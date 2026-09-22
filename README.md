@@ -17,8 +17,6 @@ Choose either Go or Docker:
 
 ### With Go
 
-With Go 1.26.7+:
-
 ```sh
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
@@ -27,30 +25,24 @@ This starts the local hosts for your session. Choose your model,
 then try the example shown in chat. See [Playground](apps/playground/README.md)
 for configuration.
 
-### With Docker (no Go required)
+### With Docker
 
 ```sh
 docker compose up --build -d && docker compose run --build --rm playground
 ```
 
-Select your model and enter its API key,
-or set the provider's key in your environment before launching.
+Select your model and enter its API key or set the provider's key in your environment before launching.
 
-You can also connect your existing AI client to **`http://localhost:4273/mcp`**
-after starting Compose.
-Client configuration examples for VS Code, Codex, and Cursor are in the
-[adapter guide](apps/adapters/README.md#quick-start).
+You can also connect your existing AI client to **`http://localhost:4273/mcp`** after starting Compose.
+Client configuration examples for VS Code, Codex, and Cursor are in the [adapter guide](apps/adapters/README.md#quick-start).
 
 ## Use Commander
 
-Ask your AI to list available missions, start one for your objective, or show
-its progress and results. For example:
+Ask your AI to list available missions, start one for your objective, or show its progress and results. For example:
 
 > Run review-website for defos.ai and summarize what should be fixed before release.
 
-Try the same mission with your own website.
-
-Your AI can ask for your input as work progresses and present a final report.
+Try the same mission with your own website. Your AI can ask for your input as work progresses and present a final report.
 
 ## More information
 
