@@ -19,9 +19,12 @@ go test -race -count=1 ./framework/... ./providers/... \
   ./apps/controllers/default/... ./apps/agents/web-quality/... ./apps/playground/...
 ```
 
-Framework tests focus on recovery, automation and concurrent decisions. Provider
+Framework tests focus on recovery, automation, concurrent decisions and retrying
+unconfirmed results without executing commands twice. Provider
 tests cover critical storage and delivery contracts. App tests cover mission
-loading, website checks, rendering and Playground's local hosts. These tests
+loading, website checks, rendering and Playground's local hosts. Playground also
+completes an SEO review through a scripted model, keyboard-selected operator
+answer and saved report, and checks recovery after model errors or Ctrl+C. These tests
 need no Docker or browser; browser execution is covered by the MCP suite.
 
 ## MCP API tests
@@ -48,9 +51,11 @@ CI saves logs on failure and always removes the test containers and volumes.
 Tests live under [`apps/adapters/mcp/tests`](../../apps/adapters/mcp/tests):
 
 - `missions_test.go`: catalog, input validation and caller-provided IDs.
-- `agents_test.go`: agent/action catalogs, discovery, errors and execution.
+- `agents_test.go`: catalogs, execution, and queued work resuming after a missing
+  dependency becomes available through rediscovery.
 - `operations_test.go`: automatic website review, grouped decisions, artifacts,
-  event cursors, reports, cancellation and failure.
+  event cursors, reports, concurrent operation isolation, capacity limits,
+  cancellation during execution and failure.
 - `questions_test.go`: latest question, operator answers and expiration.
 
 Before each test, setup calls the MCP `clean_up_state` tool. It clears database

@@ -3,11 +3,13 @@ package playground_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,45 +84,9 @@ func TestQuestionSelector(t *testing.T) {
 	}
 	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
 	defer endpoint.Close()
-	model := ui.New(ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: "http://127.0.0.1:1", MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: true}, io.Discard)
-	defer model.Close()
-	model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	messages := make(chan tea.Msg, 32)
-	var run func(tea.Cmd)
-	run = func(cmd tea.Cmd) {
-		if cmd == nil {
-			return
-		}
-		go func() {
-			msg := cmd()
-			if batch, ok := msg.(tea.BatchMsg); ok {
-				for _, child := range batch {
-					run(child)
-				}
-				return
-			}
-			select {
-			case messages <- msg:
-			case <-ctx.Done():
-			}
-		}()
-	}
-	key := func(key tea.KeyMsg) { _, cmd := model.Update(key); run(cmd) }
-	text := func(value string) { key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(value)}) }
-	wait := func(description string, check func(string) bool) {
-		t.Helper()
-		for !check(model.View()) {
-			select {
-			case msg := <-messages:
-				_, cmd := model.Update(msg)
-				run(cmd)
-			case <-ctx.Done():
-				t.Fatalf("waiting for %s: %s", description, model.View())
-			}
-		}
-	}
-	run(model.Init())
-	wait("connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
+	u := newUI(t, ctx, endpoint.URL, "http://127.0.0.1:1")
+	defer u.model.Close()
+	model, key, text, wait := u.model, u.key, u.text, u.wait
 
 	// Act: watch questions while retaining a normal chat draft, then select an
 	// option. Tab must switch focus without submitting or losing the draft.
@@ -154,5 +120,138 @@ func TestQuestionSelector(t *testing.T) {
 	wait("expiry", func(view string) bool { return !strings.Contains(view, "Operator input") })
 	if !strings.Contains(model.View(), "unsent chat draft") {
 		t.Fatal("answering or expiry lost the chat draft")
+	}
+}
+
+func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
+	for _, scenario := range []string{"HTTP error", "truncated tool stream", "Ctrl+C"} {
+		t.Run(scenario, func(t *testing.T) {
+			// Arrange: real UI, HTTP model client and MCP transport. Only external
+			// responses are scripted; a partial tool call must never reach MCP.
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			var calls, requests atomic.Int32
+			server := mcp.NewServer(&mcp.Implementation{Name: "error-fixture", Version: "1"}, nil)
+			server.AddTool(&mcp.Tool{Name: "start_operation", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				calls.Add(1)
+				return &mcp.CallToolResult{StructuredContent: map[string]any{}}, nil
+			})
+			endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+			defer endpoint.Close()
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if requests.Add(1) == 1 {
+					switch scenario {
+					case "HTTP error":
+						http.Error(w, `{"error":{"message":"Invalid fixture model"}}`, http.StatusBadRequest)
+					case "truncated tool stream":
+						writeModelDelta(w, toolDelta("start_operation", map[string]any{}), nil)
+					case "Ctrl+C":
+						writeModelDelta(w, map[string]any{"content": "Waiting for model"}, nil)
+						w.(http.Flusher).Flush()
+						select {
+						case <-r.Context().Done():
+						case <-ctx.Done():
+						}
+					}
+					return
+				}
+				writeModelDelta(w, map[string]any{"content": "**Chat recovered**"}, "stop")
+			}))
+			defer provider.Close()
+			u := newUI(t, ctx, endpoint.URL, provider.URL)
+			// Close the model before HTTP servers, including on failed assertions.
+			defer u.model.Close()
+
+			// Act: trigger the failure, or interrupt an in-flight streamed reply.
+			u.text("Start the review")
+			u.key(tea.KeyMsg{Type: tea.KeyEnter})
+			want := "HTTP 400"
+			if scenario == "truncated tool stream" {
+				want = "model stream ended before completion"
+			} else if scenario == "Ctrl+C" {
+				u.wait("active stream", func(view string) bool { return strings.Contains(view, "Waiting for model") })
+				u.key(tea.KeyMsg{Type: tea.KeyCtrlC})
+				want = "Reply stopped"
+			}
+			u.wait("error and idle state", func(view string) bool {
+				return strings.Contains(view, want) && !strings.Contains(view, "Thinking")
+			})
+
+			// Assert: partial tools did not run, the loader stopped, and a fresh
+			// chat turn still works without reconnecting or restarting Playground.
+			if calls.Load() != 0 {
+				t.Fatal("an unfinished model response executed a tool")
+			}
+			u.text("Continue chatting")
+			u.key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.wait("recovered reply", func(view string) bool {
+				return strings.Contains(view, "Chat recovered") && !strings.Contains(view, "Thinking")
+			})
+			if requests.Load() != 2 || strings.Contains(u.model.View(), "**Chat recovered**") {
+				t.Fatalf("chat recovery or markdown rendering failed: %s", u.model.View())
+			}
+		})
+	}
+}
+
+func writeModelDelta(w http.ResponseWriter, delta map[string]any, finish any) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	encoded, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}}})
+	fmt.Fprintf(w, "data: %s\n\n", encoded)
+	if finish != nil {
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}
+}
+
+// Drive Bubble Tea's public update loop, including async commands, and inspect
+// its current rendered frame instead of relying on stale terminal output.
+type uiDriver struct {
+	t        *testing.T
+	ctx      context.Context
+	model    *ui.Model
+	messages chan tea.Msg
+}
+
+func newUI(t *testing.T, ctx context.Context, endpoint, provider string) *uiDriver {
+	t.Helper()
+	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider, MCPURL: endpoint, Keys: map[string]string{"other": "test-only"}, NoColor: true}, io.Discard)}
+	t.Cleanup(u.model.Close)
+	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	u.run(u.model.Init())
+	u.wait("connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
+	return u
+}
+
+func (u *uiDriver) run(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	go func() {
+		msg := cmd()
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, child := range batch {
+				u.run(child)
+			}
+			return
+		}
+		select {
+		case u.messages <- msg:
+		case <-u.ctx.Done():
+		}
+	}()
+}
+
+func (u *uiDriver) key(key tea.KeyMsg) { _, cmd := u.model.Update(key); u.run(cmd) }
+func (u *uiDriver) text(text string)   { u.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)}) }
+func (u *uiDriver) wait(description string, check func(string) bool) {
+	u.t.Helper()
+	for !check(u.model.View()) {
+		select {
+		case msg := <-u.messages:
+			_, cmd := u.model.Update(msg)
+			u.run(cmd)
+		case <-u.ctx.Done():
+			u.t.Fatalf("waiting for %s: %s", description, u.model.View())
+		}
 	}
 }

@@ -183,7 +183,7 @@ func (a *api) resolve(opID string, task operations.Task, actions []object) {
 // no public websites, DNS services or model API credentials are needed.
 func website(t *testing.T) string {
 	t.Helper()
-	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return serveWebsite(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/missing" {
 			http.NotFound(w, r)
 			return
@@ -192,6 +192,11 @@ func website(t *testing.T) string {
 		w.Header().Set("X-Powered-By", "Express")
 		fmt.Fprint(w, `<!doctype html><html lang="en"><head><title>Commander test site</title><meta name="generator" content="WordPress 6.8"></head><body><h1>Release review</h1><a href="/about">About</a><a href="/missing">Broken link</a><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></body></html>`)
 	}))
+}
+
+func serveWebsite(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	server := httptest.NewUnstartedServer(handler)
 	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		t.Fatal(err)
