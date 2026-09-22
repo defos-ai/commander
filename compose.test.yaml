@@ -1,0 +1,118 @@
+name: commander-test
+
+x-environment: &environment
+  BUS_URL: file:///state/bus
+  STORAGE_URL: file:///state/storage
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+
+x-runtime: &runtime
+  init: true
+  stop_grace_period: 30s
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-agent: &agent
+  <<: *runtime
+  image: commander-web-quality-agent:test
+  pull_policy: never
+  shm_size: 256mb
+  command: ["--heartbeat-interval=1s"]
+  volumes:
+    - bus:/state/bus
+    - storage:/state/storage
+  environment:
+    <<: *environment
+    CHROMIUM_NO_SANDBOX: "true"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    controller:
+      condition: service_started
+
+services:
+  volume-init:
+    image: commander-controller:test
+    pull_policy: never
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["chown"]
+    command: ["1000:1000", "/bus", "/storage", "/database"]
+    volumes:
+      - bus:/bus
+      - storage:/storage
+      - database:/database
+
+  controller:
+    <<: *runtime
+    image: commander-controller:test
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/controllers/default/docker/Dockerfile
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+    command: ["--with-missions=/data/default-missions.json"]
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+      - database:/state/database
+    configs:
+      - source: default-missions
+        target: /data/default-missions.json
+    environment:
+      <<: *environment
+      DATABASE_URL: file:///state/database
+
+  mcp:
+    <<: *runtime
+    image: commander-mcp:test
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/adapters/mcp/docker/Dockerfile
+    command:
+      - --listen-address=:4273
+      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+      - database:/state/database
+    environment:
+      <<: *environment
+      DATABASE_URL: file:///state/database
+      ENV: tests
+    ports:
+      - "127.0.0.1:14273:4273"
+    depends_on:
+      controller:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  web-1:
+    <<: *agent
+    build:
+      context: .
+      dockerfile: apps/agents/web-quality/docker/Dockerfile
+
+  web-2:
+    <<: *agent
+
+volumes:
+  bus:
+  storage:
+  database:
+
+configs:
+  default-missions:
+    file: ./apps/controllers/default/data/default-missions.json

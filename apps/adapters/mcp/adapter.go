@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"mime"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
 	"commander/framework/id"
+	frameworktesting "commander/framework/testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -103,6 +105,8 @@ type Config struct {
 	ArtifactStore  artifactstore.ArtifactStore
 	ActionStore    actionmodel.ActionStore
 	Logger         *slog.Logger
+	// TestCleaner is exposed only when ENV=tests. Call between settled tests.
+	TestCleaner frameworktesting.TestCleaner
 }
 
 // NewServer exposes agent commands and persisted mission state. The host chooses
@@ -128,6 +132,12 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 	})
 	if config.Logger != nil {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
+	}
+	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
+		addTool(server, "clean_up_state", "Clear persisted test data between tests. Keeps missions, bus messages, subscriptions and host memory.", emptySchema,
+			func(_ context.Context, _ struct{}) (struct{}, error) {
+				return struct{}{}, config.TestCleaner.Clean()
+			})
 	}
 	addTool(server, "list_actions", "List action names, descriptions and required permissions. Use describe_action for schemas and list_agents for current availability and grants.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {

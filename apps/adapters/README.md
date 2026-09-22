@@ -44,11 +44,8 @@ See [continuations](../../docs/abstractions.md#next-actions-and-continuations).
   and tests. Use domain stores for queries and comms clients for commands.
 - Cover external behavior in the adapter's `tests/` folder.
 
-From the repository root:
-
-```sh
-go test -race -count=1 ./apps/adapters/mcp/...
-```
+Run the grouped MCP API tests against isolated Compose services using the
+[MCP test setup](../../framework/tests/README.md#mcp-api-tests).
 
 See the [framework guide](../../framework/README.md) for shared contracts and
 [testing conventions](../../framework/tests/README.md#writing-tests) for coverage.

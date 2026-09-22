@@ -172,7 +172,7 @@ go mod edit -replace=commander/providers=/absolute/path/to/commander/providers
 
 Both replacements belong in your project's `go.mod`. `v0.0.0` is a local
 placeholder, not a published release. Add your actions and `cmd/main.go`, following
-the [standalone framework example](../../framework/tests/agent/extension_test.go)
+the [framework guide](../../framework/README.md)
 and the [host lifecycle example](web-quality/cli/cli.go), then run:
 
 ```sh

@@ -23,6 +23,7 @@ import (
 	artifactprovider "commander/providers/artifact"
 	commsprovider "commander/providers/comms"
 	controllerprovider "commander/providers/controller"
+	testprovider "commander/providers/testing"
 )
 
 const adapterType = "mcp"
@@ -109,12 +110,20 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 		return err
 	}
 	defer func() { result = errors.Join(result, controller.Close()) }()
-	server, err := missionsmcp.NewServer(controller, missionsmcp.Config{
+	serverConfig := missionsmcp.Config{
 		Operations: controller, Logger: logger,
 		AgentStore: database.AgentStore, ExecutionStore: database.ExecutionStore,
 		MissionStore: database.MissionStore, OperationStore: database.OperationStore,
 		ActionStore: database.ActionStore, ReportStore: reportStorage.ReportStore, ArtifactStore: storage.ArtifactStore,
-	})
+	}
+	if os.Getenv("ENV") == "tests" {
+		cleaner, err := testprovider.OpenCleaner(configuration.storageURL, configuration.databaseURL)
+		if err != nil {
+			return fmt.Errorf("test cleanup: %w", err)
+		}
+		serverConfig.TestCleaner = &testCleaner{missions: database.MissionStore, state: cleaner}
+	}
+	server, err := missionsmcp.NewServer(controller, serverConfig)
 	if err != nil {
 		return err
 	}

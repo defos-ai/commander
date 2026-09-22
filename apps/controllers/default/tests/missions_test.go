@@ -1,177 +1,103 @@
-package cli_test
+package default_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
-	"time"
 
+	"commander/apps/controllers/default/data"
 	"commander/framework/domain/missions"
 )
 
-func TestControllerLeavesMissionsUnchangedByDefault(t *testing.T) {
-	for _, empty := range []bool{true, false} {
-		name := "existing catalog"
-		if empty {
-			name = "empty catalog"
+func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testing.T) {
+	// Arrange: a catalog has both a mission being updated and an unrelated one.
+	store := missionStore{
+		"review": {Name: "review", Objective: "Old objective"},
+		"other":  {Name: "other", Objective: "Keep this mission"},
+	}
+	before := map[string]missions.Mission{"review": store["review"], "other": store["other"]}
+	path := filepath.Join(t.TempDir(), "missions.json")
+	valid := `{"name":"review","objective":"New objective","input_schema":{},"output_schema":{}}`
+	if err := os.WriteFile(path, []byte("["+valid+`,{"name":"broken"}]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Act: the second definition is invalid, so the first must not be upserted.
+	err := data.UpsertMissions(t.Context(), store, path)
+
+	// Assert: invalid input leaves the entire catalog untouched.
+	if err == nil || !reflect.DeepEqual(map[string]missions.Mission(store), before) {
+		t.Fatalf("invalid import changed catalog: %+v, error=%v", store, err)
+	}
+
+	// Act: import the corrected file twice, updating by name.
+	if err := os.WriteFile(path, []byte("["+valid+"]"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := data.UpsertMissions(t.Context(), store, path); err != nil {
+			t.Fatal(err)
 		}
-		t.Run(name, func(t *testing.T) {
-			// Arrange: a database with either no missions or an existing definition.
-			d := arrange(t)
-			if empty {
-				if err := os.WriteFile(filepath.Join(d.root, "database", "missions.json"), []byte(`[]`), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			before, err := d.database.MissionStore.List(d.ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
+	}
 
-			// Act: start without --with-missions.
-			controller := d.start(t, false)
-			after, err := d.database.MissionStore.List(d.ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// Assert: startup adds or changes no definitions.
-			if !reflect.DeepEqual(after, before) {
-				t.Fatalf("startup changed missions: got %+v, want %+v", after, before)
-			}
-			controller.stop(t)
-		})
+	// Assert: repeated startup updates the intended mission and preserves the other.
+	if len(store) != 2 || store["review"].Objective != "New objective" || !reflect.DeepEqual(store["other"], before["other"]) {
+		t.Fatalf("unexpected catalog after import: %+v", store)
 	}
 }
 
-func TestControllerUpsertsMissionsFromFile(t *testing.T) {
-	// Arrange: a custom mission and a separate mission file in the working directory.
-	d := arrange(t)
-	definitions, err := os.ReadFile("../data/default-missions.json")
-	if err != nil {
+func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
+	// Arrange: validate the mission bytes actually bundled in the app.
+	var definitions []json.RawMessage
+	if err := json.Unmarshal(data.DefaultMissions, &definitions); err != nil {
 		t.Fatal(err)
 	}
-	missionFile := filepath.Join(d.root, "missions.json")
-	if err := os.WriteFile(missionFile, definitions, 0600); err != nil {
-		t.Fatal(err)
-	}
-	custom, err := d.database.MissionStore.Get(d.ctx, "review")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Act: load the supplied file using a relative path.
-	controller := d.start(t, false, "--with-missions", "./missions.json")
-	catalog, err := d.database.MissionStore.List(d.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, err := d.database.MissionStore.Get(d.ctx, "review-website")
-	if err != nil {
-		t.Fatal(err)
-	}
-	storedCustom, err := d.database.MissionStore.Get(d.ctx, custom.Name)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Assert: startup installs usable defaults and preserves custom definitions.
-	if definition.Automations["discover-pages"].Continue != missions.WhenAll ||
-		!reflect.DeepEqual(definition.Automations["discover-pages"].Run, []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}) {
-		t.Fatalf("missing bundled automation: %+v", definition)
-	}
-	for _, name := range definition.Automations["discover-pages"].Run {
-		if definition.Automations[name].Decide != missions.Model {
-			t.Fatalf("%s is missing its grouped model review: %+v", name, definition.Automations[name])
+	var website missions.Mission
+	for _, raw := range definitions {
+		mission, err := missions.LoadMission(raw)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	if err := definition.ValidateInput([]byte(`{"url":"https://defos.ai"}`)); err != nil {
-		t.Fatalf("invalid bundled input schema: %v", err)
-	}
-	if !reflect.DeepEqual(storedCustom, custom) {
-		t.Fatalf("startup changed custom mission: %+v", storedCustom)
-	}
-	controller.stop(t)
-
-	// Arrange: edit the input file without rebuilding the controller.
-	definition.Objective = "Updated objective from file"
-	definitions, err = json.Marshal([]missions.Mission{definition})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(missionFile, definitions, 0600); err != nil {
-		t.Fatal(err)
-	}
-	for i := range catalog {
-		if catalog[i].Name == definition.Name {
-			catalog[i] = definition
+		if mission.Name == "review-website" {
+			website = mission
 		}
 	}
 
-	// Act: restart with the same database and the updated input file.
-	controller = d.start(t, false, "--with-missions", missionFile)
-	restored, err := d.database.MissionStore.List(d.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Act: inspect the automatic branch that follows website discovery.
+	workflow := website.Automations["discover-pages"]
 
-	// Assert: defaults are refreshed without duplicates or changes to custom missions.
-	if !reflect.DeepEqual(restored, catalog) {
-		t.Fatalf("restart changed catalog: got %+v, want %+v", restored, catalog)
+	// Assert: discovery runs grouped checks; the model reviews their collected results.
+	if website.Name == "" || !slices.Equal(website.StartingActions, []string{"discover-pages"}) || workflow.Continue != missions.WhenAll || len(workflow.Run) == 0 {
+		t.Fatalf("website discovery is not grouped automatic work: %+v", website)
 	}
-	controller.stop(t)
+	for _, name := range []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"} {
+		if !slices.Contains(workflow.Run, name) || !slices.Contains(website.RequiredActions, name) || website.Automations[name].Decide != missions.Model {
+			t.Errorf("%s is not an automatic check followed by model review", name)
+		}
+	}
 }
 
-func TestControllerRejectsInvalidMissionFiles(t *testing.T) {
-	for _, scenario := range []struct{ name, contents string }{
-		{"missing file", ""},
-		{"invalid JSON", `[{`},
-		{"null catalog", `null`},
-		{"invalid definition", `[
-			{"name":"new-mission","objective":"Valid first mission","input_schema":{},"output_schema":{}},
-			{"name":"invalid-mission"}
-		]`},
-	} {
-		t.Run(scenario.name, func(t *testing.T) {
-			// Arrange: supply a missing or invalid file alongside an existing catalog.
-			d := arrange(t)
-			before, err := d.database.MissionStore.List(d.ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			path := filepath.Join(d.root, "input-missions.json")
-			if scenario.contents != "" {
-				if err := os.WriteFile(path, []byte(scenario.contents), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			ctx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
-			defer cancel()
-			command := exec.CommandContext(ctx, binary, "--with-missions", path)
-			command.Dir = d.root
-			for key, value := range d.env {
-				command.Env = append(command.Env, key+"="+value)
-			}
+type missionStore map[string]missions.Mission
 
-			// Act: launch the controller with the invalid file.
-			output, err := command.CombinedOutput()
-
-			// Assert: startup fails before readiness or any mission writes.
-			if err == nil || ctx.Err() != nil || !bytes.Contains(output, []byte("with-missions:")) || bytes.Contains(output, []byte("Controller ready")) {
-				t.Fatalf("unexpected startup outcome: %v\n%s", err, output)
-			}
-			after, err := d.database.MissionStore.List(d.ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(after, before) {
-				t.Fatalf("invalid file changed missions: got %+v, want %+v", after, before)
-			}
-		})
+func (s missionStore) Upsert(_ context.Context, mission missions.Mission) error {
+	s[mission.Name] = mission.Clone()
+	return nil
+}
+func (s missionStore) Get(_ context.Context, name string) (missions.Mission, error) {
+	mission, ok := s[name]
+	if !ok {
+		return missions.Mission{}, missions.ErrUnknownMission
 	}
+	return mission.Clone(), nil
+}
+func (s missionStore) List(context.Context) ([]missions.Mission, error) {
+	var result []missions.Mission
+	for _, mission := range s {
+		result = append(result, mission.Clone())
+	}
+	return result, nil
 }

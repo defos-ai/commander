@@ -79,16 +79,13 @@ host flags follow the [local setup guide](../../../docs/deployment.md).
 
 ```sh
 go test -race -count=1 ./apps/agents/web-quality/...
-go test -race -count=1 ./apps/adapters/mcp/...
-go test -race -count=1 ./apps/playground/...
 ```
 
-Browser tests use local fixtures and skip when no browser is installed. Set
-`CHROMIUM_PATH` to exercise them explicitly; CI installs/locates Chrome so they
-run there. Test model replies are fixtures, so tests need no paid model access.
-Actions and host tests cover validation, discovery, permissions, bounded work,
-screenshots, cancellation, result replay and shutdown. The MCP workflow covers
-two agents, controller recovery, grouped review, operator answers and reports.
+Focused agent tests cover hostname boundaries, SEO evidence and dependency
+discovery. The MCP suite runs the complete review through Compose, including
+real browser checks, screenshots, questions and reports. It needs no model key
+or host browser; the agent image supplies Chromium. See the
+[MCP test setup](../../../framework/tests/README.md#mcp-api-tests).
 
 ### Try these in Playground
 

@@ -1,0 +1,38 @@
+name: Unit tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+      - name: Run unit tests with race detector
+        run: >-
+          go test -race -count=1 -timeout=3m
+          ./framework/... ./providers/...
+          ./apps/controllers/default/... ./apps/agents/web-quality/...
+          ./apps/playground/...
+      - name: Vet all modules
+        run: >-
+          go vet ./framework/... ./providers/...
+          ./apps/controllers/default/... ./apps/agents/web-quality/...
+          ./apps/adapters/mcp/... ./apps/playground/...

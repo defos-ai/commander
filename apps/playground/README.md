@@ -141,10 +141,10 @@ go test -race -count=1 ./apps/playground/...
 go vet ./apps/playground/...
 ```
 
-Tests live under `tests/` and use local model fixtures: no real API keys or
-paid model calls. The website acceptance test runs real MCP, controller, agent,
-and browser processes through Playground, including an operator answer and a
-saved report. Browser test setup is documented in the agent guide.
+Tests live under `tests/`: focused rendering and question-selector checks, plus
+one `--all-in-one` CLI test with real local MCP, controller, and agent hosts.
+Local model fixtures avoid real API keys and paid calls; Chromium is not needed.
+MCP workflow coverage lives with the [MCP adapter](../adapters/README.md#development-and-testing).
 See the [website scenarios](../agents/web-quality/README.md#try-these-in-playground),
 [testing guide](../../framework/tests/README.md) and
 [local Commander setup](../../docs/deployment.md).
