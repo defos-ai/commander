@@ -151,3 +151,50 @@ func TestModelErrorsKeepChatUsableWithoutOperatorHandoff(t *testing.T) {
 		})
 	}
 }
+
+// lostResponseCommander represents a request accepted by the server whose reply
+// never reaches the client. Retrying a newly generated ID could duplicate work.
+type lostResponseCommander struct{ operationID string }
+
+func (*lostResponseCommander) Tools() []llm.Tool {
+	return []llm.Tool{{Name: "start_operation", Schema: json.RawMessage(`{"type":"object"}`)}}
+}
+func (*lostResponseCommander) Instructions() string { return "" }
+func (c *lostResponseCommander) Call(_ context.Context, _ string, raw json.RawMessage) (bridge.Result, error) {
+	var input struct {
+		ID string `json:"operation_id"`
+	}
+	_ = json.Unmarshal(raw, &input)
+	c.operationID = input.ID
+	return bridge.Result{}, errors.New("response lost")
+}
+func (*lostResponseCommander) Operation(context.Context, string) (bridge.Operation, error) {
+	return bridge.Operation{}, errors.New("unexpected operation read")
+}
+
+func TestLostStartResponsePreservesOperationID(t *testing.T) {
+	// Arrange: a model starts work, then receives an ambiguous transport failure.
+	commander := &lostResponseCommander{}
+	var calls atomic.Int32
+	model := modelFunc(func(_ context.Context, history []llm.Message, _ func(string)) (llm.Message, error) {
+		if calls.Add(1) == 1 {
+			return llm.Message{Role: "assistant", Calls: []llm.Call{{ID: "start", Name: "start_operation", Arguments: json.RawMessage(`{"mission_name":"review-website"}`)}}}, nil
+		}
+		if commander.operationID == "" || !strings.Contains(history[len(history)-1].Text, commander.operationID) || !strings.Contains(history[len(history)-1].Text, "inspect state before retrying") {
+			t.Errorf("model lost operation identity: %s", history[len(history)-1].Text)
+		}
+		return llm.Message{Role: "assistant", Text: "Checking saved work is needed."}, nil
+	})
+	e := chat.New(t.Context(), model, commander)
+	defer e.Close()
+
+	// Act.
+	_ = e.Send("Review a website")
+	event := await(t, e, func(event chat.Event) bool { return event.Kind == "error" })
+	await(t, e, func(event chat.Event) bool { return event.Kind == "idle" })
+
+	// Assert: both operator and model receive the ID; the engine does not retry.
+	if commander.operationID == "" || !strings.Contains(event.Text, commander.operationID) || calls.Load() != 2 {
+		t.Fatalf("id=%q event=%s model calls=%d", commander.operationID, event.Text, calls.Load())
+	}
+}

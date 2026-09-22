@@ -46,7 +46,7 @@
         "url": {
           "type": "string",
           "pattern": "^https?://",
-          "description": "Website URL reachable from the agents; use http://sample-website:8080/ for the bundled Compose site."
+          "description": "Website URL reachable from the agents, for example https://defos.ai."
         },
         "max_pages": {
           "type": "integer",

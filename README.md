@@ -12,19 +12,32 @@ Commander powers mission execution in DEFOS Platform, coordinating thousands of 
 
 ## Get started
 
-Run Commander locally with Docker Compose and extend it with your own agents and actions.
+Try Commander through Playground, an interactive terminal chat with your model.
+Choose either Go or Docker:
 
-You need Docker with Compose and an MCP-compatible AI client.
+### With Go
 
-### 1. Start Commander
+With Go 1.26.7+:
 
 ```sh
-docker compose up --build -d
+go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-### 2. Connect your AI client
+This starts the local hosts for your session. Choose your model,
+then try the example shown in chat. See [Playground](apps/playground/README.md)
+for configuration.
 
-Add **`http://localhost:4273/mcp`** as a Streamable HTTP MCP server.
+### With Docker (no Go required)
+
+```sh
+docker compose up --build -d && docker compose run --build --rm playground
+```
+
+Select your model and enter its API key,
+or set the provider's key in your environment before launching.
+
+You can also connect your existing AI client to **`http://localhost:4273/mcp`**
+after starting Compose.
 Client configuration examples for VS Code, Codex, and Cursor are in the
 [adapter guide](apps/adapters/README.md#quick-start).
 
@@ -33,10 +46,9 @@ Client configuration examples for VS Code, Codex, and Cursor are in the
 Ask your AI to list available missions, start one for your objective, or show
 its progress and results. For example:
 
-> Run review-website for http://sample-website:8080/ and summarize what should be fixed before release.
+> Run review-website for defos.ai and summarize what should be fixed before release.
 
-The bundled sample website has known issues for you to explore. Try the same
-mission with your own website when you are ready.
+Try the same mission with your own website.
 
 Your AI can ask for your input as work progresses and present a final report.
 

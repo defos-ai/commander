@@ -7,13 +7,33 @@ import (
 	"strings"
 )
 
+const (
+	maxStreamEventBytes    = 4 << 20
+	maxStreamResponseBytes = 16 << 20
+)
+
 // stream reads complete SSE events, including multiline data and fragmented
-// network writes. A per-line bound prevents an unbounded allocation.
+// network writes. Bound each event's lines and the entire response, including
+// comments and other ignored fields, before any complete reply can escape.
 func stream(reader io.Reader, consume func([]byte) error) error {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 4096), 4<<20)
+	limited := &io.LimitedReader{R: reader, N: maxStreamResponseBytes + 1}
+	scanner := bufio.NewScanner(limited)
+	scanner.Buffer(make([]byte, 4096), maxStreamEventBytes)
 	var data []string
+	eventBytes := 0
+	eventLimit := errors.New("model stream event exceeds 4 MiB; no tool calls were executed")
+	responseLimit := errors.New("model stream response exceeds 16 MiB; no tool calls were executed")
+	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		advance, token, err := bufio.ScanLines(data, atEOF)
+		// Count consumed wire bytes, including CRLF delimiters ScanLines removes.
+		eventBytes += advance
+		if eventBytes > maxStreamEventBytes {
+			return 0, nil, eventLimit
+		}
+		return advance, token, err
+	})
 	flush := func() error {
+		eventBytes = 0
 		if len(data) == 0 {
 			return nil
 		}
@@ -22,6 +42,9 @@ func stream(reader io.Reader, consume func([]byte) error) error {
 		return consume([]byte(joined))
 	}
 	for scanner.Scan() {
+		if limited.N == 0 {
+			return responseLimit
+		}
 		line := scanner.Text()
 		if line == "" {
 			if err := flush(); err != nil {
@@ -31,19 +54,14 @@ func stream(reader io.Reader, consume func([]byte) error) error {
 			data = append(data, strings.TrimPrefix(value, " "))
 		}
 	}
+	if limited.N == 0 {
+		return responseLimit
+	}
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			return eventLimit
+		}
 		return err
 	}
 	return flush()
-}
-
-func validateCalls(calls []Call) error {
-	seen := map[string]bool{}
-	for _, call := range calls {
-		if call.ID == "" || call.Name == "" || seen[call.ID] {
-			return errors.New("model returned an incomplete or duplicate tool call")
-		}
-		seen[call.ID] = true
-	}
-	return nil
 }

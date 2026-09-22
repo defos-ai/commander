@@ -27,7 +27,10 @@ type Event struct {
 	Kind, Text, ID string
 	Operation      *bridge.Operation
 }
-type job struct{ text, key, operationID string }
+type job struct {
+	text, operationID string
+	reviews           []reviewKey
+}
 type turnResult struct {
 	history []llm.Message
 	err     error
@@ -84,7 +87,7 @@ func (e *Engine) run() {
 	completed := make(chan turnResult, 1)
 	watched := map[string]bool{}
 	operations := map[string]bridge.Operation{}
-	seen := map[string]bool{}
+	seen := map[reviewKey]bool{}
 	questions := map[string]bool{}
 	paused := false
 	showQuestion := func(question bridge.Question) {
@@ -165,13 +168,13 @@ func (e *Engine) run() {
 				paused = false
 				id := strings.TrimSpace(strings.TrimPrefix(text, "/watch "))
 				for key := range seen {
-					if strings.HasPrefix(key, id+"/") {
+					if key.operationID == id {
 						delete(seen, key)
 					}
 				}
 				watch(id)
 				if operation, ok := operations[id]; ok {
-					automatic = append(automatic, e.decisions(operation, seen)...)
+					automatic = append(automatic, decisions(operation, seen)...)
 				}
 				e.emit(Event{Kind: "notice", Text: "Watching operation " + id})
 			case strings.HasPrefix(text, "/run "):
@@ -200,38 +203,10 @@ func (e *Engine) run() {
 				showQuestion(question)
 			}
 			if !paused {
-				automatic = append(automatic, e.decisions(operation, seen)...)
+				automatic = append(automatic, decisions(operation, seen)...)
 			}
 		}
 	}
-}
-
-func (e *Engine) decisions(operation bridge.Operation, seen map[string]bool) []job {
-	var keys []string
-	if !operation.Terminal() {
-		for _, task := range operation.Tasks {
-			c := task.Continuation
-			if c == nil || c.Status != "pending" || c.DecisionBy != "model" {
-				continue
-			}
-			key := fmt.Sprintf("%s/%s/%d", operation.ID, task.ID, c.Version)
-			if !seen[key] {
-				seen[key] = true
-				keys = append(keys, key)
-			}
-		}
-	}
-	if operation.Settled() {
-		key := operation.ID + "/" + operation.Status
-		if !seen[key] {
-			seen[key] = true
-			keys = append(keys, key)
-		}
-	}
-	if len(keys) == 0 {
-		return nil
-	}
-	return []job{{key: strings.Join(keys, ","), operationID: operation.ID}}
 }
 
 const Help = `/help                       Show this help

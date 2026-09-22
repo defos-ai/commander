@@ -36,26 +36,19 @@ require separate model approval. Operation completion remains explicit.
 From the repository root:
 
 ```sh
-docker compose up --build -d
-go run ./apps/playground/cmd/commander
+docker compose up --build -d && docker compose run --build --rm playground
 ```
 
 Choose your model in Playground, then ask:
 
-> Run review-website for http://sample-website:8080/ with max_pages 3.
+> Run review-website for https://defos.ai with max_pages 3.
 > Review the results and produce a concise report of what needs fixing.
 
-The sample website is visible in your browser at `http://localhost:8088/`.
-Use **`http://sample-website:8080/` in the mission**, because the agents run in
-containers. For another website, supply a URL reachable from those containers.
+For another website, supply a URL reachable from the agents.
 Agent registration can take one heartbeat interval (30 seconds) on first startup.
 
-The sample contains a broken service link, a missing image description, an absent
-page language, unlabeled form controls, and a mobile overflow problem. Home and
-Contact omit SEO descriptions and canonicals; About supplies both plus social
-metadata, but lacks a social preview image. Its HTTP server also exposes passive
-header indicators. Expect one discovery task plus fifteen checks for its three pages
-(16 tasks total), one grouped review, and six screenshots. Inspect results through
+For each discovered page, the controller schedules five checks, including two
+screenshots. Results depend on the website's content. Inspect them through
 `get_operation` and the final report through `get_report`; image artifacts are
 available through MCP resources.
 Playground displays text and artifact references, not inline screenshots.
@@ -66,14 +59,15 @@ mission rules; see [deployment and state](../../../docs/deployment.md#state).
 
 ### Native agent
 
-Install Chromium or Google Chrome, then run:
+Run the standalone agent:
 
 ```sh
 go run ./apps/agents/web-quality/cmd
 ```
 
-The actions find the browser on `PATH`; `CHROMIUM_PATH` can specify an absolute
-executable path. Browser actions report unavailable if it is missing; discovery,
+Only screenshot and rendered-accessibility actions use Chromium or Google Chrome.
+They find it on `PATH`; `CHROMIUM_PATH` can specify an absolute executable path.
+These actions report unavailable if it is missing; discovery,
 link checks, SEO checks and technology detection remain usable with only
 `network-access` permission. No third-party API key is needed by this agent.
 
@@ -105,7 +99,7 @@ two agents, controller recovery, grouped review, operator answers and reports.
 | Concurrent work | Start another review while one is running. | `/operations` shows both; you can keep chatting. |
 | Restart | Restart the controller while work is running or a question is pending. | Saved tasks/questions remain available. `/watch <operation-id>` reconnects a new Playground session. |
 | Cancellation | `/cancel <operation-id>` while checks run. | No new dispatch; already dispatched checks may finish. |
-| Ordinary failure | Review `http://sample-website:8080/missing-page`. | A failed discovery task, visible error, and a model decision about what to do next. |
+| Ordinary failure | Review a URL you know returns an HTTP error. | A failed discovery task, visible error, and a model decision about what to do next. |
 
 ### Scope
 

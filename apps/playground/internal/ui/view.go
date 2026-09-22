@@ -21,14 +21,12 @@ const (
 var stars = []string{"✸", "✷", "✯", "✷"}
 
 func (m *Model) color(text, foreground string) string {
-	if m.config.NoColor {
+	// Leave ordinary text in the terminal's foreground color so both light and
+	// dark terminals work without probing their background.
+	if m.config.NoColor || foreground == SmokeWhite {
 		return text
 	}
-	var color lipgloss.TerminalColor = lipgloss.Color(foreground)
-	if foreground == SmokeWhite {
-		color = lipgloss.AdaptiveColor{Light: ArmorGraphite, Dark: SmokeWhite}
-	}
-	return m.renderer.NewStyle().Foreground(color).Render(text)
+	return m.renderer.NewStyle().Foreground(lipgloss.Color(foreground)).Render(text)
 }
 func (m *Model) styleInput() {
 	m.input.PromptStyle = m.renderer.NewStyle()
@@ -55,7 +53,12 @@ func (m *Model) refresh() {
 	activityLines := min(len(m.operations), 4)
 	m.viewport.Height = max(3, m.height-10-activityLines)
 	var lines []string
-	for _, item := range m.entries {
+	for i := range m.entries {
+		item := &m.entries[i]
+		if !item.dirty && item.renderedWidth == m.viewport.Width {
+			lines = append(lines, item.rendered)
+			continue
+		}
 		label, color := "", SmokeWhite
 		switch item.kind {
 		case "user":
@@ -73,11 +76,17 @@ func (m *Model) refresh() {
 		case "notice":
 			label = "·"
 		}
-		text := m.color(label, color) + "  " + item.text
-		if item.kind == "user" || item.kind == "assistant" || item.kind == "question" {
-			text = m.color(label, color) + "\n" + item.text + "\n"
+		body := clean(item.text)
+		if item.kind == "assistant" {
+			body = m.renderMarkdown(body)
 		}
-		lines = append(lines, m.renderer.NewStyle().Width(m.viewport.Width).Render(text))
+		text := m.color(label, color) + "  " + body
+		if item.kind == "user" || item.kind == "assistant" || item.kind == "question" {
+			text = m.color(label, color) + "\n" + body + "\n"
+		}
+		item.rendered = m.renderer.NewStyle().Width(m.viewport.Width).Render(text)
+		item.renderedWidth, item.dirty = m.viewport.Width, false
+		lines = append(lines, item.rendered)
 	}
 	m.viewport.SetContent(strings.Join(lines, "\n"))
 	if bottom {
@@ -87,7 +96,7 @@ func (m *Model) refresh() {
 
 func (m *Model) View() string {
 	header := "✸ DEFOS | Commander Playground"
-	if m.stage == "chat" {
+	if m.stage == stageChat {
 		header += "  ·  " + clean(m.settings.Model)
 	}
 	if !m.config.NoColor {
@@ -97,20 +106,20 @@ func (m *Model) View() string {
 		header = ansi.Truncate(header, m.width, "…")
 	}
 	var content string
-	if m.stage == "chat" {
+	if m.stage == stageChat {
 		content = m.viewport.View()
 	} else {
 		var lines []string
 		switch m.stage {
-		case "provider", "model":
+		case stageProvider, stageModel:
 			lines = m.selectionView()
-		case "url":
+		case stageURL:
 			lines = append(lines, "API base URL")
-		case "key":
+		case stageKey:
 			lines = append(lines, m.provider.Name+" API key", "Kept in memory for this session.")
-		case "manual_model":
+		case stageManualModel:
 			lines = append(lines, "Model name", "Choose a chat model that supports tool calling.")
-		case "mcp":
+		case stageMCP:
 			lines = append(lines, "Commander MCP URL")
 		}
 		start := max(0, len(m.entries)-3)
@@ -178,7 +187,7 @@ func (m *Model) View() string {
 		input = m.color("↑/↓ choose · Enter select", MutedGray)
 	}
 	foot := "/help · /exit"
-	if m.stage == "chat" {
+	if m.stage == stageChat {
 		foot += " · PgUp/PgDown scroll · Ctrl+C stop reply"
 	} else {
 		foot += " · /back"

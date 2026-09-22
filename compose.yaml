@@ -29,14 +29,6 @@ x-agent: &agent
       condition: service_started
 
 services:
-  sample-website:
-    <<: *runtime
-    build:
-      context: .
-      dockerfile: apps/agents/web-quality/sample-site/Dockerfile
-    ports:
-      - "127.0.0.1:${COMMANDER_WEBSITE_PORT:-8088}:8080"
-
   volume-init:
     # Reuse the controller image for local volume permissions only.
     image: commander-controller:local
@@ -86,6 +78,7 @@ services:
       dockerfile: apps/adapters/mcp/docker/Dockerfile
     command:
       - --listen-address=:4273
+      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
     volumes:
       - bus:/state/bus
       - storage:/state/storage
@@ -114,6 +107,39 @@ services:
 
   web-2:
     <<: *agent
+
+  playground:
+    profiles: [playground]
+    build:
+      context: .
+      dockerfile: apps/playground/docker/Dockerfile
+    init: true
+    stdin_open: true
+    tty: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      COMMANDER_MCP_URL: http://mcp:4273/mcp
+      COMMANDER_LLM_PROVIDER: ${COMMANDER_LLM_PROVIDER:-}
+      COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-}
+      COMMANDER_LLM_BASE_URL: ${COMMANDER_LLM_BASE_URL:-}
+      COMMANDER_LLM_API_KEY: ${COMMANDER_LLM_API_KEY:-}
+      COMMANDER_DEBUG: ${COMMANDER_DEBUG:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      NO_COLOR: ${NO_COLOR:-}
+      TERM: ${TERM:-xterm-256color}
+    depends_on:
+      mcp:
+        condition: service_healthy
+      web-1:
+        condition: service_started
+      web-2:
+        condition: service_started
 
 volumes:
   bus:

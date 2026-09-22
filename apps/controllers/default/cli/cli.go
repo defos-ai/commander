@@ -23,8 +23,18 @@ import (
 	controllerprovider "commander/providers/controller"
 )
 
+// Options lets an embedding host observe readiness without parsing logs.
+type Options struct {
+	Ready func()
+}
+
 // Run owns providers, coordination and readiness. Signal handling is left to Main.
-func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
+func Run(ctx context.Context, args []string, stderr io.Writer) error {
+	return RunWithOptions(ctx, args, stderr, Options{})
+}
+
+// RunWithOptions reports readiness to an embedding host after subscriptions start.
+func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
 	}
@@ -50,10 +60,10 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 			logger.Info("Controller stopped")
 		}
 	}()
-	return serve(ctx, configuration, logger)
+	return serve(ctx, configuration, logger, options)
 }
 
-func serve(ctx context.Context, configuration config, logger *slog.Logger) (result error) {
+func serve(ctx context.Context, configuration config, logger *slog.Logger, options Options) (result error) {
 	bus, err := commsprovider.OpenBus(ctx, configuration.busURL)
 	if err != nil {
 		return fmt.Errorf("bus-url: %w", err)
@@ -126,6 +136,9 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger) (resu
 		}
 	}()
 	logger.Info("Controller ready", "transport", "bus")
+	if options.Ready != nil {
+		options.Ready()
+	}
 	select {
 	case <-ctx.Done():
 		logger.Info("Controller shutting down")

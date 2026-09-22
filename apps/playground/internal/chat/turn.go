@@ -2,11 +2,8 @@ package chat
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 
 	"commander/apps/playground/internal/llm"
 	bridge "commander/apps/playground/internal/mcp"
@@ -34,7 +31,7 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		if err != nil {
 			return history, err
 		}
-		if !relevant(operation, item.key) {
+		if !relevant(operation, item.reviews) {
 			return history, nil
 		}
 		var state map[string]json.RawMessage
@@ -74,121 +71,17 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		}
 		for _, call := range reply.Calls {
 			var result bridge.Result
-			var err error
-			if ctx.Err() != nil {
-				err = ctx.Err()
+			if err := ctx.Err(); err != nil {
+				result = bridge.Result{IsError: true, Text: err.Error()}
+				e.reportCall(call.Name, result)
 			} else if !allowed[call.Name] {
-				err = errors.New("this tool is not available to the model; operator answers require /answer")
+				result = bridge.Result{IsError: true, Text: "This tool is not available to the model; operator answers require /answer."}
+				e.reportCall(call.Name, result)
 			} else {
-				// Capture the operation ID before a potentially ambiguous network failure.
-				if call.Name == "start_operation" {
-					call.Arguments = withOperationID(call.Arguments)
-				}
-				e.emit(Event{Kind: "tool", Text: call.Name})
-				result, err = e.commander.Call(ctx, call.Name, call.Arguments)
+				result = e.call(ctx, call)
 			}
-			if err != nil {
-				result.Text = "Tool failed: " + err.Error() + ". Execution may have been accepted; inspect state before retrying."
-				result.IsError = true
-				if call.Name == "start_operation" {
-					var input struct {
-						ID string `json:"operation_id"`
-					}
-					_ = json.Unmarshal(call.Arguments, &input)
-					if input.ID != "" {
-						result.Text += " Operation ID: " + input.ID
-					}
-				}
-			}
-			kind := "success"
-			label := call.Name + completionLabel(result.IsError)
-			if result.IsError {
-				kind = "error"
-				if detail := strings.TrimSpace(result.Text); detail != "" {
-					label += ": " + detail
-				}
-			}
-			e.emit(Event{Kind: kind, Text: label})
 			history = append(history, llm.Message{Role: "tool", CallID: call.ID, Name: call.Name, Text: result.Text})
-			if !result.IsError {
-				e.follow(call, result)
-			} else if call.Name == "start_operation" {
-				var input struct {
-					ID string `json:"operation_id"`
-				}
-				_ = json.Unmarshal(call.Arguments, &input)
-				if input.ID != "" {
-					e.emit(Event{Kind: "notice", Text: "Check operation " + input.ID + " before starting it again."})
-				}
-			}
 		}
 	}
 	return history, errors.New("paused after 12 model/tool rounds; review progress and send a message to continue")
-}
-
-func relevant(operation bridge.Operation, keys string) bool {
-	for _, key := range strings.Split(keys, ",") {
-		if operation.Settled() && key == operation.ID+"/"+operation.Status {
-			return true
-		}
-		if operation.Terminal() {
-			continue
-		}
-		for _, task := range operation.Tasks {
-			c := task.Continuation
-			if c != nil && c.Status == "pending" && c.DecisionBy == "model" && key == fmt.Sprintf("%s/%s/%d", operation.ID, task.ID, c.Version) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func completionLabel(failed bool) string {
-	if failed {
-		return " failed"
-	}
-	return " completed"
-}
-
-func (e *Engine) follow(call llm.Call, result bridge.Result) {
-	var input struct {
-		ID string `json:"operation_id"`
-	}
-	_ = json.Unmarshal(call.Arguments, &input)
-	if call.Name == "start_operation" {
-		var operation struct {
-			ID string `json:"id"`
-		}
-		_ = json.Unmarshal(result.Data, &operation)
-		input.ID = operation.ID
-	}
-	if input.ID != "" {
-		select {
-		case e.watchRequests <- input.ID:
-		case <-e.ctx.Done():
-		}
-	}
-}
-
-func withOperationID(raw json.RawMessage) json.RawMessage {
-	var input map[string]any
-	if json.Unmarshal(raw, &input) != nil || input == nil {
-		return raw
-	}
-	if value, ok := input["operation_id"].(string); ok && value != "" {
-		return raw
-	}
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		return raw
-	}
-	id[6] = (id[6] & 0x0f) | 0x40
-	id[8] = (id[8] & 0x3f) | 0x80
-	input["operation_id"] = fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
-	encoded, err := json.Marshal(input)
-	if err != nil {
-		return raw
-	}
-	return encoded
 }

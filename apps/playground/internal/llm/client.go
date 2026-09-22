@@ -37,26 +37,6 @@ type Config struct {
 	Debug                            bool
 }
 
-type Tool struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Schema      json.RawMessage `json:"parameters"`
-}
-
-type Call struct {
-	ID, Name  string
-	Arguments json.RawMessage
-}
-
-// Native preserves provider-specific tool signatures and reasoning fields when
-// returning a complete assistant message to the same model on the next turn.
-type Message struct {
-	Role, Text   string
-	Calls        []Call
-	CallID, Name string
-	Native       json.RawMessage
-}
-
 type Client struct {
 	config Config
 	http   *http.Client

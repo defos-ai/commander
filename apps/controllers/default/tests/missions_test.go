@@ -90,7 +90,7 @@ func TestControllerUpsertsMissionsFromFile(t *testing.T) {
 			t.Fatalf("%s is missing its grouped model review: %+v", name, definition.Automations[name])
 		}
 	}
-	if err := definition.ValidateInput([]byte(`{"url":"http://sample-website:8080/"}`)); err != nil {
+	if err := definition.ValidateInput([]byte(`{"url":"https://defos.ai"}`)); err != nil {
 		t.Fatalf("invalid bundled input schema: %v", err)
 	}
 	if !reflect.DeepEqual(storedCustom, custom) {

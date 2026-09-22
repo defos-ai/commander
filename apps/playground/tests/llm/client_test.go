@@ -107,10 +107,16 @@ func TestAnthropicToolResultsAreGrouped(t *testing.T) {
 				sse(w, map[string]any{"type": "content_block_start", "index": index, "content_block": map[string]any{"type": "tool_use", "id": fmt.Sprintf("call-%d", index), "name": name, "input": map[string]any{}}})
 				sse(w, map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]string{"type": "input_json_delta", "partial_json": "{}"}})
 			}
+			sse(w, map[string]any{"type": "content_block_start", "index": 2, "content_block": map[string]string{"type": "thinking", "thinking": ""}})
+			sse(w, map[string]any{"type": "content_block_delta", "index": 2, "delta": map[string]string{"type": "thinking_delta", "thinking": "private reasoning"}})
+			sse(w, map[string]any{"type": "content_block_delta", "index": 2, "delta": map[string]string{"type": "signature_delta", "signature": "opaque-signature"}})
 			sse(w, map[string]any{"type": "message_delta", "delta": map[string]string{"stop_reason": "tool_use"}})
 		} else {
 			if len(body.Messages) != 3 || body.Messages[2].Role != "user" {
 				t.Errorf("tool results were not grouped: %+v", body)
+			}
+			if !strings.Contains(string(body.Messages[1].Content), "private reasoning") || !strings.Contains(string(body.Messages[1].Content), "opaque-signature") {
+				t.Errorf("Anthropic native thinking or signature discarded: %s", body.Messages[1].Content)
 			}
 			var content []map[string]any
 			if err := json.Unmarshal(body.Messages[2].Content, &content); err != nil || len(content) != 2 {

@@ -119,10 +119,6 @@ func responseMessage(output json.RawMessage) (Message, error) {
 	for _, item := range items {
 		switch item.Type {
 		case "function_call":
-			var arguments map[string]json.RawMessage
-			if err := json.Unmarshal([]byte(item.Arguments), &arguments); err != nil || arguments == nil {
-				return Message{}, errors.New("model returned invalid tool arguments; no tool calls were executed")
-			}
 			result.Calls = append(result.Calls, Call{ID: item.CallID, Name: item.Name, Arguments: json.RawMessage(item.Arguments)})
 		case "message":
 			for _, content := range item.Content {

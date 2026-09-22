@@ -5,7 +5,7 @@ instructions will follow when hosting support is available.
 
 ## Local Compose
 
-From the repository root, start MCP, one controller, two web-quality agents, and the sample website:
+From the repository root, start MCP, one controller, and two web-quality agents:
 
 ```sh
 docker compose up --build -d
@@ -18,6 +18,8 @@ Filesystem paths, mounts, and initialization belong to Compose; application
 images do not configure storage backends or create state directories.
 
 Connect your client to `http://localhost:4273/mcp`; see [client setup](../apps/adapters/README.md#quick-start).
+For terminal chat without installing Go, run `docker compose run --build --rm playground`.
+For a temporary native session, see [Playground's all-in-one mode](../apps/playground/README.md#go-one-executable).
 Use `docker compose logs -f` for logs and `docker compose down` to stop services.
 Stopping services preserves state; `docker compose down --volumes` deletes it.
 Loading a mission file upserts definitions and does not remove saved missions.
@@ -25,22 +27,20 @@ When switching from the old bundled agents, `docker compose up --build -d --remo
 also removes their old containers. For a completely fresh development setup,
 `docker compose down --volumes --remove-orphans` deletes stored operations,
 missions and artifacts before the next startup.
-The sample website is visible at `http://localhost:8088/`. For a mission, use
-`http://sample-website:8080/`, which is reachable from the agents. Browser setup
-and an end-to-end checklist are in the [web quality guide](../apps/agents/web-quality/README.md).
+Try `review-website` with `https://defos.ai` or your own website.
+Agent configuration and workflow scenarios are in the [web quality guide](../apps/agents/web-quality/README.md).
 
 ## Configuration
 
 | Variable | Purpose | Compose default |
 | --- | --- | --- |
 | `COMMANDER_MCP_PORT` | Published MCP port | `4273` |
-| `COMMANDER_WEBSITE_PORT` | Published sample website port | `8088` |
 | `BUS_URL` | Message bus | `file:///state/bus` |
 | `STORAGE_URL` | Artifacts and reports | `file:///state/storage` |
 | `DATABASE_URL` | Controller and adapter database | `file:///state/database` |
 | `LOG_LEVEL` / `LOG_FORMAT` | Logging | `info` / `json` |
 
-Application CLI flags override environment values. Native defaults use
+Application CLI flags override environment values. Standalone host defaults use
 `./state/bus`, `./state/storage`, and `./state/database`; run each binary with
 `--help` for available flags. MCP and the controller share all three locations;
 agents share the bus and storage. See [providers](../providers/README.md) for supported URLs.
@@ -60,7 +60,7 @@ Agents do not mount the database volume.
 Compose supplies the example mission file as a read-only config and passes `--with-missions`
 to upsert `review-website` at controller startup. Without that flag, no missions are loaded; see
 [controller setup](../apps/controllers/README.md#quick-start). The controller populates
-`actions.json` from agent announcements. Native runs still use local `state/`
+`actions.json` from agent announcements. Standalone hosts use local `state/`
 directories, which are ignored by Git; Compose does not use those directories.
 
 See the [architecture overview](overview.md#state-and-restart-recovery) for

@@ -27,10 +27,20 @@ import (
 
 const adapterType = "mcp"
 
+// Options lets an embedding host discover the bound address after startup.
+type Options struct {
+	Ready func(net.Addr)
+}
+
 // Run parses flags and serves the MCP HTTP endpoint until cancellation.
 // It sends commands over the bus and queries database and storage providers.
 // Environment values are resolved after flag parsing; Run installs no signals.
-func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
+func Run(ctx context.Context, args []string, stderr io.Writer) error {
+	return RunWithOptions(ctx, args, stderr, Options{})
+}
+
+// RunWithOptions reports the listening address to an embedding host after startup.
+func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
 	}
@@ -64,12 +74,12 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	return serve(ctx, configuration, adapterID, logger, listener)
+	return serve(ctx, configuration, adapterID, logger, listener, options)
 }
 
 // serve owns the adapter listener, bus and reply consumer. Controller work
 // continues independently when an MCP client disconnects or this host stops.
-func serve(ctx context.Context, configuration config, adapterID string, logger *slog.Logger, listener net.Listener) (result error) {
+func serve(ctx context.Context, configuration config, adapterID string, logger *slog.Logger, listener net.Listener, options Options) (result error) {
 	defer listener.Close()
 	if err := ctx.Err(); err != nil {
 		return err
@@ -128,6 +138,9 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	finished := make(chan error, 1)
 	go func() { finished <- httpServer.Serve(listener) }()
 	logger.Info("MCP server listening", "address", listener.Addr().String(), "endpoint", "/mcp", "transport", "streamable-http")
+	if options.Ready != nil {
+		options.Ready(listener.Addr())
+	}
 	select {
 	case err := <-finished:
 		if errors.Is(err, http.ErrServerClosed) {

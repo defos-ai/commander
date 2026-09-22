@@ -116,19 +116,18 @@ func (c *Client) anthropic(ctx context.Context, system string, history []Message
 	for _, index := range indexes {
 		block := blocks[index]
 		if block["type"] == "tool_use" {
+			var input json.RawMessage
 			if raw := arguments[index]; raw != "" {
-				var input any
-				if err := json.Unmarshal([]byte(raw), &input); err != nil {
-					return Message{}, errors.New("model returned invalid tool arguments")
-				}
+				input = json.RawMessage(raw)
 				block["input"] = input
+			} else {
+				input, err = json.Marshal(block["input"])
+				if err != nil {
+					return Message{}, err
+				}
 			}
 			id, _ := block["id"].(string)
 			name, _ := block["name"].(string)
-			input, err := json.Marshal(block["input"])
-			if err != nil {
-				return Message{}, err
-			}
 			result.Calls = append(result.Calls, Call{ID: id, Name: name, Arguments: input})
 		}
 		if text, ok := block["text"].(string); ok {

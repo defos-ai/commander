@@ -226,3 +226,76 @@ func TestContinuationReviewIsDeduplicatedAndOperatorAnswerIsExact(t *testing.T) 
 		t.Fatalf("reviews=%d answer=%q", reviews.Load(), answered)
 	}
 }
+
+func TestQueuedContinuationChecksCurrentStateBeforeCallingModel(t *testing.T) {
+	for _, change := range []string{"resolved", "new version", "operator decision", "terminal"} {
+		t.Run(change, func(t *testing.T) {
+			// Arrange: a continuation queues behind a foreground model request.
+			var updated atomic.Bool
+			endpoint := fixture.MCP(t, map[string]fixture.Tool{
+				"get_operation": func(context.Context, json.RawMessage) (any, error) {
+					status, decision, operationStatus, version := "pending", "model", "running", 1
+					if updated.Load() {
+						switch change {
+						case "resolved":
+							status = "resolved"
+						case "new version":
+							version = 2
+						case "operator decision":
+							decision = "user"
+						case "terminal":
+							operationStatus = "cancelled"
+						}
+					}
+					return map[string]any{"id": "op-1", "status": operationStatus, "version": version, "tasks": []any{
+						map[string]any{"id": "task-1", "status": "succeeded", "continuation": map[string]any{"version": version, "status": status, "decision_by": decision}},
+					}}, nil
+				},
+				"operation_events": func(ctx context.Context, _ json.RawMessage) (any, error) {
+					<-ctx.Done()
+					return nil, ctx.Err()
+				},
+			})
+			commander, err := bridge.Connect(t.Context(), endpoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer commander.Close()
+			started, release := make(chan struct{}), make(chan struct{})
+			var calls atomic.Int32
+			model := modelFunc(func(ctx context.Context, _ []llm.Message, _ func(string)) (llm.Message, error) {
+				if calls.Add(1) == 1 {
+					close(started)
+					select {
+					case <-release:
+					case <-ctx.Done():
+						return llm.Message{}, ctx.Err()
+					}
+				}
+				return llm.Message{Role: "assistant", Text: "Ready."}, nil
+			})
+			e := chat.New(t.Context(), model, commander)
+			defer e.Close()
+			_ = e.Send("hello")
+			select {
+			case <-started:
+			case <-time.After(3 * time.Second):
+				t.Fatal("foreground model request did not start")
+			}
+			_ = e.Send("/watch op-1")
+			await(t, e, func(event chat.Event) bool { return event.Kind == "operation" })
+
+			// Act: the saved continuation changes before its queued review begins.
+			updated.Store(true)
+			close(release)
+			for range 2 {
+				await(t, e, func(event chat.Event) bool { return event.Kind == "idle" })
+			}
+
+			// Assert: stale work never prompts the model to make a decision.
+			if calls.Load() != 1 {
+				t.Fatalf("model calls=%d; queued review used obsolete state", calls.Load())
+			}
+		})
+	}
+}

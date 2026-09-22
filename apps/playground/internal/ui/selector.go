@@ -10,11 +10,11 @@ import (
 )
 
 func (m *Model) selecting() bool {
-	return m.stage == "provider" || m.stage == "model"
+	return m.stage == stageProvider || m.stage == stageModel
 }
 
 func (m *Model) choices() []string {
-	if m.stage == "provider" {
+	if m.stage == stageProvider {
 		var choices []string
 		for _, provider := range llm.Presets() {
 			label := provider.Name
@@ -68,11 +68,11 @@ func (m *Model) navigate(key tea.KeyMsg) bool {
 }
 
 func (m *Model) selectChoice() tea.Cmd {
-	if m.stage == "provider" {
+	if m.stage == stageProvider {
 		return m.selectProvider(llm.Presets()[m.selection].ID)
 	}
 	if m.selection == len(m.models) {
-		m.setStage("manual_model", "Exact model name", "")
+		m.setStage(stageManualModel, "Exact model name", "")
 		return nil
 	}
 	m.settings.Model = m.models[m.selection]
@@ -81,7 +81,7 @@ func (m *Model) selectChoice() tea.Cmd {
 
 func (m *Model) selectionView() []string {
 	title := "Select your model provider:"
-	if m.stage == "model" {
+	if m.stage == stageModel {
 		title = "Select a model:"
 	}
 	lines := []string{title, ""}

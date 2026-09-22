@@ -161,12 +161,9 @@ type Task struct {
 	Status       string `json:"status"`
 	ActionName   string `json:"action_name"`
 	Continuation *struct {
-		Status          string `json:"status"`
-		DecisionBy      string `json:"decision_by"`
-		Version         uint64 `json:"version"`
-		ProposedActions []struct {
-			ActionName string `json:"action_name"`
-		} `json:"proposed_actions"`
+		Status     string `json:"status"`
+		DecisionBy string `json:"decision_by"`
+		Version    uint64 `json:"version"`
 	} `json:"continuation"`
 }
 type Question struct {

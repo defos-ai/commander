@@ -1,0 +1,52 @@
+package chat
+
+import bridge "commander/apps/playground/internal/mcp"
+
+// A continuation version or a settled operation status is reviewed once. Keep
+// these identities structured so scheduling and stale-work checks agree.
+type reviewKey struct {
+	operationID, taskID, status string
+	version                     uint64
+}
+
+func currentReviews(operation bridge.Operation) []reviewKey {
+	if operation.Settled() {
+		return []reviewKey{{operationID: operation.ID, status: operation.Status}}
+	}
+	if operation.Terminal() {
+		return nil
+	}
+	var keys []reviewKey
+	for _, task := range operation.Tasks {
+		c := task.Continuation
+		if c != nil && c.Status == "pending" && c.DecisionBy == "model" {
+			keys = append(keys, reviewKey{operationID: operation.ID, taskID: task.ID, version: c.Version})
+		}
+	}
+	return keys
+}
+
+func decisions(operation bridge.Operation, seen map[reviewKey]bool) []job {
+	var reviews []reviewKey
+	for _, key := range currentReviews(operation) {
+		if !seen[key] {
+			seen[key] = true
+			reviews = append(reviews, key)
+		}
+	}
+	if len(reviews) == 0 {
+		return nil
+	}
+	return []job{{operationID: operation.ID, reviews: reviews}}
+}
+
+func relevant(operation bridge.Operation, queued []reviewKey) bool {
+	for _, current := range currentReviews(operation) {
+		for _, key := range queued {
+			if current == key {
+				return true
+			}
+		}
+	}
+	return false
+}

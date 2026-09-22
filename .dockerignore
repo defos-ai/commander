@@ -4,6 +4,7 @@
 .cursor
 .vscode
 bin
+commander
 state
 **/.env
 **/.env.*
