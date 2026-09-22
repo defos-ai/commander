@@ -2,13 +2,8 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: Mission execution runtime for agents and tools" width="100%">
 </p>
 
-DEFOS Commander coordinates missions across AI agents, tools, and external systems.
-
-Commander is distributed execution infrastructure for AI agents and actions. Give it a mission, then follow, guide, and review the work through your existing AI chat.
-
-Kubernetes runs workloads. **Commander runs missions.**
-
-Commander powers mission execution in DEFOS Platform, coordinating thousands of cybersecurity agents.
+DEFOS Commander runs missions across AI agents, tools, and external systems.
+Start, guide, and review work from your AI chat.
 
 ## Get started
 
@@ -57,4 +52,4 @@ Try the same mission with your own website. Your AI can ask for your input as wo
 - [Providers](providers/README.md): use or implement messaging and storage backends.
 - [Development and testing](framework/tests/README.md): build and verify changes.
 
-Licensed under [GNU AGPL v3.0 only (AGPL-3.0-only)](LICENSE). Report vulnerabilities through [SECURITY.md](SECURITY.md).
+[AGPL-3.0-only](LICENSE) · [Report a vulnerability](SECURITY.md)
