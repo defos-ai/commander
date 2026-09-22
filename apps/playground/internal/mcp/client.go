@@ -46,7 +46,7 @@ func Connect(ctx context.Context, endpoint string) (*Client, error) {
 			return nil, errors.New("could not discover Commander MCP tools")
 		}
 		for _, tool := range page.Tools {
-			// Operator answers must come from /answer. The watcher owns long polling.
+			// Operator answers come from the UI. The watcher owns long polling.
 			if tool.Name == "answer_question" || tool.Name == "operation_events" {
 				continue
 			}
@@ -148,13 +148,15 @@ func Bounded(data []byte) string {
 }
 
 type Operation struct {
-	ID        string            `json:"id"`
-	Status    string            `json:"status"`
-	Tasks     []Task            `json:"tasks"`
-	Questions []Question        `json:"questions"`
-	Events    []json.RawMessage `json:"events"`
-	Version   uint64            `json:"version"`
-	Raw       json.RawMessage   `json:"-"`
+	ID                 string            `json:"id"`
+	Status             string            `json:"status"`
+	Tasks              []Task            `json:"tasks"`
+	Questions          []Question        `json:"questions"`
+	LastQuestion       *Question         `json:"last_question"`
+	RemainingQuestions int               `json:"remaining_questions"`
+	Events             []json.RawMessage `json:"events"`
+	Version            uint64            `json:"version"`
+	Raw                json.RawMessage   `json:"-"`
 }
 type Task struct {
 	ID           string `json:"id"`
@@ -166,11 +168,27 @@ type Task struct {
 		Version    uint64 `json:"version"`
 	} `json:"continuation"`
 }
+type QuestionStatus string
+
+const (
+	QuestionPending  QuestionStatus = "pending"
+	QuestionAnswered QuestionStatus = "answered"
+	QuestionExpired  QuestionStatus = "expired"
+)
+
 type Question struct {
-	ID         string   `json:"id"`
-	Text       string   `json:"text"`
-	Options    []string `json:"options"`
-	AnsweredAt *string  `json:"answered_at"`
+	ID         string         `json:"id"`
+	Status     QuestionStatus `json:"status"`
+	Text       string         `json:"text"`
+	Options    []string       `json:"options"`
+	Answer     string         `json:"answer"`
+	AskedAt    time.Time      `json:"asked_at"`
+	ExpiresAt  time.Time      `json:"expires_at"`
+	AnsweredAt *string        `json:"answered_at"`
+}
+
+func (q Question) Pending(now time.Time) bool {
+	return q.Status == QuestionPending && (q.ExpiresAt.IsZero() || now.Before(q.ExpiresAt))
 }
 
 func (o Operation) Terminal() bool {

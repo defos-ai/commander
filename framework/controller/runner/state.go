@@ -128,7 +128,7 @@ func refreshStatus(operation *operations.Operation) {
 		}
 	}
 	for _, question := range operation.Questions {
-		if question.AnsweredAt == nil {
+		if question.Pending() {
 			operation.Status = operations.Waiting
 			return
 		}

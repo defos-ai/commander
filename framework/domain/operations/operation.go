@@ -55,18 +55,31 @@ type Task struct {
 	FinishedAt   *time.Time                `json:"finished_at,omitempty"`
 }
 
+type QuestionStatus string
+
+const (
+	QuestionPending  QuestionStatus = "pending"
+	QuestionAnswered QuestionStatus = "answered"
+	QuestionExpired  QuestionStatus = "expired"
+)
+
 // A pending question blocks its StepID. An empty StepID blocks all new tasks.
 // Work already assigned continues and its results remain available.
 type Question struct {
-	ID         string     `json:"id"`
-	StepID     string     `json:"step_id,omitempty"`
-	TaskID     string     `json:"task_id,omitempty"`
-	Text       string     `json:"text"`
-	Options    []string   `json:"options,omitempty"`
-	Answer     string     `json:"answer,omitempty"`
-	AskedAt    time.Time  `json:"asked_at"`
-	AnsweredAt *time.Time `json:"answered_at,omitempty"`
+	ID         string         `json:"id"`
+	Status     QuestionStatus `json:"status"`
+	StepID     string         `json:"step_id,omitempty"`
+	TaskID     string         `json:"task_id,omitempty"`
+	Text       string         `json:"text"`
+	Options    []string       `json:"options,omitempty"`
+	Answer     string         `json:"answer,omitempty"`
+	AskedAt    time.Time      `json:"asked_at"`
+	AnsweredAt *time.Time     `json:"answered_at,omitempty"`
+	ExpiresAt  time.Time      `json:"expires_at"`
 }
+
+// Pending questions block new work until an answer or durable expiration.
+func (q Question) Pending() bool { return q.Status == QuestionPending }
 
 type EventType string
 
@@ -80,7 +93,8 @@ const (
 	TaskInterruptedEvent      EventType = "task.interrupted"
 	OperationRecovered        EventType = "operation.recovered"
 	QuestionAsked             EventType = "question.asked"
-	QuestionAnswered          EventType = "question.answered"
+	QuestionAnsweredEvent     EventType = "question.answered"
+	QuestionExpiredEvent      EventType = "question.expired"
 	OperationCompleted        EventType = "operation.completed"
 	OperationFailed           EventType = "operation.failed"
 	OperationCancelled        EventType = "operation.cancelled"

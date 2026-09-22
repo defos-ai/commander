@@ -24,9 +24,12 @@ type Commander interface {
 }
 
 type Event struct {
-	Kind, Text, ID string
-	Operation      *bridge.Operation
+	Kind, Text, ID          string
+	OperationID, QuestionID string
+	Answer                  string
+	Operation               *bridge.Operation
 }
+type answerRequest struct{ operationID, questionID, answer string }
 type job struct {
 	text, operationID string
 	reviews           []reviewKey
@@ -46,13 +49,13 @@ type Engine struct {
 	done          chan struct{}
 	watchRequests chan string
 	updates       chan bridge.Operation
-	controls      chan string
+	answers       chan answerRequest
 	wg            sync.WaitGroup
 }
 
 func New(ctx context.Context, model Model, commander Commander) *Engine {
 	ctx, cancel := context.WithCancel(ctx)
-	e := &Engine{ctx: ctx, cancel: cancel, model: model, commander: commander, input: make(chan string, 64), events: make(chan Event, 256), done: make(chan struct{}), watchRequests: make(chan string, 32), updates: make(chan bridge.Operation, 32), controls: make(chan string, 16)}
+	e := &Engine{ctx: ctx, cancel: cancel, model: model, commander: commander, input: make(chan string, 64), events: make(chan Event, 256), done: make(chan struct{}), watchRequests: make(chan string, 32), updates: make(chan bridge.Operation, 32), answers: make(chan answerRequest, 16)}
 	go e.run()
 	return e
 }
@@ -66,6 +69,22 @@ func (e *Engine) Send(text string) error {
 		return nil
 	default:
 		return errors.New("message queue is full; wait for the current reply")
+	}
+}
+
+// AnswerQuestion accepts explicit operator input without parsing command text or
+// sending the choice to the model first. Completion arrives as answer_end.
+func (e *Engine) AnswerQuestion(operationID, questionID, answer string) error {
+	if strings.TrimSpace(operationID) == "" || strings.TrimSpace(questionID) == "" || strings.TrimSpace(answer) == "" {
+		return errors.New("an operation, question and non-empty answer are required")
+	}
+	select {
+	case <-e.ctx.Done():
+		return e.ctx.Err()
+	case e.answers <- answerRequest{operationID, questionID, answer}:
+		return nil
+	default:
+		return errors.New("answer queue is full; wait for the current request")
 	}
 }
 func (e *Engine) emit(event Event) {
@@ -88,14 +107,7 @@ func (e *Engine) run() {
 	watched := map[string]bool{}
 	operations := map[string]bridge.Operation{}
 	seen := map[reviewKey]bool{}
-	questions := map[string]bool{}
 	paused := false
-	showQuestion := func(question bridge.Question) {
-		if question.AnsweredAt == nil && !questions[question.ID] {
-			questions[question.ID] = true
-			e.emit(questionEvent(question))
-		}
-	}
 	watch := func(id string) {
 		if id == "" || watched[id] {
 			return
@@ -135,9 +147,9 @@ func (e *Engine) run() {
 			e.emit(Event{Kind: "idle"})
 		case id := <-e.watchRequests:
 			watch(id)
-		case text := <-e.controls:
+		case answer := <-e.answers:
 			paused = false
-			pending = append(pending, job{text: text})
+			e.submitAnswer(answer, operations)
 		case text := <-e.input:
 			text = strings.TrimSpace(text)
 			if text == "" {
@@ -182,6 +194,7 @@ func (e *Engine) run() {
 			case strings.HasPrefix(text, "/cancel "):
 				e.control("cancel_operation", map[string]any{"operation_id": strings.TrimSpace(strings.TrimPrefix(text, "/cancel "))})
 			case strings.HasPrefix(text, "/answer "):
+				paused = false
 				e.answer(strings.TrimPrefix(text, "/answer "), operations)
 			case strings.HasPrefix(text, "/"):
 				e.emit(Event{Kind: "error", Text: "Unknown command. Type /help."})
@@ -197,11 +210,19 @@ func (e *Engine) run() {
 				}
 			}
 		case operation := <-e.updates:
+			if previous, ok := operations[operation.ID]; ok && operation.Version < previous.Version {
+				continue
+			}
+			if _, known := operations[operation.ID]; !known {
+				// Opening a saved operation should not replay old operator answers.
+				for _, question := range operation.Questions {
+					if question.Status == bridge.QuestionAnswered {
+						seen[reviewKey{operationID: operation.ID, questionID: question.ID, status: string(question.Status)}] = true
+					}
+				}
+			}
 			operations[operation.ID] = operation
 			e.emit(Event{Kind: "operation", ID: operation.ID, Operation: &operation})
-			for _, question := range operation.Questions {
-				showQuestion(question)
-			}
 			if !paused {
 				automatic = append(automatic, decisions(operation, seen)...)
 			}
@@ -213,7 +234,6 @@ const Help = `/help                       Show this help
 /status                     Show connection and queue status
 /operations                 List saved operations
 /watch <operation-id>        Follow an operation and resume model review
-/answer <question-id> <text> Answer a question (or give an option number)
 /run <operation-id> <action> <json-input> Queue an action directly through MCP
 /cancel <operation-id>       Cancel a server-side operation
 /stop                       Stop this reply and clear queued messages

@@ -30,6 +30,7 @@ func (r *Runner) schedule() {
 		case <-r.wake:
 		case <-ticker.C:
 		}
+		r.expireOperatorQuestions()
 		r.dispatchQueued()
 	}
 }
@@ -102,7 +103,7 @@ func (r *Runner) dispatchQueued() {
 
 func blockedByQuestion(op operations.Operation, task operations.Task) bool {
 	for _, q := range op.Questions {
-		if q.AnsweredAt != nil {
+		if !q.Pending() {
 			continue
 		}
 		if q.TaskID != "" {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -51,7 +52,11 @@ func (m *Model) refresh() {
 	m.forceBottom = false
 	m.viewport.Width = max(20, m.width-4)
 	activityLines := min(len(m.operations), 4)
-	m.viewport.Height = max(3, m.height-10-activityLines)
+	questionLines := 0
+	if question := m.questionView(time.Now()); question != "" {
+		questionLines = strings.Count(question, "\n") + 2
+	}
+	m.viewport.Height = max(3, m.height-10-activityLines-questionLines)
 	var lines []string
 	for i := range m.entries {
 		item := &m.entries[i]
@@ -156,11 +161,7 @@ func (m *Model) View() string {
 				done++
 			}
 		}
-		for _, question := range op.Questions {
-			if question.AnsweredAt == nil {
-				pending++
-			}
-		}
+		pending = len(m.pendingQuestions(op, time.Now()))
 		marker := stars[m.frame%len(stars)]
 		if op.Settled() {
 			marker = "✓"
@@ -192,5 +193,9 @@ func (m *Model) View() string {
 	} else {
 		foot += " · /back"
 	}
-	return header + "\n\n" + content + "\n\n" + strings.Join(activity, "\n") + "\n" + input + "\n" + m.color(foot, MutedGray) + "\n"
+	question := ""
+	if panel := m.questionView(time.Now()); panel != "" {
+		question = panel + "\n\n"
+	}
+	return header + "\n\n" + content + "\n\n" + strings.Join(activity, "\n") + "\n" + question + input + "\n" + m.color(foot, MutedGray) + "\n"
 }

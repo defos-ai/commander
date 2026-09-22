@@ -242,8 +242,12 @@ func TestPlaygroundWebsiteReviewThroughRealCommander(t *testing.T) {
 	if questionID == "" {
 		t.Fatal("question was not saved")
 	}
-	until(t, out, "/answer "+questionID)
-	submit(t, writer, "/answer "+questionID+" 1")
+	until(t, out, "Should the missing page block release?")
+	until(t, out, "Enter answer")
+	// Choose Yes with the selector; the operator never needs a question ID.
+	if _, err := io.WriteString(writer, "\r"); err != nil {
+		t.Fatal(err)
+	}
 	until(t, out, "Review complete:")
 	submit(t, writer, "/exit")
 	select {
@@ -257,7 +261,7 @@ func TestPlaygroundWebsiteReviewThroughRealCommander(t *testing.T) {
 
 	// Assert: automatic checks, the operator's answer and the final report persisted through MCP.
 	op, err := commander.Operation(ctx, operationID)
-	if err != nil || op.Status != "completed" || len(op.Tasks) != 6 || len(op.Questions) != 1 || op.Questions[0].AnsweredAt == nil {
+	if err != nil || op.Status != "completed" || len(op.Tasks) != 6 || len(op.Questions) != 1 || op.Questions[0].Status != bridge.QuestionAnswered || op.Questions[0].AnsweredAt == nil {
 		t.Fatalf("operation=%+v error=%v", op, err)
 	}
 	var saved struct {

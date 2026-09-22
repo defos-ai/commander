@@ -34,11 +34,20 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 				refs = append(refs, *task.Result.OutputArtifact)
 			}
 		}
-		if operation.Status.Terminal() && !slices.ContainsFunc(operation.Tasks, needsTaskRecovery) {
-			continue
-		}
 		s := &operationState{operation: operation.Clone(), changed: make(chan struct{})}
 		next := operation.Clone()
+		expired := expireQuestions(&next, time.Now().UTC())
+		if operation.Status.Terminal() && !slices.ContainsFunc(operation.Tasks, needsTaskRecovery) {
+			if expired {
+				if err := r.save(ctx, s, next); err != nil {
+					return fmt.Errorf("persist expired questions for %s: %w", operation.ID, err)
+				}
+			}
+			if pendingQuestionDeadline(next) {
+				r.states[operation.ID] = s
+			}
+			continue
+		}
 		refreshStatus(&next)
 		appendEvent(&next, operations.OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")
 		if err := r.save(ctx, s, next); err != nil {

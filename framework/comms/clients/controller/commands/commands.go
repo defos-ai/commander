@@ -94,12 +94,13 @@ func (r ResolveContinuationCommand) Validate() error {
 }
 
 type AskQuestionCommand struct {
-	TaskID      string   `json:"task_id,omitempty"`
-	Version     uint64   `json:"version,omitempty"`
-	OperationID string   `json:"operation_id"`
-	StepID      string   `json:"step_id,omitempty"`
-	Text        string   `json:"text"`
-	Options     []string `json:"options,omitempty"`
+	TaskID         string   `json:"task_id,omitempty"`
+	Version        uint64   `json:"version,omitempty"`
+	OperationID    string   `json:"operation_id"`
+	StepID         string   `json:"step_id,omitempty"`
+	Text           string   `json:"text"`
+	Options        []string `json:"options,omitempty"`
+	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
 }
 
 func (r AskQuestionCommand) Validate() error {
@@ -111,6 +112,12 @@ func (r AskQuestionCommand) Validate() error {
 	}
 	if strings.TrimSpace(r.Text) == "" {
 		return errors.New("question text must not be blank")
+	}
+	if r.TimeoutSeconds < 0 || r.TimeoutSeconds > 86400 {
+		return errors.New("timeout_seconds must be between 1 and 86400, or omitted for the default")
+	}
+	if len(r.Options) > 4 {
+		return errors.New("questions support at most four options")
 	}
 	for _, option := range r.Options {
 		if strings.TrimSpace(option) == "" {

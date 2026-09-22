@@ -136,8 +136,8 @@ func TestMCPOperationSummaryPreservesProgressAndDetail(t *testing.T) {
 			{ID: id.New(), Status: operations.TaskSucceeded, Continuation: &operations.Continuation{Status: operations.ContinuationWaiting, DecisionBy: operations.DecisionUser}},
 		},
 		Questions: []operations.Question{
-			{ID: id.New(), Text: "Continue?", AskedAt: now},
-			{ID: id.New(), Text: "Target?", Answer: "example.test", AskedAt: now, AnsweredAt: &now},
+			{ID: id.New(), Status: operations.QuestionPending, Text: "Continue?", AskedAt: now},
+			{ID: id.New(), Status: operations.QuestionAnswered, Text: "Target?", Answer: "example.test", AskedAt: now, AnsweredAt: &now},
 		},
 		Events: []operations.Event{{Sequence: 1, Type: operations.QuestionAsked, CreatedAt: now}},
 	}

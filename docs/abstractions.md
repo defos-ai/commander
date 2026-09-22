@@ -114,13 +114,23 @@ even when the action has an automatic mission rule.
 operation update. Send `actions: []` to finish the branch. Repeated or stale
 versions are rejected; refresh `get_operation` before making another decision.
 Explicit operation completion closes remaining model decisions, but requires
-queued/running work and unanswered questions to finish first.
+queued/running work and pending questions to finish first.
 
 A linked `ask_question` changes the decision maker to `user`. The adapter's AI
 client presents it to the operator. `answer_question` records their actual answer
 and returns the decision to `model`; it never dispatches work. Commander does not
 independently verify human authorship of the answer. Unlinked questions can still
 pause an entire operation or mission step.
+
+Question status is `pending`, `answered`, or `expired`. Status controls its
+lifecycle; `asked_at` and `answered_at` record its history, while `expires_at`
+defines the answer deadline.
+Questions accept up to four options or a free-text answer. They expire after
+two minutes by default; `timeout_seconds` can set another deadline. On expiry,
+the controller sets status to `expired` and returns the linked decision to the model.
+The question remains in history without an operator answer; silence is not approval.
+MCP exposes the latest pending question as `last_question` and the number of other
+pending questions as `remaining_questions`. Playground presents them one at a time.
 
 Agents propose actions, while mission rules authorize automatic action
 transitions. Queued work is persisted before dispatch. The current scheduler

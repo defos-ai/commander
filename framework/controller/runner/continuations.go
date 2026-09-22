@@ -158,7 +158,7 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 			return errors.New("continuation is not pending at the supplied version; refresh get_operation")
 		}
 		for _, q := range op.Questions {
-			if q.AnsweredAt == nil && (q.TaskID == command.TaskID || q.TaskID == "" && (q.StepID == "" || q.StepID == op.Tasks[i].StepID)) {
+			if q.Pending() && (q.TaskID == command.TaskID || q.TaskID == "" && (q.StepID == "" || q.StepID == op.Tasks[i].StepID)) {
 				return ErrQuestionPending
 			}
 		}

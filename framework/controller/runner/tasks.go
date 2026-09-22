@@ -44,7 +44,7 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		return operations.Task{}, err
 	}
 	for _, question := range s.operation.Questions {
-		if question.TaskID == "" && question.AnsweredAt == nil && (question.StepID == "" || question.StepID == command.StepID) {
+		if question.TaskID == "" && question.Pending() && (question.StepID == "" || question.StepID == command.StepID) {
 			return operations.Task{}, ErrQuestionPending
 		}
 	}

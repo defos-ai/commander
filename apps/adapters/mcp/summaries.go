@@ -58,18 +58,20 @@ type missionSummary struct {
 }
 
 type operationSummary struct {
-	ID               string                        `json:"id"`
-	Mission          missionSummary                `json:"mission"`
-	Input            json.RawMessage               `json:"input"`
-	Status           operations.Status             `json:"status"`
-	TaskCounts       map[operations.TaskStatus]int `json:"task_counts"`
-	PendingDecisions int                           `json:"pending_decisions"`
-	PendingQuestions int                           `json:"pending_questions"`
-	ReportID         string                        `json:"report_id,omitempty"`
-	Error            string                        `json:"error,omitempty"`
-	Version          uint64                        `json:"version"`
-	CreatedAt        time.Time                     `json:"created_at"`
-	UpdatedAt        time.Time                     `json:"updated_at"`
+	ID                 string                        `json:"id"`
+	Mission            missionSummary                `json:"mission"`
+	Input              json.RawMessage               `json:"input"`
+	Status             operations.Status             `json:"status"`
+	TaskCounts         map[operations.TaskStatus]int `json:"task_counts"`
+	PendingDecisions   int                           `json:"pending_decisions"`
+	PendingQuestions   int                           `json:"pending_questions"`
+	LastQuestion       *operations.Question          `json:"last_question"`
+	RemainingQuestions int                           `json:"remaining_questions"`
+	ReportID           string                        `json:"report_id,omitempty"`
+	Error              string                        `json:"error,omitempty"`
+	Version            uint64                        `json:"version"`
+	CreatedAt          time.Time                     `json:"created_at"`
+	UpdatedAt          time.Time                     `json:"updated_at"`
 }
 
 func summarizeOperation(operation operations.Operation) operationSummary {
@@ -85,10 +87,9 @@ func summarizeOperation(operation operations.Operation) operationSummary {
 			summary.PendingDecisions++
 		}
 	}
-	for _, question := range operation.Questions {
-		if question.AnsweredAt == nil {
-			summary.PendingQuestions++
-		}
+	summary.LastQuestion, summary.RemainingQuestions = pendingQuestions(operation, time.Now())
+	if summary.LastQuestion != nil {
+		summary.PendingQuestions = summary.RemainingQuestions + 1
 	}
 	return summary
 }

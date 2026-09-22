@@ -39,6 +39,7 @@ type eventMessage struct {
 
 type Model struct {
 	setupState
+	questions            questionPanel
 	ctx                  context.Context
 	config               Config
 	input                textinput.Model
@@ -74,6 +75,7 @@ func New(ctx context.Context, config Config, output io.Writer) *Model {
 	input.Focus()
 	m := &Model{ctx: ctx, config: config, input: input, viewport: viewport.New(78, 16), width: 80, height: 28, operations: map[string]bridge.Operation{}, streamIndex: -1, renderer: renderer}
 	m.styleInput()
+	m.initQuestions()
 	m.setStage(stageProvider, "/help, /back, or /exit", "")
 	return m
 }
@@ -105,6 +107,14 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.setupResult(message); handled {
 		return m, cmd
 	}
+	if m.stage == stageChat && m.syncQuestion(time.Now()) {
+		m.refresh()
+		if key, ok := message.(tea.KeyMsg); ok && key.String() == "enter" {
+			// An expired question may reveal a different one. Show that change
+			// before accepting an answer intended for the previous question.
+			return m, nil
+		}
+	}
 	switch msg := message.(type) {
 	case tick:
 		m.frame++
@@ -112,6 +122,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = max(24, msg.Width), max(12, msg.Height)
 		m.input.Width = max(12, m.width-8)
+		m.questions.input.Width = max(12, m.width-12)
 		m.refresh()
 		return m, nil
 	case eventMessage:
@@ -121,6 +132,10 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.receive(msg.event)
 		return m, waitEvent(m.engine)
 	case tea.KeyMsg:
+		if m.questionKey(msg) {
+			m.refresh()
+			return m, nil
+		}
 		if m.selecting() && m.navigate(msg) {
 			return m, nil
 		}
@@ -159,6 +174,10 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	var cmd tea.Cmd
+	if m.questions.focused && m.questions.editing {
+		m.questions.input, cmd = m.questions.input.Update(message)
+		return m, cmd
+	}
 	m.input, cmd = m.input.Update(message)
 	return m, cmd
 }
@@ -198,9 +217,34 @@ func (m *Model) receive(event chat.Event) {
 		m.refresh()
 	case "operation":
 		if event.Operation != nil {
-			m.operations[event.ID] = *event.Operation
-			m.refresh()
+			previous, exists := m.operations[event.ID]
+			if !exists || event.Operation.Version >= previous.Version {
+				m.operations[event.ID] = *event.Operation
+				m.syncQuestion(time.Now())
+				m.refresh()
+			}
 		}
+	case "question":
+		// Pending questions are rendered from current operation snapshots.
+	case "answer_start":
+		if current := m.questions.current; current != nil && current.key == (questionKey{event.OperationID, event.QuestionID}) {
+			m.questions.submitting = true
+		}
+	case "answer_end":
+		key := questionKey{event.OperationID, event.QuestionID}
+		if event.Text == "" {
+			if event.Answer != "" && !m.questions.answered[key] {
+				m.add("user", "Operator answer: "+event.Answer)
+			}
+			m.questions.answered[key] = true
+			m.syncQuestion(time.Now())
+		} else if current := m.questions.current; current != nil && current.key == key {
+			m.questions.submitting = false
+			m.questions.error = event.Text
+		} else {
+			m.add("error", "Answer failed: "+event.Text)
+		}
+		m.refresh()
 	default:
 		m.add(event.Kind, event.Text)
 	}

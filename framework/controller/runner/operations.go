@@ -103,7 +103,7 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 			return errors.New("operation still has active tasks")
 		}
 		for _, question := range next.Questions {
-			if question.AnsweredAt == nil {
+			if question.Pending() {
 				return ErrQuestionPending
 			}
 		}

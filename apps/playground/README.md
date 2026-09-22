@@ -101,7 +101,6 @@ prioritize accessibility or broken links.”**
 - `/help`, `/status`, `/operations`: help and current state.
 - `/watch <operation-id>`: follow saved work and resume model decisions.
 - `/run <operation-id> <action-name> <json-input>`: queue an operator-selected action directly through MCP. Input must be a JSON object; pending questions and permission checks still apply.
-- `/answer <question-id> <text>`: answer a question, or enter its option number.
 - `/cancel <operation-id>`: cancel the operation through Commander.
 - `/stop` or **Ctrl+C**: stop the current reply and clear queued messages.
 - `/clear`: clear model conversation after stopping a reply.
@@ -113,8 +112,15 @@ turn, while operation updates and slash commands remain responsive. Use
 **PgUp/PgDown** to scroll. Star loaders use the DEFOS palette; progress shows real
 task counts rather than an estimated percentage.
 
-The watcher brings pending model continuations back to the conversation. Only an
-operator can submit an answer with `/answer`. With a separate MCP server, exiting
+Operator questions appear in a selector: **↑/↓** chooses an option and **Enter**
+submits it. Type a custom answer or use **Tab** to switch back to chat without
+losing your draft. The panel shows the latest question, a countdown, and how many
+others are waiting. Up to four options are offered. Questions expire after two
+minutes by default, then the model reviews how to continue.
+
+The watcher brings pending model continuations and expired questions back to the
+conversation. Only operator input submits an answer; expiry does not invent one.
+With a separate MCP server, exiting
 leaves server-side work running; further model decisions wait until a session
 follows the operation. All-in-one hosts stop with Playground.
 After a failed model turn, send guidance or use `/watch <id>` to retry review.

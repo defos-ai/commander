@@ -74,9 +74,10 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Operations []operationSummary `json:"operations"`
 			}{summaries}, err
 		})
-	addTool(server, "get_operation", "Read current status, tasks, results, pending continuations, questions, report and event history, including after restart. An interrupted task has an unknown execution outcome; inspect it before explicitly assigning replacement work.", operationSchema,
-		func(ctx context.Context, request OperationRequest) (operations.Operation, error) {
-			return config.OperationStore.Get(ctx, request.OperationID)
+	addTool(server, "get_operation", "Read status, tasks, results, continuations and question history. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
+		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
+			operation, err := config.OperationStore.Get(ctx, request.OperationID)
+			return describeOperation(operation), err
 		})
 	addTool(server, "get_report", "Read the separately stored final report for a completed operation, including after a server restart.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
@@ -109,7 +110,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 			}
 			return OperationEventsResult{Events: events, NextSequence: request.AfterSequence + uint64(len(events))}, err
 		})
-	addTool(server, "ask_question", "Request operator intervention only when the model cannot proceed. Supply task_id and its continuation version to pause that decision. Without task_id, step_id blocks that step or omission blocks all new assignments. Present the question to the operator; do not invent an answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": stringProperty, "text": stringProperty, "options": map[string]any{"type": "array", "items": stringProperty}}, "operation_id", "text"),
+	addTool(server, "ask_question", "Ask the operator when needed, with up to 4 short options or a free-text question. timeout_seconds defaults to 120; after expiry, review the situation and decide how to continue. Silence is not approval. Supply task_id and continuation version to pause that decision; otherwise step_id blocks that step or omission blocks new assignments. Do not invent an operator answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": stringProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
 		func(ctx context.Context, request AskQuestionRequest) (operations.Question, error) {
 			return execution.Ask(ctx, commands.AskQuestionCommand(request))
 		})

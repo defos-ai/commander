@@ -152,14 +152,19 @@ func TestContinuationReviewIsDeduplicatedAndOperatorAnswerIsExact(t *testing.T) 
 		mu.Lock()
 		defer mu.Unlock()
 		questions := []any{}
+		var latest any
 		if decision == "user" || answered != "" {
-			q := map[string]any{"id": "question-1", "text": "Which priority?", "options": []string{"Accessibility", "Broken links"}}
+			q := map[string]any{"id": "question-1", "status": bridge.QuestionPending, "text": "Which priority?", "options": []string{"Accessibility", "Broken links"}}
 			if answered != "" {
+				q["status"] = bridge.QuestionAnswered
 				q["answered_at"] = "2026-09-21T12:00:00Z"
+				q["answer"] = answered
+			} else {
+				latest = q
 			}
 			questions = append(questions, q)
 		}
-		return map[string]any{"id": "op-1", "status": "running", "version": version, "tasks": []any{map[string]any{"id": "task-1", "status": "succeeded", "continuation": map[string]any{"version": version, "status": status, "decision_by": decision}}}, "questions": questions}
+		return map[string]any{"id": "op-1", "status": "running", "version": version, "tasks": []any{map[string]any{"id": "task-1", "status": "succeeded", "continuation": map[string]any{"version": version, "status": status, "decision_by": decision}}}, "questions": questions, "last_question": latest, "remaining_questions": 0}
 	}
 	endpoint := fixture.MCP(t, map[string]fixture.Tool{
 		"get_operation": func(context.Context, json.RawMessage) (any, error) { return snapshot(), nil },
@@ -212,7 +217,7 @@ func TestContinuationReviewIsDeduplicatedAndOperatorAnswerIsExact(t *testing.T) 
 
 	// Act: repeat the same operation update, then answer using the displayed option.
 	_ = e.Send("/watch op-1")
-	await(t, e, func(event chat.Event) bool { return event.Kind == "question" })
+	await(t, e, func(event chat.Event) bool { return event.Kind == "operation" && event.Operation.LastQuestion != nil })
 	changed <- struct{}{}
 	_ = e.Send("/answer question-1 2")
 	await(t, e, func(event chat.Event) bool {

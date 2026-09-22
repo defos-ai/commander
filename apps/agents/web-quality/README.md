@@ -95,7 +95,7 @@ two agents, controller recovery, grouped review, operator answers and reports.
 | Scenario | How to try it | What to expect |
 | --- | --- | --- |
 | Automatic review | Use the prompt above. | Checks run in the background; one review follows all results. |
-| Operator input | Add “Before completing, ask whether I want a brief or detailed report.” | A saved question; `/answer <question-id> brief` resumes review. |
+| Operator input | Add “Before completing, ask whether I want a brief or detailed report.” | Select an answer with ↑/↓ and Enter in Playground to resume review. |
 | Concurrent work | Start another review while one is running. | `/operations` shows both; you can keep chatting. |
 | Restart | Restart the controller while work is running or a question is pending. | Saved tasks/questions remain available. `/watch <operation-id>` reconnects a new Playground session. |
 | Cancellation | `/cancel <operation-id>` while checks run. | No new dispatch; already dispatched checks may finish. |

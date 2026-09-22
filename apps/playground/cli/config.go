@@ -30,7 +30,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.BoolVar(&c.Debug, "debug", false, "Show redacted model API error details (COMMANDER_DEBUG)")
 	flags.BoolVar(&c.NoColor, "no-color", os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb", "Disable corporate colors (NO_COLOR)")
 	flags.Usage = func() {
-		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\n\nIn chat: /help, /operations, /watch, /answer, /cancel, /exit.\n\n")
+		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\n\nIn chat: /help, /operations, /watch, /cancel, /exit.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {

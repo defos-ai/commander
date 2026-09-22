@@ -5,8 +5,8 @@ import bridge "commander/apps/playground/internal/mcp"
 // A continuation version or a settled operation status is reviewed once. Keep
 // these identities structured so scheduling and stale-work checks agree.
 type reviewKey struct {
-	operationID, taskID, status string
-	version                     uint64
+	operationID, taskID, questionID, status string
+	version                                 uint64
 }
 
 func currentReviews(operation bridge.Operation) []reviewKey {
@@ -21,6 +21,14 @@ func currentReviews(operation bridge.Operation) []reviewKey {
 		c := task.Continuation
 		if c != nil && c.Status == "pending" && c.DecisionBy == "model" {
 			keys = append(keys, reviewKey{operationID: operation.ID, taskID: task.ID, version: c.Version})
+		}
+	}
+	// An operation-wide question may have no task continuation to wake the
+	// model. Persisted expiry is itself a review trigger, never an answer.
+	for _, question := range operation.Questions {
+		switch question.Status {
+		case bridge.QuestionAnswered, bridge.QuestionExpired:
+			keys = append(keys, reviewKey{operationID: operation.ID, questionID: question.ID, status: string(question.Status)})
 		}
 	}
 	return keys

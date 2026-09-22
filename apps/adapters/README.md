@@ -31,6 +31,10 @@ with its task ID, current version, and selected actions (an empty array finishes
 the branch). Omit `agent_id` for automatic scheduling. When operator guidance is
 needed, use a linked `ask_question`, present it to the user, and submit their
 actual answer with `answer_question`; the model then resumes the decision.
+`get_operation` exposes `last_question` and `remaining_questions` (excluding the
+displayed question). Questions have at most four options and a two-minute default
+deadline, configurable with `timeout_seconds`. Expiry returns the decision to the
+model without an operator answer; full history stays available.
 See [continuations](../../docs/abstractions.md#next-actions-and-continuations).
 
 ## Development and testing
