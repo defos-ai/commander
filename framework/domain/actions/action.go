@@ -1,4 +1,3 @@
-// Package actions defines the shared action models and catalog.
 package actions
 
 import (
@@ -16,7 +15,6 @@ const (
 	Unavailable Status = "unavailable"
 )
 
-// Action is the serializable model shared by catalogs, inventory, and executors.
 type Action struct {
 	Name                string          `json:"name"`
 	Description         string          `json:"description"`

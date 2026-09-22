@@ -1,4 +1,3 @@
-// Package actions implements bounded website checks and browser screenshots.
 package actions
 
 import (
@@ -32,6 +31,6 @@ func outputSchema[T any]() json.RawMessage {
 	schema, err := action.SchemaFor[T]()
 	if err != nil {
 		panic(err)
-	} // Application-owned static types, checked by tests.
+	}
 	return schema
 }

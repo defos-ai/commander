@@ -16,7 +16,7 @@ jobs:
   test:
     name: MCP against Compose
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -28,15 +28,15 @@ jobs:
       - name: Start test stack
         run: docker compose -f compose.test.yaml up --build --wait
       - name: Run MCP tests
-        run: go test -race -count=1 -timeout=5m -v ./apps/adapters/mcp/tests
+        run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
       - name: Collect service logs
-        if: failure()
+        if: failure() || cancelled()
         run: docker compose -f compose.test.yaml logs --no-color > "$RUNNER_TEMP/commander-compose.log"
       - name: Stop test stack
         if: always()
         run: docker compose -f compose.test.yaml down --volumes
       - name: Upload service logs
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: mcp-compose-logs

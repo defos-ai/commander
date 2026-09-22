@@ -1,4 +1,3 @@
-// Package testing provides filesystem cleanup for isolated tests.
 package testing
 
 import (
@@ -60,8 +59,8 @@ func (c *TestFsCleaner) Clean() error {
 	for _, entry := range entries {
 		path := filepath.Join(c.database, entry.Name())
 		switch {
-		case strings.HasSuffix(entry.Name(), ".lock"):
-			// Never unlink a lock that another process may hold.
+		case strings.HasSuffix(entry.Name(), ".lock"), strings.HasPrefix(entry.Name(), ".") && strings.HasSuffix(entry.Name(), ".tmp"):
+			// Live catalog writers own their lock and temporary file until rename.
 		case entry.Name() == "agents" && entry.IsDir():
 			lock, err := jsonfile.NewContext(ctx, filepath.Join(path, ".locks", "inventory.json"))
 			if err != nil {

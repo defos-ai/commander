@@ -8,9 +8,6 @@ import (
 	"commander/framework/domain/executions"
 )
 
-// Shared contracts live in domain/agents, domain/actions, and domain/executions.
-// These aliases keep agent extensions
-// convenient without making consumers depend on the runtime package.
 type (
 	AgentStatus   = agentmodel.AgentStatus
 	AgentType     = agentmodel.AgentType
@@ -31,7 +28,6 @@ const (
 	DefaultInlineOutputLimit = actionmodel.DefaultInlineOutputLimit
 )
 
-// Decode validates and decodes an agent payload.
 func Decode(data []byte, destination any) error {
 	return domain.Decode(data, destination)
 }

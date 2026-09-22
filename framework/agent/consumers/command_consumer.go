@@ -8,7 +8,6 @@ import (
 	"commander/framework/comms/messages"
 )
 
-// CommandConsumer routes this agent's incoming commands to their consumers.
 type CommandConsumer struct {
 	AgentID   string
 	Action    ActionConsumer

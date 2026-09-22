@@ -65,7 +65,6 @@ func (m *Model) pendingQuestions(operation bridge.Operation, now time.Time) []pe
 	return pending
 }
 
-// Select from current operation snapshots, not old question transcript entries.
 func (m *Model) syncQuestion(now time.Time) bool {
 	var latest *pendingQuestion
 	total := 0

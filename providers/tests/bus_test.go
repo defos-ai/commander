@@ -15,7 +15,6 @@ import (
 )
 
 func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) {
-	// Arrange: separate bus instances share two subscribers on the same topic.
 	root := t.TempDir()
 	open := func() *fscomms.FsBus {
 		bus, err := fscomms.NewFsBus(root)
@@ -52,7 +51,6 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 		return len(entries)
 	}
 
-	// Act: acknowledge one recipient first, then finish the other recipient.
 	if err := publisher.Publish(ctx, "results", message); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +92,6 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 		t.Fatal(closeErr)
 	}
 
-	// Assert: failed processing remains durable after its subscriber closes.
 	if !errors.Is(err, rejected) || files() != 1 {
 		t.Fatalf("failed delivery was acknowledged or removed: %v, files=%d", err, files())
 	}

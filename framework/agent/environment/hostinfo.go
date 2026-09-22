@@ -11,7 +11,6 @@ import (
 	agentmodel "commander/framework/domain/agents"
 )
 
-// HostInfo is the public host identity resolved for an agent.
 type HostInfo = agentmodel.ServerInfo
 
 // ResolveHostInfo fills missing fields from SERVER_IP_ADDRESS and SERVER_HOSTNAME,

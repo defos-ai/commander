@@ -20,17 +20,14 @@ func TestResolveDiscoversOnlyMissingHostFields(t *testing.T) {
 		{"discover IP", "", "env-pod", HostInfo{IPAddress: "10.42.0.10", Hostname: "env-pod"}, false, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			// Arrange.
 			t.Setenv("SERVER_IP_ADDRESS", test.envIP)
 			t.Setenv("SERVER_HOSTNAME", test.envHostname)
 			var hostnameCalled, ipCalled bool
 			hostname := func() (string, error) { hostnameCalled = true; return "local-pod", nil }
 			ipAddress := func() string { ipCalled = true; return "10.42.0.10" }
 
-			// Act.
 			got, err := resolveHostInfo(HostInfo{}, hostname, ipAddress)
 
-			// Assert.
 			if err != nil || got != test.want {
 				t.Fatalf("identity = %+v, error=%v, want %+v", got, err, test.want)
 			}
@@ -52,16 +49,13 @@ func TestResolveUnavailableLocalInformation(t *testing.T) {
 		{name: "empty local hostname"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			// Arrange.
 			t.Setenv("SERVER_IP_ADDRESS", "")
 			t.Setenv("SERVER_HOSTNAME", "")
 			hostname := func() (string, error) { return test.hostname, test.err }
 			ipAddress := func() string { return "" }
 
-			// Act.
 			got, err := resolveHostInfo(HostInfo{}, hostname, ipAddress)
 
-			// Assert.
 			if err != nil || got != (HostInfo{}) {
 				t.Fatalf("resolution = %+v, %v, want empty identity without error", got, err)
 			}
@@ -126,7 +120,6 @@ func TestServerIPAddressSelection(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			for _, ordering := range []string{"original", "reversed"} {
 				t.Run(ordering, func(t *testing.T) {
-					// Arrange.
 					interfaces := slices.Clone(test.interfaces)
 					if ordering == "reversed" {
 						slices.Reverse(interfaces)
@@ -143,10 +136,8 @@ func TestServerIPAddressSelection(t *testing.T) {
 						return items, nil
 					}
 
-					// Act.
 					got := selectIPAddress(interfaces, addresses)
 
-					// Assert.
 					if got != test.want {
 						t.Fatalf("address = %q, want %q", got, test.want)
 					}

@@ -11,8 +11,6 @@ import (
 	bridge "commander/apps/playground/internal/mcp"
 )
 
-// call executes an already authorized request. The caller decides which tools
-// the model or operator may use; progress and outcomes are reported alike.
 func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
 	// Capture a stable ID before a potentially ambiguous network failure.
 	if call.Name == "start_operation" {

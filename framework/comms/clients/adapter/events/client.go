@@ -1,4 +1,3 @@
-// Package events defines replies delivered to adapters over the bus.
 package events
 
 import (

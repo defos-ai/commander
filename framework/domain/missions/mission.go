@@ -118,7 +118,6 @@ func (m Mission) Validate() error {
 	return nil
 }
 
-// Clone copies all mutable fields so a registry or operation owns its snapshot.
 func (m Mission) Clone() Mission {
 	m.Automations = maps.Clone(m.Automations)
 	for name, rule := range m.Automations {

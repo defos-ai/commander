@@ -16,8 +16,7 @@ import (
 )
 
 func TestConcurrentOperationsStayIsolated(t *testing.T) {
-	// Arrange: two clients share the real scheduler and two agents. Hold their
-	// first requests so capacity and isolation are observable without timing races.
+	// Hold both requests so capacity and isolation are observable without timing races.
 	a := connect(t)
 	b := openSession(t)
 	url, entered, release := heldWebsite(t, "/first", "/second")
@@ -42,7 +41,6 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	var question operations.Question
 	a.call("ask_question", object{"operation_id": first.ID, "text": "Approve the first review?", "options": []string{"Yes", "No"}}, &question)
 
-	// Act: the second operation continues while the first waits for its operator.
 	release("/second")
 	b.wait(second.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
 	b.task(second.ID, "capture-page", url+"/second")
@@ -57,8 +55,6 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	a.task(first.ID, "capture-page", url+"/first")
 	left = a.wait(first.ID, allTasksSucceeded)
 
-	// Assert: task outputs, operator answers, screenshots and reports keep their
-	// operation ownership even when calls and execution overlap.
 	artifactOwners := map[string]string{}
 	for _, op := range []operationDetail{left, right} {
 		for _, task := range op.Tasks {
@@ -97,8 +93,6 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 }
 
 func TestCancellationWhileActionIsRunning(t *testing.T) {
-	// Arrange: discovery is already executing and another task is queued behind
-	// it on the same agent. Discovery would normally create five follow-ups.
 	a := connect(t)
 	url, entered, release := heldWebsite(t, "/slow")
 	op := a.start(url + "/slow")
@@ -111,7 +105,6 @@ func TestCancellationWhileActionIsRunning(t *testing.T) {
 	running := a.get(op.ID).Tasks[0]
 	a.call("assign_task", object{"operation_id": op.ID, "agent_id": running.AgentID, "action_name": "check-seo", "input": object{"url": url + "/queued"}}, nil)
 
-	// Act: cancel before the active action returns its result and proposals.
 	a.call("cancel_operation", object{"operation_id": op.ID}, nil)
 	cancelled := a.get(op.ID)
 	if cancelled.Status != operations.Cancelled || cancelled.Tasks[1].Status != operations.TaskCancelled {
@@ -120,8 +113,6 @@ func TestCancellationWhileActionIsRunning(t *testing.T) {
 	release("/slow")
 	settled := a.wait(op.ID, func(op operationDetail) bool { return op.Tasks[0].Result != nil })
 
-	// Assert: late evidence is retained without reopening the operation or
-	// dispatching proposals. The queued action must never reach the website.
 	if settled.Status != operations.Cancelled || len(settled.Tasks) != 2 || settled.Tasks[1].Status != operations.TaskCancelled || len(settled.Tasks[0].Result.NextActions) != 5 {
 		t.Fatalf("late completion changed cancelled work: %+v", settled)
 	}
@@ -191,16 +182,13 @@ func heldWebsite(t *testing.T, paths ...string) (string, <-chan string, func(str
 }
 
 func TestOperationWebsiteWorkflow(t *testing.T) {
-	// Arrange: public MCP only, real controller/agents and a deterministic website.
 	const reportSummary = "MCP API website workflow passed"
 	a := connect(t)
 	url := website(t)
 	op := a.start(url)
-	// Act: assign one discovery; the mission queues all ten child checks.
 	var root operations.Task
 	a.call("assign_task", object{"operation_id": op.ID, "action_name": "discover-pages", "input": object{"url": url, "max_pages": 2}}, &root)
 	settled := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
-	// Assert: both pages ran every check, real screenshots can be read over MCP.
 	if len(settled.Tasks) != 11 {
 		t.Fatalf("expected discovery + 2×5 checks; got %d", len(settled.Tasks))
 	}
@@ -258,7 +246,6 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 		t.Fatalf("report=%+v", report)
 	}
 	assertEvents(t, a, op.ID)
-	// Final reports are immutable through commands.
 	a.fails("assign_task", object{"operation_id": op.ID, "action_name": "check-seo", "input": object{"url": url}}, "finished")
 }
 
@@ -266,17 +253,14 @@ func TestOperationCancellationAndFailure(t *testing.T) {
 	for _, method := range []string{"cancel_operation", "fail_operation"} {
 		t.Run(method, func(t *testing.T) {
 			a := connect(t)
-			// Arrange: queued work requiring an action no current agent can run.
 			op := a.start("https://example.test")
 			a.task(op.ID, "unavailable-test-action", "https://example.test")
 			args := object{"operation_id": op.ID}
 			if method == "fail_operation" {
 				args["reason"] = "operator ended test"
 			}
-			// Act.
 			var ended operations.Operation
 			a.call(method, args, &ended)
-			// Assert.
 			expected := operations.Cancelled
 			if method == "fail_operation" {
 				expected = operations.Failed
@@ -323,7 +307,6 @@ func assertEvents(t *testing.T, a *api, id string) {
 }
 
 func TestOperationDecisionAfterActionFailure(t *testing.T) {
-	// Arrange: an action that will observe an actual HTTP failure.
 	a := connect(t)
 	url := website(t)
 	op := a.start(url)
@@ -334,14 +317,12 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 		t.Fatalf("failure evidence missing: %+v", parent)
 	}
 
-	// Act: a client/model chooses another action through the versioned decision.
 	decision := object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,
 		"actions": []object{{"action_name": "check-seo", "input": object{"url": url}, "reason": "Review the available page"}}}
 	a.call("resolve_continuation", decision, nil)
 	a.fails("resolve_continuation", decision, "pending")
 	continued := a.wait(op.ID, func(op operationDetail) bool { return len(op.Tasks) == 2 && modelDecision(op) != nil })
 
-	// Assert: only one child was queued, its result is preserved, and the report can finish.
 	child := modelDecision(continued)
 	if child.ParentTaskID != parent.ID || child.Status != operations.TaskSucceeded {
 		t.Fatalf("follow-up task: %+v", child)

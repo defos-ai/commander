@@ -1,6 +1,3 @@
-// Package messages defines the wire protocol between controllers and agents.
-// Agent-to-controller events and controller-to-agent commands are listed in
-// separate files. The protocol is independent of the bus implementation.
 package messages
 
 import (
@@ -12,10 +9,8 @@ import (
 	"commander/framework/id"
 )
 
-// MessageType identifies a payload contract and remains extensible to new events.
 type MessageType string
 
-// Message is a JSON-compatible envelope. Type identifies the payload contract;
 // AgentID is the reporting agent for events and the destination for commands.
 type Message struct {
 	ID            string          `json:"id"`
@@ -100,7 +95,6 @@ func (w WorkContext) Validate() error {
 	return nil
 }
 
-// NewAdapterMessage creates an envelope with a distinct adapter identity.
 func NewAdapterMessage(kind MessageType, adapterID string, payload any) (Message, error) {
 	if payload == nil {
 		payload = map[string]any{}

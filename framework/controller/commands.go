@@ -16,7 +16,6 @@ import (
 	"commander/framework/internal/state"
 )
 
-// CommandFailure preserves the remote agent error and command correlation.
 type CommandFailure = executions.CommandFailure
 
 func (c *Controller) DiscoverActions(ctx context.Context, agentID string, scope *agentmodel.DiscoveryScope) (agentmodel.Agent, error) {

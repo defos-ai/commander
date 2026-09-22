@@ -1,4 +1,3 @@
-// Package catalog shares typed JSON collection mechanics between controller filesystem catalogs.
 package catalog
 
 import (
@@ -14,7 +13,6 @@ import (
 	"commander/providers/internal/jsonfile"
 )
 
-// Store shares collection mechanics while each domain keeps a typed contract.
 type Store[T any] struct {
 	file     *jsonfile.Collection
 	name     func(T) string

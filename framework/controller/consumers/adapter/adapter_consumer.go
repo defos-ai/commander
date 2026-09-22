@@ -1,4 +1,3 @@
-// Package adapter consumes commands sent by external adapters.
 package adapter
 
 import (

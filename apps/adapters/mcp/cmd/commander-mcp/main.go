@@ -1,4 +1,3 @@
-// Command commander-mcp exposes a controller and mission operations over MCP HTTP.
 package main
 
 import (

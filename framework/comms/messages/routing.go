@@ -12,14 +12,12 @@ const DefaultControllerType = "default"
 // independently routed controller types sharing the same transport.
 const AgentEvents = "controllers." + DefaultControllerType + ".events"
 
-// AgentCommands is the inbox for commands sent to one agent.
 func AgentCommands(agentID string) string { return "agents." + agentID + ".commands" }
 
 // AgentReceipts is consumed independently so long-running commands cannot delay
 // confirmation that earlier action outcomes have reached the controller database.
 func AgentReceipts(agentID string) string { return "agents." + agentID + ".receipts" }
 
-// ControllerEvents is the inbox for agent announcements and command results.
 func ControllerEvents(controllerType string) string {
 	return "controllers." + controllerType + ".events"
 }

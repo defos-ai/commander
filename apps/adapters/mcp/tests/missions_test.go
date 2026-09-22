@@ -8,14 +8,11 @@ import (
 )
 
 func TestMissions(t *testing.T) {
-	// Arrange: use the mission loaded by the real controller's --with-missions.
 	a := connect(t)
 	var catalog struct {
 		Missions []missions.Mission `json:"missions"`
 	}
-	// Act.
 	a.call("list_missions", object{}, &catalog)
-	// Assert: the definition is usable by an external client, including automation.
 	if len(catalog.Missions) != 1 || catalog.Missions[0].Name != "review-website" {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
@@ -28,7 +25,6 @@ func TestMissions(t *testing.T) {
 	}
 	a.fails("start_operation", object{"mission_name": "missing", "input": object{}}, "unknown")
 	a.fails("start_operation", object{"mission_name": mission.Name, "input": object{"url": "file:///etc/passwd"}}, "input")
-	// A failed request must not break the MCP session; callers can supply their ID.
 	opID := id.OperationID()
 	args := object{"operation_id": opID, "mission_name": mission.Name, "input": object{"url": "https://example.test"}}
 	var op operations.Operation

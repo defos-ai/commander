@@ -1,5 +1,3 @@
-// Package cli hosts the web-quality agent. It owns configuration, action
-// selection, provider lifetime and signal handling.
 package cli
 
 import (
@@ -23,10 +21,7 @@ import (
 
 const serviceName = "commander-" + string(webquality.WebQualityAgentType) + "-agent"
 
-// Run parses flags and serves one agent until a directed stop or cancellation.
-// It returns runtime, persistence and transport-close errors to the caller.
-// Storage URLs and logging settings accept environment values and CLI overrides.
-// Agent creation resolves server identity. Run does not install signal handlers.
+// Run installs no signal handlers; Main adds process-level shutdown handling.
 func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
@@ -97,8 +92,6 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	return agent.Serve(ctx, bus, configuration.scope)
 }
 
-// Main adds SIGINT/SIGTERM handling to Run and returns a process exit code.
-// Call os.Exit(cli.Main(os.Args[1:], os.Stderr)) from the executable.
 func Main(args []string, stderr io.Writer) int {
 	if stderr == nil {
 		stderr = io.Discard

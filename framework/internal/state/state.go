@@ -1,4 +1,3 @@
-// Package state holds the controller state shared by commands and consumers.
 package state
 
 import (

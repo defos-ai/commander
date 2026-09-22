@@ -1,13 +1,9 @@
-// Package webquality provides website quality agents and their default action catalogs.
-// Hosts configure permissions and runtime settings; controllers choose actions.
 package webquality
 
 import agents "commander/framework/agent"
 
 const WebQualityAgentType agents.AgentType = "web-quality"
 
-// WebQualityAgent collects website quality observations using controller-selected
-// actions. It inherits discovery, execution, messaging, and artifacts from Agent.
 type WebQualityAgent struct {
 	*agents.Agent
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// Role identifies the kind of runtime named by an ID.
 type Role string
 
 const (
@@ -39,13 +38,11 @@ func NewRuntime(runtimeType string, role Role) (string, error) {
 	return runtimeType + "-" + string(role) + "-" + hex.EncodeToString(suffix[:]), nil
 }
 
-// ValidRuntime reports whether value is a canonical runtime ID for role.
 func ValidRuntime(value string, role Role) bool {
 	_, ok := RuntimeType(value, role)
 	return ok
 }
 
-// RuntimeType returns the type encoded in a canonical runtime ID for role.
 func RuntimeType(value string, role Role) (string, bool) {
 	if !validRole(role) || len(value) > maxRuntimeIDLength || len(value) < len(role)+11 {
 		return "", false
@@ -90,12 +87,10 @@ func ValidType(value string) bool {
 	return true
 }
 
-// ValidAgent validates an agent runtime identity.
 func ValidAgent(value string) bool {
 	return ValidRuntime(value, Agent)
 }
 
-// ValidAdapter validates an adapter runtime identity.
 func ValidAdapter(value string) bool {
 	return ValidRuntime(value, Adapter)
 }

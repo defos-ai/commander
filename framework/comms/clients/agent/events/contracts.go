@@ -1,4 +1,3 @@
-// Package events defines the result confirmations received by agents.
 package events
 
 import (

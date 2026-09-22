@@ -16,7 +16,6 @@ type ServerInfo struct {
 	Hostname  string `json:"hostname"`
 }
 
-// Validate checks an identity without consulting the environment or host.
 func (s ServerInfo) Validate() error {
 	if s.IPAddress != "" && net.ParseIP(s.IPAddress) == nil {
 		return errors.New("server IP address must be an IPv4 or IPv6 address")

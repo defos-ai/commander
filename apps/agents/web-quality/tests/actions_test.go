@@ -19,7 +19,6 @@ import (
 )
 
 func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T) {
-	// Arrange: same hostname links cross schemes and ports; subdomains stay outside scope.
 	var visited []string
 	fixtureHTTP(t, func(request *http.Request) string {
 		visited = append(visited, request.URL.String())
@@ -34,14 +33,12 @@ func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T
 		}
 	})
 
-	// Act: execute the public action with a deterministic HTTP transport.
 	result := runAction(t, actions.NewDiscoverPages(), `{"url":"https://site.test","max_pages":3}`)
 	var output actions.DiscoverPagesOutput
 	if err := json.Unmarshal(result.Output, &output); err != nil {
 		t.Fatal(err)
 	}
 
-	// Assert: only in-scope unique pages produce follow-up checks.
 	if !reflect.DeepEqual(visited, []string{"https://site.test/", "http://site.test:8080/about"}) || len(output.Pages) != 2 || output.SkippedExternalLinks != 2 || output.Truncated {
 		t.Fatalf("visited=%v output=%+v", visited, output)
 	}
@@ -66,19 +63,16 @@ func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T
 }
 
 func TestSEOReportsObservedMetadataAndProblems(t *testing.T) {
-	// Arrange: static HTML has an indexing restriction, malformed JSON-LD and no description.
 	fixtureHTTP(t, func(*http.Request) string {
 		return `<html><head><title>Release preview</title><base href="/docs/"><link rel="canonical" href="intro"><meta name="robots" content="noindex"><script type="application/ld+json">{invalid}</script></head><body><h1>Release preview</h1></body></html>`
 	})
 
-	// Act: inspect the public action's structured output.
 	result := runAction(t, actions.NewCheckSEO(), `{"url":"https://site.test"}`)
 	var output actions.CheckSEOOutput
 	if err := json.Unmarshal(result.Output, &output); err != nil {
 		t.Fatal(err)
 	}
 
-	// Assert: findings retain evidence and correctly resolve the page's canonical URL.
 	if output.Title != "Release preview" || output.CanonicalURL != "https://site.test/docs/intro" || output.H1Count != 1 || output.InvalidJSONLDBlocks != 1 {
 		t.Fatalf("unexpected SEO metadata: %+v", output)
 	}
@@ -98,7 +92,6 @@ func TestSEOReportsObservedMetadataAndProblems(t *testing.T) {
 }
 
 func TestBrowserDiscoveryRespectsExplicitScopeAndRediscovery(t *testing.T) {
-	// Arrange: a configured executable is independent of installed host browsers.
 	directory := t.TempDir()
 	executable := filepath.Join(directory, "browser-fixture")
 	if err := os.WriteFile(executable, []byte("fixture executable, never launched"), 0700); err != nil {
@@ -108,14 +101,12 @@ func TestBrowserDiscoveryRespectsExplicitScopeAndRediscovery(t *testing.T) {
 	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
 	for _, executor := range []action.Executor{actions.NewCapturePage(), actions.NewCheckAccessibility()} {
 		t.Run(executor.Action().Name, func(t *testing.T) {
-			// Act: configuration is discovered, then an explicit empty scope denies all paths.
 			status, err := executor.Discover(t.Context(), &environment.Local{}, nil)
 			if err != nil || status != action.Ready {
 				t.Fatalf("configured browser discovery: status=%s error=%v", status, err)
 			}
 			status, err = executor.Discover(t.Context(), &environment.Local{}, &environment.DiscoveryScope{Paths: []string{}})
 
-			// Assert: stale readiness is cleared and the missing dependency is explained.
 			if err != nil || status != action.Unavailable || executor.Action().Status != action.Unavailable || executor.Action().StatusReason == "" {
 				t.Fatalf("restricted browser discovery: action=%+v error=%v", executor.Action(), err)
 			}

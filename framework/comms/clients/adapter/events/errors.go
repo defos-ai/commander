@@ -57,7 +57,6 @@ var errorCodes = []struct {
 	{"task_not_running", operations.ErrNotRunning},
 }
 
-// EncodeError preserves domain error identity in a controller reply.
 func EncodeError(err error) *ControllerError {
 	result := &ControllerError{Message: err.Error()}
 	for _, entry := range errorCodes {

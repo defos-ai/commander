@@ -17,22 +17,16 @@ func ControllerID(controllerType string) (string, error) {
 // AdapterID returns <type>-adapter-<8 lowercase hex characters>.
 func AdapterID(adapterType string) (string, error) { return NewRuntime(adapterType, Adapter) }
 
-// MessageID returns a random UUIDv4 identifying a command, event, or reply.
 func MessageID() string { return New() }
 
-// OperationID returns a random UUIDv4 identifying a mission execution.
 func OperationID() string { return New() }
 
-// TaskID returns a random UUIDv4 identifying an operation task.
 func TaskID() string { return New() }
 
-// QuestionID returns a random UUIDv4 identifying an operation question.
 func QuestionID() string { return New() }
 
-// ReportID returns a random UUIDv4 identifying a report.
 func ReportID() string { return New() }
 
-// ArtifactID returns a random UUIDv4 identifying a stored artifact.
 func ArtifactID() string { return New() }
 
 // New returns a random UUIDv4. Failure of the OS random source is fatal.

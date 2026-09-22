@@ -1,4 +1,3 @@
-// Package store persists and retrieves artifacts.
 package store
 
 import (

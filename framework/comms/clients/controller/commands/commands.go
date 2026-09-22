@@ -10,7 +10,6 @@ import (
 	"commander/framework/id"
 )
 
-// Each method serializes its own command directly into CommandEnvelope.Parameters.
 type DiscoverActionsCommand struct {
 	AgentID string                     `json:"agent_id"`
 	Scope   *agentmodel.DiscoveryScope `json:"scope,omitempty"`

@@ -1,4 +1,3 @@
-// Package testing selects cleanup implementations for isolated test environments.
 package testing
 
 import (

@@ -13,7 +13,6 @@ func NewActions() []action.Executor {
 	return webactions.NewActions()
 }
 
-// ActionNames lists the catalog for CLI help and selection validation.
 func ActionNames() []string {
 	actions := NewActions()
 	names := make([]string, 0, len(actions))

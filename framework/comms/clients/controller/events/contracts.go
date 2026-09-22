@@ -1,5 +1,3 @@
-// Package events defines the agent announcements and command outcomes received
-// by controllers.
 package events
 
 import (

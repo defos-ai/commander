@@ -17,7 +17,6 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			name = "interrupted after lost result receipt"
 		}
 		t.Run(name, func(t *testing.T) {
-			// Arrange: one command reached the agent, but its result is not in the operation.
 			config := fixture()
 			started := make(chan invocation, 1)
 			var dispatches atomic.Int32
@@ -44,12 +43,10 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 				return output(call.ActionName), nil
 			}
 
-			// Act: a new runner reconciles the outcome already held by the executor.
 			restarted := newRunner(t, config, e)
 			recovered := receive(t, observed)
 			settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 
-			// Assert: stable identity, successful evidence and one model decision survive.
 			if dispatches.Load() != 1 || recovered.agent != original.agent || recovered.call.Work != original.call.Work {
 				t.Fatalf("recovery repeated or changed work: dispatches=%d, recovered=%+v", dispatches.Load(), recovered)
 			}

@@ -35,8 +35,6 @@ func (record Agent) Snapshot(now time.Time) Agent {
 	return record
 }
 
-// Clone returns an independent snapshot, including nested actions,
-// JSON schemas, public configuration, and discovery scope.
 func (record Agent) Clone() Agent {
 	record.Responsibilities = slices.Clone(record.Responsibilities)
 	record.GrantedPermissions = slices.Clone(record.GrantedPermissions)

@@ -1,4 +1,3 @@
-// Package mcp connects the playground to Commander's public MCP interface.
 package mcp
 
 import (

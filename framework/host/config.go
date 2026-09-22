@@ -1,4 +1,3 @@
-// Package host provides CLI configuration and structured logging helpers.
 package host
 
 import "os"

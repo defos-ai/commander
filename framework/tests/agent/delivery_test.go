@@ -21,7 +21,6 @@ import (
 )
 
 func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
-	// Arrange: the bus delivers results, but the controller's receipt is lost.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	bus := &resultBus{results: make(chan messages.Message, 16)}
@@ -45,7 +44,6 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 		}
 	}
 
-	// Act: deliver the same command twice, then let automatic result retry run.
 	if err := consumer.Consume(ctx, command); err != nil {
 		t.Fatal(err)
 	}
@@ -69,8 +67,6 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	})
 	retry := next()
 
-	// Assert: retransmission preserves the result identity, evidence and work
-	// context; an altered command cannot reuse the same command ID.
 	if runtime.calls != 1 || !reflect.DeepEqual(first, replay) || !reflect.DeepEqual(first, retry) || first.CorrelationID != command.ID || first.Work != command.Work {
 		t.Fatalf("execution repeated or result changed: calls=%d first=%+v replay=%+v retry=%+v", runtime.calls, first, replay, retry)
 	}
@@ -80,7 +76,6 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 		t.Fatal("conflicting command reused the original identity")
 	}
 
-	// Act: finally deliver and acknowledge the controller's durable receipt.
 	receipt, err := agentevents.NewResultAccepted(first)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +86,6 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	}
 	receipts.AfterAck(receipt)
 
-	// Assert: after acceptance, no further publication or execution is needed.
 	select {
 	case result := <-bus.results:
 		t.Fatalf("accepted result was retried: %+v", result)
@@ -111,7 +105,6 @@ func (*countingRuntime) Discover(context.Context, *environment.DiscoveryScope) e
 func (*countingRuntime) PublishState(context.Context, messages.MessageType, string) error { return nil }
 func (*countingRuntime) Shutdown(context.Context, string) error                           { return nil }
 
-// Capture publication only: receipt delivery is explicitly controlled by the test.
 type resultBus struct{ results chan messages.Message }
 
 func (b *resultBus) Publish(ctx context.Context, _ string, message messages.Message) error {

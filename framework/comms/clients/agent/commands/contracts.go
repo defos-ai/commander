@@ -1,5 +1,3 @@
-// Package commands defines commands addressed to agents and publishes them over
-// the bus. Execution policy and result tracking belong to the caller.
 package commands
 
 import (

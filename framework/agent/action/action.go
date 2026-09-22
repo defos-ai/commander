@@ -1,4 +1,3 @@
-// Package action implements discovery and permission-checked execution for domain actions.
 package action
 
 import (
@@ -16,7 +15,6 @@ import (
 	actionmodel "commander/framework/domain/actions"
 )
 
-// Status and NextAction are shared domain data used by action executors.
 type Status = actionmodel.Status
 type NextAction = actionmodel.NextAction
 
@@ -26,14 +24,12 @@ const (
 	Unavailable = actionmodel.Unavailable
 )
 
-// Result keeps domain observations separate from files that the agent persists.
 type Result struct {
 	Output      json.RawMessage     `json:"output"`
 	Artifacts   []artifact.Artifact `json:"-"`
 	NextActions []NextAction        `json:"next_actions,omitempty"`
 }
 
-// Executor exposes an action's model, discovers its dependencies, and runs it.
 // Each instance belongs to one agent. Run never chooses another action or contacts a controller.
 type Executor interface {
 	Action() actionmodel.Action
@@ -132,7 +128,6 @@ func DecodeInput(input json.RawMessage, destination any, nullableFields ...strin
 	return nil
 }
 
-// JSONResult creates the structured part of a result from an ordinary Go model.
 func JSONResult(output any) (Result, error) {
 	encoded, err := json.Marshal(output)
 	if err != nil {

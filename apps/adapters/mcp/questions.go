@@ -6,8 +6,6 @@ import (
 	"commander/framework/domain/operations"
 )
 
-// The full question history stays available for model review. The active view
-// lets clients present one question at a time without interpreting that history.
 type operationDetail struct {
 	operations.Operation
 	LastQuestion       *operations.Question `json:"last_question"`

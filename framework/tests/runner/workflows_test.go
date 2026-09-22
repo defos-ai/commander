@@ -12,7 +12,6 @@ import (
 )
 
 func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {
-	// Arrange: discovery produces two parallel checks collected as one group.
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.Automations = map[string]missions.Automation{
 		"discover": {Run: []string{"inspect"}, Continue: missions.WhenAll},
@@ -22,7 +21,6 @@ func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {
 	op := start(t, r)
 	parent := assign(t, r, op.ID, "discover")
 
-	// Act: complete one child before the other.
 	receive(t, calls).reply <- output("discover",
 		actions.NextAction{ActionName: "inspect", AgentID: agentID, Input: json.RawMessage(`{"page":1}`)},
 		actions.NextAction{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)})
@@ -37,7 +35,6 @@ func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {
 	second.reply <- output("inspect")
 	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
 
-	// Assert: exactly one model handoff owns both results, without child reviews.
 	ready := 0
 	for _, event := range settled.Events {
 		if event.Type == operations.ContinuationReady {
@@ -56,7 +53,6 @@ func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {
 }
 
 func TestConcurrentContinuationResolutionCommitsOneBranch(t *testing.T) {
-	// Arrange: two decision makers saw the same continuation version.
 	exec, calls := controlledExecutor()
 	r := newRunner(t, fixture(), exec)
 	op := start(t, r)
@@ -67,7 +63,6 @@ func TestConcurrentContinuationResolutionCommitsOneBranch(t *testing.T) {
 		Actions: []actions.NextAction{{ActionName: "follow-up", AgentID: agentID}}}
 	gate, results := make(chan struct{}), make(chan error, 2)
 
-	// Act: submit both decisions simultaneously and then replay the stale version.
 	for range 2 {
 		go func() { <-gate; _, err := r.Resolve(t.Context(), command); results <- err }()
 	}
@@ -75,7 +70,6 @@ func TestConcurrentContinuationResolutionCommitsOneBranch(t *testing.T) {
 	a, b := <-results, <-results
 	_, stale := r.Resolve(t.Context(), command)
 
-	// Assert: one success, one conflict and exactly one durable child command.
 	if (a == nil) == (b == nil) || stale == nil {
 		t.Fatalf("conflicting decisions: %v, %v, replay=%v", a, b, stale)
 	}
@@ -90,7 +84,6 @@ func TestConcurrentContinuationResolutionCommitsOneBranch(t *testing.T) {
 }
 
 func TestFailedDecisionSavePreservesRetryableState(t *testing.T) {
-	// Arrange: the next database write fails after a task reaches model review.
 	config := fixture()
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
@@ -106,7 +99,6 @@ func TestFailedDecisionSavePreservesRetryableState(t *testing.T) {
 	command := commands.ResolveContinuationCommand{OperationID: op.ID, TaskID: task.ID, Version: before.Tasks[0].Continuation.Version,
 		Actions: []actions.NextAction{{ActionName: "follow-up", AgentID: agentID}}}
 
-	// Act: try the decision while persistence fails, then retry it unchanged.
 	_, err := r.Resolve(t.Context(), command)
 	after, readErr := r.Get(t.Context(), op.ID)
 	if readErr != nil {
@@ -122,7 +114,6 @@ func TestFailedDecisionSavePreservesRetryableState(t *testing.T) {
 	}
 	_, err = r.Resolve(t.Context(), command)
 
-	// Assert: the original version remains valid and dispatches exactly one child.
 	if err != nil {
 		t.Fatal(err)
 	}

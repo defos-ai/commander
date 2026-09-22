@@ -1,4 +1,3 @@
-// Package operations defines tracked mission runs and their tasks.
 package operations
 
 import (
@@ -129,7 +128,6 @@ type Operation struct {
 	UpdatedAt time.Time        `json:"updated_at"`
 }
 
-// Clone separates all JSON, schema, evidence and slice storage from the caller.
 func (o Operation) Clone() Operation {
 	o.Mission = o.Mission.Clone()
 	o.Input = append(json.RawMessage(nil), o.Input...)

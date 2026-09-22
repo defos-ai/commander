@@ -11,7 +11,6 @@ import (
 )
 
 func TestAgentsAndActions(t *testing.T) {
-	// Arrange: wait for real Compose agents to announce all installed actions.
 	a := connect(t)
 	var list struct {
 		Agents []agents.Agent `json:"agents"`
@@ -27,7 +26,6 @@ func TestAgentsAndActions(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	// Act: inspect the public catalogs and refresh one running agent.
 	var catalog struct {
 		Actions []actions.Action `json:"actions"`
 	}
@@ -50,7 +48,6 @@ func TestAgentsAndActions(t *testing.T) {
 	a.call("discover_actions", object{"agent_id": detail.ID}, &detail)
 	var action actions.Action
 	a.call("describe_action", object{"agent_id": detail.ID, "action_name": "check-seo"}, &action)
-	// Assert: schemas can drive calls, failures leave the session usable.
 	if len(action.InputSchema) == 0 || len(action.OutputSchema) == 0 {
 		t.Fatalf("missing schemas: %+v", action)
 	}
@@ -63,8 +60,6 @@ func TestAgentsAndActions(t *testing.T) {
 }
 
 func TestQueuedActionResumesAfterDependencyRediscovery(t *testing.T) {
-	// Arrange: restrict one agent's discovery to an empty executable search path.
-	// This exercises the same unavailable state as a missing browser installation.
 	a := connect(t)
 	var list struct {
 		Agents []agents.Agent `json:"agents"`
@@ -73,10 +68,8 @@ func TestQueuedActionResumesAfterDependencyRediscovery(t *testing.T) {
 	agentID := list.Agents[0].ID
 	var unavailable agents.Agent
 	a.call("discover_actions", object{"agent_id": agentID, "scope": object{"paths": []string{}}}, &unavailable)
-	// Restore the shared agent even if an assertion below fails.
 	t.Cleanup(func() {
-		// testing cancels t.Context before cleanup; restoration needs its own
-		// bounded lifetime while the MCP session is still open.
+		// t.Context is canceled before cleanup; restoring the agent needs a live context.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), 5*time.Second)
 		defer cancel()
 		cleanup := *a
@@ -96,13 +89,11 @@ func TestQueuedActionResumesAfterDependencyRediscovery(t *testing.T) {
 		t.Fatalf("unavailable action was dispatched: %+v", blocked.Tasks[0])
 	}
 
-	// Act: normal discovery finds the Compose browser again; no task resubmission.
 	var ready agents.Agent
 	a.call("discover_actions", object{"agent_id": agentID}, &ready)
 	assertActionStatus(t, ready, "capture-page", actions.Ready)
 	settled := a.wait(op.ID, allTasksSucceeded)
 
-	// Assert: the original task runs once, preserving identity and its artifacts.
 	resumed := settled.Tasks[0]
 	if len(settled.Tasks) != 2 || resumed.ID != queued.ID || resumed.AgentID != agentID || len(resumed.Result.Artifacts) != 2 {
 		t.Fatalf("rediscovery duplicated or replaced work: %+v", settled.Tasks)

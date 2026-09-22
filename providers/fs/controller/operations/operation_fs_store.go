@@ -43,7 +43,6 @@ func NewOperationFsStore(root string) (*OperationFsStore, error) {
 	return &OperationFsStore{file: file}, nil
 }
 
-// Root returns the absolute directory containing the operation collection.
 func (s *OperationFsStore) Root() string { return filepath.Dir(s.file.Path()) }
 
 func (s *OperationFsStore) Create(ctx context.Context, operation operations.Operation) error {

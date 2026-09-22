@@ -1,4 +1,3 @@
-// Package comms opens message brokers from connection URLs.
 package comms
 
 import (

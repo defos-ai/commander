@@ -15,11 +15,8 @@ import (
 // publishing its failure outcome. Processing failures must return an error.
 type Handler func(context.Context, messages.Message) error
 
-// Consumer receives messages and acknowledges successful handling. The caller
-// owns cancellation and subscription lifetime. Completion always runs through a
-// handler; Consumer alone acknowledges successful processing.
-// Only one Consume call may read a subscription at a time. Consumer holds no
-// deduplication state; handlers own business idempotency.
+// Only one Consume call may read a subscription at a time. The caller owns
+// cancellation and subscription lifetime; handlers own business idempotency.
 type Consumer struct {
 	Subscription Subscription
 	Logger       *slog.Logger

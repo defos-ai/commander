@@ -17,7 +17,6 @@ import (
 	"commander/framework/internal/state"
 )
 
-// AgentEventConsumer persists agent announcements and completes lifecycle replies.
 type AgentEventConsumer struct {
 	Inventory agentmodel.AgentStore
 	Actions   actionmodel.ActionStore

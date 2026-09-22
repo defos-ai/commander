@@ -1,4 +1,3 @@
-// Package local starts an isolated Commander installation for one Playground session.
 package local
 
 import (

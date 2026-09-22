@@ -1,4 +1,3 @@
-// Package data loads mission definitions for the default controller.
 package data
 
 import (
@@ -10,7 +9,6 @@ import (
 	"commander/framework/domain/missions"
 )
 
-// UpsertMissions loads a JSON file and upserts its definitions by name.
 // Missions not present in the file are preserved.
 func UpsertMissions(ctx context.Context, store missions.MissionStore, path string) error {
 	data, err := os.ReadFile(path)

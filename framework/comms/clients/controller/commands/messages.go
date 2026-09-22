@@ -13,8 +13,6 @@ const (
 	AdapterRequestCanceled = messages.AdapterRequestCanceled
 )
 
-// CommandEnvelope identifies the command method, serialized payload, and deadline.
-// The bus Message carries this envelope and supplies delivery metadata.
 type CommandEnvelope struct {
 	Method     string          `json:"method"`
 	Parameters json.RawMessage `json:"parameters"`
@@ -28,7 +26,6 @@ func (r CommandEnvelope) Validate() error {
 	return nil
 }
 
-// Method names identify controller commands accepted from adapters.
 const (
 	MethodDiscoverActions     = "agents.discover"
 	MethodRunAction           = "agents.run_action"

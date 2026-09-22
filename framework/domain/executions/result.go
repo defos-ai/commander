@@ -10,8 +10,6 @@ import (
 	actionmodel "commander/framework/domain/actions"
 )
 
-// DecodeActionResult validates the payload without changing controller state.
-// An incoming result must pass these checks before it enters the database.
 func DecodeActionResult(message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
 	if err := message.Validate(); err != nil {
 		return actionmodel.ActionOutput{}, err

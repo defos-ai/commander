@@ -1,4 +1,3 @@
-// Package consumers processes inbound controller messages.
 package consumers
 
 import (
@@ -34,8 +33,6 @@ type EventConsumer struct {
 	State        *state.State
 }
 
-// Consume reads controller events and routes each one to its domain consumer.
-// The transport consumer acknowledges successfully processed messages.
 func (c EventConsumer) Consume(ctx context.Context) error {
 	consumer := comms.Consumer{
 		Subscription: c.Subscription,

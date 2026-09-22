@@ -1,4 +1,3 @@
-// Package agents defines reported agent snapshots and their observed state.
 package agents
 
 import (
@@ -9,7 +8,6 @@ import (
 
 type AgentStatus string
 
-// AgentType identifies an extensible role, independently of an instance ID.
 type AgentType string
 
 const GenericAgentType AgentType = "generic"

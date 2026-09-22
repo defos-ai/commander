@@ -16,9 +16,6 @@ var (
 // Subscription delivers a subscriber's FIFO stream. Next's context cancels one
 // receive. Next does not acknowledge processing; replay and redelivery guarantees
 // belong to the bus implementation.
-// Agents and controllers receive and process deliveries through Consumer.Consume.
-// Next and Ack are transport primitives used by Consumer.Consume; application
-// handlers return nil to acknowledge successful processing.
 // Ack confirms processing of a message returned by this subscription, using its
 // ID, independently of CorrelationID. The built-in buses remember 4096 recently
 // acknowledged IDs for harmless retries; an older, forgotten ID returns

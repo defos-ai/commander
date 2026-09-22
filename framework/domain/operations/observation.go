@@ -8,8 +8,6 @@ import (
 	"commander/framework/id"
 )
 
-// AgentObservation preserves which agent produced an action result in a mission
-// report. Data stays inline or in the original artifact references.
 type AgentObservation struct {
 	AgentID string                   `json:"agent_id"`
 	Result  actionmodel.ActionOutput `json:"result"`

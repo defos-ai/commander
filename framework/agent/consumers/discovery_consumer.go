@@ -10,7 +10,6 @@ import (
 	"commander/framework/domain"
 )
 
-// DiscoveryConsumer refreshes action discovery and publishes the agent snapshot.
 type DiscoveryConsumer struct {
 	Runtime Runtime
 	AgentID string

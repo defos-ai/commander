@@ -20,17 +20,14 @@ import (
 )
 
 func TestProviderSelector(t *testing.T) {
-	// Arrange.
 	model := ui.New(t.Context(), ui.Config{NoColor: true}, io.Discard)
 	defer model.Close()
 	model.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 
-	// Act: choose the second provider using the keyboard.
 	model.Update(tea.KeyMsg{Type: tea.KeyDown})
 	selected := model.View()
 	model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	// Assert: setup uses a selector and the selected provider's key prompt.
 	if !strings.Contains(selected, "DEFOS | Commander Playground") || !strings.Contains(selected, "› Anthropic") || !strings.Contains(model.View(), "Anthropic API key") {
 		t.Fatalf("unexpected selector: %s\n%s", selected, model.View())
 	}
@@ -40,8 +37,6 @@ func TestProviderSelector(t *testing.T) {
 }
 
 func TestQuestionSelector(t *testing.T) {
-	// Arrange: the UI receives operation snapshots through its public MCP client.
-	// This fixture supplies only questions, not a simulated Commander workflow.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	var mu sync.Mutex
@@ -88,8 +83,6 @@ func TestQuestionSelector(t *testing.T) {
 	defer u.model.Close()
 	model, key, text, wait := u.model, u.key, u.text, u.wait
 
-	// Act: watch questions while retaining a normal chat draft, then select an
-	// option. Tab must switch focus without submitting or losing the draft.
 	text("/watch operation-1")
 	key(tea.KeyMsg{Type: tea.KeyEnter})
 	text("unsent chat draft")
@@ -107,8 +100,6 @@ func TestQuestionSelector(t *testing.T) {
 	key(tea.KeyMsg{Type: tea.KeyEnter})
 	wait("recorded answer", func(view string) bool { return strings.Contains(view, "Operator answer: Broken links") })
 
-	// Assert: only the selected answer was submitted; answered/expired panels
-	// disappear and ordinary chat remains intact.
 	select {
 	case answer := <-answers:
 		if answer != "Broken links" {
@@ -126,8 +117,6 @@ func TestQuestionSelector(t *testing.T) {
 func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 	for _, scenario := range []string{"HTTP error", "truncated tool stream", "Ctrl+C"} {
 		t.Run(scenario, func(t *testing.T) {
-			// Arrange: real UI, HTTP model client and MCP transport. Only external
-			// responses are scripted; a partial tool call must never reach MCP.
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			var calls, requests atomic.Int32
@@ -162,7 +151,6 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 			// Close the model before HTTP servers, including on failed assertions.
 			defer u.model.Close()
 
-			// Act: trigger the failure, or interrupt an in-flight streamed reply.
 			u.text("Start the review")
 			u.key(tea.KeyMsg{Type: tea.KeyEnter})
 			want := "HTTP 400"
@@ -177,8 +165,6 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 				return strings.Contains(view, want) && !strings.Contains(view, "Thinking")
 			})
 
-			// Assert: partial tools did not run, the loader stopped, and a fresh
-			// chat turn still works without reconnecting or restarting Playground.
 			if calls.Load() != 0 {
 				t.Fatal("an unfinished model response executed a tool")
 			}

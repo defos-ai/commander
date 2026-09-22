@@ -1,4 +1,3 @@
-// Package testing defines helpers for isolated test environments.
 package testing
 
 // TestCleaner removes persisted test data without touching the message bus or

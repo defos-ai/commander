@@ -27,8 +27,7 @@ import (
 )
 
 func TestAllInOne(t *testing.T) {
-	// Arrange: real bundled hosts, a local website and a scripted model. Keep
-	// this workflow to SEO so the host needs no browser or external credentials.
+	// Use SEO so this bundled-host test needs no browser or external credentials.
 	temporary := t.TempDir()
 	t.Setenv("TMPDIR", temporary)
 	t.Setenv("ENV", "")
@@ -145,7 +144,6 @@ func TestAllInOne(t *testing.T) {
 			}
 		}
 	}
-	// Unblock input and stop the hosts even if a rendering assertion fails.
 	t.Cleanup(func() {
 		cancel()
 		_ = keyboard.Close()
@@ -175,8 +173,6 @@ func TestAllInOne(t *testing.T) {
 		}
 	}
 
-	// Act: the user starts work once, then answers with Down/Enter. Background
-	// updates must wake the model and complete the report without further prompts.
 	if _, err := io.WriteString(keyboard, "Review SEO for "+website.URL+"\r"); err != nil {
 		t.Fatal(err)
 	}
@@ -207,8 +203,6 @@ func TestAllInOne(t *testing.T) {
 		t.Fatal("/exit did not stop the CLI")
 	}
 
-	// Assert: Markdown was rendered, and exiting removed temporary data and the
-	// MCP listener. Nothing from the test remains running in the background.
 	if requests.Load() < 9 || strings.Contains(output.String(), "**Review complete**") || !strings.Contains(output.String(), "Review complete") {
 		t.Fatalf("unexpected chat rendering: %s", output.String())
 	}

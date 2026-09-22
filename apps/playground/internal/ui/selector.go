@@ -36,7 +36,6 @@ func (m *Model) visibleChoices() int {
 	return min(len(m.choices()), max(1, m.height-14))
 }
 
-// Navigate choices directly; slash commands still use the text input.
 func (m *Model) navigate(key tea.KeyMsg) bool {
 	if key.String() == "esc" {
 		m.input.Reset()

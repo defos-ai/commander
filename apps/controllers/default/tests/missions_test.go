@@ -14,7 +14,6 @@ import (
 )
 
 func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testing.T) {
-	// Arrange: a catalog has both a mission being updated and an unrelated one.
 	store := missionStore{
 		"review": {Name: "review", Objective: "Old objective"},
 		"other":  {Name: "other", Objective: "Keep this mission"},
@@ -26,15 +25,12 @@ func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testin
 		t.Fatal(err)
 	}
 
-	// Act: the second definition is invalid, so the first must not be upserted.
 	err := data.UpsertMissions(t.Context(), store, path)
 
-	// Assert: invalid input leaves the entire catalog untouched.
 	if err == nil || !reflect.DeepEqual(map[string]missions.Mission(store), before) {
 		t.Fatalf("invalid import changed catalog: %+v, error=%v", store, err)
 	}
 
-	// Act: import the corrected file twice, updating by name.
 	if err := os.WriteFile(path, []byte("["+valid+"]"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -44,14 +40,12 @@ func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testin
 		}
 	}
 
-	// Assert: repeated startup updates the intended mission and preserves the other.
 	if len(store) != 2 || store["review"].Objective != "New objective" || !reflect.DeepEqual(store["other"], before["other"]) {
 		t.Fatalf("unexpected catalog after import: %+v", store)
 	}
 }
 
 func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
-	// Arrange: validate the mission bytes actually bundled in the app.
 	var definitions []json.RawMessage
 	if err := json.Unmarshal(data.DefaultMissions, &definitions); err != nil {
 		t.Fatal(err)
@@ -67,10 +61,8 @@ func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
 		}
 	}
 
-	// Act: inspect the automatic branch that follows website discovery.
 	workflow := website.Automations["discover-pages"]
 
-	// Assert: discovery runs grouped checks; the model reviews their collected results.
 	if website.Name == "" || !slices.Equal(website.StartingActions, []string{"discover-pages"}) || workflow.Continue != missions.WhenAll || len(workflow.Run) == 0 {
 		t.Fatalf("website discovery is not grouped automatic work: %+v", website)
 	}

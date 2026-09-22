@@ -1,4 +1,3 @@
-// Package reports defines immutable completed mission reports.
 package reports
 
 import (
@@ -40,7 +39,6 @@ func (r Report) Validate() error {
 	return nil
 }
 
-// Clone returns a report whose output does not share the caller's memory.
 func (r Report) Clone() Report {
 	r.Output = append(json.RawMessage(nil), r.Output...)
 	return r

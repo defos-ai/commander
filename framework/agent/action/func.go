@@ -26,9 +26,8 @@ type FuncConfig[I, O any] struct {
 	NewInput func() I
 	// Discover is optional; compiled-in implementations exist by default.
 	// A successful callback must return Ready or Unavailable.
-	Discover func(context.Context, environment.Environment, *environment.DiscoveryScope) (Status, error)
-	Run      func(context.Context, I) (O, error)
-	// NextActions optionally proposes work after a successful action run.
+	Discover    func(context.Context, environment.Environment, *environment.DiscoveryScope) (Status, error)
+	Run         func(context.Context, I) (O, error)
 	NextActions func(context.Context, I, O) ([]NextAction, error)
 }
 

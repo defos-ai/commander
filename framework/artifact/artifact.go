@@ -1,4 +1,3 @@
-// Package artifact describes work products and their portable references.
 package artifact
 
 import (
@@ -13,7 +12,6 @@ import (
 	"commander/framework/id"
 )
 
-// ErrUnknownArtifact means no trusted artifact reference exists for the lookup.
 var ErrUnknownArtifact = errors.New("unknown artifact")
 
 // Artifact describes exactly one source: bytes or a local file. Empty, non-nil
@@ -51,7 +49,6 @@ type Ref struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// Validate checks reference metadata received from storage or a message.
 func (r Ref) Validate() error {
 	if !id.Valid(r.ID) {
 		return fmt.Errorf("artifact ID must be a canonical UUID")
@@ -75,14 +72,12 @@ func (r Ref) Validate() error {
 	return (Owner{AgentID: r.AgentID, ActionName: r.ActionName, CommandID: r.CommandID}).Validate()
 }
 
-// Owner identifies the agent, action and optional command that produced a result.
 type Owner struct {
 	AgentID    string `json:"agent_id"`
 	ActionName string `json:"action_name"`
 	CommandID  string `json:"command_id,omitempty"`
 }
 
-// Validate checks the provenance attached to an artifact.
 func (o Owner) Validate() error {
 	if !id.ValidAgent(o.AgentID) {
 		return fmt.Errorf("invalid artifact agent ID")

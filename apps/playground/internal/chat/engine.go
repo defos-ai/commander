@@ -1,4 +1,3 @@
-// Package chat owns one model conversation and background operation watchers.
 package chat
 
 import (

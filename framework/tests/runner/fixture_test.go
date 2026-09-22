@@ -19,8 +19,6 @@ import (
 
 const agentID = "review-agent-00000001"
 
-// The runner is real; only its public persistence/execution interfaces are
-// replaced. No filesystem provider or concrete application is imported here.
 type operationStore struct {
 	mu       sync.Mutex
 	records  map[string]operations.Operation

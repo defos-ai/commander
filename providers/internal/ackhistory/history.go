@@ -1,4 +1,3 @@
-// Package ackhistory tracks a bounded window of acknowledged message IDs.
 package ackhistory
 
 // A bounded history makes ordinary ACK retries idempotent without retaining one
@@ -13,7 +12,6 @@ type History struct {
 	next  int
 }
 
-// Contains reports whether id is in the recent acknowledgement window.
 func (h *History) Contains(id string) bool {
 	_, ok := h.ids[id]
 	return ok

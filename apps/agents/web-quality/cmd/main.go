@@ -1,4 +1,3 @@
-// Command commander-web-quality-agent hosts the web-quality agent.
 package main
 
 import (

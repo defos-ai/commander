@@ -3,5 +3,4 @@ package domain
 
 import "errors"
 
-// ErrControllerClosed is returned when command coordination is unavailable.
 var ErrControllerClosed = errors.New("controller is closed")

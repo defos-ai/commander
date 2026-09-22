@@ -10,7 +10,6 @@ import (
 )
 
 func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
-	// Arrange: an operator question owns a completed task's continuation.
 	config := fixture()
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
@@ -31,7 +30,6 @@ func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
 		t.Fatalf("question did not suspend decision: %+v", waiting)
 	}
 
-	// Arrange an overdue persisted deadline to simulate controller downtime.
 	closeRunner(t, r)
 	waiting.Questions[0].ExpiresAt = time.Now().Add(-time.Second)
 	waiting.Version++
@@ -39,7 +37,6 @@ func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Act: restart the controller and attempt a late operator answer.
 	r = newRunner(t, config, exec)
 	expired, err := r.Get(t.Context(), op.ID)
 	if err != nil {
@@ -47,7 +44,6 @@ func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
 	}
 	_, late := r.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: op.ID, QuestionID: question.ID, Answer: "Continue"})
 
-	// Assert: silence is not approval; late input is rejected and model decides.
 	q, c := expired.Questions[0], expired.Tasks[0].Continuation
 	if late == nil || q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredAt != nil || len(expired.Tasks) != 1 || expired.Status != operations.Planning {
 		t.Fatalf("expiry invented an answer or left work waiting: %+v, late=%v", expired, late)

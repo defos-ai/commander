@@ -57,7 +57,11 @@ func connect(t *testing.T) *api {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("test agents did not become ready after cleanup")
+			states := make([]string, 0, len(list.Agents))
+			for _, agent := range list.Agents {
+				states = append(states, fmt.Sprintf("%s: status=%s stale=%t last_heartbeat=%s", agent.ID, agent.Status, agent.Stale, agent.LastHeartbeat.Format(time.RFC3339)))
+			}
+			t.Fatalf("expected 2 ready agents after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

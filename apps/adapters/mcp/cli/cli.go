@@ -1,5 +1,3 @@
-// Package cli hosts the Commander MCP HTTP service. It owns flag parsing,
-// provider connections, HTTP serving, logging and signal handling.
 package cli
 
 import (
@@ -28,19 +26,15 @@ import (
 
 const adapterType = "mcp"
 
-// Options lets an embedding host discover the bound address after startup.
 type Options struct {
 	Ready func(net.Addr)
 }
 
-// Run parses flags and serves the MCP HTTP endpoint until cancellation.
-// It sends commands over the bus and queries database and storage providers.
-// Environment values are resolved after flag parsing; Run installs no signals.
+// Run installs no signal handlers; Main adds process-level shutdown handling.
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
 	return RunWithOptions(ctx, args, stderr, Options{})
 }
 
-// RunWithOptions reports the listening address to an embedding host after startup.
 func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
@@ -78,8 +72,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	return serve(ctx, configuration, adapterID, logger, listener, options)
 }
 
-// serve owns the adapter listener, bus and reply consumer. Controller work
-// continues independently when an MCP client disconnects or this host stops.
+// Controller work continues when an MCP client disconnects or this host stops.
 func serve(ctx context.Context, configuration config, adapterID string, logger *slog.Logger, listener net.Listener, options Options) (result error) {
 	defer listener.Close()
 	if err := ctx.Err(); err != nil {
@@ -171,8 +164,6 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	}
 }
 
-// Main adds SIGINT/SIGTERM handling to Run and returns a process exit code.
-// Call os.Exit(cli.Main(os.Args[1:], os.Stderr)) from an executable.
 func Main(args []string, stderr io.Writer) int {
 	if stderr == nil {
 		stderr = io.Discard

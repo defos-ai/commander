@@ -1,4 +1,3 @@
-// Package cli hosts the interactive Commander playground.
 package cli
 
 import (

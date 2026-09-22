@@ -12,9 +12,7 @@ const (
 	maxStreamResponseBytes = 16 << 20
 )
 
-// stream reads complete SSE events, including multiline data and fragmented
-// network writes. Bound each event's lines and the entire response, including
-// comments and other ignored fields, before any complete reply can escape.
+// Limits include ignored SSE fields and comments, not just model output.
 func stream(reader io.Reader, consume func([]byte) error) error {
 	limited := &io.LimitedReader{R: reader, N: maxStreamResponseBytes + 1}
 	scanner := bufio.NewScanner(limited)

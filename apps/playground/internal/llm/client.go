@@ -1,4 +1,3 @@
-// Package llm implements the model APIs used by the playground's providers.
 package llm
 
 import (
@@ -150,7 +149,6 @@ func (c *Client) request(ctx context.Context, method, path string, body any) (*h
 			hint = "rate or quota limit reached; try again later"
 		}
 		summary := fmt.Sprintf("model API returned HTTP %d: %s", response.StatusCode, hint)
-		// Read a bounded body for diagnostics. Only debug renders provider details.
 		const limit = 64 * 1024
 		detail, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		// Never show a partial body: it may end halfway through a credential.

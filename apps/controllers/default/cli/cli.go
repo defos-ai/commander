@@ -1,4 +1,3 @@
-// Package cli hosts the default controller as an independent process.
 package cli
 
 import (
@@ -23,17 +22,14 @@ import (
 	controllerprovider "commander/providers/controller"
 )
 
-// Options lets an embedding host observe readiness without parsing logs.
 type Options struct {
 	Ready func()
 }
 
-// Run owns providers, coordination and readiness. Signal handling is left to Main.
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
 	return RunWithOptions(ctx, args, stderr, Options{})
 }
 
-// RunWithOptions reports readiness to an embedding host after subscriptions start.
 func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
 	if stderr == nil {
 		stderr = io.Discard

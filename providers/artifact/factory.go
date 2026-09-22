@@ -1,4 +1,3 @@
-// Package artifact opens artifact storage from connection URLs.
 package artifact
 
 import (
@@ -16,7 +15,6 @@ type StorageOptions struct {
 	AgentID string
 }
 
-// Storage supplies artifact persistence selected by STORAGE_URL.
 type Storage struct {
 	ArtifactStore artifactstore.ArtifactStore
 }
@@ -25,7 +23,6 @@ type Storage struct {
 // stores hold no persistent connections and need no cleanup.
 func (s *Storage) Close() error { return nil }
 
-// OpenStorage opens artifact storage selected by its URL.
 func OpenStorage(ctx context.Context, rawURL string, options StorageOptions) (*Storage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

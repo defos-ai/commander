@@ -17,7 +17,6 @@ import (
 )
 
 func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
-	// Arrange: independent store instances share one durable operation version.
 	dir := t.TempDir()
 	first, err := operationfs.NewOperationFsStore(dir)
 	if err != nil {
@@ -37,7 +36,6 @@ func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
 	}
 	gate, results := make(chan struct{}), make(chan result, 2)
 
-	// Act: both writers attempt to replace version one with different content.
 	for i, store := range []*operationfs.OperationFsStore{first, second} {
 		candidate := op.Clone()
 		candidate.Version = 2
@@ -61,7 +59,6 @@ func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assert: one write commits, the loser conflicts, and reopening preserves it.
 	var actual, expected map[string]int
 	if err := json.Unmarshal(stored.Output, &actual); err != nil {
 		t.Fatal(err)
@@ -78,7 +75,6 @@ func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
 }
 
 func TestExecutionClaimAndOutcomeRemainStableAcrossReopen(t *testing.T) {
-	// Arrange: two hosts can see the same command before either owns its claim.
 	dir := t.TempDir()
 	first, err := executionfs.NewExecutionFsStore(dir)
 	if err != nil {
@@ -99,7 +95,6 @@ func TestExecutionClaimAndOutcomeRemainStableAcrossReopen(t *testing.T) {
 	}
 	gate, claims := make(chan struct{}), make(chan claim, 2)
 
-	// Act: compete for one reservation, then persist and replay its result.
 	for _, store := range []*executionfs.ExecutionFsStore{first, second} {
 		go func() { <-gate; _, created, err := store.Claim(t.Context(), command); claims <- claim{created, err} }()
 	}
@@ -128,7 +123,6 @@ func TestExecutionClaimAndOutcomeRemainStableAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assert: restart returns the original outcome and rejects conflicting reuse.
 	if created || saved.Result == nil || saved.CompletedAt == nil || !reflect.DeepEqual(*saved.Result, result) {
 		t.Fatalf("reopen lost the accepted outcome: %+v", saved)
 	}

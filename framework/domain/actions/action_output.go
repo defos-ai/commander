@@ -50,7 +50,6 @@ func (o ActionOutput) Validate() error {
 	return nil
 }
 
-// ResolveOutput returns the original structured JSON from inline output or storage.
 func (o ActionOutput) ResolveOutput(ctx context.Context, store artifactstore.ArtifactStore) (json.RawMessage, error) {
 	if err := o.Validate(); err != nil {
 		return nil, err

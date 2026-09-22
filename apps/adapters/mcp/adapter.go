@@ -1,5 +1,3 @@
-// Package missionsmcp exposes a Commander controller to an MCP client.
-// The client chooses agents and actions; the controller routes every command.
 package missionsmcp
 
 import (
@@ -39,7 +37,6 @@ const artifactPrefix = "missions://artifacts/"
 //go:embed assets/logo.png
 var serverLogo []byte
 
-// AgentRequest identifies an agent that has announced itself to the controller.
 type AgentRequest struct {
 	AgentID string `json:"agent_id"`
 }
@@ -51,7 +48,6 @@ func (r AgentRequest) Validate() error {
 	return nil
 }
 
-// DiscoveryRequest selects the optional executable discovery scope.
 type DiscoveryRequest struct {
 	AgentID string                     `json:"agent_id"`
 	Scope   *agentmodel.DiscoveryScope `json:"scope,omitempty"`
@@ -59,7 +55,6 @@ type DiscoveryRequest struct {
 
 func (r DiscoveryRequest) Validate() error { return (AgentRequest{r.AgentID}).Validate() }
 
-// RunActionRequest selects a catalog action and passes its advertised JSON input.
 type RunActionRequest struct {
 	AgentID    string          `json:"agent_id"`
 	ActionName string          `json:"action_name"`
@@ -73,7 +68,6 @@ func (r RunActionRequest) Validate() error {
 	return (actionmodel.ActionCall{ActionName: r.ActionName, Input: r.Input}).Validate()
 }
 
-// ActionRequest selects a catalog definition or the version advertised by an agent.
 type ActionRequest struct {
 	ActionName string `json:"action_name"`
 	AgentID    string `json:"agent_id,omitempty"`
@@ -109,8 +103,6 @@ type Config struct {
 	TestCleaner frameworktesting.TestCleaner
 }
 
-// NewServer exposes agent commands and persisted mission state. The host chooses
-// the transport, such as the SDK's Streamable HTTP handler.
 func NewServer(controller controllercommands.Controller, config Config) (*mcp.Server, error) {
 	if controller == nil {
 		return nil, errors.New("controller is required")

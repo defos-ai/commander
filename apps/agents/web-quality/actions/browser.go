@@ -102,13 +102,7 @@ func (a *browserAction) browser(ctx context.Context, target *url.URL) (context.C
 		// CDP listeners cannot synchronously issue commands to their own target.
 		go func() {
 			executorCtx := cdp.WithExecutor(browserCtx, chromedp.FromContext(browserCtx).Target)
-			u, err := url.Parse(paused.Request.URL)
-			allowed := err == nil && (u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "data") && u.User == nil
-			allowed = allowed && (paused.Request.Method == "GET" || paused.Request.Method == "HEAD")
-			if paused.ResourceType == network.ResourceTypeDocument {
-				allowed = allowed && sameHostname(u, target)
-			}
-			if !allowed {
+			if !browserRequestAllowed(paused, target) {
 				_ = fetch.FailRequest(paused.RequestID, network.ErrorReasonBlockedByClient).Do(executorCtx)
 				return
 			}
@@ -120,6 +114,17 @@ func (a *browserAction) browser(ctx context.Context, target *url.URL) (context.C
 		return nil, nil, err
 	}
 	return browserCtx, cancel, nil
+}
+
+func browserRequestAllowed(request *fetch.EventRequestPaused, target *url.URL) bool {
+	u, err := url.Parse(request.Request.URL)
+	if err != nil || u.User != nil || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "data") {
+		return false
+	}
+	if request.Request.Method != "GET" && request.Request.Method != "HEAD" {
+		return false
+	}
+	return request.ResourceType != network.ResourceTypeDocument || sameHostname(u, target)
 }
 
 func boundedText(text string, limit int) string {

@@ -1,4 +1,3 @@
-// Package ui presents Commander's setup, chat and background activity.
 package ui
 
 import (

@@ -1,4 +1,3 @@
-// Package controller opens persistence used by the controller and mission runner.
 package controller
 
 import (
@@ -30,7 +29,6 @@ type ReportStorage struct {
 // Filesystem stores hold no persistent connections and need no cleanup.
 func (s *ReportStorage) Close() error { return nil }
 
-// OpenReportStorage opens report storage selected by its URL.
 func OpenReportStorage(ctx context.Context, rawURL string) (*ReportStorage, error) {
 	root, err := filesystemRoot(ctx, rawURL)
 	if err != nil {
@@ -43,7 +41,6 @@ func OpenReportStorage(ctx context.Context, rawURL string) (*ReportStorage, erro
 	return &ReportStorage{ReportStore: reportStore}, nil
 }
 
-// Database supplies the domain stores sharing DATABASE_URL.
 type Database struct {
 	ExecutionStore executions.ExecutionStore
 	AgentStore     agentmodel.AgentStore
@@ -56,7 +53,6 @@ type Database struct {
 // stores open and close files for each operation, so there is no shared handle.
 func (d *Database) Close() error { return nil }
 
-// OpenDatabase opens the controller's database stores selected by its URL.
 func OpenDatabase(ctx context.Context, rawURL string) (*Database, error) {
 	root, err := filesystemRoot(ctx, rawURL)
 	if err != nil {

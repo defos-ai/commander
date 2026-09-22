@@ -2,8 +2,7 @@ package chat
 
 import bridge "commander/apps/playground/internal/mcp"
 
-// A continuation version or a settled operation status is reviewed once. Keep
-// these identities structured so scheduling and stale-work checks agree.
+// Each continuation version or settled operation status is reviewed once.
 type reviewKey struct {
 	operationID, taskID, questionID, status string
 	version                                 uint64

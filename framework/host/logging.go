@@ -6,8 +6,6 @@ import (
 	"log/slog"
 )
 
-// NewLogger creates a logger for stderr and container log collectors without
-// changing the application's global logger.
 func NewLogger(writer io.Writer, level, format string) (*slog.Logger, error) {
 	var severity slog.Level
 	switch level {

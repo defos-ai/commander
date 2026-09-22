@@ -8,7 +8,6 @@ import (
 	"commander/framework/comms/messages"
 )
 
-// agentRuntime exposes host operations to consumers without interpreting messages.
 type agentRuntime struct {
 	agent    *Agent
 	events   controllerevents.Client

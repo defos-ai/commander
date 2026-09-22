@@ -30,8 +30,6 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 	return c.Bus.Publish(ctx, messages.ControllerEvents(messages.DefaultControllerType), message)
 }
 
-// State announces the current public agent snapshot, optionally in response to
-// a discovery or stop command.
 func (c Client) State(ctx context.Context, kind messages.MessageType, description AgentSnapshot, correlationID string) error {
 	switch kind {
 	case AgentStarted, AgentHeartbeat, AgentUpdated, AgentStopped:

@@ -1,5 +1,3 @@
-// Package environment provides host identity discovery, executable discovery,
-// and process execution.
 package environment
 
 import (
@@ -15,7 +13,6 @@ import (
 	agentmodel "commander/framework/domain/agents"
 )
 
-// DiscoveryScope describes executable discovery constraints.
 type DiscoveryScope = agentmodel.DiscoveryScope
 
 type Result struct {
