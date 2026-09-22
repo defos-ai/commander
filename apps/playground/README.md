@@ -9,6 +9,20 @@ launch the bundled local hosts for a self-contained demo.
 
 ## Quick start
 
+### Docker (recommended)
+
+No Go installation is needed. From the repository root:
+
+```sh
+docker compose up --build -d && docker compose run --build --rm playground
+```
+
+Playground runs interactively in its own container and connects to the Compose
+MCP service. There is no host executable to copy or cross-compile.
+Export your provider key before running, or enter it in
+setup. `/exit` closes the chat; Compose hosts and saved work remain available.
+Use `docker compose down` to stop them. See [local setup](../../docs/deployment.md).
+
 ### Go: one executable
 
 With Go 1.26.7+, build and run from the repository root:
@@ -27,18 +41,6 @@ that session's operations, reports, and artifacts.** Use Compose to retain work.
 
 The [agent guide](../agents/web-quality/README.md#native-agent) covers action
 availability and environment configuration.
-
-### Docker: no Go installation
-
-```sh
-docker compose up --build -d && docker compose run --build --rm playground
-```
-
-Playground runs interactively in its own container and connects to the Compose
-MCP service. There is no host executable to copy or cross-compile.
-Export your provider key before running, or enter it in
-setup. `/exit` closes the chat; Compose hosts and saved work remain available.
-Use `docker compose down` to stop them. See [local setup](../../docs/deployment.md).
 
 ### Model setup
 

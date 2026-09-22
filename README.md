@@ -8,7 +8,18 @@ Start, guide, and review work from your AI chat.
 ## Get started
 
 Try Commander through Playground, an interactive terminal chat with your model.
-Choose either Go or Docker:
+Docker is the recommended way to get started; Go is also supported.
+
+### With Docker (recommended)
+
+```sh
+docker compose up --build -d && docker compose run --build --rm playground
+```
+
+Select your model and enter its API key or set the provider's key in your environment before launching.
+
+You can also connect your existing AI client to **`http://localhost:4273/mcp`** after starting Compose.
+Client configuration examples for VS Code, Codex, and Cursor are in the [adapter guide](apps/adapters/README.md#quick-start).
 
 ### With Go
 
@@ -19,17 +30,6 @@ go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-on
 This starts the local hosts for your session. Choose your model,
 then try the example shown in chat. See [Playground](apps/playground/README.md)
 for configuration.
-
-### With Docker
-
-```sh
-docker compose up --build -d && docker compose run --build --rm playground
-```
-
-Select your model and enter its API key or set the provider's key in your environment before launching.
-
-You can also connect your existing AI client to **`http://localhost:4273/mcp`** after starting Compose.
-Client configuration examples for VS Code, Codex, and Cursor are in the [adapter guide](apps/adapters/README.md#quick-start).
 
 ## Use Commander
 

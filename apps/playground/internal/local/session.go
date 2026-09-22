@@ -90,10 +90,10 @@ func Start(ctx context.Context) (session *Session, err error) {
 	if err = s.awaitAgent(startup); err != nil {
 		return nil, err
 	}
-	s.Notices = append([]string{
+	s.Notices = []string{
 		"All-in-one: 1 MCP, 1 controller, 1 web-quality agent. Hosts and temporary state are removed on exit.",
 		"Try: Run review-website for https://defos.ai and summarize what should be fixed before release.",
-	}, s.Notices...)
+	}
 	return s, nil
 }
 
@@ -142,22 +142,13 @@ func (s *Session) awaitAgent(ctx context.Context) error {
 		}
 		var inventory struct {
 			Agents []struct {
-				Status  string `json:"status"`
-				Actions []struct {
-					Name, Status string
-					Reason       string `json:"status_reason"`
-				} `json:"actions"`
+				Status string `json:"status"`
 			} `json:"agents"`
 		}
 		if err := json.Unmarshal(result.Data, &inventory); err != nil {
 			return err
 		}
 		if len(inventory.Agents) == 1 && inventory.Agents[0].Status == "ready" {
-			for _, action := range inventory.Agents[0].Actions {
-				if action.Status != "ready" {
-					s.Notices = append(s.Notices, action.Name+" unavailable: "+action.Reason)
-				}
-			}
 			return nil
 		}
 		select {

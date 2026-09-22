@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -55,12 +54,9 @@ func TestFailedLocalStartupRemovesTemporaryState(t *testing.T) {
 }
 
 func TestLocalHostExitCancelsSessionAndReleasesResources(t *testing.T) {
-	// Arrange: a real installation still starts when browser actions are
-	// unavailable, explaining exactly which optional dependency is missing.
+	// Arrange: supervise a real local installation through its public MCP.
 	t.Setenv("SERVER_IP_ADDRESS", "")
 	t.Setenv("SERVER_HOSTNAME", "")
-	t.Setenv("CHROMIUM_PATH", filepath.Join(t.TempDir(), "not-installed"))
-	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	session, err := local.Start(ctx)
@@ -68,11 +64,6 @@ func TestLocalHostExitCancelsSessionAndReleasesResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	for _, action := range []string{"check-accessibility", "capture-page"} {
-		if !strings.Contains(strings.Join(session.Notices, "\n"), action+" unavailable: Install Chromium") {
-			t.Fatalf("missing dependency notice for %s: %v", action, session.Notices)
-		}
-	}
 	commander, err := bridge.Connect(ctx, session.MCPURL)
 	if err != nil {
 		t.Fatal(err)
