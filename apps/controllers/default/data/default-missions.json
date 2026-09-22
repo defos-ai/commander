@@ -1,0 +1,116 @@
+[
+  {
+    "name": "review-website",
+    "objective": "Review a website before release. Assign discover-pages once using the mission input. Discovery stays on the same hostname, allowing HTTP/HTTPS and port changes but excluding other hostnames and subdomains. The controller automatically checks links, basic accessibility, SEO metadata and passive technology indicators, and captures desktop/mobile screenshots for each discovered page. Wait for the grouped results, then prioritize concrete findings and report coverage and limitations. Technology indicators and declared versions are evidence, not proof of vulnerable or outdated software. SEO checks inspect returned HTML, not search rankings. Resolve the grouped continuation before completing. Ask the operator only when a release priority or intended behavior needs clarification. Do not modify the website or claim a complete accessibility or SEO audit.",
+    "required_actions": [
+      "discover-pages",
+      "check-links",
+      "check-accessibility",
+      "capture-page",
+      "check-seo",
+      "detect-technologies"
+    ],
+    "starting_actions": [
+      "discover-pages"
+    ],
+    "automations": {
+      "discover-pages": {
+        "run": [
+          "check-links",
+          "check-accessibility",
+          "capture-page",
+          "check-seo",
+          "detect-technologies"
+        ],
+        "continue": "when_all"
+      },
+      "check-links": {
+        "decide": "model"
+      },
+      "check-accessibility": {
+        "decide": "model"
+      },
+      "capture-page": {
+        "decide": "model"
+      },
+      "check-seo": {
+        "decide": "model"
+      },
+      "detect-technologies": {
+        "decide": "model"
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "Website URL reachable from the agents; use http://sample-website:8080/ for the bundled Compose site."
+        },
+        "max_pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "summary": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page_url": {
+                "type": "string",
+                "pattern": "^https?://"
+              },
+              "check": {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              "description": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "page_url",
+              "check",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        }
+      },
+      "required": [
+        "url",
+        "summary",
+        "findings"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

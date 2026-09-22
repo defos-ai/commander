@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Commander Web Quality Agent",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/apps/agents/web-quality/cmd",
+      "cwd": "${workspaceFolder}",
+      "buildFlags": "-buildvcs=false",
+      "console": "integratedTerminal",
+      "args": [
+        "-bus-url=${workspaceFolder}/state/bus",
+        "-storage-url=${workspaceFolder}/state/storage"
+      ]
+    },
+    {
+      "name": "Commander Controller",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/apps/controllers/default/cmd",
+      "cwd": "${workspaceFolder}",
+      "buildFlags": "-buildvcs=false",
+      "console": "integratedTerminal",
+      "env": {
+        "BUS_URL": "${workspaceFolder}/state/bus",
+        "STORAGE_URL": "${workspaceFolder}/state/storage",
+        "DATABASE_URL": "${workspaceFolder}/state/database",
+        "LOG_LEVEL": "debug"
+      }
+    },
+    {
+      "name": "Commander MCP: attach to running server",
+      "type": "go",
+      "request": "attach",
+      "mode": "local",
+      "processId": "${command:pickGoProcess}",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

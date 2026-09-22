@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "commander-mcp": {
+      "type": "http",
+      "url": "http://localhost:4273/mcp"
+    }
+  }
+}

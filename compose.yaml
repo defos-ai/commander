@@ -1,0 +1,125 @@
+name: commander
+
+x-environment: &environment
+  BUS_URL: ${BUS_URL:-file:///state/bus}
+  STORAGE_URL: ${STORAGE_URL:-file:///state/storage}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+
+x-runtime: &runtime
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 30s
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-agent: &agent
+  <<: *runtime
+  shm_size: 256mb
+  volumes:
+    - bus:/state/bus
+    - storage:/state/storage
+  image: commander-web-quality-agent:local
+  pull_policy: never
+  environment:
+    <<: *environment
+    CHROMIUM_NO_SANDBOX: "true"
+  depends_on:
+    controller:
+      condition: service_started
+
+services:
+  sample-website:
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: apps/agents/web-quality/sample-site/Dockerfile
+    ports:
+      - "127.0.0.1:${COMMANDER_WEBSITE_PORT:-8088}:8080"
+
+  volume-init:
+    # Reuse the controller image for local volume permissions only.
+    image: commander-controller:local
+    pull_policy: never
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["chown"]
+    command: ["1000:1000", "/bus", "/storage", "/database"]
+    volumes:
+      - bus:/bus
+      - storage:/storage
+      - database:/database
+
+  controller:
+    <<: *runtime
+    image: commander-controller:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/controllers/default/docker/Dockerfile
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+    command:
+      - --with-missions=/data/default-missions.json
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+      - database:/state/database
+    configs:
+      - source: default-missions
+        target: /data/default-missions.json
+    environment:
+      <<: *environment
+      DATABASE_URL: ${DATABASE_URL:-file:///state/database}
+
+  mcp:
+    <<: *runtime
+    image: commander-mcp:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/adapters/mcp/docker/Dockerfile
+    command:
+      - --listen-address=:4273
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+      - database:/state/database
+    environment:
+      <<: *environment
+      DATABASE_URL: ${DATABASE_URL:-file:///state/database}
+    ports:
+      - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
+    depends_on:
+      controller:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  web-1:
+    <<: *agent
+    # Build the shared image once; web-2 uses the same image.
+    build:
+      context: .
+      dockerfile: apps/agents/web-quality/docker/Dockerfile
+
+  web-2:
+    <<: *agent
+
+volumes:
+  bus:
+  storage:
+  database:
+
+configs:
+  default-missions:
+    file: ./apps/controllers/default/data/default-missions.json

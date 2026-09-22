@@ -1,0 +1,11 @@
+[mcp_servers.commander-mcp]
+url = "http://localhost:4273/mcp"
+
+[mcp_servers.commander-mcp.tools.list_missions]
+approval_mode = "approve"
+
+[mcp_servers.commander-mcp.tools.start_operation]
+approval_mode = "approve"
+
+[mcp_servers.commander-mcp.tools.list_agents]
+approval_mode = "approve"

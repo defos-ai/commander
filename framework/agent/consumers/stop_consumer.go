@@ -1,0 +1,37 @@
+package consumers
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"time"
+
+	agentcommands "commander/framework/comms/clients/agent/commands"
+	controllerevents "commander/framework/comms/clients/controller/events"
+	"commander/framework/comms/messages"
+	"commander/framework/domain"
+)
+
+// StopConsumer waits for pending results before shutting down the agent host.
+type StopConsumer struct {
+	Runtime  Runtime
+	AgentID  string
+	Events   controllerevents.Client
+	Logger   *slog.Logger
+	Outcomes *Outcomes
+}
+
+func (c StopConsumer) Consume(ctx context.Context, command messages.Message) error {
+	if err := domain.Decode(command.Payload, &agentcommands.StopAgentCommand{}); err != nil {
+		return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command, err)
+	}
+	c.Logger.Info("stop requested", "command_id", command.ID)
+	draining, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err := c.Outcomes.drain(draining)
+	cancel()
+	if err != nil {
+		return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command,
+			fmt.Errorf("pending action results were not accepted; agent remains available: %w", err))
+	}
+	return c.Runtime.Shutdown(ctx, command.ID)
+}

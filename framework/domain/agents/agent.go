@@ -1,0 +1,57 @@
+package agents
+
+import (
+	"bytes"
+	"slices"
+	"time"
+)
+
+// DefaultHeartbeatTimeout allows a 30-second heartbeat interval plus 15 seconds of grace.
+const DefaultHeartbeatTimeout = 45 * time.Second
+
+// Agent is a received public snapshot with controller-owned liveness data.
+// LastSeen records activity; LastHeartbeat alone renews the agent's lease.
+// A zero LastHeartbeat has no lease. Stores retain the observed status.
+type Agent struct {
+	AgentSnapshot
+	LastSeen       time.Time `json:"last_seen"`
+	LastHeartbeat  time.Time `json:"last_heartbeat"`
+	LeaseExpiresAt time.Time `json:"lease_expires_at,omitzero"`
+	Stale          bool      `json:"stale"`
+}
+
+// Snapshot derives freshness from the persisted lease even when the controller
+// is offline. Older records without a deadline use the default lease duration.
+func (record Agent) Snapshot(now time.Time) Agent {
+	record = record.Clone()
+	expires := record.LeaseExpiresAt
+	if expires.IsZero() {
+		expires = record.LastHeartbeat.Add(DefaultHeartbeatTimeout)
+	}
+	record.Stale = record.Status != AgentStopped && (record.LastHeartbeat.IsZero() || !now.Before(expires))
+	if record.Stale {
+		record.Status = AgentUnavailable
+	}
+	return record
+}
+
+// Clone returns an independent snapshot, including nested actions,
+// JSON schemas, public configuration, and discovery scope.
+func (record Agent) Clone() Agent {
+	record.Responsibilities = slices.Clone(record.Responsibilities)
+	record.GrantedPermissions = slices.Clone(record.GrantedPermissions)
+	if record.DiscoveryScope != nil {
+		scope := *record.DiscoveryScope
+		scope.Paths = slices.Clone(scope.Paths)
+		scope.Services = slices.Clone(scope.Services)
+		record.DiscoveryScope = &scope
+	}
+	record.Config = bytes.Clone(record.Config)
+	record.Actions = slices.Clone(record.Actions)
+	for i := range record.Actions {
+		record.Actions[i].RequiredPermissions = slices.Clone(record.Actions[i].RequiredPermissions)
+		record.Actions[i].InputSchema = bytes.Clone(record.Actions[i].InputSchema)
+		record.Actions[i].OutputSchema = bytes.Clone(record.Actions[i].OutputSchema)
+	}
+	return record
+}

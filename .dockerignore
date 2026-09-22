@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+.cursor
+.vscode
+bin
+state
+**/.env
+**/.env.*
+**/*.test
+**/coverage.out
+**/coverage.html
+**/.DS_Store
