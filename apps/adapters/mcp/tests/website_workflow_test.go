@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,12 +28,12 @@ type websiteOperation struct {
 }
 
 type websiteTask struct {
-	ID, Status   string
-	ParentTaskID string `json:"parent_task_id"`
-	ActionName   string `json:"action_name"`
-	AgentID      string `json:"agent_id"`
-	Input        json.RawMessage
-	Result       *struct {
+	ID, Status, Error string
+	ParentTaskID      string `json:"parent_task_id"`
+	ActionName        string `json:"action_name"`
+	AgentID           string `json:"agent_id"`
+	Input             json.RawMessage
+	Result            *struct {
 		Output    json.RawMessage
 		Artifacts []struct{ ID, Name string }
 	}
@@ -134,14 +135,38 @@ func TestWebsiteAutomaticReviewAndOperatorHandoff(t *testing.T) {
 	d.env["CHROMIUM_NO_SANDBOX"] = "true"
 	endpoint, _ := d.mcp(t, false)
 	for range 2 {
-		d.start(t, agentBinary, d.env, "--permissions=network-access,execute-command", "--heartbeat-interval=100ms")
+		// Full catalogs are persisted on each heartbeat. Keep registration quick
+		// without flooding the result queue with catalog writes on slower CI disks.
+		d.start(t, agentBinary, d.env, "--permissions=network-access,execute-command", "--heartbeat-interval=1s")
 	}
 	session := connect(t, d.ctx, endpoint)
-	readyAgents(t, d, session, 2)
+	registered := readyAgents(t, d, session, 2)
 	listed := decode[struct{ Missions []missions.Mission }](t, call(t, d.ctx, session, "list_missions", map[string]any{}))
 	index := slices.IndexFunc(listed.Missions, func(m missions.Mission) bool { return m.Name == "review-website" })
 	if index < 0 || listed.Missions[index].Automations["discover-pages"].Continue != missions.WhenAll {
 		t.Fatalf("missing website automation: %+v", listed)
+	}
+	for _, agent := range registered {
+		description := decode[struct {
+			Actions []struct {
+				Name, Status string
+				StatusReason string `json:"status_reason"`
+			}
+		}](t, call(t, d.ctx, session, "describe_agent", map[string]any{"agent_id": agent.ID}))
+		for _, required := range listed.Missions[index].RequiredActions {
+			found := false
+			for _, action := range description.Actions {
+				if action.Name == required {
+					found = true
+					if action.Status != "ready" {
+						t.Fatalf("agent %s action %s is %s: %s", agent.ID, required, action.Status, action.StatusReason)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("agent %s does not advertise required action %s", agent.ID, required)
+			}
+		}
 	}
 
 	released := make(chan struct{})
@@ -200,14 +225,21 @@ func TestWebsiteAutomaticReviewAndOperatorHandoff(t *testing.T) {
 	for {
 		finished = read()
 		done := len(finished.Tasks) == 11
+		var pending []string
 		for _, task := range finished.Tasks {
+			if task.Status == "failed" || task.Status == "interrupted" || task.Status == "cancelled" {
+				t.Fatalf("website action %s (%s) %s: %s", task.ActionName, task.ID, task.Status, task.Error)
+			}
+			if task.Status == "queued" || task.Status == "running" {
+				pending = append(pending, task.ActionName+" ("+task.ID+"): "+task.Status)
+			}
 			done = done && task.Status != "queued" && task.Status != "running"
 		}
 		if done {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("website checks did not finish: %+v", finished)
+			t.Fatalf("website checks did not finish: %d/11 tasks recorded; pending: %s", len(finished.Tasks), strings.Join(pending, "; "))
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
