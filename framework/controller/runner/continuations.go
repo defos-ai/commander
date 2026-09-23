@@ -148,6 +148,7 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
+	command.Actions = actionmodel.CloneNextActions(command.Actions)
 	result, err := r.change(ctx, command.OperationID, func(op *operations.Operation) error {
 		i := taskIndex(op, command.TaskID)
 		if i < 0 {

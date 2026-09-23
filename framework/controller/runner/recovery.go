@@ -39,7 +39,10 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 		expired := expireQuestions(&next, time.Now().UTC())
 		if operation.Status.Terminal() && !slices.ContainsFunc(operation.Tasks, needsTaskRecovery) {
 			if expired {
-				if err := r.save(ctx, s, next); err != nil {
+				if err := r.update(ctx, s, func(next *operations.Operation) error {
+					expireQuestions(next, time.Now().UTC())
+					return nil
+				}); err != nil {
 					return fmt.Errorf("persist expired questions for %s: %w", operation.ID, err)
 				}
 			}
@@ -48,9 +51,12 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 			}
 			continue
 		}
-		refreshStatus(&next)
-		appendEvent(&next, operations.OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")
-		if err := r.save(ctx, s, next); err != nil {
+		if err := r.update(ctx, s, func(next *operations.Operation) error {
+			expireQuestions(next, time.Now().UTC())
+			refreshStatus(next)
+			appendEvent(next, operations.OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")
+			return nil
+		}); err != nil {
 			return fmt.Errorf("persist recovered operation %s: %w", operation.ID, err)
 		}
 		r.states[operation.ID] = s
@@ -62,23 +68,14 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 }
 
 func (r *Runner) resumeTasks() {
-	// Collect before launching: a recovered result can update its operation as
-	// soon as its goroutine starts.
-	type resumedTask struct {
-		state *operationState
-		task  operations.Task
-	}
-	var pending []resumedTask
 	for _, state := range r.states {
 		for _, task := range state.operation.Clone().Tasks {
 			if needsTaskRecovery(task) {
-				pending = append(pending, resumedTask{state, task})
+				allowDispatch := !state.operation.Status.Terminal() && task.DeadlineAt.After(time.Now())
+				r.workers++
+				go r.recoverTask(task, allowDispatch)
 			}
 		}
-	}
-	for _, pending := range pending {
-		r.wg.Add(1)
-		go r.recoverTask(pending.state, pending.task)
 	}
 }
 
@@ -86,9 +83,7 @@ func needsTaskRecovery(task operations.Task) bool {
 	return task.Status == operations.TaskRunning || task.Status == operations.TaskInterrupted
 }
 
-func (r *Runner) recoverTask(state *operationState, task operations.Task) {
-	defer r.wg.Done()
-	defer r.signalScheduler()
+func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
 	deadline := *task.DeadlineAt
 	if task.Status == operations.TaskInterrupted || !deadline.After(time.Now()) {
 		// Even an interrupted or expired task may have a durable result.
@@ -101,9 +96,6 @@ func (r *Runner) recoverTask(state *operationState, task operations.Task) {
 		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
 	var result actionmodel.ActionOutput
 	var err error
-	state.mu.Lock()
-	allowDispatch := !state.operation.Status.Terminal() && task.DeadlineAt.After(time.Now())
-	state.mu.Unlock()
 	if task.Status == operations.TaskRunning && allowDispatch {
 		if dispatcher, ok := r.executor.(DurableActionExecutor); ok {
 			result, err = dispatcher.DispatchAction(ctx, task.AgentID, call)
@@ -113,7 +105,7 @@ func (r *Runner) recoverTask(state *operationState, task operations.Task) {
 	} else {
 		result, err = r.executor.RecoverAction(ctx, task.AgentID, call)
 	}
-	r.finishTask(state, task, result, err)
+	r.results <- taskResult{task: task, output: result, err: err}
 }
 
 func validateRecoveredOperation(operation operations.Operation) error {

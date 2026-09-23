@@ -4,7 +4,6 @@ package runner
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"commander/framework/artifact"
@@ -59,14 +58,12 @@ type Config struct {
 }
 
 type operationState struct {
-	mu        sync.Mutex
 	operation operations.Operation
 	changed   chan struct{}
 	err       error
 }
 
 type Runner struct {
-	mu          sync.Mutex
 	ctx         context.Context
 	cancel      context.CancelFunc
 	executor    ActionExecutor
@@ -79,10 +76,10 @@ type Runner struct {
 	capacity    int
 	lastAgent   string
 	wake        chan struct{}
-	closed      bool
-	closeOnce   sync.Once
+	requests    chan func()
+	results     chan taskResult
+	workers     int
 	closeErr    error // written before done closes
-	wg          sync.WaitGroup
 	done        chan struct{}
 }
 
@@ -118,15 +115,12 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 		config.Capacity = 1
 	}
 	lifetime, cancel := context.WithCancel(ctx)
-	r := &Runner{catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
+	r := &Runner{catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
 		missions: config.MissionStore, reports: config.ReportStore, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
 	if err := r.recover(ctx, config.ArtifactRestorer); err != nil {
 		cancel()
 		return nil, err
 	}
-	r.resumeTasks()
-	r.wg.Add(1)
-	go r.schedule()
-	go func() { <-lifetime.Done(); r.beginClose() }()
+	go r.run()
 	return r, nil
 }

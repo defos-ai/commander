@@ -11,7 +11,7 @@ import (
 
 func (e *Engine) watch(id string) {
 	var cursor uint64
-	var version uint64
+	var updatedAt time.Time
 	first, failed := true, false
 	for e.ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(e.ctx, 40*time.Second)
@@ -40,7 +40,7 @@ func (e *Engine) watch(id string) {
 				if first {
 					cursor = uint64(len(operation.Events))
 				}
-				if first || operation.Version != version || failed {
+				if first || !operation.UpdatedAt.Equal(updatedAt) || failed {
 					select {
 					case e.updates <- operation:
 					case <-e.ctx.Done():
@@ -48,7 +48,7 @@ func (e *Engine) watch(id string) {
 						return
 					}
 				}
-				version = operation.Version
+				updatedAt = operation.UpdatedAt
 				first = false
 				if failed {
 					e.emit(Event{Kind: "success", Text: "Operation updates resumed: " + id})

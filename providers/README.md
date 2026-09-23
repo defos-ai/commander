@@ -74,7 +74,10 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
 2. Add URL selection to the relevant factory. Keep connection setup, credentials,
    and cleanup in the provider; return the existing framework interfaces.
 3. Preserve the contracts for message acknowledgement, artifact ownership,
-   immutable reports, execution outcomes, and operation version conflicts.
+   immutable reports, execution outcomes, and atomic operation updates.
+   `OperationStore.Update` applies a callback to the latest saved operation;
+   locks and storage revisions stay inside the provider. Callbacks must be safe
+   to retry and must not perform external side effects.
 4. Add public behavior tests under `providers/tests/`, including concurrent writes,
    retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
 

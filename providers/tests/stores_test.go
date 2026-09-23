@@ -26,29 +26,27 @@ func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	op := operations.Operation{ID: id.OperationID(), Version: 1, Status: operations.Planning}
+	op := operations.Operation{ID: id.OperationID(), Status: operations.Planning}
 	if err := first.Create(t.Context(), op); err != nil {
 		t.Fatal(err)
 	}
-	type result struct {
-		operation operations.Operation
-		err       error
-	}
-	gate, results := make(chan struct{}), make(chan result, 2)
+	gate, results := make(chan struct{}), make(chan error, 2)
 
-	for i, store := range []*operationfs.OperationFsStore{first, second} {
-		candidate := op.Clone()
-		candidate.Version = 2
-		candidate.Output, err = json.Marshal(map[string]int{"writer": i})
-		if err != nil {
-			t.Fatal(err)
-		}
-		go func() { <-gate; results <- result{candidate, store.Update(t.Context(), candidate, 1)} }()
+	for _, store := range []*operationfs.OperationFsStore{first, second} {
+		go func() {
+			<-gate
+			_, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
+				next.Events = append(next.Events, operations.Event{Sequence: uint64(len(next.Events) + 1)})
+				return nil
+			})
+			results <- err
+		}()
 	}
 	close(gate)
-	winner, loser := <-results, <-results
-	if winner.err != nil {
-		winner, loser = loser, winner
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
 	}
 	reopened, err := operationfs.NewOperationFsStore(dir)
 	if err != nil {
@@ -58,19 +56,33 @@ func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(stored.Events) != 2 || stored.Events[0].Sequence != 1 || stored.Events[1].Sequence != 2 {
+		t.Fatalf("concurrent mutations lost an event: %+v", stored)
+	}
 
-	var actual, expected map[string]int
-	if err := json.Unmarshal(stored.Output, &actual); err != nil {
+	rejected := errors.New("invalid transition")
+	_, err = reopened.Update(t.Context(), op.ID, func(next *operations.Operation) error {
+		next.Status = operations.Completed
+		next.Events[0].Sequence = 100
+		return rejected
+	})
+	if !errors.Is(err, rejected) {
+		t.Fatalf("expected callback rejection, got %v", err)
+	}
+	after, err := first.Get(t.Context(), op.ID)
+	if err != nil || !reflect.DeepEqual(after, stored) {
+		t.Fatalf("rejected mutation changed storage: %+v, %v", after, err)
+	}
+	payload, err := json.Marshal(after)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(winner.operation.Output, &expected); err != nil {
+	var public map[string]any
+	if err := json.Unmarshal(payload, &public); err != nil {
 		t.Fatal(err)
 	}
-	if winner.err != nil || !errors.Is(loser.err, operations.ErrOperationConflict) || stored.ID != op.ID || stored.Version != 2 || !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("lost or merged concurrent update: winner=%v, loser=%v, stored=%+v", winner.err, loser.err, stored)
-	}
-	if err := reopened.Update(t.Context(), loser.operation, 1); !errors.Is(err, operations.ErrOperationConflict) {
-		t.Fatalf("stale retry overwrote committed state: %v", err)
+	if _, exists := public["version"]; exists {
+		t.Fatal("storage revision escaped into the domain operation")
 	}
 }
 

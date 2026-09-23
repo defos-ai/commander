@@ -40,7 +40,7 @@ func TestQuestionSelector(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	var mu sync.Mutex
-	op := bridge.Operation{ID: "operation-1", Status: "waiting", Version: 1, Questions: []bridge.Question{
+	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Questions: []bridge.Question{
 		{ID: "older", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Minute)},
 		{ID: "latest", Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), ExpiresAt: time.Now().Add(2 * time.Minute)},
 	}}
@@ -67,10 +67,10 @@ func TestQuestionSelector(t *testing.T) {
 					t.Errorf("answer targeted the wrong question: %+v", args)
 				}
 				answers <- args.Answer
+				op.UpdatedAt = time.Now()
 				op.Questions[1].Status = bridge.QuestionAnswered
 				op.Questions[1].Answer = args.Answer
 				op.Questions[0].ExpiresAt = time.Now().Add(500 * time.Millisecond)
-				op.Version++
 				payload = op
 			}
 			encoded, _ := json.Marshal(payload)
@@ -185,7 +185,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	defer cancel()
 	var mu sync.Mutex
 	var reads, requests atomic.Int32
-	op := bridge.Operation{ID: "operation-1", Status: "waiting", Version: 1, Preflight: &bridge.Preflight{Ready: false, Version: 1}}
+	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "preflight-fixture", Version: "1"}, nil)
 	for _, name := range []string{"get_operation", "operation_events"} {
 		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -230,7 +230,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 		return strings.Contains(view, "requirements missing") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
 	})
 	mu.Lock()
-	op.Version++
+	op.UpdatedAt = time.Now()
 	mu.Unlock()
 	targetReads := reads.Load() + 3
 	u.wait("unchanged preflight", func(string) bool { return reads.Load() >= targetReads })
@@ -239,7 +239,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	}
 	mu.Lock()
 	op.Status, op.Preflight.Ready = "planning", true
-	op.Version++
+	op.UpdatedAt = time.Now()
 	op.Preflight.Version++
 	mu.Unlock()
 	u.wait("ready preflight", func(view string) bool {

@@ -155,7 +155,7 @@ type Operation struct {
 	LastQuestion       *Question         `json:"last_question"`
 	RemainingQuestions int               `json:"remaining_questions"`
 	Events             []json.RawMessage `json:"events"`
-	Version            uint64            `json:"version"`
+	UpdatedAt          time.Time         `json:"updated_at"`
 	Raw                json.RawMessage   `json:"-"`
 }
 

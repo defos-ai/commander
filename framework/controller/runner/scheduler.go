@@ -18,22 +18,6 @@ func (r *Runner) signalScheduler() {
 	}
 }
 
-func (r *Runner) schedule() {
-	defer r.wg.Done()
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-r.ctx.Done():
-			return
-		case <-r.wake:
-		case <-ticker.C:
-		}
-		r.expireOperatorQuestions()
-		r.dispatchQueued()
-	}
-}
-
 func (r *Runner) dispatchQueued() {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
@@ -46,40 +30,32 @@ func (r *Runner) dispatchQueued() {
 		} // Keep durable work queued until inventory is available.
 		sort.Slice(records, func(i, j int) bool { return records[i].ID < records[j].ID })
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed || r.ctx.Err() != nil {
+	if r.ctx.Err() != nil {
 		return
 	}
 	used := map[string]int{}
 	ids := make([]string, 0, len(r.states))
 	for id, s := range r.states {
 		ids = append(ids, id)
-		s.mu.Lock()
 		for _, task := range s.operation.Tasks {
 			if task.Status == operations.TaskRunning {
 				used[task.AgentID]++
 			}
 		}
-		s.mu.Unlock()
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
 		s := r.states[id]
-		s.mu.Lock()
 		if active(s) != nil {
-			s.mu.Unlock()
 			continue
 		}
 		if err := r.refreshPreflight(ctx, s, records); err != nil {
-			s.mu.Unlock()
 			continue
 		}
 		if s.operation.Preflight != nil && !s.operation.Preflight.Ready {
-			s.mu.Unlock()
 			continue
 		}
-		for i, task := range s.operation.Tasks {
+		for _, task := range s.operation.Tasks {
 			if task.Status != operations.TaskQueued || blockedByQuestion(s.operation, task) {
 				continue
 			}
@@ -87,24 +63,28 @@ func (r *Runner) dispatchQueued() {
 			if agentID == "" {
 				continue
 			}
-			next := s.operation.Clone()
-			task = next.Tasks[i]
-			task.AgentID, task.Status, task.StartedAt = agentID, operations.TaskRunning, time.Now().UTC()
-			deadline := task.StartedAt.Add(r.taskTimeout)
-			task.DeadlineAt = &deadline
-			next.Tasks[i] = task
-			refreshStatus(&next)
-			appendEvent(&next, operations.TaskDispatched, task.ID, "", "Task dispatched")
-			if err := r.save(ctx, s, next); err != nil {
-				break
-			} // Retry unsaved dispatch on the next tick.
+			if err := r.update(ctx, s, func(next *operations.Operation) error {
+				i := taskIndex(next, task.ID)
+				if next.Status.Terminal() || i < 0 || next.Tasks[i].Status != operations.TaskQueued || blockedByQuestion(*next, next.Tasks[i]) || next.Preflight != nil && !next.Preflight.Ready {
+					return operations.ErrOperationConflict
+				}
+				task = next.Tasks[i]
+				task.AgentID, task.Status, task.StartedAt = agentID, operations.TaskRunning, time.Now().UTC()
+				deadline := task.StartedAt.Add(r.taskTimeout)
+				task.DeadlineAt = &deadline
+				next.Tasks[i] = task
+				refreshStatus(next)
+				appendEvent(next, operations.TaskDispatched, task.ID, "", "Task dispatched")
+				return nil
+			}); err != nil {
+				break // Retry unsaved dispatch on the next tick.
+			}
 			used[agentID]++
 			r.lastAgent = agentID
-			call := actionmodel.ActionCall{ActionName: task.ActionName, Input: task.Input, Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
-			r.wg.Add(1)
-			go r.runTask(s, task, call)
+			call := actionmodel.ActionCall{ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
+			r.workers++
+			go r.runTask(task, call)
 		}
-		s.mu.Unlock()
 	}
 }
 

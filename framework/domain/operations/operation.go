@@ -123,7 +123,6 @@ type Operation struct {
 	ReportID  string           `json:"report_id,omitempty"`
 	Error     string           `json:"error,omitempty"`
 	Events    []Event          `json:"events"`
-	Version   uint64           `json:"version"`
 	CreatedAt time.Time        `json:"created_at"`
 	UpdatedAt time.Time        `json:"updated_at"`
 }

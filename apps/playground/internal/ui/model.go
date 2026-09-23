@@ -217,7 +217,7 @@ func (m *Model) receive(event chat.Event) {
 	case "operation":
 		if event.Operation != nil {
 			previous, exists := m.operations[event.ID]
-			if !exists || event.Operation.Version >= previous.Version {
+			if !exists || !event.Operation.UpdatedAt.Before(previous.UpdatedAt) {
 				m.operations[event.ID] = *event.Operation
 				m.syncQuestion(time.Now())
 				m.refresh()

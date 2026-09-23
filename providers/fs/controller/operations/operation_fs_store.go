@@ -16,10 +16,14 @@ import (
 )
 
 // OperationFsStore saves complete operation snapshots in root/operations.json.
-// Each mutation holds the collection's process-shared lock through the version
-// comparison and atomic replacement. Existing invalid data is never overwritten.
+// The collection lock covers reading, mutation, and atomic replacement.
 type OperationFsStore struct {
 	file *jsonfile.Collection
+}
+
+type storedOperation struct {
+	operations.Operation
+	Version uint64 `json:"version"`
 }
 
 var _ operations.OperationStore = (*OperationFsStore)(nil)
@@ -49,8 +53,8 @@ func (s *OperationFsStore) Create(ctx context.Context, operation operations.Oper
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !id.Valid(operation.ID) || operation.Version != 1 {
-		return errors.New("new operation requires a UUID and version 1")
+	if !id.Valid(operation.ID) {
+		return errors.New("new operation requires a UUID")
 	}
 	snapshot := operation.Clone()
 	return s.file.Update(ctx, func(data []byte) ([]byte, error) {
@@ -63,7 +67,7 @@ func (s *OperationFsStore) Create(ctx context.Context, operation operations.Oper
 				return nil, operations.ErrOperationConflict
 			}
 		}
-		return encodeOperations(append(records, snapshot))
+		return encodeOperations(append(records, storedOperation{Operation: snapshot, Version: 1}))
 	})
 }
 
@@ -116,38 +120,50 @@ func (s *OperationFsStore) List(ctx context.Context) ([]operations.Operation, er
 	return result, nil
 }
 
-func (s *OperationFsStore) Update(ctx context.Context, operation operations.Operation, expectedVersion uint64) error {
+func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return operations.Operation{}, err
 	}
-	if !id.Valid(operation.ID) {
-		return errors.New("operation ID must be a canonical UUID")
+	if !id.Valid(operationID) {
+		return operations.Operation{}, errors.New("operation ID must be a canonical UUID")
 	}
-	snapshot := operation.Clone()
-	return s.file.Update(ctx, func(data []byte) ([]byte, error) {
+	if mutate == nil {
+		return operations.Operation{}, errors.New("operation mutation is required")
+	}
+	var result operations.Operation
+	err := s.file.Update(ctx, func(data []byte) ([]byte, error) {
 		records, err := decodeOperations(data)
 		if err != nil {
 			return nil, err
 		}
 		for index, current := range records {
-			if current.ID != snapshot.ID {
+			if current.ID != operationID {
 				continue
 			}
-			// Guard addition before comparing the supplied successor so uint64
-			// wraparound can never make version zero a successful update.
-			if expectedVersion == 0 || expectedVersion == ^uint64(0) ||
-				current.Version != expectedVersion || snapshot.Version != expectedVersion+1 {
-				return nil, operations.ErrOperationConflict
+			next := current.Clone()
+			if err := mutate(&next); err != nil {
+				return nil, err
 			}
-			records[index] = snapshot
+			if next.ID != operationID {
+				return nil, errors.New("operation identity cannot change")
+			}
+			if current.Version == ^uint64(0) {
+				return nil, errors.New("operation storage version exhausted")
+			}
+			result = next.Clone()
+			records[index] = storedOperation{Operation: result, Version: current.Version + 1}
 			return encodeOperations(records)
 		}
 		return nil, operations.ErrUnknownOperation
 	})
+	if err != nil {
+		return operations.Operation{}, err
+	}
+	return result, nil
 }
 
-func decodeOperations(data []byte) ([]operations.Operation, error) {
-	var records []operations.Operation
+func decodeOperations(data []byte) ([]storedOperation, error) {
+	var records []storedOperation
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&records); err != nil {
@@ -172,7 +188,7 @@ func decodeOperations(data []byte) ([]operations.Operation, error) {
 	return records, nil
 }
 
-func encodeOperations(records []operations.Operation) ([]byte, error) {
+func encodeOperations(records []storedOperation) ([]byte, error) {
 	sort.Slice(records, func(i, j int) bool { return records[i].ID < records[j].ID })
 	data, err := json.MarshalIndent(records, "", "  ")
 	if err != nil {

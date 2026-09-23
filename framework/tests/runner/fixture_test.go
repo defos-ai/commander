@@ -52,19 +52,27 @@ func (s *operationStore) List(context.Context) ([]operations.Operation, error) {
 	}
 	return result, nil
 }
-func (s *operationStore) Update(_ context.Context, op operations.Operation, expected uint64) error {
+func (s *operationStore) Update(ctx context.Context, id string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return operations.Operation{}, err
+	}
 	if s.failNext != nil {
 		err := s.failNext
 		s.failNext = nil
-		return err
+		return operations.Operation{}, err
 	}
-	if previous, ok := s.records[op.ID]; !ok || previous.Version != expected || op.Version != expected+1 {
-		return operations.ErrOperationConflict
+	previous, ok := s.records[id]
+	if !ok {
+		return operations.Operation{}, operations.ErrUnknownOperation
 	}
-	s.records[op.ID] = op.Clone()
-	return nil
+	next := previous.Clone()
+	if err := mutate(&next); err != nil {
+		return operations.Operation{}, err
+	}
+	s.records[id] = next.Clone()
+	return next.Clone(), nil
 }
 
 type missionStore struct{ mission missions.Mission }

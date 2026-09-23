@@ -2,41 +2,31 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
-	"commander/framework/id"
 )
 
 func (r *Runner) change(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
-	if err := ctx.Err(); err != nil {
-		return operations.Operation{}, err
-	}
-	if r.ctx.Err() != nil {
-		return operations.Operation{}, ErrClosed
-	}
-	ctx, cancel := r.requestContext(ctx)
-	defer cancel()
-	s, err := r.state(operationID)
-	if err != nil {
-		return operations.Operation{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := active(s); err != nil {
-		return operations.Operation{}, err
-	}
-	next := s.operation.Clone()
-	if err := mutate(&next); err != nil {
-		return operations.Operation{}, err
-	}
-	if err := r.save(ctx, s, next); err != nil {
-		return operations.Operation{}, err
-	}
-	return s.operation.Clone(), nil
+	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
+		s, err := r.state(operationID)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		if err := active(s); err != nil {
+			return operations.Operation{}, err
+		}
+		if err := r.update(ctx, s, func(next *operations.Operation) error {
+			if next.Status.Terminal() {
+				return ErrFinished
+			}
+			return mutate(next)
+		}); err != nil {
+			return operations.Operation{}, err
+		}
+		return s.operation.Clone(), nil
+	})
 }
 
 // requestContext lets shutdown interrupt request-owned store operations, even
@@ -54,19 +44,15 @@ func (r *Runner) requestContext(ctx context.Context) (context.Context, func()) {
 	}
 }
 
-func (r *Runner) save(ctx context.Context, s *operationState, next operations.Operation) error {
-	next.Version, next.UpdatedAt = s.operation.Version+1, time.Now().UTC()
-	if next.Status == operations.Completed && s.operation.Status != operations.Completed {
-		report := reports.Report{ID: id.ReportID(), OperationID: next.ID, Mission: next.Mission.Name,
-			Output: append(json.RawMessage(nil), next.Output...), CreatedAt: next.UpdatedAt}
-		if err := r.reports.Put(ctx, report); err != nil {
-			return fmt.Errorf("save operation report: %w", err)
+func (r *Runner) update(ctx context.Context, s *operationState, mutate func(*operations.Operation) error) error {
+	next, err := r.store.Update(ctx, s.operation.ID, func(next *operations.Operation) error {
+		if err := mutate(next); err != nil {
+			return err
 		}
-		next.ReportID = report.ID
-		// Publish content before its reference. An operation-store failure may
-		// leave an unreferenced report; immutable IDs keep retries independent.
-	}
-	if err := r.store.Update(ctx, next, s.operation.Version); err != nil {
+		next.UpdatedAt = time.Now().UTC()
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 	s.operation = next
@@ -76,8 +62,6 @@ func (r *Runner) save(ctx context.Context, s *operationState, next operations.Op
 }
 
 func (r *Runner) state(operationID string) (*operationState, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	s, exists := r.states[operationID]
 	if !exists {
 		return nil, operations.ErrUnknownOperation

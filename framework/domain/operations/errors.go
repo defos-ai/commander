@@ -11,5 +11,5 @@ var (
 
 var (
 	ErrUnknownOperation  = errors.New("unknown operation")
-	ErrOperationConflict = errors.New("operation version conflict")
+	ErrOperationConflict = errors.New("operation conflict")
 )

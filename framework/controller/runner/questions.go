@@ -16,8 +16,9 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 	if err := command.Validate(); err != nil {
 		return operations.Question{}, err
 	}
-	var question operations.Question
-	_, err := r.change(ctx, command.OperationID, func(next *operations.Operation) error {
+	command.Options = append([]string(nil), command.Options...)
+	questionID := id.QuestionID()
+	result, err := r.change(ctx, command.OperationID, func(next *operations.Operation) error {
 		if err := validStep(*next, command.StepID); err != nil {
 			return err
 		}
@@ -26,7 +27,7 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 		if command.TimeoutSeconds > 0 {
 			timeout = time.Duration(command.TimeoutSeconds) * time.Second
 		}
-		question = operations.Question{ID: id.QuestionID(), Status: operations.QuestionPending, TaskID: command.TaskID, StepID: command.StepID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, ExpiresAt: now.Add(timeout)}
+		question := operations.Question{ID: questionID, Status: operations.QuestionPending, TaskID: command.TaskID, StepID: command.StepID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, ExpiresAt: now.Add(timeout)}
 		if command.TaskID != "" {
 			i := taskIndex(next, command.TaskID)
 			if i < 0 {
@@ -45,14 +46,16 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 		appendEvent(next, operations.QuestionAsked, command.TaskID, question.ID, "Operator intervention requested")
 		return nil
 	})
-	return question, err
+	if err != nil {
+		return operations.Question{}, err
+	}
+	return result.Questions[len(result.Questions)-1], nil
 }
 
 func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
-	var answerErr error
 	result, err := r.change(ctx, command.OperationID, func(next *operations.Operation) error {
 		for i := range next.Questions {
 			question := &next.Questions[i]
@@ -72,7 +75,6 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 			if !question.ExpiresAt.IsZero() && !now.Before(question.ExpiresAt) {
 				// Commit expiration even when the caller's answer is rejected.
 				expireQuestions(next, now)
-				answerErr = errors.New("question has expired")
 				return nil
 			}
 			question.Status, question.Answer, question.AnsweredAt = operations.QuestionAnswered, command.Answer, &now
@@ -97,7 +99,12 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 	if err != nil {
 		return operations.Operation{}, err
 	}
-	return result, answerErr
+	for _, question := range result.Questions {
+		if question.ID == command.QuestionID && question.Status == operations.QuestionExpired {
+			return result, errors.New("question has expired")
+		}
+	}
+	return result, nil
 }
 
 // Expiration records an unanswered question and gives a linked decision back
@@ -140,13 +147,10 @@ func pendingQuestionDeadline(op operations.Operation) bool {
 func (r *Runner) expireOperatorQuestions() {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.closed || r.ctx.Err() != nil {
+	if r.ctx.Err() != nil {
 		return
 	}
 	for _, s := range r.states {
-		s.mu.Lock()
 		now := time.Now().UTC()
 		due := false
 		for _, question := range s.operation.Questions {
@@ -156,12 +160,11 @@ func (r *Runner) expireOperatorQuestions() {
 			}
 		}
 		if due {
-			next := s.operation.Clone()
-			if expireQuestions(&next, now) {
-				// A failed write leaves the previous snapshot intact for the next sweep.
-				_ = r.save(ctx, s, next)
-			}
+			// A failed write leaves the previous snapshot intact for the next sweep.
+			_ = r.update(ctx, s, func(next *operations.Operation) error {
+				expireQuestions(next, now)
+				return nil
+			})
 		}
-		s.mu.Unlock()
 	}
 }

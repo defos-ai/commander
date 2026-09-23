@@ -72,7 +72,6 @@ type operationSummary struct {
 	RemainingQuestions int                           `json:"remaining_questions"`
 	ReportID           string                        `json:"report_id,omitempty"`
 	Error              string                        `json:"error,omitempty"`
-	Version            uint64                        `json:"version"`
 	CreatedAt          time.Time                     `json:"created_at"`
 	UpdatedAt          time.Time                     `json:"updated_at"`
 }
@@ -82,7 +81,7 @@ func summarizeOperation(operation operations.Operation) operationSummary {
 		ID: operation.ID, Mission: missionSummary{Name: operation.Mission.Name}, Input: operation.Input,
 		Status: operation.Status, TaskCounts: make(map[operations.TaskStatus]int),
 		Preflight: operation.Preflight,
-		ReportID:  operation.ReportID, Error: operation.Error, Version: operation.Version,
+		ReportID:  operation.ReportID, Error: operation.Error,
 		CreatedAt: operation.CreatedAt, UpdatedAt: operation.UpdatedAt,
 	}
 	for _, task := range operation.Tasks {

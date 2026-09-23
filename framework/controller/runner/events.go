@@ -7,124 +7,90 @@ import (
 	"commander/framework/domain/operations"
 )
 
-// Events returns updates after a sequence cursor. With wait=true it waits for
-// the next update, caller cancellation, or a terminal operation with no tasks left.
-// Finished operations outside the active runtime return their stored history.
-func (r *Runner) Events(ctx context.Context, operationID string, after uint64, wait bool) ([]operations.Event, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	s, err := r.state(operationID)
-	if errors.Is(err, operations.ErrUnknownOperation) {
-		operation, err := r.store.Get(ctx, operationID)
-		if err != nil {
-			return nil, err
-		}
-		return eventsAfter(operation, after)
-	}
+type operationView struct {
+	operation operations.Operation
+	changed   <-chan struct{}
+	stopped   bool
+}
+
+func (r *Runner) view(operationID string) (operationView, error) {
+	state, err := r.state(operationID)
 	if err != nil {
-		return nil, err
+		return operationView{}, err
 	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		s.mu.Lock()
-		if s.err != nil {
-			err := s.err
-			s.mu.Unlock()
-			return nil, err
-		}
-		events, err := eventsAfter(s.operation, after)
-		if err != nil {
-			s.mu.Unlock()
-			return nil, err
-		}
-		finished := s.operation.Status.Terminal() && !runningTasks(s.operation)
+	if state.err != nil {
+		return operationView{}, state.err
+	}
+	return operationView{operation: state.operation.Clone(), changed: state.changed}, nil
+}
+
+func (r *Runner) snapshot(ctx context.Context, operationID string) (operationView, error) {
+	view, err := submit(ctx, r, func(context.Context) (operationView, error) {
+		return r.view(operationID)
+	})
+	if errors.Is(err, ErrClosed) {
 		select {
 		case <-r.done:
-			finished = true
-		default:
+			// The loop has joined its workers; its final snapshots are immutable.
+			view, err = r.view(operationID)
+			view.stopped = true
+		case <-ctx.Done():
+			return operationView{}, ctx.Err()
 		}
-		changed := s.changed
-		s.mu.Unlock()
-		if len(events) > 0 || !wait || finished {
+	}
+	if errors.Is(err, operations.ErrUnknownOperation) {
+		op, err := r.store.Get(ctx, operationID)
+		return operationView{operation: op, stopped: true}, err
+	}
+	return view, err
+}
+
+// Events waits outside the coordination loop, so a long poll cannot block writes.
+func (r *Runner) Events(ctx context.Context, operationID string, after uint64, wait bool) ([]operations.Event, error) {
+	for {
+		view, err := r.snapshot(ctx, operationID)
+		if err != nil {
+			return nil, err
+		}
+		events, err := eventsAfter(view.operation, after)
+		if err != nil {
+			return nil, err
+		}
+		finished := view.operation.Status.Terminal() && !runningTasks(view.operation)
+		if len(events) > 0 || !wait || finished || view.stopped {
 			return events, nil
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-changed:
+		case <-view.changed:
 		case <-r.done:
-			// Recheck the final snapshot after shutdown's last persistence write.
 		}
 	}
 }
 
 func (r *Runner) WaitTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
-	if err := ctx.Err(); err != nil {
-		return operations.Task{}, err
-	}
-	s, err := r.state(operationID)
-	if errors.Is(err, operations.ErrUnknownOperation) {
-		operation, err := r.store.Get(ctx, operationID)
+	for {
+		view, err := r.snapshot(ctx, operationID)
 		if err != nil {
 			return operations.Task{}, err
 		}
-		for _, task := range operation.Clone().Tasks {
-			if task.ID == taskID {
-				if task.Status == operations.TaskRunning {
-					return operations.Task{}, ErrNotRunning
-				}
-				return task, nil
-			}
-		}
-		return operations.Task{}, errors.New("unknown task")
-	}
-	if err != nil {
-		return operations.Task{}, err
-	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return operations.Task{}, err
-		}
-		s.mu.Lock()
-		if s.err != nil {
-			err := s.err
-			s.mu.Unlock()
-			return operations.Task{}, err
-		}
-		var task *operations.Task
-		snapshot := s.operation.Clone()
-		for i := range snapshot.Tasks {
-			if snapshot.Tasks[i].ID == taskID {
-				task = &snapshot.Tasks[i]
-				break
-			}
-		}
-		changed := s.changed
-		finishedRuntime := false
-		select {
-		case <-r.done:
-			finishedRuntime = true
-		default:
-		}
-		s.mu.Unlock()
-		if task == nil {
+		i := taskIndex(&view.operation, taskID)
+		if i < 0 {
 			return operations.Task{}, errors.New("unknown task")
 		}
+		task := view.operation.Tasks[i]
 		if task.Status != operations.TaskRunning && task.Status != operations.TaskQueued {
-			return *task, nil
+			return task, nil
 		}
-		if finishedRuntime {
+		if view.stopped {
 			return operations.Task{}, ErrNotRunning
 		}
 		select {
 		case <-ctx.Done():
 			return operations.Task{}, ctx.Err()
-		case <-changed:
+		case <-view.changed:
 		case <-r.done:
-			// Recheck the task/error after shutdown has joined its final writer.
 		}
 	}
 }

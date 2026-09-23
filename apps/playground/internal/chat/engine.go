@@ -209,7 +209,7 @@ func (e *Engine) run() {
 				}
 			}
 		case operation := <-e.updates:
-			if previous, ok := operations[operation.ID]; ok && operation.Version < previous.Version {
+			if previous, ok := operations[operation.ID]; ok && operation.UpdatedAt.Before(previous.UpdatedAt) {
 				continue
 			}
 			if _, known := operations[operation.ID]; !known {

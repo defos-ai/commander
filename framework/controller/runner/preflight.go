@@ -85,15 +85,22 @@ func (r *Runner) refreshPreflight(ctx context.Context, state *operationState, re
 		if preflight.Ready == previous.Ready && reflect.DeepEqual(preflight.Actions, previous.Actions) {
 			return nil
 		}
-		preflight.Version = previous.Version + 1
 	}
-	next := state.operation.Clone()
-	next.Preflight = preflight
-	refreshStatus(&next)
-	message := "Mission requirements are ready"
-	if !preflight.Ready {
-		message = "Mission requirements are unavailable; inspect preflight before continuing"
-	}
-	appendEvent(&next, operations.PreflightUpdated, "", "", message)
-	return r.save(ctx, state, next)
+	return r.update(ctx, state, func(next *operations.Operation) error {
+		if next.Status.Terminal() {
+			return ErrFinished
+		}
+		preflight := assessPreflight(next.Mission, records)
+		if previous := next.Preflight; previous != nil {
+			preflight.Version = previous.Version + 1
+		}
+		next.Preflight = preflight
+		refreshStatus(next)
+		message := "Mission requirements are ready"
+		if !preflight.Ready {
+			message = "Mission requirements are unavailable; inspect preflight before continuing"
+		}
+		appendEvent(next, operations.PreflightUpdated, "", "", message)
+		return nil
+	})
 }

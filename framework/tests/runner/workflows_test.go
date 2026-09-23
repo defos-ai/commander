@@ -104,7 +104,7 @@ func TestFailedDecisionSavePreservesRetryableState(t *testing.T) {
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if !errors.Is(err, failure) || after.Version != before.Version || len(after.Tasks) != 1 || after.Tasks[0].Continuation.Status != operations.ContinuationPending {
+	if !errors.Is(err, failure) || !after.UpdatedAt.Equal(before.UpdatedAt) || len(after.Tasks) != 1 || after.Tasks[0].Continuation.Status != operations.ContinuationPending {
 		t.Fatalf("failed save changed durable state: %+v, error=%v", after, err)
 	}
 	select {
