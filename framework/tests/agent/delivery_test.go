@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +27,8 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	bus := &resultBus{results: make(chan messages.Message, 16)}
 	runtime := &countingRuntime{}
 	outcomes := &consumers.Outcomes{}
+	outcomesDone := outcomes.Start(ctx)
+	t.Cleanup(func() { cancel(); <-outcomesDone })
 	consumer := consumers.ActionConsumer{Runtime: runtime, AgentID: "fixture-agent-12345678", Outcomes: outcomes,
 		Events: controllerevents.Client{Bus: bus}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	command, err := agentcommands.NewRunAction(consumer.AgentID, actions.ActionCall{ActionName: "inspect", Input: []byte(`{"page":1}`),
@@ -84,7 +87,9 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	if err := receipts.Consume(ctx, receipt); err != nil {
 		t.Fatal(err)
 	}
-	receipts.AfterAck(receipt)
+	if err := receipts.AfterAck(ctx, receipt); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case result := <-bus.results:
@@ -119,3 +124,89 @@ func (*resultBus) Subscribe(context.Context, string) (comms.Subscription, error)
 	return nil, errors.New("subscriptions are unused in this fault test")
 }
 func (*resultBus) Close() error { return nil }
+
+func TestFailedPublicationWaitsForReceiptAndPreservesOutcomeAcrossRestart(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	lifetime, stop := context.WithCancel(ctx)
+	outcomes := &consumers.Outcomes{}
+	outcomesDone := outcomes.Start(lifetime)
+	bus := &flakyResultBus{resultBus: resultBus{results: make(chan messages.Message, 16)}}
+	runtime := &countingRuntime{}
+	consumer := consumers.ActionConsumer{Runtime: runtime, AgentID: "fixture-agent-12345678", Outcomes: outcomes,
+		Events: controllerevents.Client{Bus: bus}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	command, err := agentcommands.NewRunAction(consumer.AgentID, actions.ActionCall{ActionName: "inspect", Input: []byte(`{"page":1}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished, retried := make(chan error, 1), make(chan error, 1)
+	go func() { finished <- consumer.Consume(lifetime, command) }()
+	go func() { retried <- consumer.RetryResults(lifetime) }()
+	t.Cleanup(func() { stop(); <-outcomesDone })
+
+	var result messages.Message
+	select {
+	case result = <-bus.results:
+	case <-ctx.Done():
+		t.Fatal("failed publication was not retried")
+	}
+	select {
+	case err := <-finished:
+		t.Fatalf("command stopped waiting before its receipt: %v", err)
+	default:
+	}
+	receipt, err := agentevents.NewResultAccepted(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipts := consumers.ResultReceiptConsumer{AgentID: consumer.AgentID, Outcomes: outcomes}
+	if err := receipts.Consume(ctx, receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err := receipts.AfterAck(ctx, receipt); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("receipt did not release the waiting command")
+	}
+	stop()
+	if err := <-retried; !errors.Is(err, context.Canceled) {
+		t.Fatalf("retry worker failed to stop: %v", err)
+	}
+	<-outcomesDone
+
+	if err := consumer.Consume(ctx, command); !errors.Is(err, comms.ErrClosed) {
+		t.Fatalf("stopped outcomes accepted a command: %v", err)
+	}
+	restarted, stopRestart := context.WithCancel(ctx)
+	restartDone := outcomes.Start(restarted)
+	t.Cleanup(func() { stopRestart(); <-restartDone })
+	if err := consumer.Consume(ctx, command); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case replay := <-bus.results:
+		if runtime.calls != 1 || !reflect.DeepEqual(result, replay) {
+			t.Fatalf("restart repeated work or changed its result: calls=%d replay=%+v", runtime.calls, replay)
+		}
+	case <-ctx.Done():
+		t.Fatal("restart did not replay the saved outcome")
+	}
+}
+
+type flakyResultBus struct {
+	resultBus
+	failed atomic.Bool
+}
+
+func (b *flakyResultBus) Publish(ctx context.Context, topic string, message messages.Message) error {
+	if b.failed.CompareAndSwap(false, true) {
+		return errors.New("temporary publication failure")
+	}
+	return b.resultBus.Publish(ctx, topic, message)
+}

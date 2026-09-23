@@ -3,7 +3,7 @@ package actions
 import (
 	"context"
 	"encoding/json"
-	"sync"
+	"sync/atomic"
 
 	"commander/framework/agent/action"
 	actionmodel "commander/framework/domain/actions"
@@ -48,22 +48,19 @@ func (a *CheckAccessibility) Run(ctx context.Context, raw json.RawMessage, grant
 		return action.Result{}, err
 	}
 	defer cancel()
-	var mu sync.Mutex
-	errors := []string{}
-	dropped := false
+	errors := make(chan string, 10)
+	var dropped atomic.Bool
 	chromedp.ListenTarget(browserCtx, func(event any) {
 		if e, ok := event.(*runtime.EventExceptionThrown); ok {
-			mu.Lock()
-			defer mu.Unlock()
-			if len(errors) >= 10 {
-				dropped = true
-				return
-			}
 			message := e.ExceptionDetails.Text
 			if e.ExceptionDetails.Exception != nil && e.ExceptionDetails.Exception.Description != "" {
 				message = e.ExceptionDetails.Exception.Description
 			}
-			errors = append(errors, boundedText(message, 300))
+			select {
+			case errors <- boundedText(message, 300):
+			default:
+				dropped.Store(true)
+			}
 		}
 	})
 	out := CheckAccessibilityOutput{Scope: "Basic rendered-page checks only; excludes contrast, keyboard navigation, assistive technology and full WCAG conformance."}
@@ -71,10 +68,11 @@ func (a *CheckAccessibility) Run(ctx context.Context, raw json.RawMessage, grant
 		return action.Result{}, err
 	}
 	out.Scope = "Basic rendered-page checks only; excludes contrast, keyboard navigation, assistive technology and full WCAG conformance."
-	mu.Lock()
-	out.BrowserErrors = append([]string{}, errors...)
-	out.Truncated = out.Truncated || dropped
-	mu.Unlock()
+	out.BrowserErrors = make([]string, 0, len(errors))
+	for range len(errors) {
+		out.BrowserErrors = append(out.BrowserErrors, <-errors)
+	}
+	out.Truncated = out.Truncated || dropped.Load()
 	return action.JSONResult(out)
 }
 

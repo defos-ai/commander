@@ -36,6 +36,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	var heartbeatDone chan struct{}
 	var resultsDone chan struct{}
 	var receiptsDone chan struct{}
+	var outcomesDone <-chan struct{}
 	var subscription comms.Subscription
 	var receipts comms.Subscription
 	var stopCommandID string
@@ -65,6 +66,9 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}
 		if receiptsDone != nil {
 			<-receiptsDone
+		}
+		if outcomesDone != nil {
+			<-outcomesDone
 		}
 	}
 	announceStopped := func(ctx context.Context, commandID string) error {
@@ -113,12 +117,18 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	if err != nil {
 		return err
 	}
+	outcomesDone = a.outcomes.Start(workersCtx)
 	receiptsDone = make(chan struct{})
 	confirmation := consumers.ResultReceiptConsumer{
 		AgentID: a.ID(), Outcomes: &a.outcomes, Logger: a.config.Logger,
 	}
 	receiptConsumer := comms.Consumer{
-		Subscription: receipts, Logger: a.config.Logger, AfterAck: confirmation.AfterAck,
+		Subscription: receipts, Logger: a.config.Logger,
+		AfterAck: func(receipt messages.Message) {
+			if err := confirmation.AfterAck(workersCtx, receipt); err != nil && workersCtx.Err() == nil {
+				endService(err)
+			}
+		},
 	}
 	go func() {
 		defer close(receiptsDone)

@@ -23,7 +23,7 @@ func (c *ResultReceiptConsumer) Consume(ctx context.Context, receipt messages.Me
 	if receipt.AgentID != c.AgentID || receipt.Type != agentevents.ActionResultAccepted {
 		return nil
 	}
-	if err := c.Outcomes.validateReceipt(receipt); err != nil {
+	if err := c.Outcomes.validateReceipt(ctx, receipt); err != nil {
 		logger := c.Logger
 		if logger == nil {
 			logger = slog.Default()
@@ -38,8 +38,9 @@ func (c *ResultReceiptConsumer) Consume(ctx context.Context, receipt messages.Me
 }
 
 // AfterAck releases waiting commands only once receipt processing is acknowledged.
-func (c *ResultReceiptConsumer) AfterAck(receipt messages.Message) {
+func (c *ResultReceiptConsumer) AfterAck(ctx context.Context, receipt messages.Message) error {
 	if c.accepted {
-		c.Outcomes.acceptReceipt(receipt.CorrelationID)
+		return c.Outcomes.acceptReceipt(ctx, receipt.CorrelationID)
 	}
+	return nil
 }

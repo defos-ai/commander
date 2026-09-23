@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"commander/framework/agent/action"
@@ -22,15 +22,17 @@ import (
 
 type browserAction struct {
 	*action.Base
-	mu         sync.RWMutex
+	configuration atomic.Pointer[browserConfiguration]
+}
+
+type browserConfiguration struct {
 	executable string
 	noSandbox  bool
 }
 
 func (a *browserAction) Discover(ctx context.Context, env environment.Environment, scope *environment.DiscoveryScope) (action.Status, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.executable = ""
+	a.configuration.Store(nil)
+	configuration := &browserConfiguration{}
 	a.SetStatus(action.Unknown)
 	if env == nil {
 		env = &environment.Local{}
@@ -59,24 +61,24 @@ func (a *browserAction) Discover(ctx context.Context, env environment.Environmen
 			return action.Unknown, err
 		}
 		if path != "" {
-			a.executable = path
+			configuration.executable = path
 			break
 		}
 	}
 	noSandbox, _ := env.LookupEnv("CHROMIUM_NO_SANDBOX")
-	a.noSandbox = false
 	if noSandbox != "" {
 		value, err := strconv.ParseBool(noSandbox)
 		if err != nil {
 			a.SetUnavailable("CHROMIUM_NO_SANDBOX must be a boolean", actionmodel.Requirement{Kind: actionmodel.ConfigurationRequirement, Name: "CHROMIUM_NO_SANDBOX"})
 			return action.Unavailable, nil
 		}
-		a.noSandbox = value
+		configuration.noSandbox = value
 	}
-	if a.executable == "" {
+	if configuration.executable == "" {
 		a.SetUnavailable("Install Chromium or set CHROMIUM_PATH", actionmodel.Requirement{Kind: actionmodel.ExecutableRequirement, Name: "chromium"})
 		return action.Unavailable, nil
 	}
+	a.configuration.Store(configuration)
 	a.SetStatus(action.Ready)
 	return action.Ready, nil
 }
@@ -85,15 +87,13 @@ func (a *browserAction) Discover(ctx context.Context, env environment.Environmen
 // document navigation stays on the requested hostname. External HTTP(S) resources
 // remain available so fonts, styles and images render as they do for a visitor.
 func (a *browserAction) browser(ctx context.Context, target *url.URL) (context.Context, context.CancelFunc, error) {
-	a.mu.RLock()
-	path, noSandbox := a.executable, a.noSandbox
-	a.mu.RUnlock()
-	if path == "" {
+	configuration := a.configuration.Load()
+	if configuration == nil {
 		return nil, nil, errors.New("browser is unavailable; run discovery first")
 	}
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 45*time.Second)
 	options := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
-	options = append(options, chromedp.ExecPath(path), chromedp.Flag("no-sandbox", noSandbox), chromedp.Flag("disable-dev-shm-usage", true), chromedp.Flag("disable-extensions", true))
+	options = append(options, chromedp.ExecPath(configuration.executable), chromedp.Flag("no-sandbox", configuration.noSandbox), chromedp.Flag("disable-dev-shm-usage", true), chromedp.Flag("disable-extensions", true))
 	allocCtx, allocCancel := chromedp.NewExecAllocator(timeoutCtx, options...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 	cancel := func() { browserCancel(); allocCancel(); timeoutCancel() }

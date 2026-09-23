@@ -26,7 +26,7 @@ type ActionConsumer struct {
 }
 
 func (c ActionConsumer) Consume(ctx context.Context, command messages.Message) error {
-	response, claimed, err := c.Outcomes.claim(command)
+	response, claimed, err := c.Outcomes.claim(ctx, command)
 	if err != nil {
 		// A conflicting duplicate must not execute or overwrite the outcome of
 		// the original command with a second, fabricated failure response.
@@ -65,16 +65,22 @@ func (c ActionConsumer) Consume(ctx context.Context, command messages.Message) e
 	}
 	result.CorrelationID, result.Work = command.ID, command.Work
 	acknowledgeCommand := !errors.Is(commandErr, actionmodel.ErrArtifactPersistence)
-	c.Outcomes.complete(result, acknowledgeCommand)
+	if err := c.Outcomes.complete(ctx, result, acknowledgeCommand); err != nil {
+		return err
+	}
 	return c.deliverResult(ctx, result)
 }
 
 func (c ActionConsumer) deliverResult(ctx context.Context, response messages.Message) error {
+	acknowledgeCommand, err := c.Outcomes.canAcknowledge(ctx, response.CorrelationID)
+	if err != nil {
+		return err
+	}
 	if err := c.Events.Publish(ctx, response); err != nil {
 		if cause := context.Cause(ctx); cause != nil {
 			return cause
 		}
-		if errors.Is(err, comms.ErrClosed) || !c.Outcomes.canAcknowledge(response.CorrelationID) {
+		if errors.Is(err, comms.ErrClosed) || !acknowledgeCommand {
 			return err
 		}
 		// Retry publication independently, but keep completion in this handler.
@@ -84,7 +90,7 @@ func (c ActionConsumer) deliverResult(ctx context.Context, response messages.Mes
 	}
 	// Artifact persistence failures retain their original command, including
 	// when a duplicate command replays the already published failure outcome.
-	if !c.Outcomes.canAcknowledge(response.CorrelationID) {
+	if !acknowledgeCommand {
 		return actionmodel.ErrArtifactPersistence
 	}
 	return nil
@@ -100,7 +106,11 @@ func (c ActionConsumer) RetryResults(ctx context.Context) error {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-ticker.C:
-			for _, response := range c.Outcomes.pending() {
+			pending, err := c.Outcomes.pending(ctx)
+			if err != nil {
+				return err
+			}
+			for _, response := range pending {
 				publication, cancel := context.WithTimeout(ctx, 5*time.Second)
 				err := c.Events.Publish(publication, response)
 				cancel()

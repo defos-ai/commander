@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"commander/framework/domain/missions"
@@ -10,16 +9,13 @@ import (
 )
 
 // Keep configured mission definitions available after clearing test data.
-// Bus connections and host memory are deliberately outside this cleanup.
+// Call between settled tests; cleanup requests must not run concurrently.
 type testCleaner struct {
-	mu       sync.Mutex
 	missions missions.MissionStore
 	state    frameworktesting.TestCleaner
 }
 
 func (c *testCleaner) Clean() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	definitions, err := c.missions.List(ctx)

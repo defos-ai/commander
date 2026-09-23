@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sync"
+	"sync/atomic"
 
 	"commander/framework/agent/environment"
 	"commander/framework/artifact"
@@ -37,11 +37,17 @@ type Executor interface {
 	Run(context.Context, json.RawMessage, []string) (Result, error)
 }
 
-// Base supplies synchronized inventory state and permission checks for extensions.
+// Base publishes immutable readiness snapshots and checks permissions for extensions.
 // Embed *Base, implement Run, and override Discover for external dependencies.
 type Base struct {
-	mu         sync.RWMutex
 	definition actionmodel.Action
+	readiness  atomic.Pointer[readiness]
+}
+
+type readiness struct {
+	status       Status
+	reason       string
+	requirements []actionmodel.Requirement
 }
 
 func NewBase(definition actionmodel.Action) *Base {
@@ -56,9 +62,12 @@ func NewBase(definition actionmodel.Action) *Base {
 
 // Action returns an independent snapshot of the action's metadata and readiness.
 func (b *Base) Action() actionmodel.Action {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
 	definition := b.definition
+	if current := b.readiness.Load(); current != nil {
+		definition.Status = current.status
+		definition.StatusReason = current.reason
+		definition.MissingRequirements = current.requirements
+	}
 	definition.RequiredPermissions = slices.Clone(definition.RequiredPermissions)
 	definition.MissingRequirements = slices.Clone(definition.MissingRequirements)
 	definition.InputSchema = bytes.Clone(definition.InputSchema)
@@ -67,19 +76,12 @@ func (b *Base) Action() actionmodel.Action {
 }
 
 func (b *Base) SetStatus(status Status) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.definition.Status = status
-	b.definition.StatusReason = ""
-	b.definition.MissingRequirements = nil
+	b.readiness.Store(&readiness{status: status})
 }
 
 // SetUnavailable records a public reason. It must never contain credentials.
 func (b *Base) SetUnavailable(reason string, requirements ...actionmodel.Requirement) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.definition.Status, b.definition.StatusReason = Unavailable, reason
-	b.definition.MissingRequirements = slices.Clone(requirements)
+	b.readiness.Store(&readiness{status: Unavailable, reason: reason, requirements: slices.Clone(requirements)})
 }
 
 // Discover marks compiled-in implementations available. Scope paths constrain only
