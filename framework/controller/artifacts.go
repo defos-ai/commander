@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 
 	"commander/framework/artifact"
 )
@@ -9,20 +10,25 @@ import (
 // RestoreArtifacts restores validated references from persisted operation
 // results. Storage remains responsible for checking content when it is read.
 func (c *Controller) RestoreArtifacts(refs []artifact.Ref) error {
-	return c.state.RestoreArtifacts(refs)
+	return c.restoreArtifacts(c.state.Context, refs)
+}
+
+func (c *Controller) restoreArtifacts(ctx context.Context, refs []artifact.Ref) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(refs) == 0 {
+		return c.state.CheckOpen()
+	}
+	refs = slices.Clone(refs)
+	_, err := submit(ctx, c, func(context.Context) (struct{}, error) {
+		return struct{}{}, c.state.RestoreArtifacts(refs)
+	})
+	return err
 }
 
 func (c *Controller) Artifact(artifactID string) (artifact.Ref, error) {
-	c.state.Mu.RLock()
-	defer c.state.Mu.RUnlock()
-	if c.state.Closed {
-		return artifact.Ref{}, ErrControllerClosed
-	}
-	ref, ok := c.state.Artifacts[artifactID]
-	if !ok {
-		return artifact.Ref{}, ErrUnknownArtifact
-	}
-	return ref, nil
+	return c.state.Artifact(artifactID)
 }
 
 func (c *Controller) ReadArtifact(ctx context.Context, artifactID string) (artifact.Ref, []byte, error) {

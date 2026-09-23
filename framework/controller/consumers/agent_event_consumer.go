@@ -70,13 +70,11 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 			return fmt.Errorf("persist agent observation: %w", err)
 		}
 	}
-	c.State.Mu.Lock()
-	defer c.State.Mu.Unlock()
-	if c.State.Closed {
-		return c.State.ClosedError()
+	if err := c.State.CheckOpen(); err != nil {
+		return err
 	}
 	if resultErr == nil {
-		c.State.NotifyLocked()
+		c.State.Notify()
 	}
 	var handlingErr error
 	if resultErr != nil {
@@ -98,7 +96,7 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 		pending.Reply <- state.CommandReply{Message: message, Record: c.State.Snapshot(record, time.Now().UTC()), Err: resultErr}
 	}
 	if resultErr == nil && message.Type == controllerevents.AgentStopped {
-		c.State.FailAgentLocked(message.AgentID, state.ErrAgentNotRunning)
+		c.State.FailAgent(message.AgentID, state.ErrAgentNotRunning)
 	}
 	return handlingErr
 }

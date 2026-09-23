@@ -40,9 +40,7 @@ func (c CommandResultConsumer) Consume(ctx context.Context, message messages.Mes
 	}
 	// Discovery and stop commands are not action executions. Their failures
 	// are only valid while the matching command is awaiting a response.
-	c.State.Mu.RLock()
 	pending, pendingExists := c.State.Pending[message.CorrelationID]
-	c.State.Mu.RUnlock()
 	if message.Type == controllerevents.ActionSucceeded || !pendingExists || pending.AgentID != message.AgentID || pending.Expected == controllerevents.ActionSucceeded {
 		return InvalidMessage(errors.New("command result has no matching execution or pending command"))
 	}
@@ -76,14 +74,10 @@ func (c CommandResultConsumer) acceptActionResult(ctx context.Context, message m
 	if err != nil {
 		return InvalidMessage(err)
 	}
-	c.State.Mu.RLock()
-	for _, ref := range refs {
-		if previous, exists := c.State.Artifacts[ref.ID]; exists && previous != ref {
-			c.State.Mu.RUnlock()
-			return InvalidMessage(fmt.Errorf("artifact %q conflicts with a previously accepted artifact", ref.ID))
-		}
+	if err := c.State.ValidateArtifacts(refs); err != nil {
+		return InvalidMessage(err)
 	}
-	c.State.Mu.RUnlock()
+
 	// The database is the acknowledgement boundary. Neither the caller nor
 	// the agent receives acceptance until the terminal result is durable.
 	if err := c.Executions.Complete(ctx, message); err != nil {
@@ -107,10 +101,8 @@ func (c CommandResultConsumer) acceptActionResult(ctx context.Context, message m
 	if err := (agentevents.Client{Bus: c.Bus}).Publish(ctx, receipt); err != nil {
 		return fmt.Errorf("acknowledge durable action result: %w", err)
 	}
-	c.State.Mu.Lock()
-	defer c.State.Mu.Unlock()
-	if c.State.Closed {
-		return c.State.ClosedError()
+	if err := c.State.CheckOpen(); err != nil {
+		return err
 	}
 	if pending, ok := c.State.Pending[command.ID]; ok && pending.AgentID == command.AgentID && pending.Work == command.Work && pending.Expected == controllerevents.ActionSucceeded {
 		delete(c.State.Pending, command.ID)
@@ -132,7 +124,6 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 	if record.Status == agentmodel.AgentStopped || record.LastSeen.After(message.CreatedAt) {
 		return nil
 	}
-	c.State.Mu.RLock()
 	otherCommand := false
 	for commandID, pending := range c.State.Pending {
 		if commandID != message.CorrelationID && pending.AgentID == message.AgentID && pending.Expected == controllerevents.ActionSucceeded {
@@ -140,7 +131,6 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 			break
 		}
 	}
-	c.State.Mu.RUnlock()
 	if otherCommand {
 		return nil
 	}
@@ -148,10 +138,8 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 	if err := c.Inventory.Upsert(ctx, record); err != nil {
 		return fmt.Errorf("persist agent completion: %w", err)
 	}
-	c.State.Mu.Lock()
-	defer c.State.Mu.Unlock()
-	if !c.State.Closed {
-		c.State.NotifyLocked()
+	if c.State.CheckOpen() == nil {
+		c.State.Notify()
 	}
 	return nil
 }

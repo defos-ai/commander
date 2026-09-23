@@ -51,9 +51,7 @@ func (c *Controller) WaitForAgent(ctx context.Context, agentID string) (agentmod
 		if err := ctx.Err(); err != nil {
 			return agentmodel.Agent{}, err
 		}
-		c.state.Mu.RLock()
-		changed := c.state.Changed
-		c.state.Mu.RUnlock()
+		changed := c.state.Changed()
 		record, err := c.Agent(ctx, agentID)
 		if err == nil && !record.Stale && (record.Status == agentmodel.AgentReady || record.Status == agentmodel.AgentWorking) {
 			return record, nil
@@ -71,36 +69,13 @@ func (c *Controller) WaitForAgent(ctx context.Context, agentID string) (agentmod
 	}
 }
 
-func (c *Controller) watchLeases() {
-	defer close(c.leasesDone)
-	ticker := time.NewTicker(c.leaseSweepInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-c.state.Context.Done():
-			return
-		case <-ticker.C:
-			if err := c.expireLeases(); err != nil {
-				c.beginClose(fmt.Errorf("expire agent leases: %w", err))
-				return
-			}
-		}
-	}
-}
-
 func (c *Controller) expireLeases() error {
-	c.state.ObservationMu.Lock()
-	defer c.state.ObservationMu.Unlock()
 	expired, err := c.leaseRegistry.Sweep(c.state.Context, time.Now().UTC())
 	if len(expired) != 0 {
-		c.state.Mu.Lock()
-		defer c.state.Mu.Unlock()
-		if !c.state.Closed {
-			for _, record := range expired {
-				c.state.FailAgentLocked(record.ID, ErrAgentNotRunning)
-			}
-			c.state.NotifyLocked()
+		for _, record := range expired {
+			c.state.FailAgent(record.ID, ErrAgentNotRunning)
 		}
+		c.state.Notify()
 	}
 	return err
 }
@@ -116,5 +91,8 @@ func (c *Controller) inventoryError(err error) error {
 func (c *Controller) inventoryContext(ctx context.Context) (context.Context, func()) {
 	operation, cancel := context.WithCancel(ctx)
 	stop := context.AfterFunc(c.state.Context, cancel)
+	if c.state.Context.Err() != nil {
+		cancel()
+	}
 	return operation, func() { stop(); cancel() }
 }

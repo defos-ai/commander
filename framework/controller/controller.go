@@ -13,7 +13,6 @@ import (
 	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	"commander/framework/comms/messages"
-	"commander/framework/controller/consumers"
 	"commander/framework/controller/leases"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
@@ -65,7 +64,8 @@ type Controller struct {
 	closeOnce          sync.Once
 	closeErr           error // written before cleanupDone closes
 	eventsDone         chan struct{}
-	leasesDone         chan struct{}
+	loopDone           chan struct{}
+	requests           chan func()
 	cleanupDone        chan struct{}
 }
 
@@ -140,17 +140,12 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		events: events, cancel: cancel, inventory: config.AgentStore,
 		leaseRegistry: registry, leaseSweepInterval: config.LeaseSweepInterval,
 		state:      state.New(lifetime, config.HeartbeatTimeout),
-		eventsDone: make(chan struct{}), leasesDone: make(chan struct{}), cleanupDone: make(chan struct{}),
+		eventsDone: make(chan struct{}), loopDone: make(chan struct{}), cleanupDone: make(chan struct{}),
+		requests: make(chan func()),
 	}
-	eventConsumer := consumers.EventConsumer{
-		Subscription: c.events, Logger: c.logger,
-		Bus: c.bus, Inventory: c.inventory, Actions: config.ActionStore, Executions: c.executionStore, State: c.state,
-	}
-	go func() {
-		defer close(c.eventsDone)
-		c.beginClose(eventConsumer.Consume(lifetime))
-	}()
-	go c.watchLeases()
+	go c.run()
+	go c.consumeEvents(config.ActionStore)
+
 	return c, nil
 }
 

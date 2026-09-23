@@ -103,7 +103,7 @@ func (c *Controller) executionResult(ctx context.Context, agentID, commandID str
 	if record.Result == nil {
 		return actionmodel.ActionOutput{}, false, nil
 	}
-	output, err := c.actionResult(*record.Result, agentID, command.ID, call)
+	output, err := c.actionResult(ctx, *record.Result, agentID, command.ID, call)
 	var failure *CommandFailure
 	if err == nil || errors.As(err, &failure) {
 		return output, true, err
@@ -111,7 +111,7 @@ func (c *Controller) executionResult(ctx context.Context, agentID, commandID str
 	return output, true, recoveryOutcomeError(err)
 }
 
-func (c *Controller) actionResult(message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
+func (c *Controller) actionResult(ctx context.Context, message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
 	output, err := executions.DecodeActionResult(message, agentID, commandID, call)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
@@ -120,7 +120,7 @@ func (c *Controller) actionResult(message messages.Message, agentID, commandID s
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	if err := c.RestoreArtifacts(refs); err != nil {
+	if err := c.restoreArtifacts(ctx, refs); err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
 	return output, nil

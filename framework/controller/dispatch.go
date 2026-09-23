@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	agentcommands "commander/framework/comms/clients/agent/commands"
@@ -25,7 +26,7 @@ func (c *Controller) DispatchAction(ctx context.Context, agentID string, call ac
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	output, err := c.actionResult(reply.Message, agentID, reply.Message.CorrelationID, call)
+	output, err := c.actionResult(ctx, reply.Message, agentID, reply.Message.CorrelationID, call)
 	return output, commandOutcomeError(agentcommands.RunAction, err)
 }
 
@@ -33,23 +34,36 @@ func (c *Controller) resumeClaimedAction(ctx context.Context, stored executions.
 	if !replay {
 		return c.awaitClaimedAction(ctx, stored, requested)
 	}
-	if err := stored.Validate(); err != nil {
+	current, err := submit(ctx, c, func(ctx context.Context) (executions.Execution, error) {
+		return c.redeliverAction(ctx, stored, requested)
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrControllerClosed) {
+			err = commandOutcomeError(agentcommands.RunAction, c.inventoryError(err))
+		}
 		return state.CommandReply{}, err
+	}
+
+	return c.awaitClaimedAction(ctx, current, requested)
+}
+
+func (c *Controller) redeliverAction(ctx context.Context, stored executions.Execution, requested messages.Message) (executions.Execution, error) {
+	if err := stored.Validate(); err != nil {
+		return executions.Execution{}, err
 	}
 	// Claim compares logical content while preserving original creation time.
 	current, _, err := c.executionStore.Claim(ctx, requested)
 	if err != nil {
-		return state.CommandReply{}, err
+		return executions.Execution{}, err
 	}
-	stored = current
-	if stored.Result == nil {
-		record, err := c.Agent(ctx, stored.Command.AgentID)
+	if current.Result == nil {
+		record, err := c.Agent(ctx, current.Command.AgentID)
 		if err != nil || record.Stale || (record.Status != agentmodel.AgentReady && record.Status != agentmodel.AgentWorking) {
-			return state.CommandReply{}, commandOutcomeError(agentcommands.RunAction, ErrAgentNotRunning)
+			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, ErrAgentNotRunning)
 		}
-		if err := (agentcommands.Client{Bus: c.bus}).Publish(ctx, stored.Command); err != nil {
-			return state.CommandReply{}, commandOutcomeError(agentcommands.RunAction, fmt.Errorf("redeliver saved command: %w", err))
+		if err := (agentcommands.Client{Bus: c.bus}).Publish(ctx, current.Command); err != nil {
+			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, fmt.Errorf("redeliver saved command: %w", err))
 		}
 	}
-	return c.awaitClaimedAction(ctx, stored, requested)
+	return current, nil
 }

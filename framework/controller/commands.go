@@ -39,7 +39,7 @@ func (c *Controller) RunAction(ctx context.Context, agentID string, call actionm
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	output, err := c.actionResult(reply.Message, agentID, reply.Message.CorrelationID, call)
+	output, err := c.actionResult(ctx, reply.Message, agentID, reply.Message.CorrelationID, call)
 	return output, commandOutcomeError(agentcommands.RunAction, err)
 }
 
@@ -54,107 +54,88 @@ func (c *Controller) StopAgent(ctx context.Context, agentID string) (agentmodel.
 	return reply.Record, err
 }
 
+type commandDispatch struct {
+	pending *state.PendingCommand
+	stored  *executions.Execution
+}
+
 func (c *Controller) command(ctx context.Context, message messages.Message, expected messages.MessageType, replay bool) (state.CommandReply, error) {
-	agentID, kind := message.AgentID, message.Type
 	if ctx == nil {
 		return state.CommandReply{}, errors.New("command requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return state.CommandReply{}, err
 	}
-	ctx, done := c.inventoryContext(ctx)
+	waiting, done := c.inventoryContext(ctx)
 	defer done()
-	if err := c.state.CheckOpen(); err != nil {
+	dispatched, err := submit(waiting, c, func(ctx context.Context) (commandDispatch, error) {
+		return c.dispatchCommand(ctx, waiting, message, expected)
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrControllerClosed) {
+			err = commandOutcomeError(message.Type, c.inventoryError(err))
+		}
 		return state.CommandReply{}, err
 	}
+	if dispatched.stored != nil {
+		return c.resumeClaimedAction(waiting, *dispatched.stored, message, replay)
+	}
+	select {
+	case reply := <-dispatched.pending.Reply:
+		return reply, commandOutcomeError(message.Type, reply.Err)
+	case <-waiting.Done():
+		return state.CommandReply{}, commandOutcomeError(message.Type, c.inventoryError(waiting.Err()))
+	}
+}
+
+func (c *Controller) dispatchCommand(ctx, waiting context.Context, message messages.Message, expected messages.MessageType) (commandDispatch, error) {
+	agentID, kind := message.AgentID, message.Type
 	if kind == agentcommands.RunAction {
-		// A task ID identifies its original command across controller restarts.
-		// Check the journal before inventory: a completed result remains usable
-		// after the agent has disappeared.
+		// Completed work remains usable after its agent has disappeared.
 		stored, err := c.executionStore.Get(ctx, agentID, message.ID)
 		if err == nil {
-			return c.resumeClaimedAction(ctx, stored, message, replay)
+			return commandDispatch{stored: &stored}, nil
 		}
 		if !errors.Is(err, executions.ErrUnknownExecution) {
-			return state.CommandReply{}, fmt.Errorf("read execution claim: %w", err)
+			return commandDispatch{}, fmt.Errorf("read execution claim: %w", err)
 		}
 	}
-	var pending *state.PendingCommand
-	for {
-		c.state.Mu.RLock()
-		revision, closed := c.state.Revision, c.state.Closed
-		c.state.Mu.RUnlock()
-		if closed || c.state.Context.Err() != nil {
-			return state.CommandReply{}, c.state.ClosedError()
-		}
-		record, err := c.inventory.Get(ctx, agentID)
-		if err != nil {
-			return state.CommandReply{}, fmt.Errorf("read agent inventory: %w", c.inventoryError(err))
-		}
-		record = c.state.Snapshot(record, time.Now().UTC())
-		c.state.Mu.Lock()
-		if c.state.Closed || c.state.Context.Err() != nil {
-			c.state.Mu.Unlock()
-			return state.CommandReply{}, c.state.ClosedError()
-		}
-		// An observation may have arrived during the database read. Re-read
-		// before registering a command, so a completed stop cannot be missed.
-		if revision != c.state.Revision {
-			c.state.Mu.Unlock()
-			continue
-		}
-		available := record.Status == agentmodel.AgentReady || record.Status == agentmodel.AgentWorking
-		if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent {
-			available = available || record.Status == agentmodel.AgentUnavailable
-		}
-		if record.Stale || !available {
-			c.state.Mu.Unlock()
-			return state.CommandReply{}, ErrAgentNotRunning
-		}
-		pending = &state.PendingCommand{AgentID: agentID, Work: message.Work, Expected: expected, Reply: make(chan state.CommandReply, 1)}
-		if _, exists := c.state.Pending[message.ID]; exists {
-			c.state.Mu.Unlock()
-			return state.CommandReply{}, errors.New("command is already awaiting a result")
-		}
-		c.state.Pending[message.ID] = pending
-		c.state.Mu.Unlock()
-		break
+	record, err := c.inventory.Get(ctx, agentID)
+	if err != nil {
+		return commandDispatch{}, fmt.Errorf("read agent inventory: %w", c.inventoryError(err))
 	}
-	defer func() {
-		c.state.Mu.Lock()
-		if c.state.Pending[message.ID] == pending {
-			delete(c.state.Pending, message.ID)
-		}
-		c.state.Mu.Unlock()
-	}()
+	record = c.state.Snapshot(record, time.Now().UTC())
+	available := record.Status == agentmodel.AgentReady || record.Status == agentmodel.AgentWorking
+	if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent {
+		available = available || record.Status == agentmodel.AgentUnavailable
+	}
+	if record.Stale || !available {
+		return commandDispatch{}, ErrAgentNotRunning
+	}
+	if _, exists := c.state.Pending[message.ID]; exists {
+		return commandDispatch{}, errors.New("command is already awaiting a result")
+	}
 	if kind == agentcommands.RunAction {
 		stored, claimed, err := c.executionStore.Claim(ctx, message)
 		if errors.Is(err, executions.ErrExecutionConflict) {
-			// Another caller may have claimed this task between our first read
-			// and Claim. Compare its durable request, including action input.
 			stored, err = c.executionStore.Get(ctx, agentID, message.ID)
 			claimed = false
 		}
 		if err != nil {
-			return state.CommandReply{}, fmt.Errorf("claim execution: %w", err)
+			return commandDispatch{}, fmt.Errorf("claim execution: %w", err)
 		}
 		if !claimed {
-			return c.resumeClaimedAction(ctx, stored, message, replay)
+			return commandDispatch{stored: &stored}, nil
 		}
 	}
+	pending := &state.PendingCommand{Context: waiting, AgentID: agentID, Work: message.Work, Expected: expected, Reply: make(chan state.CommandReply, 1)}
+	c.state.Pending[message.ID] = pending
 	if err := (agentcommands.Client{Bus: c.bus}).Publish(ctx, message); err != nil {
-		// A transport can commit the command before its acknowledgement is
-		// lost. Publication errors cannot establish that it never executed.
-		return state.CommandReply{}, commandOutcomeError(kind, err)
+		delete(c.state.Pending, message.ID)
+		// Publication may have committed before its confirmation was lost.
+		return commandDispatch{}, commandOutcomeError(kind, err)
 	}
-	select {
-	case reply := <-pending.Reply:
-		return reply, commandOutcomeError(kind, reply.Err)
-	case <-ctx.Done():
-		return state.CommandReply{}, commandOutcomeError(kind, c.inventoryError(ctx.Err()))
-	case <-c.state.Context.Done():
-		return state.CommandReply{}, commandOutcomeError(kind, c.state.ClosedError())
-	}
+	return commandDispatch{pending: pending}, nil
 }
 
 // awaitClaimedAction observes a previously dispatched command. Its durable claim

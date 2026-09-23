@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"commander/framework/comms"
 	controllerevents "commander/framework/comms/clients/controller/events"
@@ -24,55 +23,30 @@ func InvalidMessage(err error) error {
 }
 
 type EventConsumer struct {
-	Subscription comms.Subscription
-	Logger       *slog.Logger
-	Bus          comms.Bus
-	Inventory    agentmodel.AgentStore
-	Actions      actionmodel.ActionStore
-	Executions   executions.ExecutionStore
-	State        *state.State
+	Bus        comms.Bus
+	Inventory  agentmodel.AgentStore
+	Actions    actionmodel.ActionStore
+	Executions executions.ExecutionStore
+	State      *state.State
 }
 
-func (c EventConsumer) Consume(ctx context.Context) error {
-	consumer := comms.Consumer{
-		Subscription: c.Subscription,
-		Logger:       c.Logger,
-		ContinueOnError: func(_ messages.Message, err error) bool {
-			return errors.Is(err, ErrInvalidMessage)
-		},
+// Consume is called by the controller loop, together with commands and lease expiry.
+func (c EventConsumer) Consume(ctx context.Context, message messages.Message) error {
+	if err := message.Validate(); err != nil {
+		return InvalidMessage(err)
 	}
-	agents := AgentEventConsumer{
-		Inventory: c.Inventory, Actions: c.Actions, State: c.State,
+	if pending, exists := c.State.Pending[message.CorrelationID]; exists && pending.Work != message.Work {
+		return InvalidMessage(errors.New("reply work does not match the pending command"))
 	}
-	results := CommandResultConsumer{
-		Inventory: c.Inventory, Executions: c.Executions,
-		Bus: c.Bus, State: c.State,
+	if err := c.State.CheckOpen(); err != nil {
+		return err
 	}
-	return consumer.Consume(ctx, func(ctx context.Context, message messages.Message) error {
-		c.State.ObservationMu.Lock()
-		defer c.State.ObservationMu.Unlock()
-
-		if err := message.Validate(); err != nil {
-			return InvalidMessage(err)
-		}
-		c.State.Mu.RLock()
-		pending, exists := c.State.Pending[message.CorrelationID]
-		wrongWork := exists && pending.Work != message.Work
-		c.State.Mu.RUnlock()
-		if wrongWork {
-			return InvalidMessage(errors.New("reply work does not match the pending command"))
-		}
-		if err := c.State.CheckOpen(); err != nil {
-			return err
-		}
-
-		switch message.Type {
-		case controllerevents.AgentStarted, controllerevents.AgentHeartbeat, controllerevents.AgentUpdated, controllerevents.AgentStopped:
-			return agents.Consume(ctx, message)
-		case controllerevents.ActionSucceeded, controllerevents.CommandFailed:
-			return results.Consume(ctx, message)
-		default:
-			return InvalidMessage(fmt.Errorf("unsupported event type %q", message.Type))
-		}
-	})
+	switch message.Type {
+	case controllerevents.AgentStarted, controllerevents.AgentHeartbeat, controllerevents.AgentUpdated, controllerevents.AgentStopped:
+		return (AgentEventConsumer{Inventory: c.Inventory, Actions: c.Actions, State: c.State}).Consume(ctx, message)
+	case controllerevents.ActionSucceeded, controllerevents.CommandFailed:
+		return (CommandResultConsumer{Inventory: c.Inventory, Executions: c.Executions, Bus: c.Bus, State: c.State}).Consume(ctx, message)
+	default:
+		return InvalidMessage(fmt.Errorf("unsupported event type %q", message.Type))
+	}
 }

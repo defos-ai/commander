@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"commander/framework/comms"
-	"commander/framework/internal/state"
 )
 
 // Done closes when coordination stops, including event or lease processing failures.
@@ -25,7 +24,7 @@ func (c *Controller) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	select {
-	case <-c.leasesDone:
+	case <-c.loopDone:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -41,14 +40,6 @@ func (c *Controller) beginClose(cause error) {
 	c.closeOnce.Do(func() {
 		// Interrupt database operations without waiting for the event consumer.
 		c.cancel(errors.Join(ErrControllerClosed, cause))
-		c.state.Mu.Lock()
-		c.state.Closed = true
-		for commandID, pending := range c.state.Pending {
-			delete(c.state.Pending, commandID)
-			pending.Reply <- state.CommandReply{Err: c.state.ClosedError()}
-		}
-		close(c.state.Changed)
-		c.state.Mu.Unlock()
 		// Subscription cleanup may need a remote or filesystem lock. Keep it
 		// outside the caller's Close path so its context still bounds shutdown.
 		go func() {
