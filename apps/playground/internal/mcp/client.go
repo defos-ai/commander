@@ -149,6 +149,7 @@ func Bounded(data []byte) string {
 type Operation struct {
 	ID                 string            `json:"id"`
 	Status             string            `json:"status"`
+	Preflight          *Preflight        `json:"preflight"`
 	Tasks              []Task            `json:"tasks"`
 	Questions          []Question        `json:"questions"`
 	LastQuestion       *Question         `json:"last_question"`
@@ -157,6 +158,12 @@ type Operation struct {
 	Version            uint64            `json:"version"`
 	Raw                json.RawMessage   `json:"-"`
 }
+
+type Preflight struct {
+	Ready   bool   `json:"ready"`
+	Version uint64 `json:"version"`
+}
+
 type Task struct {
 	ID           string `json:"id"`
 	Status       string `json:"status"`

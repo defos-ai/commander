@@ -18,10 +18,11 @@ type actionSummary struct {
 }
 
 type agentActionSummary struct {
-	Name                string         `json:"name"`
-	Status              actions.Status `json:"status"`
-	StatusReason        string         `json:"status_reason,omitempty"`
-	RequiredPermissions []string       `json:"required_permissions"`
+	Name                string                `json:"name"`
+	Status              actions.Status        `json:"status"`
+	StatusReason        string                `json:"status_reason,omitempty"`
+	RequiredPermissions []string              `json:"required_permissions"`
+	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
 }
 
 type agentSummary struct {
@@ -44,6 +45,7 @@ func summarizeAgent(agent agents.Agent) agentSummary {
 		items = append(items, agentActionSummary{
 			Name: action.Name, Status: action.Status, StatusReason: action.StatusReason,
 			RequiredPermissions: action.RequiredPermissions,
+			MissingRequirements: action.MissingRequirements,
 		})
 	}
 	return agentSummary{
@@ -62,6 +64,7 @@ type operationSummary struct {
 	Mission            missionSummary                `json:"mission"`
 	Input              json.RawMessage               `json:"input"`
 	Status             operations.Status             `json:"status"`
+	Preflight          *operations.Preflight         `json:"preflight,omitempty"`
 	TaskCounts         map[operations.TaskStatus]int `json:"task_counts"`
 	PendingDecisions   int                           `json:"pending_decisions"`
 	PendingQuestions   int                           `json:"pending_questions"`
@@ -78,7 +81,8 @@ func summarizeOperation(operation operations.Operation) operationSummary {
 	summary := operationSummary{
 		ID: operation.ID, Mission: missionSummary{Name: operation.Mission.Name}, Input: operation.Input,
 		Status: operation.Status, TaskCounts: make(map[operations.TaskStatus]int),
-		ReportID: operation.ReportID, Error: operation.Error, Version: operation.Version,
+		Preflight: operation.Preflight,
+		ReportID:  operation.ReportID, Error: operation.Error, Version: operation.Version,
 		CreatedAt: operation.CreatedAt, UpdatedAt: operation.UpdatedAt,
 	}
 	for _, task := range operation.Tasks {

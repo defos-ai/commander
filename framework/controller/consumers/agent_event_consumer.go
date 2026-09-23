@@ -49,6 +49,7 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 				// Catalog definitions are shared across agents. Readiness and its
 				// reason remain on the agent that reported them.
 				entry.Status, entry.StatusReason = actionmodel.Unknown, ""
+				entry.MissingRequirements = nil
 				if err := c.Actions.Upsert(ctx, entry); err != nil {
 					return fmt.Errorf("persist announced action %q: %w", entry.Name, err)
 				}

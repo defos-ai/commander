@@ -57,7 +57,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missions.Mission `json:"missions"`
 			}{items}, err
 		})
-	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns in planning status; choose tasks next.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
+	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until all declared mission requirements are ready.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
 		func(ctx context.Context, request StartOperationRequest) (operations.Operation, error) {
 			return execution.Start(ctx, commands.StartOperationCommand(request))
 		})
@@ -74,7 +74,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Operations []operationSummary `json:"operations"`
 			}{summaries}, err
 		})
-	addTool(server, "get_operation", "Read status, tasks, results, continuations and question history. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
+	addTool(server, "get_operation", "Read status, preflight, tasks, results, continuations and question history. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
 			operation, err := config.OperationStore.Get(ctx, request.OperationID)
 			return describeOperation(operation), err

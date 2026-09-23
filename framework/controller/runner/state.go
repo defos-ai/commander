@@ -127,6 +127,10 @@ func refreshStatus(operation *operations.Operation) {
 			return
 		}
 	}
+	if operation.Preflight != nil && !operation.Preflight.Ready {
+		operation.Status = operations.Waiting
+		return
+	}
 	for _, question := range operation.Questions {
 		if question.Pending() {
 			operation.Status = operations.Waiting

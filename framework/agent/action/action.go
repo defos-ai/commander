@@ -47,6 +47,7 @@ type Base struct {
 func NewBase(definition actionmodel.Action) *Base {
 	definition.Status = Unknown
 	definition.StatusReason = ""
+	definition.MissingRequirements = nil
 	definition.RequiredPermissions = slices.Clone(definition.RequiredPermissions)
 	definition.InputSchema = bytes.Clone(definition.InputSchema)
 	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
@@ -59,6 +60,7 @@ func (b *Base) Action() actionmodel.Action {
 	defer b.mu.RUnlock()
 	definition := b.definition
 	definition.RequiredPermissions = slices.Clone(definition.RequiredPermissions)
+	definition.MissingRequirements = slices.Clone(definition.MissingRequirements)
 	definition.InputSchema = bytes.Clone(definition.InputSchema)
 	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
 	return definition
@@ -69,13 +71,15 @@ func (b *Base) SetStatus(status Status) {
 	defer b.mu.Unlock()
 	b.definition.Status = status
 	b.definition.StatusReason = ""
+	b.definition.MissingRequirements = nil
 }
 
 // SetUnavailable records a public reason. It must never contain credentials.
-func (b *Base) SetUnavailable(reason string) {
+func (b *Base) SetUnavailable(reason string, requirements ...actionmodel.Requirement) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.definition.Status, b.definition.StatusReason = Unavailable, reason
+	b.definition.MissingRequirements = slices.Clone(requirements)
 }
 
 // Discover marks compiled-in implementations available. Scope paths constrain only

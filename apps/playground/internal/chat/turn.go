@@ -15,6 +15,9 @@ Use the advertised MCP tools to inspect real missions, agents, and action schema
 Explain results briefly. Never invent progress, observations, or successful tool calls.
 Prefer tracked operations and assign_task for mission work. Tasks run in the background;
 do not loop on get_operation or wait for work to finish. The app will bring updates to you.
+Inspect operation preflight before assigning mission work. If it is not ready, explain
+the missing requirements and ask the operator when needed. Never request credentials
+in chat or invent installation actions. Discovery updates will refresh preflight.
 Resolve pending model continuations using their current versions and actual evidence.
 When the objective has been met, explicitly complete_operation with the mission's output schema.
 If you cannot continue without operator input, use ask_question and explain why.
@@ -42,7 +45,7 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		}
 		delete(state, "events")
 		data, _ := json.Marshal(state)
-		text = "Background operation update. Review pending model decisions, or summarize a finished operation."
+		text = "Background operation update. Review preflight requirements and pending model decisions, or summarize a finished operation."
 		var expired []string
 		var answers []bridge.Question
 		for _, review := range item.reviews {

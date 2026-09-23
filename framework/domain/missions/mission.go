@@ -16,8 +16,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// Step is ordered planning guidance. Agent types and actions describe
-// intended collaboration, not prerequisites for starting an operation.
+// Step is ordered planning guidance. Required actions also participate in preflight.
 type Step struct {
 	ID              string                 `json:"id"`
 	Objective       string                 `json:"objective"`
@@ -26,9 +25,8 @@ type Step struct {
 }
 
 // Mission describes an objective independently of its operations.
-// Definitions can be loaded from JSON supplied by a host. A nil
-// StartingActions means RequiredActions; an explicit empty slice means
-// no initial requirements. Action gaps never prevent an operation starting.
+// RequiredActions define preflight coverage; StartingActions guide initial task
+// selection. An operation can be created with gaps, but dispatch waits for readiness.
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {

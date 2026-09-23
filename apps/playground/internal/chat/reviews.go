@@ -16,6 +16,11 @@ func currentReviews(operation bridge.Operation) []reviewKey {
 		return nil
 	}
 	var keys []reviewKey
+	if p := operation.Preflight; p != nil {
+		if !p.Ready || p.Version > 1 && len(operation.Tasks) == 0 {
+			keys = append(keys, reviewKey{operationID: operation.ID, status: "preflight", version: p.Version})
+		}
+	}
 	for _, task := range operation.Tasks {
 		c := task.Continuation
 		if c != nil && c.Status == "pending" && c.DecisionBy == "model" {

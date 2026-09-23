@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"slices"
 	"sort"
 	"time"
 
@@ -72,6 +71,14 @@ func (r *Runner) dispatchQueued() {
 			s.mu.Unlock()
 			continue
 		}
+		if err := r.refreshPreflight(ctx, s, records); err != nil {
+			s.mu.Unlock()
+			continue
+		}
+		if s.operation.Preflight != nil && !s.operation.Preflight.Ready {
+			s.mu.Unlock()
+			continue
+		}
 		for i, task := range s.operation.Tasks {
 			if task.Status != operations.TaskQueued || blockedByQuestion(s.operation, task) {
 				continue
@@ -133,17 +140,10 @@ func (r *Runner) selectAgent(task operations.Task, records []agentmodel.Agent, u
 			continue
 		}
 		for _, action := range record.Actions {
-			if action.Name != task.ActionName || action.Status != actionmodel.Ready {
+			if action.Name != task.ActionName {
 				continue
 			}
-			allowed := true
-			for _, permission := range action.RequiredPermissions {
-				if !slices.Contains(record.GrantedPermissions, permission) {
-					allowed = false
-					break
-				}
-			}
-			if allowed {
+			if assessAgentAction(record, action).Reason == "" {
 				eligible = append(eligible, record.ID)
 			}
 			break

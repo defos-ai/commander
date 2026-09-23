@@ -106,9 +106,18 @@ network or process actions must declare theirs.
 ### Action readiness
 
 Implement `Discover` to check executables with `Environment.FindExecutable` and
-settings with `Environment.LookupEnv`. For a missing dependency, call
-`Base.SetUnavailable("missing environment variable: YOUR_KEY")` and return
-`action.Unavailable, nil`; the agent can still serve its other actions. Mark a
+settings with `Environment.LookupEnv`. For a missing configuration key, call:
+
+```go
+Base.SetUnavailable("YOUR_KEY is not configured", actionmodel.Requirement{
+    Kind: actionmodel.ConfigurationRequirement, Name: "YOUR_KEY", Secret: true,
+})
+```
+
+Return `action.Unavailable, nil`; the agent can still serve its other actions. Use
+`ExecutableRequirement` for missing programs. Missing permission grants are reported
+by the agent runtime. These names feed [mission preflight](../../docs/abstractions.md#discovery-and-preflight);
+never include configuration values. Mark a
 configured action with `Base.SetStatus(action.Ready)`. Configuration errors should
 name the missing setting without including its value. Recheck needed credentials
 when running, and rediscover actions after supplying missing dependencies.

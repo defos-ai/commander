@@ -3,7 +3,7 @@
 </p>
 
 DEFOS Commander runs missions across AI agents, tools, and external systems.
-Start, guide, and review work from your AI chat.
+Start, guide, and review work from your AI chat. Kubernetes runs workloads, **Commander runs missions.**
 
 ## Get started
 

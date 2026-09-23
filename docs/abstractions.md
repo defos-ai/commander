@@ -18,8 +18,9 @@ Input and output schemas describe the JSON values accepted when starting and
 completing the operation.
 
 Mission steps guide the decision maker; they do not automatically execute as a
-workflow. Missing required actions do not prevent starting an operation. The current
-controller runs tasks selected through the adapter.
+workflow. An operation can be created with missing requirements, but its tasks wait
+for [preflight](#discovery-and-preflight). The controller runs tasks selected through
+the adapter.
 
 ```mermaid
 flowchart LR
@@ -200,6 +201,31 @@ For the FS provider, definitions live in `DATABASE_URL/missions.json`.
 the mission store or loaded at startup with the controller's
 [`--with-missions` flag](../apps/controllers/README.md#quick-start)
 (there is no MCP mission-edit command).
+
+## Discovery and preflight
+
+Discovery runs on the agent. An action reports its readiness and
+`missing_requirements`: executable names, configuration keys, or permissions.
+Configuration requirements can be marked `secret`; values never belong in this
+metadata. Action discovery does not install software or change configuration.
+
+The controller checks the mission's `required_actions` and each step's required
+actions against live agents. Different agents can provide different actions;
+`starting_actions` guides initial assignments and does not reduce preflight coverage.
+A busy agent still provides coverage, while capacity is checked separately at dispatch.
+
+`start_operation` saves `preflight` with the operation. Each entry in `actions`
+has `ready_agent_ids`, or `unavailable_agents` with reasons and missing requirements.
+If both lists are absent, no agent advertises that action. Missing requirements put
+the operation in `waiting` before dispatch. Tasks can be queued while waiting;
+inventory updates refresh preflight and resume those tasks when coverage is ready.
+Already running tasks continue. Only changed preflight results advance its version
+and produce an `operation.preflight_updated` event.
+
+MCP exposes preflight in operation responses. Playground brings blocked preflight
+to the model for explanation or an operator question. Installation and credential
+configuration are not implemented by this check; supplying dependencies remains a
+host operation followed by action rediscovery.
 
 ## Messages and durable execution
 

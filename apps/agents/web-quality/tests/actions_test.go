@@ -16,6 +16,7 @@ import (
 	"commander/apps/agents/web-quality/actions"
 	"commander/framework/agent/action"
 	"commander/framework/agent/environment"
+	actionmodel "commander/framework/domain/actions"
 )
 
 func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T) {
@@ -110,7 +111,31 @@ func TestBrowserDiscoveryRespectsExplicitScopeAndRediscovery(t *testing.T) {
 			if err != nil || status != action.Unavailable || executor.Action().Status != action.Unavailable || executor.Action().StatusReason == "" {
 				t.Fatalf("restricted browser discovery: action=%+v error=%v", executor.Action(), err)
 			}
+			missing := executor.Action().MissingRequirements
+			if len(missing) != 1 || missing[0] != (actionmodel.Requirement{Kind: actionmodel.ExecutableRequirement, Name: "chromium"}) {
+				t.Fatalf("missing structured dependency: %+v", missing)
+			}
+			missing[0].Name = "caller mutation"
+			if executor.Action().MissingRequirements[0].Name != "chromium" {
+				t.Fatal("action snapshot shares mutable requirements")
+			}
+			status, err = executor.Discover(t.Context(), &environment.Local{}, nil)
+			if err != nil || status != action.Ready || len(executor.Action().MissingRequirements) != 0 {
+				t.Fatalf("rediscovery retained missing requirements: %+v, %v", executor.Action(), err)
+			}
 		})
+	}
+}
+
+func TestBrowserDiscoveryReportsInvalidConfigurationAsRequirement(t *testing.T) {
+	t.Setenv("CHROMIUM_PATH", "relative/browser")
+	executor := actions.NewCapturePage()
+
+	status, err := executor.Discover(t.Context(), &environment.Local{}, nil)
+
+	missing := executor.Action().MissingRequirements
+	if err != nil || status != action.Unavailable || len(missing) != 1 || missing[0] != (actionmodel.Requirement{Kind: actionmodel.ConfigurationRequirement, Name: "CHROMIUM_PATH"}) {
+		t.Fatalf("invalid configuration was not reported as a readiness gap: %+v, %v", executor.Action(), err)
 	}
 }
 

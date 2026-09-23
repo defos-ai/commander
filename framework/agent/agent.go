@@ -157,11 +157,15 @@ func (a *Agent) Describe() AgentSnapshot {
 	}
 	for _, instance := range a.config.Actions {
 		d := instance.Action()
-		if d.Status == action.Ready {
-			for _, permission := range d.RequiredPermissions {
-				if !slices.Contains(a.config.GrantedPermissions, permission) {
-					d.Status, d.StatusReason = action.Unavailable, "missing permission: "+permission
-					break
+		for _, permission := range d.RequiredPermissions {
+			if !slices.Contains(a.config.GrantedPermissions, permission) {
+				if d.StatusReason == "" {
+					d.StatusReason = "missing permission: " + permission
+				}
+				d.Status = action.Unavailable
+				requirement := actionmodel.Requirement{Kind: actionmodel.PermissionRequirement, Name: permission}
+				if !slices.Contains(d.MissingRequirements, requirement) {
+					d.MissingRequirements = append(d.MissingRequirements, requirement)
 				}
 			}
 		}

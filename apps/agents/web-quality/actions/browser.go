@@ -12,6 +12,7 @@ import (
 
 	"commander/framework/agent/action"
 	"commander/framework/agent/environment"
+	actionmodel "commander/framework/domain/actions"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/fetch"
@@ -38,7 +39,8 @@ func (a *browserAction) Discover(ctx context.Context, env environment.Environmen
 	names := []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 	if configured != "" {
 		if !filepath.IsAbs(configured) {
-			return action.Unknown, errors.New("CHROMIUM_PATH must be an absolute executable path")
+			a.SetUnavailable("CHROMIUM_PATH must be an absolute executable path", actionmodel.Requirement{Kind: actionmodel.ConfigurationRequirement, Name: "CHROMIUM_PATH"})
+			return action.Unavailable, nil
 		}
 		// An explicit discovery scope still wins over environment configuration.
 		if scope == nil || scope.Paths == nil {
@@ -66,12 +68,13 @@ func (a *browserAction) Discover(ctx context.Context, env environment.Environmen
 	if noSandbox != "" {
 		value, err := strconv.ParseBool(noSandbox)
 		if err != nil {
-			return action.Unknown, errors.New("CHROMIUM_NO_SANDBOX must be a boolean")
+			a.SetUnavailable("CHROMIUM_NO_SANDBOX must be a boolean", actionmodel.Requirement{Kind: actionmodel.ConfigurationRequirement, Name: "CHROMIUM_NO_SANDBOX"})
+			return action.Unavailable, nil
 		}
 		a.noSandbox = value
 	}
 	if a.executable == "" {
-		a.SetUnavailable("Install Chromium or set CHROMIUM_PATH")
+		a.SetUnavailable("Install Chromium or set CHROMIUM_PATH", actionmodel.Requirement{Kind: actionmodel.ExecutableRequirement, Name: "chromium"})
 		return action.Unavailable, nil
 	}
 	a.SetStatus(action.Ready)

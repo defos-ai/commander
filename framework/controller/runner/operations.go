@@ -18,9 +18,8 @@ func (r *Runner) Missions(ctx context.Context) ([]missions.Mission, error) {
 	return r.missions.List(ctx)
 }
 
-// Start validates and records an operation. It never requires all required actions
-// to exist and does not invent an action-selection policy. The AI can assign work
-// after inspecting the registered agents, results and suggested mission steps.
+// Start saves unavailable requirements so the decision maker can inspect them.
+// Tasks stay queued until preflight passes; the operation itself is still created.
 func (r *Runner) Start(ctx context.Context, command commands.StartOperationCommand) (operations.Operation, error) {
 	if err := ctx.Err(); err != nil {
 		return operations.Operation{}, err
@@ -53,6 +52,14 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	operation := operations.Operation{ID: operationID, Mission: definition.Clone(), Input: input,
 		Status: operations.Planning, Tasks: []operations.Task{}, Questions: []operations.Question{},
 		Version: 1, CreatedAt: now, UpdatedAt: now}
+	if r.catalog != nil {
+		records, err := r.catalog.Agents(ctx)
+		if err != nil {
+			return operations.Operation{}, fmt.Errorf("operation preflight: %w", err)
+		}
+		operation.Preflight = assessPreflight(definition, records)
+		refreshStatus(&operation)
+	}
 	appendEvent(&operation, operations.OperationStarted, "", "", "Awaiting the next action from the decision maker")
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -180,6 +180,76 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 	}
 }
 
+func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	var mu sync.Mutex
+	var reads, requests atomic.Int32
+	op := bridge.Operation{ID: "operation-1", Status: "waiting", Version: 1, Preflight: &bridge.Preflight{Ready: false, Version: 1}}
+	server := mcp.NewServer(&mcp.Implementation{Name: "preflight-fixture", Version: "1"}, nil)
+	for _, name := range []string{"get_operation", "operation_events"} {
+		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			var payload any = op
+			if req.Params.Name == "operation_events" {
+				payload = map[string]any{"events": []any{}, "next_sequence": 0}
+			} else {
+				reads.Add(1)
+			}
+			encoded, _ := json.Marshal(payload)
+			return &mcp.CallToolResult{StructuredContent: json.RawMessage(encoded)}, nil
+		})
+	}
+	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+	defer endpoint.Close()
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Messages []struct{ Content string } }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Messages) == 0 {
+			t.Error("missing model messages")
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		last := body.Messages[len(body.Messages)-1].Content
+		if !strings.Contains(last, `"preflight":`) {
+			t.Errorf("model did not receive preflight: %s", last)
+		}
+		message := "Requirements need operator attention"
+		if requests.Add(1) > 1 {
+			message = "Environment ready to run"
+		}
+		writeModelDelta(w, map[string]any{"content": message}, "stop")
+	}))
+	defer provider.Close()
+	u := newUI(t, ctx, endpoint.URL, provider.URL)
+	defer u.model.Close()
+
+	u.text("/watch operation-1")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("blocked preflight", func(view string) bool {
+		return strings.Contains(view, "requirements missing") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
+	})
+	mu.Lock()
+	op.Version++
+	mu.Unlock()
+	targetReads := reads.Load() + 3
+	u.wait("unchanged preflight", func(string) bool { return reads.Load() >= targetReads })
+	if requests.Load() != 1 {
+		t.Fatalf("unchanged requirements triggered %d model calls", requests.Load())
+	}
+	mu.Lock()
+	op.Status, op.Preflight.Ready = "planning", true
+	op.Version++
+	op.Preflight.Version++
+	mu.Unlock()
+	u.wait("ready preflight", func(view string) bool {
+		return strings.Contains(view, "Environment ready to run") && !strings.Contains(view, "Thinking")
+	})
+	if requests.Load() != 2 {
+		t.Fatalf("expected one review per preflight change, got %d", requests.Load())
+	}
+}
+
 func writeModelDelta(w http.ResponseWriter, delta map[string]any, finish any) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	encoded, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}}})

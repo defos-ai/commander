@@ -24,13 +24,11 @@ func (s Status) Terminal() bool { return s == Completed || s == Failed || s == C
 type TaskStatus string
 
 const (
-	TaskQueued    TaskStatus = "queued"
-	TaskRunning   TaskStatus = "running"
-	TaskSucceeded TaskStatus = "succeeded"
-	TaskFailed    TaskStatus = "failed"
-	TaskCancelled TaskStatus = "cancelled"
-	// TaskInterrupted has an unknown execution outcome. A decision maker may
-	// assign new work explicitly; recovery never retries the action automatically.
+	TaskQueued      TaskStatus = "queued"
+	TaskRunning     TaskStatus = "running"
+	TaskSucceeded   TaskStatus = "succeeded"
+	TaskFailed      TaskStatus = "failed"
+	TaskCancelled   TaskStatus = "cancelled"
 	TaskInterrupted TaskStatus = "interrupted"
 )
 
@@ -84,6 +82,7 @@ type EventType string
 
 const (
 	OperationStarted          EventType = "operation.started"
+	PreflightUpdated          EventType = "operation.preflight_updated"
 	TaskDispatched            EventType = "task.dispatched"
 	ContinuationReady         EventType = "continuation.ready"
 	ContinuationResolvedEvent EventType = "continuation.resolved"
@@ -117,6 +116,7 @@ type Operation struct {
 	Mission   missions.Mission `json:"mission"`
 	Input     json.RawMessage  `json:"input"`
 	Status    Status           `json:"status"`
+	Preflight *Preflight       `json:"preflight,omitempty"`
 	Tasks     []Task           `json:"tasks"`
 	Questions []Question       `json:"questions"`
 	Output    json.RawMessage  `json:"output,omitempty"`
@@ -129,6 +129,10 @@ type Operation struct {
 }
 
 func (o Operation) Clone() Operation {
+	if o.Preflight != nil {
+		preflight := o.Preflight.Clone()
+		o.Preflight = &preflight
+	}
 	o.Mission = o.Mission.Clone()
 	o.Input = append(json.RawMessage(nil), o.Input...)
 	o.Output = append(json.RawMessage(nil), o.Output...)

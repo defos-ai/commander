@@ -21,6 +21,7 @@ type Action struct {
 	StatusReason        string          `json:"status_reason,omitempty"`
 	Status              Status          `json:"status"`
 	RequiredPermissions []string        `json:"required_permissions"`
+	MissingRequirements []Requirement   `json:"missing_requirements,omitempty"`
 	InputSchema         json.RawMessage `json:"input_schema"`
 	OutputSchema        json.RawMessage `json:"output_schema"`
 }
@@ -35,6 +36,14 @@ func (a Action) Validate() error {
 		if strings.TrimSpace(permission) == "" {
 			return errors.New("action permissions must not be blank")
 		}
+	}
+	for _, requirement := range a.MissingRequirements {
+		if err := requirement.Validate(); err != nil {
+			return err
+		}
+	}
+	if a.Status == Ready && len(a.MissingRequirements) != 0 {
+		return errors.New("ready action cannot have missing requirements")
 	}
 	for name, schema := range map[string]json.RawMessage{"input": a.InputSchema, "output": a.OutputSchema} {
 		var value map[string]json.RawMessage

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -27,8 +28,15 @@ import (
 )
 
 func TestAllInOne(t *testing.T) {
-	// Use SEO so this bundled-host test needs no browser or external credentials.
+	// Browser presence satisfies mission preflight; this smoke test only executes SEO.
+	// Real browser execution is covered by the MCP suite against Compose.
 	temporary := t.TempDir()
+	browser := filepath.Join(t.TempDir(), "browser-fixture")
+	if err := os.WriteFile(browser, []byte("fixture executable, never launched"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CHROMIUM_PATH", browser)
+	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
 	t.Setenv("TMPDIR", temporary)
 	t.Setenv("ENV", "")
 	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")

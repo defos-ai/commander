@@ -175,6 +175,9 @@ func (m *Model) View() string {
 			label = label[:8]
 		}
 		line := fmt.Sprintf("%s %s · %s · %d/%d tasks finished", m.color(marker, color), label, op.Status, done, len(op.Tasks))
+		if !op.Terminal() && op.Preflight != nil && !op.Preflight.Ready {
+			line += " · requirements missing"
+		}
 		if pending > 0 {
 			line += fmt.Sprintf(" · %d question(s)", pending)
 		}

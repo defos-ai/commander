@@ -26,6 +26,10 @@ agent's version), `describe_agent` for full agent details, and `get_operation`
 for task results and questions. `list_missions` includes mission schemas and
 automation rules; `get_report` returns a completed operation's report.
 
+Operation responses include [preflight](../../docs/abstractions.md#discovery-and-preflight):
+required-action coverage and missing agent requirements. Explain blockers before
+assigning work; queued tasks wait until discovery reports sufficient coverage.
+
 Inspect `tasks[].continuation` through `get_operation`. Use `resolve_continuation`
 with its task ID, current version, and selected actions (an empty array finishes
 the branch). Omit `agent_id` for automatic scheduling. When operator guidance is
