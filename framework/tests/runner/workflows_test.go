@@ -93,9 +93,7 @@ func TestFailedDecisionSavePreservesRetryableState(t *testing.T) {
 	before := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	store := config.OperationStore.(*operationStore)
 	failure := errors.New("database unavailable")
-	store.mu.Lock()
-	store.failNext = failure
-	store.mu.Unlock()
+	store.failNextUpdate(failure)
 	command := commands.ResolveContinuationCommand{OperationID: op.ID, TaskID: task.ID, Version: before.Tasks[0].Continuation.Version,
 		Actions: []actions.NextAction{{ActionName: "follow-up", AgentID: agentID}}}
 

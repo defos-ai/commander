@@ -3,7 +3,7 @@ package runner_test
 import (
 	"context"
 	"encoding/json"
-	"sync"
+	"sync/atomic"
 	"testing"
 
 	"commander/framework/comms/clients/controller/commands"
@@ -13,27 +13,24 @@ import (
 )
 
 type agentCatalog struct {
-	mu      sync.Mutex
-	records []agents.Agent
+	records atomic.Value
 }
 
 func (c *agentCatalog) Agents(context.Context) ([]agents.Agent, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	result := make([]agents.Agent, len(c.records))
-	for i, record := range c.records {
+	records, _ := c.records.Load().([]agents.Agent)
+	result := make([]agents.Agent, len(records))
+	for i, record := range records {
 		result[i] = record.Clone()
 	}
 	return result, nil
 }
 
 func (c *agentCatalog) set(records ...agents.Agent) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.records = make([]agents.Agent, len(records))
+	snapshot := make([]agents.Agent, len(records))
 	for i, record := range records {
-		c.records[i] = record.Clone()
+		snapshot[i] = record.Clone()
 	}
+	c.records.Store(snapshot)
 }
 
 func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {

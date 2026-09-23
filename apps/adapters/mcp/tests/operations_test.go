@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -163,10 +162,7 @@ func heldWebsite(t *testing.T, paths ...string) (string, <-chan string, func(str
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, "<!doctype html><html lang=en><title>%s</title><h1>Review fixture</h1></html>", strings.TrimPrefix(r.URL.Path, "/"))
 	}))
-	var mu sync.Mutex
 	release := func(path string) {
-		mu.Lock()
-		defer mu.Unlock()
 		select {
 		case <-gates[path]:
 		default:

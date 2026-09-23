@@ -24,13 +24,15 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		return errors.New("event bus is required")
 	}
 	events := controllerevents.Client{Bus: bus}
-	a.mu.Lock()
-	if a.serving || a.status == AgentWorking || a.status == AgentDiscovering {
-		a.mu.Unlock()
-		return errors.New("agent is already serving or busy")
+	if err := a.stateChange(ctx, func(next *agentState) error {
+		if next.serving || next.status == AgentWorking || next.status == AgentDiscovering {
+			return errors.New("agent is already serving or busy")
+		}
+		next.serving = true
+		return nil
+	}, nil); err != nil {
+		return err
 	}
-	a.serving = true
-	a.mu.Unlock()
 	ctx, endService := context.WithCancelCause(ctx)
 	workersCtx, stopWorkers := context.WithCancel(ctx)
 	var heartbeatDone chan struct{}
@@ -72,7 +74,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}
 	}
 	announceStopped := func(ctx context.Context, commandID string) error {
-		return a.stateChange(ctx, func() error { a.status = AgentStopped; return nil }, func(ctx context.Context, snapshot AgentSnapshot) error {
+		return a.stateChange(ctx, func(next *agentState) error { next.status = AgentStopped; return nil }, func(ctx context.Context, snapshot AgentSnapshot) error {
 			return events.State(ctx, controllerevents.AgentStopped, snapshot, commandID)
 		})
 	}
@@ -92,9 +94,10 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 					serveErr = errors.Join(serveErr, err)
 				}
 			}
-			a.mu.Lock()
-			a.serving = false
-			a.mu.Unlock()
+			serveErr = errors.Join(serveErr, a.stateChange(context.WithoutCancel(ctx), func(next *agentState) error {
+				next.serving = false
+				return nil
+			}, nil))
 		}()
 		if stopCommandID != "" {
 			// The stop handler already attempted its final announcement.

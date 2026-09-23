@@ -232,18 +232,19 @@ func toolDelta(name string, args map[string]any) map[string]any {
 }
 
 type terminalOutput struct {
-	sync.Mutex
+	mu     sync.Mutex
 	buffer bytes.Buffer
 }
 
 func (b *terminalOutput) Write(p []byte) (int, error) {
-	b.Lock()
-	defer b.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return b.buffer.Write(p)
 }
 
 func (b *terminalOutput) String() string {
-	b.Lock()
-	defer b.Unlock()
-	return ansi.Strip(b.buffer.String())
+	b.mu.Lock()
+	output := b.buffer.String()
+	b.mu.Unlock()
+	return ansi.Strip(output)
 }

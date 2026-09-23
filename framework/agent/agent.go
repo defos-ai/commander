@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"commander/framework/agent/action"
@@ -47,11 +47,8 @@ type AgentConfig struct {
 // Agent owns an explicit action catalog and executes controller instructions.
 // Give each agent its own action instances; actions contain discovery state.
 type Agent struct {
-	mu                sync.RWMutex
 	config            AgentConfig
-	status            AgentStatus
-	serving           bool
-	scope             *environment.DiscoveryScope
+	state             atomic.Pointer[agentState]
 	inlineLimit       int
 	heartbeatInterval time.Duration
 	stateGate         chan struct{}
@@ -130,29 +127,27 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	config.Responsibilities = append([]string(nil), config.Responsibilities...)
 	config.GrantedPermissions = append([]string(nil), config.GrantedPermissions...)
 	config.PublicConfig = append(json.RawMessage(nil), config.PublicConfig...)
-	return &Agent{config: config, status: AgentIdle, inlineLimit: limit, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1)}, nil
+	a := &Agent{config: config, inlineLimit: limit, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1)}
+	a.state.Store(&agentState{status: AgentIdle})
+	return a, nil
 }
 
 func (a *Agent) ID() string { return a.config.ID }
 
 func (a *Agent) Status() AgentStatus {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.status
+	return a.state.Load().status
 }
 
 func (a *Agent) ArtifactStore() artifactstore.ArtifactStore { return a.config.ArtifactStore }
 
 func (a *Agent) Describe() AgentSnapshot {
-	a.mu.RLock()
-	status, scope := a.status, a.scope.Clone()
-	a.mu.RUnlock()
+	state := a.state.Load()
 	description := AgentSnapshot{
-		ID: a.ID(), Type: a.config.Type, Status: status,
+		ID: a.ID(), Type: a.config.Type, Status: state.status,
 		Server:             a.config.Server,
 		Responsibilities:   append([]string(nil), a.config.Responsibilities...),
 		GrantedPermissions: append([]string(nil), a.config.GrantedPermissions...),
-		DiscoveryScope:     scope, Config: append(json.RawMessage(nil), a.config.PublicConfig...),
+		DiscoveryScope:     state.scope.Clone(), Config: append(json.RawMessage(nil), a.config.PublicConfig...),
 		Actions: make([]actionmodel.Action, 0, len(a.config.Actions)),
 	}
 	for _, instance := range a.config.Actions {
@@ -182,11 +177,11 @@ func (a *Agent) DiscoverActions(ctx context.Context, scope *environment.Discover
 
 func (a *Agent) discover(ctx context.Context, scope *environment.DiscoveryScope, fromServer bool) (discoveryErr error) {
 	started := false
-	discoveryErr = a.stateChange(ctx, func() error {
-		if a.status == AgentDiscovering || a.status == AgentWorking || a.serving && !fromServer {
+	discoveryErr = a.stateChange(ctx, func(next *agentState) error {
+		if next.status == AgentDiscovering || next.status == AgentWorking || next.serving && !fromServer {
 			return errors.New("agent is busy")
 		}
-		a.status, a.scope = AgentDiscovering, scope.Clone()
+		next.status, next.scope = AgentDiscovering, scope.Clone()
 		started = true
 		return nil
 	}, nil)
@@ -245,11 +240,11 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 		return ActionOutput{}, err
 	}
 	started := false
-	workErr = a.stateChange(ctx, func() error {
-		if a.status != AgentReady || a.serving && !fromServer {
+	workErr = a.stateChange(ctx, func(next *agentState) error {
+		if next.status != AgentReady || next.serving && !fromServer {
 			return errors.New("agent must be ready and available before working")
 		}
-		a.status = AgentWorking
+		next.status = AgentWorking
 		started = true
 		return nil
 	}, nil)

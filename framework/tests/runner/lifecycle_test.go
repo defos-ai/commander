@@ -133,9 +133,7 @@ func TestResultSaveFailureReachesWaitersAndClose(t *testing.T) {
 	call := receive(t, calls)
 	failure := errors.New("database unavailable")
 	store := config.OperationStore.(*operationStore)
-	store.mu.Lock()
-	store.failNext = failure
-	store.mu.Unlock()
+	store.failNextUpdate(failure)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 

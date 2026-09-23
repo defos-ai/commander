@@ -25,6 +25,12 @@ type operationStore struct {
 	failNext error
 }
 
+func (s *operationStore) failNextUpdate(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failNext = err
+}
+
 func (s *operationStore) Create(_ context.Context, op operations.Operation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -183,15 +183,21 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	var mu sync.Mutex
+	var snapshot atomic.Value
 	var reads, requests atomic.Int32
 	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}}
+	publish := func() {
+		encoded, err := json.Marshal(op)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot.Store(json.RawMessage(encoded))
+	}
+	publish()
 	server := mcp.NewServer(&mcp.Implementation{Name: "preflight-fixture", Version: "1"}, nil)
 	for _, name := range []string{"get_operation", "operation_events"} {
 		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			mu.Lock()
-			defer mu.Unlock()
-			var payload any = op
+			payload := snapshot.Load()
 			if req.Params.Name == "operation_events" {
 				payload = map[string]any{"events": []any{}, "next_sequence": 0}
 			} else {
@@ -229,19 +235,17 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	u.wait("blocked preflight", func(view string) bool {
 		return strings.Contains(view, "requirements missing") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
 	})
-	mu.Lock()
 	op.UpdatedAt = time.Now()
-	mu.Unlock()
+	publish()
 	targetReads := reads.Load() + 3
 	u.wait("unchanged preflight", func(string) bool { return reads.Load() >= targetReads })
 	if requests.Load() != 1 {
 		t.Fatalf("unchanged requirements triggered %d model calls", requests.Load())
 	}
-	mu.Lock()
 	op.Status, op.Preflight.Ready = "planning", true
 	op.UpdatedAt = time.Now()
 	op.Preflight.Version++
-	mu.Unlock()
+	publish()
 	u.wait("ready preflight", func(view string) bool {
 		return strings.Contains(view, "Environment ready to run") && !strings.Contains(view, "Thinking")
 	})
