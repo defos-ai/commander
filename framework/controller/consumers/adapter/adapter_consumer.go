@@ -1,13 +1,13 @@
 package adapter
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"commander/framework/comms"
 	adapterevents "commander/framework/comms/clients/adapter/events"
@@ -18,13 +18,6 @@ import (
 	"commander/framework/id"
 )
 
-type requestState struct {
-	message messages.Message
-	done    chan struct{}
-	cancel  context.CancelFunc
-	reply   messages.Message
-}
-
 // Consumer processes adapter requests independently of agent events. A bounded
 // number of requests can wait for actions without blocking other commands or agent events.
 type Consumer struct {
@@ -34,10 +27,10 @@ type Consumer struct {
 	controller    controllercommands.Controller
 	operations    controllercommands.Operations
 	logger        *slog.Logger
-	mu            sync.Mutex
-	active        map[string]*requestState
-	canceled      map[string]string
-	completed     []string
+	ctx           context.Context
+	cancel        context.CancelFunc
+	running       atomic.Bool
+	ledger        requestLedger
 	closeOnce     sync.Once
 	closeErr      error
 }
@@ -45,7 +38,7 @@ type Consumer struct {
 // NewConsumer subscribes before returning so a host can advertise readiness
 // only after both requests and cancellation notices have a receiver.
 func NewConsumer(ctx context.Context, bus comms.Bus, controllerType string, controller controllercommands.Controller, operations controllercommands.Operations, logger *slog.Logger) (*Consumer, error) {
-	if bus == nil || controller == nil || operations == nil {
+	if ctx == nil || bus == nil || controller == nil || operations == nil {
 		return nil, errors.New("adapter consumer requires a bus, controller, and operations")
 	}
 	if err := messages.ValidateControllerType(controllerType); err != nil {
@@ -59,40 +52,68 @@ func NewConsumer(ctx context.Context, bus comms.Bus, controllerType string, cont
 	if err != nil {
 		return nil, errors.Join(err, requests.Close())
 	}
-	return &Consumer{bus: bus, requests: requests, cancellations: cancellations, controller: controller, operations: operations, logger: logger, active: make(map[string]*requestState), canceled: make(map[string]string)}, nil
+	lifetime, cancel := context.WithCancel(ctx)
+	return &Consumer{ctx: lifetime, cancel: cancel, bus: bus, requests: requests, cancellations: cancellations, controller: controller, operations: operations, logger: logger, ledger: requestLedger{active: make(map[string]*requestState), canceled: make(map[string]string)}}, nil
 }
 
 func (c *Consumer) Close() error {
-	c.closeOnce.Do(func() { c.closeErr = errors.Join(c.requests.Close(), c.cancellations.Close()) })
+	c.closeOnce.Do(func() {
+		c.cancel()
+		c.closeErr = errors.Join(c.requests.Close(), c.cancellations.Close())
+	})
 	return c.closeErr
 }
 
+// Consume may be restarted after it returns; completed replies stay cached.
+// Only this goroutine accesses the ledger. The two bus consumers join their
+// workers before returning, including workers finishing during cancellation.
 func (c *Consumer) Consume(ctx context.Context) error {
+	if !c.running.CompareAndSwap(false, true) {
+		return errors.New("adapter consumer is already running")
+	}
+	defer c.running.Store(false)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	stop := context.AfterFunc(c.ctx, cancel)
+	defer stop()
+	if c.ctx.Err() != nil {
+		cancel()
+	}
+	coordinator := requestCoordinator{claims: make(chan requestClaim), completions: make(chan requestCompletion), cancellations: make(chan requestCancellation)}
 	finished := make(chan error, 2)
 	go func() {
 		consumer := comms.Consumer{Subscription: c.requests, Logger: c.logger, Concurrency: 16, ContinueOnError: continueAfterInvalidInput}
-		finished <- consumer.Consume(ctx, c.consumeRequest)
+		finished <- consumer.Consume(ctx, func(ctx context.Context, m messages.Message) error { return c.consumeRequest(ctx, coordinator, m) })
 	}()
 	go func() {
 		consumer := comms.Consumer{Subscription: c.cancellations, Logger: c.logger, ContinueOnError: continueAfterInvalidInput}
-		finished <- consumer.Consume(ctx, c.consumeCancellation)
+		finished <- consumer.Consume(ctx, func(ctx context.Context, m messages.Message) error { return c.consumeCancellation(ctx, coordinator, m) })
 	}()
-	err := <-finished
-	cancel()
-	other := <-finished
-	if errors.Is(other, context.Canceled) {
-		other = nil
+	var result error
+	for remaining := 2; remaining > 0; {
+		select {
+		case claim := <-coordinator.claims:
+			c.ledger.claim(claim)
+		case completion := <-coordinator.completions:
+			c.ledger.complete(completion)
+		case cancellation := <-coordinator.cancellations:
+			c.ledger.cancel(cancellation)
+		case err := <-finished:
+			if remaining == 2 || !errors.Is(err, context.Canceled) {
+				result = errors.Join(result, err)
+			}
+			remaining--
+			cancel()
+		}
 	}
-	return errors.Join(err, other)
+	return result
 }
 
 func continueAfterInvalidInput(_ messages.Message, err error) bool {
 	return errors.Is(err, controllerconsumers.ErrInvalidMessage)
 }
 
-func (c *Consumer) consumeRequest(ctx context.Context, m messages.Message) error {
+func (c *Consumer) consumeRequest(ctx context.Context, coordinator requestCoordinator, m messages.Message) error {
 	if err := m.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
@@ -106,76 +127,56 @@ func (c *Consumer) consumeRequest(ctx context.Context, m messages.Message) error
 	if err := envelope.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
-	c.mu.Lock()
-	if previous := c.active[m.ID]; previous != nil {
-		c.mu.Unlock()
-		if previous.message.AdapterID != m.AdapterID || !bytes.Equal(previous.message.Payload, m.Payload) {
-			return controllerconsumers.InvalidMessage(errors.New("request ID reused with different parameters"))
+	claim := requestClaim{ctx: ctx, message: m, deadline: envelope.Deadline, reply: make(chan claimedRequest, 1)}
+	select {
+	case coordinator.claims <- claim:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	// Once registered, the owner must receive a terminal outcome even if the
+	// caller is cancelled before the worker gets its registration result.
+	claimed := <-claim.reply
+	if claimed.err != nil {
+		return claimed.err
+	}
+	state := claimed.state
+	if claimed.execute {
+		var value any
+		err := state.ctx.Err()
+		if err == nil {
+			value, err = c.dispatch(state.ctx, envelope.Method, envelope.Parameters)
 		}
+		reply, err := adapterevents.NewReply(m.AdapterID, m.ID, value, err)
+		coordinator.completions <- requestCompletion{state: state, reply: reply, err: err}
+		<-state.done
+	} else {
 		select {
-		case <-previous.done:
+		case <-state.done:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		return (adapterevents.Client{Bus: c.bus}).Publish(ctx, previous.reply)
 	}
-	requestCtx, cancel := context.WithDeadline(ctx, envelope.Deadline)
-	state := &requestState{message: m, done: make(chan struct{}), cancel: cancel}
-	c.active[m.ID] = state
-	if c.canceled[m.ID] == m.AdapterID {
-		cancel()
+	if state.err != nil {
+		return state.err
 	}
-	delete(c.canceled, m.ID)
-	c.mu.Unlock()
-	defer cancel()
-	var value any
-	err := requestCtx.Err()
-	if err == nil {
-		value, err = c.dispatch(requestCtx, envelope.Method, envelope.Parameters)
-	}
-	reply, err := adapterevents.NewReply(m.AdapterID, m.ID, value, err)
-	if err != nil {
-		return err
-	}
-	c.mu.Lock()
-	state.reply = reply
-	state.cancel = nil
-	close(state.done)
-	c.completed = append(c.completed, m.ID)
-	if len(c.completed) > 4096 {
-		delete(c.active, c.completed[0])
-		c.completed = c.completed[1:]
-	}
-	c.mu.Unlock()
-	// Publishing the outcome finishes request processing, including domain errors.
-	// Keep the cached reply if publication fails; redelivery must not repeat work.
-	return (adapterevents.Client{Bus: c.bus}).Publish(ctx, reply)
+	// A failed publication retains the cached reply; redelivery must not repeat work.
+	return (adapterevents.Client{Bus: c.bus}).Publish(ctx, state.reply)
 }
 
-func (c *Consumer) consumeCancellation(_ context.Context, m messages.Message) error {
+func (c *Consumer) consumeCancellation(ctx context.Context, coordinator requestCoordinator, m messages.Message) error {
 	if err := m.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
 	if m.Type != controllercommands.AdapterRequestCanceled || !id.Valid(m.CorrelationID) {
 		return controllerconsumers.InvalidMessage(errors.New("invalid adapter cancellation"))
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if state := c.active[m.CorrelationID]; state != nil {
-		if state.message.AdapterID == m.AdapterID && state.cancel != nil {
-			state.cancel()
-		}
-		return nil
+	cancellation := requestCancellation{message: m, done: make(chan struct{})}
+	select {
+	case coordinator.cancellations <- cancellation:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	// Cancellation may overtake a request waiting for a worker. Bound these
-	// notices; the request's own deadline remains the fallback in every case.
-	if len(c.canceled) >= 4096 {
-		for requestID := range c.canceled {
-			delete(c.canceled, requestID)
-			break
-		}
-	}
-	c.canceled[m.CorrelationID] = m.AdapterID
+	<-cancellation.done
 	return nil
 }
 
