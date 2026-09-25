@@ -83,7 +83,13 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return readReport(ctx, config.OperationStore, config.ReportStore, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task, optionally selecting an agent or declared step. Omit agent_id for automatic selection. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{"operation_id": stringProperty, "step_id": stringProperty, "agent_id": stringProperty, "action_name": stringProperty, "input": map[string]any{"type": "object"}}, "operation_id", "action_name"),
+	addTool(server, "assign_task", "Queue an action task. Omit agent_id for automatic selection. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
+		"operation_id": stringProperty,
+		"step_id":      missionStepProperty,
+		"agent_id":     stringProperty,
+		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages. An action name is not a mission step ID."},
+		"input":        map[string]any{"type": "object"},
+	}, "operation_id", "action_name"),
 		func(ctx context.Context, request AssignTaskRequest) (operations.Task, error) {
 			return execution.Assign(ctx, commands.AssignTaskCommand(request))
 		})
@@ -110,7 +116,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 			}
 			return OperationEventsResult{Events: events, NextSequence: request.AfterSequence + uint64(len(events))}, err
 		})
-	addTool(server, "ask_question", "Ask the operator when needed, with up to 4 short options or a free-text question. timeout_seconds defaults to 120; after expiry, review the situation and decide how to continue. Silence is not approval. Supply task_id and continuation version to pause that decision; otherwise step_id blocks that step or omission blocks new assignments. Do not invent an operator answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": stringProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
+	addTool(server, "ask_question", "Ask the operator when needed, with up to 4 short options or a free-text question. timeout_seconds defaults to 120; after expiry, review the situation and decide how to continue. Silence is not approval. Supply task_id and continuation version to pause that decision; otherwise step_id blocks that step or omission blocks new assignments. Do not invent an operator answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": missionStepProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
 		func(ctx context.Context, request AskQuestionRequest) (operations.Question, error) {
 			return execution.Ask(ctx, commands.AskQuestionCommand(request))
 		})
@@ -130,6 +136,12 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (operations.Operation, error) {
 			return execution.Cancel(ctx, commands.CancelOperationCommand{OperationID: request.OperationID})
 		})
+}
+
+var missionStepProperty = map[string]any{
+	"type":        "string",
+	"minLength":   1,
+	"description": "Optional ID from the mission's explicitly declared steps. Omit when the mission has no steps. Do not substitute an action name.",
 }
 
 func readReport(ctx context.Context, store operations.OperationStore, reportStore reports.ReportStore, operationID string) (reports.Report, error) {

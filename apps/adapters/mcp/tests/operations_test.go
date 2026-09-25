@@ -182,6 +182,11 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 	a := connect(t)
 	url := website(t)
 	op := a.start(url)
+	a.fails("assign_task", object{"operation_id": op.ID, "step_id": "discover-pages", "action_name": "discover-pages", "input": object{"url": url, "max_pages": 2}},
+		`mission "review-website" declares no steps; omit step_id and use action_name`)
+	if rejected := a.get(op.ID); len(rejected.Tasks) != 0 {
+		t.Fatalf("invalid step queued work: %+v", rejected.Tasks)
+	}
 	var root operations.Task
 	a.call("assign_task", object{"operation_id": op.ID, "action_name": "discover-pages", "input": object{"url": url, "max_pages": 2}}, &root)
 	settled := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
