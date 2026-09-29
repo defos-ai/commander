@@ -19,6 +19,11 @@ type OperationRequest struct {
 	OperationID string `json:"operation_id"`
 }
 
+type TaskRequest struct {
+	OperationRequest
+	TaskID string `json:"task_id"`
+}
+
 // MCP input types reuse command fields. Validation runs in the command client so
 // invalid domain input is returned as an action error, not a transport error.
 type StartOperationRequest commands.StartOperationCommand
@@ -86,6 +91,23 @@ func addOperationTools(server *mcp.Server, config Config) {
 			operation, err := config.OperationStore.Get(ctx, request.OperationID)
 			return describeOperation(operation), err
 		})
+	addTool(server, "list_tasks", "List an operation's tasks in assignment order, with status and continuation summaries. Use get_task for input, results and proposed next actions.", operationSchema,
+		func(ctx context.Context, request OperationRequest) (struct {
+			Tasks []taskSummary `json:"tasks"`
+		}, error) {
+			tasks, err := config.OperationStore.ListTasks(ctx, request.OperationID)
+			summaries := make([]taskSummary, 0, len(tasks))
+			for _, task := range tasks {
+				summaries = append(summaries, summarizeTask(task))
+			}
+			return struct {
+				Tasks []taskSummary `json:"tasks"`
+			}{summaries}, err
+		})
+	addTool(server, "get_task", "Read one task's input, result, artifacts, error and full continuation. Requires both operation_id and task_id; use the continuation version when resolving its decision.", objectSchema(map[string]any{"operation_id": stringProperty, "task_id": stringProperty}, "operation_id", "task_id"),
+		func(ctx context.Context, request TaskRequest) (operations.Task, error) {
+			return config.OperationStore.GetTask(ctx, request.OperationID, request.TaskID)
+		})
 	addTool(server, "get_report", "Read the separately stored final report for a completed operation, including after a server restart.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return readReport(ctx, config.OperationStore, config.ReportStore, request.OperationID)
@@ -100,13 +122,13 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request AssignTaskRequest) (operations.Task, error) {
 			return execution.Assign(ctx, commands.AssignTaskCommand(request))
 		})
-	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. Agent selection is optional. After an operator answer, review their guidance before resolving.", objectSchema(map[string]any{
+	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_task or get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. Agent selection is optional. After an operator answer, review their guidance before resolving.", objectSchema(map[string]any{
 		"operation_id": stringProperty, "task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1},
 		"actions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"action_name": stringProperty, "agent_id": stringProperty, "input": map[string]any{"type": "object"}, "reason": stringProperty}, "required": []string{"action_name"}}},
 	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operations.Operation, error) {
 		return execution.Resolve(ctx, commands.ResolveContinuationCommand(request))
 	})
-	addTool(server, "operation_events", "Read updates after a sequence cursor, up to limit (default 100, max 1000). Optionally wait up to 30 seconds. Inspect referenced tasks/questions with get_operation; use next_sequence as after_sequence to read the next page.", objectSchema(map[string]any{"operation_id": stringProperty, "after_sequence": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxEventLimit, "default": defaultEventLimit}, "wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 30}}, "operation_id"),
+	addTool(server, "operation_events", "Read updates after a sequence cursor, up to limit (default 100, max 1000). Optionally wait up to 30 seconds. Inspect tasks with get_task and questions with get_operation; use next_sequence as after_sequence to read the next page.", objectSchema(map[string]any{"operation_id": stringProperty, "after_sequence": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxEventLimit, "default": defaultEventLimit}, "wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 30}}, "operation_id"),
 		func(ctx context.Context, request OperationEventsRequest) (OperationEventsResult, error) {
 			limit := defaultEventLimit
 			if request.Limit != nil {

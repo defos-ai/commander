@@ -12,6 +12,7 @@ import (
 
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
+	"commander/framework/id"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -21,6 +22,13 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	b := openSession(t)
 	url, entered, release := heldWebsite(t, "/first", "/second")
 	first, second := a.start(url+"/first"), b.start(url+"/second")
+	var empty struct {
+		Tasks []operations.Task `json:"tasks"`
+	}
+	a.call("list_tasks", object{"operation_id": first.ID}, &empty)
+	if empty.Tasks == nil || len(empty.Tasks) != 0 {
+		t.Fatalf("new operation must have an empty task list: %+v", empty)
+	}
 	a.task(first.ID, "check-seo", url+"/first")
 	b.task(second.ID, "check-seo", url+"/second")
 	for range 2 {
@@ -40,6 +48,13 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	}
 	var question operations.Question
 	a.call("ask_question", object{"operation_id": first.ID, "text": "Approve the first review?", "options": []string{"Yes", "No"}}, &question)
+	assertTaskQueries(t, a, a.get(first.ID))
+	assertTaskQueries(t, b, right)
+	a.fails("get_task", object{"operation_id": first.ID, "task_id": right.Tasks[0].ID}, "unknown task")
+	a.fails("get_task", object{"operation_id": first.ID, "task_id": id.New()}, "unknown task")
+	a.fails("get_task", object{"operation_id": first.ID, "task_id": "not-a-uuid"}, "task")
+	a.fails("get_task", object{"operation_id": id.OperationID(), "task_id": left.Tasks[0].ID}, "unknown operation")
+	a.fails("list_tasks", object{"operation_id": id.OperationID()}, "unknown operation")
 
 	release("/second")
 	b.wait(second.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
@@ -57,6 +72,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 
 	artifactOwners := map[string]string{}
 	for _, op := range []operationDetail{left, right} {
+		assertTaskQueries(t, a, op)
 		for _, task := range op.Tasks {
 			if task.OperationID != op.ID || task.Result == nil {
 				t.Fatalf("task crossed operation boundaries: %+v", task)
@@ -89,6 +105,56 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	}
 	if len(left.Questions) != 1 || left.Questions[0].Answer != "Yes" || len(right.Questions) != 0 || len(artifactOwners) != 4 {
 		t.Fatal("questions or artifacts leaked between operations")
+	}
+}
+
+func assertTaskQueries(t *testing.T, a *api, op operationDetail) {
+	t.Helper()
+	var list struct {
+		Tasks []json.RawMessage `json:"tasks"`
+	}
+	a.call("list_tasks", object{"operation_id": op.ID}, &list)
+	if len(list.Tasks) != len(op.Tasks) {
+		t.Fatalf("task count differs from operation: got %d, want %d", len(list.Tasks), len(op.Tasks))
+	}
+	for i, raw := range list.Tasks {
+		var summary operations.Task
+		if err := json.Unmarshal(raw, &summary); err != nil {
+			t.Fatal(err)
+		}
+		want := op.Tasks[i]
+		if summary.ID != want.ID || summary.ParentTaskID != want.ParentTaskID || summary.StepID != want.StepID || summary.AgentID != want.AgentID ||
+			summary.ActionName != want.ActionName || summary.Status != want.Status || summary.Error != want.Error ||
+			!summary.StartedAt.Equal(want.StartedAt) || !reflect.DeepEqual(summary.FinishedAt, want.FinishedAt) {
+			t.Fatalf("task summary lost order or progress: got %+v, want %+v", summary, want)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"input", "result", "command_id", "deadline_at"} {
+			if _, exists := fields[name]; exists {
+				t.Errorf("task summary repeats detail field %s", name)
+			}
+		}
+		if want.Continuation == nil {
+			if summary.Continuation != nil {
+				t.Fatalf("task summary invented continuation: %+v", summary)
+			}
+		} else {
+			c := summary.Continuation
+			if c == nil || c.Version != want.Continuation.Version || c.Status != want.Continuation.Status || c.DecisionBy != want.Continuation.DecisionBy {
+				t.Fatalf("task summary lost continuation decision: got %+v, want %+v", c, want.Continuation)
+			}
+			if bytes.Contains(fields["continuation"], []byte(`"proposed_actions"`)) || bytes.Contains(fields["continuation"], []byte(`"created_task_ids"`)) {
+				t.Fatal("task summary repeats continuation payloads")
+			}
+		}
+		var detail operations.Task
+		a.call("get_task", object{"operation_id": op.ID, "task_id": want.ID}, &detail)
+		if !reflect.DeepEqual(detail, want) {
+			t.Fatalf("task detail differs from operation snapshot: got %+v, want %+v", detail, want)
+		}
 	}
 }
 

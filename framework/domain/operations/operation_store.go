@@ -12,6 +12,11 @@ type OperationStore interface {
 	Create(context.Context, Operation) error
 	Get(context.Context, string) (Operation, error)
 	List(context.Context) ([]Operation, error)
+	// Task queries are scoped to one operation. A missing operation returns
+	// ErrUnknownOperation; GetTask returns ErrUnknownTask when its task is absent.
+	GetTask(ctx context.Context, operationID, taskID string) (Task, error)
+	// ListTasks preserves assignment order and returns an empty slice when no tasks exist.
+	ListTasks(ctx context.Context, operationID string) ([]Task, error)
 	// ListEvents returns up to limit events in ascending sequence order, strictly
 	// after afterSequence. The limit must be positive. A cursor at or beyond the
 	// latest sequence returns an empty page; an unknown operation returns ErrUnknownOperation.

@@ -59,6 +59,37 @@ type missionSummary struct {
 	Name string `json:"name"`
 }
 
+type continuationSummary struct {
+	Status     operations.ContinuationStatus `json:"status"`
+	DecisionBy operations.DecisionBy         `json:"decision_by"`
+	Version    uint64                        `json:"version"`
+}
+
+type taskSummary struct {
+	ID           string                `json:"id"`
+	ParentTaskID string                `json:"parent_task_id,omitempty"`
+	StepID       string                `json:"step_id,omitempty"`
+	AgentID      string                `json:"agent_id"`
+	ActionName   string                `json:"action_name"`
+	Status       operations.TaskStatus `json:"status"`
+	Continuation *continuationSummary  `json:"continuation,omitempty"`
+	Error        string                `json:"error,omitempty"`
+	StartedAt    time.Time             `json:"started_at"`
+	FinishedAt   *time.Time            `json:"finished_at,omitempty"`
+}
+
+func summarizeTask(task operations.Task) taskSummary {
+	summary := taskSummary{
+		ID: task.ID, ParentTaskID: task.ParentTaskID, StepID: task.StepID,
+		AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
+		Error: task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+	}
+	if c := task.Continuation; c != nil {
+		summary.Continuation = &continuationSummary{Status: c.Status, DecisionBy: c.DecisionBy, Version: c.Version}
+	}
+	return summary
+}
+
 type operationSummary struct {
 	ID                 string                        `json:"id"`
 	Mission            missionSummary                `json:"mission"`

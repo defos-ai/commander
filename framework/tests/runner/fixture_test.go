@@ -77,6 +77,25 @@ func (s *operationStore) ListEvents(ctx context.Context, id string, after uint64
 	}
 	return events, nil
 }
+func (s *operationStore) GetTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
+	tasks, err := s.ListTasks(ctx, operationID)
+	if err != nil {
+		return operations.Task{}, err
+	}
+	for _, task := range tasks {
+		if task.ID == taskID {
+			return task, nil
+		}
+	}
+	return operations.Task{}, operations.ErrUnknownTask
+}
+func (s *operationStore) ListTasks(ctx context.Context, operationID string) ([]operations.Task, error) {
+	op, err := s.Get(ctx, operationID)
+	if err != nil {
+		return nil, err
+	}
+	return op.Tasks, nil
+}
 func (s *operationStore) Update(ctx context.Context, id string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

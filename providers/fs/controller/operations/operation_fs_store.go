@@ -135,6 +135,30 @@ func (s *OperationFsStore) List(ctx context.Context) ([]operations.Operation, er
 	return result, nil
 }
 
+func (s *OperationFsStore) GetTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
+	if !id.Valid(taskID) {
+		return operations.Task{}, errors.New("task ID must be a canonical UUID")
+	}
+	tasks, err := s.ListTasks(ctx, operationID)
+	if err != nil {
+		return operations.Task{}, err
+	}
+	for _, task := range tasks {
+		if task.ID == taskID {
+			return task, nil
+		}
+	}
+	return operations.Task{}, operations.ErrUnknownTask
+}
+
+func (s *OperationFsStore) ListTasks(ctx context.Context, operationID string) ([]operations.Task, error) {
+	operation, err := s.Get(ctx, operationID)
+	if err != nil {
+		return nil, err
+	}
+	return operation.Tasks, nil
+}
+
 func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, afterSequence uint64, limit int) ([]operations.Event, error) {
 	if limit <= 0 {
 		return nil, errors.New("event limit must be positive")

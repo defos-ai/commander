@@ -11,6 +11,7 @@ var (
 
 var (
 	ErrUnknownOperation  = errors.New("unknown operation")
+	ErrUnknownTask       = errors.New("unknown task")
 	ErrOperationConflict = errors.New("operation conflict")
 	ErrWriteUncertain    = errors.New("operation write durability is uncertain")
 )

@@ -301,6 +301,77 @@ func TestOperationEventsPagination(t *testing.T) {
 	}
 }
 
+func TestOperationTaskQueries(t *testing.T) {
+	store, err := operationfs.NewOperationFsStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
+	first := operations.Operation{ID: id.OperationID(), Tasks: []operations.Task{
+		{ID: "00000000-0000-4000-8000-000000000002", ActionName: "inspect", Status: operations.TaskSucceeded,
+			Input: json.RawMessage(`1`), FinishedAt: &finished,
+			Result: &actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`2`),
+				NextActions: []actions.NextAction{{ActionName: "follow-up", Input: json.RawMessage(`3`)}}},
+			Continuation: &operations.Continuation{Version: 2, Status: operations.ContinuationPending, DecisionBy: operations.DecisionModel,
+				ProposedActions: []actions.NextAction{{ActionName: "follow-up", Input: json.RawMessage(`4`)}}, CreatedTaskIDs: []string{id.New()}}},
+		{ID: "00000000-0000-4000-8000-000000000001", ActionName: "follow-up", Status: operations.TaskQueued},
+	}}
+	other := operations.Operation{ID: id.OperationID(), Tasks: []operations.Task{{ID: id.New(), ActionName: "unrelated", Status: operations.TaskQueued}}}
+	empty := operations.Operation{ID: id.OperationID()}
+	for _, op := range []*operations.Operation{&first, &other, &empty} {
+		for i := range op.Tasks {
+			op.Tasks[i].OperationID = op.ID
+		}
+		if err := store.Create(t.Context(), *op); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	listed, err := store.ListTasks(t.Context(), first.ID)
+	if err != nil || !reflect.DeepEqual(listed, first.Clone().Tasks) {
+		t.Fatalf("task list must preserve assignment order and complete details: %+v, %v", listed, err)
+	}
+	detail, err := store.GetTask(t.Context(), first.ID, first.Tasks[0].ID)
+	if err != nil || !reflect.DeepEqual(detail, listed[0]) {
+		t.Fatalf("task detail differs from its operation snapshot: %+v, %v", detail, err)
+	}
+	for _, task := range []*operations.Task{&listed[0], &detail} {
+		task.Input[0] = '9'
+		task.Result.Output[0] = '9'
+		task.Result.NextActions[0].Input[0] = '9'
+		task.Continuation.ProposedActions[0].Input[0] = '9'
+		task.Continuation.CreatedTaskIDs[0] = "changed"
+		*task.FinishedAt = task.FinishedAt.Add(time.Hour)
+	}
+	for _, op := range []operations.Operation{first, other} {
+		stored, err := store.ListTasks(t.Context(), op.ID)
+		if err != nil || !reflect.DeepEqual(stored, op.Clone().Tasks) {
+			t.Fatalf("modifying query results changed stored tasks or another operation: %+v, %v", stored, err)
+		}
+	}
+	noTasks, err := store.ListTasks(t.Context(), empty.ID)
+	if err != nil || noTasks == nil || len(noTasks) != 0 {
+		t.Fatalf("a known operation without tasks must return an empty list: %+v, %v", noTasks, err)
+	}
+	for _, taskID := range []string{id.New(), other.Tasks[0].ID} {
+		if _, err := store.GetTask(t.Context(), first.ID, taskID); !errors.Is(err, operations.ErrUnknownTask) {
+			t.Fatalf("missing or foreign task %s must not be returned: %v", taskID, err)
+		}
+	}
+	unknown := id.OperationID()
+	if _, err := store.ListTasks(t.Context(), unknown); !errors.Is(err, operations.ErrUnknownOperation) {
+		t.Fatalf("unknown operation must not return an empty task list: %v", err)
+	}
+	if _, err := store.GetTask(t.Context(), unknown, first.Tasks[0].ID); !errors.Is(err, operations.ErrUnknownOperation) {
+		t.Fatalf("task query lost unknown operation error: %v", err)
+	}
+	for _, taskID := range []string{"", "../task", "00000000000040008000000000000001"} {
+		if _, err := store.GetTask(t.Context(), first.ID, taskID); err == nil || errors.Is(err, operations.ErrUnknownTask) {
+			t.Errorf("malformed task ID %q must fail validation: %v", taskID, err)
+		}
+	}
+}
+
 func TestOperationWritesReportUncertainDurability(t *testing.T) {
 	for _, name := range []string{"update", "create"} {
 		t.Run(name, func(t *testing.T) {

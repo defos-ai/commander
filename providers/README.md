@@ -26,8 +26,9 @@ defines consumer acknowledgement policy.
 Operations are stored in `DATABASE_URL/operations/<operation-id>.json`, each with
 its own lock. Tasks, questions, and events remain in the operation snapshot so
 related changes commit together. Reads use atomic snapshots without taking a write lock.
-`OperationStore.ListEvents` provides paginated event queries; the filesystem
-implementation currently reads the operation snapshot to return each page.
+`OperationStore.GetTask` and `ListTasks` query tasks within one operation;
+`ListEvents` provides paginated event queries. These filesystem queries currently
+read the operation snapshot.
 
 ## Quick start
 
