@@ -1,16 +1,15 @@
-package runner
+package operations
 
 import (
 	"slices"
 
 	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
 )
 
-func automaticRule(mission missions.Mission, task operations.Task) (missions.Automation, bool) {
+func automaticRule(mission missions.Mission, task Task) (missions.Automation, bool) {
 	rule, exists := mission.Automations[task.ActionName]
-	if !exists || rule.Decide == missions.Model || rule.Validate() != nil || task.Status != operations.TaskSucceeded || task.Continuation == nil {
+	if !exists || rule.Decide == missions.Model || rule.Validate() != nil || task.Status != TaskSucceeded || task.Continuation == nil {
 		return missions.Automation{}, false
 	}
 	actions := task.Continuation.ProposedActions

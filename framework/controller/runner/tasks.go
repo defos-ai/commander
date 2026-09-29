@@ -62,36 +62,18 @@ func (r *Runner) finishTask(s *operationState, task operations.Task, result acti
 	if runErr != nil && r.ctx.Err() != nil {
 		return
 	}
-	interrupted := errors.Is(runErr, executions.ErrIndeterminate) || errors.Is(runErr, context.DeadlineExceeded) || errors.Is(runErr, context.Canceled)
+	outcome := operations.TaskResult{TaskID: task.ID, AgentID: task.AgentID, Status: operations.TaskSucceeded, Result: &result, FinishedAt: time.Now().UTC()}
+	if runErr != nil {
+		outcome.Status, outcome.Result, outcome.Error = operations.TaskFailed, nil, runErr.Error()
+		if errors.Is(runErr, executions.ErrIndeterminate) || errors.Is(runErr, context.DeadlineExceeded) || errors.Is(runErr, context.Canceled) {
+			outcome.Status = operations.TaskInterrupted
+		}
+	}
 	// Preserve evidence and errors during shutdown, after the task context ends.
 	saveCtx, done := context.WithTimeout(context.WithoutCancel(r.ctx), 5*time.Second)
 	defer done()
-	if err := r.update(saveCtx, s, func(next *operations.Operation) error {
-		i := taskIndex(next, task.ID)
-		if i < 0 || !needsTaskRecovery(next.Tasks[i]) {
-			return operations.ErrOperationConflict
-		}
-		finished := time.Now().UTC()
-		next.Tasks[i].FinishedAt = &finished
-		if runErr == nil {
-			next.Tasks[i].Status, next.Tasks[i].Result = operations.TaskSucceeded, &result
-			next.Tasks[i].Error = ""
-		} else {
-			next.Tasks[i].Status, next.Tasks[i].Error = operations.TaskFailed, runErr.Error()
-			if interrupted {
-				next.Tasks[i].Status = operations.TaskInterrupted
-			}
-		}
-		r.continueTask(next, task.ID, runErr == nil)
-		r.refreshGroups(next)
-		refreshStatus(next)
-		kind, message := operations.TaskFinished, "Task finished; inspect its result or error"
-		if interrupted {
-			kind, message = operations.TaskInterruptedEvent, "Execution outcome is unknown; inspect before explicitly assigning replacement work"
-		}
-		appendEvent(next, kind, task.ID, "", message)
-		return nil
-	}); err != nil {
+	next, err := r.store.FinishTask(saveCtx, s.operation.ID, outcome)
+	if err := s.acceptUpdate(next, err); err != nil {
 		s.err = errors.Join(s.err, fmt.Errorf("save task result: %w", err))
 		close(s.changed)
 		s.changed = make(chan struct{})

@@ -32,6 +32,8 @@ type storedOperation struct {
 
 var _ operations.OperationStore = (*OperationFsStore)(nil)
 
+var errUnchangedTaskResult = errors.New("task result already recorded")
+
 func NewOperationFsStore(root string) (*OperationFsStore, error) {
 	if root == "" {
 		root = filepath.Join("state", "database")
@@ -199,6 +201,25 @@ func (s *OperationFsStore) DispatchTask(ctx context.Context, operationID string,
 	return s.Update(ctx, operationID, func(next *operations.Operation) error {
 		return next.DispatchTask(dispatch)
 	})
+}
+
+func (s *OperationFsStore) FinishTask(ctx context.Context, operationID string, result operations.TaskResult) (operations.Operation, error) {
+	var unchanged operations.Operation
+	next, err := s.Update(ctx, operationID, func(next *operations.Operation) error {
+		changed, err := next.FinishTask(result)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			unchanged = next.Clone()
+			return errUnchangedTaskResult
+		}
+		return nil
+	})
+	if errors.Is(err, errUnchangedTaskResult) {
+		return unchanged, nil
+	}
+	return next, err
 }
 
 func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {

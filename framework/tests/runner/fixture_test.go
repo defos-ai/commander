@@ -137,6 +137,13 @@ func (s *operationStore) DispatchTask(ctx context.Context, operationID string, d
 	})
 }
 
+func (s *operationStore) FinishTask(ctx context.Context, operationID string, result operations.TaskResult) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		_, err := op.FinishTask(result)
+		return err
+	})
+}
+
 type missionStore struct{ mission missions.Mission }
 
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {

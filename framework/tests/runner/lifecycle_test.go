@@ -3,12 +3,14 @@ package runner_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
 	"commander/framework/comms/clients/controller/commands"
 	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 )
 
@@ -116,8 +118,11 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 	}
 }
 
-func TestResultSaveFailureReachesWaitersAndClose(t *testing.T) {
+func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testing.T) {
 	config := fixture()
+	config.MissionStore.(*missionStore).mission.Automations = map[string]missions.Automation{
+		"discover": {Run: []string{"inspect"}, Continue: missions.WhenAll},
+	}
 	exec, calls := controlledExecutor()
 	r, err := runner.NewRunner(t.Context(), exec, config)
 	if err != nil {
@@ -129,15 +134,16 @@ func TestResultSaveFailureReachesWaitersAndClose(t *testing.T) {
 		_ = r.Close(ctx)
 	})
 	op := start(t, r)
-	task := assign(t, r, op.ID, "inspect")
+	task := assign(t, r, op.ID, "discover")
 	call := receive(t, calls)
+	savedResult := output("discover", actions.NextAction{ActionName: "inspect", AgentID: agentID})
 	failure := errors.New("database unavailable")
 	store := config.OperationStore.(*operationStore)
 	store.failNextUpdate(failure)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	call.reply <- output("inspect")
+	call.reply <- savedResult
 	_, waitErr := r.WaitTask(ctx, op.ID, task.ID)
 	_, eventErr := r.Events(ctx, op.ID, 0, false)
 	closeErr := r.Close(ctx)
@@ -148,7 +154,51 @@ func TestResultSaveFailureReachesWaitersAndClose(t *testing.T) {
 		}
 	}
 	stored, err := r.Get(ctx, op.ID)
-	if err != nil || stored.Tasks[0].Status != operations.TaskRunning || stored.Tasks[0].Result != nil {
+	if err != nil || len(stored.Tasks) != 1 || stored.Tasks[0].Status != operations.TaskRunning || stored.Tasks[0].Result != nil {
 		t.Fatalf("failed write corrupted recoverable work: %+v, %v", stored, err)
+	}
+	observed := make(chan invocation, 2)
+	exec.recover = func(_ context.Context, agent string, recovered actions.ActionCall) (actions.ActionOutput, error) {
+		observed <- invocation{agent: agent, call: recovered}
+		return savedResult, nil
+	}
+	restarted := newRunner(t, config, exec)
+	recovered := receive(t, observed)
+	if recovered.agent != call.agent || recovered.call.Work != call.call.Work {
+		t.Fatalf("result reconciliation changed the saved command: %+v", recovered)
+	}
+	child := receive(t, calls)
+	if child.call.Work.TaskID == task.ID || child.call.Work.OperationID != op.ID || child.call.ActionName != "inspect" {
+		t.Fatalf("recovery repeated the parent instead of starting its child: %+v", child)
+	}
+	child.reply <- output("inspect")
+	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
+	closeRunner(t, restarted)
+	if len(settled.Tasks) != 2 {
+		t.Fatalf("recovery duplicated or lost automatic work: %+v", settled)
+	}
+	parent := settled.Tasks[0]
+	if parent.ID != task.ID || parent.CommandID != task.CommandID || !reflect.DeepEqual(parent.Result, &savedResult) {
+		t.Fatalf("recovery changed the parent command or result: %+v", parent)
+	}
+	c := parent.Continuation
+	if settled.Tasks[1].ID != child.call.Work.TaskID || settled.Tasks[1].ParentTaskID != task.ID || c == nil || len(c.CreatedTaskIDs) != 1 || c.CreatedTaskIDs[0] != settled.Tasks[1].ID {
+		t.Fatalf("recovery lost the automatic child relationship: %+v", settled)
+	}
+	finished := 0
+	for _, event := range settled.Events {
+		if event.Type == operations.TaskFinished && event.TaskID == task.ID {
+			finished++
+		}
+	}
+	if finished != 1 {
+		t.Fatalf("reconciled parent completion was recorded %d times", finished)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("recovery dispatched duplicate work: %+v", call)
+	case call := <-observed:
+		t.Fatalf("recovery observed the completed parent again: %+v", call)
+	default:
 	}
 }

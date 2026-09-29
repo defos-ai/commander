@@ -113,33 +113,9 @@ func runningTasks(operation operations.Operation) bool {
 }
 
 func refreshStatus(operation *operations.Operation) {
-	if operation.Status.Terminal() {
-		return
-	}
-	operation.Status = operations.Planning
-	for _, task := range operation.Tasks {
-		if task.Status == operations.TaskRunning {
-			operation.Status = operations.Running
-			return
-		}
-	}
-	if operation.Preflight != nil && !operation.Preflight.Ready {
-		operation.Status = operations.Waiting
-		return
-	}
-	for _, question := range operation.Questions {
-		if question.Pending() {
-			operation.Status = operations.Waiting
-			return
-		}
-	}
-	if runningTasks(*operation) {
-		operation.Status = operations.Running
-	}
+	operation.RefreshStatus()
 }
 
 func appendEvent(operation *operations.Operation, kind operations.EventType, taskID, questionID, message string) {
-	operation.Events = append(operation.Events, operations.Event{Sequence: uint64(len(operation.Events) + 1),
-		OperationID: operation.ID, Type: kind, Status: operation.Status, TaskID: taskID,
-		QuestionID: questionID, Message: message, CreatedAt: time.Now().UTC()})
+	operation.AppendEvent(kind, taskID, questionID, message)
 }

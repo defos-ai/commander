@@ -5,7 +5,7 @@ import "context"
 // Implementations retain and return independent copies. Update applies a mutation
 // atomically to the latest operation. Errors other than ErrWriteUncertain leave it unchanged.
 // ErrWriteUncertain means the new snapshot is visible but durability is unconfirmed;
-// Update and DispatchTask return that snapshot. Pause new work until recovery
+// Update, DispatchTask, and FinishTask return that snapshot. Pause new work until recovery
 // reconciles persisted state. Providers may retry the callback; it must not perform I/O or
 // other external side effects.
 type OperationStore interface {
@@ -28,5 +28,10 @@ type OperationStore interface {
 	// queued command ID and saves the running task, event, status, and timestamp
 	// together. A competing claim returns ErrOperationConflict without dispatching.
 	DispatchTask(ctx context.Context, operationID string, dispatch TaskDispatch) (Operation, error)
+	// FinishTask saves a running or interrupted task's outcome together with its
+	// continuation, automatic follow-ups, events, and operation status. Repeated
+	// outcomes return the saved snapshot unchanged; conflicting final outcomes
+	// return ErrOperationConflict. Late results preserve terminal operation status.
+	FinishTask(ctx context.Context, operationID string, result TaskResult) (Operation, error)
 	Update(context.Context, string, func(*Operation) error) (Operation, error)
 }

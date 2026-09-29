@@ -2,7 +2,9 @@ package runner_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/executions"
+	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
 )
@@ -140,6 +143,110 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	}
 }
 
+func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.T) {
+	config := fixture()
+	config.MissionStore.(*missionStore).mission.Automations = map[string]missions.Automation{
+		"discover": {Run: []string{"inspect"}, Continue: missions.WhenAll},
+	}
+	failure := errors.New("directory sync failed")
+	var failed atomic.Bool
+	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterFinish: func(operations.Operation) error {
+		if failed.CompareAndSwap(false, true) {
+			return errors.Join(operations.ErrWriteUncertain, failure)
+		}
+		return nil
+	}}
+	exec, calls := controlledExecutor()
+	var recoveries atomic.Int32
+	exec.recover = func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error) {
+		recoveries.Add(1)
+		return actions.ActionOutput{}, errors.New("unexpected recovery of completed work")
+	}
+	first, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = first.Close(ctx)
+	})
+	op := start(t, first)
+	parent := assign(t, first, op.ID, "discover")
+	receive(t, calls).reply <- output("discover",
+		actions.NextAction{ActionName: "inspect", AgentID: agentID, Input: json.RawMessage(`{"page":1}`)},
+		actions.NextAction{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, waitErr := first.WaitTask(ctx, op.ID, parent.ID)
+	_, eventErr := first.Events(ctx, op.ID, 0, false)
+	for _, err := range []error{waitErr, eventErr} {
+		if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
+			t.Fatalf("uncertain result persistence was hidden: %v", err)
+		}
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("automatic child dispatched before durability was confirmed: %+v", call)
+	case <-time.After(150 * time.Millisecond):
+	}
+	if err := first.Close(ctx); !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
+		t.Fatalf("shutdown hid uncertain result persistence: %v", err)
+	}
+	stored, err := first.Get(ctx, op.ID)
+	if err != nil || len(stored.Tasks) != 3 {
+		t.Fatalf("uncertain write lost the result or automatic children: %+v, %v", stored, err)
+	}
+	savedParent := stored.Tasks[0]
+	if savedParent.ID != parent.ID || savedParent.CommandID != parent.CommandID || savedParent.Status != operations.TaskSucceeded || savedParent.Result == nil || savedParent.Continuation == nil || len(savedParent.Continuation.CreatedTaskIDs) != 2 {
+		t.Fatalf("uncertain write lost the completed parent: %+v", savedParent)
+	}
+	savedChildren := make(map[string]operations.Task)
+	for _, child := range stored.Tasks[1:] {
+		if child.Status != operations.TaskQueued || child.ParentTaskID != parent.ID || child.CommandID != child.ID {
+			t.Fatalf("uncertain result did not preserve a queued child: %+v", child)
+		}
+		savedChildren[child.ID] = child
+	}
+
+	restarted := newRunner(t, config, exec)
+	for range 2 {
+		call := receive(t, calls)
+		child, exists := savedChildren[call.call.Work.TaskID]
+		if !exists || call.call.Work.OperationID != op.ID || call.agent != child.AgentID || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
+			t.Fatalf("recovery repeated the parent or changed an automatic child: %+v", call)
+		}
+		delete(savedChildren, child.ID)
+		call.reply <- output("inspect")
+	}
+	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
+	closeRunner(t, restarted)
+	if len(settled.Tasks) != 3 || recoveries.Load() != 0 {
+		t.Fatalf("recovery duplicated or lost saved work: recoveries=%d, operation=%+v", recoveries.Load(), settled)
+	}
+	gotParent := settled.Tasks[0]
+	if gotParent.CommandID != savedParent.CommandID || !reflect.DeepEqual(gotParent.FinishedAt, savedParent.FinishedAt) || !reflect.DeepEqual(gotParent.Result, savedParent.Result) {
+		t.Fatalf("recovery changed the saved parent completion: %+v", gotParent)
+	}
+	if gotParent.Continuation == nil || !reflect.DeepEqual(gotParent.Continuation.CreatedTaskIDs, savedParent.Continuation.CreatedTaskIDs) {
+		t.Fatalf("recovery replaced the saved automatic children: %+v", gotParent.Continuation)
+	}
+	finished := 0
+	for _, event := range settled.Events {
+		if event.Type == operations.TaskFinished && event.TaskID == parent.ID {
+			finished++
+		}
+	}
+	if finished != 1 {
+		t.Fatalf("parent completion was recorded %d times", finished)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("recovery duplicated automatic work: %+v", call)
+	default:
+	}
+}
+
 func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 	config := fixture()
 	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, createError: operations.ErrWriteUncertain}
@@ -183,6 +290,7 @@ type uncertainWriteStore struct {
 	operations.OperationStore
 	createError   error
 	afterDispatch func(operations.Operation) error
+	afterFinish   func(operations.Operation) error
 }
 
 func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -196,6 +304,14 @@ func (s *uncertainWriteStore) DispatchTask(ctx context.Context, operationID stri
 	op, err := s.OperationStore.DispatchTask(ctx, operationID, dispatch)
 	if err == nil && s.afterDispatch != nil {
 		err = s.afterDispatch(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) FinishTask(ctx context.Context, operationID string, result operations.TaskResult) (operations.Operation, error) {
+	op, err := s.OperationStore.FinishTask(ctx, operationID, result)
+	if err == nil && s.afterFinish != nil {
+		err = s.afterFinish(op)
 	}
 	return op, err
 }

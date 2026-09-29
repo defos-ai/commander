@@ -87,6 +87,9 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    to retry and must not perform external side effects.
    `DispatchTask` atomically claims an eligible queued task and saves its agent,
    timing, dispatch event, and operation status together, preserving its command ID.
+   `FinishTask` saves the result, continuation, automatic follow-ups, and events
+   together. Identical results return the saved state without rewriting it;
+   conflicting outcomes cannot replace a final result.
 4. Add public behavior tests under `providers/tests/`, including concurrent writes,
    retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
 
