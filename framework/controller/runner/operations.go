@@ -190,10 +190,18 @@ func (r *Runner) Cancel(ctx context.Context, command commands.CancelOperationCom
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
-	return r.change(ctx, command.OperationID, func(next *operations.Operation) error {
-		next.Status = operations.Cancelled
-		cancelQueued(next)
-		appendEvent(next, operations.OperationCancelled, "", "", "New assignments cancelled; dispatched tasks may still finish")
-		return nil
+	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
+		s, err := r.state(command.OperationID)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		if err := active(s); err != nil {
+			return operations.Operation{}, err
+		}
+		next, err := r.store.Cancel(ctx, command.OperationID)
+		if err := s.acceptUpdate(next, err); err != nil {
+			return operations.Operation{}, err
+		}
+		return s.operation.Clone(), nil
 	})
 }

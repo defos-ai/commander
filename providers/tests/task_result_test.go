@@ -179,12 +179,7 @@ func TestOperationResultAfterCancellationRetainsEvidenceWithoutChildren(t *testi
 	dir := t.TempDir()
 	store := newDispatchStore(t, dir)
 	op, request := createResultOperation(t, store)
-	cancelled, err := newDispatchStore(t, dir).Update(t.Context(), op.ID, func(next *operations.Operation) error {
-		next.Status = operations.Cancelled
-		next.Events = append(next.Events, operations.Event{Sequence: 2, OperationID: next.ID,
-			Type: operations.OperationCancelled, Status: operations.Cancelled, CreatedAt: request.FinishedAt})
-		return nil
-	})
+	cancelled, err := newDispatchStore(t, dir).Cancel(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

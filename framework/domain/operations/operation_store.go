@@ -45,5 +45,9 @@ type OperationStore interface {
 	// resolution, follow-up tasks, events, and operation status together. A stale
 	// version cannot create another branch, including when retrying a saved decision.
 	ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (Operation, error)
+	// Cancel saves terminal status, queued task cancellations, and its event together.
+	// Dispatched tasks retain their state and may finish later. Terminal operations
+	// return ErrFinished without changing the saved state.
+	Cancel(ctx context.Context, operationID string) (Operation, error)
 	Update(context.Context, string, func(*Operation) error) (Operation, error)
 }

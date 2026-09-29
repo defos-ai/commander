@@ -469,6 +469,7 @@ type uncertainWriteStore struct {
 	afterDispatch func(operations.Operation) error
 	afterFinish   func(operations.Operation) error
 	afterResolve  func(operations.Operation) error
+	afterCancel   func(operations.Operation) error
 }
 
 func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -506,6 +507,14 @@ func (s *uncertainWriteStore) ResolveContinuation(ctx context.Context, operation
 	op, err := s.OperationStore.ResolveContinuation(ctx, operationID, taskID, version, next)
 	if err == nil && s.afterResolve != nil {
 		err = s.afterResolve(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) Cancel(ctx context.Context, operationID string) (operations.Operation, error) {
+	op, err := s.OperationStore.Cancel(ctx, operationID)
+	if err == nil && s.afterCancel != nil {
+		err = s.afterCancel(op)
 	}
 	return op, err
 }

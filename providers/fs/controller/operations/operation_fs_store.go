@@ -222,6 +222,12 @@ func (s *OperationFsStore) ResolveContinuation(ctx context.Context, operationID,
 	})
 }
 
+func (s *OperationFsStore) Cancel(ctx context.Context, operationID string) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
+		return operation.Cancel()
+	})
+}
+
 func (s *OperationFsStore) updateChanged(ctx context.Context, operationID string, mutate func(*operations.Operation) (bool, error)) (operations.Operation, error) {
 	var unchanged operations.Operation
 	next, err := s.Update(ctx, operationID, func(next *operations.Operation) error {

@@ -94,6 +94,8 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    conflicting outcomes cannot replace a final result.
    `ResolveContinuation` checks the decision version and saves its follow-up tasks
    and events atomically; a stale version cannot create a second branch.
+   `Cancel` commits operation and queued-task cancellation with its event;
+   dispatched tasks can still record results without starting new work.
 4. Add public behavior tests under `providers/tests/`, including concurrent writes,
    retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
 

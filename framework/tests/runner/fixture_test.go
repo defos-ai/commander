@@ -157,6 +157,12 @@ func (s *operationStore) ResolveContinuation(ctx context.Context, operationID, t
 	})
 }
 
+func (s *operationStore) Cancel(ctx context.Context, operationID string) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.Cancel()
+	})
+}
+
 type missionStore struct{ mission missions.Mission }
 
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {
