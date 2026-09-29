@@ -19,28 +19,21 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		return operations.Task{}, err
 	}
 	task := queuedTask(command.OperationID, command.StepID, "", actionmodel.NextAction{AgentID: command.AgentID, ActionName: command.ActionName, Input: command.Input})
-	op, err := r.change(ctx, command.OperationID, func(next *operations.Operation) error {
-		if err := validStep(*next, command.StepID); err != nil {
-			return err
+	return submit(ctx, r, func(ctx context.Context) (operations.Task, error) {
+		s, err := r.state(command.OperationID)
+		if err != nil {
+			return operations.Task{}, err
 		}
-		for _, question := range next.Questions {
-			if question.TaskID == "" && question.Pending() && (question.StepID == "" || question.StepID == command.StepID) {
-				return ErrQuestionPending
-			}
+		if err := active(s); err != nil {
+			return operations.Task{}, err
 		}
-		if len(next.Tasks) >= 10000 {
-			return errors.New("operation task limit exceeded")
+		next, err := r.store.QueueTask(ctx, command.OperationID, task)
+		if err := s.acceptUpdate(next, err); err != nil {
+			return operations.Task{}, err
 		}
-		next.Tasks = append(next.Tasks, task)
-		refreshStatus(next)
-		appendEvent(next, operations.TaskAssigned, task.ID, "", "Task queued")
-		return nil
+		r.signalScheduler()
+		return s.operation.Clone().Tasks[taskIndex(&s.operation, task.ID)], nil
 	})
-	if err != nil {
-		return operations.Task{}, err
-	}
-	r.signalScheduler()
-	return op.Tasks[len(op.Tasks)-1], nil
 }
 
 func (r *Runner) runTask(task operations.Task, call actionmodel.ActionCall) {

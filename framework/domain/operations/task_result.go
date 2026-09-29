@@ -102,10 +102,11 @@ func (r TaskResult) validate() error {
 }
 
 func sameTaskResult(task Task, result TaskResult) bool {
-	if task.Status != result.Status || task.Error != result.Error {
-		return false
-	}
-	decode := func(output *actions.ActionOutput) (any, error) {
+	return task.Status == result.Status && task.Error == result.Error && sameJSON(task.Result, result.Result)
+}
+
+func sameJSON(first, second any) bool {
+	decode := func(output any) (any, error) {
 		data, err := json.Marshal(output)
 		if err != nil {
 			return nil, err
@@ -116,7 +117,7 @@ func sameTaskResult(task Task, result TaskResult) bool {
 		err = decoder.Decode(&value)
 		return value, err
 	}
-	previous, previousErr := decode(task.Result)
-	incoming, incomingErr := decode(result.Result)
+	previous, previousErr := decode(first)
+	incoming, incomingErr := decode(second)
 	return previousErr == nil && incomingErr == nil && reflect.DeepEqual(previous, incoming)
 }

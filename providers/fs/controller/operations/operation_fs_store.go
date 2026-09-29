@@ -32,7 +32,7 @@ type storedOperation struct {
 
 var _ operations.OperationStore = (*OperationFsStore)(nil)
 
-var errUnchangedTaskResult = errors.New("task result already recorded")
+var errUnchangedOperation = errors.New("operation unchanged")
 
 func NewOperationFsStore(root string) (*OperationFsStore, error) {
 	if root == "" {
@@ -197,6 +197,12 @@ func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, a
 	return events, nil
 }
 
+func (s *OperationFsStore) QueueTask(ctx context.Context, operationID string, task operations.Task) (operations.Operation, error) {
+	return s.updateChanged(ctx, operationID, func(next *operations.Operation) (bool, error) {
+		return next.QueueTask(task)
+	})
+}
+
 func (s *OperationFsStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(next *operations.Operation) error {
 		return next.DispatchTask(dispatch)
@@ -204,19 +210,25 @@ func (s *OperationFsStore) DispatchTask(ctx context.Context, operationID string,
 }
 
 func (s *OperationFsStore) FinishTask(ctx context.Context, operationID string, result operations.TaskResult) (operations.Operation, error) {
+	return s.updateChanged(ctx, operationID, func(next *operations.Operation) (bool, error) {
+		return next.FinishTask(result)
+	})
+}
+
+func (s *OperationFsStore) updateChanged(ctx context.Context, operationID string, mutate func(*operations.Operation) (bool, error)) (operations.Operation, error) {
 	var unchanged operations.Operation
 	next, err := s.Update(ctx, operationID, func(next *operations.Operation) error {
-		changed, err := next.FinishTask(result)
+		changed, err := mutate(next)
 		if err != nil {
 			return err
 		}
 		if !changed {
 			unchanged = next.Clone()
-			return errUnchangedTaskResult
+			return errUnchangedOperation
 		}
 		return nil
 	})
-	if errors.Is(err, errUnchangedTaskResult) {
+	if errors.Is(err, errUnchangedOperation) {
 		return unchanged, nil
 	}
 	return next, err

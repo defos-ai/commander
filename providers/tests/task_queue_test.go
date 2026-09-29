@@ -1,0 +1,310 @@
+package providers_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+	"time"
+
+	"commander/framework/domain/actions"
+	"commander/framework/domain/missions"
+	"commander/framework/domain/operations"
+	"commander/framework/id"
+	operationfs "commander/providers/fs/controller/operations"
+)
+
+func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) {
+	dir := t.TempDir()
+	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
+	op, firstTask := createQueueOperation(t, first)
+	firstTask.Input = json.RawMessage(`{"page":1}`)
+	secondTask := operations.NewTask(op.ID, "review", "", actions.NextAction{
+		ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`),
+	})
+	requests := []operations.Task{firstTask, secondTask}
+	type result struct {
+		op  operations.Operation
+		err error
+	}
+	gate, results := make(chan struct{}), make(chan result, 2)
+	for i, store := range []*operationfs.OperationFsStore{first, second} {
+		go func() {
+			<-gate
+			published, err := store.QueueTask(t.Context(), op.ID, requests[i])
+			results <- result{published, err}
+		}()
+	}
+	started := time.Now().UTC()
+	close(gate)
+	a, b := <-results, <-results
+	if len(a.op.Tasks) > len(b.op.Tasks) {
+		a, b = b, a
+	}
+	if a.err != nil || b.err != nil || len(a.op.Tasks) != 1 || len(b.op.Tasks) != 2 {
+		t.Fatalf("concurrent assignments lost a task: first=%+v, %v; second=%+v, %v", a.op, a.err, b.op, b.err)
+	}
+	for _, published := range []operations.Operation{a.op, b.op} {
+		if published.Status != operations.Running || published.UpdatedAt.Before(started) || published.UpdatedAt.After(time.Now().UTC()) || len(published.Events) != len(published.Tasks)+1 {
+			t.Fatalf("queue omitted its status, commit time, or event: %+v", published)
+		}
+		for i, task := range published.Tasks {
+			want := firstTask
+			if task.ID == secondTask.ID {
+				want = secondTask
+			}
+			assertResultJSONEqual(t, task, want)
+			event := published.Events[i+1]
+			if event.Sequence != uint64(i+2) || event.OperationID != op.ID || event.TaskID != task.ID || event.Type != operations.TaskAssigned || event.Status != operations.Running || event.CreatedAt.Before(started) || event.CreatedAt.After(time.Now().UTC()) {
+				t.Fatalf("assignment event does not match its committed task: %+v", event)
+			}
+		}
+	}
+	if b.op.Tasks[0].ID == b.op.Tasks[1].ID {
+		t.Fatal("concurrent assignments duplicated one task")
+	}
+	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertResultJSONEqual(t, saved, b.op)
+}
+
+func TestOperationQueueReplayPreservesDispatchedAndTerminalState(t *testing.T) {
+	dir := t.TempDir()
+	store := newDispatchStore(t, dir)
+	op, task := createQueueOperation(t, store)
+	task.Input = json.RawMessage(`{"page":9007199254740992,"flags":{"checked":true,"fresh":false}}`)
+	if _, err := store.QueueTask(t.Context(), op.ID, task); err != nil {
+		t.Fatal(err)
+	}
+	dispatch := operations.TaskDispatch{TaskID: task.ID, AgentID: "review-agent-00000001",
+		StartedAt: time.Now().UTC(), DeadlineAt: time.Now().UTC().Add(time.Minute)}
+	if _, err := store.DispatchTask(t.Context(), op.ID, dispatch); err != nil {
+		t.Fatal(err)
+	}
+	replay := task
+	replay.Input = json.RawMessage(`{ "flags": { "fresh": false, "checked": true }, "page": 9007199254740992 }`)
+	pinned := replay
+	pinned.AgentID = dispatch.AgentID
+	wrongAgent := replay
+	wrongAgent.AgentID = "review-agent-00000002"
+	differentInput := replay
+	differentInput.Input = json.RawMessage(`{"page":9007199254740993,"flags":{"checked":true,"fresh":false}}`)
+	differentAction := replay
+	differentAction.ActionName = "report"
+	for _, terminal := range []bool{false, true} {
+		name := "dispatched"
+		if terminal {
+			name = "terminal"
+		}
+		t.Run(name, func(t *testing.T) {
+			if terminal {
+				if _, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
+					next.Status = operations.Cancelled
+					next.Tasks[0].Status = operations.TaskCancelled
+					next.Tasks[0].FinishedAt = &dispatch.DeadlineAt
+					next.Mission.Steps = nil
+					next.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending}}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			reopened := newDispatchStore(t, dir)
+			saved, err := reopened.Get(t.Context(), op.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, "operations", op.ID+".json")
+			before := readDispatchFile(t, path)
+			for _, tc := range []struct {
+				name     string
+				task     operations.Task
+				conflict bool
+			}{
+				{"equivalent JSON and unpinned agent", replay, false},
+				{"matching selected agent", pinned, false},
+				{"different agent", wrongAgent, true},
+				{"different large integer", differentInput, true},
+				{"different action", differentAction, true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					published, err := reopened.QueueTask(t.Context(), op.ID, tc.task)
+					if tc.conflict {
+						if !errors.Is(err, operations.ErrOperationConflict) {
+							t.Fatalf("conflicting assignment accepted: %v", err)
+						}
+					} else {
+						if err != nil {
+							t.Fatal(err)
+						}
+						assertResultJSONEqual(t, published, saved)
+					}
+					if !bytes.Equal(before, readDispatchFile(t, path)) {
+						t.Fatal("assignment retry changed execution state, events, timestamp, or storage revision")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestOperationQueueChecksLatestStateAndAllowsPreflightWaiting(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		change  func(*operations.Operation)
+		blocked bool
+		wantErr error
+		status  operations.Status
+	}{
+		{"mission step removed", func(op *operations.Operation) { op.Mission.Steps = nil }, true, nil, ""},
+		{"operation cancelled", func(op *operations.Operation) { op.Status = operations.Cancelled }, true, operations.ErrFinished, ""},
+		{"global question", func(op *operations.Operation) {
+			op.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending}}
+		}, true, operations.ErrQuestionPending, ""},
+		{"matching step question", func(op *operations.Operation) {
+			op.Questions = []operations.Question{{ID: id.QuestionID(), StepID: "review", Status: operations.QuestionPending}}
+		}, true, operations.ErrQuestionPending, ""},
+		{"unrelated step question", func(op *operations.Operation) {
+			op.Questions = []operations.Question{{ID: id.QuestionID(), StepID: "report", Status: operations.QuestionPending}}
+		}, false, nil, operations.Waiting},
+		{"task linked question", func(op *operations.Operation) {
+			op.Questions = []operations.Question{{ID: id.QuestionID(), TaskID: id.TaskID(), StepID: "review", Status: operations.QuestionPending}}
+		}, false, nil, operations.Waiting},
+		{"preflight not ready", func(op *operations.Operation) { op.Preflight.Ready = false }, false, nil, operations.Waiting},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
+			op, task := createQueueOperation(t, first)
+			latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
+				tc.change(next)
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, "operations", op.ID+".json")
+			before := readDispatchFile(t, path)
+
+			published, err := first.QueueTask(t.Context(), op.ID, task)
+
+			if tc.blocked {
+				if err == nil || tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+					t.Fatalf("queue ignored latest assignment guard: %v", err)
+				}
+				if !bytes.Equal(before, readDispatchFile(t, path)) {
+					t.Fatal("rejected assignment changed the latest snapshot or revision")
+				}
+			} else {
+				if err != nil || published.Status != tc.status || len(published.Tasks) != 1 || len(published.Events) != len(latest.Events)+1 {
+					t.Fatalf("eligible assignment did not retain its waiting state: %+v, %v", published, err)
+				}
+				assertResultJSONEqual(t, published.Tasks[0], task)
+				assertResultJSONEqual(t, published.Preflight, latest.Preflight)
+				assertResultJSONEqual(t, published.Questions, latest.Questions)
+				latest = published
+			}
+			saved, err := second.Get(t.Context(), op.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertResultJSONEqual(t, saved, latest)
+		})
+	}
+}
+
+func TestOperationQueueWriteFailuresAreSafeToRetry(t *testing.T) {
+	for _, uncertain := range []bool{false, true} {
+		name := "before publish"
+		if uncertain {
+			name = "after publish"
+		}
+		t.Run(name, func(t *testing.T) {
+			if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+				t.Skip("requires Unix directory permissions and an unprivileged user")
+			}
+			dir := t.TempDir()
+			store := newDispatchStore(t, dir)
+			op, task := createQueueOperation(t, store)
+			operationDir := filepath.Join(dir, "operations")
+			path := filepath.Join(operationDir, op.ID+".json")
+			before := readDispatchFile(t, path)
+			restore := func() {
+				t.Helper()
+				if err := os.Chmod(operationDir, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if uncertain {
+				restore = denyDirectoryRead(t, operationDir)
+			} else {
+				t.Cleanup(restore)
+				if err := os.Chmod(operationDir, 0500); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			published, err := store.QueueTask(t.Context(), op.ID, task)
+			restore()
+
+			if err == nil && !uncertain {
+				t.Skip("directory permissions are not enforced")
+			}
+			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) != uncertain {
+				t.Fatalf("write failure lost its cause or publication state: %v", err)
+			}
+			after := readDispatchFile(t, path)
+			reopened := newDispatchStore(t, dir)
+			saved, err := reopened.Get(t.Context(), op.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if uncertain {
+				if len(published.Tasks) != 1 || published.Status != operations.Running || len(published.Events) != len(op.Events)+1 {
+					t.Fatalf("uncertain queue did not return its complete published snapshot: %+v", published)
+				}
+				assertResultJSONEqual(t, saved, published)
+			} else {
+				if !bytes.Equal(before, after) || published.ID != "" {
+					t.Fatal("failed queue exposed or persisted an uncommitted assignment")
+				}
+				assertResultJSONEqual(t, saved, op)
+			}
+			retried, err := reopened.QueueTask(t.Context(), op.ID, task)
+			if err != nil || len(retried.Tasks) != 1 || retried.Status != operations.Running || countResultEvents(retried, operations.TaskAssigned) != 1 {
+				t.Fatalf("retry lost or duplicated the assignment: %+v, %v", retried, err)
+			}
+			assertResultJSONEqual(t, retried.Tasks[0], task)
+			if uncertain && !bytes.Equal(after, readDispatchFile(t, path)) {
+				t.Fatal("retrying an uncertain queue changed its published snapshot or revision")
+			}
+		})
+	}
+}
+
+func createQueueOperation(t *testing.T, store *operationfs.OperationFsStore) (operations.Operation, operations.Task) {
+	t.Helper()
+	created := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
+	operationID := id.OperationID()
+	op := operations.Operation{
+		ID: operationID, Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
+		Mission:   missions.Mission{Steps: []missions.Step{{ID: "review"}, {ID: "report"}}},
+		Preflight: &operations.Preflight{Ready: true, Version: 2},
+		Events: []operations.Event{{Sequence: 1, OperationID: operationID,
+			Type: operations.OperationStarted, Status: operations.Planning, CreatedAt: created}},
+	}
+	if err := store.Create(t.Context(), op); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := store.Get(t.Context(), op.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return saved, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect"})
+}

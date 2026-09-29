@@ -69,6 +69,74 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 	}
 }
 
+func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
+	config := fixture()
+	failure := errors.New("directory sync failed")
+	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterQueue: func(operations.Operation) error {
+		return errors.Join(operations.ErrWriteUncertain, failure)
+	}}
+	exec, calls := controlledExecutor()
+	first, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = first.Close(ctx)
+	})
+	op := start(t, first)
+	command := commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)}
+	_, assignErr := first.Assign(t.Context(), command)
+	stored, err := first.Get(t.Context(), op.ID)
+	if err != nil || len(stored.Tasks) != 1 || stored.Tasks[0].Status != operations.TaskQueued {
+		t.Fatalf("uncertain assignment lost the queued task: %+v, %v", stored, err)
+	}
+	saved := stored.Tasks[0]
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, waitErr := first.WaitTask(ctx, op.ID, saved.ID)
+	_, eventErr := first.Events(ctx, op.ID, 0, false)
+	_, retryErr := first.Assign(ctx, command)
+	closeErr := first.Close(ctx)
+	for _, err := range []error{assignErr, waitErr, eventErr, retryErr, closeErr} {
+		if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
+			t.Fatalf("uncertain assignment was hidden: %v", err)
+		}
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("assignment dispatched before durability was confirmed: %+v", call)
+	default:
+	}
+
+	restarted := newRunner(t, config, exec)
+	call := receive(t, calls)
+	if call.agent != saved.AgentID || call.call.Work.TaskID != saved.ID || call.call.Work.OperationID != op.ID || call.call.ActionName != saved.ActionName || !reflect.DeepEqual(call.call.Input, saved.Input) {
+		t.Fatalf("recovery changed the saved assignment: %+v", call)
+	}
+	call.reply <- output("inspect")
+	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	closeRunner(t, restarted)
+	assigned, dispatched := 0, 0
+	for _, event := range settled.Events {
+		switch event.Type {
+		case operations.TaskAssigned:
+			assigned++
+		case operations.TaskDispatched:
+			dispatched++
+		}
+	}
+	if len(settled.Tasks) != 1 || settled.Tasks[0].ID != saved.ID || settled.Tasks[0].CommandID != saved.CommandID || assigned != 1 || dispatched != 1 {
+		t.Fatalf("recovery duplicated the saved assignment: %+v", settled)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("recovery dispatched the assignment twice: %+v", call)
+	default:
+	}
+}
+
 func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	config := fixture()
 	failure := errors.New("directory sync failed")
@@ -289,6 +357,7 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 type uncertainWriteStore struct {
 	operations.OperationStore
 	createError   error
+	afterQueue    func(operations.Operation) error
 	afterDispatch func(operations.Operation) error
 	afterFinish   func(operations.Operation) error
 }
@@ -298,6 +367,14 @@ func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operatio
 		return err
 	}
 	return s.createError
+}
+
+func (s *uncertainWriteStore) QueueTask(ctx context.Context, operationID string, task operations.Task) (operations.Operation, error) {
+	op, err := s.OperationStore.QueueTask(ctx, operationID, task)
+	if err == nil && s.afterQueue != nil {
+		err = s.afterQueue(op)
+	}
+	return op, err
 }
 
 func (s *uncertainWriteStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {

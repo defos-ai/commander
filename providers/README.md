@@ -85,6 +85,8 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    `OperationStore.Update` applies a callback to the latest saved operation;
    locks and storage revisions stay inside the provider. Callbacks must be safe
    to retry and must not perform external side effects.
+   `QueueTask` saves a direct assignment with its event and status update;
+   retries with the same task ID preserve saved progress without another write.
    `DispatchTask` atomically claims an eligible queued task and saves its agent,
    timing, dispatch event, and operation status together, preserving its command ID.
    `FinishTask` saves the result, continuation, automatic follow-ups, and events

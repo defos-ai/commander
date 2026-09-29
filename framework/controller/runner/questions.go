@@ -19,7 +19,7 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 	command.Options = append([]string(nil), command.Options...)
 	questionID := id.QuestionID()
 	result, err := r.change(ctx, command.OperationID, func(next *operations.Operation) error {
-		if err := validStep(*next, command.StepID); err != nil {
+		if err := next.ValidateStep(command.StepID); err != nil {
 			return err
 		}
 		now := time.Now().UTC()
