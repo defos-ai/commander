@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -287,24 +288,53 @@ func assertPNG(t *testing.T, a *api, id string) {
 }
 func assertEvents(t *testing.T, a *api, id string) {
 	t.Helper()
+	expected := a.get(id).Events
+	if len(expected) < 3 || expected[len(expected)-1].Type != operations.OperationCompleted {
+		t.Fatalf("workflow did not produce events for pagination: %+v", expected)
+	}
 	var result struct {
 		Events       []operations.Event `json:"events"`
 		NextSequence uint64             `json:"next_sequence"`
 	}
 	a.call("operation_events", object{"operation_id": id}, &result)
-	if len(result.Events) == 0 || result.Events[len(result.Events)-1].Type != operations.OperationCompleted {
-		t.Fatalf("missing completion event: %+v", result)
+	defaultCount := min(len(expected), 100)
+	if !reflect.DeepEqual(result.Events, expected[:defaultCount]) || result.NextSequence != expected[defaultCount-1].Sequence {
+		t.Fatalf("default event page: %+v", result)
 	}
-	for i, event := range result.Events {
-		if event.Sequence != uint64(i+1) {
-			t.Fatalf("event gap: %+v", event)
+	var cursor uint64
+	var events []operations.Event
+	for len(events) < len(expected) {
+		result.Events = nil
+		a.call("operation_events", object{"operation_id": id, "after_sequence": cursor, "limit": 2}, &result)
+		if len(result.Events) == 0 || len(result.Events) > 2 || result.NextSequence != result.Events[len(result.Events)-1].Sequence {
+			t.Fatalf("invalid page after %d: %+v", cursor, result)
+		}
+		for _, event := range result.Events {
+			if event.Sequence <= cursor {
+				t.Fatalf("events repeated or out of order after %d: %+v", cursor, result)
+			}
+			cursor = event.Sequence
+		}
+		events = append(events, result.Events...)
+	}
+	if !reflect.DeepEqual(events, expected) {
+		t.Fatalf("pagination lost or repeated events: got %+v, want %+v", events, expected)
+	}
+	for _, after := range []uint64{cursor, cursor + 100} {
+		result.Events = nil
+		a.call("operation_events", object{"operation_id": id, "after_sequence": after, "limit": 2, "wait_seconds": 1}, &result)
+		if len(result.Events) != 0 || result.NextSequence != after {
+			t.Fatalf("empty page must preserve cursor %d: %+v", after, result)
 		}
 	}
-	cursor := result.NextSequence
-	a.call("operation_events", object{"operation_id": id, "after_sequence": cursor, "wait_seconds": 1}, &result)
-	if len(result.Events) != 0 || result.NextSequence != cursor {
-		t.Fatalf("repeated events: %+v", result)
+	for _, limit := range []int{0, -1, 1001} {
+		invalid := openSession(t)
+		_, err := invalid.session.CallTool(invalid.ctx, &mcp.CallToolParams{Name: "operation_events", Arguments: object{"operation_id": id, "limit": limit}})
+		if err == nil || !strings.Contains(err.Error(), "limit") {
+			t.Errorf("invalid limit %d: expected argument error, got %v", limit, err)
+		}
 	}
+	a.fails("operation_events", object{"operation_id": "ffffffff-ffff-4fff-8fff-ffffffffffff", "limit": 2}, "unknown operation")
 }
 
 func TestOperationDecisionAfterActionFailure(t *testing.T) {

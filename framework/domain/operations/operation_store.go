@@ -12,5 +12,9 @@ type OperationStore interface {
 	Create(context.Context, Operation) error
 	Get(context.Context, string) (Operation, error)
 	List(context.Context) ([]Operation, error)
+	// ListEvents returns up to limit events in ascending sequence order, strictly
+	// after afterSequence. The limit must be positive. A cursor at or beyond the
+	// latest sequence returns an empty page; an unknown operation returns ErrUnknownOperation.
+	ListEvents(ctx context.Context, operationID string, afterSequence uint64, limit int) ([]Event, error)
 	Update(context.Context, string, func(*Operation) error) (Operation, error)
 }

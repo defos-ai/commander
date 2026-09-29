@@ -26,6 +26,11 @@ agent's version), `describe_agent` for full agent details, and `get_operation`
 for task results and questions. `list_missions` includes mission schemas and
 automation rules; `get_report` returns a completed operation's report.
 
+`operation_events` returns events after `after_sequence`, ordered by sequence.
+Set `limit` to 1–1,000 (default 100), then pass `next_sequence` as the next cursor.
+An empty page keeps the cursor unchanged. `wait_seconds` can wait up to 30 seconds
+for new events.
+
 Operation responses include [preflight](../../docs/abstractions.md#discovery-and-preflight):
 required-action coverage and missing agent requirements. Explain blockers before
 assigning work; queued tasks wait until discovery reports sufficient coverage.

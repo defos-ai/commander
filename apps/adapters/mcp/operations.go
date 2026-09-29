@@ -31,10 +31,17 @@ type FailOperationRequest commands.FailOperationCommand
 type OperationEventsRequest struct {
 	OperationRequest
 	AfterSequence uint64 `json:"after_sequence,omitempty"`
+	Limit         *int   `json:"limit,omitempty"`
 	WaitSeconds   int    `json:"wait_seconds,omitempty"`
 }
 
+const defaultEventLimit = 100
+const maxEventLimit = 1000
+
 func (r OperationEventsRequest) Validate() error {
+	if r.Limit != nil && (*r.Limit < 1 || *r.Limit > maxEventLimit) {
+		return fmt.Errorf("limit must be between 1 and %d", maxEventLimit)
+	}
 	if r.WaitSeconds < 0 || r.WaitSeconds > 30 {
 		return errors.New("wait_seconds must be between 0 and 30")
 	}
@@ -99,22 +106,30 @@ func addOperationTools(server *mcp.Server, config Config) {
 	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operations.Operation, error) {
 		return execution.Resolve(ctx, commands.ResolveContinuationCommand(request))
 	})
-	addTool(server, "operation_events", "Read updates after a sequence cursor. Optionally wait up to 30 seconds. Inspect referenced tasks/questions with get_operation; save next_sequence for the next call.", objectSchema(map[string]any{"operation_id": stringProperty, "after_sequence": map[string]any{"type": "integer", "minimum": 0}, "wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 30}}, "operation_id"),
+	addTool(server, "operation_events", "Read updates after a sequence cursor, up to limit (default 100, max 1000). Optionally wait up to 30 seconds. Inspect referenced tasks/questions with get_operation; use next_sequence as after_sequence to read the next page.", objectSchema(map[string]any{"operation_id": stringProperty, "after_sequence": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxEventLimit, "default": defaultEventLimit}, "wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 30}}, "operation_id"),
 		func(ctx context.Context, request OperationEventsRequest) (OperationEventsResult, error) {
+			limit := defaultEventLimit
+			if request.Limit != nil {
+				limit = *request.Limit
+			}
 			waitCtx := ctx
 			if request.WaitSeconds > 0 {
 				var cancel context.CancelFunc
 				waitCtx, cancel = context.WithTimeout(ctx, time.Duration(request.WaitSeconds)*time.Second)
 				defer cancel()
 			}
-			events, err := readEvents(waitCtx, config.OperationStore, request.OperationID, request.AfterSequence, request.WaitSeconds > 0)
+			events, err := readEvents(waitCtx, config.OperationStore, request.OperationID, request.AfterSequence, limit, request.WaitSeconds > 0)
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 				err = nil
 			}
 			if events == nil {
 				events = []operations.Event{}
 			}
-			return OperationEventsResult{Events: events, NextSequence: request.AfterSequence + uint64(len(events))}, err
+			nextSequence := request.AfterSequence
+			if len(events) > 0 {
+				nextSequence = events[len(events)-1].Sequence
+			}
+			return OperationEventsResult{Events: events, NextSequence: nextSequence}, err
 		})
 	addTool(server, "ask_question", "Ask the operator when needed, with up to 4 short options or a free-text question. timeout_seconds defaults to 120; after expiry, review the situation and decide how to continue. Silence is not approval. Supply task_id and continuation version to pause that decision; otherwise step_id blocks that step or omission blocks new assignments. Do not invent an operator answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": missionStepProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
 		func(ctx context.Context, request AskQuestionRequest) (operations.Question, error) {
@@ -164,16 +179,16 @@ func readReport(ctx context.Context, store operations.OperationStore, reportStor
 
 // Long polling reads durable snapshots, so event history and updates do not
 // depend on a controller connection or in-memory notification channel.
-func readEvents(ctx context.Context, store operations.OperationStore, operationID string, after uint64, wait bool) ([]operations.Event, error) {
+func readEvents(ctx context.Context, store operations.OperationStore, operationID string, after uint64, limit int, wait bool) ([]operations.Event, error) {
 	for {
+		events, err := store.ListEvents(ctx, operationID, after, limit)
+		if err != nil || len(events) > 0 || !wait {
+			return events, err
+		}
 		operation, err := store.Get(ctx, operationID)
 		if err != nil {
 			return nil, err
 		}
-		if after > uint64(len(operation.Events)) {
-			return nil, errors.New("event cursor exceeds the latest sequence")
-		}
-		events := operation.Events[after:]
 		finished := operation.Status.Terminal()
 		for _, task := range operation.Tasks {
 			if task.Status == operations.TaskRunning {
@@ -181,8 +196,9 @@ func readEvents(ctx context.Context, store operations.OperationStore, operationI
 				break
 			}
 		}
-		if len(events) > 0 || !wait || finished {
-			return events, nil
+		if finished {
+			// Completion may have been saved after the first event query.
+			return store.ListEvents(ctx, operationID, after, limit)
 		}
 		timer := time.NewTimer(100 * time.Millisecond)
 		select {

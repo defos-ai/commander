@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"commander/framework/domain/operations"
@@ -132,6 +133,27 @@ func (s *OperationFsStore) List(ctx context.Context) ([]operations.Operation, er
 		result = append(result, operation)
 	}
 	return result, nil
+}
+
+func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, afterSequence uint64, limit int) ([]operations.Event, error) {
+	if limit <= 0 {
+		return nil, errors.New("event limit must be positive")
+	}
+	operation, err := s.Get(ctx, operationID)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(operation.Events, func(i, j int) bool { return operation.Events[i].Sequence < operation.Events[j].Sequence })
+	events := make([]operations.Event, 0, min(limit, len(operation.Events)))
+	for _, event := range operation.Events {
+		if event.Sequence > afterSequence {
+			events = append(events, event)
+			if len(events) == limit {
+				break
+			}
+		}
+	}
+	return events, nil
 }
 
 func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {

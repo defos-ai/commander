@@ -248,6 +248,59 @@ func TestOperationFileMustMatchItsID(t *testing.T) {
 	}
 }
 
+func TestOperationEventsPagination(t *testing.T) {
+	store, err := operationfs.NewOperationFsStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	op := operations.Operation{ID: id.OperationID(), Events: []operations.Event{
+		{Sequence: 10, Type: operations.OperationCompleted},
+		{Sequence: 2, Type: operations.OperationStarted},
+		{Sequence: 7, Type: operations.TaskFinished},
+	}}
+	if err := store.Create(t.Context(), op); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		after uint64
+		limit int
+		want  []operations.Event
+	}{
+		{"first page", 0, 2, []operations.Event{op.Events[1], op.Events[2]}},
+		{"second page", 7, 2, []operations.Event{op.Events[0]}},
+		{"cursor between events", 3, 1, []operations.Event{op.Events[2]}},
+		{"at end", 10, 2, []operations.Event{}},
+		{"beyond end", 100, 2, []operations.Event{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			page, err := store.ListEvents(t.Context(), op.ID, tc.after, tc.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(page) != len(tc.want) || len(page) > 0 && !reflect.DeepEqual(page, tc.want) {
+				t.Fatalf("events after %d: got %+v, want %+v", tc.after, page, tc.want)
+			}
+			if len(page) > 0 {
+				page[0].Sequence, page[0].Type = 99, operations.OperationFailed
+			}
+		})
+	}
+	stored, err := store.Get(t.Context(), op.ID)
+	if err != nil || !reflect.DeepEqual(stored.Events, op.Events) {
+		t.Fatalf("querying or modifying a page changed stored events: %+v, %v", stored.Events, err)
+	}
+	for _, limit := range []int{0, -1} {
+		if _, err := store.ListEvents(t.Context(), op.ID, 0, limit); err == nil {
+			t.Errorf("invalid event limit %d was accepted", limit)
+		}
+	}
+	if _, err := store.ListEvents(t.Context(), id.OperationID(), 0, 2); !errors.Is(err, operations.ErrUnknownOperation) {
+		t.Fatalf("missing operation must not look like an empty event page: %v", err)
+	}
+}
+
 func TestOperationWritesReportUncertainDurability(t *testing.T) {
 	for _, name := range []string{"update", "create"} {
 		t.Run(name, func(t *testing.T) {

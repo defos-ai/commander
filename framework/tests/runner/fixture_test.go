@@ -58,6 +58,25 @@ func (s *operationStore) List(context.Context) ([]operations.Operation, error) {
 	}
 	return result, nil
 }
+func (s *operationStore) ListEvents(ctx context.Context, id string, after uint64, limit int) ([]operations.Event, error) {
+	if limit <= 0 {
+		return nil, errors.New("event limit must be positive")
+	}
+	op, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	events := []operations.Event{}
+	for _, event := range op.Events {
+		if event.Sequence > after {
+			events = append(events, event)
+			if len(events) == limit {
+				break
+			}
+		}
+	}
+	return events, nil
+}
 func (s *operationStore) Update(ctx context.Context, id string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
