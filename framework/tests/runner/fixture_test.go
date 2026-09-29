@@ -157,6 +157,25 @@ func (s *operationStore) ResolveContinuation(ctx context.Context, operationID, t
 	})
 }
 
+func (s *operationStore) AskQuestion(ctx context.Context, operationID string, question operations.Question, version uint64) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.AskQuestion(question, version)
+	})
+}
+
+func (s *operationStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.AnswerQuestion(questionID, answer)
+	})
+}
+
+func (s *operationStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		op.ExpireQuestions(now)
+		return nil
+	})
+}
+
 func (s *operationStore) Cancel(ctx context.Context, operationID string) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(op *operations.Operation) error {
 		return op.Cancel()

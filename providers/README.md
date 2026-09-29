@@ -94,6 +94,9 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    conflicting outcomes cannot replace a final result.
    `ResolveContinuation` checks the decision version and saves its follow-up tasks
    and events atomically; a stale version cannot create a second branch.
+   Question methods save their linked decision, status, and events together.
+   `AnswerQuestion` commits expiration instead of a late answer; callers inspect
+   the returned question status. `ExpireQuestions` skips writes when nothing is due.
    `Complete` rechecks completion eligibility and saves output, the report reference,
    and resolved model decisions together. The caller publishes the immutable report first.
    `Fail` records failure and cancels queued work while preserving dispatched tasks.

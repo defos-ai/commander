@@ -469,6 +469,9 @@ type uncertainWriteStore struct {
 	afterDispatch func(operations.Operation) error
 	afterFinish   func(operations.Operation) error
 	afterResolve  func(operations.Operation) error
+	afterAsk      func(operations.Operation) error
+	afterAnswer   func(operations.Operation) error
+	afterExpire   func(operations.Operation) error
 	afterCancel   func(operations.Operation) error
 	afterComplete func(operations.Operation) error
 	afterFail     func(operations.Operation) error
@@ -509,6 +512,30 @@ func (s *uncertainWriteStore) ResolveContinuation(ctx context.Context, operation
 	op, err := s.OperationStore.ResolveContinuation(ctx, operationID, taskID, version, next)
 	if err == nil && s.afterResolve != nil {
 		err = s.afterResolve(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) AskQuestion(ctx context.Context, operationID string, question operations.Question, version uint64) (operations.Operation, error) {
+	op, err := s.OperationStore.AskQuestion(ctx, operationID, question, version)
+	if err == nil && s.afterAsk != nil {
+		err = s.afterAsk(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
+	op, err := s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer)
+	if err == nil && s.afterAnswer != nil {
+		err = s.afterAnswer(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
+	op, err := s.OperationStore.ExpireQuestions(ctx, operationID, now)
+	if err == nil && s.afterExpire != nil {
+		err = s.afterExpire(op)
 	}
 	return op, err
 }

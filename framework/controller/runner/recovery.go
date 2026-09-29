@@ -35,24 +35,20 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 			}
 		}
 		s := &operationState{operation: operation.Clone(), changed: make(chan struct{})}
-		next := operation.Clone()
-		expired := expireQuestions(&next, time.Now().UTC())
 		if operation.Status.Terminal() && !slices.ContainsFunc(operation.Tasks, needsTaskRecovery) {
-			if expired {
-				if err := r.update(ctx, s, func(next *operations.Operation) error {
-					expireQuestions(next, time.Now().UTC())
-					return nil
-				}); err != nil {
+			if now := time.Now().UTC(); hasDueQuestions(operation, now) {
+				next, err := r.store.ExpireQuestions(ctx, operation.ID, now)
+				if err := s.acceptUpdate(next, err); err != nil {
 					return fmt.Errorf("persist expired questions for %s: %w", operation.ID, err)
 				}
 			}
-			if pendingQuestionDeadline(next) {
+			if pendingQuestionDeadline(s.operation) {
 				r.states[operation.ID] = s
 			}
 			continue
 		}
 		if err := r.update(ctx, s, func(next *operations.Operation) error {
-			expireQuestions(next, time.Now().UTC())
+			next.ExpireQuestions(time.Now().UTC())
 			refreshStatus(next)
 			appendEvent(next, operations.OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")
 			return nil

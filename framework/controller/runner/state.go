@@ -9,27 +9,6 @@ import (
 	"commander/framework/domain/operations"
 )
 
-func (r *Runner) change(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
-	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
-		s, err := r.state(operationID)
-		if err != nil {
-			return operations.Operation{}, err
-		}
-		if err := active(s); err != nil {
-			return operations.Operation{}, err
-		}
-		if err := r.update(ctx, s, func(next *operations.Operation) error {
-			if next.Status.Terminal() {
-				return ErrFinished
-			}
-			return mutate(next)
-		}); err != nil {
-			return operations.Operation{}, err
-		}
-		return s.operation.Clone(), nil
-	})
-}
-
 // requestContext lets shutdown interrupt request-owned store operations, even
 // when their caller used a background context. Final shutdown/result persistence
 // deliberately uses separate bounded contexts and does not call this helper.

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"commander/framework/domain/actions"
 	"commander/framework/domain/operations"
@@ -219,6 +220,27 @@ func (s *OperationFsStore) FinishTask(ctx context.Context, operationID string, r
 func (s *OperationFsStore) ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
 		return operation.ResolveContinuation(taskID, version, next)
+	})
+}
+
+func (s *OperationFsStore) AskQuestion(ctx context.Context, operationID string, question operations.Question, version uint64) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
+		return operation.AskQuestion(question, version)
+	})
+}
+
+func (s *OperationFsStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
+		return operation.AnswerQuestion(questionID, answer)
+	})
+}
+
+func (s *OperationFsStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
+	if now.IsZero() {
+		return operations.Operation{}, errors.New("question expiration requires a cutoff time")
+	}
+	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
+		return operation.ExpireQuestions(now), nil
 	})
 }
 
