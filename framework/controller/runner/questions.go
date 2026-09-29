@@ -151,6 +151,9 @@ func (r *Runner) expireOperatorQuestions() {
 		return
 	}
 	for _, s := range r.states {
+		if s.err != nil {
+			continue
+		}
 		now := time.Now().UTC()
 		due := false
 		for _, question := range s.operation.Questions {
@@ -160,7 +163,7 @@ func (r *Runner) expireOperatorQuestions() {
 			}
 		}
 		if due {
-			// A failed write leaves the previous snapshot intact for the next sweep.
+			// Retry rejected writes; uncertain writes pause the operation.
 			_ = r.update(ctx, s, func(next *operations.Operation) error {
 				expireQuestions(next, now)
 				return nil

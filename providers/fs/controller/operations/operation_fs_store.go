@@ -57,7 +57,7 @@ func (s *OperationFsStore) Create(ctx context.Context, operation operations.Oper
 		return errors.New("new operation requires a UUID")
 	}
 	snapshot := operation.Clone()
-	return s.file.Update(ctx, func(data []byte) ([]byte, error) {
+	err := s.file.Update(ctx, func(data []byte) ([]byte, error) {
 		records, err := decodeOperations(data)
 		if err != nil {
 			return nil, err
@@ -69,6 +69,7 @@ func (s *OperationFsStore) Create(ctx context.Context, operation operations.Oper
 		}
 		return encodeOperations(append(records, storedOperation{Operation: snapshot, Version: 1}))
 	})
+	return operationWriteError(operation.ID, err)
 }
 
 func (s *OperationFsStore) Get(ctx context.Context, operationID string) (operations.Operation, error) {
@@ -156,6 +157,9 @@ func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutat
 		}
 		return nil, operations.ErrUnknownOperation
 	})
+	if errors.Is(err, jsonfile.ErrWriteUncertain) {
+		return result, operationWriteError(operationID, err)
+	}
 	if err != nil {
 		return operations.Operation{}, err
 	}
@@ -186,6 +190,13 @@ func decodeOperations(data []byte) ([]storedOperation, error) {
 		seen[operation.ID] = true
 	}
 	return records, nil
+}
+
+func operationWriteError(operationID string, err error) error {
+	if errors.Is(err, jsonfile.ErrWriteUncertain) {
+		return fmt.Errorf("write operation %s: %w", operationID, errors.Join(operations.ErrWriteUncertain, err))
+	}
+	return err
 }
 
 func encodeOperations(records []storedOperation) ([]byte, error) {

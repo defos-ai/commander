@@ -17,6 +17,8 @@ import (
 
 type Collection struct{ path string }
 
+var ErrWriteUncertain = errors.New("JSON collection was replaced but directory sync failed")
+
 // New creates parent directories and initializes a missing collection to [].
 // Existing content is validated and never overwritten during construction.
 func New(path string) (*Collection, error) {
@@ -249,7 +251,10 @@ func (c *Collection) write(ctx context.Context, data []byte) error {
 	if err := os.Rename(file.Name(), c.path); err != nil {
 		return err
 	}
-	return syncDirectory(filepath.Dir(c.path))
+	if err := syncDirectory(filepath.Dir(c.path)); err != nil {
+		return errors.Join(ErrWriteUncertain, err)
+	}
+	return nil
 }
 
 type contextReader struct {

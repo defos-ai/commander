@@ -2,12 +2,17 @@ package runner_test
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"commander/framework/comms/clients/controller/commands"
+	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/executions"
 	"commander/framework/domain/operations"
+	"commander/framework/id"
 )
 
 func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
@@ -59,4 +64,144 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
+	config := fixture()
+	failure := errors.New("directory sync failed")
+	var failed atomic.Bool
+	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterUpdate: func(op operations.Operation) error {
+		if op.Events[len(op.Events)-1].Type == operations.TaskDispatched && failed.CompareAndSwap(false, true) {
+			return errors.Join(operations.ErrWriteUncertain, failure)
+		}
+		return nil
+	}}
+	exec, calls := controlledExecutor()
+	first, err := runner.NewRunner(t.Context(), durableExecutor{exec}, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = first.Close(ctx)
+	})
+	op := start(t, first)
+	task := assign(t, first, op.ID, "inspect")
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	_, waitErr := first.WaitTask(ctx, op.ID, task.ID)
+	_, eventErr := first.Events(ctx, op.ID, 0, false)
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	closeErr := first.Close(ctx)
+
+	for _, err := range []error{waitErr, eventErr, assignErr, closeErr} {
+		if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
+			t.Fatalf("uncertain write was hidden: %v", err)
+		}
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("dispatched before durability was confirmed: %+v", call)
+	default:
+	}
+	stored, err := first.Get(ctx, op.ID)
+	if err != nil || len(stored.Tasks) != 1 || stored.Tasks[0].Status != operations.TaskRunning {
+		t.Fatalf("uncertain write lost the saved reservation: %+v, %v", stored, err)
+	}
+
+	restarted, err := runner.NewRunner(t.Context(), durableExecutor{exec}, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeRunner(t, restarted) })
+	recovered := receive(t, calls)
+	if recovered.agent != agentID || recovered.call.Work.TaskID != task.ID || recovered.call.Work.OperationID != op.ID {
+		t.Fatalf("recovery changed the reserved work: %+v", recovered)
+	}
+	recovered.reply <- output("inspect")
+	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	closeRunner(t, restarted)
+
+	dispatchEvents := 0
+	for _, event := range settled.Events {
+		if event.Type == operations.TaskDispatched {
+			dispatchEvents++
+		}
+	}
+	if len(settled.Tasks) != 1 || settled.Tasks[0].CommandID != task.CommandID || dispatchEvents != 1 {
+		t.Fatalf("recovery duplicated the reservation: %+v", settled)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("recovery dispatched twice: %+v", call)
+	default:
+	}
+}
+
+func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
+	config := fixture()
+	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, createError: operations.ErrWriteUncertain}
+	exec, calls := controlledExecutor()
+	first, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = first.Close(ctx)
+	})
+	opID := id.OperationID()
+
+	op, startErr := first.Start(t.Context(), commands.StartOperationCommand{OperationID: opID, MissionName: "review", Input: []byte(`{}`)})
+	_, assignErr := first.Assign(t.Context(), commands.AssignTaskCommand{OperationID: opID, AgentID: agentID, ActionName: "inspect"})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	closeErr := first.Close(ctx)
+
+	if op.ID != opID {
+		t.Fatalf("uncertain create lost its operation ID: %+v", op)
+	}
+	for _, err := range []error{startErr, assignErr, closeErr} {
+		if !errors.Is(err, operations.ErrWriteUncertain) {
+			t.Fatalf("uncertain creation was hidden: %v", err)
+		}
+	}
+	restarted := newRunner(t, config, exec)
+	task := assign(t, restarted, opID, "inspect")
+	receive(t, calls).reply <- output("inspect")
+	settled := awaitOperation(t, restarted, opID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	all, err := restarted.List(t.Context())
+	if err != nil || len(all) != 1 || len(settled.Tasks) != 1 || settled.Tasks[0].ID != task.ID {
+		t.Fatalf("recovery duplicated work: %+v, %v", all, err)
+	}
+}
+
+type uncertainWriteStore struct {
+	operations.OperationStore
+	createError error
+	afterUpdate func(operations.Operation) error
+}
+
+func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
+	if err := s.OperationStore.Create(ctx, op); err != nil {
+		return err
+	}
+	return s.createError
+}
+
+func (s *uncertainWriteStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
+	op, err := s.OperationStore.Update(ctx, operationID, mutate)
+	if err == nil && s.afterUpdate != nil {
+		err = s.afterUpdate(op)
+	}
+	return op, err
+}
+
+type durableExecutor struct{ executor }
+
+func (e durableExecutor) DispatchAction(ctx context.Context, agentID string, call actions.ActionCall) (actions.ActionOutput, error) {
+	return e.RunAction(ctx, agentID, call)
 }

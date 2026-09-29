@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -52,13 +53,17 @@ func (r *Runner) update(ctx context.Context, s *operationState, mutate func(*ope
 		next.UpdatedAt = time.Now().UTC()
 		return nil
 	})
-	if err != nil {
+	if err != nil && !errors.Is(err, operations.ErrWriteUncertain) {
 		return err
 	}
 	s.operation = next
+	if err != nil {
+		err = fmt.Errorf("restart controller to reconcile operation %s: %w", next.ID, err)
+		s.err = errors.Join(s.err, err)
+	}
 	close(s.changed)
 	s.changed = make(chan struct{})
-	return nil
+	return err
 }
 
 func (r *Runner) state(operationID string) (*operationState, error) {

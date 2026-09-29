@@ -41,6 +41,7 @@ var errorCodes = []struct {
 	target error
 }{
 	{"indeterminate", executions.ErrIndeterminate},
+	{"operation_write_uncertain", operations.ErrWriteUncertain},
 	{"canceled", context.Canceled},
 	{"deadline_exceeded", context.DeadlineExceeded},
 	{"controller_closed", domain.ErrControllerClosed},

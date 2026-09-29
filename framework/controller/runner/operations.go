@@ -63,6 +63,11 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	appendEvent(&operation, operations.OperationStarted, "", "", "Awaiting the next action from the decision maker")
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
 		if err := r.store.Create(ctx, operation); err != nil {
+			if errors.Is(err, operations.ErrWriteUncertain) {
+				err = fmt.Errorf("restart controller to reconcile operation %s: %w", operation.ID, err)
+				r.states[operation.ID] = &operationState{operation: operation, changed: make(chan struct{}), err: err}
+				return operation.Clone(), err
+			}
 			return operations.Operation{}, err
 		}
 		r.states[operation.ID] = &operationState{operation: operation, changed: make(chan struct{})}
