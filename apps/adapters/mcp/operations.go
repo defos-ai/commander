@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	commands "commander/framework/comms/clients/controller/commands"
@@ -34,18 +35,13 @@ type AnswerQuestionRequest commands.AnswerQuestionCommand
 type CompleteOperationRequest commands.CompleteOperationCommand
 type FailOperationRequest commands.FailOperationCommand
 type OperationEventsRequest struct {
-	OperationRequest
-	AfterSequence uint64 `json:"after_sequence,omitempty"`
-	Limit         *int   `json:"limit,omitempty"`
-	WaitSeconds   int    `json:"wait_seconds,omitempty"`
+	OperationPageRequest
+	WaitSeconds int `json:"wait_seconds,omitempty"`
 }
 
-const defaultEventLimit = 100
-const maxEventLimit = 1000
-
 func (r OperationEventsRequest) Validate() error {
-	if r.Limit != nil && (*r.Limit < 1 || *r.Limit > maxEventLimit) {
-		return fmt.Errorf("limit must be between 1 and %d", maxEventLimit)
+	if err := r.OperationPageRequest.Validate(); err != nil {
+		return err
 	}
 	if r.WaitSeconds < 0 || r.WaitSeconds > 30 {
 		return errors.New("wait_seconds must be between 0 and 30")
@@ -54,8 +50,13 @@ func (r OperationEventsRequest) Validate() error {
 }
 
 type OperationEventsResult struct {
-	Events       []operations.Event `json:"events"`
-	NextSequence uint64             `json:"next_sequence"`
+	Events     []operations.Event `json:"events"`
+	NextCursor string             `json:"next_cursor"`
+}
+
+type OperationTasksResult struct {
+	Tasks      []taskSummary `json:"tasks"`
+	NextCursor string        `json:"next_cursor"`
 }
 
 func addOperationTools(server *mcp.Server, config Config) {
@@ -91,18 +92,16 @@ func addOperationTools(server *mcp.Server, config Config) {
 			operation, err := config.OperationStore.Get(ctx, request.OperationID)
 			return describeOperation(operation), err
 		})
-	addTool(server, "list_tasks", "List an operation's tasks in assignment order, with status and continuation summaries. Use get_task for input, results and proposed next actions.", operationSchema,
-		func(ctx context.Context, request OperationRequest) (struct {
-			Tasks []taskSummary `json:"tasks"`
-		}, error) {
-			tasks, err := config.OperationStore.ListTasks(ctx, request.OperationID)
+	addTool(server, "operation_tasks", "Read task summaries in assignment order, up to limit (default 100, max 1000). Pass next_cursor as cursor for the next page; an empty page keeps the cursor unchanged. Use get_task for input, results and proposed next actions.", operationPageSchema(false),
+		func(ctx context.Context, request OperationPageRequest) (OperationTasksResult, error) {
+			tasks, err := config.OperationStore.ListTasks(ctx, request.OperationID, request.Cursor, request.pageLimit())
 			summaries := make([]taskSummary, 0, len(tasks))
+			nextCursor := request.Cursor
 			for _, task := range tasks {
 				summaries = append(summaries, summarizeTask(task))
+				nextCursor = task.ID
 			}
-			return struct {
-				Tasks []taskSummary `json:"tasks"`
-			}{summaries}, err
+			return OperationTasksResult{Tasks: summaries, NextCursor: nextCursor}, err
 		})
 	addTool(server, "get_task", "Read one task's input, result, artifacts, error and full continuation. Requires both operation_id and task_id; use the continuation version when resolving its decision.", objectSchema(map[string]any{"operation_id": stringProperty, "task_id": stringProperty}, "operation_id", "task_id"),
 		func(ctx context.Context, request TaskRequest) (operations.Task, error) {
@@ -128,11 +127,15 @@ func addOperationTools(server *mcp.Server, config Config) {
 	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operations.Operation, error) {
 		return execution.Resolve(ctx, commands.ResolveContinuationCommand(request))
 	})
-	addTool(server, "operation_events", "Read updates after a sequence cursor, up to limit (default 100, max 1000). Optionally wait up to 30 seconds. Inspect tasks with get_task and questions with get_operation; use next_sequence as after_sequence to read the next page.", objectSchema(map[string]any{"operation_id": stringProperty, "after_sequence": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxEventLimit, "default": defaultEventLimit}, "wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 30}}, "operation_id"),
+	addTool(server, "operation_events", "Read events in sequence order, up to limit (default 100, max 1000). Pass next_cursor as cursor for the next page; an empty page keeps the cursor unchanged. Optionally wait up to 30 seconds. Inspect tasks with get_task and questions with get_operation.", operationPageSchema(true),
 		func(ctx context.Context, request OperationEventsRequest) (OperationEventsResult, error) {
-			limit := defaultEventLimit
-			if request.Limit != nil {
-				limit = *request.Limit
+			var after uint64
+			if request.Cursor != "" {
+				var err error
+				after, err = strconv.ParseUint(request.Cursor, 10, 64)
+				if err != nil {
+					return OperationEventsResult{}, errors.New("invalid event cursor")
+				}
 			}
 			waitCtx := ctx
 			if request.WaitSeconds > 0 {
@@ -140,18 +143,18 @@ func addOperationTools(server *mcp.Server, config Config) {
 				waitCtx, cancel = context.WithTimeout(ctx, time.Duration(request.WaitSeconds)*time.Second)
 				defer cancel()
 			}
-			events, err := readEvents(waitCtx, config.OperationStore, request.OperationID, request.AfterSequence, limit, request.WaitSeconds > 0)
+			events, err := readEvents(waitCtx, config.OperationStore, request.OperationID, after, request.pageLimit(), request.WaitSeconds > 0)
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 				err = nil
 			}
 			if events == nil {
 				events = []operations.Event{}
 			}
-			nextSequence := request.AfterSequence
+			nextCursor := request.Cursor
 			if len(events) > 0 {
-				nextSequence = events[len(events)-1].Sequence
+				nextCursor = strconv.FormatUint(events[len(events)-1].Sequence, 10)
 			}
-			return OperationEventsResult{Events: events, NextSequence: nextSequence}, err
+			return OperationEventsResult{Events: events, NextCursor: nextCursor}, err
 		})
 	addTool(server, "ask_question", "Ask the operator when needed, with up to 4 short options or a free-text question. timeout_seconds defaults to 120; after expiry, review the situation and decide how to continue. Silence is not approval. Supply task_id and continuation version to pause that decision; otherwise step_id blocks that step or omission blocks new assignments. Do not invent an operator answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": missionStepProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
 		func(ctx context.Context, request AskQuestionRequest) (operations.Question, error) {

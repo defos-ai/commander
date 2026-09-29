@@ -23,10 +23,11 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	url, entered, release := heldWebsite(t, "/first", "/second")
 	first, second := a.start(url+"/first"), b.start(url+"/second")
 	var empty struct {
-		Tasks []operations.Task `json:"tasks"`
+		Tasks      []operations.Task `json:"tasks"`
+		NextCursor *string           `json:"next_cursor"`
 	}
-	a.call("list_tasks", object{"operation_id": first.ID}, &empty)
-	if empty.Tasks == nil || len(empty.Tasks) != 0 {
+	a.call("operation_tasks", object{"operation_id": first.ID}, &empty)
+	if empty.Tasks == nil || len(empty.Tasks) != 0 || empty.NextCursor == nil || *empty.NextCursor != "" {
 		t.Fatalf("new operation must have an empty task list: %+v", empty)
 	}
 	a.task(first.ID, "check-seo", url+"/first")
@@ -54,7 +55,10 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": id.New()}, "unknown task")
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": "not-a-uuid"}, "task")
 	a.fails("get_task", object{"operation_id": id.OperationID(), "task_id": left.Tasks[0].ID}, "unknown operation")
-	a.fails("list_tasks", object{"operation_id": id.OperationID()}, "unknown operation")
+	a.fails("operation_tasks", object{"operation_id": id.OperationID()}, "unknown operation")
+	a.fails("operation_tasks", object{"operation_id": first.ID, "cursor": right.Tasks[0].ID}, "unknown task")
+	a.fails("operation_tasks", object{"operation_id": first.ID, "cursor": "invalid"}, "cursor")
+	assertInvalidPageLimits(t, "operation_tasks", first.ID)
 
 	release("/second")
 	b.wait(second.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
@@ -111,11 +115,30 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 func assertTaskQueries(t *testing.T, a *api, op operationDetail) {
 	t.Helper()
 	var list struct {
-		Tasks []json.RawMessage `json:"tasks"`
+		Tasks      []json.RawMessage `json:"tasks"`
+		NextCursor string            `json:"next_cursor"`
 	}
-	a.call("list_tasks", object{"operation_id": op.ID}, &list)
-	if len(list.Tasks) != len(op.Tasks) {
+	a.call("operation_tasks", object{"operation_id": op.ID}, &list)
+	if len(list.Tasks) != len(op.Tasks) || list.NextCursor == "" {
 		t.Fatalf("task count differs from operation: got %d, want %d", len(list.Tasks), len(op.Tasks))
+	}
+	var cursor string
+	for i := 0; i <= len(list.Tasks); i++ {
+		var page struct {
+			Tasks      []json.RawMessage `json:"tasks"`
+			NextCursor string            `json:"next_cursor"`
+		}
+		a.call("operation_tasks", object{"operation_id": op.ID, "cursor": cursor, "limit": 1}, &page)
+		if i == len(list.Tasks) {
+			if len(page.Tasks) != 0 || page.NextCursor != cursor || cursor != list.NextCursor {
+				t.Fatalf("empty task page did not preserve final cursor %q: %+v", cursor, page)
+			}
+			break
+		}
+		if len(page.Tasks) != 1 || !bytes.Equal(page.Tasks[0], list.Tasks[i]) || page.NextCursor == "" || page.NextCursor == cursor {
+			t.Fatalf("task pagination lost assignment order at index %d: %+v", i, page)
+		}
+		cursor = page.NextCursor
 	}
 	for i, raw := range list.Tasks {
 		var summary operations.Task
@@ -359,48 +382,58 @@ func assertEvents(t *testing.T, a *api, id string) {
 		t.Fatalf("workflow did not produce events for pagination: %+v", expected)
 	}
 	var result struct {
-		Events       []operations.Event `json:"events"`
-		NextSequence uint64             `json:"next_sequence"`
+		Events     []operations.Event `json:"events"`
+		NextCursor string             `json:"next_cursor"`
 	}
 	a.call("operation_events", object{"operation_id": id}, &result)
 	defaultCount := min(len(expected), 100)
-	if !reflect.DeepEqual(result.Events, expected[:defaultCount]) || result.NextSequence != expected[defaultCount-1].Sequence {
+	if !reflect.DeepEqual(result.Events, expected[:defaultCount]) || result.NextCursor == "" {
 		t.Fatalf("default event page: %+v", result)
 	}
-	var cursor uint64
+	defaultCursor := result.NextCursor
+	var cursor string
+	var lastSequence uint64
 	var events []operations.Event
 	for len(events) < len(expected) {
 		result.Events = nil
-		a.call("operation_events", object{"operation_id": id, "after_sequence": cursor, "limit": 2}, &result)
-		if len(result.Events) == 0 || len(result.Events) > 2 || result.NextSequence != result.Events[len(result.Events)-1].Sequence {
-			t.Fatalf("invalid page after %d: %+v", cursor, result)
+		a.call("operation_events", object{"operation_id": id, "cursor": cursor, "limit": 2}, &result)
+		if len(result.Events) == 0 || len(result.Events) > 2 || result.NextCursor == "" || result.NextCursor == cursor {
+			t.Fatalf("invalid page after %q: %+v", cursor, result)
 		}
 		for _, event := range result.Events {
-			if event.Sequence <= cursor {
-				t.Fatalf("events repeated or out of order after %d: %+v", cursor, result)
+			if event.Sequence <= lastSequence {
+				t.Fatalf("events repeated or out of order after %q: %+v", cursor, result)
 			}
-			cursor = event.Sequence
+			lastSequence = event.Sequence
 		}
+		cursor = result.NextCursor
 		events = append(events, result.Events...)
 	}
 	if !reflect.DeepEqual(events, expected) {
 		t.Fatalf("pagination lost or repeated events: got %+v, want %+v", events, expected)
 	}
-	for _, after := range []uint64{cursor, cursor + 100} {
-		result.Events = nil
-		a.call("operation_events", object{"operation_id": id, "after_sequence": after, "limit": 2, "wait_seconds": 1}, &result)
-		if len(result.Events) != 0 || result.NextSequence != after {
-			t.Fatalf("empty page must preserve cursor %d: %+v", after, result)
-		}
+	if len(expected) <= 100 && cursor != defaultCursor {
+		t.Fatalf("cursor depends on page size: default %q, paginated %q", defaultCursor, cursor)
 	}
+	result.Events = nil
+	a.call("operation_events", object{"operation_id": id, "cursor": cursor, "limit": 2, "wait_seconds": 1}, &result)
+	if len(result.Events) != 0 || result.NextCursor != cursor {
+		t.Fatalf("empty page must preserve cursor %q: %+v", cursor, result)
+	}
+	assertInvalidPageLimits(t, "operation_events", id)
+	a.fails("operation_events", object{"operation_id": id, "cursor": "invalid"}, "cursor")
+	a.fails("operation_events", object{"operation_id": "ffffffff-ffff-4fff-8fff-ffffffffffff", "limit": 2}, "unknown operation")
+}
+
+func assertInvalidPageLimits(t *testing.T, tool, operationID string) {
+	t.Helper()
 	for _, limit := range []int{0, -1, 1001} {
 		invalid := openSession(t)
-		_, err := invalid.session.CallTool(invalid.ctx, &mcp.CallToolParams{Name: "operation_events", Arguments: object{"operation_id": id, "limit": limit}})
+		_, err := invalid.session.CallTool(invalid.ctx, &mcp.CallToolParams{Name: tool, Arguments: object{"operation_id": operationID, "limit": limit}})
 		if err == nil || !strings.Contains(err.Error(), "limit") {
-			t.Errorf("invalid limit %d: expected argument error, got %v", limit, err)
+			t.Errorf("%s invalid limit %d: expected argument error, got %v", tool, limit, err)
 		}
 	}
-	a.fails("operation_events", object{"operation_id": "ffffffff-ffff-4fff-8fff-ffffffffffff", "limit": 2}, "unknown operation")
 }
 
 func TestOperationDecisionAfterActionFailure(t *testing.T) {

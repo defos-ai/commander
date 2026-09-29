@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -78,23 +79,34 @@ func (s *operationStore) ListEvents(ctx context.Context, id string, after uint64
 	return events, nil
 }
 func (s *operationStore) GetTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
-	tasks, err := s.ListTasks(ctx, operationID)
+	op, err := s.Get(ctx, operationID)
 	if err != nil {
 		return operations.Task{}, err
 	}
-	for _, task := range tasks {
+	for _, task := range op.Tasks {
 		if task.ID == taskID {
 			return task, nil
 		}
 	}
 	return operations.Task{}, operations.ErrUnknownTask
 }
-func (s *operationStore) ListTasks(ctx context.Context, operationID string) ([]operations.Task, error) {
+func (s *operationStore) ListTasks(ctx context.Context, operationID, afterTaskID string, limit int) ([]operations.Task, error) {
+	if limit <= 0 {
+		return nil, errors.New("task limit must be positive")
+	}
 	op, err := s.Get(ctx, operationID)
 	if err != nil {
 		return nil, err
 	}
-	return op.Tasks, nil
+	start := 0
+	if afterTaskID != "" {
+		index := slices.IndexFunc(op.Tasks, func(task operations.Task) bool { return task.ID == afterTaskID })
+		if index < 0 {
+			return nil, operations.ErrUnknownTask
+		}
+		start = index + 1
+	}
+	return op.Tasks[start : start+min(limit, len(op.Tasks)-start)], nil
 }
 func (s *operationStore) Update(ctx context.Context, id string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	s.mu.Lock()

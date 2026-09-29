@@ -327,7 +327,7 @@ func TestOperationTaskQueries(t *testing.T) {
 		}
 	}
 
-	listed, err := store.ListTasks(t.Context(), first.ID)
+	listed, err := store.ListTasks(t.Context(), first.ID, "", 100)
 	if err != nil || !reflect.DeepEqual(listed, first.Clone().Tasks) {
 		t.Fatalf("task list must preserve assignment order and complete details: %+v, %v", listed, err)
 	}
@@ -344,12 +344,44 @@ func TestOperationTaskQueries(t *testing.T) {
 		*task.FinishedAt = task.FinishedAt.Add(time.Hour)
 	}
 	for _, op := range []operations.Operation{first, other} {
-		stored, err := store.ListTasks(t.Context(), op.ID)
+		stored, err := store.ListTasks(t.Context(), op.ID, "", 100)
 		if err != nil || !reflect.DeepEqual(stored, op.Clone().Tasks) {
 			t.Fatalf("modifying query results changed stored tasks or another operation: %+v, %v", stored, err)
 		}
 	}
-	noTasks, err := store.ListTasks(t.Context(), empty.ID)
+	for _, tc := range []struct {
+		name  string
+		after string
+		want  []operations.Task
+	}{
+		{"first page", "", first.Tasks[:1]},
+		{"second page", first.Tasks[0].ID, first.Tasks[1:]},
+		{"at end", first.Tasks[1].ID, []operations.Task{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			page, err := store.ListTasks(t.Context(), first.ID, tc.after, 1)
+			if err != nil || !reflect.DeepEqual(page, tc.want) {
+				t.Fatalf("task page after %q: got %+v, want %+v; %v", tc.after, page, tc.want, err)
+			}
+		})
+	}
+	last, err := store.GetTask(t.Context(), first.ID, first.Tasks[1].ID)
+	if err != nil || !reflect.DeepEqual(last, first.Tasks[1]) {
+		t.Fatalf("get task must find a task beyond the first page: %+v, %v", last, err)
+	}
+	updated, err := store.Update(t.Context(), first.ID, func(op *operations.Operation) error {
+		op.Tasks[0].Status = operations.TaskRunning
+		op.Tasks[1].Status = operations.TaskSucceeded
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.ListTasks(t.Context(), first.ID, first.Tasks[0].ID, 1)
+	if err != nil || !reflect.DeepEqual(page, updated.Tasks[1:]) {
+		t.Fatalf("status changes reordered tasks or invalidated their cursor: %+v, %v", page, err)
+	}
+	noTasks, err := store.ListTasks(t.Context(), empty.ID, "", 100)
 	if err != nil || noTasks == nil || len(noTasks) != 0 {
 		t.Fatalf("a known operation without tasks must return an empty list: %+v, %v", noTasks, err)
 	}
@@ -357,9 +389,12 @@ func TestOperationTaskQueries(t *testing.T) {
 		if _, err := store.GetTask(t.Context(), first.ID, taskID); !errors.Is(err, operations.ErrUnknownTask) {
 			t.Fatalf("missing or foreign task %s must not be returned: %v", taskID, err)
 		}
+		if _, err := store.ListTasks(t.Context(), first.ID, taskID, 1); !errors.Is(err, operations.ErrUnknownTask) {
+			t.Fatalf("missing or foreign task cursor %s must fail: %v", taskID, err)
+		}
 	}
 	unknown := id.OperationID()
-	if _, err := store.ListTasks(t.Context(), unknown); !errors.Is(err, operations.ErrUnknownOperation) {
+	if _, err := store.ListTasks(t.Context(), unknown, "", 100); !errors.Is(err, operations.ErrUnknownOperation) {
 		t.Fatalf("unknown operation must not return an empty task list: %v", err)
 	}
 	if _, err := store.GetTask(t.Context(), unknown, first.Tasks[0].ID); !errors.Is(err, operations.ErrUnknownOperation) {
@@ -368,6 +403,16 @@ func TestOperationTaskQueries(t *testing.T) {
 	for _, taskID := range []string{"", "../task", "00000000000040008000000000000001"} {
 		if _, err := store.GetTask(t.Context(), first.ID, taskID); err == nil || errors.Is(err, operations.ErrUnknownTask) {
 			t.Errorf("malformed task ID %q must fail validation: %v", taskID, err)
+		}
+		if taskID != "" {
+			if _, err := store.ListTasks(t.Context(), first.ID, taskID, 1); err == nil || errors.Is(err, operations.ErrUnknownTask) {
+				t.Errorf("malformed task cursor %q must fail validation: %v", taskID, err)
+			}
+		}
+	}
+	for _, limit := range []int{0, -1} {
+		if _, err := store.ListTasks(t.Context(), first.ID, "", limit); err == nil {
+			t.Errorf("invalid task limit %d was accepted", limit)
 		}
 	}
 }

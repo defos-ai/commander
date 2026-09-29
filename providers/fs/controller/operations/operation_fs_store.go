@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -139,11 +140,11 @@ func (s *OperationFsStore) GetTask(ctx context.Context, operationID, taskID stri
 	if !id.Valid(taskID) {
 		return operations.Task{}, errors.New("task ID must be a canonical UUID")
 	}
-	tasks, err := s.ListTasks(ctx, operationID)
+	operation, err := s.Get(ctx, operationID)
 	if err != nil {
 		return operations.Task{}, err
 	}
-	for _, task := range tasks {
+	for _, task := range operation.Tasks {
 		if task.ID == taskID {
 			return task, nil
 		}
@@ -151,12 +152,26 @@ func (s *OperationFsStore) GetTask(ctx context.Context, operationID, taskID stri
 	return operations.Task{}, operations.ErrUnknownTask
 }
 
-func (s *OperationFsStore) ListTasks(ctx context.Context, operationID string) ([]operations.Task, error) {
+func (s *OperationFsStore) ListTasks(ctx context.Context, operationID, afterTaskID string, limit int) ([]operations.Task, error) {
+	if limit <= 0 {
+		return nil, errors.New("task limit must be positive")
+	}
+	if afterTaskID != "" && !id.Valid(afterTaskID) {
+		return nil, errors.New("task cursor must be a canonical UUID")
+	}
 	operation, err := s.Get(ctx, operationID)
 	if err != nil {
 		return nil, err
 	}
-	return operation.Tasks, nil
+	start := 0
+	if afterTaskID != "" {
+		index := slices.IndexFunc(operation.Tasks, func(task operations.Task) bool { return task.ID == afterTaskID })
+		if index < 0 {
+			return nil, operations.ErrUnknownTask
+		}
+		start = index + 1
+	}
+	return operation.Tasks[start : start+min(limit, len(operation.Tasks)-start)], nil
 }
 
 func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, afterSequence uint64, limit int) ([]operations.Event, error) {

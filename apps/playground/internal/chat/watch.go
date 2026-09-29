@@ -10,36 +10,33 @@ import (
 )
 
 func (e *Engine) watch(id string) {
-	var cursor uint64
+	var cursor string
 	var updatedAt time.Time
 	first, failed := true, false
 	for e.ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(e.ctx, 40*time.Second)
-		var err error
-		if !first {
-			args, _ := json.Marshal(map[string]any{"operation_id": id, "after_sequence": cursor, "wait_seconds": 25})
-			var result bridge.Result
-			result, err = e.commander.Call(ctx, "operation_events", args)
-			if err == nil && result.IsError {
-				err = fmt.Errorf("%s", result.Text)
+		waitSeconds := 25
+		if first {
+			waitSeconds = 0
+		}
+		args, _ := json.Marshal(map[string]any{"operation_id": id, "cursor": cursor, "wait_seconds": waitSeconds})
+		result, err := e.commander.Call(ctx, "operation_events", args)
+		if err == nil && result.IsError {
+			err = fmt.Errorf("%s", result.Text)
+		}
+		if err == nil {
+			var page struct {
+				Next string `json:"next_cursor"`
 			}
+			err = json.Unmarshal(result.Data, &page)
 			if err == nil {
-				var page struct {
-					Next uint64 `json:"next_sequence"`
-				}
-				err = json.Unmarshal(result.Data, &page)
-				if err == nil {
-					cursor = page.Next
-				}
+				cursor = page.Next
 			}
 		}
 		if err == nil {
 			var operation bridge.Operation
 			operation, err = e.commander.Operation(ctx, id)
 			if err == nil {
-				if first {
-					cursor = uint64(len(operation.Events))
-				}
 				if first || !operation.UpdatedAt.Equal(updatedAt) || failed {
 					select {
 					case e.updates <- operation:

@@ -53,7 +53,7 @@ func TestQuestionSelector(t *testing.T) {
 			var payload any = op
 			switch req.Params.Name {
 			case "operation_events":
-				payload = map[string]any{"events": []any{}, "next_sequence": 0}
+				payload = map[string]any{"events": []any{}, "next_cursor": ""}
 			case "answer_question":
 				var args struct {
 					Answer      string
@@ -184,8 +184,9 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	var snapshot atomic.Value
-	var reads, requests atomic.Int32
-	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}}
+	var reads, requests, eventPages atomic.Int32
+	const eventCursor = "opaque:event-page/token+1="
+	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}, Events: []json.RawMessage{json.RawMessage(`{"sequence":42}`)}}
 	publish := func() {
 		encoded, err := json.Marshal(op)
 		if err != nil {
@@ -199,7 +200,21 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			payload := snapshot.Load()
 			if req.Params.Name == "operation_events" {
-				payload = map[string]any{"events": []any{}, "next_sequence": 0}
+				var args struct {
+					Cursor      string `json:"cursor"`
+					WaitSeconds int    `json:"wait_seconds"`
+				}
+				if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+					return nil, err
+				}
+				wantCursor, wantWait := eventCursor, 25
+				if eventPages.Add(1) == 1 {
+					wantCursor, wantWait = "", 0
+				}
+				if args.Cursor != wantCursor || args.WaitSeconds != wantWait {
+					t.Errorf("event request = %+v, want cursor %q and wait_seconds %d", args, wantCursor, wantWait)
+				}
+				payload = map[string]any{"events": []any{}, "next_cursor": eventCursor}
 			} else {
 				reads.Add(1)
 			}

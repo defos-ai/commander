@@ -26,14 +26,15 @@ agent's version), `describe_agent` for full agent details, and `get_operation`
 for task results and questions. `list_missions` includes mission schemas and
 automation rules; `get_report` returns a completed operation's report.
 
-Use `list_tasks` with `operation_id` for task summaries in assignment order.
+`operation_tasks` returns task summaries in assignment order; `operation_events`
+returns events in sequence order. Both accept `operation_id`, an optional `cursor`,
+and `limit` (1–1,000, default 100). Omit `cursor` to start, then copy `next_cursor`
+unchanged into the next request for the same operation and tool. An empty page
+keeps the cursor unchanged. Only `operation_events` supports `wait_seconds`, up to
+30 seconds for new events.
+
 Use `get_task` with both `operation_id` and `task_id` for its full input, result,
 artifacts and continuation, without retrieving the rest of the operation.
-
-`operation_events` returns events after `after_sequence`, ordered by sequence.
-Set `limit` to 1–1,000 (default 100), then pass `next_sequence` as the next cursor.
-An empty page keeps the cursor unchanged. `wait_seconds` can wait up to 30 seconds
-for new events.
 
 Operation responses include [preflight](../../docs/abstractions.md#discovery-and-preflight):
 required-action coverage and missing agent requirements. Explain blockers before
