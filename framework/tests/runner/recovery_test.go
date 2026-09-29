@@ -315,6 +315,114 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 	}
 }
 
+func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
+	config := fixture()
+	failure := errors.New("directory sync failed")
+	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterResolve: func(operations.Operation) error {
+		return errors.Join(operations.ErrWriteUncertain, failure)
+	}}
+	exec, calls := controlledExecutor()
+	var recoveries atomic.Int32
+	exec.recover = func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error) {
+		recoveries.Add(1)
+		return actions.ActionOutput{}, errors.New("unexpected recovery of completed work")
+	}
+	first, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = first.Close(ctx)
+	})
+	op := start(t, first)
+	parent := assign(t, first, op.ID, "discover")
+	receive(t, calls).reply <- output("discover")
+	before := awaitOperation(t, first, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	continuation := before.Tasks[0].Continuation
+	if continuation == nil || continuation.Status != operations.ContinuationPending || continuation.DecisionBy != operations.DecisionModel {
+		t.Fatalf("parent is not awaiting a model decision: %+v", before.Tasks[0])
+	}
+	command := commands.ResolveContinuationCommand{OperationID: op.ID, TaskID: parent.ID, Version: continuation.Version,
+		Actions: []actions.NextAction{
+			{ActionName: "inspect", AgentID: agentID, Input: json.RawMessage(`{"page":1}`)},
+			{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)},
+		}}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, resolveErr := first.Resolve(ctx, command)
+	_, eventErr := first.Events(ctx, op.ID, 0, false)
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	_, retryErr := first.Resolve(ctx, command)
+	closeErr := first.Close(ctx)
+	for _, err := range []error{resolveErr, eventErr, assignErr, retryErr, closeErr} {
+		if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
+			t.Fatalf("uncertain resolution persistence was hidden: %v", err)
+		}
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("resolved child dispatched before durability was confirmed: %+v", call)
+	default:
+	}
+	stored, err := first.Get(ctx, op.ID)
+	if err != nil || len(stored.Tasks) != 3 {
+		t.Fatalf("uncertain resolution lost its children: %+v, %v", stored, err)
+	}
+	savedParent := stored.Tasks[0]
+	if savedParent.Continuation.Status != operations.ContinuationResolved || savedParent.Continuation.Version != continuation.Version+1 || len(savedParent.Continuation.CreatedTaskIDs) != 2 {
+		t.Fatalf("uncertain resolution lost its decision: %+v", savedParent.Continuation)
+	}
+	savedEvent := stored.Events[len(stored.Events)-1]
+	if len(stored.Events) != len(before.Events)+len(command.Actions)+1 || savedEvent.Type != operations.ContinuationResolvedEvent || savedEvent.TaskID != parent.ID {
+		t.Fatalf("uncertain resolution lost its event: %+v", stored.Events)
+	}
+	savedChildren := make(map[string]operations.Task)
+	for i, child := range stored.Tasks[1:] {
+		if child.Status != operations.TaskQueued || child.ParentTaskID != parent.ID || child.CommandID != child.ID || child.ID != savedParent.Continuation.CreatedTaskIDs[i] {
+			t.Fatalf("uncertain resolution did not preserve a queued child: %+v", child)
+		}
+		savedChildren[child.ID] = child
+	}
+
+	restarted := newRunner(t, config, exec)
+	for range 2 {
+		call := receive(t, calls)
+		child, exists := savedChildren[call.call.Work.TaskID]
+		if !exists || call.call.Work.OperationID != op.ID || call.agent != child.AgentID || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
+			t.Fatalf("recovery repeated the parent or changed a resolved child: %+v", call)
+		}
+		delete(savedChildren, child.ID)
+		call.reply <- output("inspect")
+	}
+	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
+	if _, err := restarted.Resolve(ctx, command); err == nil || errors.Is(err, operations.ErrWriteUncertain) {
+		t.Fatalf("recovery did not reject the stale decision: %v", err)
+	}
+	closeRunner(t, restarted)
+	if len(settled.Tasks) != 3 || recoveries.Load() != 0 || !reflect.DeepEqual(settled.Tasks[0], savedParent) {
+		t.Fatalf("recovery changed saved work: recoveries=%d, operation=%+v", recoveries.Load(), settled)
+	}
+	resolved := 0
+	for _, event := range settled.Events {
+		if event.Type == operations.ContinuationResolvedEvent && event.TaskID == parent.ID {
+			resolved++
+			if !reflect.DeepEqual(event, savedEvent) {
+				t.Fatalf("recovery changed the saved decision event: %+v", event)
+			}
+		}
+	}
+	if resolved != 1 {
+		t.Fatalf("model decision was recorded %d times", resolved)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("recovery dispatched resolved work twice: %+v", call)
+	default:
+	}
+}
+
 func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 	config := fixture()
 	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, createError: operations.ErrWriteUncertain}
@@ -360,6 +468,7 @@ type uncertainWriteStore struct {
 	afterQueue    func(operations.Operation) error
 	afterDispatch func(operations.Operation) error
 	afterFinish   func(operations.Operation) error
+	afterResolve  func(operations.Operation) error
 }
 
 func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -389,6 +498,14 @@ func (s *uncertainWriteStore) FinishTask(ctx context.Context, operationID string
 	op, err := s.OperationStore.FinishTask(ctx, operationID, result)
 	if err == nil && s.afterFinish != nil {
 		err = s.afterFinish(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (operations.Operation, error) {
+	op, err := s.OperationStore.ResolveContinuation(ctx, operationID, taskID, version, next)
+	if err == nil && s.afterResolve != nil {
+		err = s.afterResolve(op)
 	}
 	return op, err
 }

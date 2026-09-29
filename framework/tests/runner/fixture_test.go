@@ -151,6 +151,12 @@ func (s *operationStore) FinishTask(ctx context.Context, operationID string, res
 	})
 }
 
+func (s *operationStore) ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.ResolveContinuation(taskID, version, next)
+	})
+}
+
 type missionStore struct{ mission missions.Mission }
 
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {

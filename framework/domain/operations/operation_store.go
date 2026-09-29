@@ -1,6 +1,10 @@
 package operations
 
-import "context"
+import (
+	"context"
+
+	"commander/framework/domain/actions"
+)
 
 // Implementations retain and return independent copies. Update applies a mutation
 // atomically to the latest operation. Errors other than ErrWriteUncertain leave it unchanged.
@@ -37,5 +41,9 @@ type OperationStore interface {
 	// outcomes return the saved snapshot unchanged; conflicting final outcomes
 	// return ErrOperationConflict. Late results preserve terminal operation status.
 	FinishTask(ctx context.Context, operationID string, result TaskResult) (Operation, error)
+	// ResolveContinuation checks the current decision version and commits the
+	// resolution, follow-up tasks, events, and operation status together. A stale
+	// version cannot create another branch, including when retrying a saved decision.
+	ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (Operation, error)
 	Update(context.Context, string, func(*Operation) error) (Operation, error)
 }

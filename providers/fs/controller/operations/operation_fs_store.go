@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"commander/framework/domain/actions"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
 	"commander/providers/internal/jsonfile"
@@ -212,6 +213,12 @@ func (s *OperationFsStore) DispatchTask(ctx context.Context, operationID string,
 func (s *OperationFsStore) FinishTask(ctx context.Context, operationID string, result operations.TaskResult) (operations.Operation, error) {
 	return s.updateChanged(ctx, operationID, func(next *operations.Operation) (bool, error) {
 		return next.FinishTask(result)
+	})
+}
+
+func (s *OperationFsStore) ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
+		return operation.ResolveContinuation(taskID, version, next)
 	})
 }
 

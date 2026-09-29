@@ -27,13 +27,21 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 		return operations.Operation{}, err
 	}
 	command.Actions = actionmodel.CloneNextActions(command.Actions)
-	result, err := r.change(ctx, command.OperationID, func(op *operations.Operation) error {
-		return op.ResolveContinuation(command.TaskID, command.Version, command.Actions)
-	})
-	if err == nil {
+	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
+		s, err := r.state(command.OperationID)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		if err := active(s); err != nil {
+			return operations.Operation{}, err
+		}
+		next, err := r.store.ResolveContinuation(ctx, command.OperationID, command.TaskID, command.Version, command.Actions)
+		if err := s.acceptUpdate(next, err); err != nil {
+			return operations.Operation{}, err
+		}
 		r.signalScheduler()
-	}
-	return result, err
+		return s.operation.Clone(), nil
+	})
 }
 
 func cancelQueued(op *operations.Operation) {

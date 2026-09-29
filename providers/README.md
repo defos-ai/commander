@@ -92,6 +92,8 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    `FinishTask` saves the result, continuation, automatic follow-ups, and events
    together. Identical results return the saved state without rewriting it;
    conflicting outcomes cannot replace a final result.
+   `ResolveContinuation` checks the decision version and saves its follow-up tasks
+   and events atomically; a stale version cannot create a second branch.
 4. Add public behavior tests under `providers/tests/`, including concurrent writes,
    retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
 

@@ -3,6 +3,7 @@ package operations
 import (
 	"errors"
 	"slices"
+	"time"
 
 	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/missions"
@@ -173,5 +174,6 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 	createChildren(op, i, actions, false)
 	op.RefreshStatus()
 	op.AppendEvent(ContinuationResolvedEvent, taskID, "", "Model decision recorded")
+	op.UpdatedAt = time.Now().UTC()
 	return nil
 }
