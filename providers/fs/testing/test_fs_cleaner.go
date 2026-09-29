@@ -69,6 +69,10 @@ func (c *TestFsCleaner) Clean() error {
 			if err := lock.View(ctx, func([]byte) error { return clearDirectory(path) }); err != nil {
 				return err
 			}
+		case entry.Name() == "operations" && entry.IsDir():
+			if err := clearOperations(ctx, path); err != nil {
+				return err
+			}
 		case strings.HasSuffix(entry.Name(), ".json") && entry.Type().IsRegular():
 			collection, err := jsonfile.NewContext(ctx, path)
 			if err != nil {
@@ -81,6 +85,33 @@ func (c *TestFsCleaner) Clean() error {
 			if err := os.RemoveAll(path); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func clearOperations(ctx context.Context, directory string) error {
+	entries, err := readDirectory(directory)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".json") || !entry.Type().IsRegular() {
+			continue
+		}
+		path := filepath.Join(directory, entry.Name())
+		file, err := jsonfile.OpenContext(ctx, path)
+		if err != nil {
+			return err
+		}
+		if err := file.View(ctx, func([]byte) error {
+			err := os.Remove(path)
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}); err != nil {
+			return err
 		}
 	}
 	return nil

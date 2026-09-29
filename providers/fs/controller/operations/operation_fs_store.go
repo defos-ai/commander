@@ -7,18 +7,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
-	"sort"
+	"strings"
 
 	"commander/framework/domain/operations"
 	"commander/framework/id"
 	"commander/providers/internal/jsonfile"
 )
 
-// OperationFsStore saves complete operation snapshots in root/operations.json.
-// The collection lock covers reading, mutation, and atomic replacement.
+// OperationFsStore keeps each complete snapshot under operations/<id>.json.
+// Updates share a persistent lock only with writers of the same operation.
 type OperationFsStore struct {
-	file *jsonfile.Collection
+	root      string
+	directory string
 }
 
 type storedOperation struct {
@@ -28,134 +30,145 @@ type storedOperation struct {
 
 var _ operations.OperationStore = (*OperationFsStore)(nil)
 
-// NewOperationFsStore opens a JSON array collection, creating it if missing.
-// An empty root selects state/database relative to the working directory.
 func NewOperationFsStore(root string) (*OperationFsStore, error) {
 	if root == "" {
 		root = filepath.Join("state", "database")
 	}
-	file, err := jsonfile.New(filepath.Join(root, "operations.json"))
+	if strings.TrimSpace(root) == "" {
+		return nil, errors.New("operation database root must not be blank")
+	}
+	directory, err := filepath.Abs(filepath.Join(root, "operations"))
 	if err != nil {
 		return nil, err
 	}
-	if err := file.View(context.Background(), func(data []byte) error {
-		_, err := decodeOperations(data)
-		return err
-	}); err != nil {
+	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
-	return &OperationFsStore{file: file}, nil
+	root, err = filepath.EvalSymlinks(filepath.Dir(directory))
+	if err != nil {
+		return nil, err
+	}
+	directory, err = filepath.EvalSymlinks(directory)
+	if err != nil {
+		return nil, err
+	}
+	return &OperationFsStore{root: root, directory: directory}, nil
 }
 
-func (s *OperationFsStore) Root() string { return filepath.Dir(s.file.Path()) }
+func (s *OperationFsStore) Root() string { return s.root }
 
 func (s *OperationFsStore) Create(ctx context.Context, operation operations.Operation) error {
-	if err := ctx.Err(); err != nil {
+	path, err := s.path(ctx, operation.ID)
+	if err != nil {
 		return err
 	}
-	if !id.Valid(operation.ID) {
-		return errors.New("new operation requires a UUID")
-	}
 	snapshot := operation.Clone()
-	err := s.file.Update(ctx, func(data []byte) ([]byte, error) {
-		records, err := decodeOperations(data)
+	file, err := jsonfile.OpenContext(ctx, path)
+	if err != nil {
+		return err
+	}
+	err = file.Update(ctx, func(data []byte) ([]byte, error) {
+		_, err := decodeOperation(data, operation.ID)
+		if errors.Is(err, operations.ErrUnknownOperation) {
+			return encodeOperation(storedOperation{Operation: snapshot, Version: 1})
+		}
 		if err != nil {
 			return nil, err
 		}
-		for _, current := range records {
-			if current.ID == snapshot.ID {
-				return nil, operations.ErrOperationConflict
-			}
-		}
-		return encodeOperations(append(records, storedOperation{Operation: snapshot, Version: 1}))
+		return nil, operations.ErrOperationConflict
 	})
 	return operationWriteError(operation.ID, err)
 }
 
 func (s *OperationFsStore) Get(ctx context.Context, operationID string) (operations.Operation, error) {
-	if err := ctx.Err(); err != nil {
-		return operations.Operation{}, err
-	}
-	if !id.Valid(operationID) {
-		return operations.Operation{}, errors.New("operation ID must be a canonical UUID")
-	}
-	var result operations.Operation
-	err := s.file.View(ctx, func(data []byte) error {
-		records, err := decodeOperations(data)
-		if err != nil {
-			return err
-		}
-		for _, operation := range records {
-			if operation.ID == operationID {
-				result = operation.Clone()
-				return nil
-			}
-		}
-		return operations.ErrUnknownOperation
-	})
+	path, err := s.path(ctx, operationID)
 	if err != nil {
 		return operations.Operation{}, err
 	}
-	return result, nil
+	data, err := jsonfile.Read(ctx, path)
+	if errors.Is(err, os.ErrNotExist) {
+		return operations.Operation{}, operations.ErrUnknownOperation
+	}
+	if err != nil {
+		return operations.Operation{}, err
+	}
+	stored, err := decodeOperation(data, operationID)
+	if err != nil {
+		return operations.Operation{}, err
+	}
+	return stored.Operation.Clone(), nil
 }
 
 func (s *OperationFsStore) List(ctx context.Context) ([]operations.Operation, error) {
+	if ctx == nil {
+		return nil, errors.New("operation database requires a context")
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	result := []operations.Operation{}
-	err := s.file.View(ctx, func(data []byte) error {
-		records, err := decodeOperations(data)
-		if err != nil {
-			return err
-		}
-		for _, operation := range records {
-			result = append(result, operation.Clone())
-		}
-		return nil
-	})
+	entries, err := os.ReadDir(s.directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return result, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		operationID := strings.TrimSuffix(entry.Name(), ".json")
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !id.Valid(operationID) {
+			continue
+		}
+		operation, err := s.Get(ctx, operationID)
+		if errors.Is(err, operations.ErrUnknownOperation) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read operation %s: %w", operationID, err)
+		}
+		result = append(result, operation)
+	}
 	return result, nil
 }
 
 func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
-	if err := ctx.Err(); err != nil {
+	path, err := s.path(ctx, operationID)
+	if err != nil {
 		return operations.Operation{}, err
-	}
-	if !id.Valid(operationID) {
-		return operations.Operation{}, errors.New("operation ID must be a canonical UUID")
 	}
 	if mutate == nil {
 		return operations.Operation{}, errors.New("operation mutation is required")
 	}
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return operations.Operation{}, operations.ErrUnknownOperation
+	} else if err != nil {
+		return operations.Operation{}, err
+	}
+	file, err := jsonfile.OpenContext(ctx, path)
+	if err != nil {
+		return operations.Operation{}, err
+	}
 	var result operations.Operation
-	err := s.file.Update(ctx, func(data []byte) ([]byte, error) {
-		records, err := decodeOperations(data)
+	err = file.Update(ctx, func(data []byte) ([]byte, error) {
+		current, err := decodeOperation(data, operationID)
 		if err != nil {
 			return nil, err
 		}
-		for index, current := range records {
-			if current.ID != operationID {
-				continue
-			}
-			next := current.Clone()
-			if err := mutate(&next); err != nil {
-				return nil, err
-			}
-			if next.ID != operationID {
-				return nil, errors.New("operation identity cannot change")
-			}
-			if current.Version == ^uint64(0) {
-				return nil, errors.New("operation storage version exhausted")
-			}
-			result = next.Clone()
-			records[index] = storedOperation{Operation: result, Version: current.Version + 1}
-			return encodeOperations(records)
+		next := current.Clone()
+		if err := mutate(&next); err != nil {
+			return nil, err
 		}
-		return nil, operations.ErrUnknownOperation
+		if next.ID != operationID {
+			return nil, errors.New("operation identity cannot change")
+		}
+		if current.Version == ^uint64(0) {
+			return nil, errors.New("operation storage version exhausted")
+		}
+		result = next.Clone()
+		return encodeOperation(storedOperation{Operation: result, Version: current.Version + 1})
 	})
 	if errors.Is(err, jsonfile.ErrWriteUncertain) {
 		return result, operationWriteError(operationID, err)
@@ -166,30 +179,39 @@ func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutat
 	return result, nil
 }
 
-func decodeOperations(data []byte) ([]storedOperation, error) {
+func (s *OperationFsStore) path(ctx context.Context, operationID string) (string, error) {
+	if ctx == nil {
+		return "", errors.New("operation database requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if !id.Valid(operationID) {
+		return "", errors.New("operation ID must be a canonical UUID")
+	}
+	return filepath.Join(s.directory, operationID+".json"), nil
+}
+
+func decodeOperation(data []byte, operationID string) (storedOperation, error) {
 	var records []storedOperation
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&records); err != nil {
-		return nil, fmt.Errorf("decode operations: %w", err)
+		return storedOperation{}, fmt.Errorf("decode operation: %w", err)
 	}
 	if records == nil {
-		return nil, errors.New("operations must be a JSON array")
+		return storedOperation{}, errors.New("operation must be a JSON array")
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return nil, errors.New("operations must contain exactly one JSON array")
+		return storedOperation{}, errors.New("operation must contain exactly one JSON array")
 	}
-	seen := make(map[string]bool, len(records))
-	for _, operation := range records {
-		if !id.Valid(operation.ID) || operation.Version == 0 {
-			return nil, errors.New("stored operations require a UUID and a positive version")
-		}
-		if seen[operation.ID] {
-			return nil, errors.New("operations contain a duplicate UUID")
-		}
-		seen[operation.ID] = true
+	if len(records) == 0 {
+		return storedOperation{}, operations.ErrUnknownOperation
 	}
-	return records, nil
+	if len(records) != 1 || records[0].ID != operationID || records[0].Version == 0 {
+		return storedOperation{}, errors.New("operation file must contain one matching UUID and a positive version")
+	}
+	return records[0], nil
 }
 
 func operationWriteError(operationID string, err error) error {
@@ -199,11 +221,10 @@ func operationWriteError(operationID string, err error) error {
 	return err
 }
 
-func encodeOperations(records []storedOperation) ([]byte, error) {
-	sort.Slice(records, func(i, j int) bool { return records[i].ID < records[j].ID })
-	data, err := json.MarshalIndent(records, "", "  ")
+func encodeOperation(record storedOperation) ([]byte, error) {
+	data, err := json.MarshalIndent([]storedOperation{record}, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("encode operations: %w", err)
+		return nil, fmt.Errorf("encode operation: %w", err)
 	}
 	return append(data, '\n'), nil
 }

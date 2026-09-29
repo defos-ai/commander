@@ -27,6 +27,26 @@ func New(path string) (*Collection, error) {
 
 // NewContext is New with cancellation while initializing or waiting for a lock.
 func NewContext(ctx context.Context, path string) (*Collection, error) {
+	c, err := OpenContext(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	err = c.locked(ctx, func() error {
+		_, exists, err := c.read(ctx)
+		if err != nil || exists {
+			return err
+		}
+		return c.write(ctx, []byte("[]\n"))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// OpenContext prepares a collection without publishing an empty file. The first
+// Update can therefore commit a complete record in a single atomic replacement.
+func OpenContext(ctx context.Context, path string) (*Collection, error) {
 	if ctx == nil {
 		return nil, errors.New("JSON collection requires a context")
 	}
@@ -50,16 +70,6 @@ func NewContext(ctx context.Context, path string) (*Collection, error) {
 	}
 	c := &Collection{path: filepath.Join(directory, filepath.Base(absolute))}
 	if err := regularPath(c.path); err != nil {
-		return nil, err
-	}
-	err = c.locked(ctx, func() error {
-		_, exists, err := c.read(ctx)
-		if err != nil || exists {
-			return err
-		}
-		return c.write(ctx, []byte("[]\n"))
-	})
-	if err != nil {
 		return nil, err
 	}
 	return c, nil

@@ -23,6 +23,10 @@ messages are published. Shared filesystems must support file locks, atomic
 renames, and hard links. The [message-handling guide](../framework/comms/README.md)
 defines consumer acknowledgement policy.
 
+Operations are stored in `DATABASE_URL/operations/<operation-id>.json`, each with
+its own lock. Tasks, questions, and events remain in the operation snapshot so
+related changes commit together. Reads use atomic snapshots without taking a write lock.
+
 ## Quick start
 
 For a private project, follow the [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository)
