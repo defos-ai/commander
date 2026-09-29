@@ -70,7 +70,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	config := fixture()
 	failure := errors.New("directory sync failed")
 	var failed atomic.Bool
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterUpdate: func(op operations.Operation) error {
+	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterDispatch: func(op operations.Operation) error {
 		if op.Events[len(op.Events)-1].Type == operations.TaskDispatched && failed.CompareAndSwap(false, true) {
 			return errors.Join(operations.ErrWriteUncertain, failure)
 		}
@@ -181,8 +181,8 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 
 type uncertainWriteStore struct {
 	operations.OperationStore
-	createError error
-	afterUpdate func(operations.Operation) error
+	createError   error
+	afterDispatch func(operations.Operation) error
 }
 
 func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -192,10 +192,10 @@ func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operatio
 	return s.createError
 }
 
-func (s *uncertainWriteStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
-	op, err := s.OperationStore.Update(ctx, operationID, mutate)
-	if err == nil && s.afterUpdate != nil {
-		err = s.afterUpdate(op)
+func (s *uncertainWriteStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
+	op, err := s.OperationStore.DispatchTask(ctx, operationID, dispatch)
+	if err == nil && s.afterDispatch != nil {
+		err = s.afterDispatch(op)
 	}
 	return op, err
 }

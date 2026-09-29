@@ -85,6 +85,8 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    `OperationStore.Update` applies a callback to the latest saved operation;
    locks and storage revisions stay inside the provider. Callbacks must be safe
    to retry and must not perform external side effects.
+   `DispatchTask` atomically claims an eligible queued task and saves its agent,
+   timing, dispatch event, and operation status together, preserving its command ID.
 4. Add public behavior tests under `providers/tests/`, including concurrent writes,
    retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
 

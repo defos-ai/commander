@@ -195,6 +195,12 @@ func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, a
 	return events, nil
 }
 
+func (s *OperationFsStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(next *operations.Operation) error {
+		return next.DispatchTask(dispatch)
+	})
+}
+
 func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	path, err := s.path(ctx, operationID)
 	if err != nil {

@@ -53,6 +53,10 @@ func (r *Runner) update(ctx context.Context, s *operationState, mutate func(*ope
 		next.UpdatedAt = time.Now().UTC()
 		return nil
 	})
+	return s.acceptUpdate(next, err)
+}
+
+func (s *operationState) acceptUpdate(next operations.Operation, err error) error {
 	if err != nil && !errors.Is(err, operations.ErrWriteUncertain) {
 		return err
 	}

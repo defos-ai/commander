@@ -131,6 +131,12 @@ func (s *operationStore) Update(ctx context.Context, id string, mutate func(*ope
 	return next.Clone(), nil
 }
 
+func (s *operationStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.DispatchTask(dispatch)
+	})
+}
+
 type missionStore struct{ mission missions.Mission }
 
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {

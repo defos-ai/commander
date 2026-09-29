@@ -56,29 +56,21 @@ func (r *Runner) dispatchQueued() {
 			continue
 		}
 		for _, task := range s.operation.Tasks {
-			if task.Status != operations.TaskQueued || blockedByQuestion(s.operation, task) {
+			if task.Status != operations.TaskQueued || s.operation.BlockedByQuestion(task) {
 				continue
 			}
 			agentID := r.selectAgent(task, records, used)
 			if agentID == "" {
 				continue
 			}
-			if err := r.update(ctx, s, func(next *operations.Operation) error {
-				i := taskIndex(next, task.ID)
-				if next.Status.Terminal() || i < 0 || next.Tasks[i].Status != operations.TaskQueued || blockedByQuestion(*next, next.Tasks[i]) || next.Preflight != nil && !next.Preflight.Ready {
-					return operations.ErrOperationConflict
-				}
-				task = next.Tasks[i]
-				task.AgentID, task.Status, task.StartedAt = agentID, operations.TaskRunning, time.Now().UTC()
-				deadline := task.StartedAt.Add(r.taskTimeout)
-				task.DeadlineAt = &deadline
-				next.Tasks[i] = task
-				refreshStatus(next)
-				appendEvent(next, operations.TaskDispatched, task.ID, "", "Task dispatched")
-				return nil
-			}); err != nil {
+			startedAt := time.Now().UTC()
+			next, err := r.store.DispatchTask(ctx, s.operation.ID, operations.TaskDispatch{
+				TaskID: task.ID, AgentID: agentID, StartedAt: startedAt, DeadlineAt: startedAt.Add(r.taskTimeout),
+			})
+			if err := s.acceptUpdate(next, err); err != nil {
 				break // Retry unsaved dispatch on the next tick.
 			}
+			task = s.operation.Tasks[taskIndex(&s.operation, task.ID)]
 			used[agentID]++
 			r.lastAgent = agentID
 			call := actionmodel.ActionCall{ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
@@ -86,24 +78,6 @@ func (r *Runner) dispatchQueued() {
 			go r.runTask(task, call)
 		}
 	}
-}
-
-func blockedByQuestion(op operations.Operation, task operations.Task) bool {
-	for _, q := range op.Questions {
-		if !q.Pending() {
-			continue
-		}
-		if q.TaskID != "" {
-			if task.ParentTaskID == q.TaskID {
-				return true
-			}
-			continue
-		}
-		if q.StepID == "" || q.StepID == task.StepID {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *Runner) selectAgent(task operations.Task, records []agentmodel.Agent, used map[string]int) string {
