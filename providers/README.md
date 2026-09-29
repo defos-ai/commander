@@ -94,6 +94,9 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    conflicting outcomes cannot replace a final result.
    `ResolveContinuation` checks the decision version and saves its follow-up tasks
    and events atomically; a stale version cannot create a second branch.
+   `Complete` rechecks completion eligibility and saves output, the report reference,
+   and resolved model decisions together. The caller publishes the immutable report first.
+   `Fail` records failure and cancels queued work while preserving dispatched tasks.
    `Cancel` commits operation and queued-task cancellation with its event;
    dispatched tasks can still record results without starting new work.
 4. Add public behavior tests under `providers/tests/`, including concurrent writes,

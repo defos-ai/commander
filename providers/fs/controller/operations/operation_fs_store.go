@@ -222,6 +222,18 @@ func (s *OperationFsStore) ResolveContinuation(ctx context.Context, operationID,
 	})
 }
 
+func (s *OperationFsStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
+		return operation.Complete(reportID, output)
+	})
+}
+
+func (s *OperationFsStore) Fail(ctx context.Context, operationID, reason string) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
+		return operation.Fail(reason)
+	})
+}
+
 func (s *OperationFsStore) Cancel(ctx context.Context, operationID string) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
 		return operation.Cancel()

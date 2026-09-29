@@ -119,7 +119,7 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 		if err != nil {
 			return operations.Operation{}, err
 		}
-		if err := completeOperation(&next, output); err != nil {
+		if err := next.ValidateCompletion(output); err != nil {
 			return operations.Operation{}, err
 		}
 		report := reports.Report{ID: id.ReportID(), OperationID: next.ID, Mission: next.Mission.Name,
@@ -129,58 +129,31 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 		if err := r.reports.Put(ctx, report); err != nil {
 			return operations.Operation{}, fmt.Errorf("save operation report: %w", err)
 		}
-		if err := r.update(ctx, s, func(next *operations.Operation) error {
-			if err := completeOperation(next, output); err != nil {
-				return err
-			}
-			next.ReportID = report.ID
-			return nil
-		}); err != nil {
+		next, err = r.store.Complete(ctx, command.OperationID, report.ID, output)
+		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
 		return s.operation.Clone(), nil
 	})
 }
 
-func completeOperation(next *operations.Operation, output json.RawMessage) error {
-	if next.Status.Terminal() {
-		return ErrFinished
-	}
-	if runningTasks(*next) {
-		return errors.New("operation still has active tasks")
-	}
-	for _, question := range next.Questions {
-		if question.Pending() {
-			return ErrQuestionPending
-		}
-	}
-	if err := next.Mission.ValidateOutput(next.Input, output); err != nil {
-		return err
-	}
-	for i := range next.Tasks {
-		if c := next.Tasks[i].Continuation; c != nil && c.Status != operations.ContinuationResolved {
-			if c.DecisionBy != operations.DecisionModel {
-				return errors.New("operation still has unresolved automatic or operator work")
-			}
-			c.Status = operations.ContinuationResolved
-			c.Version++
-		}
-	}
-	next.Output, next.Status = append(json.RawMessage(nil), output...), operations.Completed
-	appendEvent(next, operations.OperationCompleted, "", "", "Operation completed")
-	return nil
-}
-
 func (r *Runner) Fail(ctx context.Context, command commands.FailOperationCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
-	reason := command.Reason
-	return r.change(ctx, command.OperationID, func(next *operations.Operation) error {
-		next.Status, next.Error = operations.Failed, reason
-		cancelQueued(next)
-		appendEvent(next, operations.OperationFailed, "", "", reason)
-		return nil
+	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
+		s, err := r.state(command.OperationID)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		if err := active(s); err != nil {
+			return operations.Operation{}, err
+		}
+		next, err := r.store.Fail(ctx, command.OperationID, command.Reason)
+		if err := s.acceptUpdate(next, err); err != nil {
+			return operations.Operation{}, err
+		}
+		return s.operation.Clone(), nil
 	})
 }
 

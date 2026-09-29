@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"time"
 
 	commands "commander/framework/comms/clients/controller/commands"
 	actionmodel "commander/framework/domain/actions"
@@ -42,14 +41,4 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 		r.signalScheduler()
 		return s.operation.Clone(), nil
 	})
-}
-
-func cancelQueued(op *operations.Operation) {
-	now := time.Now().UTC()
-	for i := range op.Tasks {
-		if op.Tasks[i].Status == operations.TaskQueued {
-			op.Tasks[i].Status = operations.TaskCancelled
-			op.Tasks[i].FinishedAt = &now
-		}
-	}
 }

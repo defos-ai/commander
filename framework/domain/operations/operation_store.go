@@ -2,6 +2,7 @@ package operations
 
 import (
 	"context"
+	"encoding/json"
 
 	"commander/framework/domain/actions"
 )
@@ -45,6 +46,13 @@ type OperationStore interface {
 	// resolution, follow-up tasks, events, and operation status together. A stale
 	// version cannot create another branch, including when retrying a saved decision.
 	ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (Operation, error)
+	// Complete rechecks eligibility and saves output, report reference, resolved
+	// model continuations, status, and event together. The caller must persist
+	// the immutable report first. Terminal operations return ErrFinished unchanged.
+	Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (Operation, error)
+	// Fail saves the reason, terminal status, queued task cancellations, and event
+	// together. Running tasks can still finish; terminal operations return ErrFinished.
+	Fail(ctx context.Context, operationID, reason string) (Operation, error)
 	// Cancel saves terminal status, queued task cancellations, and its event together.
 	// Dispatched tasks retain their state and may finish later. Terminal operations
 	// return ErrFinished without changing the saved state.

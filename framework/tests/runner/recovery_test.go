@@ -470,6 +470,8 @@ type uncertainWriteStore struct {
 	afterFinish   func(operations.Operation) error
 	afterResolve  func(operations.Operation) error
 	afterCancel   func(operations.Operation) error
+	afterComplete func(operations.Operation) error
+	afterFail     func(operations.Operation) error
 }
 
 func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -515,6 +517,22 @@ func (s *uncertainWriteStore) Cancel(ctx context.Context, operationID string) (o
 	op, err := s.OperationStore.Cancel(ctx, operationID)
 	if err == nil && s.afterCancel != nil {
 		err = s.afterCancel(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
+	op, err := s.OperationStore.Complete(ctx, operationID, reportID, output)
+	if err == nil && s.afterComplete != nil {
+		err = s.afterComplete(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) Fail(ctx context.Context, operationID, reason string) (operations.Operation, error) {
+	op, err := s.OperationStore.Fail(ctx, operationID, reason)
+	if err == nil && s.afterFail != nil {
+		err = s.afterFail(op)
 	}
 	return op, err
 }

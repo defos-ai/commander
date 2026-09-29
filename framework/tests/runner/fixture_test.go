@@ -163,6 +163,18 @@ func (s *operationStore) Cancel(ctx context.Context, operationID string) (operat
 	})
 }
 
+func (s *operationStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.Complete(reportID, output)
+	})
+}
+
+func (s *operationStore) Fail(ctx context.Context, operationID, reason string) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.Fail(reason)
+	})
+}
+
 type missionStore struct{ mission missions.Mission }
 
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {

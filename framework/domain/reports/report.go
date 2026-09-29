@@ -18,8 +18,8 @@ type Report struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
-// Validate checks the report envelope. Mission output-schema validation belongs
-// to the runner; a report may contain any valid JSON value.
+// Validate checks the report envelope. Operation completion validates the mission
+// output schema; a report may contain any valid JSON value.
 func (r Report) Validate() error {
 	if !id.Valid(r.ID) {
 		return errors.New("report ID must be a canonical UUID")
