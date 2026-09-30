@@ -1,0 +1,89 @@
+package s3_test
+
+import (
+	"context"
+	"net/url"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"commander/framework/id"
+	"commander/providers/s3/store"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+)
+
+type fixture struct {
+	storage *store.S3Store
+	client  *awss3.Client
+	bucket  string
+	prefix  string
+}
+
+func openStore(t *testing.T) fixture {
+	t.Helper()
+	raw := os.Getenv("COMMANDER_TEST_S3_URL")
+	if raw == "" {
+		t.Skip("set COMMANDER_TEST_S3_URL to run S3 provider integration tests")
+	}
+	location, err := url.Parse(raw)
+	if err != nil || location.Scheme != "s3" || location.Host == "" {
+		t.Fatalf("COMMANDER_TEST_S3_URL must identify an S3 bucket and optional prefix")
+	}
+	prefix := strings.Trim(location.Path, "/")
+	if prefix != "" {
+		prefix += "/"
+	}
+	prefix += "provider-test-" + id.New() + "/"
+	location.Path = "/" + prefix
+	storage, err := store.Open(t.Context(), location.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.LoadDefaultConfig(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Region == "" {
+		cfg.Region = "us-east-1"
+	}
+	client := awss3.NewFromConfig(cfg, func(options *awss3.Options) {
+		if endpoint := os.Getenv("AWS_ENDPOINT_URL_S3"); endpoint != "" {
+			options.BaseEndpoint = aws.String(endpoint)
+		}
+		options.UsePathStyle, _ = strconv.ParseBool(os.Getenv("S3_USE_PATH_STYLE"))
+	})
+	f := fixture{storage: storage, client: client, bucket: location.Host, prefix: prefix}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		pages := awss3.NewListObjectsV2Paginator(client, &awss3.ListObjectsV2Input{Bucket: aws.String(f.bucket), Prefix: aws.String(prefix)})
+		for pages.HasMorePages() {
+			page, err := pages.NextPage(ctx)
+			if err != nil {
+				t.Errorf("list S3 test cleanup: %v", err)
+				return
+			}
+			objects := make([]types.ObjectIdentifier, 0, len(page.Contents))
+			for _, object := range page.Contents {
+				objects = append(objects, types.ObjectIdentifier{Key: object.Key})
+			}
+			if len(objects) == 0 {
+				continue
+			}
+			result, err := client.DeleteObjects(ctx, &awss3.DeleteObjectsInput{Bucket: aws.String(f.bucket), Delete: &types.Delete{Objects: objects, Quiet: aws.Bool(true)}})
+			if err != nil {
+				t.Errorf("clean S3 test objects: %v", err)
+				return
+			}
+			if len(result.Errors) != 0 {
+				t.Errorf("clean S3 test objects: %+v", result.Errors)
+			}
+		}
+	})
+	return f
+}

@@ -1,7 +1,6 @@
 # Local setup and configuration
 
-Local setup uses Docker Compose with filesystem providers or MongoDB for the
-database. Production deployment instructions will follow when hosting support
+Local setup uses Docker Compose with filesystem providers, or MongoDB and MinIO. Production deployment instructions will follow when hosting support
 is available.
 
 ## Local Compose
@@ -31,10 +30,10 @@ missions and artifacts before the next startup.
 Try `review-website` with `https://defos.ai` or your own website.
 Agent configuration and workflow scenarios are in the [web quality guide](../apps/agents/web-quality/README.md).
 
-For MongoDB-backed state, use `docker compose -f compose.full.yaml up --build -d`.
-This starts a local replica set while keeping the bus, artifacts, and reports on
-filesystem volumes. See the [Mongo provider guide](../providers/mongo/README.md)
-for connection settings and tests.
+For MongoDB and S3 storage, use `docker compose -f compose.full.yaml up --build -d`.
+This starts a Mongo replica set and MinIO, initializes the storage bucket, and
+keeps the bus on a shared filesystem volume. See the [Mongo](../providers/mongo/README.md)
+and [S3](../providers/s3/README.md) guides for connection settings and tests.
 
 ## Configuration
 

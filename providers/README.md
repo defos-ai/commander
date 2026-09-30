@@ -12,9 +12,10 @@ them into the runtime, keeping infrastructure details out of agents and controll
 | --- | --- | --- |
 | [`fs`](fs/) | Message bus, artifacts, reports, inventory, executions, missions, operations, and action catalogs | Local paths, `~/path`, `file:///path`, `fs:///path` |
 | [`mongo`](mongo/) | Missions, actions, agent inventory, executions, operations, artifact metadata | `mongodb://`, `mongodb+srv://` |
+| [`s3`](s3/) | Artifact files and reports | `s3://bucket/optional-prefix` |
 
-Each provider is a separate Go module: `commander/providers/fs` and
-`commander/providers/mongo`. There is no shared `commander/providers` module;
+Each provider is a separate Go module: `commander/providers/fs`,
+`commander/providers/mongo`, or `commander/providers/s3`. There is no shared `commander/providers` module;
 import only the backends your host uses. Providers export concrete stores and
 brokers. Each app's `cli/factory.go` maps configured URLs to their constructors
 and gives `cli.go` framework interfaces. Each dependency has its own factory:
@@ -22,8 +23,8 @@ filesystem inputs select FS, and `mongodb://` or `mongodb+srv://` select Mongo
 where implemented. Missing stores and unsupported schemes return explicit errors
 without falling back to FS. All controller database stores support Mongo;
 operation updates require a replica set or sharded cluster for transactions.
-Bus factories reserve `amqp://` and `amqps://` for RabbitMQ; artifact-file and report
-factories reserve `s3://` for S3. These backends are not implemented yet.
+Artifact-file and report factories select S3 for `s3://` URLs. Bus factories
+reserve `amqp://` and `amqps://` for RabbitMQ, which is not implemented yet.
 
 ### Filesystem behavior
 
@@ -50,7 +51,8 @@ operation reads and mutations still assemble the complete operation.
 For a private project, follow the [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository)
 to add `commander/framework` and `commander/providers/fs`. Within this repository,
 [go.work](../go.work) already connects the provider modules. Import the filesystem
-constructor you need; Mongo has its own [quick start](mongo/README.md#quick-start):
+constructor you need; see also the [Mongo](mongo/README.md#quick-start) and
+[S3](s3/README.md#quick-start) guides:
 
 | Constructor | Host setting | Framework interface |
 | --- | --- | --- |

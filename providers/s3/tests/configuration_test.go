@@ -1,0 +1,31 @@
+package s3_test
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"commander/providers/s3/store"
+)
+
+func TestS3Configuration(t *testing.T) {
+	for _, raw := range []string{
+		"https://bucket/prefix", "s3://", "s3://bucket:9000/prefix", "s3://Bucket/prefix", "s3://bucket/%zz",
+		"s3://user:secret-marker@bucket/prefix", "s3://bucket/prefix?token=secret-marker", "s3://bucket/prefix#secret-marker",
+		"s3://bucket/../outside", "s3://bucket/prefix/%2e%2e/outside", "s3://bucket/prefix//child", "s3://bucket/prefix/%5cchild",
+	} {
+		if _, err := store.Open(t.Context(), raw); err == nil || strings.Contains(err.Error(), "secret-marker") {
+			t.Fatalf("invalid S3 configuration accepted or leaked a secret: %v", err)
+		}
+	}
+	t.Setenv("S3_USE_PATH_STYLE", "invalid-secret-marker")
+	if _, err := store.Open(t.Context(), "s3://bucket/prefix"); err == nil || strings.Contains(err.Error(), "secret-marker") {
+		t.Fatalf("invalid path-style setting accepted or leaked its value: %v", err)
+	}
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := store.Open(cancelled, "s3://bucket/prefix"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled constructor: %v", err)
+	}
+}

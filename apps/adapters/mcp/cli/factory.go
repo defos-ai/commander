@@ -34,6 +34,9 @@ import (
 	mongomissions "commander/providers/mongo/controller/missions"
 	mongooperations "commander/providers/mongo/controller/operations"
 	mongostore "commander/providers/mongo/store"
+	s3artifact "commander/providers/s3/artifact"
+	s3reports "commander/providers/s3/controller/reports"
+	s3store "commander/providers/s3/store"
 )
 
 type dependencies struct {
@@ -47,6 +50,7 @@ type dependencies struct {
 	ReportStore       reports.ReportStore
 	TestCleaner       frameworktesting.TestCleaner
 	mongo             *mongostore.MongoStore
+	s3                *s3store.S3Store
 	closers           []func() error
 }
 
@@ -75,11 +79,11 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
-	deps.ArtifactFileStore, err = createArtifactFileStore(ctx, configuration.storageURL)
+	deps.ArtifactFileStore, err = deps.createArtifactFileStore(ctx, configuration.storageURL)
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
-	deps.ReportStore, err = createReportStore(ctx, configuration.storageURL)
+	deps.ReportStore, err = deps.createReportStore(ctx, configuration.storageURL)
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
@@ -152,7 +156,7 @@ func (d *dependencies) createArtifactStore(ctx context.Context, rawURL string) (
 	}
 }
 
-func createReportStore(ctx context.Context, rawURL string) (reports.ReportStore, error) {
+func (d *dependencies) createReportStore(ctx context.Context, rawURL string) (reports.ReportStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -165,7 +169,10 @@ func createReportStore(ctx context.Context, rawURL string) (reports.ReportStore,
 		}
 		return fsreports.NewReportFsStore(path)
 	case "s3":
-		return nil, errors.New("S3 report store is not implemented")
+		if err := d.connectS3(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return s3reports.NewReportS3Store(d.s3)
 	default:
 		return nil, fmt.Errorf("unsupported report store scheme %q", scheme)
 	}
@@ -279,6 +286,21 @@ func (d *dependencies) connectMongo(ctx context.Context, rawURL string) error {
 	return nil
 }
 
+func (d *dependencies) connectS3(ctx context.Context, rawURL string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if d.s3 != nil {
+		return nil
+	}
+	storage, err := s3store.Open(ctx, rawURL)
+	if err != nil {
+		return err
+	}
+	d.s3 = storage
+	return nil
+}
+
 func connectionScheme(rawURL string) string {
 	if filepath.VolumeName(rawURL) != "" {
 		return "file"
@@ -321,7 +343,7 @@ func createTestCleaner(ctx context.Context, storageURL, databaseURL string) (fra
 	return fstesting.NewTestFsCleaner(storagePath, databasePath)
 }
 
-func createArtifactFileStore(ctx context.Context, rawURL string) (artifactstore.ArtifactFileStore, error) {
+func (d *dependencies) createArtifactFileStore(ctx context.Context, rawURL string) (artifactstore.ArtifactFileStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -333,7 +355,10 @@ func createArtifactFileStore(ctx context.Context, rawURL string) (artifactstore.
 		}
 		return fsartifact.NewArtifactFileFsStore(path)
 	case "s3":
-		return nil, errors.New("S3 artifact file store is not implemented")
+		if err := d.connectS3(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return s3artifact.NewArtifactFileS3Store(d.s3)
 	default:
 		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
 	}

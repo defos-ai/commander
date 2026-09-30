@@ -13,6 +13,8 @@ import (
 	"commander/providers/fs"
 	fsartifact "commander/providers/fs/artifact"
 	fscomms "commander/providers/fs/comms"
+	s3artifact "commander/providers/s3/artifact"
+	s3store "commander/providers/s3/store"
 )
 
 type dependencies struct {
@@ -86,7 +88,11 @@ func createArtifactFileStore(ctx context.Context, storageURL string) (artifactst
 		}
 		return fsartifact.NewArtifactFileFsStore(root)
 	case "s3":
-		return nil, errors.New("S3 artifact file store is not implemented")
+		storage, err := s3store.Open(ctx, storageURL)
+		if err != nil {
+			return nil, err
+		}
+		return s3artifact.NewArtifactFileS3Store(storage)
 	default:
 		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
 	}

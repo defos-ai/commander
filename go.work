@@ -4,6 +4,7 @@ use (
 	./framework
 	./providers/fs
 	./providers/mongo
+	./providers/s3
 	./apps/agents/web-quality
 	./apps/controllers/default
 	./apps/adapters/mcp

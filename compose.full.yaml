@@ -2,7 +2,12 @@ name: commander-full
 
 x-environment: &environment
   BUS_URL: ${BUS_URL:-file:///state/bus}
-  STORAGE_URL: ${STORAGE_URL:-file:///state/storage}
+  STORAGE_URL: ${STORAGE_URL:-s3://commander}
+  AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://minio:9000}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-commander}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
+  S3_USE_PATH_STYLE: ${S3_USE_PATH_STYLE:-true}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_FORMAT: ${LOG_FORMAT:-json}
 
@@ -18,7 +23,6 @@ x-agent: &agent
   shm_size: 256mb
   volumes:
     - bus:/state/bus
-    - storage:/state/storage
   image: commander-web-quality-agent:local
   pull_policy: never
   environment:
@@ -57,6 +61,44 @@ services:
       retries: 18
       start_period: 5s
 
+  minio:
+    image: commander-minio:local
+    build:
+      context: ./providers/s3/tests/minio
+      target: minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      # Local development credentials; hosting supplies its own credentials.
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-commander}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 18
+      start_period: 5s
+
+  minio-init:
+    image: commander-minio-client:local
+    build:
+      context: ./providers/s3/tests/minio
+      target: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-commander}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
+        mc mb --ignore-existing local/commander
+
   volume-init:
     # Reuse the controller image for local volume permissions only.
     image: commander-controller:local
@@ -68,10 +110,9 @@ services:
     cap_add: [CHOWN]
     security_opt: ["no-new-privileges:true"]
     entrypoint: ["chown"]
-    command: ["1000:1000", "/bus", "/storage"]
+    command: ["1000:1000", "/bus"]
     volumes:
       - bus:/bus
-      - storage:/storage
 
   controller:
     <<: *runtime
@@ -85,11 +126,12 @@ services:
         condition: service_completed_successfully
       mongo:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     command:
       - --with-missions=/data/default-missions.json
     volumes:
       - bus:/state/bus
-      - storage:/state/storage
     configs:
       - source: default-missions
         target: /data/default-missions.json
@@ -109,7 +151,6 @@ services:
       - --allowed-hosts=localhost,127.0.0.1,::1,mcp
     volumes:
       - bus:/state/bus
-      - storage:/state/storage
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
@@ -120,6 +161,8 @@ services:
         condition: service_started
       mongo:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
       interval: 5s
@@ -172,7 +215,7 @@ services:
 
 volumes:
   bus:
-  storage:
+  minio:
   mongo:
 
 configs:

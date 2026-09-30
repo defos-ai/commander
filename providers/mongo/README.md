@@ -43,8 +43,8 @@ docker compose -f compose.full.yaml up --wait mongo
 
 For the complete local app stack, run
 `docker compose -f compose.full.yaml up --build -d`. It uses Mongo for database
-stores and filesystem volumes for the bus, artifacts, and reports. Compose
-initializes a single-node replica set and persists data in a named volume.
+stores, MinIO for artifact files and reports, and a filesystem volume for the bus.
+Compose initializes a single-node replica set and persists data in a named volume.
 The host port defaults to `27017` (`MONGO_PORT` overrides it).
 
 The repository workspace already includes this module. In a private project's
