@@ -68,7 +68,7 @@ S3_USE_PATH_STYLE=true COMMANDER_TEST_S3_URL=s3://commander/tests \
 
 Use a dedicated test bucket or prefix. Integration tests skip without
 `COMMANDER_TEST_S3_URL` and remove their own objects afterward. CI runs them in
-[test-provider.yml](../../.github/workflows/test-provider.yml).
+[test-provider-s3.yml](../../.github/workflows/test-provider-s3.yml).
 
 Uploads use single-object PUT requests with conditional writes; multipart and
 resumable uploads are not implemented. Artifact reads verify

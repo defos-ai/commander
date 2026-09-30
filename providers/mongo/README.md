@@ -94,10 +94,12 @@ docker compose -f compose.full.yaml down --volumes
 
 Database tests skip when `COMMANDER_TEST_MONGO_URL` is unset. Use a dedicated test
 database: tests clean their collections before and after each case. CI runs the
-same suite in [test-provider.yml](../../.github/workflows/test-provider.yml).
+same suite in [test-provider-mongo.yml](../../.github/workflows/test-provider-mongo.yml).
 Optional controller and MCP startup tests use the same environment variable,
 with separate `_controller_startup` and `_mcp_startup` databases. They create
-indexes and verify startup/shutdown without deleting database contents.
+indexes and verify startup/shutdown without deleting database contents. CI runs
+these in [test-controller.yml](../../.github/workflows/test-controller.yml) and
+[test-mcp.yml](../../.github/workflows/test-mcp.yml).
 
 Keep collection names, document mapping, and domain errors in each domain store.
 The shared store exposes BSON queries and driver errors without interpreting

@@ -1,0 +1,74 @@
+name: Controller tests
+
+on:
+  push:
+    paths:
+      - 'framework/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'apps/controllers/default/**'
+      - 'providers/fs/**'
+      - 'providers/mongo/**'
+      - 'providers/s3/**'
+      - 'compose.full.yaml'
+      - '.github/workflows/test-controller.yml'
+      - '!**/*.md'
+  pull_request:
+    paths:
+      - 'framework/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'apps/controllers/default/**'
+      - 'providers/fs/**'
+      - 'providers/mongo/**'
+      - 'providers/s3/**'
+      - 'compose.full.yaml'
+      - '.github/workflows/test-controller.yml'
+      - '!**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Controller tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMMANDER_TEST_MONGO_URL: "mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+      - name: Vet controller
+        run: go vet ./apps/controllers/default/...
+      - name: Start MongoDB
+        run: docker compose -f compose.full.yaml up --wait --wait-timeout 90 mongo
+      - name: Run controller tests with race detector
+        run: go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+      - name: Collect MongoDB logs
+        if: failure() || cancelled()
+        run: docker compose -f compose.full.yaml logs --no-color mongo > "$RUNNER_TEMP/commander-controller-mongo.log"
+      - name: Stop MongoDB
+        if: always()
+        run: docker compose -f compose.full.yaml down --volumes
+      - name: Upload MongoDB logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controller-mongo-logs
+          path: ${{ runner.temp }}/commander-controller-mongo.log
+          if-no-files-found: ignore

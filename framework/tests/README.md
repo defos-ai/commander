@@ -1,14 +1,35 @@
 # Testing
 
-Three suites run in GitHub Actions:
+GitHub Actions runs separate suites for [framework](../../.github/workflows/test-framework.yml),
+[FS](../../.github/workflows/test-provider-fs.yml),
+[Mongo](../../.github/workflows/test-provider-mongo.yml),
+[S3](../../.github/workflows/test-provider-s3.yml),
+[controller](../../.github/workflows/test-controller.yml),
+[agent](../../.github/workflows/test-agent.yml),
+[MCP](../../.github/workflows/test-mcp.yml), and
+[Playground](../../.github/workflows/test-playground.yml).
 
-- [Unit tests](../../.github/workflows/test-unit.yml): framework, controller,
-  agent and Playground tests, including its `--all-in-one` behavior.
-- [Provider tests](../../.github/workflows/test-provider.yml): separate FS and
-  Mongo jobs covering storage and delivery contracts.
-- [MCP API tests](../../.github/workflows/test-mcp.yml): real Compose services,
-  queried only through MCP. Uses the same start, test and cleanup commands below,
-  with service logs saved on failure.
+Code changes trigger the changed component and its consumers:
+
+| Changed component | Suites |
+| --- | --- |
+| Framework | All |
+| FS | FS, controller, agent, MCP, Playground |
+| Mongo | Mongo, controller, MCP, Playground |
+| S3 | S3, controller, agent, MCP, Playground |
+| Controller | Controller, MCP, Playground |
+| Agent | Agent, MCP, Playground |
+| MCP | MCP, Playground |
+| Playground | Playground |
+
+Changes to `go.work`, `go.work.sum`, or any `go.mod`/`go.sum` run all suites.
+Markdown-only changes do not run tests. Test Compose, host Dockerfiles, and
+`.dockerignore` trigger MCP; full Compose triggers Mongo, S3, controller, and MCP.
+Each workflow also supports **Run workflow** for manual execution.
+
+MCP tests exercise the FS-backed Compose stack. Provider suites test their own
+storage contracts; controller and MCP suites also verify startup with Mongo.
+Playground tests include `--all-in-one` behavior.
 
 No model API key or public website is needed.
 
@@ -39,6 +60,8 @@ go test -race -count=1 ./providers/fs/...
 The separate Mongo module uses a real database. See the
 [Mongo testing guide](../../providers/mongo/README.md#development-and-testing)
 for its Compose and test commands. CI starts and cleans up Mongo automatically.
+The [S3 testing guide](../../providers/s3/README.md#development-and-testing)
+has equivalent commands for MinIO.
 
 ## MCP API tests
 

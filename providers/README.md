@@ -164,5 +164,6 @@ go test -race -count=1 ./providers/fs/...
 go vet ./providers/fs/...
 ```
 
+CI runs these in [test-provider-fs.yml](../.github/workflows/test-provider-fs.yml).
 Run affected [framework and host tests](../framework/tests/README.md) when changing
 shared behavior. Keep provider helpers inside that provider's module.
