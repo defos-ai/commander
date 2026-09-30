@@ -9,6 +9,7 @@ import (
 
 	agentmodel "commander/framework/domain/agents"
 	"commander/framework/id"
+	"commander/providers/mongo/internal/bsonvalue"
 	"commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -27,17 +28,10 @@ var _ agentmodel.AgentStore = (*AgentMongoStore)(nil)
 type agentDocument struct {
 	ID             string                   `bson:"_id"`
 	Snapshot       agentmodel.AgentSnapshot `bson:",inline"`
-	LastSeen       inventoryTime            `bson:"last_seen"`
-	LastHeartbeat  inventoryTime            `bson:"last_heartbeat"`
-	LeaseExpiresAt inventoryTime            `bson:"lease_expires_at"`
+	LastSeen       bsonvalue.Timestamp      `bson:"last_seen"`
+	LastHeartbeat  bsonvalue.Timestamp      `bson:"last_heartbeat"`
+	LeaseExpiresAt bsonvalue.Timestamp      `bson:"lease_expires_at"`
 	Stale          bool                     `bson:"stale"`
-}
-
-// BSON dates have millisecond precision. Keep the remainder for observation
-// ordering and exact heartbeat cutoffs without exposing storage fields to callers.
-type inventoryTime struct {
-	Time        time.Time `bson:"time"`
-	Nanoseconds int32     `bson:"nanoseconds"`
 }
 
 func NewAgentMongoStore(ctx context.Context, database *store.MongoStore) (*AgentMongoStore, error) {
@@ -61,8 +55,8 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 	}
 	document := agentDocument{
 		ID: record.ID, Snapshot: record.AgentSnapshot,
-		LastSeen: inventoryTimestamp(record.LastSeen), LastHeartbeat: inventoryTimestamp(record.LastHeartbeat),
-		LeaseExpiresAt: inventoryTimestamp(record.LeaseExpiresAt), Stale: record.Stale,
+		LastSeen: bsonvalue.NewTimestamp(record.LastSeen), LastHeartbeat: bsonvalue.NewTimestamp(record.LastHeartbeat),
+		LeaseExpiresAt: bsonvalue.NewTimestamp(record.LeaseExpiresAt), Stale: record.Stale,
 	}
 	_, err := s.database.Replace(ctx, collection, bson.M{"_id": record.ID}, document, true)
 	return err
@@ -102,7 +96,7 @@ func (s *AgentMongoStore) List(ctx context.Context) ([]agentmodel.Agent, error) 
 }
 
 func (s *AgentMongoStore) DeleteExpired(ctx context.Context, cutoff time.Time) ([]agentmodel.Agent, error) {
-	deadline := inventoryTimestamp(cutoff)
+	deadline := bsonvalue.NewTimestamp(cutoff)
 	filter := bson.M{"$or": bson.A{
 		bson.M{"last_heartbeat.time": bson.M{"$lt": deadline.Time}},
 		bson.M{"last_heartbeat.time": deadline.Time, "last_heartbeat.nanoseconds": bson.M{"$lte": deadline.Nanoseconds}},
@@ -138,14 +132,14 @@ func (d agentDocument) decode() (agentmodel.Agent, error) {
 	record := agentmodel.Agent{AgentSnapshot: d.Snapshot, Stale: d.Stale}
 	for _, field := range []struct {
 		name  string
-		value inventoryTime
+		value bsonvalue.Timestamp
 		out   *time.Time
 	}{
 		{"last_seen", d.LastSeen, &record.LastSeen},
 		{"last_heartbeat", d.LastHeartbeat, &record.LastHeartbeat},
 		{"lease_expires_at", d.LeaseExpiresAt, &record.LeaseExpiresAt},
 	} {
-		value, err := field.value.decode()
+		value, err := field.value.Decode()
 		if err != nil {
 			return agentmodel.Agent{}, fmt.Errorf("invalid stored agent %q %s: %w", d.ID, field.name, err)
 		}
@@ -155,17 +149,6 @@ func (d agentDocument) decode() (agentmodel.Agent, error) {
 		return agentmodel.Agent{}, fmt.Errorf("invalid stored agent %q: %w", d.ID, err)
 	}
 	return record, nil
-}
-
-func inventoryTimestamp(value time.Time) inventoryTime {
-	return inventoryTime{Time: value.UTC().Truncate(time.Millisecond), Nanoseconds: int32(value.Nanosecond() % int(time.Millisecond))}
-}
-
-func (value inventoryTime) decode() (time.Time, error) {
-	if value.Nanoseconds < 0 || value.Nanoseconds >= int32(time.Millisecond) || value.Time.Nanosecond()%int(time.Millisecond) != 0 {
-		return time.Time{}, errors.New("invalid timestamp precision")
-	}
-	return value.Time.UTC().Add(time.Duration(value.Nanoseconds)), nil
 }
 
 func validateInventoryRecord(record agentmodel.Agent) error {

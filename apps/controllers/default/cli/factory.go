@@ -28,6 +28,7 @@ import (
 	fsreports "commander/providers/fs/controller/reports"
 	mongoactions "commander/providers/mongo/controller/actions"
 	mongoagents "commander/providers/mongo/controller/agents"
+	mongoexecutions "commander/providers/mongo/controller/executions"
 	mongomissions "commander/providers/mongo/controller/missions"
 	mongostore "commander/providers/mongo/store"
 )
@@ -90,7 +91,7 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
-	deps.ExecutionStore, err = createExecutionStore(ctx, configuration.databaseURL)
+	deps.ExecutionStore, err = deps.createExecutionStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
@@ -220,7 +221,7 @@ func (d *dependencies) createActionStore(ctx context.Context, rawURL string) (ac
 	}
 }
 
-func createExecutionStore(ctx context.Context, rawURL string) (executions.ExecutionStore, error) {
+func (d *dependencies) createExecutionStore(ctx context.Context, rawURL string) (executions.ExecutionStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -233,7 +234,10 @@ func createExecutionStore(ctx context.Context, rawURL string) (executions.Execut
 		}
 		return fsexecutions.NewExecutionFsStore(path)
 	case "mongodb", "mongodb+srv":
-		return nil, errors.New("MongoDB execution store is not implemented")
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoexecutions.NewExecutionMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported execution store scheme %q", scheme)
 	}

@@ -11,7 +11,7 @@ them into the runtime, keeping infrastructure details out of agents and controll
 | Provider | Implements | Connection formats |
 | --- | --- | --- |
 | [`fs`](fs/) | Message bus, artifacts, reports, inventory, executions, missions, operations, and action catalogs | Local paths, `~/path`, `file:///path`, `fs:///path` |
-| [`mongo`](mongo/) | Mission and action catalogs, agent inventory | `mongodb://`, `mongodb+srv://` |
+| [`mongo`](mongo/) | Mission and action catalogs, agent inventory, executions | `mongodb://`, `mongodb+srv://` |
 
 Each provider is a separate Go module: `commander/providers/fs` and
 `commander/providers/mongo`. There is no shared `commander/providers` module;
@@ -20,8 +20,8 @@ brokers. Each app's `cli/factory.go` maps configured URLs to their constructors
 and gives `cli.go` framework interfaces. Each dependency has its own factory:
 filesystem inputs select FS, and `mongodb://` or `mongodb+srv://` select Mongo
 where implemented. Missing stores and unsupported schemes return explicit errors
-without falling back to FS. Missions, actions, and agent inventory support Mongo;
-controller and MCP still require FS until operation and execution stores exist.
+without falling back to FS. Missions, actions, agent inventory, and executions
+support Mongo; controller and MCP still require FS until the operation store exists.
 Bus factories reserve `amqp://` and `amqps://` for RabbitMQ; artifact and report
 factories reserve `s3://` for S3. These backends are not implemented yet.
 
