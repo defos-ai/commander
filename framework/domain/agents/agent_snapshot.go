@@ -21,9 +21,9 @@ const (
 	AgentStopped     AgentStatus = "stopped"
 )
 
-// CurrentWork identifies the action being executed without exposing its inputs.
+// Work identifies the action being executed without exposing its inputs.
 // Operation and task IDs are absent for work issued outside an operation.
-type CurrentWork struct {
+type Work struct {
 	OperationID string `json:"operation_id,omitempty"`
 	TaskID      string `json:"task_id,omitempty"`
 	StepID      string `json:"step_id,omitempty"`
@@ -31,7 +31,7 @@ type CurrentWork struct {
 	CommandID   string `json:"command_id,omitempty"`
 }
 
-func (work *CurrentWork) Clone() *CurrentWork {
+func (work *Work) Clone() *Work {
 	if work == nil {
 		return nil
 	}
@@ -45,7 +45,7 @@ type AgentSnapshot struct {
 	ID                 string               `json:"id"`
 	Type               AgentType            `json:"type"`
 	Status             AgentStatus          `json:"status"`
-	CurrentWork        *CurrentWork         `json:"current_work,omitempty"`
+	Work               *Work                `json:"work,omitempty"`
 	Server             ServerInfo           `json:"server"`
 	Responsibilities   []string             `json:"responsibilities"`
 	Actions            []actionmodel.Action `json:"actions"`

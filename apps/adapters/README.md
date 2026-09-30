@@ -48,7 +48,7 @@ required-action coverage and missing agent requirements. Explain blockers before
 assigning work; queued tasks wait until discovery reports sufficient coverage.
 Use `assign_task` with `action_name` and `input`; the controller selects a ready
 agent and records its ID on the task. `list_agents` and `describe_agent` show
-`current_work` alongside freshness. Agent administration stays in the controller.
+`work` alongside freshness. Agent administration stays in the controller.
 
 Inspect `tasks[].continuation` through `get_operation`. Use `resolve_continuation`
 with its task ID, current version, and selected actions (an empty array finishes

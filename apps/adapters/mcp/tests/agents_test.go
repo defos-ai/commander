@@ -92,7 +92,7 @@ func TestAgentsAndActions(t *testing.T) {
 	}
 	var idle agents.Agent
 	a.call("describe_agent", object{"agent_id": task.AgentID}, &idle)
-	if idle.Status != agents.AgentReady || idle.CurrentWork != nil {
+	if idle.Status != agents.AgentReady || idle.Work != nil {
 		t.Fatalf("completed action still reported as current work: %+v", idle)
 	}
 	var saved operations.Task

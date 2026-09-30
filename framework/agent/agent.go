@@ -135,7 +135,7 @@ func (a *Agent) Describe() AgentSnapshot {
 	state := a.state.Load()
 	description := AgentSnapshot{
 		ID: a.ID(), Type: a.config.Type, Status: state.status,
-		CurrentWork:        state.currentWork.Clone(),
+		Work:               state.work.Clone(),
 		Server:             a.config.Server,
 		Responsibilities:   append([]string(nil), a.config.Responsibilities...),
 		GrantedPermissions: append([]string(nil), a.config.GrantedPermissions...),
@@ -237,7 +237,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			return errors.New("agent must be ready and available before working")
 		}
 		next.status = AgentWorking
-		next.currentWork = &CurrentWork{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID,
+		next.work = &Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID,
 			StepID: call.Work.StepID, ActionName: call.ActionName, CommandID: commandID}
 		started = true
 		return nil

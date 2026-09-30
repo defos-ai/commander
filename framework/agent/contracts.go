@@ -15,7 +15,7 @@ type (
 	ActionOutput  = actionmodel.ActionOutput
 	CommandError  = executions.CommandError
 	AgentSnapshot = agentmodel.AgentSnapshot
-	CurrentWork   = agentmodel.CurrentWork
+	Work          = agentmodel.Work
 )
 
 const (

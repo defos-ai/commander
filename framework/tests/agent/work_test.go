@@ -18,7 +18,7 @@ import (
 	"commander/framework/id"
 )
 
-func TestAgentAnnouncesCurrentWorkWithoutHeartbeat(t *testing.T) {
+func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		name := "success"
 		if fail {
@@ -78,9 +78,9 @@ func TestAgentAnnouncesCurrentWorkWithoutHeartbeat(t *testing.T) {
 			if err := agent.Decode(working.Payload, &snapshot); err != nil {
 				t.Fatal(err)
 			}
-			want := agent.CurrentWork{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID, StepID: call.Work.StepID,
+			want := agent.Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID, StepID: call.Work.StepID,
 				ActionName: call.ActionName, CommandID: command.ID}
-			if snapshot.Status != agent.AgentWorking || snapshot.CurrentWork == nil || *snapshot.CurrentWork != want ||
+			if snapshot.Status != agent.AgentWorking || snapshot.Work == nil || *snapshot.Work != want ||
 				working.CorrelationID != "" || bytes.Contains(working.Payload, []byte("private-input")) {
 				t.Fatalf("working announcement lost work identity or exposed input: %+v", snapshot)
 			}
@@ -90,17 +90,17 @@ func TestAgentAnnouncesCurrentWorkWithoutHeartbeat(t *testing.T) {
 				t.Fatal("action did not start")
 			}
 			description := readAgentState(t, ctx, a, agent.AgentWorking)
-			if description.CurrentWork == nil || *description.CurrentWork != want {
+			if description.Work == nil || *description.Work != want {
 				t.Fatalf("runtime did not expose current work: %+v", description)
 			}
-			description.CurrentWork.TaskID = "changed-by-reader"
-			if *a.Describe().CurrentWork != want {
+			description.Work.TaskID = "changed-by-reader"
+			if *a.Describe().Work != want {
 				t.Fatal("reader changed the runtime's current work")
 			}
 			record := agents.Agent{AgentSnapshot: snapshot}
 			copy := record.Clone()
-			copy.CurrentWork.TaskID = "changed-by-store-reader"
-			if *record.CurrentWork != want {
+			copy.Work.TaskID = "changed-by-store-reader"
+			if *record.Work != want {
 				t.Fatal("inventory clone shared current work")
 			}
 
@@ -110,7 +110,7 @@ func TestAgentAnnouncesCurrentWorkWithoutHeartbeat(t *testing.T) {
 			if err := agent.Decode(ready.Payload, &snapshot); err != nil {
 				t.Fatal(err)
 			}
-			if snapshot.Status != agent.AgentReady || snapshot.CurrentWork != nil || ready.CorrelationID != "" {
+			if snapshot.Status != agent.AgentReady || snapshot.Work != nil || ready.CorrelationID != "" {
 				t.Fatalf("finished work remained in announcement: %+v", snapshot)
 			}
 			resultKind := controllerevents.ActionSucceeded
@@ -121,7 +121,7 @@ func TestAgentAnnouncesCurrentWorkWithoutHeartbeat(t *testing.T) {
 			if result.CorrelationID != command.ID || result.Work != call.Work {
 				t.Fatalf("work announcements changed command result identity: %+v", result)
 			}
-			if a.Describe().CurrentWork != nil {
+			if a.Describe().Work != nil {
 				t.Fatal("finished work remained in runtime snapshot")
 			}
 			stop()

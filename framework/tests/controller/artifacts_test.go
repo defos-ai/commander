@@ -167,7 +167,7 @@ func TestRejectedResultsDoNotCreateArtifacts(t *testing.T) {
 	})
 }
 
-func TestCompletionClearsOnlyMatchingCurrentWork(t *testing.T) {
+func TestCompletionClearsOnlyMatchingWork(t *testing.T) {
 	for _, newerWork := range []bool{false, true} {
 		name := "completed work"
 		if newerWork {
@@ -175,13 +175,13 @@ func TestCompletionClearsOnlyMatchingCurrentWork(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			command, result, _ := artifactResult(t)
-			current := &agents.CurrentWork{OperationID: command.Work.OperationID, TaskID: command.Work.TaskID, ActionName: "capture", CommandID: command.ID}
+			current := &agents.Work{OperationID: command.Work.OperationID, TaskID: command.Work.TaskID, ActionName: "capture", CommandID: command.ID}
 			if newerWork {
 				current.CommandID, current.TaskID = id.New(), id.New()
 			}
 			store := &inventory{}
 			if err := store.Upsert(t.Context(), agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID,
-				Status: agents.AgentWorking, CurrentWork: current}, LastSeen: command.CreatedAt}); err != nil {
+				Status: agents.AgentWorking, Work: current}, LastSeen: command.CreatedAt}); err != nil {
 				t.Fatal(err)
 			}
 			consumer := consumers.CommandResultConsumer{
@@ -196,10 +196,10 @@ func TestCompletionClearsOnlyMatchingCurrentWork(t *testing.T) {
 				t.Fatal(err)
 			}
 			if newerWork {
-				if record.Status != agents.AgentWorking || record.CurrentWork == nil || *record.CurrentWork != *current {
+				if record.Status != agents.AgentWorking || record.Work == nil || *record.Work != *current {
 					t.Fatalf("completion overwrote newer work: %+v", record)
 				}
-			} else if record.Status != agents.AgentReady || record.CurrentWork != nil {
+			} else if record.Status != agents.AgentReady || record.Work != nil {
 				t.Fatalf("completion left finished work in inventory: %+v", record)
 			}
 		})

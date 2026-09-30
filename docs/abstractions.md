@@ -53,7 +53,7 @@ Agent **type** identifies its implementation, such as `web-quality`; agent
 Controllers and adapters likewise have types and instance IDs.
 
 In `domain/agents`, `AgentSnapshot` is the state reported by the agent.
-`current_work` identifies the reported action, operation, task, and command; it is
+`work` identifies the reported action, operation, task, and command; it is
 cleared when execution ends. `Agent` adds heartbeat freshness and lease expiration;
 `AgentStore` persists it. Work reported by a stale agent is its last known state.
 

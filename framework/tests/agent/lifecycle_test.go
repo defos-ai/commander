@@ -108,9 +108,9 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 	}
 
 	snapshot := readAgentState(t, ctx, a, agent.AgentWorking)
-	if snapshot.CurrentWork == nil || snapshot.CurrentWork.OperationID != call.Work.OperationID || snapshot.CurrentWork.TaskID != call.Work.TaskID ||
-		snapshot.CurrentWork.StepID != call.Work.StepID || snapshot.CurrentWork.ActionName != call.ActionName || snapshot.CurrentWork.CommandID != "" {
-		t.Fatalf("current work did not identify the direct action: %+v", snapshot.CurrentWork)
+	if snapshot.Work == nil || snapshot.Work.OperationID != call.Work.OperationID || snapshot.Work.TaskID != call.Work.TaskID ||
+		snapshot.Work.StepID != call.Work.StepID || snapshot.Work.ActionName != call.ActionName || snapshot.Work.CommandID != "" {
+		t.Fatalf("current work did not identify the direct action: %+v", snapshot.Work)
 	}
 	if _, err := a.Work(ctx, call); err == nil {
 		t.Fatal("agent accepted concurrent work")
@@ -130,8 +130,8 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("cancelled action did not return")
 	}
-	if snapshot := readAgentState(t, ctx, a, agent.AgentReady); snapshot.CurrentWork != nil {
-		t.Fatalf("cancelled work remained in snapshot: %+v", snapshot.CurrentWork)
+	if snapshot := readAgentState(t, ctx, a, agent.AgentReady); snapshot.Work != nil {
+		t.Fatalf("cancelled work remained in snapshot: %+v", snapshot.Work)
 	}
 }
 

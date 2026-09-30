@@ -29,7 +29,7 @@ type agentSummary struct {
 	ID                 string               `json:"id"`
 	Type               agents.AgentType     `json:"type"`
 	Status             agents.AgentStatus   `json:"status"`
-	CurrentWork        *agents.CurrentWork  `json:"current_work,omitempty"`
+	Work               *agents.Work         `json:"work,omitempty"`
 	Server             agents.ServerInfo    `json:"server"`
 	Responsibilities   []string             `json:"responsibilities,omitempty"`
 	Actions            []agentActionSummary `json:"actions"`
@@ -50,7 +50,7 @@ func summarizeAgent(agent agents.Agent) agentSummary {
 		})
 	}
 	return agentSummary{
-		ID: agent.ID, Type: agent.Type, Status: agent.Status, CurrentWork: agent.CurrentWork, Server: agent.Server,
+		ID: agent.ID, Type: agent.Type, Status: agent.Status, Work: agent.Work, Server: agent.Server,
 		Responsibilities: agent.Responsibilities, Actions: items, GrantedPermissions: agent.GrantedPermissions,
 		LastSeen: agent.LastSeen, LastHeartbeat: agent.LastHeartbeat, LeaseExpiresAt: agent.LeaseExpiresAt, Stale: agent.Stale,
 	}

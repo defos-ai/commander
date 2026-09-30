@@ -45,7 +45,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	if left.Tasks[0].Status != operations.TaskRunning || right.Tasks[0].Status != operations.TaskRunning || left.Tasks[0].AgentID == right.Tasks[0].AgentID {
 		t.Fatalf("capacity was not respected: first=%+v second=%+v", left.Tasks, right.Tasks)
 	}
-	assertCurrentWork(t, a, left.Tasks[0], right.Tasks[0])
+	assertWork(t, a, left.Tasks[0], right.Tasks[0])
 	queued := a.task(first.ID, "check-seo", url+"/extra")
 	if queued.Status != operations.TaskQueued {
 		t.Fatalf("third task exceeded the two agents' capacity: %+v", queued)
@@ -124,7 +124,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	}
 }
 
-func assertCurrentWork(t *testing.T, a *api, tasks ...operations.Task) {
+func assertWork(t *testing.T, a *api, tasks ...operations.Task) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -138,14 +138,14 @@ func assertCurrentWork(t *testing.T, a *api, tasks ...operations.Task) {
 				if agent.ID != task.AgentID {
 					continue
 				}
-				work := agent.CurrentWork
+				work := agent.Work
 				if agent.Stale || agent.Status != agents.AgentWorking || work == nil || work.OperationID != task.OperationID || work.TaskID != task.ID || work.CommandID != task.CommandID || work.ActionName != task.ActionName {
 					continue
 				}
 				var detail agents.Agent
 				a.call("describe_agent", object{"agent_id": agent.ID}, &detail)
-				if !reflect.DeepEqual(detail.CurrentWork, work) {
-					t.Fatalf("agent queries disagree about current work: list=%+v detail=%+v", work, detail.CurrentWork)
+				if !reflect.DeepEqual(detail.Work, work) {
+					t.Fatalf("agent queries disagree about current work: list=%+v detail=%+v", work, detail.Work)
 				}
 				matched++
 			}

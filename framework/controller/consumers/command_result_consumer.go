@@ -117,7 +117,7 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 	// A delayed result must not undo a newer heartbeat or a new action command.
 	// Replays of already completed results never reach this method.
 	if record.Status == agentmodel.AgentStopped || record.LastSeen.After(message.CreatedAt) ||
-		record.CurrentWork != nil && record.CurrentWork.CommandID != message.CorrelationID {
+		record.Work != nil && record.Work.CommandID != message.CorrelationID {
 		return nil
 	}
 	otherCommand := false
@@ -130,7 +130,7 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 	if otherCommand {
 		return nil
 	}
-	record.Status, record.CurrentWork, record.LastSeen = agentmodel.AgentReady, nil, receivedAt
+	record.Status, record.Work, record.LastSeen = agentmodel.AgentReady, nil, receivedAt
 	if err := c.Inventory.Upsert(ctx, record); err != nil {
 		return fmt.Errorf("persist agent completion: %w", err)
 	}

@@ -7,10 +7,10 @@ import (
 )
 
 type agentState struct {
-	status      AgentStatus
-	serving     bool
-	scope       *environment.DiscoveryScope
-	currentWork *CurrentWork
+	status  AgentStatus
+	serving bool
+	scope   *environment.DiscoveryScope
+	work    *Work
 }
 
 // stateChange serializes in-memory status changes and their bus announcements.
@@ -42,7 +42,7 @@ func (a *Agent) stateChange(ctx context.Context, change func(*agentState) error,
 
 func (a *Agent) finishState(ctx context.Context, status AgentStatus, announce func(context.Context, AgentSnapshot) error) error {
 	return a.stateChange(context.WithoutCancel(ctx), func(next *agentState) error {
-		next.status, next.currentWork = status, nil
+		next.status, next.work = status, nil
 		return nil
 	}, announce)
 }

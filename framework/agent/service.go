@@ -75,7 +75,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	}
 	announceStopped := func(ctx context.Context, commandID string) error {
 		return a.stateChange(ctx, func(next *agentState) error {
-			next.status, next.currentWork = AgentStopped, nil
+			next.status, next.work = AgentStopped, nil
 			return nil
 		}, func(ctx context.Context, snapshot AgentSnapshot) error {
 			return events.State(ctx, controllerevents.AgentStopped, snapshot, commandID)
