@@ -50,6 +50,8 @@ jobs:
         run: docker compose -f compose.full.yaml up --wait --wait-timeout 90 mongo
       - name: Run Mongo provider tests
         run: go test -race -count=1 -timeout=3m -v ./providers/mongo/...
+      - name: Verify MongoDB host startup
+        run: go test -race -count=1 -timeout=1m ./apps/controllers/default/tests ./apps/adapters/mcp/tests -run '^TestCLIStartsWithMongo$'
       - name: Collect MongoDB logs
         if: failure() || cancelled()
         run: docker compose -f compose.full.yaml logs --no-color > "$RUNNER_TEMP/commander-mongo.log"

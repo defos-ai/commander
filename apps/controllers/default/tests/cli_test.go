@@ -3,7 +3,9 @@ package default_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -11,17 +13,18 @@ import (
 	"time"
 
 	"commander/apps/controllers/default/cli"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {
 	const secret = "provider-test-secret"
 	for _, test := range []struct {
-		name, flag, url string
-		dependency      string
-		filesystemForm  string
+		name, flag, url   string
+		dependency        string
+		filesystemForm    string
+		connectionFailure bool
 	}{
-		{name: "Mongo operation store unavailable", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander", dependency: "operation"},
-		{name: "Mongo SRV operation store unavailable", flag: "database-url", url: "mongodb+srv://user:" + secret + "@provider.invalid/commander", dependency: "operation"},
+		{name: "Mongo connection unavailable", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander?serverSelectionTimeoutMS=50", connectionFailure: true},
 		{name: "unsupported database", flag: "database-url", url: "postgres://user:" + secret + "@127.0.0.1:5432/commander"},
 		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:5672", dependency: "rabbitmq"},
 		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:5671", dependency: "rabbitmq"},
@@ -61,7 +64,7 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 			err := cli.Run(ctx, args, &logs)
 
 			if ctx.Err() != nil {
-				t.Fatalf("startup waited for provider I/O instead of rejecting the unavailable dependency: %v", err)
+				t.Fatalf("startup did not return within its deadline: %v", err)
 			}
 			if err == nil {
 				t.Fatal("startup accepted an unavailable provider")
@@ -70,7 +73,11 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 			if !strings.Contains(message, test.flag) {
 				t.Errorf("error does not identify %s: %v", test.flag, err)
 			}
-			if test.dependency != "" {
+			if test.connectionFailure {
+				if !mongo.IsTimeout(err) {
+					t.Errorf("expected a MongoDB connection timeout: %v", err)
+				}
+			} else if test.dependency != "" {
 				if !strings.Contains(message, test.dependency) || !strings.Contains(message, "not implemented") {
 					t.Errorf("startup must identify its unimplemented %s dependency: %v", test.dependency, err)
 				}
@@ -81,5 +88,38 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 				t.Error("startup exposed credentials from the connection URL")
 			}
 		})
+	}
+}
+
+func TestCLIStartsWithMongo(t *testing.T) {
+	databaseURL := os.Getenv("COMMANDER_TEST_MONGO_URL")
+	if databaseURL == "" {
+		t.Skip("COMMANDER_TEST_MONGO_URL is not set")
+	}
+	base, query, hasQuery := strings.Cut(databaseURL, "?")
+	databaseURL = base + "_controller_startup"
+	if hasQuery {
+		databaseURL += "?" + query
+	}
+	t.Setenv("ENV", "")
+	root := t.TempDir()
+	args := []string{
+		"--bus-url=" + filepath.Join(root, "bus"),
+		"--storage-url=" + filepath.Join(root, "storage"),
+		"--database-url=" + databaseURL,
+		"--heartbeat-timeout=45s",
+		"--log-level=info", "--log-format=json",
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	ready := false
+
+	err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{Ready: func() {
+		ready = true
+		cancel()
+	}})
+
+	if err != nil || !ready {
+		t.Fatalf("MongoDB host did not start and stop cleanly: ready=%t error=%v", ready, err)
 	}
 }

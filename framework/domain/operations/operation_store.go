@@ -11,9 +11,9 @@ import (
 
 // Implementations retain and return independent copies. Mutations apply atomically
 // to the latest operation. Errors other than ErrWriteUncertain leave it unchanged.
-// ErrWriteUncertain means the new snapshot is visible but durability is unconfirmed;
-// Methods returning an Operation provide that snapshot. Pause new work until
-// recovery reconciles persisted state.
+// ErrWriteUncertain means commit outcome or durability is unconfirmed. Methods
+// returning an Operation provide the attempted snapshot, which may not be visible.
+// Pause new work until recovery rereads and reconciles persisted state.
 type OperationStore interface {
 	Create(context.Context, Operation) error
 	Get(context.Context, string) (Operation, error)

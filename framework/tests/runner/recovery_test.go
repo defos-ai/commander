@@ -212,6 +212,86 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	}
 }
 
+func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
+	config := fixture()
+	durable := config.OperationStore
+	var failed atomic.Bool
+	config.OperationStore = &uncertainWriteStore{OperationStore: durable, dispatch: func(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
+		if !failed.CompareAndSwap(false, true) {
+			return durable.DispatchTask(ctx, operationID, dispatch)
+		}
+		attempted, err := durable.Get(ctx, operationID)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		if err := attempted.DispatchTask(dispatch); err != nil {
+			return operations.Operation{}, err
+		}
+		return attempted, operations.ErrWriteUncertain
+	}}
+	exec, calls := controlledExecutor()
+	first, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = first.Close(ctx)
+	})
+	op := start(t, first)
+	task := assign(t, first, op.ID, "inspect")
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	_, waitErr := first.WaitTask(ctx, op.ID, task.ID)
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	closeErr := first.Close(ctx)
+
+	for _, err := range []error{waitErr, assignErr, closeErr} {
+		if !errors.Is(err, operations.ErrWriteUncertain) {
+			t.Fatalf("uncertain dispatch did not pause the operation: %v", err)
+		}
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("attempted dispatch executed without a committed reservation: %+v", call)
+	default:
+	}
+	stored, err := first.Get(ctx, op.ID)
+	if err != nil || len(stored.Tasks) != 1 || !reflect.DeepEqual(stored.Tasks[0], task) {
+		t.Fatalf("attempted dispatch changed the durable queued task: %+v, %v", stored, err)
+	}
+	for _, event := range stored.Events {
+		if event.Type == operations.TaskDispatched {
+			t.Fatal("uncommitted dispatch appeared in durable events")
+		}
+	}
+
+	restarted := newRunner(t, config, exec)
+	recovered := receive(t, calls)
+	if recovered.agent != task.AgentID || recovered.call.Work.TaskID != task.ID || recovered.call.Work.OperationID != op.ID {
+		t.Fatalf("recovery changed the queued assignment: %+v", recovered)
+	}
+	recovered.reply <- output("inspect")
+	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	closeRunner(t, restarted)
+	dispatchEvents := 0
+	for _, event := range settled.Events {
+		if event.Type == operations.TaskDispatched {
+			dispatchEvents++
+		}
+	}
+	if len(settled.Tasks) != 1 || settled.Tasks[0].ID != task.ID || settled.Tasks[0].CommandID != task.CommandID || dispatchEvents != 1 {
+		t.Fatalf("recovery duplicated the queued assignment: %+v", settled)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("recovery dispatched the queued assignment twice: %+v", call)
+	default:
+	}
+}
+
 func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.Automations = map[string]missions.Automation{
@@ -466,6 +546,7 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 type uncertainWriteStore struct {
 	operations.OperationStore
 	createError    error
+	dispatch       func(context.Context, string, operations.TaskDispatch) (operations.Operation, error)
 	afterQueue     func(operations.Operation) error
 	afterDispatch  func(operations.Operation) error
 	afterFinish    func(operations.Operation) error
@@ -496,6 +577,9 @@ func (s *uncertainWriteStore) QueueTask(ctx context.Context, operationID string,
 }
 
 func (s *uncertainWriteStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
+	if s.dispatch != nil {
+		return s.dispatch(ctx, operationID, dispatch)
+	}
 	op, err := s.OperationStore.DispatchTask(ctx, operationID, dispatch)
 	if err == nil && s.afterDispatch != nil {
 		err = s.afterDispatch(op)

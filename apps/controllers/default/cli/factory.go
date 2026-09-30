@@ -30,6 +30,7 @@ import (
 	mongoagents "commander/providers/mongo/controller/agents"
 	mongoexecutions "commander/providers/mongo/controller/executions"
 	mongomissions "commander/providers/mongo/controller/missions"
+	mongooperations "commander/providers/mongo/controller/operations"
 	mongostore "commander/providers/mongo/store"
 )
 
@@ -75,7 +76,7 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
-	deps.OperationStore, err = createOperationStore(ctx, configuration.databaseURL)
+	deps.OperationStore, err = deps.createOperationStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
@@ -180,7 +181,7 @@ func (d *dependencies) createAgentStore(ctx context.Context, rawURL string) (age
 	}
 }
 
-func createOperationStore(ctx context.Context, rawURL string) (operations.OperationStore, error) {
+func (d *dependencies) createOperationStore(ctx context.Context, rawURL string) (operations.OperationStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -193,7 +194,10 @@ func createOperationStore(ctx context.Context, rawURL string) (operations.Operat
 		}
 		return fsoperations.NewOperationFsStore(path)
 	case "mongodb", "mongodb+srv":
-		return nil, errors.New("MongoDB operation store is not implemented")
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongooperations.NewOperationMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported operation store scheme %q", scheme)
 	}

@@ -4,11 +4,10 @@
 
 An independent Go module implementing framework database stores with MongoDB.
 Currently available: `MissionMongoStore`, `ActionMongoStore`, `AgentMongoStore`,
-`ExecutionMongoStore`, and the shared `MongoStore` for queries, conditional
-writes, indexes, and transactions. App factories select providers per dependency.
-Catalogs, agent inventory, and executions support Mongo. The operation store is
-not implemented yet, so controller and MCP startup with a Mongo database URL
-remains blocked.
+`ExecutionMongoStore`, `OperationMongoStore`, and the shared `MongoStore` for
+queries, conditional writes, indexes, and transactions. Controller and MCP hosts
+select these stores when `DATABASE_URL` uses `mongodb://` or `mongodb+srv://`.
+Operation updates require a replica set or sharded cluster for transactions.
 
 `MongoStore` owns one client shared by injected domain stores. Mission and action
 names are unique document IDs in separate collections. Fields use their JSON
@@ -23,6 +22,15 @@ Executions atomically claim commands and preserve immutable terminal outcomes.
 Indexed artifact lookups return trusted metadata only from successful completed
 executions.
 
+Operations use `operations`, `operation_tasks`, `operation_questions`, and
+`operation_events` collections. Each transition commits metadata and changed
+children in one transaction; unchanged child records are not rewritten. A private
+parent revision serializes competing changes to the same operation. Task order
+and event sequence have indexed cursors. JSON bodies preserve numeric precision
+and timestamps, with searchable identity/order fields stored separately in BSON.
+Transitions currently read the full operation to apply shared domain rules; this
+is not yet a large-operation throughput optimization.
+
 ## Quick start
 
 From the repository root, start Mongo:
@@ -31,9 +39,10 @@ From the repository root, start Mongo:
 docker compose -f compose.full.yaml up --wait mongo
 ```
 
-`compose.full.yaml` contains the full app layout with Mongo database URLs, staged
-for the remaining provider work. **Only its Mongo service is ready in this step.**
-It initializes a single-node replica set and persists data in a named volume.
+For the complete local app stack, run
+`docker compose -f compose.full.yaml up --build -d`. It uses Mongo for database
+stores and filesystem volumes for the bus, artifacts, and reports. Compose
+initializes a single-node replica set and persists data in a named volume.
 The host port defaults to `27017` (`MONGO_PORT` overrides it).
 
 The repository workspace already includes this module. In a private project's
@@ -84,9 +93,13 @@ docker compose -f compose.full.yaml down --volumes
 Database tests skip when `COMMANDER_TEST_MONGO_URL` is unset. Use a dedicated test
 database: tests clean their collections before and after each case. CI runs the
 same suite in [test-provider.yml](../../../.github/workflows/test-provider.yml).
+Optional controller and MCP startup tests use the same environment variable,
+with separate `_controller_startup` and `_mcp_startup` databases. They create
+indexes and verify startup/shutdown without deleting database contents.
 
 Keep collection names, document mapping, and domain errors in each domain store.
 The shared store exposes BSON queries and driver errors without interpreting
 mission or operation state. Transaction callbacks may retry: use their supplied
-context and keep external effects outside the callback. Operation-level handling
-of uncertain writes is deferred until `OperationMongoStore` is implemented.
+context and keep external effects outside the callback. Store-specific error
+mapping belongs to domain providers; callers reconcile uncertain writes before
+dispatching further work.
