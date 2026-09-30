@@ -234,7 +234,7 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 	}{
 		{"operation status", func(op *operations.Operation) { op.Status = "invalid" }},
 		{"task identity", func(op *operations.Operation) { op.Tasks[0].OperationID = id.OperationID() }},
-		{"duplicate task", func(op *operations.Operation) { op.Tasks = append(op.Tasks, op.Tasks[0]) }},
+		{"duplicate task", nil},
 		{"command identity", func(op *operations.Operation) { op.Tasks[0].CommandID = id.TaskID() }},
 		{"execution deadline", func(op *operations.Operation) { op.Tasks[0].DeadlineAt = nil }},
 		{"result action", func(op *operations.Operation) {
@@ -251,10 +251,33 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 				task.Status, task.DeadlineAt = operations.TaskRunning, &cutoff
 				next.Tasks = []operations.Task{task}
 				next.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending, ExpiresAt: cutoff}}
-				tc.change(next)
+				if tc.change != nil {
+					tc.change(next)
+				}
 				return nil
 			}); err != nil {
 				t.Fatal(err)
+			}
+			if tc.change == nil {
+				// The store rejects duplicate task IDs on write. Corrupt the
+				// metadata directly to exercise recovery's persisted-state guard.
+				records := openRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
+				if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
+					var metadata map[string]json.RawMessage
+					if err := json.Unmarshal(next["operation"], &metadata); err != nil {
+						return err
+					}
+					var taskIDs []string
+					if err := json.Unmarshal(metadata["task_ids"], &taskIDs); err != nil {
+						return err
+					}
+					metadata["task_ids"], _ = json.Marshal(append(taskIDs, taskIDs[0]))
+					var err error
+					next["operation"], err = json.Marshal(metadata)
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
 			}
 			assertTerminalRejected(t, dir, op.ID, func() (operations.Operation, error) {
 				return first.Recover(t.Context(), op.ID, cutoff)

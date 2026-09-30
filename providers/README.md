@@ -23,9 +23,12 @@ messages are published. Shared filesystems must support file locks, atomic
 renames, and hard links. The [message-handling guide](../framework/comms/README.md)
 defines consumer acknowledgement policy.
 
-Operations are stored in `DATABASE_URL/operations/<operation-id>.json`, each with
-its own lock. Tasks, questions, and events remain in the operation snapshot so
-related changes commit together. Reads use atomic snapshots without taking a write lock.
+Each `DATABASE_URL/operations/<operation-id>.json` is a manifest with its own
+writer lock. Metadata, individual tasks, and individual questions live in
+content-addressed files under `<operation-id>.json.records/`. Metadata keeps
+ordered task/question IDs and the event history. One manifest replacement
+commits related changes together; unchanged record files are reused. Reads
+assemble consistent snapshots without taking a write lock.
 `OperationStore.GetTask` queries one task; `ListTasks` pages in assignment order
 after a task ID, and `ListEvents` pages after an event sequence. Limits must be
 positive. These filesystem queries currently read the operation snapshot.
@@ -82,8 +85,9 @@ manifest publication can return `ErrWriteUncertain`; an identical retry confirms
 durability without creating another revision. The containing directory must be
 prepared durably before opening a record set.
 
-This helper prepares the operation store split. Operations still use complete
-snapshots until the task and question records are wired into it.
+The operation provider uses it for metadata, tasks, and questions. Event history
+remains part of metadata for now. Existing development snapshots use an older
+format; start with fresh state rather than migrating them.
 
 ### Adding a backend
 

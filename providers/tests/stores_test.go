@@ -158,7 +158,7 @@ func TestOperationWritesDoNotBlockOtherOperations(t *testing.T) {
 	}
 }
 
-func TestOperationFilesKeepCompleteSnapshotsAndListOnlyRecords(t *testing.T) {
+func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 	dir := t.TempDir()
 	store, err := operationfs.NewOperationFsStore(dir)
 	if err != nil {
@@ -179,19 +179,51 @@ func TestOperationFilesKeepCompleteSnapshotsAndListOnlyRecords(t *testing.T) {
 		if err := store.Create(t.Context(), op); err != nil {
 			t.Fatal(err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, "operations", op.ID+".json"))
+		path := filepath.Join(dir, "operations", op.ID+".json")
+		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var records []struct {
-			operations.Operation
-			Version uint64 `json:"version"`
+		var manifest []struct {
+			Version uint64            `json:"version"`
+			Records []json.RawMessage `json:"records"`
 		}
-		if err := json.Unmarshal(data, &records); err != nil {
+		if err := json.Unmarshal(data, &manifest); err != nil {
 			t.Fatal(err)
 		}
-		if len(records) != 1 || records[0].Version != 1 || !reflect.DeepEqual(records[0].Operation, op.Clone()) {
-			t.Fatalf("operation file must retain its complete snapshot: %+v", records)
+		if len(manifest) != 1 || manifest[0].Version != 1 || len(manifest[0].Records) != 1+len(op.Tasks)+len(op.Questions) {
+			t.Fatalf("operation manifest must reference metadata and each task and question: %+v", manifest)
+		}
+		records, err := openRecords(t, path).Read(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var metadata map[string]json.RawMessage
+		if err := json.Unmarshal(records["operation"], &metadata); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"tasks", "questions"} {
+			if _, exists := metadata[field]; exists {
+				t.Fatalf("operation metadata contains embedded %s", field)
+			}
+		}
+		for _, task := range op.Tasks {
+			var stored operations.Task
+			if err := json.Unmarshal(records["tasks/"+task.ID], &stored); err != nil {
+				t.Fatal(err)
+			}
+			assertResultJSONEqual(t, stored, task)
+		}
+		for _, question := range op.Questions {
+			var stored operations.Question
+			if err := json.Unmarshal(records["questions/"+question.ID], &stored); err != nil {
+				t.Fatal(err)
+			}
+			assertResultJSONEqual(t, stored, question)
+		}
+		stored, err := store.Get(t.Context(), op.ID)
+		if err != nil || !reflect.DeepEqual(stored, op.Clone()) {
+			t.Fatalf("split records must reconstruct the complete operation: %+v, %v", stored, err)
 		}
 	}
 	if err := store.Create(t.Context(), first); !errors.Is(err, operations.ErrOperationConflict) {
@@ -234,6 +266,9 @@ func TestOperationFileMustMatchItsID(t *testing.T) {
 	}
 	otherID := id.OperationID()
 	if err := os.Rename(filepath.Join(dir, "operations", op.ID+".json"), filepath.Join(dir, "operations", otherID+".json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(dir, "operations", op.ID+".json.records"), filepath.Join(dir, "operations", otherID+".json.records")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Get(t.Context(), otherID); err == nil || errors.Is(err, operations.ErrUnknownOperation) {
@@ -417,10 +452,10 @@ func TestOperationTaskQueries(t *testing.T) {
 	}
 }
 
-func TestOperationWritesReportUncertainDurability(t *testing.T) {
-	for _, name := range []string{"update", "create"} {
+func TestOperationWritesDistinguishUnpublishedAndUncertainSnapshots(t *testing.T) {
+	for _, name := range []string{"update", "create", "unchanged update"} {
 		t.Run(name, func(t *testing.T) {
-			create := name == "create"
+			create, unchanged := name == "create", name == "unchanged update"
 			dir := t.TempDir()
 			store, err := operationfs.NewOperationFsStore(dir)
 			if err != nil {
@@ -436,13 +471,10 @@ func TestOperationWritesReportUncertainDurability(t *testing.T) {
 			}
 			op := other.Clone()
 			op.ID, op.Status = id.OperationID(), operations.Planning
-			expected, version := op.Clone(), uint64(1)
 			if !create {
 				if err := store.Create(t.Context(), op); err != nil {
 					t.Fatal(err)
 				}
-				expected.Status, version = operations.Running, 2
-				expected.Events = []operations.Event{{Sequence: 1}}
 			}
 			operationDir := filepath.Join(dir, "operations")
 			restore := denyDirectoryRead(t, operationDir)
@@ -454,57 +486,65 @@ func TestOperationWritesReportUncertainDurability(t *testing.T) {
 			} else {
 				published, err = store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 					calls++
-					next.Status = operations.Running
-					next.Events = append(next.Events, operations.Event{Sequence: 1})
+					if !unchanged {
+						next.Status = operations.Running
+						next.Events = append(next.Events, operations.Event{Sequence: 1})
+					}
 					return nil
 				})
 			}
 			restore()
 
-			if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, fs.ErrPermission) {
-				t.Fatalf("post-rename sync failure lost its uncertainty or cause: %v", err)
+			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) != unchanged {
+				t.Fatalf("directory sync failure lost its cause or publication state: %v", err)
 			}
 			var pathErr *os.PathError
-			if !errors.As(err, &pathErr) || pathErr.Op != "open" || pathErr.Path != filepath.Join(store.Root(), "operations") {
+			if !errors.As(err, &pathErr) || pathErr.Op != "open" || pathErr.Path != operationDir {
 				t.Fatalf("expected failure opening the directory for sync, got %v", err)
 			}
-			if !create && (calls != 1 || !reflect.DeepEqual(published, expected)) {
-				t.Fatalf("uncertain update must return its published snapshot without replay: calls=%d, snapshot=%+v", calls, published)
+			if !create && calls != 1 {
+				t.Fatalf("write failure replayed its mutation: calls=%d", calls)
 			}
-			for _, operationID := range []string{op.ID, other.ID} {
-				data, err := os.ReadFile(filepath.Join(operationDir, operationID+".json"))
-				if err != nil {
-					t.Fatal(err)
+			if unchanged {
+				if !reflect.DeepEqual(published, op) {
+					t.Fatalf("uncertain durability confirmation must return the visible snapshot: %+v", published)
 				}
-				var records []struct {
-					operations.Operation
-					Version uint64 `json:"version"`
+			} else if published.ID != "" {
+				t.Fatalf("failed write returned an unpublished snapshot: %+v", published)
+			}
+			if create {
+				if _, err := store.Get(t.Context(), op.ID); !errors.Is(err, operations.ErrUnknownOperation) {
+					t.Fatalf("failed creation published an operation: %v", err)
 				}
-				if err := json.Unmarshal(data, &records); err != nil {
-					t.Fatal(err)
-				}
-				if len(records) != 1 {
-					t.Fatalf("operation file must contain one snapshot: %+v", records)
-				}
-				record := records[0]
-				want, wantVersion := expected, version
-				if operationID == other.ID {
-					want, wantVersion = other, 1
-				}
-				if record.Version != wantVersion || !reflect.DeepEqual(record.Operation, want) {
-					t.Fatalf("uncertain write changed the wrong snapshot or revision: %+v", record)
+				if err := store.Create(t.Context(), op); err != nil {
+					t.Fatalf("failed creation could not be retried: %v", err)
 				}
 			}
 			reopened, err := operationfs.NewOperationFsStore(dir)
 			if err != nil {
 				t.Fatal(err)
 			}
-			saved, err := reopened.Get(t.Context(), op.ID)
-			if err != nil || !reflect.DeepEqual(saved, expected) {
-				t.Fatalf("reopening lost the published snapshot: %+v, %v", saved, err)
+			for _, expected := range []operations.Operation{op, other} {
+				data, err := os.ReadFile(filepath.Join(operationDir, expected.ID+".json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var manifest []struct {
+					Version uint64 `json:"version"`
+				}
+				if err := json.Unmarshal(data, &manifest); err != nil {
+					t.Fatal(err)
+				}
+				if len(manifest) != 1 || manifest[0].Version != 1 {
+					t.Fatalf("failed or unchanged write advanced the storage revision: %+v", manifest)
+				}
+				saved, err := reopened.Get(t.Context(), expected.ID)
+				if err != nil || !reflect.DeepEqual(saved, expected) {
+					t.Fatalf("write failure changed the persisted snapshot: %+v, %v", saved, err)
+				}
 			}
 			confirmed, err := reopened.Update(t.Context(), op.ID, func(*operations.Operation) error { return nil })
-			if err != nil || !reflect.DeepEqual(confirmed, expected) {
+			if err != nil || !reflect.DeepEqual(confirmed, op) {
 				t.Fatalf("could not confirm durability after permissions recovered: %+v, %v", confirmed, err)
 			}
 		})

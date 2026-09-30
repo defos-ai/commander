@@ -173,12 +173,8 @@ func TestOperationCancellationSerializesWithDispatchAndAutomaticChildren(t *test
 }
 
 func TestOperationCancellationWriteFailuresPreservePublicationState(t *testing.T) {
-	for _, uncertain := range []bool{false, true} {
-		name := "before publish"
-		if uncertain {
-			name = "after publish"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, permission := range []string{"write", "read"} {
+		t.Run("denied "+permission, func(t *testing.T) {
 			if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
@@ -194,7 +190,7 @@ func TestOperationCancellationWriteFailuresPreservePublicationState(t *testing.T
 					t.Fatal(err)
 				}
 			}
-			if uncertain {
+			if permission == "read" {
 				restore = denyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
@@ -207,35 +203,26 @@ func TestOperationCancellationWriteFailuresPreservePublicationState(t *testing.T
 			published, err := store.Cancel(t.Context(), op.ID)
 			restore()
 
-			if err == nil && !uncertain {
+			if err == nil && permission == "write" {
 				t.Skip("directory permissions are not enforced")
 			}
-			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) != uncertain {
-				t.Fatalf("write failure lost its cause or publication state: %v", err)
+			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
+				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			after := readDispatchFile(t, path)
+			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+				t.Fatal("failed write exposed or persisted an uncommitted mutation")
+			}
 			reopened := newDispatchStore(t, dir)
-			if uncertain {
-				assertCancellation(t, op, published, started)
-				saved, err := reopened.Get(t.Context(), op.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				assertResultJSONEqual(t, saved, published)
-			} else if !bytes.Equal(before, after) || published.ID != "" {
-				t.Fatal("failed write exposed or persisted an uncommitted cancellation")
+			saved, err := reopened.Get(t.Context(), op.ID)
+			if err != nil {
+				t.Fatal(err)
 			}
+			assertResultJSONEqual(t, saved, op)
 			retried, err := reopened.Cancel(t.Context(), op.ID)
-			if uncertain {
-				if !errors.Is(err, operations.ErrFinished) || retried.ID != "" || !bytes.Equal(after, readDispatchFile(t, path)) {
-					t.Fatalf("retry changed the published cancellation or storage revision: %+v, %v", retried, err)
-				}
-			} else {
-				if err != nil {
-					t.Fatal(err)
-				}
-				assertCancellation(t, op, retried, started)
+			if err != nil {
+				t.Fatal(err)
 			}
+			assertCancellation(t, op, retried, started)
 		})
 	}
 }

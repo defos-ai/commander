@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -135,12 +134,8 @@ func TestOperationContinuationEmptyDecisionIsDurable(t *testing.T) {
 }
 
 func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) {
-	for _, uncertain := range []bool{false, true} {
-		name := "before publish"
-		if uncertain {
-			name = "after publish"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, permission := range []string{"write", "read"} {
+		t.Run("denied "+permission, func(t *testing.T) {
 			if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
@@ -156,7 +151,7 @@ func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) 
 					t.Fatal(err)
 				}
 			}
-			if uncertain {
+			if permission == "read" {
 				restore = denyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
@@ -169,41 +164,26 @@ func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) 
 			published, err := store.ResolveContinuation(t.Context(), op.ID, op.Tasks[0].ID, op.Tasks[0].Continuation.Version, selected)
 			restore()
 
-			if err == nil && !uncertain {
+			if err == nil && permission == "write" {
 				t.Skip("directory permissions are not enforced")
 			}
-			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) != uncertain {
-				t.Fatalf("write failure lost its cause or publication state: %v", err)
+			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
+				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			after := readDispatchFile(t, path)
+			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+				t.Fatal("failed write exposed or persisted an uncommitted mutation")
+			}
 			reopened := newDispatchStore(t, dir)
-			if uncertain {
-				assertContinuationResolution(t, op, published, selected, started)
-				saved, err := reopened.Get(t.Context(), op.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				assertResultJSONEqual(t, saved, published)
-			} else {
-				var pathErr *os.PathError
-				if !errors.As(err, &pathErr) || !strings.HasPrefix(pathErr.Path, filepath.Join(operationDir, "."+op.ID+".json-")) {
-					t.Fatalf("expected failure creating the temporary snapshot: %v", err)
-				}
-				if !bytes.Equal(before, after) || published.ID != "" {
-					t.Fatal("failed write exposed or persisted an uncommitted decision")
-				}
+			saved, err := reopened.Get(t.Context(), op.ID)
+			if err != nil {
+				t.Fatal(err)
 			}
+			assertResultJSONEqual(t, saved, op.Clone())
 			retried, err := reopened.ResolveContinuation(t.Context(), op.ID, op.Tasks[0].ID, op.Tasks[0].Continuation.Version, selected)
-			if uncertain {
-				if err == nil || !bytes.Equal(after, readDispatchFile(t, path)) {
-					t.Fatal("retrying a published decision must fail without changing bytes or revision")
-				}
-			} else {
-				if err != nil {
-					t.Fatal(err)
-				}
-				assertContinuationResolution(t, op, retried, selected, started)
+			if err != nil {
+				t.Fatal(err)
 			}
+			assertContinuationResolution(t, op, retried, selected, started)
 		})
 	}
 }

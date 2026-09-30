@@ -95,24 +95,36 @@ func clearOperations(ctx context.Context, directory string) error {
 	if err != nil {
 		return err
 	}
+	cleared := make(map[string]bool)
 	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".json") || !entry.Type().IsRegular() {
+		name := entry.Name()
+		switch {
+		case strings.HasSuffix(name, ".json") && entry.Type().IsRegular():
+		case strings.HasSuffix(name, ".json.records") && entry.IsDir():
+			// Interrupted creates can leave blobs without a published manifest.
+			name = strings.TrimSuffix(name, ".records")
+		default:
 			continue
 		}
-		path := filepath.Join(directory, entry.Name())
+		if cleared[name] {
+			continue
+		}
+		path := filepath.Join(directory, name)
 		file, err := jsonfile.OpenContext(ctx, path)
 		if err != nil {
 			return err
 		}
 		if err := file.View(ctx, func([]byte) error {
-			err := os.Remove(path)
-			if errors.Is(err, os.ErrNotExist) {
-				return nil
+			// Unpublish the snapshot before removing its blobs, while keeping
+			// the writer's persistent lock in place.
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
 			}
-			return err
+			return os.RemoveAll(path + ".records")
 		}); err != nil {
 			return err
 		}
+		cleared[name] = true
 	}
 	return nil
 }

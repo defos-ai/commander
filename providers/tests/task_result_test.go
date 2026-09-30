@@ -201,12 +201,8 @@ func TestOperationResultAfterCancellationRetainsEvidenceWithoutChildren(t *testi
 }
 
 func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
-	for _, uncertain := range []bool{false, true} {
-		name := "before publish"
-		if uncertain {
-			name = "after publish"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, permission := range []string{"write", "read"} {
+		t.Run("denied "+permission, func(t *testing.T) {
 			if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
@@ -222,7 +218,7 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if uncertain {
+			if permission == "read" {
 				restore = denyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
@@ -234,32 +230,25 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 			published, err := store.FinishTask(t.Context(), op.ID, request)
 			restore()
 
-			if err == nil && !uncertain {
+			if err == nil && permission == "write" {
 				t.Skip("directory permissions are not enforced")
 			}
-			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) != uncertain {
-				t.Fatalf("write failure lost its cause or publication state: %v", err)
+			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
+				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			after := readDispatchFile(t, path)
-			if uncertain {
-				if len(published.Tasks) != 3 || published.Tasks[0].Status != operations.TaskSucceeded || countResultEvents(published, operations.TaskFinished) != 1 {
-					t.Fatalf("uncertain write did not return the complete published result: %+v", published)
-				}
-				saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				assertResultJSONEqual(t, saved, published)
-			} else if !bytes.Equal(before, after) || published.ID != "" {
-				t.Fatal("failed write exposed or persisted an uncommitted result")
+			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+				t.Fatal("failed write exposed or persisted an uncommitted mutation")
 			}
+			reopened := newDispatchStore(t, dir)
+			saved, err := reopened.Get(t.Context(), op.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertResultJSONEqual(t, saved, op.Clone())
 			request.FinishedAt = request.FinishedAt.Add(time.Hour)
-			retried, err := newDispatchStore(t, dir).FinishTask(t.Context(), op.ID, request)
+			retried, err := reopened.FinishTask(t.Context(), op.ID, request)
 			if err != nil || len(retried.Tasks) != 3 || retried.Tasks[0].Status != operations.TaskSucceeded || countResultEvents(retried, operations.TaskAssigned) != 2 || countResultEvents(retried, operations.TaskFinished) != 1 {
 				t.Fatalf("retry lost or duplicated the completion transaction: %+v, %v", retried, err)
-			}
-			if uncertain && !bytes.Equal(after, readDispatchFile(t, path)) {
-				t.Fatal("retrying an uncertain completion changed published bytes or revision")
 			}
 		})
 	}

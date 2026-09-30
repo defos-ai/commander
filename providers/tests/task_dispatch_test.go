@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -141,10 +140,8 @@ func TestOperationDispatchWriteFailureLeavesAssignmentQueued(t *testing.T) {
 	if err == nil {
 		t.Skip("directory write permissions are not enforced")
 	}
-	var pathErr *os.PathError
-	if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) || !errors.As(err, &pathErr) ||
-		!strings.HasPrefix(pathErr.Path, filepath.Join(operationDir, "."+op.ID+".json-")) {
-		t.Fatalf("expected failure creating the temporary operation snapshot: %v", err)
+	if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
+		t.Fatalf("expected permission failure before publishing the operation: %v", err)
 	}
 	if after := readDispatchFile(t, path); !bytes.Equal(before, after) {
 		t.Fatal("failed write partially dispatched the task or changed its revision")
@@ -155,34 +152,31 @@ func TestOperationDispatchWriteFailureLeavesAssignmentQueued(t *testing.T) {
 	}
 }
 
-func TestOperationDispatchReturnsPublishedSnapshotWhenDurabilityIsUncertain(t *testing.T) {
+func TestOperationDispatchDirectorySyncFailureLeavesAssignmentQueued(t *testing.T) {
 	dir := t.TempDir()
 	store := newDispatchStore(t, dir)
 	op, dispatch := createQueuedDispatchOperation(t, store)
+	path := filepath.Join(dir, "operations", op.ID+".json")
+	before := readDispatchFile(t, path)
 	restore := denyDirectoryRead(t, filepath.Join(dir, "operations"))
 
 	published, err := store.DispatchTask(t.Context(), op.ID, dispatch)
 	restore()
 
-	if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, fs.ErrPermission) {
-		t.Fatalf("post-rename sync failure lost its uncertainty or cause: %v", err)
+	if errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("pre-publication sync failure lost its cause or reported uncertain durability: %v", err)
 	}
-	expected := expectedDispatch(op, dispatch, published.UpdatedAt)
-	if !reflect.DeepEqual(published, expected) {
-		t.Fatalf("uncertain dispatch must return its published snapshot: %+v", published)
+	if published.ID != "" || !bytes.Equal(before, readDispatchFile(t, path)) {
+		t.Fatal("failed sync exposed or persisted an uncommitted dispatch")
 	}
 	reopened := newDispatchStore(t, dir)
 	saved, err := reopened.Get(t.Context(), op.ID)
-	if err != nil || !reflect.DeepEqual(saved, expected) {
-		t.Fatalf("uncertain dispatch was not fully published: %+v, %v", saved, err)
+	if err != nil || !reflect.DeepEqual(saved, op) {
+		t.Fatalf("failed sync changed the queued assignment: %+v, %v", saved, err)
 	}
-	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
-	if _, err := reopened.DispatchTask(t.Context(), op.ID, dispatch); !errors.Is(err, operations.ErrOperationConflict) {
-		t.Fatalf("uncertain dispatch must not be claimed twice: %v", err)
-	}
-	if after := readDispatchFile(t, path); !bytes.Equal(before, after) {
-		t.Fatal("retrying an uncertain dispatch changed the published snapshot or revision")
+	retried, err := reopened.DispatchTask(t.Context(), op.ID, dispatch)
+	if err != nil || !reflect.DeepEqual(retried, expectedDispatch(op, dispatch, retried.UpdatedAt)) {
+		t.Fatalf("dispatch could not retry after directory permissions recovered: %+v, %v", retried, err)
 	}
 }
 
