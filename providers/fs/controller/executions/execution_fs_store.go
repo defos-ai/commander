@@ -19,7 +19,7 @@ import (
 	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/executions"
 	"commander/framework/id"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 // ExecutionFsStore keeps one execution per locked JSON collection at

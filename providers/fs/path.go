@@ -1,7 +1,4 @@
-// Package connections supplies connection parsing helpers for providers.
-// Only the filesystem provider is currently implemented; other schemes fail
-// explicitly instead of becoming local directory names.
-package connections
+package fs
 
 import (
 	"errors"

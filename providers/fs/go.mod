@@ -1,4 +1,4 @@
-module commander/providers
+module commander/providers/fs
 
 go 1.26.7
 
@@ -9,4 +9,4 @@ require (
 
 require github.com/google/jsonschema-go v0.4.3 // indirect
 
-replace commander/framework => ../framework
+replace commander/framework => ../../framework

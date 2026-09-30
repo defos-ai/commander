@@ -15,8 +15,6 @@ import (
 	"commander/framework/agent/action"
 	"commander/framework/host"
 	"commander/framework/id"
-	artifactprovider "commander/providers/artifact"
-	commsprovider "commander/providers/comms"
 )
 
 const serviceName = "commander-" + string(webquality.WebQualityAgentType) + "-agent"
@@ -52,11 +50,11 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 			logger.Info("agent stopped")
 		}
 	}()
-	storage, err := artifactprovider.OpenStorage(ctx, configuration.storageURL, artifactprovider.StorageOptions{AgentID: agentID})
+	dependencies, err := openDependencies(ctx, configuration, agentID)
 	if err != nil {
-		return fmt.Errorf("storage-url: %w", err)
+		return err
 	}
-	defer func() { result = errors.Join(result, storage.Close()) }()
+	defer func() { result = errors.Join(result, dependencies.Close()) }()
 	actions := webquality.NewActions()
 	if configuration.actionNames != nil {
 		selected := make([]action.Executor, 0, len(configuration.actionNames))
@@ -74,7 +72,7 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 		ID:                 agentID,
 		Actions:            actions,
 		GrantedPermissions: configuration.permissions,
-		ArtifactStore:      storage.ArtifactStore, Logger: logger,
+		ArtifactStore:      dependencies.ArtifactStore, Logger: logger,
 		InlineOutputLimit: &configuration.inlineLimit, HeartbeatInterval: &configuration.heartbeatInterval,
 	})
 	if err != nil {
@@ -83,13 +81,8 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	bus, err := commsprovider.OpenBus(ctx, configuration.busURL)
-	if err != nil {
-		return fmt.Errorf("bus-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, bus.Close()) }()
 	logger.Info("agent starting", "heartbeat_interval", configuration.heartbeatInterval)
-	return agent.Serve(ctx, bus, configuration.scope)
+	return agent.Serve(ctx, dependencies.Bus, configuration.scope)
 }
 
 func Main(args []string, stderr io.Writer) int {

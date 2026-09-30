@@ -40,13 +40,15 @@ apps/agents/<agent-type>/
    [go.mod](web-quality/go.mod) for local framework/provider requirements,
    keep only dependencies your agent uses, and add it with
    `go work use ./apps/agents/<agent-type>` from the repository root.
-2. Generate an ID with `id.AgentID("<agent-type>")`. Use the same ID in
-   `artifactprovider.StorageOptions{AgentID: agentID}` and `agent.AgentConfig.ID`.
+2. Generate an ID with `id.AgentID("<agent-type>")`. For filesystem artifacts,
+   construct `artifact.NewArtifactFsStore(storageRoot)`, then call
+   `store.ForAgent(agentID)`. Use that ID in `agent.AgentConfig.ID`.
 3. Construct `agent.NewAgent` with your fixed `Type`, responsibilities, fresh action
    instances, granted permissions, and injected `ArtifactStore`.
-4. In the CLI, open providers and call `worker.Serve(ctx, bus, nil)`. Cancel its
-   context on shutdown, wait for it to return, and close providers. The existing
-   [CLI](web-quality/cli/cli.go) shows environment settings and signal handling.
+4. Construct providers in the app's `cli/factory.go` and pass framework interfaces
+   to `cli.go`, which calls `worker.Serve(ctx, bus, nil)`. Cancel its context on
+   shutdown, wait for it to return, and close resources. The existing
+   [factory](web-quality/cli/factory.go) and [CLI](web-quality/cli/cli.go) show the setup.
 5. Add the module to CI testing and, if needed, add its image/service to Compose.
 
 Follow the [dependency boundaries](../../docs/overview.md#dependencies). Shared runtime
@@ -159,7 +161,7 @@ follow-up actions themselves. See
 
 Keep your agent source in your own module and use the same construction and action
 steps above. Current module names are `commander/framework` and
-`commander/providers`; use a local Commander checkout pinned to a tested revision.
+`commander/providers/fs`; use a local Commander checkout pinned to a tested revision.
 
 From your private project's directory:
 
@@ -172,13 +174,17 @@ go mod edit -replace=commander/framework=/absolute/path/to/commander/framework
 Import `commander/framework/agent`, `commander/framework/agent/action`, and
 `commander/framework/domain/actions`. Supply
 implementations of `comms.Bus` and `artifactstore.ArtifactStore`, or use the bundled
-providers by also adding:
+filesystem provider by also adding:
 
 ```sh
-go mod edit -require=commander/providers@v0.0.0
-go mod edit -replace=commander/providers=/absolute/path/to/commander/providers
+go mod edit -require=commander/providers/fs@v0.0.0
+go mod edit -replace=commander/providers/fs=/absolute/path/to/commander/providers/fs
 ```
 
+Import `commander/providers/fs/comms` and `commander/providers/fs/artifact`
+for `comms.NewFsBus` and `artifact.NewArtifactFsStore`. Convert configured URLs
+with `fs.FilesystemPath` from `commander/providers/fs` before passing paths to
+these constructors. Other provider modules are optional.
 Both replacements belong in your project's `go.mod`. `v0.0.0` is a local
 placeholder, not a published release. Add your actions and `cmd/main.go`, following
 the [framework guide](../../framework/README.md)

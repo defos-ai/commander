@@ -22,8 +22,8 @@ import (
 	"commander/framework/comms"
 	"commander/framework/comms/messages"
 	"commander/framework/id"
-	"commander/providers/internal/ackhistory"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/ackhistory"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 const (

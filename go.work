@@ -2,7 +2,7 @@ go 1.26.7
 
 use (
 	./framework
-	./providers
+	./providers/fs
 	./providers/mongo
 	./apps/agents/web-quality
 	./apps/controllers/default

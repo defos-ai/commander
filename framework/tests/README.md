@@ -33,7 +33,7 @@ need no Docker or browser; browser execution is covered by the MCP suite.
 Run the FS suite from the repository root:
 
 ```sh
-go test -race -count=1 ./providers/...
+go test -race -count=1 ./providers/fs/...
 ```
 
 The separate Mongo module uses a real database. See the

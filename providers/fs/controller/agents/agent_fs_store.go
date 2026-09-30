@@ -16,7 +16,7 @@ import (
 
 	agentmodel "commander/framework/domain/agents"
 	"commander/framework/id"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 // AgentFsStore keeps one JSON observation per agent in

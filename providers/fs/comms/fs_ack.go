@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"commander/framework/comms"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 func (s *fsSubscription) Ack(ctx context.Context, messageID string) error {

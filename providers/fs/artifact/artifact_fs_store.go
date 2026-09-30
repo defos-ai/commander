@@ -18,7 +18,7 @@ import (
 	"commander/framework/artifact"
 	artifactstore "commander/framework/artifact/store"
 	"commander/framework/id"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 // ArtifactFsStore stores state/agent/<agent ID>/artifact.json manifests and the

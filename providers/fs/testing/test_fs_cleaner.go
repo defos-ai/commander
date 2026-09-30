@@ -9,7 +9,7 @@ import (
 	"time"
 
 	frameworktesting "commander/framework/testing"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 // TestFsCleaner clears storage and database records. It never opens the bus.

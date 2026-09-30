@@ -4,7 +4,7 @@ go 1.26.7
 
 require (
 	commander/framework v0.0.0
-	commander/providers v0.0.0
+	commander/providers/fs v0.0.0
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
 	golang.org/x/net v0.59.0
@@ -22,4 +22,4 @@ require (
 
 replace commander/framework => ../../../framework
 
-replace commander/providers => ../../../providers
+replace commander/providers/fs => ../../../providers/fs

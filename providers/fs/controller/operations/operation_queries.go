@@ -9,7 +9,7 @@ import (
 
 	"commander/framework/domain/operations"
 	"commander/framework/id"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 func (s *OperationFsStore) GetTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {

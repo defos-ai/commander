@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 func openRecords(t *testing.T, path string) *jsonfile.Records {

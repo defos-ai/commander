@@ -3,8 +3,8 @@
 ## Overview
 
 Providers implement the framework's messaging and persistence interfaces.
-Application hosts select implementations by connection URL and inject them into
-the runtime, keeping infrastructure details out of agents and controllers.
+Application hosts select provider modules, open their connection URLs, and inject
+them into the runtime, keeping infrastructure details out of agents and controllers.
 
 ### Existing providers
 
@@ -13,10 +13,13 @@ the runtime, keeping infrastructure details out of agents and controllers.
 | [`fs`](fs/) | Message bus, artifacts, reports, inventory, executions, missions, operations, and action catalogs | Local paths, `~/path`, `file:///path`, `fs:///path` |
 | [`mongo`](mongo/) | Mission catalog (first slice) | `mongodb://`, `mongodb+srv://` |
 
-[`mongo`](mongo/) is a separate module with a shared Mongo store and
-`MissionMongoStore`. Application URL factories still select filesystem stores;
-Mongo application wiring will follow the remaining domain stores. RabbitMQ and
-S3 are planned; unsupported URL schemes return an error.
+Each provider is a separate Go module: `commander/providers/fs` and
+`commander/providers/mongo`. There is no shared `commander/providers` module;
+import only the backends your host uses. Providers export concrete stores and
+brokers. Each app's `cli/factory.go` maps configured URLs to their constructors
+and gives `cli.go` framework interfaces. The current apps use filesystem stores;
+Mongo URL selection will follow the remaining domain stores. RabbitMQ and S3 are
+planned; unsupported URL schemes return an error.
 
 ### Filesystem behavior
 
@@ -41,15 +44,20 @@ operation reads and mutations still assemble the complete operation.
 ## Quick start
 
 For a private project, follow the [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository)
-to add `commander/framework` and `commander/providers`. Within this repository,
-[go.work](../go.work) already connects them. Import the factory you need:
+to add `commander/framework` and `commander/providers/fs`. Within this repository,
+[go.work](../go.work) already connects the provider modules. Import the filesystem
+constructor you need; Mongo has its own [quick start](mongo/README.md#quick-start):
 
-| Factory | Host setting | Returns |
+| Constructor | Host setting | Framework interface |
 | --- | --- | --- |
-| [`comms.OpenBus`](comms/factory.go) | `BUS_URL` | `comms.Bus` |
-| [`artifact.OpenStorage`](artifact/factory.go) | `STORAGE_URL` | Handle with `ArtifactStore` |
-| [`controller.OpenReportStorage`](controller/factory.go) | `STORAGE_URL` | Handle with `ReportStore` |
-| [`controller.OpenDatabase`](controller/factory.go) | `DATABASE_URL` | Handle with domain stores |
+| [`comms.NewFsBus`](fs/comms/fs_bus.go) | `BUS_URL` | `comms.Bus` |
+| [`artifact.NewArtifactFsStore`](fs/artifact/artifact_fs_store.go) | `STORAGE_URL` | `artifactstore.ArtifactStore` |
+| [`reports.NewReportFsStore`](fs/controller/reports/report_fs_store.go) | `STORAGE_URL` | `reports.ReportStore` |
+| [`missions.NewMissionFsStore`](fs/controller/missions/mission_fs_store.go) | `DATABASE_URL` | `missions.MissionStore` |
+
+Other database stores have constructors in [`fs/controller/`](fs/controller/).
+Filesystem constructors accept paths; [`fs.FilesystemPath`](fs/path.go) converts
+configured paths and `file://` or `fs://` URLs without opening resources.
 
 For example, query missions through a filesystem database:
 
@@ -58,32 +66,36 @@ package queries
 
 import (
     "context"
-    "errors"
 
     "commander/framework/domain/missions"
-    provider "commander/providers/controller"
+    "commander/providers/fs"
+    fsmissions "commander/providers/fs/controller/missions"
 )
 
-func ListMissions(ctx context.Context) (items []missions.Mission, err error) {
-    database, err := provider.OpenDatabase(ctx, "./state/database")
+func ListMissions(ctx context.Context, databaseURL string) ([]missions.Mission, error) {
+    root, err := fs.FilesystemPath(databaseURL)
     if err != nil {
         return nil, err
     }
-    defer func() { err = errors.Join(err, database.Close()) }()
-    return database.MissionStore.List(ctx)
+    store, err := fsmissions.NewMissionFsStore(root)
+    if err != nil {
+        return nil, err
+    }
+    return store.List(ctx)
 }
 ```
 
-Factories take URLs explicitly; hosts read environment variables and flags.
-For agent artifact storage, pass `StorageOptions{AgentID: agentID}` using the
-same ID as the agent. Stop runtime consumers before closing provider handles.
+Hosts read environment variables and flags. For agent artifacts, construct
+`artifact.NewArtifactFsStore(storageRoot)`, then call `store.ForAgent(agentID)`
+with the same ID as the agent and inject the scoped store. Close brokers and
+shared database clients after consumers stop; filesystem stores need no close.
 See [configuration](../docs/deployment.md#configuration) for connection settings.
 
 ## Development and testing
 
 ### Atomic filesystem record sets
 
-`internal/jsonfile.Records` stages immutable JSON records and publishes them with
+`fs/internal/jsonfile.Records` stages immutable JSON records and publishes them with
 one versioned manifest. Writers lock only that record set; readers take no lock.
 Unchanged records are reused, and later writes collect abandoned files. Only
 manifest publication can return `ErrWriteUncertain`; an identical retry confirms
@@ -102,8 +114,9 @@ rather than migrating them.
 1. Add a separate module under `providers/<backend>/`, keeping its driver dependencies local (see `mongo/`).
    Implement interfaces from `framework/comms`, `framework/artifact`, or
    `framework/domain`; providers must not depend on application runtimes.
-2. Wire selected providers into the application host. Keep connection setup,
-   credentials, and cleanup in the provider; return framework interfaces.
+2. Export concrete constructors. The app's `cli/factory.go` selects and constructs
+   its providers, shares connections between stores, and returns framework interfaces.
+   Providers own connection mechanics; the app closes resources after consumers stop.
 3. Preserve the contracts for message acknowledgement, artifact ownership,
    immutable reports, execution outcomes, and atomic operation updates.
    `OperationStore` exposes explicit transitions against the latest saved operation;
@@ -134,8 +147,8 @@ rather than migrating them.
 Run filesystem-provider checks from the repository root:
 
 ```sh
-go test -race -count=1 ./providers/...
-go vet ./providers/...
+go test -race -count=1 ./providers/fs/...
+go vet ./providers/fs/...
 ```
 
 Run affected [framework and host tests](../framework/tests/README.md) when changing

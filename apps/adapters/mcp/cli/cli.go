@@ -18,10 +18,6 @@ import (
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/host"
 	"commander/framework/id"
-	artifactprovider "commander/providers/artifact"
-	commsprovider "commander/providers/comms"
-	controllerprovider "commander/providers/controller"
-	testprovider "commander/providers/testing"
 )
 
 const adapterType = "mcp"
@@ -78,43 +74,21 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	bus, err := commsprovider.OpenBus(ctx, configuration.busURL)
+	deps, err := openDependencies(ctx, configuration)
 	if err != nil {
-		return fmt.Errorf("bus-url: %w", err)
+		return err
 	}
-	defer func() { result = errors.Join(result, bus.Close()) }()
-	storage, err := artifactprovider.OpenStorage(ctx, configuration.storageURL, artifactprovider.StorageOptions{})
-	if err != nil {
-		return fmt.Errorf("storage-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, storage.Close()) }()
-	reportStorage, err := controllerprovider.OpenReportStorage(ctx, configuration.storageURL)
-	if err != nil {
-		return fmt.Errorf("storage-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, reportStorage.Close()) }()
-	database, err := controllerprovider.OpenDatabase(ctx, configuration.databaseURL)
-	if err != nil {
-		return fmt.Errorf("database-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, database.Close()) }()
-	controller, err := controllercommands.NewClient(ctx, bus, adapterID, logger)
+	defer func() { result = errors.Join(result, deps.Close()) }()
+	controller, err := controllercommands.NewClient(ctx, deps.Bus, adapterID, logger)
 	if err != nil {
 		return err
 	}
 	defer func() { result = errors.Join(result, controller.Close()) }()
 	serverConfig := missionsmcp.Config{
-		Operations: controller, Logger: logger,
-		AgentStore: database.AgentStore, ExecutionStore: database.ExecutionStore,
-		MissionStore: database.MissionStore, OperationStore: database.OperationStore,
-		ActionStore: database.ActionStore, ReportStore: reportStorage.ReportStore, ArtifactStore: storage.ArtifactStore,
-	}
-	if os.Getenv("ENV") == "tests" {
-		cleaner, err := testprovider.OpenCleaner(configuration.storageURL, configuration.databaseURL)
-		if err != nil {
-			return fmt.Errorf("test cleanup: %w", err)
-		}
-		serverConfig.TestCleaner = &testCleaner{missions: database.MissionStore, state: cleaner}
+		Operations: controller, Logger: logger, TestCleaner: deps.TestCleaner,
+		AgentStore: deps.AgentStore, ExecutionStore: deps.ExecutionStore,
+		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
+		ActionStore: deps.ActionStore, ReportStore: deps.ReportStore, ArtifactStore: deps.ArtifactStore,
 	}
 	server, err := missionsmcp.NewServer(controller, serverConfig)
 	if err != nil {
@@ -125,7 +99,7 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		check, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		if _, err := database.OperationStore.List(check); err != nil {
+		if _, err := deps.OperationStore.List(check); err != nil {
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 			return
 		}

@@ -19,7 +19,7 @@ require (
 
 require (
 	commander/framework v0.0.0
-	commander/providers v0.0.0 // indirect
+	commander/providers/fs v0.0.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -69,4 +69,4 @@ replace commander/apps/agents/web-quality => ../agents/web-quality
 
 replace commander/framework => ../../framework
 
-replace commander/providers => ../../providers
+replace commander/providers/fs => ../../providers/fs

@@ -4,7 +4,7 @@ go 1.26.7
 
 require (
 	commander/framework v0.0.0
-	commander/providers v0.0.0
+	commander/providers/fs v0.0.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 )
 
@@ -22,4 +22,4 @@ require (
 
 replace commander/framework => ../../../framework
 
-replace commander/providers => ../../../providers
+replace commander/providers/fs => ../../../providers/fs

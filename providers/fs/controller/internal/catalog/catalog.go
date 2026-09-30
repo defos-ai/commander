@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 type Store[T any] struct {

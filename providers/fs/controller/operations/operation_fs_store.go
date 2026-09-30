@@ -15,7 +15,7 @@ import (
 	"commander/framework/domain/agents"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
-	"commander/providers/internal/jsonfile"
+	"commander/providers/fs/internal/jsonfile"
 )
 
 // OperationFsStore atomically publishes metadata, tasks, questions, and events through

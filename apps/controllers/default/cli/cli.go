@@ -17,9 +17,6 @@ import (
 	adapterconsumer "commander/framework/controller/consumers/adapter"
 	"commander/framework/controller/runner"
 	"commander/framework/host"
-	artifactprovider "commander/providers/artifact"
-	commsprovider "commander/providers/comms"
-	controllerprovider "commander/providers/controller"
 )
 
 type Options struct {
@@ -60,36 +57,21 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 }
 
 func serve(ctx context.Context, configuration config, logger *slog.Logger, options Options) (result error) {
-	bus, err := commsprovider.OpenBus(ctx, configuration.busURL)
+	deps, err := openDependencies(ctx, configuration)
 	if err != nil {
-		return fmt.Errorf("bus-url: %w", err)
+		return err
 	}
-	defer func() { result = errors.Join(result, bus.Close()) }()
-	storage, err := artifactprovider.OpenStorage(ctx, configuration.storageURL, artifactprovider.StorageOptions{})
-	if err != nil {
-		return fmt.Errorf("storage-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, storage.Close()) }()
-	reportStorage, err := controllerprovider.OpenReportStorage(ctx, configuration.storageURL)
-	if err != nil {
-		return fmt.Errorf("storage-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, reportStorage.Close()) }()
-	database, err := controllerprovider.OpenDatabase(ctx, configuration.databaseURL)
-	if err != nil {
-		return fmt.Errorf("database-url: %w", err)
-	}
-	defer func() { result = errors.Join(result, database.Close()) }()
+	defer func() { result = errors.Join(result, deps.Close()) }()
 	if configuration.withMissions != "" {
-		if err := data.UpsertMissions(ctx, database.MissionStore, configuration.withMissions); err != nil {
+		if err := data.UpsertMissions(ctx, deps.MissionStore, configuration.withMissions); err != nil {
 			return fmt.Errorf("with-missions: %w", err)
 		}
 	}
 	// Keep routing available until the runner has suspended its accepted tasks.
-	coordination, err := controller.NewController(context.WithoutCancel(ctx), bus, controller.ControllerConfig{
+	coordination, err := controller.NewController(context.WithoutCancel(ctx), deps.Bus, controller.ControllerConfig{
 		Type: controllerType, ID: configuration.controllerID, HeartbeatTimeout: configuration.heartbeatTimeout,
-		ArtifactStore: storage.ArtifactStore, AgentStore: database.AgentStore, ActionStore: database.ActionStore,
-		ExecutionStore: database.ExecutionStore, Logger: logger,
+		ArtifactStore: deps.ArtifactStore, AgentStore: deps.AgentStore, ActionStore: deps.ActionStore,
+		ExecutionStore: deps.ExecutionStore, Logger: logger,
 	})
 	if err != nil {
 		return err
@@ -100,8 +82,8 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		result = errors.Join(result, coordination.Close(shutdown))
 	}()
 	execution, err := runner.NewRunner(context.WithoutCancel(ctx), coordination, runner.Config{
-		MissionStore: database.MissionStore, OperationStore: database.OperationStore,
-		ReportStore: reportStorage.ReportStore, ArtifactRestorer: coordination, AgentCatalog: coordination,
+		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
+		ReportStore: deps.ReportStore, ArtifactRestorer: coordination, AgentCatalog: coordination,
 	})
 	if err != nil {
 		return err
@@ -113,7 +95,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	}()
 	requestCtx, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelRequests()
-	requests, err := adapterconsumer.NewConsumer(ctx, bus, controllerType, coordination, execution, logger)
+	requests, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination, execution, logger)
 	if err != nil {
 		return err
 	}
