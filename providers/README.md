@@ -73,6 +73,18 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
 
 ## Development and testing
 
+### Atomic filesystem record sets
+
+`internal/jsonfile.Records` stages immutable JSON records and publishes them with
+one versioned manifest. Writers lock only that record set; readers take no lock.
+Unchanged records are reused, and later writes collect abandoned files. Only
+manifest publication can return `ErrWriteUncertain`; an identical retry confirms
+durability without creating another revision. The containing directory must be
+prepared durably before opening a record set.
+
+This helper prepares the operation store split. Operations still use complete
+snapshots until the task and question records are wired into it.
+
 ### Adding a backend
 
 1. Add implementations under `providers/<backend>/`, following the `fs/` layout.

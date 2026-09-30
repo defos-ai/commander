@@ -231,6 +231,16 @@ func validate(data []byte) error {
 }
 
 func (c *Collection) write(ctx context.Context, data []byte) error {
+	if err := c.replace(ctx, data); err != nil {
+		return err
+	}
+	if err := syncDirectory(filepath.Dir(c.path)); err != nil {
+		return errors.Join(ErrWriteUncertain, err)
+	}
+	return nil
+}
+
+func (c *Collection) replace(ctx context.Context, data []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -258,13 +268,7 @@ func (c *Collection) write(ctx context.Context, data []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := os.Rename(file.Name(), c.path); err != nil {
-		return err
-	}
-	if err := syncDirectory(filepath.Dir(c.path)); err != nil {
-		return errors.Join(ErrWriteUncertain, err)
-	}
-	return nil
+	return os.Rename(file.Name(), c.path)
 }
 
 type contextReader struct {
