@@ -1,9 +1,11 @@
 # Testing
 
-Two suites run in GitHub Actions:
+Three suites run in GitHub Actions:
 
-- [Unit tests](../../.github/workflows/test-unit.yml): framework, providers,
-  controller, agent and Playground tests, including its `--all-in-one` behavior.
+- [Unit tests](../../.github/workflows/test-unit.yml): framework, controller,
+  agent and Playground tests, including its `--all-in-one` behavior.
+- [Provider tests](../../.github/workflows/test-provider.yml): separate FS and
+  Mongo jobs covering storage and delivery contracts.
 - [MCP API tests](../../.github/workflows/test-mcp.yml): real Compose services,
   queried only through MCP. Uses the same start, test and cleanup commands below,
   with service logs saved on failure.
@@ -15,17 +17,28 @@ No model API key or public website is needed.
 From the repository root:
 
 ```sh
-go test -race -count=1 ./framework/... ./providers/... \
+go test -race -count=1 ./framework/... \
   ./apps/controllers/default/... ./apps/agents/web-quality/... ./apps/playground/...
 ```
 
 Framework tests focus on recovery, automation, concurrent decisions and retrying
-unconfirmed results without executing commands twice. Provider
-tests cover critical storage and delivery contracts. App tests cover mission
+unconfirmed results without executing commands twice. App tests cover mission
 loading, website checks, rendering and Playground's local hosts. Playground also
 completes an SEO review through a scripted model, keyboard-selected operator
 answer and saved report, and checks recovery after model errors or Ctrl+C. These tests
 need no Docker or browser; browser execution is covered by the MCP suite.
+
+## Provider tests
+
+Run the FS suite from the repository root:
+
+```sh
+go test -race -count=1 ./providers/...
+```
+
+The separate Mongo module uses a real database. See the
+[Mongo testing guide](../../providers/mongo/README.md#development-and-testing)
+for its Compose and test commands. CI starts and cleans up Mongo automatically.
 
 ## MCP API tests
 

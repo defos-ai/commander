@@ -1,0 +1,65 @@
+name: Provider tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fs-provider:
+    name: FS provider tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+      - name: Run FS provider tests
+        run: go test -race -count=1 -timeout=3m ./providers/...
+      - name: Vet FS provider
+        run: go vet ./providers/...
+
+  mongo-provider:
+    name: Mongo provider tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMMANDER_TEST_MONGO_URL: mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+      - name: Vet Mongo provider
+        run: go vet ./providers/mongo/...
+      - name: Start MongoDB
+        run: docker compose -f compose.full.yaml up --wait --wait-timeout 90 mongo
+      - name: Run Mongo provider tests
+        run: go test -race -count=1 -timeout=3m -v ./providers/mongo/...
+      - name: Collect MongoDB logs
+        if: failure() || cancelled()
+        run: docker compose -f compose.full.yaml logs --no-color > "$RUNNER_TEMP/commander-mongo.log"
+      - name: Stop MongoDB
+        if: always()
+        run: docker compose -f compose.full.yaml down --volumes
+      - name: Upload MongoDB logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mongo-provider-logs
+          path: ${{ runner.temp }}/commander-mongo.log
+          if-no-files-found: ignore

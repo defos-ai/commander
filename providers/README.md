@@ -11,9 +11,12 @@ the runtime, keeping infrastructure details out of agents and controllers.
 | Provider | Implements | Connection formats |
 | --- | --- | --- |
 | [`fs`](fs/) | Message bus, artifacts, reports, inventory, executions, missions, operations, and action catalogs | Local paths, `~/path`, `file:///path`, `fs:///path` |
+| [`mongo`](mongo/) | Mission catalog (first slice) | `mongodb://`, `mongodb+srv://` |
 
-Only filesystem providers are implemented. RabbitMQ, S3, and MongoDB are planned;
-unsupported URL schemes return an error.
+[`mongo`](mongo/) is a separate module with a shared Mongo store and
+`MissionMongoStore`. Application URL factories still select filesystem stores;
+Mongo application wiring will follow the remaining domain stores. RabbitMQ and
+S3 are planned; unsupported URL schemes return an error.
 
 ### Filesystem behavior
 
@@ -96,11 +99,11 @@ rather than migrating them.
 
 ### Adding a backend
 
-1. Add implementations under `providers/<backend>/`, following the `fs/` layout.
+1. Add a separate module under `providers/<backend>/`, keeping its driver dependencies local (see `mongo/`).
    Implement interfaces from `framework/comms`, `framework/artifact`, or
    `framework/domain`; providers must not depend on application runtimes.
-2. Add URL selection to the relevant factory. Keep connection setup, credentials,
-   and cleanup in the provider; return the existing framework interfaces.
+2. Wire selected providers into the application host. Keep connection setup,
+   credentials, and cleanup in the provider; return framework interfaces.
 3. Preserve the contracts for message acknowledgement, artifact ownership,
    immutable reports, execution outcomes, and atomic operation updates.
    `OperationStore` exposes explicit transitions against the latest saved operation;
@@ -125,10 +128,10 @@ rather than migrating them.
    `Fail` records failure and cancels queued work while preserving dispatched tasks.
    `Cancel` commits operation and queued-task cancellation with its event;
    dispatched tasks can still record results without starting new work.
-4. Add public behavior tests under `providers/tests/`, including concurrent writes,
+4. Add public behavior tests inside the provider module, including concurrent writes,
    retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
 
-From the repository root:
+Run filesystem-provider checks from the repository root:
 
 ```sh
 go test -race -count=1 ./providers/...
@@ -136,4 +139,4 @@ go vet ./providers/...
 ```
 
 Run affected [framework and host tests](../framework/tests/README.md) when changing
-shared behavior. Provider helpers belong in `providers/internal`.
+shared behavior. Keep provider helpers inside that provider's module.

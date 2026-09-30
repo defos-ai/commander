@@ -1,0 +1,180 @@
+name: commander-full
+
+x-environment: &environment
+  BUS_URL: ${BUS_URL:-file:///state/bus}
+  STORAGE_URL: ${STORAGE_URL:-file:///state/storage}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+
+x-runtime: &runtime
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 30s
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-agent: &agent
+  <<: *runtime
+  shm_size: 256mb
+  volumes:
+    - bus:/state/bus
+    - storage:/state/storage
+  image: commander-web-quality-agent:local
+  pull_policy: never
+  environment:
+    <<: *environment
+    CHROMIUM_NO_SANDBOX: "true"
+  depends_on:
+    controller:
+      condition: service_started
+
+services:
+  mongo:
+    image: mongo:8.0.32
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      # Avoid MongoDB TCMalloc crashes on newer kernels: SERVER-121912.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - >-
+          try { rs.status(); }
+          catch (error) {
+            if (error.codeName !== "NotYetInitialized") throw error;
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
+          }
+          quit(db.hello().isWritablePrimary ? 0 : 1);
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 5s
+
+  volume-init:
+    # Reuse the controller image for local volume permissions only.
+    image: commander-controller:local
+    pull_policy: never
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["chown"]
+    command: ["1000:1000", "/bus", "/storage"]
+    volumes:
+      - bus:/bus
+      - storage:/storage
+
+  controller:
+    <<: *runtime
+    image: commander-controller:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/controllers/default/docker/Dockerfile
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
+    command:
+      - --with-missions=/data/default-missions.json
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+    configs:
+      - source: default-missions
+        target: /data/default-missions.json
+    environment:
+      <<: *environment
+      DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
+
+  mcp:
+    <<: *runtime
+    image: commander-mcp:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/adapters/mcp/docker/Dockerfile
+    command:
+      - --listen-address=:4273
+      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+    environment:
+      <<: *environment
+      DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
+    ports:
+      - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
+    depends_on:
+      controller:
+        condition: service_started
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  web-1:
+    <<: *agent
+    # Build the shared image once; web-2 uses the same image.
+    build:
+      context: .
+      dockerfile: apps/agents/web-quality/docker/Dockerfile
+
+  web-2:
+    <<: *agent
+
+  playground:
+    profiles: [playground]
+    build:
+      context: .
+      dockerfile: apps/playground/docker/Dockerfile
+    init: true
+    stdin_open: true
+    tty: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      COMMANDER_MCP_URL: http://mcp:4273/mcp
+      COMMANDER_LLM_PROVIDER: ${COMMANDER_LLM_PROVIDER:-}
+      COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-}
+      COMMANDER_LLM_BASE_URL: ${COMMANDER_LLM_BASE_URL:-}
+      COMMANDER_LLM_API_KEY: ${COMMANDER_LLM_API_KEY:-}
+      COMMANDER_DEBUG: ${COMMANDER_DEBUG:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      NO_COLOR: ${NO_COLOR:-}
+      TERM: ${TERM:-xterm-256color}
+    depends_on:
+      mcp:
+        condition: service_healthy
+      web-1:
+        condition: service_started
+      web-2:
+        condition: service_started
+
+volumes:
+  bus:
+  storage:
+  mongo:
+
+configs:
+  default-missions:
+    file: ./apps/controllers/default/data/default-missions.json
