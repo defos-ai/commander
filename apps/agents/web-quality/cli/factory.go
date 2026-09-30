@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"net/url"
+	"path/filepath"
+	"strings"
 
 	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
@@ -16,27 +18,20 @@ import (
 type dependencies struct {
 	Bus           comms.Bus
 	ArtifactStore artifactstore.ArtifactStore
-	closers       []io.Closer
+	closers       []func() error
 }
 
 func (d *dependencies) Close() (err error) {
 	for i := len(d.closers) - 1; i >= 0; i-- {
-		err = errors.Join(err, d.closers[i].Close())
+		err = errors.Join(err, d.closers[i]())
 	}
+	d.closers = nil
 	return err
 }
 
 func openDependencies(ctx context.Context, configuration config, agentID string) (result *dependencies, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
-	}
-	storageRoot, err := fs.FilesystemPath(configuration.storageURL)
-	if err != nil {
-		return nil, fmt.Errorf("storage-url: %w", err)
-	}
-	busRoot, err := fs.FilesystemPath(configuration.busURL)
-	if err != nil {
-		return nil, fmt.Errorf("bus-url: %w", err)
 	}
 	d := &dependencies{}
 	defer func() {
@@ -45,23 +40,71 @@ func openDependencies(ctx context.Context, configuration config, agentID string)
 		}
 	}()
 
-	storage, err := fsartifact.NewArtifactFsStore(storageRoot)
+	d.ArtifactStore, err = createArtifactStore(ctx, configuration.storageURL, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
-	d.ArtifactStore, err = storage.ForAgent(agentID)
-	if err != nil {
-		return nil, fmt.Errorf("storage-url: scope artifact store: %w", err)
-	}
-
-	bus, err := fscomms.NewFsBus(busRoot)
+	bus, err := createBus(ctx, configuration.busURL)
 	if err != nil {
 		return nil, fmt.Errorf("bus-url: %w", err)
 	}
 	d.Bus = bus
-	d.closers = append(d.closers, bus)
+	d.closers = append(d.closers, bus.Close)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return d, nil
+}
+
+func createBus(ctx context.Context, busURL string) (comms.Bus, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(busURL); scheme {
+	case "file", "fs":
+		root, err := fs.FilesystemPath(busURL)
+		if err != nil {
+			return nil, err
+		}
+		return fscomms.NewFsBus(root)
+	case "amqp", "amqps":
+		return nil, errors.New("RabbitMQ bus is not implemented")
+	default:
+		return nil, fmt.Errorf("unsupported bus scheme %q", scheme)
+	}
+}
+
+func createArtifactStore(ctx context.Context, storageURL, agentID string) (artifactstore.ArtifactStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(storageURL); scheme {
+	case "file", "fs":
+		root, err := fs.FilesystemPath(storageURL)
+		if err != nil {
+			return nil, err
+		}
+		store, err := fsartifact.NewArtifactFsStore(root)
+		if err != nil {
+			return nil, err
+		}
+		return store.ForAgent(agentID)
+	case "s3":
+		return nil, errors.New("S3 artifact store is not implemented")
+	default:
+		return nil, fmt.Errorf("unsupported artifact store scheme %q", scheme)
+	}
+}
+
+func connectionScheme(rawURL string) string {
+	if filepath.VolumeName(rawURL) != "" {
+		return "file"
+	}
+	// Parse only the prefix: MongoDB seed lists are not standard URL authorities.
+	if prefix, _, ok := strings.Cut(rawURL, ":"); ok {
+		if parsed, err := url.Parse(prefix + ":"); err == nil && parsed.Scheme != "" {
+			return parsed.Scheme
+		}
+	}
+	return "file"
 }

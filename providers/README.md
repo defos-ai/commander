@@ -17,9 +17,13 @@ Each provider is a separate Go module: `commander/providers/fs` and
 `commander/providers/mongo`. There is no shared `commander/providers` module;
 import only the backends your host uses. Providers export concrete stores and
 brokers. Each app's `cli/factory.go` maps configured URLs to their constructors
-and gives `cli.go` framework interfaces. The current apps use filesystem stores;
-Mongo URL selection will follow the remaining domain stores. RabbitMQ and S3 are
-planned; unsupported URL schemes return an error.
+and gives `cli.go` framework interfaces. Each dependency has its own factory:
+filesystem inputs select FS, and `mongodb://` or `mongodb+srv://` select Mongo
+where implemented. Missing stores and unsupported schemes return explicit errors
+without falling back to FS. Only missions support Mongo so far; the full
+controller and MCP still require FS until the remaining database stores exist.
+Bus factories reserve `amqp://` and `amqps://` for RabbitMQ; artifact and report
+factories reserve `s3://` for S3. These backends are not implemented yet.
 
 ### Filesystem behavior
 
