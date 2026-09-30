@@ -44,7 +44,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 			}
 			for _, child := range op.Tasks[1:] {
 				op, err = first.DispatchTask(t.Context(), op.ID, operations.TaskDispatch{
-					TaskID: child.ID, AgentID: child.AgentID,
+					TaskID: child.ID, AgentID: "review-agent-00000001",
 					StartedAt: parentResult.FinishedAt.Add(time.Minute), DeadlineAt: parentResult.FinishedAt.Add(time.Hour),
 				})
 				if err != nil {
@@ -274,8 +274,8 @@ func createResultOperation(t *testing.T, store *operationfs.OperationFsStore) (o
 		Status: operations.TaskSucceeded, FinishedAt: created.Add(time.Minute),
 		Result: &actions.ActionOutput{ActionName: "discover", Output: json.RawMessage(`{"found":2}`),
 			NextActions: []actions.NextAction{
-				{ActionName: "inspect", AgentID: "review-agent-00000001", Input: json.RawMessage(`{"page":1}`)},
-				{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)},
+				{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)},
+				{ActionName: "inspect", Input: json.RawMessage(`{"page":2}`)},
 			}},
 	}
 	if err := store.Create(t.Context(), op); err != nil {

@@ -98,6 +98,9 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 	if config.ReportStore == nil {
 		return nil, errors.New("runner requires a report store")
 	}
+	if config.AgentCatalog == nil {
+		return nil, errors.New("runner requires an agent catalog")
+	}
 	if config.Capacity < 0 {
 		return nil, errors.New("capacity must not be negative")
 	}

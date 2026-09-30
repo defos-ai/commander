@@ -13,6 +13,7 @@ import (
 
 func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {
 	config := fixture()
+	config.AgentCatalog.(*agentCatalog).set(readyAgent(agentID), readyAgent("review-agent-00000002"))
 	config.MissionStore.(*missionStore).mission.Automations = map[string]missions.Automation{
 		"discover": {Run: []string{"inspect"}, Continue: missions.WhenAll},
 	}
@@ -22,8 +23,8 @@ func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {
 	parent := assign(t, r, op.ID, "discover")
 
 	receive(t, calls).reply <- output("discover",
-		actions.NextAction{ActionName: "inspect", AgentID: agentID, Input: json.RawMessage(`{"page":1}`)},
-		actions.NextAction{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)})
+		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)},
+		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{"page":2}`)})
 	first, second := receive(t, calls), receive(t, calls)
 	first.reply <- output("inspect")
 	partial := awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
@@ -60,7 +61,7 @@ func TestConcurrentContinuationResolutionCommitsOneBranch(t *testing.T) {
 	receive(t, calls).reply <- output("inspect")
 	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	command := commands.ResolveContinuationCommand{OperationID: op.ID, TaskID: task.ID, Version: settled.Tasks[0].Continuation.Version,
-		Actions: []actions.NextAction{{ActionName: "follow-up", AgentID: agentID}}}
+		Actions: []actions.NextAction{{ActionName: "follow-up"}}}
 	gate, results := make(chan struct{}), make(chan error, 2)
 
 	for range 2 {
@@ -95,7 +96,7 @@ func TestFailedDecisionSavePreservesRetryableState(t *testing.T) {
 	failure := errors.New("database unavailable")
 	store.failNextUpdate(failure)
 	command := commands.ResolveContinuationCommand{OperationID: op.ID, TaskID: task.ID, Version: before.Tasks[0].Continuation.Version,
-		Actions: []actions.NextAction{{ActionName: "follow-up", AgentID: agentID}}}
+		Actions: []actions.NextAction{{ActionName: "follow-up"}}}
 
 	_, err := r.Resolve(t.Context(), command)
 	after, readErr := r.Get(t.Context(), op.ID)

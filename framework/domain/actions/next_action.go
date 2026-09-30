@@ -6,25 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"commander/framework/id"
 )
 
 // NextAction proposes follow-up work. It does not authorize or dispatch an action.
-// An omitted AgentID leaves agent selection to the decision maker.
+// The controller selects an available agent to execute it.
 type NextAction struct {
 	ActionName string          `json:"action_name"`
 	Input      json.RawMessage `json:"input,omitempty"`
-	AgentID    string          `json:"agent_id,omitempty"`
 	Reason     string          `json:"reason,omitempty"`
 }
 
 func (a NextAction) Validate() error {
 	if strings.TrimSpace(a.ActionName) == "" {
 		return errors.New("next action action_name must not be blank")
-	}
-	if a.AgentID != "" && !id.ValidAgent(a.AgentID) {
-		return errors.New("next action has invalid agent_id")
 	}
 	if len(a.Input) != 0 {
 		input := bytes.TrimSpace(a.Input)

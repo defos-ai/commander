@@ -46,11 +46,14 @@ artifacts and continuation, without retrieving the rest of the operation.
 Operation responses include [preflight](../../docs/abstractions.md#discovery-and-preflight):
 required-action coverage and missing agent requirements. Explain blockers before
 assigning work; queued tasks wait until discovery reports sufficient coverage.
+Use `assign_task` with `action_name` and `input`; the controller selects a ready
+agent and records its ID on the task. `list_agents` and `describe_agent` show
+`current_work` alongside freshness. Agent administration stays in the controller.
 
 Inspect `tasks[].continuation` through `get_operation`. Use `resolve_continuation`
 with its task ID, current version, and selected actions (an empty array finishes
-the branch). Omit `agent_id` for automatic scheduling. When operator guidance is
-needed, use a linked `ask_question`, present it to the user, and submit their
+the branch). The controller also selects agents for these actions. When guidance
+is needed, use a linked `ask_question`, present it to the user, and submit their
 actual answer with `answer_question`; the model then resumes the decision.
 `get_operation` exposes `last_question` and `remaining_questions` (excluding the
 displayed question). Questions have at most four options and a two-minute default

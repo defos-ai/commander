@@ -178,7 +178,7 @@ func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 	_, waitErr := first.WaitTask(ctx, op.ID, running.ID)
 	_, eventErr := first.Events(ctx, op.ID, 0, false)
 	_, retryErr := first.Fail(ctx, command)
-	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect"})
 	closeErr := first.Close(ctx)
 	for _, err := range []error{failErr, waitErr, eventErr, retryErr, assignErr, closeErr} {
 		if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
@@ -190,7 +190,7 @@ func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 		t.Fatalf("uncertain failure lost its visible snapshot: %+v, %v", stored, err)
 	}
 
-	savedResult := output("discover", actions.NextAction{ActionName: "inspect", AgentID: agentID})
+	savedResult := output("discover", actions.NextAction{ActionName: "inspect"})
 	observed := make(chan invocation, 2)
 	exec.recover = func(_ context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
 		observed <- invocation{agent: agent, call: call}

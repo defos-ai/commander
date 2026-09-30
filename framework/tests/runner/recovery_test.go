@@ -52,6 +52,7 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 				return output(call.ActionName), nil
 			}
 
+			config.AgentCatalog.(*agentCatalog).set(readyAgent("review-agent-00000002"))
 			restarted := newRunner(t, config, e)
 			recovered := receive(t, observed)
 			settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
@@ -87,7 +88,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 		_ = first.Close(ctx)
 	})
 	op := start(t, first)
-	command := commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)}
+	command := commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)}
 	_, assignErr := first.Assign(t.Context(), command)
 	stored, err := first.Get(t.Context(), op.ID)
 	if err != nil || len(stored.Tasks) != 1 || stored.Tasks[0].Status != operations.TaskQueued {
@@ -113,7 +114,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 
 	restarted := newRunner(t, config, exec)
 	call := receive(t, calls)
-	if call.agent != saved.AgentID || call.call.Work.TaskID != saved.ID || call.call.Work.OperationID != op.ID || call.call.ActionName != saved.ActionName || !reflect.DeepEqual(call.call.Input, saved.Input) {
+	if call.agent != agentID || saved.AgentID != "" || call.call.Work.TaskID != saved.ID || call.call.Work.OperationID != op.ID || call.call.ActionName != saved.ActionName || !reflect.DeepEqual(call.call.Input, saved.Input) {
 		t.Fatalf("recovery changed the saved assignment: %+v", call)
 	}
 	call.reply <- output("inspect")
@@ -165,7 +166,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 
 	_, waitErr := first.WaitTask(ctx, op.ID, task.ID)
 	_, eventErr := first.Events(ctx, op.ID, 0, false)
-	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect"})
 	closeErr := first.Close(ctx)
 
 	for _, err := range []error{waitErr, eventErr, assignErr, closeErr} {
@@ -245,7 +246,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 	defer cancel()
 
 	_, waitErr := first.WaitTask(ctx, op.ID, task.ID)
-	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect"})
 	closeErr := first.Close(ctx)
 
 	for _, err := range []error{waitErr, assignErr, closeErr} {
@@ -270,7 +271,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 
 	restarted := newRunner(t, config, exec)
 	recovered := receive(t, calls)
-	if recovered.agent != task.AgentID || recovered.call.Work.TaskID != task.ID || recovered.call.Work.OperationID != op.ID {
+	if recovered.agent != agentID || task.AgentID != "" || recovered.call.Work.TaskID != task.ID || recovered.call.Work.OperationID != op.ID {
 		t.Fatalf("recovery changed the queued assignment: %+v", recovered)
 	}
 	recovered.reply <- output("inspect")
@@ -323,8 +324,8 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 	op := start(t, first)
 	parent := assign(t, first, op.ID, "discover")
 	receive(t, calls).reply <- output("discover",
-		actions.NextAction{ActionName: "inspect", AgentID: agentID, Input: json.RawMessage(`{"page":1}`)},
-		actions.NextAction{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)})
+		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)},
+		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{"page":2}`)})
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	_, waitErr := first.WaitTask(ctx, op.ID, parent.ID)
@@ -362,7 +363,7 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 	for range 2 {
 		call := receive(t, calls)
 		child, exists := savedChildren[call.call.Work.TaskID]
-		if !exists || call.call.Work.OperationID != op.ID || call.agent != child.AgentID || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
+		if !exists || call.call.Work.OperationID != op.ID || call.agent != agentID || child.AgentID != "" || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
 			t.Fatalf("recovery repeated the parent or changed an automatic child: %+v", call)
 		}
 		delete(savedChildren, child.ID)
@@ -427,14 +428,14 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 	}
 	command := commands.ResolveContinuationCommand{OperationID: op.ID, TaskID: parent.ID, Version: continuation.Version,
 		Actions: []actions.NextAction{
-			{ActionName: "inspect", AgentID: agentID, Input: json.RawMessage(`{"page":1}`)},
-			{ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`)},
+			{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)},
+			{ActionName: "inspect", Input: json.RawMessage(`{"page":2}`)},
 		}}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	_, resolveErr := first.Resolve(ctx, command)
 	_, eventErr := first.Events(ctx, op.ID, 0, false)
-	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, AgentID: agentID, ActionName: "inspect"})
+	_, assignErr := first.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect"})
 	_, retryErr := first.Resolve(ctx, command)
 	closeErr := first.Close(ctx)
 	for _, err := range []error{resolveErr, eventErr, assignErr, retryErr, closeErr} {
@@ -471,7 +472,7 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 	for range 2 {
 		call := receive(t, calls)
 		child, exists := savedChildren[call.call.Work.TaskID]
-		if !exists || call.call.Work.OperationID != op.ID || call.agent != child.AgentID || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
+		if !exists || call.call.Work.OperationID != op.ID || call.agent != agentID || child.AgentID != "" || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
 			t.Fatalf("recovery repeated the parent or changed a resolved child: %+v", call)
 		}
 		delete(savedChildren, child.ID)
@@ -520,7 +521,7 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 	opID := id.OperationID()
 
 	op, startErr := first.Start(t.Context(), commands.StartOperationCommand{OperationID: opID, MissionName: "review", Input: []byte(`{}`)})
-	_, assignErr := first.Assign(t.Context(), commands.AssignTaskCommand{OperationID: opID, AgentID: agentID, ActionName: "inspect"})
+	_, assignErr := first.Assign(t.Context(), commands.AssignTaskCommand{OperationID: opID, ActionName: "inspect"})
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	closeErr := first.Close(ctx)

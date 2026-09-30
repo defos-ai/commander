@@ -36,6 +36,7 @@ func (record Agent) Snapshot(now time.Time) Agent {
 }
 
 func (record Agent) Clone() Agent {
+	record.CurrentWork = record.CurrentWork.Clone()
 	record.Responsibilities = slices.Clone(record.Responsibilities)
 	record.GrantedPermissions = slices.Clone(record.GrantedPermissions)
 	if record.DiscoveryScope != nil {

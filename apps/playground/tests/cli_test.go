@@ -99,6 +99,9 @@ func TestAllInOne(t *testing.T) {
 				http.Error(w, "missing operation evidence", http.StatusBadRequest)
 				return
 			}
+			if !strings.HasPrefix(op.Tasks[0].AgentID, "web-quality-agent-") {
+				t.Errorf("controller did not record the selected agent: %+v", op.Tasks[0])
+			}
 			if request == 7 {
 				task := op.Tasks[0]
 				if task.Continuation == nil || task.Continuation.Status != operations.ContinuationPending {
@@ -179,8 +182,9 @@ func TestAllInOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tool := range tools.Tools {
-		if tool.Name == "clean_up_state" {
-			t.Fatal("test cleanup tool was exposed in normal mode")
+		switch tool.Name {
+		case "clean_up_state", "run_action", "discover_actions", "stop_agent":
+			t.Fatalf("non-operation command %q was exposed to Playground", tool.Name)
 		}
 	}
 

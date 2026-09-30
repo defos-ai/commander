@@ -18,7 +18,7 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 	if err := command.Validate(); err != nil {
 		return operations.Task{}, err
 	}
-	task := queuedTask(command.OperationID, command.StepID, "", actionmodel.NextAction{AgentID: command.AgentID, ActionName: command.ActionName, Input: command.Input})
+	task := queuedTask(command.OperationID, command.StepID, "", actionmodel.NextAction{ActionName: command.ActionName, Input: command.Input})
 	return submit(ctx, r, func(ctx context.Context) (operations.Task, error) {
 		s, err := r.state(command.OperationID)
 		if err != nil {

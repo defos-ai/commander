@@ -21,15 +21,11 @@ func (r *Runner) signalScheduler() {
 func (r *Runner) dispatchQueued() {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
-	var records []agentmodel.Agent
-	if r.catalog != nil {
-		var err error
-		records, err = r.catalog.Agents(ctx)
-		if err != nil {
-			return
-		} // Keep durable work queued until inventory is available.
-		sort.Slice(records, func(i, j int) bool { return records[i].ID < records[j].ID })
+	records, err := r.catalog.Agents(ctx)
+	if err != nil {
+		return
 	}
+	sort.Slice(records, func(i, j int) bool { return records[i].ID < records[j].ID })
 	if r.ctx.Err() != nil {
 		return
 	}
@@ -81,16 +77,9 @@ func (r *Runner) dispatchQueued() {
 }
 
 func (r *Runner) selectAgent(task operations.Task, records []agentmodel.Agent, used map[string]int) string {
-	// An injected executor without a catalog can only receive explicitly targeted tasks.
-	if r.catalog == nil {
-		if task.AgentID != "" && used[task.AgentID] < r.capacity {
-			return task.AgentID
-		}
-		return ""
-	}
 	eligible := make([]string, 0, len(records))
 	for _, record := range records {
-		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity || task.AgentID != "" && task.AgentID != record.ID {
+		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity {
 			continue
 		}
 		for _, action := range record.Actions {

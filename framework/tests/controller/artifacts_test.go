@@ -13,6 +13,7 @@ import (
 	"commander/framework/controller"
 	"commander/framework/controller/consumers"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	"commander/framework/id"
@@ -164,6 +165,45 @@ func TestRejectedResultsDoNotCreateArtifacts(t *testing.T) {
 		}
 		assertNoArtifactReceipt(t, bus)
 	})
+}
+
+func TestCompletionClearsOnlyMatchingCurrentWork(t *testing.T) {
+	for _, newerWork := range []bool{false, true} {
+		name := "completed work"
+		if newerWork {
+			name = "newer work"
+		}
+		t.Run(name, func(t *testing.T) {
+			command, result, _ := artifactResult(t)
+			current := &agents.CurrentWork{OperationID: command.Work.OperationID, TaskID: command.Work.TaskID, ActionName: "capture", CommandID: command.ID}
+			if newerWork {
+				current.CommandID, current.TaskID = id.New(), id.New()
+			}
+			store := &inventory{}
+			if err := store.Upsert(t.Context(), agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID,
+				Status: agents.AgentWorking, CurrentWork: current}, LastSeen: command.CreatedAt}); err != nil {
+				t.Fatal(err)
+			}
+			consumer := consumers.CommandResultConsumer{
+				Inventory: store, Executions: &artifactExecutions{record: executions.Execution{Command: command, StartedAt: command.CreatedAt}},
+				Artifacts: &artifactCatalog{records: make(map[string]artifacts.Artifact)}, Bus: artifactBus(), State: state.New(t.Context(), time.Hour),
+			}
+			if err := consumer.Consume(t.Context(), result); err != nil {
+				t.Fatal(err)
+			}
+			record, err := store.Get(t.Context(), agentID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if newerWork {
+				if record.Status != agents.AgentWorking || record.CurrentWork == nil || *record.CurrentWork != *current {
+					t.Fatalf("completion overwrote newer work: %+v", record)
+				}
+			} else if record.Status != agents.AgentReady || record.CurrentWork != nil {
+				t.Fatalf("completion left finished work in inventory: %+v", record)
+			}
+		})
+	}
 }
 
 func artifactResult(t *testing.T) (messages.Message, messages.Message, actions.ActionOutput) {

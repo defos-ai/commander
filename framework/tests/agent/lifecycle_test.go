@@ -15,6 +15,7 @@ import (
 	"commander/framework/comms/messages"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/artifacts"
+	"commander/framework/id"
 )
 
 func TestAgentSnapshotsRemainReadableDuringAnnouncementsAndRestart(t *testing.T) {
@@ -98,7 +99,7 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 	working, stop := context.WithCancel(ctx)
 	defer stop()
 	finished := make(chan error, 1)
-	call := agent.ActionCall{ActionName: "inspect"}
+	call := agent.ActionCall{ActionName: "inspect", Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-page"}}
 	go func() { _, err := a.Work(working, call); finished <- err }()
 	select {
 	case <-started:
@@ -106,7 +107,11 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 		t.Fatal("action did not start")
 	}
 
-	readAgentState(t, ctx, a, agent.AgentWorking)
+	snapshot := readAgentState(t, ctx, a, agent.AgentWorking)
+	if snapshot.CurrentWork == nil || snapshot.CurrentWork.OperationID != call.Work.OperationID || snapshot.CurrentWork.TaskID != call.Work.TaskID ||
+		snapshot.CurrentWork.StepID != call.Work.StepID || snapshot.CurrentWork.ActionName != call.ActionName || snapshot.CurrentWork.CommandID != "" {
+		t.Fatalf("current work did not identify the direct action: %+v", snapshot.CurrentWork)
+	}
 	if _, err := a.Work(ctx, call); err == nil {
 		t.Fatal("agent accepted concurrent work")
 	}
@@ -125,7 +130,9 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("cancelled action did not return")
 	}
-	readAgentState(t, ctx, a, agent.AgentReady)
+	if snapshot := readAgentState(t, ctx, a, agent.AgentReady); snapshot.CurrentWork != nil {
+		t.Fatalf("cancelled work remained in snapshot: %+v", snapshot.CurrentWork)
+	}
 }
 
 func stateAgent(t *testing.T, actions ...action.Executor) *agent.Agent {

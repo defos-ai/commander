@@ -43,8 +43,8 @@ type Task struct {
 func NewTask(operationID, stepID, parentID string, action actionmodel.NextAction) Task {
 	taskID := id.TaskID()
 	return Task{ID: taskID, CommandID: taskID, OperationID: operationID, StepID: stepID,
-		ParentTaskID: parentID, AgentID: action.AgentID,
-		ActionName: action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}
+		ParentTaskID: parentID,
+		ActionName:   action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}
 }
 
 func (t Task) Clone() Task {

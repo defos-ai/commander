@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -44,6 +45,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	if left.Tasks[0].Status != operations.TaskRunning || right.Tasks[0].Status != operations.TaskRunning || left.Tasks[0].AgentID == right.Tasks[0].AgentID {
 		t.Fatalf("capacity was not respected: first=%+v second=%+v", left.Tasks, right.Tasks)
 	}
+	assertCurrentWork(t, a, left.Tasks[0], right.Tasks[0])
 	queued := a.task(first.ID, "check-seo", url+"/extra")
 	if queued.Status != operations.TaskQueued {
 		t.Fatalf("third task exceeded the two agents' capacity: %+v", queued)
@@ -122,6 +124,42 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	}
 }
 
+func assertCurrentWork(t *testing.T, a *api, tasks ...operations.Task) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var list struct {
+			Agents []agents.Agent `json:"agents"`
+		}
+		a.call("list_agents", object{}, &list)
+		matched := 0
+		for _, task := range tasks {
+			for _, agent := range list.Agents {
+				if agent.ID != task.AgentID {
+					continue
+				}
+				work := agent.CurrentWork
+				if agent.Stale || agent.Status != agents.AgentWorking || work == nil || work.OperationID != task.OperationID || work.TaskID != task.ID || work.CommandID != task.CommandID || work.ActionName != task.ActionName {
+					continue
+				}
+				var detail agents.Agent
+				a.call("describe_agent", object{"agent_id": agent.ID}, &detail)
+				if !reflect.DeepEqual(detail.CurrentWork, work) {
+					t.Fatalf("agent queries disagree about current work: list=%+v detail=%+v", work, detail.CurrentWork)
+				}
+				matched++
+			}
+		}
+		if matched == len(tasks) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("agent queries did not report running tasks: %+v", list.Agents)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func assertTaskQueries(t *testing.T, a *api, op operationDetail) {
 	t.Helper()
 	var list struct {
@@ -193,7 +231,7 @@ func assertTaskQueries(t *testing.T, a *api, op operationDetail) {
 
 func TestCancellationWhileActionIsRunning(t *testing.T) {
 	a := connect(t)
-	url, entered, release := heldWebsite(t, "/slow")
+	url, entered, release := heldWebsite(t, "/slow", "/blocker")
 	op := a.start(url + "/slow")
 	a.call("assign_task", object{"operation_id": op.ID, "action_name": "discover-pages", "input": object{"url": url + "/slow", "max_pages": 1}}, nil)
 	select {
@@ -201,8 +239,17 @@ func TestCancellationWhileActionIsRunning(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("discovery did not start")
 	}
-	running := a.get(op.ID).Tasks[0]
-	a.call("assign_task", object{"operation_id": op.ID, "agent_id": running.AgentID, "action_name": "check-seo", "input": object{"url": url + "/queued"}}, nil)
+	blocker := a.start(url + "/blocker")
+	a.task(blocker.ID, "check-seo", url+"/blocker")
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("second agent did not start the blocking task")
+	}
+	queued := a.task(op.ID, "check-seo", url+"/queued")
+	if queued.Status != operations.TaskQueued || queued.AgentID != "" {
+		t.Fatalf("task should await capacity without an assigned agent: %+v", queued)
+	}
 
 	a.call("cancel_operation", object{"operation_id": op.ID}, nil)
 	cancelled := a.get(op.ID)
@@ -221,6 +268,9 @@ func TestCancellationWhileActionIsRunning(t *testing.T) {
 	default:
 	}
 	a.fails("assign_task", object{"operation_id": op.ID, "action_name": "check-seo", "input": object{"url": url}}, "finished")
+	release("/blocker")
+	a.wait(blocker.ID, allTasksSucceeded)
+	a.call("cancel_operation", object{"operation_id": blocker.ID}, nil)
 }
 
 func allTasksSucceeded(op operationDetail) bool {
@@ -479,6 +529,14 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	parent := modelDecision(failed)
 	if parent.Status != operations.TaskFailed || parent.Error == "" {
 		t.Fatalf("failure evidence missing: %+v", parent)
+	}
+
+	assertAgentSelectionRejected(t, "resolve_continuation", object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,
+		"actions": []object{{"action_name": "check-seo", "agent_id": parent.AgentID, "input": object{"url": url}}}})
+	unchanged := a.get(op.ID)
+	pending := modelDecision(unchanged)
+	if len(unchanged.Tasks) != 1 || pending == nil || pending.Continuation.Version != parent.Continuation.Version {
+		t.Fatalf("rejected agent selection changed the decision: %+v", unchanged)
 	}
 
 	decision := object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,

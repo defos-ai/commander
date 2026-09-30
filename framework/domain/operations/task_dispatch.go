@@ -30,7 +30,7 @@ func (o *Operation) DispatchTask(dispatch TaskDispatch) error {
 	if o.Status.Terminal() || task.Status != TaskQueued || o.BlockedByQuestion(*task) || o.Preflight != nil && !o.Preflight.Ready {
 		return ErrOperationConflict
 	}
-	if task.AgentID != "" && task.AgentID != dispatch.AgentID {
+	if task.AgentID != "" {
 		return ErrOperationConflict
 	}
 	if task.OperationID != o.ID || task.CommandID != task.ID {

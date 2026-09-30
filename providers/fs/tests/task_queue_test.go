@@ -24,7 +24,7 @@ func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) 
 	op, firstTask := createQueueOperation(t, first)
 	firstTask.Input = json.RawMessage(`{"page":1}`)
 	secondTask := operations.NewTask(op.ID, "review", "", actions.NextAction{
-		ActionName: "inspect", AgentID: "review-agent-00000002", Input: json.RawMessage(`{"page":2}`),
+		ActionName: "inspect", Input: json.RawMessage(`{"page":2}`),
 	})
 	requests := []operations.Task{firstTask, secondTask}
 	type result struct {
@@ -127,16 +127,16 @@ func TestOperationQueueReplayPreservesDispatchedAndTerminalState(t *testing.T) {
 				task     operations.Task
 				conflict bool
 			}{
-				{"equivalent JSON and unpinned agent", replay, false},
-				{"matching selected agent", pinned, false},
-				{"different agent", wrongAgent, true},
+				{"equivalent JSON without an assigned agent", replay, false},
+				{"preassigned matching agent", pinned, true},
+				{"preassigned different agent", wrongAgent, true},
 				{"different large integer", differentInput, true},
 				{"different action", differentAction, true},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					published, err := reopened.QueueTask(t.Context(), op.ID, tc.task)
 					if tc.conflict {
-						if !errors.Is(err, operations.ErrOperationConflict) {
+						if err == nil || tc.task.AgentID == "" && !errors.Is(err, operations.ErrOperationConflict) {
 							t.Fatalf("conflicting assignment accepted: %v", err)
 						}
 					} else {

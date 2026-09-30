@@ -52,14 +52,12 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	operation := operations.Operation{ID: operationID, Mission: definition.Clone(), Input: input,
 		Status: operations.Planning, Tasks: []operations.Task{}, Questions: []operations.Question{},
 		CreatedAt: now, UpdatedAt: now}
-	if r.catalog != nil {
-		records, err := r.catalog.Agents(ctx)
-		if err != nil {
-			return operations.Operation{}, fmt.Errorf("operation preflight: %w", err)
-		}
-		operation.Preflight = operations.AssessPreflight(definition, records)
-		operation.RefreshStatus()
+	records, err := r.catalog.Agents(ctx)
+	if err != nil {
+		return operations.Operation{}, fmt.Errorf("operation preflight: %w", err)
 	}
+	operation.Preflight = operations.AssessPreflight(definition, records)
+	operation.RefreshStatus()
 	operation.AppendEvent(operations.OperationStarted, "", "", "Awaiting the next action from the decision maker")
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
 		if err := r.store.Create(ctx, operation); err != nil {

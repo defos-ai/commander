@@ -54,7 +54,7 @@ func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 	if _, err := r.Cancel(ctx, commands.CancelOperationCommand{OperationID: second.ID}); err != nil {
 		t.Fatal(err)
 	}
-	secondCall.reply <- output("inspect", actions.NextAction{ActionName: "follow-up", AgentID: agentID})
+	secondCall.reply <- output("inspect", actions.NextAction{ActionName: "follow-up"})
 
 	for _, result := range []<-chan error{waited, polled} {
 		if err := <-result; err != nil {
@@ -136,7 +136,7 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 	op := start(t, r)
 	task := assign(t, r, op.ID, "discover")
 	call := receive(t, calls)
-	savedResult := output("discover", actions.NextAction{ActionName: "inspect", AgentID: agentID})
+	savedResult := output("discover", actions.NextAction{ActionName: "inspect"})
 	failure := errors.New("database unavailable")
 	store := config.OperationStore.(*operationStore)
 	store.failNextUpdate(failure)

@@ -267,7 +267,10 @@ func controlledExecutor() (executor, <-chan invocation) {
 }
 
 func fixture() runner.Config {
+	catalog := &agentCatalog{}
+	catalog.set(readyAgent(agentID))
 	return runner.Config{
+		AgentCatalog:   catalog,
 		MissionStore:   &missionStore{mission: missions.Mission{Name: "review", Objective: "Review a document", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
 		OperationStore: &operationStore{records: map[string]operations.Operation{}},
 		ReportStore:    reportStore{},
@@ -300,7 +303,7 @@ func start(t *testing.T, r *runner.Runner) operations.Operation {
 }
 func assign(t *testing.T, r *runner.Runner, opID, action string) operations.Task {
 	t.Helper()
-	task, err := r.Assign(t.Context(), commands.AssignTaskCommand{OperationID: opID, AgentID: agentID, ActionName: action, Input: json.RawMessage(`{}`)})
+	task, err := r.Assign(t.Context(), commands.AssignTaskCommand{OperationID: opID, ActionName: action, Input: json.RawMessage(`{}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,4 +338,15 @@ func awaitOperation(t *testing.T, r *runner.Runner, id string, ready func(operat
 }
 func output(name string, next ...actions.NextAction) actions.ActionOutput {
 	return actions.ActionOutput{ActionName: name, Output: json.RawMessage(`{"ok":true}`), NextActions: next}
+}
+
+func readyAgent(id string) agents.Agent {
+	return agents.Agent{AgentSnapshot: agents.AgentSnapshot{
+		ID: id, Type: "review", Status: agents.AgentReady,
+		Actions: []actions.Action{
+			{Name: "inspect", Status: actions.Ready},
+			{Name: "discover", Status: actions.Ready},
+			{Name: "follow-up", Status: actions.Ready},
+		},
+	}}
 }

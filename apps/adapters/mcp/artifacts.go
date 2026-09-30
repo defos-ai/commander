@@ -76,11 +76,3 @@ func artifactResourceError(uri string, err error) error {
 	}
 	return fmt.Errorf("read artifact resource: %w", err)
 }
-
-func artifactLinks(value artifacts.Artifact) []mcp.Content {
-	links := make([]mcp.Content, 0, len(value.Files))
-	for _, file := range value.Files {
-		links = append(links, &mcp.ResourceLink{URI: artifactPrefix + value.ID + "/files/" + file.ID, Name: file.Name, MIMEType: file.MediaType, Size: &file.Size})
-	}
-	return links
-}

@@ -77,7 +77,7 @@ func TestOperationDispatchRejectsChangedStoredState(t *testing.T) {
 		{"already claimed", func(op *operations.Operation) { op.Tasks[0].Status = operations.TaskRunning }},
 		{"preflight blocked", func(op *operations.Operation) { op.Preflight.Ready = false }},
 		{"operation cancelled", func(op *operations.Operation) { op.Status = operations.Cancelled }},
-		{"agent pinned", func(op *operations.Operation) { op.Tasks[0].AgentID = "review-agent-00000002" }},
+		{"agent already assigned", func(op *operations.Operation) { op.Tasks[0].AgentID = "review-agent-00000002" }},
 		{"question pending", func(op *operations.Operation) {
 			op.Questions = append(op.Questions, operations.Question{ID: id.QuestionID(), Status: operations.QuestionPending})
 		}},

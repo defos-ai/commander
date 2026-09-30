@@ -205,7 +205,7 @@ func createContinuationOperation(t *testing.T, store *operationfs.OperationFsSto
 			Type: operations.ContinuationReady, Status: operations.Waiting, CreatedAt: created}},
 	}
 	selected := []actions.NextAction{
-		{ActionName: "inspect", AgentID: "review-agent-00000001", Input: json.RawMessage(`{"page":1}`), Reason: "Inspect first page"},
+		{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`), Reason: "Inspect first page"},
 		{ActionName: "report", Input: json.RawMessage(`{"page":2}`), Reason: "Report second page"},
 	}
 	if err := store.Create(t.Context(), op); err != nil {
@@ -228,7 +228,7 @@ func assertContinuationResolution(t *testing.T, before, published operations.Ope
 	for i, child := range published.Tasks[len(before.Tasks):] {
 		if child.ID == "" || seen[child.ID] || child.ID != c.CreatedTaskIDs[i] || child.CommandID != child.ID ||
 			child.OperationID != before.ID || child.ParentTaskID != before.Tasks[0].ID || child.StepID != before.Tasks[0].StepID ||
-			child.ActionName != selected[i].ActionName || child.AgentID != selected[i].AgentID || child.Status != operations.TaskQueued {
+			child.ActionName != selected[i].ActionName || child.AgentID != "" || child.Status != operations.TaskQueued {
 			t.Fatalf("decision child lost its identity or assignment: %+v", child)
 		}
 		seen[child.ID] = true

@@ -10,7 +10,7 @@ coordinate it. This guide describes the current model.
 | **Mission** | A reusable definition of an objective, expected input/output, required actions, optional planning steps, and automation rules. | “Review a website before release.” |
 | **Operation** | One tracked run of a mission with specific input. It owns tasks, questions, progress, and the final output. | Review the staging website today. |
 | **Mission step** | Planning guidance within a mission. A task can reference a step, and several tasks can contribute to it. | “Check page quality.” |
-| **Task** | One queued or dispatched action assignment within an operation; its agent may be selected at dispatch. It records the outcome and observation deadline. | Ask a web quality agent to capture a page. |
+| **Task** | One queued or dispatched action assignment within an operation; the controller selects its agent at dispatch. It records the outcome and observation deadline. | Capture a page with an available web quality agent. |
 
 A mission can have many operations. Each operation keeps a snapshot of its mission,
 so editing the catalog does not rewrite an existing operation's definition.
@@ -53,8 +53,9 @@ Agent **type** identifies its implementation, such as `web-quality`; agent
 Controllers and adapters likewise have types and instance IDs.
 
 In `domain/agents`, `AgentSnapshot` is the state reported by the agent.
-`Agent` combines that snapshot with controller observations such as last heartbeat
-and lease expiration; `AgentStore` persists it.
+`current_work` identifies the reported action, operation, task, and command; it is
+cleared when execution ends. `Agent` adds heartbeat freshness and lease expiration;
+`AgentStore` persists it. Work reported by a stale agent is its last known state.
 
 ## Actions, environment, and permissions
 
@@ -75,8 +76,9 @@ and lease expiration; `AgentStore` persists it.
   recent heartbeats. Heartbeats indicate liveness, not task completion.
 
 MCP still exposes **tools**, its protocol endpoints. Commander tools such as
-`run_action` and `list_actions` operate on agent actions. Arguments and results
-identify the action with `action_name`.
+`assign_task` and `list_actions` operate on agent actions. Work specifies
+`action_name` and `input`; the controller selects an eligible agent. Agent queries
+still expose instance details, while agent administration stays in controller code.
 
 ## Results, artifacts, questions, and reports
 
@@ -94,7 +96,7 @@ can inspect the result, assign more tasks, ask questions, or submit a final repo
 ## Next actions and continuations
 
 An action can return optional **`next_actions`**: proposals for follow-up actions,
-each with a `action_name`, optional `input`, `agent_id`, and `reason`. For example,
+each with an `action_name`, optional `input`, and `reason`. For example,
 page discovery can suggest quality checks for each page. Multiple proposals
 are independent; their list order does not define execution order or dependencies.
 They do not authorize execution.
@@ -137,8 +139,8 @@ pending questions as `remaining_questions`. Playground presents them one at a ti
 Agents propose actions, while mission rules authorize automatic action
 transitions. Queued work is persisted before dispatch. The current scheduler
 selects available agents in round-robin order with one active task per agent by
-default. This limit covers this runner's operation tasks, not direct `run_action`
-requests or other controller replicas.
+default. This limit applies within one runner; it is not shared across controller
+replicas.
 
 For grouped work, the controller waits for all children before applying their
 own automation rules. If every child qualifies, follow-ups are queued together;

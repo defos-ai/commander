@@ -209,9 +209,12 @@ func TestOperationRecoveryRetainsTerminalInFlightTasks(t *testing.T) {
 			op := createMaintenanceOperation(t, store)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			latest, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect", AgentID: "review-agent-00000001"})
-				task.Status, task.DeadlineAt = status, &cutoff
-				next.Status, next.Tasks = operations.Cancelled, []operations.Task{task}
+				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
+				next.Tasks = []operations.Task{task}
+				if err := next.DispatchTask(operations.TaskDispatch{TaskID: task.ID, AgentID: "review-agent-00000001", StartedAt: op.CreatedAt, DeadlineAt: cutoff}); err != nil {
+					return err
+				}
+				next.Status, next.Tasks[0].Status = operations.Cancelled, status
 				return nil
 			})
 			if err != nil {
@@ -247,9 +250,11 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 			op := createMaintenanceOperation(t, first)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			if _, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect", AgentID: "review-agent-00000001"})
-				task.Status, task.DeadlineAt = operations.TaskRunning, &cutoff
+				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
 				next.Tasks = []operations.Task{task}
+				if err := next.DispatchTask(operations.TaskDispatch{TaskID: task.ID, AgentID: "review-agent-00000001", StartedAt: op.CreatedAt, DeadlineAt: cutoff}); err != nil {
+					return err
+				}
 				next.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending, ExpiresAt: cutoff}}
 				if tc.change != nil {
 					tc.change(next)

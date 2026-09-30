@@ -35,7 +35,8 @@ see [available providers](../providers/README.md#existing-providers) for impleme
 
 1. An AI client sends a request through MCP.
 2. The adapter sends a command over the bus to the controller.
-3. The controller records the operation and dispatches selected tasks to agents.
+3. The controller records the operation, selects eligible agents for each task's
+   action and input, and dispatches the work.
 4. Agents run actions, upload artifact files, and publish results with artifact
    metadata. The controller saves outcomes and metadata in the database before
    confirming acceptance to the agent.

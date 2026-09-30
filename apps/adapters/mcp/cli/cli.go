@@ -90,7 +90,7 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		ActionStore: deps.ActionStore, ReportStore: deps.ReportStore, ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
 	}
-	server, err := missionsmcp.NewServer(controller, serverConfig)
+	server, err := missionsmcp.NewServer(serverConfig)
 	if err != nil {
 		return err
 	}

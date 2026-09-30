@@ -88,7 +88,7 @@ func TestRecoveryWriteFailurePreventsStartupExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			config := fixture()
 			op := seedMaintenanceTask(t, config, true)
-			queued := operations.NewTask(op.ID, "", "", actions.NextAction{AgentID: agentID, ActionName: "inspect"})
+			queued := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
 			if _, err := config.OperationStore.QueueTask(t.Context(), op.ID, queued); err != nil {
 				t.Fatal(err)
 			}
@@ -195,7 +195,7 @@ func TestPreflightWriteFailureKeepsSavedTaskQueued(t *testing.T) {
 				blocked.allowed.Store(true)
 			}
 			call := receive(t, calls)
-			if call.agent != task.AgentID || call.call.Work.TaskID != task.ID || call.call.Work.OperationID != op.ID || !reflect.DeepEqual(call.call.Input, task.Input) {
+			if call.agent != agentID || task.AgentID != "" || call.call.Work.TaskID != task.ID || call.call.Work.OperationID != op.ID || !reflect.DeepEqual(call.call.Input, task.Input) {
 				t.Fatalf("preflight retry replaced the saved assignment: %+v", call)
 			}
 			call.reply <- output("inspect")
@@ -217,7 +217,7 @@ func seedMaintenanceTask(t *testing.T, config runner.Config, running bool) opera
 	now := time.Now().UTC()
 	op := operations.Operation{ID: id.OperationID(), Mission: config.MissionStore.(*missionStore).mission.Clone(),
 		Input: json.RawMessage(`{}`), Status: operations.Planning, CreatedAt: now, UpdatedAt: now}
-	task := operations.NewTask(op.ID, "", "", actions.NextAction{AgentID: agentID, ActionName: "inspect", Input: json.RawMessage(`{}`)})
+	task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{}`)})
 	if _, err := op.QueueTask(task); err != nil {
 		t.Fatal(err)
 	}

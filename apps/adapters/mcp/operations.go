@@ -136,19 +136,18 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return readReport(ctx, config.OperationStore, config.ReportStore, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task. Omit agent_id for automatic selection. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
 		"operation_id": stringProperty,
 		"step_id":      missionStepProperty,
-		"agent_id":     stringProperty,
 		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages. An action name is not a mission step ID."},
 		"input":        map[string]any{"type": "object"},
 	}, "operation_id", "action_name"),
 		func(ctx context.Context, request AssignTaskRequest) (operations.Task, error) {
 			return execution.Assign(ctx, commands.AssignTaskCommand(request))
 		})
-	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_task or get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. Agent selection is optional. After an operator answer, review their guidance before resolving.", objectSchema(map[string]any{
+	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_task or get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. The controller selects agents. After an operator answer, review their guidance before resolving.", objectSchema(map[string]any{
 		"operation_id": stringProperty, "task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1},
-		"actions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"action_name": stringProperty, "agent_id": stringProperty, "input": map[string]any{"type": "object"}, "reason": stringProperty}, "required": []string{"action_name"}}},
+		"actions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"action_name": stringProperty, "input": map[string]any{"type": "object"}, "reason": stringProperty}, "required": []string{"action_name"}}},
 	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operations.Operation, error) {
 		return execution.Resolve(ctx, commands.ResolveContinuationCommand(request))
 	})

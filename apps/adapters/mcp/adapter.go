@@ -43,26 +43,6 @@ func (r AgentRequest) Validate() error {
 	return nil
 }
 
-type DiscoveryRequest struct {
-	AgentID string                     `json:"agent_id"`
-	Scope   *agentmodel.DiscoveryScope `json:"scope,omitempty"`
-}
-
-func (r DiscoveryRequest) Validate() error { return (AgentRequest{r.AgentID}).Validate() }
-
-type RunActionRequest struct {
-	AgentID    string          `json:"agent_id"`
-	ActionName string          `json:"action_name"`
-	Input      json.RawMessage `json:"input,omitempty"`
-}
-
-func (r RunActionRequest) Validate() error {
-	if err := (AgentRequest{r.AgentID}).Validate(); err != nil {
-		return err
-	}
-	return (actionmodel.ActionCall{ActionName: r.ActionName, Input: r.Input}).Validate()
-}
-
 type ActionRequest struct {
 	ActionName string `json:"action_name"`
 	AgentID    string `json:"agent_id,omitempty"`
@@ -98,10 +78,7 @@ type Config struct {
 	TestCleaner frameworktesting.TestCleaner
 }
 
-func NewServer(controller controllercommands.Controller, config Config) (*mcp.Server, error) {
-	if controller == nil {
-		return nil, errors.New("controller is required")
-	}
+func NewServer(config Config) (*mcp.Server, error) {
 	if config.Operations == nil || config.AgentStore == nil ||
 		config.MissionStore == nil || config.OperationStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil || config.ActionStore == nil {
@@ -115,7 +92,7 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 		}},
 	}, &mcp.ServerOptions{
 		Logger:       config.Logger,
-		Instructions: "Find a mission with list_missions; read describe_mission and relevant action schemas before starting. Use tracked operations for mission work. Check preflight, follow automation, and resolve pending model continuations using current versions. Review failed-task recovery before ending the operation; ask before changing scope. ask_question is for active-operation decisions; general clarifications belong in chat. Only record real operator answers; expiry is not approval. Finish with complete_operation using output_schema; report limitations. Finished operations are read-only: get_report reads reports; new work needs a new operation. Inspect saved state before retrying an ambiguous failure. Never request secrets in chat or tool inputs. Read artifacts with resources/read.",
+		Instructions: "Find a mission with list_missions; read describe_mission and relevant action schemas before starting. Use tracked operations; specify actions and input, the controller selects agents. Check preflight, follow automation, and resolve pending model continuations using current versions. Review failed-task recovery before ending the operation; ask before changing scope. ask_question is for active-operation decisions; general clarifications belong in chat. Only record real operator answers; expiry is not approval. Finish with complete_operation using output_schema; report limitations. Finished operations are read-only: get_report reads reports; new work needs a new operation. Inspect saved state before retrying an ambiguous failure. Never request secrets in chat or tool inputs. Read artifacts with resources/read.",
 	})
 	if config.Logger != nil {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
@@ -155,7 +132,7 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 			}
 			return actionmodel.Action{}, fmt.Errorf("%w: %s on agent %s", actionmodel.ErrUnknownAction, request.ActionName, request.AgentID)
 		})
-	addTool(server, "list_agents", "List agent IDs, hosts, freshness, grants and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details.", emptySchema,
+	addTool(server, "list_agents", "List agent IDs, current work, hosts, freshness, grants and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details.", emptySchema,
 		func(ctx context.Context, _ struct{}) (agentList, error) {
 			agents, err := config.AgentStore.List(ctx)
 			if err != nil {
@@ -169,25 +146,13 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 			}
 			return agentList{Agents: summaries}, nil
 		})
-	addTool(server, "describe_agent", "Inspect one announced agent, its freshness and complete action catalog.", agentSchema,
+	addTool(server, "describe_agent", "Inspect one announced agent, its current work, freshness and complete action catalog.", agentSchema,
 		func(ctx context.Context, request AgentRequest) (agentmodel.Agent, error) {
 			record, err := config.AgentStore.Get(ctx, request.AgentID)
 			if err != nil {
 				return agentmodel.Agent{}, err
 			}
 			return record.Snapshot(time.Now().UTC()), nil
-		})
-	addTool(server, "discover_actions", "Rediscover actions on a running agent using the optional discovery scope.", discoverySchema,
-		func(ctx context.Context, request DiscoveryRequest) (agentmodel.Agent, error) {
-			return controller.DiscoverActions(ctx, request.AgentID, request.Scope)
-		})
-	addTool(server, "run_action", "Run one explicitly selected action on a fresh, running agent. Use its advertised input_schema. Returns inline observations or artifact references; read linked artifacts separately.", runSchema,
-		func(ctx context.Context, request RunActionRequest) (actionmodel.ActionOutput, error) {
-			return controller.RunAction(ctx, request.AgentID, actionmodel.ActionCall{ActionName: request.ActionName, Input: request.Input})
-		})
-	addTool(server, "stop_agent", "Stop a running agent after its queued work finishes.", agentSchema,
-		func(ctx context.Context, request AgentRequest) (agentmodel.Agent, error) {
-			return controller.StopAgent(ctx, request.AgentID)
 		})
 	addArtifactResources(server, config)
 	addOperationTools(server, config)
@@ -213,18 +178,10 @@ func addTool[Input, Output any](server *mcp.Server, name, description, schema st
 			if err != nil {
 				return nil, fmt.Errorf("encode %s result: %w", name, err)
 			}
-			result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}
-			if actionOutput, ok := any(output).(actionmodel.ActionOutput); ok {
-				for _, ref := range actionOutput.Artifacts {
-					result.Content = append(result.Content, artifactLinks(ref)...)
-				}
-			}
-			return result, nil
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}, nil
 		})
 }
 
 const emptySchema = `{"type":"object","properties":{},"additionalProperties":false}`
 const agentSchema = `{"type":"object","properties":{"agent_id":{"type":"string","minLength":1}},"required":["agent_id"],"additionalProperties":false}`
 const actionSchema = `{"type":"object","properties":{"action_name":{"type":"string","minLength":1},"agent_id":{"type":"string","minLength":1}},"required":["action_name"],"additionalProperties":false}`
-const discoverySchema = `{"type":"object","properties":{"agent_id":{"type":"string","minLength":1},"scope":{"type":["object","null"],"properties":{"paths":{"type":["array","null"],"items":{"type":"string"}},"services":{"type":["array","null"],"items":{"type":"string"}}},"additionalProperties":false}},"required":["agent_id"],"additionalProperties":false}`
-const runSchema = `{"type":"object","properties":{"agent_id":{"type":"string","minLength":1},"action_name":{"type":"string","minLength":1},"input":{"type":"object","description":"Input matching the selected action's advertised input_schema."}},"required":["agent_id","action_name"],"additionalProperties":false}`

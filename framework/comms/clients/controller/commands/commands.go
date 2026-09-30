@@ -56,7 +56,6 @@ func (r StartOperationCommand) Validate() error {
 type AssignTaskCommand struct {
 	OperationID string          `json:"operation_id"`
 	StepID      string          `json:"step_id,omitempty"`
-	AgentID     string          `json:"agent_id"`
 	ActionName  string          `json:"action_name"`
 	Input       json.RawMessage `json:"input,omitempty"`
 }
@@ -64,11 +63,6 @@ type AssignTaskCommand struct {
 func (r AssignTaskCommand) Validate() error {
 	if err := validateOperationID(r.OperationID); err != nil {
 		return err
-	}
-	if r.AgentID != "" {
-		if err := validateAgentID(r.AgentID); err != nil {
-			return err
-		}
 	}
 	return (actionmodel.ActionCall{ActionName: r.ActionName, Input: r.Input}).Validate()
 }

@@ -135,6 +135,7 @@ func (a *Agent) Describe() AgentSnapshot {
 	state := a.state.Load()
 	description := AgentSnapshot{
 		ID: a.ID(), Type: a.config.Type, Status: state.status,
+		CurrentWork:        state.currentWork.Clone(),
 		Server:             a.config.Server,
 		Responsibilities:   append([]string(nil), a.config.Responsibilities...),
 		GrantedPermissions: append([]string(nil), a.config.GrantedPermissions...),
@@ -182,7 +183,7 @@ func (a *Agent) discover(ctx context.Context, scope *environment.DiscoveryScope,
 			if discoveryErr != nil {
 				status = AgentUnavailable
 			}
-			discoveryErr = errors.Join(discoveryErr, a.finishState(ctx, status))
+			discoveryErr = errors.Join(discoveryErr, a.finishState(ctx, status, nil))
 		}()
 	}
 	if discoveryErr != nil {
@@ -213,10 +214,10 @@ func (a *Agent) discover(ctx context.Context, scope *environment.DiscoveryScope,
 // Work executes one externally selected action. Serve uses the same execution and
 // artifact path, adding the command ID to artifact ownership and replies.
 func (a *Agent) Work(ctx context.Context, call ActionCall) (ActionOutput, error) {
-	return a.work(ctx, call, "", false)
+	return a.work(ctx, call, "", false, nil)
 }
 
-func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fromServer bool) (output ActionOutput, workErr error) {
+func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fromServer bool, announce func(context.Context, AgentSnapshot) error) (output ActionOutput, workErr error) {
 	startedAt := time.Now()
 	logger := a.config.Logger.With("action_name", call.ActionName, "command_id", commandID)
 	logger.Info("action started")
@@ -236,12 +237,14 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			return errors.New("agent must be ready and available before working")
 		}
 		next.status = AgentWorking
+		next.currentWork = &CurrentWork{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID,
+			StepID: call.Work.StepID, ActionName: call.ActionName, CommandID: commandID}
 		started = true
 		return nil
-	}, nil)
+	}, announce)
 	if started {
 		defer func() {
-			if err := a.finishState(ctx, AgentReady); err != nil {
+			if err := a.finishState(ctx, AgentReady, announce); err != nil {
 				workErr = errors.Join(workErr, err)
 				output = ActionOutput{}
 			}
