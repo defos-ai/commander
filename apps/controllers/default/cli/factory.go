@@ -27,6 +27,7 @@ import (
 	fsoperations "commander/providers/fs/controller/operations"
 	fsreports "commander/providers/fs/controller/reports"
 	mongoactions "commander/providers/mongo/controller/actions"
+	mongoagents "commander/providers/mongo/controller/agents"
 	mongomissions "commander/providers/mongo/controller/missions"
 	mongostore "commander/providers/mongo/store"
 )
@@ -73,15 +74,15 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
-	deps.AgentStore, err = createAgentStore(ctx, configuration.databaseURL)
+	deps.OperationStore, err = createOperationStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.AgentStore, err = deps.createAgentStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
 	deps.MissionStore, err = deps.createMissionStore(ctx, configuration.databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("database-url: %w", err)
-	}
-	deps.OperationStore, err = createOperationStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
@@ -156,7 +157,7 @@ func createReportStore(ctx context.Context, rawURL string) (reports.ReportStore,
 	}
 }
 
-func createAgentStore(ctx context.Context, rawURL string) (agents.AgentStore, error) {
+func (d *dependencies) createAgentStore(ctx context.Context, rawURL string) (agents.AgentStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -169,7 +170,10 @@ func createAgentStore(ctx context.Context, rawURL string) (agents.AgentStore, er
 		}
 		return fsagents.NewAgentFsStore(path)
 	case "mongodb", "mongodb+srv":
-		return nil, errors.New("MongoDB agent store is not implemented")
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoagents.NewAgentMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported agent store scheme %q", scheme)
 	}

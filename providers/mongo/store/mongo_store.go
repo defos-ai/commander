@@ -90,6 +90,10 @@ func (s *MongoStore) Delete(ctx context.Context, collection string, filter any) 
 	return s.database.Collection(collection).DeleteMany(ctx, filter)
 }
 
+func (s *MongoStore) FindOneAndDelete(ctx context.Context, collection string, filter, out any) error {
+	return s.database.Collection(collection).FindOneAndDelete(ctx, filter).Decode(out)
+}
+
 func (s *MongoStore) EnsureIndexes(ctx context.Context, collection string, indexes []mongo.IndexModel) error {
 	_, err := s.database.Collection(collection).Indexes().CreateMany(ctx, indexes)
 	return err

@@ -20,8 +20,8 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 		dependency      string
 		filesystemForm  string
 	}{
-		{name: "Mongo agent store unavailable", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander", dependency: "agent"},
-		{name: "Mongo SRV agent store unavailable", flag: "database-url", url: "mongodb+srv://user:" + secret + "@provider.invalid/commander", dependency: "agent"},
+		{name: "Mongo operation store unavailable", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander", dependency: "operation"},
+		{name: "Mongo SRV operation store unavailable", flag: "database-url", url: "mongodb+srv://user:" + secret + "@provider.invalid/commander", dependency: "operation"},
 		{name: "unsupported database", flag: "database-url", url: "postgres://user:" + secret + "@127.0.0.1:5432/commander"},
 		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:5672", dependency: "rabbitmq"},
 		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:5671", dependency: "rabbitmq"},

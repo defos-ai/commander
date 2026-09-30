@@ -3,17 +3,20 @@
 ## Overview
 
 An independent Go module implementing framework database stores with MongoDB.
-Currently available: `MissionMongoStore`, `ActionMongoStore`, and the shared
-`MongoStore` for queries, conditional writes, indexes, and transactions. App
-factories select providers per dependency. Mission and action factories support
-Mongo; other database factories return explicit not-implemented errors. Controller
-and MCP startup with a Mongo database URL remains blocked until those stores exist.
+Currently available: `MissionMongoStore`, `ActionMongoStore`, `AgentMongoStore`,
+and the shared `MongoStore` for queries, conditional writes, indexes, and
+transactions. App factories select providers per dependency. Catalogs and agent
+inventory support Mongo; operation and execution stores are not implemented yet,
+so controller and MCP startup with a Mongo database URL remains blocked.
 
 `MongoStore` owns one client shared by injected domain stores. Mission and action
 names are unique document IDs in separate collections. Fields use their JSON
 names; JSON schemas remain verbatim BSON binary values so large numbers and
 extension fields round-trip. Action catalogs accept only empty or `unknown`
-status; readiness belongs to each agent.
+status; readiness belongs to each agent. Agent inventory stores one document per
+agent ID, including its advertised action readiness. A compound heartbeat index
+supports atomic expiry checks. Observation timestamps retain sub-millisecond
+precision alongside BSON dates, keeping ordering and expiry boundaries exact.
 
 ## Quick start
 
