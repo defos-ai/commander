@@ -63,6 +63,76 @@ func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T
 	}
 }
 
+func TestDiscoveryRedirectScope(t *testing.T) {
+	const source = "https://site.test/"
+	for _, test := range []struct {
+		name        string
+		destination string
+		wantError   []string
+	}{
+		{
+			name: "different hostname requires operator approval", destination: "https://other.test/review",
+			wantError: []string{`redirect to "https://other.test/review"`, `website scope "site.test"`, `operator approval is required`, `hostname "other.test"`},
+		},
+		{
+			name: "subdomain requires operator approval", destination: "https://www.site.test/review",
+			wantError: []string{`redirect to "https://www.site.test/review"`, `website scope "site.test"`, `operator approval is required`, `hostname "www.site.test"`},
+		},
+		{name: "same hostname different scheme", destination: "http://site.test/review"},
+		{name: "same hostname different port", destination: "https://site.test:8443/review"},
+		{name: "same hostname different scheme and port", destination: "http://site.test:8080/review"},
+		{name: "credentials rejected", destination: "https://user:password@site.test/review", wantError: []string{"HTTP(S) URL without credentials"}},
+		{name: "non-HTTP scheme rejected", destination: "ftp://site.test/review", wantError: []string{"HTTP(S) URL without credentials"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var visited []string
+			original := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = original })
+			http.DefaultTransport = roundTrip(func(request *http.Request) (*http.Response, error) {
+				visited = append(visited, request.URL.String())
+				status := http.StatusOK
+				headers := http.Header{"Content-Type": {"text/html"}}
+				if request.URL.String() == source {
+					status = http.StatusFound
+					headers.Set("Location", test.destination)
+				}
+				return &http.Response{StatusCode: status, Header: headers, Body: io.NopCloser(strings.NewReader("<title>Review</title>")), Request: request}, nil
+			})
+			executor := actions.NewDiscoverPages()
+			if _, err := executor.Discover(t.Context(), nil, nil); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := executor.Run(t.Context(), json.RawMessage(`{"url":"https://site.test","max_pages":1}`), []string{"network-access"})
+
+			if len(test.wantError) > 0 {
+				if err == nil {
+					t.Fatal("expected redirect to be rejected")
+				}
+				for _, message := range test.wantError {
+					if !strings.Contains(err.Error(), message) {
+						t.Errorf("error %q does not contain %q", err, message)
+					}
+				}
+				if !reflect.DeepEqual(visited, []string{source}) {
+					t.Fatalf("fetched blocked redirect destination: %v", visited)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output actions.DiscoverPagesOutput
+			if err := json.Unmarshal(result.Output, &output); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(visited, []string{source, test.destination}) || len(output.Pages) != 1 || output.Pages[0].URL != test.destination {
+				t.Fatalf("same-hostname redirect was not discovered: visited=%v output=%+v", visited, output)
+			}
+		})
+	}
+}
+
 func TestSEOReportsObservedMetadataAndProblems(t *testing.T) {
 	fixtureHTTP(t, func(*http.Request) string {
 		return `<html><head><title>Release preview</title><base href="/docs/"><link rel="canonical" href="intro"><meta name="robots" content="noindex"><script type="application/ld+json">{invalid}</script></head><body><h1>Release preview</h1></body></html>`

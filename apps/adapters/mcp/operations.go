@@ -132,7 +132,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request TaskRequest) (operations.Task, error) {
 			return config.OperationStore.GetTask(ctx, request.OperationID, request.TaskID)
 		})
-	addTool(server, "get_report", "Read the separately stored final report for a completed operation, including after a server restart.", operationSchema,
+	addTool(server, "get_report", "Read a completed operation's report by operation_id. Use list_operations to find the ID; no operator question is needed.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return readReport(ctx, config.OperationStore, config.ReportStore, request.OperationID)
 		})
@@ -181,9 +181,13 @@ func addOperationTools(server *mcp.Server, config Config) {
 			}
 			return OperationEventsResult{Events: events, NextCursor: nextCursor}, err
 		})
-	addTool(server, "ask_question", "Ask the operator when needed, with up to 4 short options or a free-text question. timeout_seconds defaults to 120; after expiry, review the situation and decide how to continue. Silence is not approval. Supply task_id and continuation version to pause that decision; otherwise step_id blocks that step or omission blocks new assignments. Do not invent an operator answer.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": missionStepProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
+	addTool(server, "ask_question", "Ask an operator decision for an active operation (up to 4 options or free text). General clarifications belong in chat. Supply task_id/version to pause a continuation; otherwise step_id blocks that step, or omit it to block new assignments. Timeout defaults to 120 seconds; expiry returns to model review, not approval.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": missionStepProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
 		func(ctx context.Context, request AskQuestionRequest) (operations.Question, error) {
-			return execution.Ask(ctx, commands.AskQuestionCommand(request))
+			question, err := execution.Ask(ctx, commands.AskQuestionCommand(request))
+			if errors.Is(err, operations.ErrFinished) {
+				return question, fmt.Errorf("%w: ask clarifications in chat; read saved results or start a new operation for new work", err)
+			}
+			return question, err
 		})
 	addTool(server, "answer_question", "Record the operator's actual answer. A linked continuation returns to the model for a decision; this does not execute or approve any action automatically.", objectSchema(map[string]any{"operation_id": stringProperty, "question_id": stringProperty, "answer": stringProperty}, "operation_id", "question_id", "answer"),
 		func(ctx context.Context, request AnswerQuestionRequest) (operations.Operation, error) {
@@ -193,7 +197,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request CompleteOperationRequest) (operations.Operation, error) {
 			return execution.Complete(ctx, commands.CompleteOperationCommand(request))
 		})
-	addTool(server, "fail_operation", "End an operation that cannot continue, retaining collected results and the failure reason.", objectSchema(map[string]any{"operation_id": stringProperty, "reason": stringProperty}, "operation_id", "reason"),
+	addTool(server, "fail_operation", "End unrecoverable work, retaining results and the reason. Consider recovery or an operator decision first.", objectSchema(map[string]any{"operation_id": stringProperty, "reason": stringProperty}, "operation_id", "reason"),
 		func(ctx context.Context, request FailOperationRequest) (operations.Operation, error) {
 			return execution.Fail(ctx, commands.FailOperationCommand(request))
 		})

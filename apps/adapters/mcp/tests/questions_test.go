@@ -1,10 +1,16 @@
 package mcp_test
 
 import (
+	"bytes"
+	"net"
+	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"commander/framework/domain/operations"
+	"commander/framework/domain/reports"
 )
 
 func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
@@ -117,5 +123,73 @@ func TestLinkedQuestionReturnsDecisionToModel(t *testing.T) {
 			a.resolve(op.ID, *decision, []object{})
 			a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": "Reviewed the SEO evidence and operator question", "findings": []object{}}}, nil)
 		})
+	}
+}
+
+func TestDiscoveryRedirectWaitsForOperatorBeforeLimitedReport(t *testing.T) {
+	a := connect(t)
+	var outsideRequests atomic.Int32
+	url := serveWebsite(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/outside" {
+			outsideRequests.Add(1)
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("<html><title>Outside requested scope</title></html>"))
+			return
+		}
+		// Use the fixture's reachable IP as a different hostname from the
+		// Compose host alias. Local test stacks may use an IP already.
+		host, port, err := net.SplitHostPort(r.Context().Value(http.LocalAddrContextKey).(net.Addr).String())
+		if err != nil {
+			t.Error(err)
+			http.Error(w, "invalid fixture address", http.StatusInternalServerError)
+			return
+		}
+		requestedHost, _, _ := net.SplitHostPort(r.Host)
+		if strings.EqualFold(host, requestedHost) {
+			host = "host.docker.internal"
+			if address := net.ParseIP(requestedHost); address != nil && address.IsLoopback() {
+				host = "localhost"
+			}
+		}
+		http.Redirect(w, r, "http://"+net.JoinHostPort(host, port)+"/outside", http.StatusFound)
+	}))
+	op := a.start(url)
+	if len(op.Mission.Automations["discover-pages"].Run) == 0 {
+		t.Fatal("fixture mission has no discovery automation")
+	}
+
+	a.task(op.ID, "discover-pages", url)
+	failed := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
+	decision := modelDecision(failed)
+	if failed.Status != operations.Planning || len(failed.Tasks) != 1 || decision.Status != operations.TaskFailed || !strings.Contains(decision.Error, "leaves website scope") || outsideRequests.Load() != 0 {
+		t.Fatalf("redirect did not preserve a scoped model decision: operation=%+v, outside requests=%d", failed, outsideRequests.Load())
+	}
+	originalVersion := decision.Continuation.Version
+	var question operations.Question
+	a.call("ask_question", object{"operation_id": op.ID, "task_id": decision.ID, "version": originalVersion,
+		"text": "The website redirects to another hostname. Should the review include it?", "options": []string{"Review the destination", "Keep the original scope"}}, &question)
+	waiting := a.get(op.ID)
+	continuation := waiting.Tasks[0].Continuation
+	if waiting.Status != operations.Waiting || continuation.DecisionBy != operations.DecisionUser || continuation.Status != operations.ContinuationWaiting || continuation.QuestionID != question.ID {
+		t.Fatalf("redirect question did not wait for the operator: %+v", waiting)
+	}
+
+	const answer = "Keep the original scope"
+	a.call("answer_question", object{"operation_id": op.ID, "question_id": question.ID, "answer": answer}, nil)
+	resumed := a.get(op.ID)
+	decision = modelDecision(resumed)
+	if resumed.Status != operations.Planning || decision == nil || decision.Continuation.Version != originalVersion+2 || len(resumed.Questions) != 1 || resumed.Questions[0].Status != operations.QuestionAnswered || resumed.Questions[0].Answer != answer {
+		t.Fatalf("operator choice did not resume the current decision: %+v", resumed)
+	}
+	a.fails("resolve_continuation", object{"operation_id": op.ID, "task_id": decision.ID, "version": originalVersion, "actions": []object{}}, "pending")
+	a.resolve(op.ID, *decision, []object{})
+	const limitation = "Discovery was blocked by a cross-host redirect; the operator declined to expand scope, so no pages were reviewed."
+	var completed operations.Operation
+	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": "Review ended with the operator's requested scope limitation", "findings": []object{}, "limitations": []string{limitation}}}, &completed)
+	a.fails("ask_question", object{"operation_id": op.ID, "text": "Should the report be shown?"}, "operation has finished")
+	var report reports.Report
+	a.call("get_report", object{"operation_id": op.ID}, &report)
+	if completed.Status != operations.Completed || len(completed.Tasks) != 1 || report.ID != completed.ReportID || report.OperationID != op.ID || !bytes.Contains(report.Output, []byte(limitation)) || outsideRequests.Load() != 0 {
+		t.Fatalf("limited report or redirect scope was lost: operation=%+v, report=%+v, outside requests=%d", completed, report, outsideRequests.Load())
 	}
 }

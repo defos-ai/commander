@@ -180,6 +180,63 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 	}
 }
 
+func TestReadingReportDoesNotTriggerBackgroundReview(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var reads, requests atomic.Int32
+	server := mcp.NewServer(&mcp.Implementation{Name: "report-fixture", Version: "1"}, nil)
+	for _, name := range []string{"get_report", "get_operation", "operation_events"} {
+		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			payload := `{"operation_id":"finished-operation","output":{"summary":"Saved review"}}`
+			if req.Params.Name != "get_report" {
+				reads.Add(1)
+				payload = `{"id":"finished-operation","status":"completed"}`
+			}
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: payload}}}, nil
+		})
+	}
+	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+	defer endpoint.Close()
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			writeModelDelta(w, toolDelta("get_report", map[string]any{"operation_id": "finished-operation"}), "tool_calls")
+			return
+		}
+		writeModelDelta(w, map[string]any{"content": "Saved review retrieved"}, "stop")
+	}))
+	defer provider.Close()
+	u := newUI(t, ctx, endpoint.URL, provider.URL)
+	defer u.model.Close()
+
+	u.text("Get the saved report")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("report reply", func(view string) bool {
+		return strings.Contains(view, "Saved review retrieved") && !strings.Contains(view, "Thinking")
+	})
+	// Drain asynchronous updates: a report read must not launch a watcher or another model turn.
+	quiet := time.NewTimer(250 * time.Millisecond)
+	defer quiet.Stop()
+wait:
+	for {
+		select {
+		case msg := <-u.messages:
+			_, cmd := u.model.Update(msg)
+			u.run(cmd)
+		case <-quiet.C:
+			break wait
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+
+	if reads.Load() != 0 || requests.Load() != 2 {
+		t.Fatalf("report read started background work: %d operation reads, %d model requests", reads.Load(), requests.Load())
+	}
+	if strings.Contains(u.model.View(), "Operator input") {
+		t.Fatal("report retrieval opened an operator question")
+	}
+}
+
 func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()

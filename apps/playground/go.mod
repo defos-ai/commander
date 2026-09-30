@@ -14,11 +14,11 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/muesli/termenv v0.16.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.48.0 // indirect
 )
 
 require (
-	commander/framework v0.0.0 // indirect
+	commander/framework v0.0.0
 	commander/providers v0.0.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect

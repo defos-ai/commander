@@ -57,6 +57,9 @@ func operationID(arguments json.RawMessage) string {
 }
 
 func (e *Engine) follow(call llm.Call, result bridge.Result) {
+	if call.Name == "get_report" {
+		return
+	}
 	id := operationID(call.Arguments)
 	if call.Name == "start_operation" {
 		var operation struct {

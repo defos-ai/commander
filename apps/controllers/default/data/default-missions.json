@@ -1,7 +1,7 @@
 [
   {
     "name": "review-website",
-    "objective": "Review a website before release. Assign discover-pages once using the mission input. Discovery stays on the same hostname, allowing HTTP/HTTPS and port changes but excluding other hostnames and subdomains. The controller automatically checks links, basic accessibility, SEO metadata and passive technology indicators, and captures desktop/mobile screenshots for each discovered page. Wait for the grouped results, then prioritize concrete findings and report coverage and limitations. Technology indicators and declared versions are evidence, not proof of vulnerable or outdated software. SEO checks inspect returned HTML, not search rankings. Resolve the grouped continuation before completing. Ask the operator only when a release priority or intended behavior needs clarification. Do not modify the website or claim a complete accessibility or SEO audit.",
+    "objective": "Review a website before release. Start discover-pages with mission input; let automation run page checks. Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages at the destination, preserving max_pages; document the scope change. Review grouped results and resolve the continuation before completing. Report prioritized findings, coverage and limitations. Technology versions are indicators, not vulnerability proof; SEO/accessibility checks are partial. Do not modify the site.",
     "required_actions": [
       "discover-pages",
       "check-links",

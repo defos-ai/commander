@@ -44,8 +44,11 @@ func httpClient(scope *url.URL) *http.Client {
 		if len(via) >= 5 {
 			return errors.New("redirect limit reached")
 		}
-		if !sameHostname(req.URL, scope) || req.URL.User != nil || (req.URL.Scheme != "http" && req.URL.Scheme != "https") {
-			return errors.New("redirect leaves website scope")
+		if req.URL.User != nil || (req.URL.Scheme != "http" && req.URL.Scheme != "https") {
+			return errors.New("redirect must use an HTTP(S) URL without credentials")
+		}
+		if !sameHostname(req.URL, scope) {
+			return fmt.Errorf("redirect to %q leaves website scope %q; operator approval is required before reviewing hostname %q", req.URL.String(), scope.Hostname(), req.URL.Hostname())
 		}
 		return nil
 	}}
