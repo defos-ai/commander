@@ -10,13 +10,22 @@ import (
 func TestMissions(t *testing.T) {
 	a := connect(t)
 	var catalog struct {
-		Missions []missions.Mission `json:"missions"`
+		Missions []map[string]string `json:"missions"`
 	}
 	a.call("list_missions", object{}, &catalog)
-	if len(catalog.Missions) != 1 || catalog.Missions[0].Name != "review-website" {
+	if len(catalog.Missions) != 1 || catalog.Missions[0]["name"] != "review-website" {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
-	mission := catalog.Missions[0]
+	summary := catalog.Missions[0]
+	if len(summary) != 2 || summary["objective"] == "" {
+		t.Fatalf("expected only mission name and objective: %+v", summary)
+	}
+	var mission missions.Mission
+	a.call("describe_mission", object{"mission_name": summary["name"]}, &mission)
+	if mission.Name != summary["name"] || mission.Objective != summary["objective"] {
+		t.Fatalf("mission detail differs from summary: %+v", mission)
+	}
+	a.fails("describe_mission", object{"mission_name": "missing"}, "unknown")
 	if len(mission.StartingActions) != 1 || mission.StartingActions[0] != "discover-pages" || len(mission.Automations["discover-pages"].Run) != 5 {
 		t.Fatalf("missing automatic website workflow: %+v", mission)
 	}

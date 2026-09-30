@@ -61,11 +61,12 @@ func TestAllInOne(t *testing.T) {
 			return
 		}
 		request := requests.Add(1)
-		if request == 2 || request == 3 {
-			want := "review-website"
-			if request == 3 {
-				want = "web-quality-agent-"
-			}
+		expected := map[int32][]string{
+			2: {"review-website"},
+			3: {"starting_actions", "automations", "input_schema", "output_schema"},
+			4: {"web-quality-agent-"},
+		}
+		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
 				t.Errorf("model did not receive the real tool result containing %q", want)
 			}
@@ -73,19 +74,21 @@ func TestAllInOne(t *testing.T) {
 		var delta map[string]any
 		finish := "tool_calls"
 		switch request {
-		case 1, 2:
+		case 1, 3:
 			name := "list_missions"
-			if request == 2 {
+			if request == 3 {
 				name = "list_agents"
 			}
-			delta = map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": name, "type": "function", "function": map[string]any{"name": name, "arguments": "{}"}}}}
-		case 3:
-			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "review-website", "input": map[string]any{"url": website.URL}})
+			delta = toolDelta(name, map[string]any{})
+		case 2:
+			delta = toolDelta("describe_mission", map[string]any{"mission_name": "review-website"})
 		case 4:
-			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "check-seo", "input": map[string]any{"url": website.URL}})
+			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "review-website", "input": map[string]any{"url": website.URL}})
 		case 5:
+			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "check-seo", "input": map[string]any{"url": website.URL}})
+		case 6:
 			delta, finish = map[string]any{"content": "**Review running**"}, "stop"
-		case 6, 8:
+		case 7, 9:
 			// Continuations must reach the model automatically, carrying actual
 			// results and then the operator's answer, without another chat prompt.
 			last := body.Messages[len(body.Messages)-1]
@@ -96,7 +99,7 @@ func TestAllInOne(t *testing.T) {
 				http.Error(w, "missing operation evidence", http.StatusBadRequest)
 				return
 			}
-			if request == 6 {
+			if request == 7 {
 				task := op.Tasks[0]
 				if task.Continuation == nil || task.Continuation.Status != operations.ContinuationPending {
 					t.Error("missing model continuation")
@@ -112,9 +115,9 @@ func TestAllInOne(t *testing.T) {
 				delta = toolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{"url": website.URL,
 					"summary": "Release preview reviewed; operator confirmed intentional noindex", "findings": []any{}}})
 			}
-		case 7:
+		case 8:
 			delta, finish = map[string]any{"content": "Please choose how to interpret the indexing restriction."}, "stop"
-		case 9, 10: // Completion can also produce a final background update.
+		case 10, 11: // Completion can also produce a final background update.
 			delta, finish = map[string]any{"content": "**Review complete**\n\n- SEO evidence checked\n- Operator answer recorded"}, "stop"
 		default:
 			t.Errorf("unexpected model request %d", request)
@@ -193,7 +196,12 @@ func TestAllInOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := json.Marshal(result.StructuredContent)
+	var raw []byte
+	for _, content := range result.Content {
+		if text, ok := content.(*mcp.TextContent); ok {
+			raw = append(raw, text.Text...)
+		}
+	}
 	var report reports.Report
 	if result.IsError || json.Unmarshal(raw, &report) != nil || report.OperationID != operationID || !bytes.Contains(report.Output, []byte("operator confirmed intentional noindex")) {
 		t.Fatalf("Playground did not persist the mission report: %s", raw)
@@ -211,7 +219,7 @@ func TestAllInOne(t *testing.T) {
 		t.Fatal("/exit did not stop the CLI")
 	}
 
-	if requests.Load() < 9 || strings.Contains(output.String(), "**Review complete**") || !strings.Contains(output.String(), "Review complete") {
+	if requests.Load() < 10 || strings.Contains(output.String(), "**Review complete**") || !strings.Contains(output.String(), "Review complete") {
 		t.Fatalf("unexpected chat rendering: %s", output.String())
 	}
 	files, err := os.ReadDir(temporary)

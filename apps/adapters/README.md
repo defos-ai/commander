@@ -20,11 +20,16 @@ are provided for [VS Code](../../.vscode/mcp.json),
 [Codex](../../.codex/config.toml), and [Cursor](../../.cursor/mcp.json).
 See [local setup](../../docs/deployment.md) for Compose and connection settings.
 
+Successful MCP tool results contain JSON in one `content` text block, without
+`structuredContent`. Artifact links are returned as additional resource-link blocks.
+
 `list_agents`, `list_actions` and `list_operations` return compact summaries.
 Use `describe_action` for an action's schemas (optionally with `agent_id` for that
 agent's version), `describe_agent` for full agent details, and `get_operation`
-for task results and questions. `list_missions` includes mission schemas and
-automation rules; `get_report` returns a completed operation's report.
+for task results and questions. `list_missions` returns mission names and
+objectives; call `describe_mission` with `mission_name` for the selected mission's
+full actions, automation rules and input/output schemas before starting it.
+`get_report` returns a completed operation's report.
 
 `operation_tasks` returns task summaries in assignment order; `operation_events`
 returns events in sequence order. Both accept `operation_id`, an optional `cursor`,

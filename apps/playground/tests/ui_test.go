@@ -74,7 +74,7 @@ func TestQuestionSelector(t *testing.T) {
 				payload = op
 			}
 			encoded, _ := json.Marshal(payload)
-			return &mcp.CallToolResult{StructuredContent: json.RawMessage(encoded)}, nil
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}, nil
 		})
 	}
 	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
@@ -123,7 +123,7 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 			server := mcp.NewServer(&mcp.Implementation{Name: "error-fixture", Version: "1"}, nil)
 			server.AddTool(&mcp.Tool{Name: "start_operation", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				calls.Add(1)
-				return &mcp.CallToolResult{StructuredContent: map[string]any{}}, nil
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "{}"}}}, nil
 			})
 			endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
 			defer endpoint.Close()
@@ -219,7 +219,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 				reads.Add(1)
 			}
 			encoded, _ := json.Marshal(payload)
-			return &mcp.CallToolResult{StructuredContent: json.RawMessage(encoded)}, nil
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}, nil
 		})
 	}
 	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))

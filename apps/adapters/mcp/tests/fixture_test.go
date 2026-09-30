@@ -97,16 +97,13 @@ func (a *api) call(name string, args object, out any) {
 	if result.IsError {
 		a.t.Fatalf("%s: %s", name, resultText(result))
 	}
+	if result.StructuredContent != nil {
+		a.t.Fatalf("%s: result must contain JSON once, in content text only", name)
+	}
 	if out == nil {
 		return
 	}
-	raw, err := json.Marshal(result.StructuredContent)
-	if err != nil {
-		a.t.Fatal(err)
-	}
-	if string(raw) == "null" {
-		raw = []byte(resultText(result))
-	}
+	raw := []byte(resultText(result))
 	if err := json.Unmarshal(raw, out); err != nil {
 		a.t.Fatalf("decode %s: %v; %s", name, err, raw)
 	}

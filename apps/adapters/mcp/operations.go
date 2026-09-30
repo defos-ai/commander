@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	commands "commander/framework/comms/clients/controller/commands"
@@ -15,6 +16,22 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+type MissionRequest struct {
+	MissionName string `json:"mission_name"`
+}
+
+func (r MissionRequest) Validate() error {
+	if strings.TrimSpace(r.MissionName) == "" {
+		return errors.New("mission_name must not be blank")
+	}
+	return nil
+}
+
+type missionListItem struct {
+	Name      string `json:"name"`
+	Objective string `json:"objective"`
+}
 
 type OperationRequest struct {
 	OperationID string `json:"operation_id"`
@@ -61,14 +78,22 @@ type OperationTasksResult struct {
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
-	addTool(server, "list_missions", "List reusable JSON mission definitions, automation rules, suggested steps, and input/output schemas. Does not execute work.", emptySchema,
+	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, automation and schemas before starting it.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
-			Missions []missions.Mission `json:"missions"`
+			Missions []missionListItem `json:"missions"`
 		}, error) {
 			items, err := config.MissionStore.List(ctx)
+			summaries := make([]missionListItem, 0, len(items))
+			for _, item := range items {
+				summaries = append(summaries, missionListItem{Name: item.Name, Objective: item.Objective})
+			}
 			return struct {
-				Missions []missions.Mission `json:"missions"`
-			}{items}, err
+				Missions []missionListItem `json:"missions"`
+			}{summaries}, err
+		})
+	addTool(server, "describe_mission", "Read one mission's full definition: required and starting actions, automation rules, declared steps and input/output schemas. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
+			return config.MissionStore.Get(ctx, request.MissionName)
 		})
 	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until all declared mission requirements are ready.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
 		func(ctx context.Context, request StartOperationRequest) (operations.Operation, error) {

@@ -120,7 +120,7 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 		}},
 	}, &mcp.ServerOptions{
 		Logger:       config.Logger,
-		Instructions: "Use list_missions for mission definitions, automation and schemas; start_operation begins a run. list_agents, list_actions, list_operations and operation_tasks return summaries; get_task returns one task with its result and continuation. Use describe_action for input/output schemas before calling an unfamiliar action; pass agent_id for that agent's definition. Inspect operation preflight before assigning work; it reports missing actions and per-agent requirements. describe_agent returns full agent details. assign_task queues work; operation_events tracks progress; get_operation returns full results, continuations and questions. Inspect automation and resolve pending model continuations before adding work; the controller has no embedded model. ask_question requests operator help; answer_question records only an actual operator answer. Complete with a report matching output_schema. run_action is for ad hoc work. Operations with missing requirements wait before dispatch; discovery updates refresh preflight. Agents are started by their hosts. Never request secret configuration values in chat or task inputs. Read artifact links with resources/read.",
+		Instructions: "Use list_missions to find missions, then describe_mission for the selected mission's actions, automation and schemas before start_operation begins a run. list_agents, list_actions, list_operations and operation_tasks return summaries; get_task returns one task with its result and continuation. Use describe_action for input/output schemas before calling an unfamiliar action; pass agent_id for that agent's definition. Inspect operation preflight before assigning work; it reports missing actions and per-agent requirements. describe_agent returns full agent details. assign_task queues work; operation_events tracks progress; get_operation returns full results, continuations and questions. Inspect automation and resolve pending model continuations before adding work; the controller has no embedded model. ask_question requests operator help; answer_question records only an actual operator answer. Complete with a report matching output_schema. run_action is for ad hoc work. Operations with missing requirements wait before dispatch; discovery updates refresh preflight. Agents are started by their hosts. Never request secret configuration values in chat or task inputs. Read artifact links with resources/read.",
 	})
 	if config.Logger != nil {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
@@ -244,7 +244,7 @@ func addTool[Input, Output any](server *mcp.Server, name, description, schema st
 			if err != nil {
 				return nil, fmt.Errorf("encode %s result: %w", name, err)
 			}
-			result := &mcp.CallToolResult{StructuredContent: output, Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}
+			result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}
 			if actionOutput, ok := any(output).(actionmodel.ActionOutput); ok {
 				if actionOutput.OutputArtifact != nil {
 					result.Content = append(result.Content, resourceLink(*actionOutput.OutputArtifact))
