@@ -57,10 +57,10 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 		if err != nil {
 			return operations.Operation{}, fmt.Errorf("operation preflight: %w", err)
 		}
-		operation.Preflight = assessPreflight(definition, records)
-		refreshStatus(&operation)
+		operation.Preflight = operations.AssessPreflight(definition, records)
+		operation.RefreshStatus()
 	}
-	appendEvent(&operation, operations.OperationStarted, "", "", "Awaiting the next action from the decision maker")
+	operation.AppendEvent(operations.OperationStarted, "", "", "Awaiting the next action from the decision maker")
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
 		if err := r.store.Create(ctx, operation); err != nil {
 			if errors.Is(err, operations.ErrWriteUncertain) {

@@ -6,18 +6,26 @@ import (
 	"time"
 
 	"commander/framework/domain/actions"
+	"commander/framework/domain/agents"
 )
 
-// Implementations retain and return independent copies. Update applies a mutation
-// atomically to the latest operation. Errors other than ErrWriteUncertain leave it unchanged.
+// Implementations retain and return independent copies. Mutations apply atomically
+// to the latest operation. Errors other than ErrWriteUncertain leave it unchanged.
 // ErrWriteUncertain means the new snapshot is visible but durability is unconfirmed;
 // Methods returning an Operation provide that snapshot. Pause new work until
-// recovery reconciles persisted state. Providers may retry the callback; it must
-// not perform I/O or other external side effects.
+// recovery reconciles persisted state.
 type OperationStore interface {
 	Create(context.Context, Operation) error
 	Get(context.Context, string) (Operation, error)
 	List(context.Context) ([]Operation, error)
+	// RefreshPreflight assesses the saved mission against the supplied inventory
+	// snapshot. Changed readiness, its version, status, and event commit together;
+	// identical readiness returns the saved operation without writing.
+	RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (Operation, error)
+	// Recover validates the latest saved work, expires due questions, and records
+	// recovery together. Terminal operations without recoverable tasks only expire
+	// questions, with no write if none are due. It never dispatches work.
+	Recover(ctx context.Context, operationID string, now time.Time) (Operation, error)
 	// Task queries are scoped to one operation. A missing operation returns
 	// ErrUnknownOperation; GetTask returns ErrUnknownTask when its task is absent.
 	GetTask(ctx context.Context, operationID, taskID string) (Task, error)
@@ -69,5 +77,4 @@ type OperationStore interface {
 	// Dispatched tasks retain their state and may finish later. Terminal operations
 	// return ErrFinished without changing the saved state.
 	Cancel(ctx context.Context, operationID string) (Operation, error)
-	Update(context.Context, string, func(*Operation) error) (Operation, error)
 }

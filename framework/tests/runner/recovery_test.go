@@ -12,6 +12,7 @@ import (
 	"commander/framework/comms/clients/controller/commands"
 	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/agents"
 	"commander/framework/domain/executions"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
@@ -464,17 +465,19 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 
 type uncertainWriteStore struct {
 	operations.OperationStore
-	createError   error
-	afterQueue    func(operations.Operation) error
-	afterDispatch func(operations.Operation) error
-	afterFinish   func(operations.Operation) error
-	afterResolve  func(operations.Operation) error
-	afterAsk      func(operations.Operation) error
-	afterAnswer   func(operations.Operation) error
-	afterExpire   func(operations.Operation) error
-	afterCancel   func(operations.Operation) error
-	afterComplete func(operations.Operation) error
-	afterFail     func(operations.Operation) error
+	createError    error
+	afterQueue     func(operations.Operation) error
+	afterDispatch  func(operations.Operation) error
+	afterFinish    func(operations.Operation) error
+	afterResolve   func(operations.Operation) error
+	afterAsk       func(operations.Operation) error
+	afterAnswer    func(operations.Operation) error
+	afterExpire    func(operations.Operation) error
+	afterPreflight func(operations.Operation) error
+	afterRecover   func(operations.Operation) error
+	afterCancel    func(operations.Operation) error
+	afterComplete  func(operations.Operation) error
+	afterFail      func(operations.Operation) error
 }
 
 func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -536,6 +539,22 @@ func (s *uncertainWriteStore) ExpireQuestions(ctx context.Context, operationID s
 	op, err := s.OperationStore.ExpireQuestions(ctx, operationID, now)
 	if err == nil && s.afterExpire != nil {
 		err = s.afterExpire(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
+	op, err := s.OperationStore.RefreshPreflight(ctx, operationID, records)
+	if err == nil && s.afterPreflight != nil {
+		err = s.afterPreflight(op)
+	}
+	return op, err
+}
+
+func (s *uncertainWriteStore) Recover(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
+	op, err := s.OperationStore.Recover(ctx, operationID, now)
+	if err == nil && s.afterRecover != nil {
+		err = s.afterRecover(op)
 	}
 	return op, err
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"commander/framework/domain/operations"
 )
@@ -22,17 +21,6 @@ func (r *Runner) requestContext(ctx context.Context) (context.Context, func()) {
 		stop()
 		cancel()
 	}
-}
-
-func (r *Runner) update(ctx context.Context, s *operationState, mutate func(*operations.Operation) error) error {
-	next, err := r.store.Update(ctx, s.operation.ID, func(next *operations.Operation) error {
-		if err := mutate(next); err != nil {
-			return err
-		}
-		next.UpdatedAt = time.Now().UTC()
-		return nil
-	})
-	return s.acceptUpdate(next, err)
 }
 
 func (s *operationState) acceptUpdate(next operations.Operation, err error) error {
@@ -74,12 +62,4 @@ func runningTasks(operation operations.Operation) bool {
 		}
 	}
 	return false
-}
-
-func refreshStatus(operation *operations.Operation) {
-	operation.RefreshStatus()
-}
-
-func appendEvent(operation *operations.Operation, kind operations.EventType, taskID, questionID, message string) {
-	operation.AppendEvent(kind, taskID, questionID, message)
 }

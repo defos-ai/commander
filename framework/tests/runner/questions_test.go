@@ -31,7 +31,7 @@ func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
 	}
 
 	closeRunner(t, r)
-	if _, err := config.OperationStore.Update(t.Context(), waiting.ID, func(op *operations.Operation) error {
+	if _, err := config.OperationStore.(*operationStore).Update(t.Context(), waiting.ID, func(op *operations.Operation) error {
 		op.Questions[0].ExpiresAt = time.Now().Add(-time.Second)
 		return nil
 	}); err != nil {

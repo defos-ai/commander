@@ -174,7 +174,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 
 func TestLateAnswerPersistsExpirationBeforeReturningError(t *testing.T) {
 	config := fixture()
-	config.OperationStore = &deadlineOnAnswerStore{OperationStore: config.OperationStore}
+	config.OperationStore = &deadlineOnAnswerStore{operationStore: config.OperationStore.(*operationStore)}
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
 	before := operationAwaitingDecision(t, r, calls)
@@ -209,10 +209,10 @@ func operationAwaitingDecision(t *testing.T, r *runner.Runner, calls <-chan invo
 
 // Expire the durable deadline within AnswerQuestion so the runner's periodic
 // sweep cannot handle expiration before the answer reaches the store.
-type deadlineOnAnswerStore struct{ operations.OperationStore }
+type deadlineOnAnswerStore struct{ *operationStore }
 
 func (s *deadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
-	if _, err := s.OperationStore.Update(ctx, operationID, func(op *operations.Operation) error {
+	if _, err := s.operationStore.Update(ctx, operationID, func(op *operations.Operation) error {
 		for i := range op.Questions {
 			if op.Questions[i].ID == questionID {
 				op.Questions[i].ExpiresAt = time.Now().Add(-time.Second)
@@ -222,5 +222,5 @@ func (s *deadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID,
 	}); err != nil {
 		return operations.Operation{}, err
 	}
-	return s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer)
+	return s.operationStore.AnswerQuestion(ctx, operationID, questionID, answer)
 }

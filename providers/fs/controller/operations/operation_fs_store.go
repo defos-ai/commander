@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"commander/framework/domain/actions"
+	"commander/framework/domain/agents"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
 	"commander/providers/internal/jsonfile"
@@ -199,6 +200,18 @@ func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, a
 	return events, nil
 }
 
+func (s *OperationFsStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
+	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
+		return operation.RefreshPreflight(records)
+	})
+}
+
+func (s *OperationFsStore) Recover(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
+	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
+		return operation.Recover(now)
+	})
+}
+
 func (s *OperationFsStore) QueueTask(ctx context.Context, operationID string, task operations.Task) (operations.Operation, error) {
 	return s.updateChanged(ctx, operationID, func(next *operations.Operation) (bool, error) {
 		return next.QueueTask(task)
@@ -281,6 +294,8 @@ func (s *OperationFsStore) updateChanged(ctx context.Context, operationID string
 	return next, err
 }
 
+// Update is the filesystem provider's mutation primitive. The callback must be
+// safe to retry and must not perform I/O or other external side effects.
 func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	path, err := s.path(ctx, operationID)
 	if err != nil {

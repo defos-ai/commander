@@ -10,7 +10,6 @@ import (
 	"commander/framework/comms/messages"
 	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/operations"
-	"commander/framework/id"
 )
 
 // recover restores state before the runner becomes available to callers. It
@@ -21,9 +20,10 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 		return fmt.Errorf("load operations for recovery: %w", err)
 	}
 	var refs []artifact.Ref
-	for _, operation := range records {
-		if err := validateRecoveredOperation(operation); err != nil {
-			return fmt.Errorf("recover operation %s: %w", operation.ID, err)
+	for _, record := range records {
+		operation, err := r.store.Recover(ctx, record.ID, time.Now().UTC())
+		if err != nil {
+			return fmt.Errorf("recover operation %s: %w", record.ID, err)
 		}
 		for _, task := range operation.Tasks {
 			if task.Result == nil {
@@ -34,28 +34,9 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 				refs = append(refs, *task.Result.OutputArtifact)
 			}
 		}
-		s := &operationState{operation: operation.Clone(), changed: make(chan struct{})}
-		if operation.Status.Terminal() && !slices.ContainsFunc(operation.Tasks, needsTaskRecovery) {
-			if now := time.Now().UTC(); hasDueQuestions(operation, now) {
-				next, err := r.store.ExpireQuestions(ctx, operation.ID, now)
-				if err := s.acceptUpdate(next, err); err != nil {
-					return fmt.Errorf("persist expired questions for %s: %w", operation.ID, err)
-				}
-			}
-			if pendingQuestionDeadline(s.operation) {
-				r.states[operation.ID] = s
-			}
-			continue
+		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) || pendingQuestionDeadline(operation) {
+			r.states[operation.ID] = &operationState{operation: operation.Clone(), changed: make(chan struct{})}
 		}
-		if err := r.update(ctx, s, func(next *operations.Operation) error {
-			next.ExpireQuestions(time.Now().UTC())
-			refreshStatus(next)
-			appendEvent(next, operations.OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")
-			return nil
-		}); err != nil {
-			return fmt.Errorf("persist recovered operation %s: %w", operation.ID, err)
-		}
-		r.states[operation.ID] = s
 	}
 	if err := artifacts.RestoreArtifacts(refs); err != nil {
 		return fmt.Errorf("restore operation artifacts: %w", err)
@@ -66,17 +47,13 @@ func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error 
 func (r *Runner) resumeTasks() {
 	for _, state := range r.states {
 		for _, task := range state.operation.Clone().Tasks {
-			if needsTaskRecovery(task) {
+			if task.NeedsRecovery() {
 				allowDispatch := !state.operation.Status.Terminal() && task.DeadlineAt.After(time.Now())
 				r.workers++
 				go r.recoverTask(task, allowDispatch)
 			}
 		}
 	}
-}
-
-func needsTaskRecovery(task operations.Task) bool {
-	return task.Status == operations.TaskRunning || task.Status == operations.TaskInterrupted
 }
 
 func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
@@ -102,43 +79,4 @@ func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
 		result, err = r.executor.RecoverAction(ctx, task.AgentID, call)
 	}
 	r.results <- taskResult{task: task, output: result, err: err}
-}
-
-func validateRecoveredOperation(operation operations.Operation) error {
-	switch operation.Status {
-	case operations.Planning, operations.Running, operations.Waiting, operations.Completed, operations.Failed, operations.Cancelled:
-	default:
-		return fmt.Errorf("invalid operation status %q", operation.Status)
-	}
-	seen := make(map[string]bool)
-	for _, task := range operation.Tasks {
-		undispatched := task.Status == operations.TaskQueued || task.Status == operations.TaskCancelled && task.DeadlineAt == nil
-		if !id.Valid(task.ID) || (!undispatched || task.AgentID != "") && !id.ValidAgent(task.AgentID) || task.OperationID != operation.ID || seen[task.ID] {
-			return fmt.Errorf("invalid or duplicate task identity %q", task.ID)
-		}
-		seen[task.ID] = true
-		if task.CommandID != task.ID {
-			return fmt.Errorf("task %s has a mismatched command identity", task.ID)
-		}
-		if task.Status == operations.TaskQueued || task.Status == operations.TaskCancelled && task.DeadlineAt == nil {
-			continue
-		}
-		if task.DeadlineAt == nil || task.DeadlineAt.IsZero() {
-			return fmt.Errorf("task %s has no execution deadline", task.ID)
-		}
-		switch task.Status {
-		case operations.TaskRunning, operations.TaskSucceeded, operations.TaskFailed, operations.TaskCancelled, operations.TaskInterrupted:
-		default:
-			return fmt.Errorf("task %s has an invalid status", task.ID)
-		}
-		if task.Result != nil {
-			if task.Result.ActionName != task.ActionName {
-				return fmt.Errorf("task %s result belongs to another action", task.ID)
-			}
-			if err := (operations.AgentObservation{AgentID: task.AgentID, Result: *task.Result}).Validate(); err != nil {
-				return fmt.Errorf("task %s result: %w", task.ID, err)
-			}
-		}
-	}
-	return nil
 }

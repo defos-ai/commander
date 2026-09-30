@@ -97,7 +97,7 @@ func (r *Runner) selectAgent(task operations.Task, records []agentmodel.Agent, u
 			if action.Name != task.ActionName {
 				continue
 			}
-			if assessAgentAction(record, action).Reason == "" {
+			if operations.AssessAgentAction(record, action).Reason == "" {
 				eligible = append(eligible, record.ID)
 			}
 			break

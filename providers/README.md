@@ -82,9 +82,11 @@ See [configuration](../docs/deployment.md#configuration) for connection settings
    and cleanup in the provider; return the existing framework interfaces.
 3. Preserve the contracts for message acknowledgement, artifact ownership,
    immutable reports, execution outcomes, and atomic operation updates.
-   `OperationStore.Update` applies a callback to the latest saved operation;
-   locks and storage revisions stay inside the provider. Callbacks must be safe
-   to retry and must not perform external side effects.
+   `OperationStore` exposes explicit transitions against the latest saved operation;
+   locks and storage revisions stay inside the provider.
+   `RefreshPreflight` assesses the saved mission against an inventory snapshot,
+   skipping unchanged readiness. `Recover` validates saved work and settles due
+   questions before returning the operation used to restore tasks and artifacts.
    `QueueTask` saves a direct assignment with its event and status update;
    retries with the same task ID preserve saved progress without another write.
    `DispatchTask` atomically claims an eligible queued task and saves its agent,

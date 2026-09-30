@@ -13,6 +13,7 @@ import (
 	"commander/framework/comms/clients/controller/commands"
 	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -173,6 +174,20 @@ func (s *operationStore) ExpireQuestions(ctx context.Context, operationID string
 	return s.Update(ctx, operationID, func(op *operations.Operation) error {
 		op.ExpireQuestions(now)
 		return nil
+	})
+}
+
+func (s *operationStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		_, err := op.RefreshPreflight(records)
+		return err
+	})
+}
+
+func (s *operationStore) Recover(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		_, err := op.Recover(now)
+		return err
 	})
 }
 
