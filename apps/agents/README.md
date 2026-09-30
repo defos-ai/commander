@@ -40,11 +40,10 @@ apps/agents/<agent-type>/
    [go.mod](web-quality/go.mod) for local framework/provider requirements,
    keep only dependencies your agent uses, and add it with
    `go work use ./apps/agents/<agent-type>` from the repository root.
-2. Generate an ID with `id.AgentID("<agent-type>")`. For filesystem artifacts,
-   construct `artifact.NewArtifactFsStore(storageRoot)`, then call
-   `store.ForAgent(agentID)`. Use that ID in `agent.AgentConfig.ID`.
+2. Generate an ID with `id.AgentID("<agent-type>")` for `agent.AgentConfig.ID`.
+   Construct `artifact.NewArtifactFileFsStore(storageRoot)` for file storage.
 3. Construct `agent.NewAgent` with your fixed `Type`, responsibilities, fresh action
-   instances, granted permissions, and injected `ArtifactStore`.
+   instances, granted permissions, and injected `ArtifactFileStore`.
 4. Construct providers in the app's `cli/factory.go` and pass framework interfaces
    to `cli.go`, which calls `worker.Serve(ctx, bus, nil)`. Cancel its context on
    shutdown, wait for it to return, and close resources. The existing
@@ -127,6 +126,16 @@ when running, and rediscover actions after supplying missing dependencies.
 The web quality host's `--actions` flag selects which actions to expose. Actions own
 their specific settings; adding an action should not require new CLI fields.
 
+### Return files
+
+Set `Result.Artifacts` to `[]action.Artifact`. Each artifact groups named
+`artifact.FileSource` entries, supplied as `Data` bytes or a local `Path`.
+The agent uploads files through `ArtifactFileStore` and announces their metadata;
+the controller saves that metadata in its database. Files stay in shared storage.
+See [capture-page](web-quality/actions/capture_page.go) for desktop/mobile images
+under one artifact. Keep action output as a compact JSON summary and place bulk
+data in artifact files.
+
 ### Propose follow-up work
 
 Set `NextActions` in `action.FuncConfig` to derive suggestions from a successful
@@ -150,9 +159,8 @@ NextActions: func(ctx context.Context, input DiscoverInput, output DiscoverOutpu
 
 Use your catalog's actual action name and input schema; this example also needs
 `encoding/json`. Direct `action.Executor` implementations set `Result.NextActions`.
-Proposals remain inline when output is stored as an artifact. Malformed proposals
-or callback errors fail the action command, so keep proposal generation local and
-deterministic. Mission automation rules authorize transitions for particular source and
+Malformed proposals or callback errors fail the action command, so keep proposal
+generation local and deterministic. Mission automation rules authorize transitions for particular source and
 destination actions; other proposals wait for the model. Agents never invoke
 follow-up actions themselves. See
 [continuation decisions and scheduling](../../docs/abstractions.md#next-actions-and-continuations).
@@ -173,7 +181,7 @@ go mod edit -replace=commander/framework=/absolute/path/to/commander/framework
 
 Import `commander/framework/agent`, `commander/framework/agent/action`, and
 `commander/framework/domain/actions`. Supply
-implementations of `comms.Bus` and `artifactstore.ArtifactStore`, or use the bundled
+implementations of `comms.Bus` and `artifactstore.ArtifactFileStore`, or use the bundled
 filesystem provider by also adding:
 
 ```sh
@@ -182,7 +190,7 @@ go mod edit -replace=commander/providers/fs=/absolute/path/to/commander/provider
 ```
 
 Import `commander/providers/fs/comms` and `commander/providers/fs/artifact`
-for `comms.NewFsBus` and `artifact.NewArtifactFsStore`. Convert configured URLs
+for `comms.NewFsBus` and `artifact.NewArtifactFileFsStore`. Convert configured URLs
 with `fs.FilesystemPath` from `commander/providers/fs` before passing paths to
 these constructors. Other provider modules are optional.
 Both replacements belong in your project's `go.mod`. `v0.0.0` is a local

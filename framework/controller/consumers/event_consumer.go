@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	controllerevents "commander/framework/comms/clients/controller/events"
 	"commander/framework/comms/messages"
@@ -27,6 +28,7 @@ type EventConsumer struct {
 	Inventory  agentmodel.AgentStore
 	Actions    actionmodel.ActionStore
 	Executions executions.ExecutionStore
+	Artifacts  artifactstore.ArtifactStore
 	State      *state.State
 }
 
@@ -45,7 +47,7 @@ func (c EventConsumer) Consume(ctx context.Context, message messages.Message) er
 	case controllerevents.AgentStarted, controllerevents.AgentHeartbeat, controllerevents.AgentUpdated, controllerevents.AgentStopped:
 		return (AgentEventConsumer{Inventory: c.Inventory, Actions: c.Actions, State: c.State}).Consume(ctx, message)
 	case controllerevents.ActionSucceeded, controllerevents.CommandFailed:
-		return (CommandResultConsumer{Inventory: c.Inventory, Executions: c.Executions, Bus: c.Bus, State: c.State}).Consume(ctx, message)
+		return (CommandResultConsumer{Inventory: c.Inventory, Executions: c.Executions, Artifacts: c.Artifacts, Bus: c.Bus, State: c.State}).Consume(ctx, message)
 	default:
 		return InvalidMessage(fmt.Errorf("unsupported event type %q", message.Type))
 	}

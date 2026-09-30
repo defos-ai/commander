@@ -12,7 +12,7 @@ asks for operator guidance when needed.
 | `discover-pages` | A bounded set of pages on the same hostname and proposed checks. |
 | `check-links` | HTTP link status, broken links, and skipped/limited coverage. |
 | `check-accessibility` | Basic rendered-page checks for titles, language, image descriptions, and control names; JavaScript errors. |
-| `capture-page` | Desktop/mobile PNG artifacts and horizontal overflow detection. |
+| `capture-page` | One artifact with desktop/mobile PNG files and horizontal overflow detection. |
 | `check-seo` | Static HTML checks for page titles, descriptions, canonicals, headings, indexing directives, viewport and social metadata. |
 | `detect-technologies` | Passive technology indicators from response headers, generator metadata and script URLs, with versions only when explicitly exposed. |
 

@@ -6,7 +6,6 @@ import (
 	"slices"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
 	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/operations"
@@ -14,32 +13,19 @@ import (
 
 // recover restores state before the runner becomes available to callers. It
 // never dispatches commands. Stored results and questions remain authoritative.
-func (r *Runner) recover(ctx context.Context, artifacts ArtifactRestorer) error {
+func (r *Runner) recover(ctx context.Context) error {
 	records, err := r.store.List(ctx)
 	if err != nil {
 		return fmt.Errorf("load operations for recovery: %w", err)
 	}
-	var refs []artifact.Ref
 	for _, record := range records {
 		operation, err := r.store.Recover(ctx, record.ID, time.Now().UTC())
 		if err != nil {
 			return fmt.Errorf("recover operation %s: %w", record.ID, err)
 		}
-		for _, task := range operation.Tasks {
-			if task.Result == nil {
-				continue
-			}
-			refs = append(refs, task.Result.Artifacts...)
-			if task.Result.OutputArtifact != nil {
-				refs = append(refs, *task.Result.OutputArtifact)
-			}
-		}
 		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) || pendingQuestionDeadline(operation) {
 			r.states[operation.ID] = &operationState{operation: operation.Clone(), changed: make(chan struct{})}
 		}
-	}
-	if err := artifacts.RestoreArtifacts(refs); err != nil {
-		return fmt.Errorf("restore operation artifacts: %w", err)
 	}
 	return nil
 }

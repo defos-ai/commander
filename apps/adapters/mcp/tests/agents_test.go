@@ -2,12 +2,14 @@ package mcp_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/operations"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestAgentsAndActions(t *testing.T) {
@@ -54,8 +56,33 @@ func TestAgentsAndActions(t *testing.T) {
 	a.fails("run_action", object{"agent_id": detail.ID, "action_name": "check-seo", "input": object{"url": "file:///tmp"}}, "http")
 	var result actions.ActionOutput
 	a.call("run_action", object{"agent_id": detail.ID, "action_name": "check-seo", "input": object{"url": website(t)}}, &result)
-	if len(result.Output) == 0 && result.OutputArtifact == nil {
+	if len(result.Output) == 0 {
 		t.Fatal("action returned no result")
+	}
+
+	response, err := a.session.CallTool(a.ctx, &mcp.CallToolParams{Name: "run_action", Arguments: object{
+		"agent_id": detail.ID, "action_name": "capture-page", "input": object{"url": website(t)},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.IsError {
+		t.Fatal(resultText(response))
+	}
+	var screenshots actions.ActionOutput
+	if err := json.Unmarshal([]byte(resultText(response)), &screenshots); err != nil {
+		t.Fatal(err)
+	}
+	if len(screenshots.Artifacts) != 1 || len(response.Content) != 3 {
+		t.Fatalf("expected one artifact with two linked files: %+v", screenshots)
+	}
+	saved := screenshots.Artifacts[0]
+	assertScreenshots(t, a, saved)
+	for i, file := range saved.Files {
+		link, ok := response.Content[i+1].(*mcp.ResourceLink)
+		if !ok || link.URI != "missions://artifacts/"+saved.ID+"/files/"+file.ID || link.Name != file.Name || link.MIMEType != file.MediaType || link.Size == nil || *link.Size != file.Size {
+			t.Fatalf("MCP file link does not match artifact metadata: %+v", response.Content[i+1])
+		}
 	}
 }
 
@@ -95,7 +122,7 @@ func TestQueuedActionResumesAfterDependencyRediscovery(t *testing.T) {
 	settled := a.wait(op.ID, allTasksSucceeded)
 
 	resumed := settled.Tasks[0]
-	if len(settled.Tasks) != 2 || resumed.ID != queued.ID || resumed.AgentID != agentID || len(resumed.Result.Artifacts) != 2 {
+	if len(settled.Tasks) != 2 || resumed.ID != queued.ID || resumed.AgentID != agentID || len(resumed.Result.Artifacts) != 1 {
 		t.Fatalf("rediscovery duplicated or replaced work: %+v", settled.Tasks)
 	}
 	var events struct {
@@ -112,7 +139,7 @@ func TestQueuedActionResumesAfterDependencyRediscovery(t *testing.T) {
 		t.Fatalf("task was dispatched %d times", started)
 	}
 	for _, ref := range resumed.Result.Artifacts {
-		assertPNG(t, a, ref.ID)
+		assertScreenshots(t, a, ref)
 	}
 	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": "Dependency restored and queued work completed", "findings": []object{}}}, nil)
 }

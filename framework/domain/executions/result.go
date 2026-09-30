@@ -44,17 +44,14 @@ func DecodeActionResult(message messages.Message, agentID, commandID string, cal
 	return output, nil
 }
 
-func OutputArtifacts(message messages.Message, output actionmodel.ActionOutput) ([]artifact.Ref, error) {
-	refs := append([]artifact.Ref(nil), output.Artifacts...)
-	if output.OutputArtifact != nil {
-		refs = append(refs, *output.OutputArtifact)
-	}
-	seen := make(map[string]artifact.Ref, len(refs))
+func OutputArtifacts(message messages.Message, output actionmodel.ActionOutput) ([]artifact.Artifact, error) {
+	refs := append([]artifact.Artifact(nil), output.Artifacts...)
+	seen := make(map[string]artifact.Artifact, len(refs))
 	for _, ref := range refs {
 		if err := ref.Validate(); err != nil {
 			return nil, err
 		}
-		if previous, exists := seen[ref.ID]; exists && previous != ref {
+		if previous, exists := seen[ref.ID]; exists && !previous.Equal(ref) {
 			return nil, errors.New("artifact has conflicting metadata within the result")
 		}
 		seen[ref.ID] = ref

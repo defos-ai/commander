@@ -16,7 +16,6 @@ type executionDocument struct {
 	Result      *messageDocument     `bson:"result,omitempty"`
 	StartedAt   bsonvalue.Timestamp  `bson:"started_at"`
 	CompletedAt *bsonvalue.Timestamp `bson:"completed_at,omitempty"`
-	ArtifactIDs []string             `bson:"artifact_ids,omitempty"`
 }
 
 type messageDocument struct {

@@ -72,7 +72,7 @@ Definitions: [`controller/events`](../clients/controller/events).
 | `agent.heartbeat` | `agents.AgentSnapshot` | Periodic inventory and lease refresh |
 | `agent.updated` | `agents.AgentSnapshot` | Action discovery updates the inventory |
 | `agent.stopped` | `agents.AgentSnapshot` | Graceful shutdown |
-| `action.succeeded` | `actions.ActionOutput` | An action succeeds; output is inline or an artifact reference |
+| `action.succeeded` | `actions.ActionOutput` | An action succeeds; structured output and artifact metadata, without file bytes |
 | `command.failed` | `executions.CommandError` | A command fails validation or execution |
 
 ## Correlation and acknowledgements
@@ -98,13 +98,16 @@ sequenceDiagram
     C->>A: action.run
     A->>A: Execute and retain result in memory
     A->>C: action.succeeded / command.failed
-    C->>D: Save validated result
+    C->>D: Save validated result and artifact metadata
     C->>A: action.result.accepted
     A->>A: Stop retrying this result
 ```
 
 The agent retries action results until a receipt matches the result ID, command ID,
-and work context. The controller sends the receipt only after database persistence.
+and work context. Files are uploaded before the result is published. The controller
+sends the receipt only after the result and its artifact metadata are durable.
+If metadata persistence fails, replay repairs it without reuploading files or
+rerunning the action.
 Receipts do not trigger another reply. Command IDs prevent repeat execution within
 the same agent runtime. Queued-operation recovery may redeliver the exact saved
 command to that same live instance; it never generates a replacement command ID

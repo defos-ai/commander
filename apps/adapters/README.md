@@ -21,7 +21,9 @@ are provided for [VS Code](../../.vscode/mcp.json),
 See [local setup](../../docs/deployment.md) for Compose and connection settings.
 
 Successful MCP tool results contain JSON in one `content` text block, without
-`structuredContent`. Artifact links are returned as additional resource-link blocks.
+`structuredContent`. File links are returned as additional resource-link blocks.
+Read `missions://artifacts/{id}` for saved artifact metadata, or
+`missions://artifacts/{id}/files/{file_id}` for one of its files.
 
 `list_agents`, `list_actions` and `list_operations` return compact summaries.
 Use `describe_action` for an action's schemas (optionally with `agent_id` for that

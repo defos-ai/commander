@@ -18,16 +18,17 @@ import (
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
 	"commander/providers/fs"
-	fsartifact "commander/providers/fs/artifact"
 	fscomms "commander/providers/fs/comms"
 	fsactions "commander/providers/fs/controller/actions"
 	fsagents "commander/providers/fs/controller/agents"
+	fsartifacts "commander/providers/fs/controller/artifacts"
 	fsexecutions "commander/providers/fs/controller/executions"
 	fsmissions "commander/providers/fs/controller/missions"
 	fsoperations "commander/providers/fs/controller/operations"
 	fsreports "commander/providers/fs/controller/reports"
 	mongoactions "commander/providers/mongo/controller/actions"
 	mongoagents "commander/providers/mongo/controller/agents"
+	mongoartifacts "commander/providers/mongo/controller/artifacts"
 	mongoexecutions "commander/providers/mongo/controller/executions"
 	mongomissions "commander/providers/mongo/controller/missions"
 	mongooperations "commander/providers/mongo/controller/operations"
@@ -68,9 +69,9 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("bus-url: %w", err)
 	}
 	deps.closers = append(deps.closers, deps.Bus.Close)
-	deps.ArtifactStore, err = createArtifactStore(ctx, configuration.storageURL)
+	deps.ArtifactStore, err = deps.createArtifactStore(ctx, configuration.databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("storage-url: %w", err)
+		return nil, fmt.Errorf("database-url: %w", err)
 	}
 	deps.ReportStore, err = createReportStore(ctx, configuration.storageURL)
 	if err != nil {
@@ -121,20 +122,22 @@ func createBus(ctx context.Context, rawURL string) (comms.Bus, error) {
 	}
 }
 
-func createArtifactStore(ctx context.Context, rawURL string) (artifactstore.ArtifactStore, error) {
+func (d *dependencies) createArtifactStore(ctx context.Context, rawURL string) (artifactstore.ArtifactStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	scheme := connectionScheme(rawURL)
-	switch scheme {
+	switch scheme := connectionScheme(rawURL); scheme {
 	case "file", "fs":
 		path, err := fs.FilesystemPath(rawURL)
 		if err != nil {
 			return nil, err
 		}
-		return fsartifact.NewArtifactFsStore(path)
-	case "s3":
-		return nil, errors.New("S3 artifact store is not implemented")
+		return fsartifacts.NewArtifactFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoartifacts.NewArtifactMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported artifact store scheme %q", scheme)
 	}

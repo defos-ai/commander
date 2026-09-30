@@ -17,7 +17,7 @@ type Viewport struct {
 	Width              int    `json:"width"`
 	Height             int    `json:"height"`
 	HorizontalOverflow bool   `json:"horizontal_overflow"`
-	ArtifactName       string `json:"artifact_name"`
+	FileName           string `json:"file_name"`
 }
 type CapturePageOutput struct {
 	URL       string     `json:"url"`
@@ -27,7 +27,7 @@ type CapturePageOutput struct {
 type CapturePage struct{ *browserAction }
 
 func NewCapturePage() *CapturePage {
-	return &CapturePage{&browserAction{Base: action.NewBase(actionmodel.Action{Name: CapturePageName, Description: "Capture desktop and mobile viewport PNG screenshots with Chromium and report horizontal overflow. Returns two image artifacts for visual review.", RequiredPermissions: []string{"network-access", "execute-command"}, InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[CapturePageOutput]()})}}
+	return &CapturePage{&browserAction{Base: action.NewBase(actionmodel.Action{Name: CapturePageName, Description: "Capture desktop and mobile viewport PNG screenshots with Chromium and report horizontal overflow. Returns one artifact containing desktop and mobile images for visual review.", RequiredPermissions: []string{"network-access", "execute-command"}, InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[CapturePageOutput]()})}}
 }
 func (a *CapturePage) Run(ctx context.Context, raw json.RawMessage, grants []string) (action.Result, error) {
 	if err := a.Check(grants); err != nil {
@@ -46,18 +46,18 @@ func (a *CapturePage) Run(ctx context.Context, raw json.RawMessage, grants []str
 		return action.Result{}, err
 	}
 	defer cancel()
-	out := CapturePageOutput{URL: target.String(), Viewports: []Viewport{{Name: "desktop", Width: 1280, Height: 800, ArtifactName: "desktop.png"}, {Name: "mobile", Width: 390, Height: 844, ArtifactName: "mobile.png"}}}
-	artifacts := []artifact.Artifact{}
+	out := CapturePageOutput{URL: target.String(), Viewports: []Viewport{{Name: "desktop", Width: 1280, Height: 800, FileName: "desktop.png"}, {Name: "mobile", Width: 390, Height: 844, FileName: "mobile.png"}}}
+	screenshots := action.Artifact{Name: "Page screenshots"}
 	for i := range out.Viewports {
 		v := &out.Viewports[i]
 		var screenshot []byte
 		if err := chromedp.Run(browserCtx, chromedp.EmulateViewport(int64(v.Width), int64(v.Height)), chromedp.Navigate(target.String()), chromedp.Evaluate(`document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))`, nil, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) }), chromedp.Title(&out.Title), chromedp.Location(&out.URL), chromedp.Evaluate(`document.documentElement.scrollWidth > innerWidth + 1`, &v.HorizontalOverflow), chromedp.CaptureScreenshot(&screenshot)); err != nil {
 			return action.Result{}, err
 		}
-		artifacts = append(artifacts, artifact.Artifact{Name: v.ArtifactName, MediaType: "image/png", Data: screenshot})
+		screenshots.Files = append(screenshots.Files, artifact.FileSource{Name: v.FileName, MediaType: "image/png", Data: screenshot})
 	}
 	out.Title = boundedText(out.Title, 300)
 	result, err := action.JSONResult(out)
-	result.Artifacts = artifacts
+	result.Artifacts = []action.Artifact{screenshots}
 	return result, err
 }

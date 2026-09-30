@@ -83,7 +83,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	}()
 	execution, err := runner.NewRunner(context.WithoutCancel(ctx), coordination, runner.Config{
 		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
-		ReportStore: deps.ReportStore, ArtifactRestorer: coordination, AgentCatalog: coordination,
+		ReportStore: deps.ReportStore, AgentCatalog: coordination,
 	})
 	if err != nil {
 		return err

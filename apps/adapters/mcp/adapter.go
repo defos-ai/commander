@@ -8,24 +8,19 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"mime"
 	"os"
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
-	"commander/framework/artifact"
 	artifactstore "commander/framework/artifact/store"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/executions"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
-	"commander/framework/id"
 	frameworktesting "commander/framework/testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -90,15 +85,15 @@ type agentList struct {
 // Config supplies commands and stores independently. Queries read saved state;
 // only commands require a running controller.
 type Config struct {
-	Operations     controllercommands.Operations
-	AgentStore     agentmodel.AgentStore
-	ExecutionStore executions.ExecutionStore
-	MissionStore   missions.MissionStore
-	OperationStore operations.OperationStore
-	ReportStore    reports.ReportStore
-	ArtifactStore  artifactstore.ArtifactStore
-	ActionStore    actionmodel.ActionStore
-	Logger         *slog.Logger
+	Operations        controllercommands.Operations
+	AgentStore        agentmodel.AgentStore
+	MissionStore      missions.MissionStore
+	OperationStore    operations.OperationStore
+	ReportStore       reports.ReportStore
+	ArtifactStore     artifactstore.ArtifactStore
+	ArtifactFileStore artifactstore.ArtifactFileStore
+	ActionStore       actionmodel.ActionStore
+	Logger            *slog.Logger
 	// TestCleaner is exposed only when ENV=tests. Call between settled tests.
 	TestCleaner frameworktesting.TestCleaner
 }
@@ -107,10 +102,10 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 	if controller == nil {
 		return nil, errors.New("controller is required")
 	}
-	if config.Operations == nil || config.AgentStore == nil || config.ExecutionStore == nil ||
+	if config.Operations == nil || config.AgentStore == nil ||
 		config.MissionStore == nil || config.OperationStore == nil || config.ReportStore == nil ||
-		config.ArtifactStore == nil || config.ActionStore == nil {
-		return nil, errors.New("MCP requires operation commands and inventory, execution, mission, operation, report, artifact and action stores")
+		config.ArtifactStore == nil || config.ArtifactFileStore == nil || config.ActionStore == nil {
+		return nil, errors.New("MCP requires operation commands and inventory, mission, operation, report, artifact metadata, artifact file and action stores")
 	}
 	server := mcp.NewServer(&mcp.Implementation{
 		Name: "commander-mcp", Version: "0.1.0",
@@ -194,33 +189,7 @@ func NewServer(controller controllercommands.Controller, config Config) (*mcp.Se
 		func(ctx context.Context, request AgentRequest) (agentmodel.Agent, error) {
 			return controller.StopAgent(ctx, request.AgentID)
 		})
-	server.AddResourceTemplate(&mcp.ResourceTemplate{
-		URITemplate: artifactPrefix + "{id}", Name: "mission_artifact",
-		Description: "Read a stored result or attachment returned by this controller. IDs identify artifacts, never filesystem paths.",
-	}, func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		uri := request.Params.URI
-		artifactID, ok := strings.CutPrefix(uri, artifactPrefix)
-		if !ok || !id.Valid(artifactID) {
-			return nil, mcp.ResourceNotFoundError(uri)
-		}
-		ref, data, err := readArtifact(ctx, config, artifactID)
-		if err != nil {
-			if errors.Is(err, artifact.ErrUnknownArtifact) {
-				return nil, mcp.ResourceNotFoundError(uri)
-			}
-			return nil, fmt.Errorf("read artifact %s: %w", artifactID, err)
-		}
-		content := &mcp.ResourceContents{URI: uri, MIMEType: ref.MediaType}
-		mediaType, _, _ := mime.ParseMediaType(ref.MediaType)
-		if len(data) > 0 && utf8.Valid(data) && (strings.HasPrefix(mediaType, "text/") || mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")) {
-			content.Text = string(data)
-		} else {
-			// SDK Text uses omitempty. An explicit empty blob preserves an empty
-			// artifact instead of sending resource contents with neither field.
-			content.Blob = append([]byte{}, data...)
-		}
-		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{content}}, nil
-	})
+	addArtifactResources(server, config)
 	addOperationTools(server, config)
 	return server, nil
 }
@@ -246,19 +215,12 @@ func addTool[Input, Output any](server *mcp.Server, name, description, schema st
 			}
 			result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}
 			if actionOutput, ok := any(output).(actionmodel.ActionOutput); ok {
-				if actionOutput.OutputArtifact != nil {
-					result.Content = append(result.Content, resourceLink(*actionOutput.OutputArtifact))
-				}
 				for _, ref := range actionOutput.Artifacts {
-					result.Content = append(result.Content, resourceLink(ref))
+					result.Content = append(result.Content, artifactLinks(ref)...)
 				}
 			}
 			return result, nil
 		})
-}
-
-func resourceLink(ref artifact.Ref) *mcp.ResourceLink {
-	return &mcp.ResourceLink{URI: artifactPrefix + ref.ID, Name: ref.Name, MIMEType: ref.MediaType, Size: &ref.Size}
 }
 
 const emptySchema = `{"type":"object","properties":{},"additionalProperties":false}`

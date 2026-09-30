@@ -62,14 +62,7 @@ func (t Task) Clone() Task {
 		t.Continuation = &continuation
 	}
 	if t.Result != nil {
-		result := *t.Result
-		result.NextActions = actionmodel.CloneNextActions(result.NextActions)
-		result.Output = append(json.RawMessage(nil), result.Output...)
-		result.Artifacts = append(result.Artifacts[:0:0], result.Artifacts...)
-		if result.OutputArtifact != nil {
-			ref := *result.OutputArtifact
-			result.OutputArtifact = &ref
-		}
+		result := t.Result.Clone()
 		t.Result = &result
 	}
 	return t

@@ -16,9 +16,9 @@ import (
 )
 
 type dependencies struct {
-	Bus           comms.Bus
-	ArtifactStore artifactstore.ArtifactStore
-	closers       []func() error
+	Bus               comms.Bus
+	ArtifactFileStore artifactstore.ArtifactFileStore
+	closers           []func() error
 }
 
 func (d *dependencies) Close() (err error) {
@@ -29,7 +29,7 @@ func (d *dependencies) Close() (err error) {
 	return err
 }
 
-func openDependencies(ctx context.Context, configuration config, agentID string) (result *dependencies, err error) {
+func openDependencies(ctx context.Context, configuration config) (result *dependencies, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func openDependencies(ctx context.Context, configuration config, agentID string)
 		}
 	}()
 
-	d.ArtifactStore, err = createArtifactStore(ctx, configuration.storageURL, agentID)
+	d.ArtifactFileStore, err = createArtifactFileStore(ctx, configuration.storageURL)
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
@@ -74,7 +74,7 @@ func createBus(ctx context.Context, busURL string) (comms.Bus, error) {
 	}
 }
 
-func createArtifactStore(ctx context.Context, storageURL, agentID string) (artifactstore.ArtifactStore, error) {
+func createArtifactFileStore(ctx context.Context, storageURL string) (artifactstore.ArtifactFileStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -84,15 +84,11 @@ func createArtifactStore(ctx context.Context, storageURL, agentID string) (artif
 		if err != nil {
 			return nil, err
 		}
-		store, err := fsartifact.NewArtifactFsStore(root)
-		if err != nil {
-			return nil, err
-		}
-		return store.ForAgent(agentID)
+		return fsartifact.NewArtifactFileFsStore(root)
 	case "s3":
-		return nil, errors.New("S3 artifact store is not implemented")
+		return nil, errors.New("S3 artifact file store is not implemented")
 	default:
-		return nil, fmt.Errorf("unsupported artifact store scheme %q", scheme)
+		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
 	}
 }
 

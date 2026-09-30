@@ -18,14 +18,13 @@ type (
 )
 
 const (
-	GenericAgentType         = agentmodel.GenericAgentType
-	AgentIdle                = agentmodel.AgentIdle
-	AgentDiscovering         = agentmodel.AgentDiscovering
-	AgentReady               = agentmodel.AgentReady
-	AgentWorking             = agentmodel.AgentWorking
-	AgentUnavailable         = agentmodel.AgentUnavailable
-	AgentStopped             = agentmodel.AgentStopped
-	DefaultInlineOutputLimit = actionmodel.DefaultInlineOutputLimit
+	GenericAgentType = agentmodel.GenericAgentType
+	AgentIdle        = agentmodel.AgentIdle
+	AgentDiscovering = agentmodel.AgentDiscovering
+	AgentReady       = agentmodel.AgentReady
+	AgentWorking     = agentmodel.AgentWorking
+	AgentUnavailable = agentmodel.AgentUnavailable
+	AgentStopped     = agentmodel.AgentStopped
 )
 
 func Decode(data []byte, destination any) error {

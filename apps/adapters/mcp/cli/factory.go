@@ -14,7 +14,6 @@ import (
 	"commander/framework/comms"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
-	"commander/framework/domain/executions"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -24,31 +23,31 @@ import (
 	fscomms "commander/providers/fs/comms"
 	fsactions "commander/providers/fs/controller/actions"
 	fsagents "commander/providers/fs/controller/agents"
-	fsexecutions "commander/providers/fs/controller/executions"
+	fsartifacts "commander/providers/fs/controller/artifacts"
 	fsmissions "commander/providers/fs/controller/missions"
 	fsoperations "commander/providers/fs/controller/operations"
 	fsreports "commander/providers/fs/controller/reports"
 	fstesting "commander/providers/fs/testing"
 	mongoactions "commander/providers/mongo/controller/actions"
 	mongoagents "commander/providers/mongo/controller/agents"
-	mongoexecutions "commander/providers/mongo/controller/executions"
+	mongoartifacts "commander/providers/mongo/controller/artifacts"
 	mongomissions "commander/providers/mongo/controller/missions"
 	mongooperations "commander/providers/mongo/controller/operations"
 	mongostore "commander/providers/mongo/store"
 )
 
 type dependencies struct {
-	Bus            comms.Bus
-	ArtifactStore  artifactstore.ArtifactStore
-	ExecutionStore executions.ExecutionStore
-	AgentStore     agents.AgentStore
-	MissionStore   missions.MissionStore
-	OperationStore operations.OperationStore
-	ActionStore    actions.ActionStore
-	ReportStore    reports.ReportStore
-	TestCleaner    frameworktesting.TestCleaner
-	mongo          *mongostore.MongoStore
-	closers        []func() error
+	Bus               comms.Bus
+	ArtifactStore     artifactstore.ArtifactStore
+	ArtifactFileStore artifactstore.ArtifactFileStore
+	AgentStore        agents.AgentStore
+	MissionStore      missions.MissionStore
+	OperationStore    operations.OperationStore
+	ActionStore       actions.ActionStore
+	ReportStore       reports.ReportStore
+	TestCleaner       frameworktesting.TestCleaner
+	mongo             *mongostore.MongoStore
+	closers           []func() error
 }
 
 func (d *dependencies) Close() error {
@@ -72,7 +71,11 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("bus-url: %w", err)
 	}
 	deps.closers = append(deps.closers, deps.Bus.Close)
-	deps.ArtifactStore, err = createArtifactStore(ctx, configuration.storageURL)
+	deps.ArtifactStore, err = deps.createArtifactStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.ArtifactFileStore, err = createArtifactFileStore(ctx, configuration.storageURL)
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
 	}
@@ -93,10 +96,6 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
 	deps.ActionStore, err = deps.createActionStore(ctx, configuration.databaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("database-url: %w", err)
-	}
-	deps.ExecutionStore, err = deps.createExecutionStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
@@ -132,20 +131,22 @@ func createBus(ctx context.Context, rawURL string) (comms.Bus, error) {
 	}
 }
 
-func createArtifactStore(ctx context.Context, rawURL string) (artifactstore.ArtifactStore, error) {
+func (d *dependencies) createArtifactStore(ctx context.Context, rawURL string) (artifactstore.ArtifactStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	scheme := connectionScheme(rawURL)
-	switch scheme {
+	switch scheme := connectionScheme(rawURL); scheme {
 	case "file", "fs":
 		path, err := fs.FilesystemPath(rawURL)
 		if err != nil {
 			return nil, err
 		}
-		return fsartifact.NewArtifactFsStore(path)
-	case "s3":
-		return nil, errors.New("S3 artifact store is not implemented")
+		return fsartifacts.NewArtifactFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoartifacts.NewArtifactMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported artifact store scheme %q", scheme)
 	}
@@ -236,28 +237,6 @@ func (d *dependencies) createActionStore(ctx context.Context, rawURL string) (ac
 	}
 }
 
-func (d *dependencies) createExecutionStore(ctx context.Context, rawURL string) (executions.ExecutionStore, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	scheme := connectionScheme(rawURL)
-	switch scheme {
-	case "file", "fs":
-		path, err := fs.FilesystemPath(rawURL)
-		if err != nil {
-			return nil, err
-		}
-		return fsexecutions.NewExecutionFsStore(path)
-	case "mongodb", "mongodb+srv":
-		if err := d.connectMongo(ctx, rawURL); err != nil {
-			return nil, err
-		}
-		return mongoexecutions.NewExecutionMongoStore(ctx, d.mongo)
-	default:
-		return nil, fmt.Errorf("unsupported execution store scheme %q", scheme)
-	}
-}
-
 func (d *dependencies) createMissionStore(ctx context.Context, rawURL string) (missions.MissionStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -340,4 +319,22 @@ func createTestCleaner(ctx context.Context, storageURL, databaseURL string) (fra
 		return nil, err
 	}
 	return fstesting.NewTestFsCleaner(storagePath, databasePath)
+}
+
+func createArtifactFileStore(ctx context.Context, rawURL string) (artifactstore.ArtifactFileStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fsartifact.NewArtifactFileFsStore(path)
+	case "s3":
+		return nil, errors.New("S3 artifact file store is not implemented")
+	default:
+		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
+	}
 }

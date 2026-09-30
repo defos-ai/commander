@@ -3,12 +3,10 @@ package controller_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
 	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	controllerevents "commander/framework/comms/clients/controller/events"
@@ -17,7 +15,6 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/executions"
-	"commander/framework/id"
 )
 
 func TestControllerWaitsForCommandsIndependently(t *testing.T) {
@@ -50,13 +47,8 @@ func TestControllerWaitsForCommandsIndependently(t *testing.T) {
 	}
 }
 
-func TestControllerCloseAndReadsDoNotWaitForBlockedObservation(t *testing.T) {
+func TestControllerCloseDoesNotWaitForBlockedObservation(t *testing.T) {
 	ctx, c, bus, store := fixture(t, time.Hour)
-	ref := artifact.Ref{ID: id.New(), Name: "evidence", MediaType: "text/plain", SHA256: strings.Repeat("0", 64),
-		AgentID: agentID, ActionName: "inspect", CreatedAt: time.Now().UTC()}
-	if err := c.RestoreArtifacts([]artifact.Ref{ref}); err != nil {
-		t.Fatal(err)
-	}
 	waiting := discover(ctx, c)
 	receive(t, ctx, bus.commands)
 	gate := newGate(t)
@@ -64,11 +56,6 @@ func TestControllerCloseAndReadsDoNotWaitForBlockedObservation(t *testing.T) {
 	heartbeat := bus.send(t, ctx, controllerevents.AgentHeartbeat, "")
 	receive(t, ctx, gate.entered)
 
-	read := make(chan artifact.Ref, 1)
-	go func() { found, _ := c.Artifact(ref.ID); read <- found }()
-	if found := receive(t, ctx, read); found != ref {
-		t.Fatalf("artifact snapshot changed: %+v", found)
-	}
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
 	defer cancel()
 	if err := c.Close(deadline); !errors.Is(err, context.DeadlineExceeded) {
@@ -86,9 +73,7 @@ func TestControllerCloseAndReadsDoNotWaitForBlockedObservation(t *testing.T) {
 		t.Fatalf("cancelled observation %s was acknowledged: %s", heartbeat.ID, ack)
 	default:
 	}
-	if _, err := c.Artifact(ref.ID); !errors.Is(err, controller.ErrControllerClosed) {
-		t.Fatalf("closed controller served artifact: %v", err)
-	}
+
 }
 
 func TestControllerOrdersLeaseExpiryBeforeRenewal(t *testing.T) {

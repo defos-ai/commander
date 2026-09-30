@@ -42,7 +42,7 @@ for connection settings and tests.
 | --- | --- | --- |
 | `COMMANDER_MCP_PORT` | Published MCP port | `4273` |
 | `BUS_URL` | Message bus | `file:///state/bus` |
-| `STORAGE_URL` | Artifacts and reports | `file:///state/storage` |
+| `STORAGE_URL` | Artifact files and reports | `file:///state/storage` |
 | `DATABASE_URL` | Controller and adapter database | `file:///state/database` |
 | `LOG_LEVEL` / `LOG_FORMAT` | Logging | `info` / `json` |
 

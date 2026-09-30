@@ -11,7 +11,7 @@ them into the runtime, keeping infrastructure details out of agents and controll
 | Provider | Implements | Connection formats |
 | --- | --- | --- |
 | [`fs`](fs/) | Message bus, artifacts, reports, inventory, executions, missions, operations, and action catalogs | Local paths, `~/path`, `file:///path`, `fs:///path` |
-| [`mongo`](mongo/) | Missions, actions, agent inventory, executions, operations | `mongodb://`, `mongodb+srv://` |
+| [`mongo`](mongo/) | Missions, actions, agent inventory, executions, operations, artifact metadata | `mongodb://`, `mongodb+srv://` |
 
 Each provider is a separate Go module: `commander/providers/fs` and
 `commander/providers/mongo`. There is no shared `commander/providers` module;
@@ -22,7 +22,7 @@ filesystem inputs select FS, and `mongodb://` or `mongodb+srv://` select Mongo
 where implemented. Missing stores and unsupported schemes return explicit errors
 without falling back to FS. All controller database stores support Mongo;
 operation updates require a replica set or sharded cluster for transactions.
-Bus factories reserve `amqp://` and `amqps://` for RabbitMQ; artifact and report
+Bus factories reserve `amqp://` and `amqps://` for RabbitMQ; artifact-file and report
 factories reserve `s3://` for S3. These backends are not implemented yet.
 
 ### Filesystem behavior
@@ -55,7 +55,8 @@ constructor you need; Mongo has its own [quick start](mongo/README.md#quick-star
 | Constructor | Host setting | Framework interface |
 | --- | --- | --- |
 | [`comms.NewFsBus`](fs/comms/fs_bus.go) | `BUS_URL` | `comms.Bus` |
-| [`artifact.NewArtifactFsStore`](fs/artifact/artifact_fs_store.go) | `STORAGE_URL` | `artifactstore.ArtifactStore` |
+| [`artifact.NewArtifactFileFsStore`](fs/artifact/artifact_file_fs_store.go) | `STORAGE_URL` | `artifactstore.ArtifactFileStore` |
+| [`artifacts.NewArtifactFsStore`](fs/controller/artifacts/artifact_fs_store.go) | `DATABASE_URL` | `artifactstore.ArtifactStore` |
 | [`reports.NewReportFsStore`](fs/controller/reports/report_fs_store.go) | `STORAGE_URL` | `reports.ReportStore` |
 | [`missions.NewMissionFsStore`](fs/controller/missions/mission_fs_store.go) | `DATABASE_URL` | `missions.MissionStore` |
 
@@ -89,10 +90,13 @@ func ListMissions(ctx context.Context, databaseURL string) ([]missions.Mission, 
 }
 ```
 
-Hosts read environment variables and flags. For agent artifacts, construct
-`artifact.NewArtifactFsStore(storageRoot)`, then call `store.ForAgent(agentID)`
-with the same ID as the agent and inject the scoped store. Close brokers and
-shared database clients after consumers stop; filesystem stores need no close.
+Agents receive an `ArtifactFileStore` for uploads. Controllers receive an
+`ArtifactStore` for accepted metadata; MCP receives both for queries and file
+reads. FS metadata lives at `DATABASE_URL/artifacts/<id>.json`; bytes live at
+`STORAGE_URL/artifacts/<artifact-id>/<file-id>`. Uploading bytes alone does not
+make them visible through MCP. A crash before metadata acceptance can leave
+unreferenced files; automatic file cleanup is not implemented yet. Close brokers
+and shared database clients after consumers stop; filesystem stores need no close.
 See [configuration](../docs/deployment.md#configuration) for connection settings.
 
 ## Development and testing
@@ -127,7 +131,7 @@ rather than migrating them.
    locks and storage revisions stay inside the provider.
    `RefreshPreflight` assesses the saved mission against an inventory snapshot,
    skipping unchanged readiness. `Recover` validates saved work and settles due
-   questions before returning the operation used to restore tasks and artifacts.
+   questions before returning the operation used to restore tasks.
    `QueueTask` saves a direct assignment with its event and status update;
    retries with the same task ID preserve saved progress without another write.
    `DispatchTask` atomically claims an eligible queued task and saves its agent,

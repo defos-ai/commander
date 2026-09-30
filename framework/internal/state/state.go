@@ -3,12 +3,9 @@ package state
 import (
 	"context"
 	"errors"
-	"fmt"
-	"maps"
 	"sync/atomic"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
 	"commander/framework/domain"
 	agentmodel "commander/framework/domain/agents"
@@ -43,13 +40,12 @@ type State struct {
 }
 
 type view struct {
-	changed   chan struct{}
-	artifacts map[string]artifact.Ref
+	changed chan struct{}
 }
 
 func New(ctx context.Context, heartbeatTimeout time.Duration) *State {
 	s := &State{Context: ctx, HeartbeatTimeout: heartbeatTimeout, Pending: make(map[string]*PendingCommand)}
-	s.view.Store(&view{changed: make(chan struct{}), artifacts: make(map[string]artifact.Ref)})
+	s.view.Store(&view{changed: make(chan struct{})})
 	return s
 }
 
@@ -61,17 +57,6 @@ func (s *State) CheckOpen() error {
 }
 
 func (s *State) Changed() <-chan struct{} { return s.view.Load().changed }
-
-func (s *State) Artifact(id string) (artifact.Ref, error) {
-	if err := s.CheckOpen(); err != nil {
-		return artifact.Ref{}, err
-	}
-	ref, ok := s.view.Load().artifacts[id]
-	if !ok {
-		return artifact.Ref{}, artifact.ErrUnknownArtifact
-	}
-	return ref, nil
-}
 
 func (s *State) Close() {
 	for id, pending := range s.Pending {
@@ -104,7 +89,7 @@ func (s *State) ClosedError() error {
 
 func (s *State) Notify() {
 	previous := s.view.Load()
-	s.view.Store(&view{changed: make(chan struct{}), artifacts: previous.artifacts})
+	s.view.Store(&view{changed: make(chan struct{})})
 	close(previous.changed)
 }
 
@@ -122,46 +107,4 @@ func (s *State) Snapshot(record agentmodel.Agent, now time.Time) agentmodel.Agen
 		record.LeaseExpiresAt = record.LastHeartbeat.Add(s.HeartbeatTimeout)
 	}
 	return record.Snapshot(now)
-}
-
-func (s *State) ValidateArtifacts(refs []artifact.Ref) error {
-	current := s.view.Load().artifacts
-	validated := make(map[string]artifact.Ref, len(refs))
-	for _, ref := range refs {
-		if err := ref.Validate(); err != nil {
-			return fmt.Errorf("restore artifact: %w", err)
-		}
-		if previous, exists := current[ref.ID]; exists && previous != ref {
-			return fmt.Errorf("artifact %s has conflicting metadata", ref.ID)
-		}
-		if previous, exists := validated[ref.ID]; exists && previous != ref {
-			return fmt.Errorf("artifact %s has conflicting metadata", ref.ID)
-		}
-		validated[ref.ID] = ref
-	}
-	return nil
-}
-
-func (s *State) RestoreArtifacts(refs []artifact.Ref) error {
-	if err := s.CheckOpen(); err != nil {
-		return err
-	}
-	if err := s.ValidateArtifacts(refs); err != nil {
-		return err
-	}
-	previous := s.view.Load()
-	var next map[string]artifact.Ref
-	for _, ref := range refs {
-		if _, exists := previous.artifacts[ref.ID]; exists {
-			continue
-		}
-		if next == nil {
-			next = maps.Clone(previous.artifacts)
-		}
-		next[ref.ID] = ref
-	}
-	if next != nil {
-		s.view.Store(&view{changed: previous.changed, artifacts: next})
-	}
-	return nil
 }

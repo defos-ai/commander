@@ -65,7 +65,7 @@ func Connect(ctx context.Context, endpoint string) (*Client, error) {
 		}
 		cursor = page.NextCursor
 	}
-	result.tools = append(result.tools, llm.Tool{Name: "read_artifact", Description: "Read a missions://artifacts/ URI returned by Commander. Large results are bounded; do not invent missing content.", Schema: json.RawMessage(`{"type":"object","properties":{"uri":{"type":"string"}},"required":["uri"],"additionalProperties":false}`)})
+	result.tools = append(result.tools, llm.Tool{Name: "read_artifact", Description: "Read a missions://artifacts/ URI returned by Commander. Artifact roots contain metadata; /files/{file_id} contains the file. Large results are bounded; do not invent missing content.", Schema: json.RawMessage(`{"type":"object","properties":{"uri":{"type":"string"}},"required":["uri"],"additionalProperties":false}`)})
 	result.stop = context.AfterFunc(lifetime, func() { _ = session.Close() })
 	return result, nil
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"commander/framework/artifact"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
 	"commander/framework/id"
@@ -75,6 +76,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	left = a.wait(first.ID, allTasksSucceeded)
 
 	artifactOwners := map[string]string{}
+	var previousArtifact *artifact.Artifact
 	for _, op := range []operationDetail{left, right} {
 		assertTaskQueries(t, a, op)
 		for _, task := range op.Tasks {
@@ -88,7 +90,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 			if err := json.Unmarshal(task.Result.Output, &output); err != nil || output.URL != input.URL {
 				t.Fatalf("result does not match task input: %s: %s (%v)", task.ID, task.Result.Output, err)
 			}
-			if task.ActionName == "capture-page" && len(task.Result.Artifacts) != 2 {
+			if task.ActionName == "capture-page" && len(task.Result.Artifacts) != 1 {
 				t.Fatalf("missing screenshots: %+v", task.Result)
 			}
 			for _, ref := range task.Result.Artifacts {
@@ -96,7 +98,15 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 					t.Fatalf("incorrect artifact ownership: %+v", ref)
 				}
 				artifactOwners[ref.ID] = op.ID
-				assertPNG(t, a, ref.ID)
+				assertScreenshots(t, a, ref)
+				if previousArtifact != nil {
+					uri := "missions://artifacts/" + ref.ID + "/files/" + previousArtifact.Files[0].ID
+					invalid := openSession(t)
+					if _, err := invalid.session.ReadResource(invalid.ctx, &mcp.ReadResourceParams{URI: uri}); err == nil || !strings.Contains(err.Error(), "Resource not found") {
+						t.Fatalf("expected another artifact's file to be inaccessible, got %v", err)
+					}
+				}
+				previousArtifact = &ref
 			}
 		}
 		summary := "Review " + op.ID
@@ -107,7 +117,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 			t.Fatalf("report crossed operation boundaries: %+v", report)
 		}
 	}
-	if len(left.Questions) != 1 || left.Questions[0].Answer != "Yes" || len(right.Questions) != 0 || len(artifactOwners) != 4 {
+	if len(left.Questions) != 1 || left.Questions[0].Answer != "Yes" || len(right.Questions) != 0 || len(artifactOwners) != 2 {
 		t.Fatal("questions or artifacts leaked between operations")
 	}
 }
@@ -294,11 +304,11 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 			t.Fatalf("child lost parent: %+v", task)
 		}
 		if task.ActionName == "capture-page" {
-			if len(task.Result.Artifacts) != 2 {
+			if len(task.Result.Artifacts) != 1 {
 				t.Fatalf("missing desktop/mobile screenshots: %+v", task.Result)
 			}
 			for _, ref := range task.Result.Artifacts {
-				assertPNG(t, a, ref.ID)
+				assertScreenshots(t, a, ref)
 			}
 		}
 		if task.ActionName == "check-links" {
@@ -365,16 +375,40 @@ func TestOperationCancellationAndFailure(t *testing.T) {
 	}
 }
 
-func assertPNG(t *testing.T, a *api, id string) {
+func assertScreenshots(t *testing.T, a *api, expected artifact.Artifact) {
 	t.Helper()
-	result, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: "missions://artifacts/" + id})
+	uri := "missions://artifacts/" + expected.ID
+	result, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: uri})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Contents) != 1 || result.Contents[0].MIMEType != "image/png" || !bytes.HasPrefix(result.Contents[0].Blob, []byte("\x89PNG\r\n\x1a\n")) {
-		t.Fatal("resource is not a PNG screenshot")
+	if len(result.Contents) != 1 || result.Contents[0].MIMEType != "application/json" {
+		t.Fatal("artifact resource must return metadata")
+	}
+	var saved artifact.Artifact
+	if err := json.Unmarshal([]byte(result.Contents[0].Text), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if !saved.Equal(expected) || len(saved.Files) != 2 || saved.Name != "Page screenshots" {
+		t.Fatalf("artifact metadata lost ownership or grouped files: %+v", saved)
+	}
+	for i, file := range saved.Files {
+		if file.Name != []string{"desktop.png", "mobile.png"}[i] {
+			t.Fatalf("unexpected screenshot file: %+v", file)
+		}
+		resource, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: uri + "/files/" + file.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(resource.Contents) != 1 || resource.Contents[0].MIMEType != "image/png" || !bytes.HasPrefix(resource.Contents[0].Blob, []byte("\x89PNG\r\n\x1a\n")) {
+			t.Fatal("file resource is not a PNG screenshot")
+		}
+		if int64(len(resource.Contents[0].Blob)) != file.Size {
+			t.Fatal("file size does not match saved metadata")
+		}
 	}
 }
+
 func assertEvents(t *testing.T, a *api, id string) {
 	t.Helper()
 	expected := a.get(id).Events

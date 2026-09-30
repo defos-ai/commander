@@ -133,7 +133,7 @@ func stateAgent(t *testing.T, actions ...action.Executor) *agent.Agent {
 	noHeartbeat := time.Duration(0)
 	a, err := agent.NewAgent(agent.AgentConfig{Type: "fixture", Actions: actions,
 		Server:            agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"},
-		HeartbeatInterval: &noHeartbeat, ArtifactStore: unusedArtifacts{},
+		HeartbeatInterval: &noHeartbeat, ArtifactFileStore: unusedArtifacts{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -217,9 +217,9 @@ func nextAnnouncement(t *testing.T, ctx context.Context, bus *announcementBus) a
 
 type unusedArtifacts struct{}
 
-func (unusedArtifacts) Put(context.Context, artifact.Artifact, artifact.Owner) (artifact.Ref, error) {
-	return artifact.Ref{}, errors.New("unexpected artifact write")
+func (unusedArtifacts) Put(context.Context, string, artifact.FileSource) (artifact.ArtifactFile, error) {
+	return artifact.ArtifactFile{}, errors.New("unexpected artifact write")
 }
-func (unusedArtifacts) Get(context.Context, artifact.Ref) ([]byte, error) {
+func (unusedArtifacts) Get(context.Context, string, artifact.ArtifactFile) ([]byte, error) {
 	return nil, errors.New("unexpected artifact read")
 }

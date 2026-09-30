@@ -50,7 +50,7 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 			logger.Info("agent stopped")
 		}
 	}()
-	dependencies, err := openDependencies(ctx, configuration, agentID)
+	dependencies, err := openDependencies(ctx, configuration)
 	if err != nil {
 		return err
 	}
@@ -72,8 +72,9 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 		ID:                 agentID,
 		Actions:            actions,
 		GrantedPermissions: configuration.permissions,
-		ArtifactStore:      dependencies.ArtifactStore, Logger: logger,
-		InlineOutputLimit: &configuration.inlineLimit, HeartbeatInterval: &configuration.heartbeatInterval,
+		ArtifactFileStore:  dependencies.ArtifactFileStore,
+		Logger:             logger,
+		HeartbeatInterval:  &configuration.heartbeatInterval,
 	})
 	if err != nil {
 		return err

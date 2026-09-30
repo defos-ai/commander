@@ -1,10 +1,9 @@
 package artifact
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -12,64 +11,62 @@ import (
 	"commander/framework/id"
 )
 
-var ErrUnknownArtifact = errors.New("unknown artifact")
+var (
+	ErrUnknownArtifact  = errors.New("unknown artifact")
+	ErrArtifactConflict = errors.New("artifact ID already has different metadata")
+)
 
-// Artifact describes exactly one source: bytes or a local file. Empty, non-nil
-// Data is valid. Sources are local implementation details and never serialized.
 type Artifact struct {
-	Name      string `json:"name"`
-	MediaType string `json:"media_type"`
-	Data      []byte `json:"-"`
-	Path      string `json:"-"`
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	AgentID    string         `json:"agent_id"`
+	ActionName string         `json:"action_name"`
+	CommandID  string         `json:"command_id,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
+	Files      []ArtifactFile `json:"files"`
 }
 
 func (a Artifact) Validate() error {
-	if !utf8.ValidString(a.Name) || !utf8.ValidString(a.MediaType) {
-		return fmt.Errorf("artifact name and media type must contain valid UTF-8")
+	if !id.Valid(a.ID) {
+		return errors.New("artifact ID must be a canonical UUID")
 	}
-	if strings.TrimSpace(a.Name) == "" {
-		return fmt.Errorf("artifact name must not be blank")
+	if strings.TrimSpace(a.Name) == "" || !utf8.ValidString(a.Name) {
+		return errors.New("artifact name must contain nonblank UTF-8 text")
 	}
-	if (a.Data != nil) == (a.Path != "") {
-		return fmt.Errorf("artifact requires exactly one source: data or path")
+	if a.CreatedAt.IsZero() {
+		return errors.New("artifact timestamp must be set")
+	}
+	if err := (Owner{AgentID: a.AgentID, ActionName: a.ActionName, CommandID: a.CommandID}).Validate(); err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(a.Files))
+	for _, file := range a.Files {
+		if err := file.Validate(); err != nil {
+			return fmt.Errorf("artifact file: %w", err)
+		}
+		if seen[file.ID] {
+			return errors.New("artifact contains duplicate file IDs")
+		}
+		seen[file.ID] = true
 	}
 	return nil
 }
 
-// Ref is portable metadata. It deliberately contains no local storage path.
-type Ref struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	MediaType  string    `json:"media_type"`
-	Size       int64     `json:"size"`
-	SHA256     string    `json:"sha256"`
-	AgentID    string    `json:"agent_id"`
-	ActionName string    `json:"action_name"`
-	CommandID  string    `json:"command_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+func (a Artifact) Clone() Artifact {
+	a.Files = slices.Clone(a.Files)
+	return a
 }
 
-func (r Ref) Validate() error {
-	if !id.Valid(r.ID) {
-		return fmt.Errorf("artifact ID must be a canonical UUID")
+func (a Artifact) Equal(b Artifact) bool {
+	return a.ID == b.ID && a.Name == b.Name && a.AgentID == b.AgentID && a.ActionName == b.ActionName && a.CommandID == b.CommandID && a.CreatedAt.Equal(b.CreatedAt) && slices.Equal(a.Files, b.Files)
+}
+
+func CloneAll(artifacts []Artifact) []Artifact {
+	result := slices.Clone(artifacts)
+	for i := range result {
+		result[i] = result[i].Clone()
 	}
-	if strings.TrimSpace(r.Name) == "" || strings.TrimSpace(r.MediaType) == "" {
-		return fmt.Errorf("artifact name and media type must not be blank")
-	}
-	if !utf8.ValidString(r.Name) || !utf8.ValidString(r.MediaType) {
-		return fmt.Errorf("artifact name and media type must contain valid UTF-8")
-	}
-	if r.Size < 0 {
-		return fmt.Errorf("artifact size must not be negative")
-	}
-	digest, err := hex.DecodeString(r.SHA256)
-	if err != nil || len(digest) != sha256.Size || r.SHA256 != strings.ToLower(r.SHA256) {
-		return fmt.Errorf("artifact SHA256 must contain 64 lowercase hexadecimal characters")
-	}
-	if r.CreatedAt.IsZero() {
-		return fmt.Errorf("artifact timestamp must be set")
-	}
-	return (Owner{AgentID: r.AgentID, ActionName: r.ActionName, CommandID: r.CommandID}).Validate()
+	return result
 }
 
 type Owner struct {
@@ -80,16 +77,13 @@ type Owner struct {
 
 func (o Owner) Validate() error {
 	if !id.ValidAgent(o.AgentID) {
-		return fmt.Errorf("invalid artifact agent ID")
+		return errors.New("invalid artifact agent ID")
 	}
 	if o.CommandID != "" && !id.Valid(o.CommandID) {
-		return fmt.Errorf("artifact command ID must be a UUID")
+		return errors.New("artifact command ID must be a UUID")
 	}
-	if strings.TrimSpace(o.ActionName) == "" {
-		return fmt.Errorf("artifact action name must not be blank")
-	}
-	if !utf8.ValidString(o.ActionName) {
-		return fmt.Errorf("artifact action name must contain valid UTF-8")
+	if strings.TrimSpace(o.ActionName) == "" || !utf8.ValidString(o.ActionName) {
+		return errors.New("artifact action name must contain nonblank UTF-8 text")
 	}
 	return nil
 }

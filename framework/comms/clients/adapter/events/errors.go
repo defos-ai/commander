@@ -48,6 +48,7 @@ var errorCodes = []struct {
 	{"unknown_agent", agentmodel.ErrUnknownAgent},
 	{"agent_not_running", agentmodel.ErrAgentNotRunning},
 	{"unknown_artifact", artifact.ErrUnknownArtifact},
+	{"artifact_conflict", artifact.ErrArtifactConflict},
 	{"unknown_mission", missions.ErrUnknownMission},
 	{"unknown_operation", operations.ErrUnknownOperation},
 	{"operation_conflict", operations.ErrOperationConflict},

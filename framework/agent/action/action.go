@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	"commander/framework/agent/environment"
-	"commander/framework/artifact"
 	actionmodel "commander/framework/domain/actions"
 )
 
@@ -25,9 +24,9 @@ const (
 )
 
 type Result struct {
-	Output      json.RawMessage     `json:"output"`
-	Artifacts   []artifact.Artifact `json:"-"`
-	NextActions []NextAction        `json:"next_actions,omitempty"`
+	Output      json.RawMessage `json:"output"`
+	Artifacts   []Artifact      `json:"-"`
+	NextActions []NextAction    `json:"next_actions,omitempty"`
 }
 
 // Each instance belongs to one agent. Run never chooses another action or contacts a controller.

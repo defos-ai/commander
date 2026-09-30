@@ -28,7 +28,6 @@ func TestRecoveryUsesLatestOperationAfterList(t *testing.T) {
 			config := fixture()
 			op := seedMaintenanceTask(t, config, !cancelled)
 			var latest operations.Operation
-			var wantRefs []artifact.Ref
 			base := config.OperationStore
 			config.OperationStore = &afterListStore{OperationStore: base, afterList: func() error {
 				var err error
@@ -36,12 +35,9 @@ func TestRecoveryUsesLatestOperationAfterList(t *testing.T) {
 					latest, err = base.Cancel(t.Context(), op.ID)
 					return err
 				}
-				ref := artifact.Ref{ID: id.ArtifactID(), Name: "result.json", MediaType: "application/json", Size: 2,
-					SHA256: strings.Repeat("a", 64), AgentID: agentID, ActionName: "inspect", CommandID: op.Tasks[0].ID, CreatedAt: time.Now().UTC()}
-				attachment := ref
-				attachment.ID, attachment.Name = id.ArtifactID(), "evidence.json"
-				wantRefs = []artifact.Ref{attachment, ref}
-				result := actions.ActionOutput{ActionName: "inspect", OutputArtifact: &ref, Artifacts: []artifact.Ref{attachment}}
+				ref := artifact.Artifact{ID: id.ArtifactID(), Name: "result.json", AgentID: agentID, ActionName: "inspect", CommandID: op.Tasks[0].ID, CreatedAt: time.Now().UTC(),
+					Files: []artifact.ArtifactFile{{ID: id.ArtifactFileID(), Name: "result.json", MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64)}}}
+				result := actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{}`), Artifacts: []artifact.Artifact{ref}}
 				latest, err = base.FinishTask(t.Context(), op.ID, operations.TaskResult{TaskID: op.Tasks[0].ID, AgentID: agentID,
 					Status: operations.TaskSucceeded, Result: &result, FinishedAt: time.Now().UTC()})
 				if err != nil {
@@ -50,8 +46,6 @@ func TestRecoveryUsesLatestOperationAfterList(t *testing.T) {
 				latest, err = base.ResolveContinuation(t.Context(), op.ID, op.Tasks[0].ID, latest.Tasks[0].Continuation.Version, []actions.NextAction{})
 				return err
 			}}
-			restorer := &recordingArtifactRestorer{}
-			config.ArtifactRestorer = restorer
 			calls := make(chan invocation, 2)
 			unexpected := func(_ context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
 				calls <- invocation{agent: agent, call: call}
@@ -68,9 +62,7 @@ func TestRecoveryUsesLatestOperationAfterList(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(stored.Tasks, latest.Tasks) || stored.Status != latest.Status {
 				t.Fatalf("recovery replaced the latest task or status: %+v, %v", stored, err)
 			}
-			if !reflect.DeepEqual(restorer.refs, wantRefs) {
-				t.Fatalf("restored stale evidence: got %+v, want %+v", restorer.refs, wantRefs)
-			}
+
 			wantEvents := len(latest.Events)
 			if !cancelled {
 				wantEvents++
@@ -252,13 +244,6 @@ func (s *afterListStore) List(ctx context.Context) ([]operations.Operation, erro
 		s.afterList = nil
 	}
 	return ops, err
-}
-
-type recordingArtifactRestorer struct{ refs []artifact.Ref }
-
-func (r *recordingArtifactRestorer) RestoreArtifacts(refs []artifact.Ref) error {
-	r.refs = append([]artifact.Ref(nil), refs...)
-	return nil
 }
 
 type recoveryFailureStore struct {

@@ -6,9 +6,10 @@ import (
 	"commander/framework/artifact"
 )
 
-// ArtifactStore publishes and retrieves artifacts. Put returns only after both
-// content and metadata are available to subsequent reads.
+// ArtifactStore persists accepted metadata in the controller database.
+// Create is immutable and idempotent: the same ID and metadata succeeds;
+// a conflicting replay returns artifact.ErrArtifactConflict.
 type ArtifactStore interface {
-	Put(context.Context, artifact.Artifact, artifact.Owner) (artifact.Ref, error)
-	Get(context.Context, artifact.Ref) ([]byte, error)
+	Create(ctx context.Context, value artifact.Artifact) error
+	Get(ctx context.Context, artifactID string) (artifact.Artifact, error)
 }

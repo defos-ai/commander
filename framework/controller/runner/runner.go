@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"commander/framework/artifact"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
 	"commander/framework/domain/missions"
@@ -27,11 +26,6 @@ type DurableActionExecutor interface {
 	DispatchAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
 }
 
-// ArtifactRestorer makes persisted evidence references available after restart.
-type ArtifactRestorer interface {
-	RestoreArtifacts([]artifact.Ref) error
-}
-
 var (
 	ErrClosed          = operations.ErrClosed
 	ErrFinished        = operations.ErrFinished
@@ -48,9 +42,8 @@ type Config struct {
 	// Capacity is per agent for work owned by this runner; default one.
 	Capacity int
 
-	MissionStore     missions.MissionStore
-	OperationStore   operations.OperationStore
-	ArtifactRestorer ArtifactRestorer
+	MissionStore   missions.MissionStore
+	OperationStore operations.OperationStore
 	// ReportStore saves immutable reports before an operation is completed.
 	ReportStore reports.ReportStore
 	// TaskTimeout bounds the wait for a dispatched command. Default: five minutes.
@@ -105,9 +98,6 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 	if config.ReportStore == nil {
 		return nil, errors.New("runner requires a report store")
 	}
-	if config.ArtifactRestorer == nil {
-		return nil, errors.New("runner requires an artifact restorer")
-	}
 	if config.Capacity < 0 {
 		return nil, errors.New("capacity must not be negative")
 	}
@@ -117,7 +107,7 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 	lifetime, cancel := context.WithCancel(ctx)
 	r := &Runner{catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
 		missions: config.MissionStore, reports: config.ReportStore, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
-	if err := r.recover(ctx, config.ArtifactRestorer); err != nil {
+	if err := r.recover(ctx); err != nil {
 		cancel()
 		return nil, err
 	}

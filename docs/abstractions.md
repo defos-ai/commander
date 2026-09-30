@@ -83,7 +83,8 @@ identify the action with `action_name`.
 | Concept | Meaning |
 | --- | --- |
 | **Action result** | The structured output of an action, plus any artifact references. Failures carry an error instead of a successful result. |
-| **Artifact** | Stored content produced by an action, such as a screenshot or oversized JSON output. References identify it without carrying the full content in messages. |
+| **Artifact** | A database record describing evidence produced by an action: its identity, owner, creation time, and file descriptors. One artifact can group several files. |
+| **Artifact file** | Bytes such as a screenshot, download, or detailed JSON evidence. Stored separately through `ArtifactFileStore`; its descriptor records the name, media type, size, and checksum. |
 | **Question** | A request for operator intervention when the model cannot proceed. It can pause a linked continuation, a mission step, or the operation; dispatched tasks continue. |
 | **Report** | The final output saved when an operation is explicitly completed. It has its own ID and belongs to that operation. |
 

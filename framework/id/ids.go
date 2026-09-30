@@ -29,6 +29,8 @@ func ReportID() string { return New() }
 
 func ArtifactID() string { return New() }
 
+func ArtifactFileID() string { return New() }
+
 // New returns a random UUIDv4. Failure of the OS random source is fatal.
 func New() string {
 	var b [16]byte

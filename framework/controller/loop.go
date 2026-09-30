@@ -41,7 +41,7 @@ func (c *Controller) run() {
 func (c *Controller) consumeEvents(actions actions.ActionStore) {
 	defer close(c.eventsDone)
 	events := consumers.EventConsumer{
-		Bus: c.bus, Inventory: c.inventory, Actions: actions, Executions: c.executionStore, State: c.state,
+		Bus: c.bus, Inventory: c.inventory, Actions: actions, Executions: c.executionStore, Artifacts: c.artifactStore, State: c.state,
 	}
 	consumer := comms.Consumer{
 		Subscription: c.events, Logger: c.logger,

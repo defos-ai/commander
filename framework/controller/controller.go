@@ -47,7 +47,7 @@ type ControllerConfig struct {
 
 // Controller discovers agents from its own event topic and routes decisions over
 // the bus. It neither owns agent runtimes nor calls a model or selects actions.
-// The host supplies shared artifact storage and controller-owned database stores.
+// The host supplies controller-owned database stores.
 type Controller struct {
 	state              *state.State
 	id                 string

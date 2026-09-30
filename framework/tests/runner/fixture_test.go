@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/clients/controller/commands"
 	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
@@ -229,10 +228,6 @@ func (reportStore) Get(context.Context, string) (reports.Report, error) {
 	return reports.Report{}, reports.ErrUnknownReport
 }
 
-type artifactRestorer struct{}
-
-func (artifactRestorer) RestoreArtifacts([]artifact.Ref) error { return nil }
-
 type executor struct {
 	run     func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error)
 	recover func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error)
@@ -275,7 +270,7 @@ func fixture() runner.Config {
 	return runner.Config{
 		MissionStore:   &missionStore{mission: missions.Mission{Name: "review", Objective: "Review a document", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
 		OperationStore: &operationStore{records: map[string]operations.Operation{}},
-		ReportStore:    reportStore{}, ArtifactRestorer: artifactRestorer{},
+		ReportStore:    reportStore{},
 	}
 }
 func newRunner(t *testing.T, config runner.Config, e executor) *runner.Runner {

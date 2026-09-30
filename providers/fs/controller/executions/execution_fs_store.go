@@ -13,10 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/executions"
 	"commander/framework/id"
 	"commander/providers/fs/internal/jsonfile"
@@ -139,97 +136,6 @@ func (s *ExecutionFsStore) Get(ctx context.Context, agentID, commandID string) (
 		return executions.Execution{}, err
 	}
 	return decodeExecution(data, agentID, commandID)
-}
-
-// FindArtifact scans accepted execution outcomes without creating paths. Database
-// providers can index the same persisted references; FS keeps the execution record
-// as the single source of truth for acceptance and artifact ownership.
-func (s *ExecutionFsStore) FindArtifact(ctx context.Context, artifactID string) (artifact.Ref, error) {
-	if ctx == nil {
-		return artifact.Ref{}, errors.New("execution database requires a context")
-	}
-	if err := ctx.Err(); err != nil {
-		return artifact.Ref{}, err
-	}
-	if !id.Valid(artifactID) {
-		return artifact.Ref{}, errors.New("artifact ID must be a canonical UUID")
-	}
-	var found artifact.Ref
-	root := filepath.Join(s.root, "executions")
-	agents, err := os.ReadDir(root)
-	if errors.Is(err, os.ErrNotExist) {
-		return artifact.Ref{}, artifact.ErrUnknownArtifact
-	}
-	if err != nil {
-		return artifact.Ref{}, err
-	}
-	for _, agent := range agents {
-		if err := ctx.Err(); err != nil {
-			return artifact.Ref{}, err
-		}
-		if !agent.IsDir() || !id.ValidAgent(agent.Name()) {
-			continue
-		}
-		files, err := os.ReadDir(filepath.Join(root, agent.Name()))
-		if err != nil {
-			return artifact.Ref{}, err
-		}
-		for _, file := range files {
-			if err := ctx.Err(); err != nil {
-				return artifact.Ref{}, err
-			}
-			commandID := strings.TrimSuffix(file.Name(), ".json")
-			if file.IsDir() || !strings.HasSuffix(file.Name(), ".json") || !id.Valid(commandID) {
-				continue
-			}
-			record, err := s.Get(ctx, agent.Name(), commandID)
-			if errors.Is(err, executions.ErrUnknownExecution) {
-				// A new claim's collection may exist before its first atomic write.
-				continue
-			}
-			if err != nil {
-				return artifact.Ref{}, fmt.Errorf("read artifact execution: %w", err)
-			}
-			if record.Result == nil || record.Result.Type != messages.ActionSucceeded {
-				continue
-			}
-			refs, err := executionArtifacts(record)
-			if err != nil {
-				return artifact.Ref{}, fmt.Errorf("read execution artifacts: %w", err)
-			}
-			for _, ref := range refs {
-				if ref.ID != artifactID {
-					continue
-				}
-				if found.ID != "" && found != ref {
-					return artifact.Ref{}, errors.New("artifact has conflicting metadata across executions")
-				}
-				found = ref
-			}
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return artifact.Ref{}, err
-	}
-	if found.ID == "" {
-		return artifact.Ref{}, artifact.ErrUnknownArtifact
-	}
-	return found, nil
-}
-
-func executionArtifacts(record executions.Execution) ([]artifact.Ref, error) {
-	var call actionmodel.ActionCall
-	if err := domain.Decode(record.Command.Payload, &call); err != nil {
-		return nil, err
-	}
-	if call.Work != record.Command.Work {
-		return nil, errors.New("claimed action request does not match its work context")
-	}
-	output, err := executions.DecodeActionResult(*record.Result, record.Command.AgentID, record.Command.ID, call)
-	if err != nil {
-		return nil, err
-	}
-	return executions.OutputArtifacts(*record.Result, output)
 }
 
 func (s *ExecutionFsStore) path(ctx context.Context, agentID, commandID string) (string, error) {

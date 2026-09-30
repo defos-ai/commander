@@ -3,7 +3,6 @@ package executions
 import (
 	"context"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
 )
 
@@ -17,8 +16,4 @@ type ExecutionStore interface {
 	Claim(ctx context.Context, command messages.Message) (Execution, bool, error)
 	Complete(ctx context.Context, result messages.Message) error
 	Get(ctx context.Context, agentID, commandID string) (Execution, error)
-	// FindArtifact returns trusted metadata from a completed successful execution
-	// or artifact.ErrUnknownArtifact. It does not
-	// authorize artifacts that only exist in storage or uncompleted executions.
-	FindArtifact(ctx context.Context, artifactID string) (artifact.Ref, error)
 }

@@ -23,7 +23,6 @@ type config struct {
 	storageURL        string
 	logLevel          string
 	logFormat         string
-	inlineLimit       int
 	heartbeatInterval time.Duration
 	scope             *environment.DiscoveryScope
 }
@@ -42,7 +41,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Log level: debug, info, warn, error; overrides LOG_LEVEL")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Log format: json or text; overrides LOG_FORMAT; logs are written to stderr")
-	flags.IntVar(&result.inlineLimit, "inline-limit", agents.DefaultInlineOutputLimit, "Maximum inline JSON result bytes; zero stores every result")
 	flags.DurationVar(&result.heartbeatInterval, "heartbeat-interval", agents.DefaultHeartbeatInterval, "Heartbeat interval; zero disables heartbeats and prevents a later controller from discovering this agent")
 	flags.StringVar(&searchPaths, "search-paths", "", "Executable discovery paths separated by the OS path separator; omitted uses PATH, explicit empty searches nowhere")
 	flags.Usage = func() {
@@ -66,9 +64,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	result.logFormat = host.Value(result.logFormat, provided["log-format"], "LOG_FORMAT", "json")
 	if _, err := host.NewLogger(io.Discard, result.logLevel, result.logFormat); err != nil {
 		return config{}, err
-	}
-	if result.inlineLimit < 0 {
-		return config{}, errors.New("inline-limit must not be negative")
 	}
 	if result.heartbeatInterval < 0 {
 		return config{}, errors.New("heartbeat-interval must not be negative")

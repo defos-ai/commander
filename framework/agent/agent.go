@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,12 +35,10 @@ type AgentConfig struct {
 	GrantedPermissions []string
 	PublicConfig       json.RawMessage
 	Environment        environment.Environment
-	// ArtifactStore is required and is created by the host.
-	ArtifactStore artifactstore.ArtifactStore
+	// ArtifactFileStore is required and is created by the host.
+	ArtifactFileStore artifactstore.ArtifactFileStore
 	// Logger receives runtime events without action inputs or results. Nil is silent.
 	Logger *slog.Logger
-	// Nil uses 100,000 bytes; zero stores every structured result.
-	InlineOutputLimit *int
 	// Nil uses thirty seconds; zero disables periodic announcements.
 	HeartbeatInterval *time.Duration
 }
@@ -49,7 +48,6 @@ type AgentConfig struct {
 type Agent struct {
 	config            AgentConfig
 	state             atomic.Pointer[agentState]
-	inlineLimit       int
 	heartbeatInterval time.Duration
 	stateGate         chan struct{}
 	outcomes          consumers.Outcomes
@@ -112,22 +110,14 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	if config.Logger == nil {
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	limit := DefaultInlineOutputLimit
-	if config.InlineOutputLimit != nil {
-		limit = *config.InlineOutputLimit
+	if config.ArtifactFileStore == nil {
+		return nil, errors.New("artifact file store is required")
 	}
-	if limit < 0 {
-		return nil, errors.New("inline output limit must not be negative")
-	}
-	if config.ArtifactStore == nil {
-		return nil, errors.New("artifact store is required")
-	}
-	config.InlineOutputLimit = nil // Store the copied value, not the caller's pointer.
 	config.Actions = append([]action.Executor(nil), config.Actions...)
 	config.Responsibilities = append([]string(nil), config.Responsibilities...)
 	config.GrantedPermissions = append([]string(nil), config.GrantedPermissions...)
 	config.PublicConfig = append(json.RawMessage(nil), config.PublicConfig...)
-	a := &Agent{config: config, inlineLimit: limit, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1)}
+	a := &Agent{config: config, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1)}
 	a.state.Store(&agentState{status: AgentIdle})
 	return a, nil
 }
@@ -138,7 +128,9 @@ func (a *Agent) Status() AgentStatus {
 	return a.state.Load().status
 }
 
-func (a *Agent) ArtifactStore() artifactstore.ArtifactStore { return a.config.ArtifactStore }
+func (a *Agent) ArtifactFileStore() artifactstore.ArtifactFileStore {
+	return a.config.ArtifactFileStore
+}
 
 func (a *Agent) Describe() AgentSnapshot {
 	state := a.state.Load()
@@ -233,7 +225,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 		if workErr != nil {
 			logger.Warn("action failed", "error_type", fmt.Sprintf("%T", workErr), "duration_ms", time.Since(startedAt).Milliseconds())
 		} else {
-			logger.Info("action completed", "duration_ms", time.Since(startedAt).Milliseconds(), "stored_output", output.OutputArtifact != nil, "artifact_count", len(output.Artifacts))
+			logger.Info("action completed", "duration_ms", time.Since(startedAt).Milliseconds(), "artifact_count", len(output.Artifacts))
 		}
 	}()
 	if err := call.Validate(); err != nil {
@@ -294,34 +286,17 @@ func (a *Agent) packageOutput(ctx context.Context, name string, result action.Re
 	if err := domain.ValidateObject(result.Output); err != nil {
 		return ActionOutput{}, fmt.Errorf("action output: %w", err)
 	}
-	// Match the transport's JSON encoding, including HTML character escapes.
-	// Compacting alone could underestimate the actual inline payload size.
-	encoded, err := json.Marshal(result.Output)
-	if err != nil {
-		return ActionOutput{}, err
-	}
 	if err := actionmodel.ValidateNextActions(result.NextActions); err != nil {
 		return ActionOutput{}, err
 	}
-	output := ActionOutput{ActionName: name, NextActions: actionmodel.CloneNextActions(result.NextActions)}
+	output := ActionOutput{ActionName: name, Output: bytes.Clone(result.Output), NextActions: actionmodel.CloneNextActions(result.NextActions)}
 	owner := artifact.Owner{AgentID: a.ID(), ActionName: name, CommandID: commandID}
 	for _, attachment := range result.Artifacts {
-		ref, err := a.config.ArtifactStore.Put(ctx, attachment, owner)
+		ref, err := a.publishArtifact(ctx, attachment, owner)
 		if err != nil {
 			return ActionOutput{}, fmt.Errorf("%w: store attachment: %w", errArtifactPersistence, err)
 		}
 		output.Artifacts = append(output.Artifacts, ref)
-	}
-	if len(encoded) <= a.inlineLimit {
-		output.Output = encoded
-	} else {
-		ref, err := a.config.ArtifactStore.Put(ctx, artifact.Artifact{
-			Name: "output.json", MediaType: "application/json", Data: encoded,
-		}, owner)
-		if err != nil {
-			return ActionOutput{}, fmt.Errorf("%w: store output: %w", errArtifactPersistence, err)
-		}
-		output.OutputArtifact = &ref
 	}
 	if err := ctx.Err(); err != nil {
 		return ActionOutput{}, err
@@ -330,4 +305,28 @@ func (a *Agent) packageOutput(ctx context.Context, name string, result action.Re
 		return ActionOutput{}, fmt.Errorf("invalid stored result: %w", err)
 	}
 	return output, nil
+}
+
+func (a *Agent) publishArtifact(ctx context.Context, source action.Artifact, owner artifact.Owner) (artifact.Artifact, error) {
+	record := artifact.Artifact{ID: id.ArtifactID(), Name: source.Name, AgentID: owner.AgentID,
+		ActionName: owner.ActionName, CommandID: owner.CommandID, CreatedAt: time.Now().UTC(), Files: []artifact.ArtifactFile{}}
+	if err := record.Validate(); err != nil {
+		return artifact.Artifact{}, err
+	}
+	for _, file := range source.Files {
+		if err := file.Validate(); err != nil {
+			return artifact.Artifact{}, err
+		}
+	}
+	for _, sourceFile := range source.Files {
+		file, err := a.config.ArtifactFileStore.Put(ctx, record.ID, sourceFile)
+		if err != nil {
+			return artifact.Artifact{}, err
+		}
+		record.Files = append(record.Files, file)
+	}
+	if err := record.Validate(); err != nil {
+		return artifact.Artifact{}, err
+	}
+	return record, nil
 }

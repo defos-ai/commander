@@ -4,7 +4,7 @@
 
 An independent Go module implementing framework database stores with MongoDB.
 Currently available: `MissionMongoStore`, `ActionMongoStore`, `AgentMongoStore`,
-`ExecutionMongoStore`, `OperationMongoStore`, and the shared `MongoStore` for
+`ExecutionMongoStore`, `OperationMongoStore`, `ArtifactMongoStore`, and the shared `MongoStore` for
 queries, conditional writes, indexes, and transactions. Controller and MCP hosts
 select these stores when `DATABASE_URL` uses `mongodb://` or `mongodb+srv://`.
 Operation updates require a replica set or sharded cluster for transactions.
@@ -19,8 +19,10 @@ supports atomic expiry checks. Observation timestamps retain sub-millisecond
 precision alongside BSON dates, keeping ordering and expiry boundaries exact.
 
 Executions atomically claim commands and preserve immutable terminal outcomes.
-Indexed artifact lookups return trusted metadata only from successful completed
-executions.
+Accepted artifact metadata is immutable in the `artifacts` collection. The
+controller indexes it after saving a validated successful execution, before
+sending its receipt. Replaying or recovering that result repairs incomplete
+metadata writes. File bytes use the separately configured `ArtifactFileStore`.
 
 Operations use `operations`, `operation_tasks`, `operation_questions`, and
 `operation_events` collections. Each transition commits metadata and changed

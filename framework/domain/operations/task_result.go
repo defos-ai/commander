@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/domain/actions"
 	"commander/framework/id"
 )
@@ -60,14 +58,7 @@ func (o *Operation) FinishTask(result TaskResult) (bool, error) {
 	task.Status, task.Error, task.FinishedAt = result.Status, result.Error, &finished
 	task.Result = nil
 	if result.Result != nil {
-		output := *result.Result
-		output.Output = bytes.Clone(output.Output)
-		output.NextActions = actions.CloneNextActions(output.NextActions)
-		output.Artifacts = slices.Clone(output.Artifacts)
-		if output.OutputArtifact != nil {
-			ref := *output.OutputArtifact
-			output.OutputArtifact = &ref
-		}
+		output := result.Result.Clone()
 		task.Result = &output
 	}
 	continueTask(o, result.TaskID, result.Status == TaskSucceeded)
@@ -109,11 +100,7 @@ func validateAgentResult(agentID string, result actions.ActionOutput) error {
 	if err := result.Validate(); err != nil {
 		return err
 	}
-	refs := append([]artifact.Ref(nil), result.Artifacts...)
-	if result.OutputArtifact != nil {
-		refs = append(refs, *result.OutputArtifact)
-	}
-	for _, ref := range refs {
+	for _, ref := range result.Artifacts {
 		if ref.AgentID != agentID || ref.ActionName != result.ActionName {
 			return errors.New("observation artifact ownership does not match its agent and action")
 		}

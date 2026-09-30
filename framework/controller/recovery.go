@@ -11,6 +11,7 @@ import (
 
 	agentcommands "commander/framework/comms/clients/agent/commands"
 	"commander/framework/comms/messages"
+	"commander/framework/controller/consumers"
 	"commander/framework/domain"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
@@ -116,11 +117,7 @@ func (c *Controller) actionResult(ctx context.Context, message messages.Message,
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	refs, err := executions.OutputArtifacts(message, output)
-	if err != nil {
-		return actionmodel.ActionOutput{}, err
-	}
-	if err := c.restoreArtifacts(ctx, refs); err != nil {
+	if err := (consumers.ArtifactConsumer{Store: c.artifactStore}).Consume(ctx, message); err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
 	return output, nil

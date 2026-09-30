@@ -150,9 +150,9 @@ func TestConcurrentExecutionClaimsAndCompletions(t *testing.T) {
 	}
 	responses := []messages.Message{executionResult(command), executionResult(command)}
 	responses[1].ID = executionResult(executionCommand(2)).ID
-	references := []artifact.Ref{executionArtifact(command, 1), executionArtifact(command, 2)}
+	references := []artifact.Artifact{executionArtifact(command, 1), executionArtifact(command, 2)}
 	for i, ref := range references {
-		responses[i].Payload, _ = json.Marshal(actions.ActionOutput{ActionName: "check", Output: json.RawMessage(`{}`), Artifacts: []artifact.Ref{ref}})
+		responses[i].Payload, _ = json.Marshal(actions.ActionOutput{ActionName: "check", Output: json.RawMessage(`{}`), Artifacts: []artifact.Artifact{ref}})
 	}
 	type completion struct {
 		index int
@@ -182,13 +182,6 @@ func TestConcurrentExecutionClaimsAndCompletions(t *testing.T) {
 	stored, err := first.Get(t.Context(), command.AgentID, command.ID)
 	if winner == -1 || conflicts != 1 || err != nil || stored.Result == nil || !reflect.DeepEqual(*stored.Result, responses[winner]) {
 		t.Fatalf("completion race lost its winner: winner=%d conflicts=%d record=%#v error=%v", winner, conflicts, stored, err)
-	}
-	found, err := second.FindArtifact(t.Context(), references[winner].ID)
-	if err != nil || found != references[winner] {
-		t.Fatalf("winning completion lost artifact authorization: %#v, error=%v", found, err)
-	}
-	if _, err := second.FindArtifact(t.Context(), references[1-winner].ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
-		t.Fatalf("losing completion authorized an artifact: %v", err)
 	}
 }
 
@@ -236,12 +229,6 @@ func TestExecutionMongoStoreRejectsMissingInvalidAndCancelledWrites(t *testing.T
 	if err := catalog.Complete(cancelled, result); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled completion: %v", err)
 	}
-	if _, err := catalog.FindArtifact(cancelled, executionArtifact(command, 1).ID); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled artifact lookup: %v", err)
-	}
-	if _, err := catalog.FindArtifact(t.Context(), "invalid"); err == nil {
-		t.Fatal("invalid artifact ID was accepted")
-	}
 	stored, err := catalog.Get(t.Context(), command.AgentID, command.ID)
 	if err != nil || stored.Result != nil || stored.CompletedAt != nil {
 		t.Fatalf("cancelled write completed a reservation: %#v, error=%v", stored, err)
@@ -251,104 +238,37 @@ func TestExecutionMongoStoreRejectsMissingInvalidAndCancelledWrites(t *testing.T
 	}
 }
 
-func TestExecutionMongoStoreAuthorizesOnlySuccessfulArtifacts(t *testing.T) {
+func TestExecutionMongoStorePreservesFailedOutcome(t *testing.T) {
 	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := executionCommand(1)
-	output, attachment := executionArtifact(command, 1), executionArtifact(command, 2)
-	command.Payload, _ = json.Marshal(actions.ActionCall{ActionName: "check", Work: command.Work, Input: json.RawMessage(fmt.Sprintf(`{"artifact_id":%q}`, output.ID))})
 	if _, _, err := catalog.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
-	for _, ref := range []artifact.Ref{output, attachment} {
-		if _, err := catalog.FindArtifact(t.Context(), ref.ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
-			t.Fatalf("pending command authorized an artifact: %v", err)
-		}
-	}
-	result := executionResult(command)
-	result.Payload, _ = json.Marshal(actions.ActionOutput{ActionName: "check", OutputArtifact: &output, Artifacts: []artifact.Ref{attachment}})
-
-	if err := catalog.Complete(t.Context(), result); err != nil {
-		t.Fatal(err)
-	}
-
-	for _, ref := range []artifact.Ref{output, attachment} {
-		found, err := catalog.FindArtifact(t.Context(), ref.ID)
-		if err != nil || found != ref {
-			t.Fatalf("successful artifact metadata changed: %#v, error=%v", found, err)
-		}
-	}
-	failed := executionCommand(2)
-	failedRef := executionArtifact(failed, 3)
-	if _, _, err := catalog.Claim(t.Context(), failed); err != nil {
-		t.Fatal(err)
-	}
-	failure := executionResult(failed)
+	failure := executionResult(command)
 	failure.Type = messages.CommandFailed
-	failure.Payload, _ = json.Marshal(map[string]any{"error_type": "fixture", "message": "failed", "artifacts": []artifact.Ref{failedRef}})
+	failure.Payload = json.RawMessage(`{"error_type":"fixture","message":"failed"}`)
+
 	if err := catalog.Complete(t.Context(), failure); err != nil {
 		t.Fatal(err)
 	}
-	for _, ref := range []artifact.Ref{failedRef, executionArtifact(command, 4)} {
-		if _, err := catalog.FindArtifact(t.Context(), ref.ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
-			t.Fatalf("failed or unknown artifact was authorized: %v", err)
-		}
+	stored, err := catalog.Get(t.Context(), command.AgentID, command.ID)
+	if err != nil || stored.Result == nil || !reflect.DeepEqual(*stored.Result, failure) || stored.CompletedAt == nil {
+		t.Fatalf("failed outcome was not preserved: %#v, error=%v", stored, err)
 	}
-}
-
-func TestExecutionMongoStoreRejectsConflictingArtifactOwnership(t *testing.T) {
-	for _, test := range []string{"agent", "command", "action", "within result", "across executions"} {
-		t.Run(test, func(t *testing.T) {
-			catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			command := executionCommand(1)
-			ref := executionArtifact(command, 1)
-			output := actions.ActionOutput{ActionName: "check", Output: json.RawMessage(`{}`)}
-			switch test {
-			case "agent":
-				ref.AgentID = "web-quality-agent-00000002"
-			case "command":
-				ref.CommandID = executionCommand(2).ID
-			case "action":
-				ref.ActionName = "different"
-			case "within result":
-				other := ref
-				other.Name = "conflicting-name.json"
-				output.Artifacts = append(output.Artifacts, other)
-			}
-			output.Artifacts = append(output.Artifacts, ref)
-			if _, _, err := catalog.Claim(t.Context(), command); err != nil {
-				t.Fatal(err)
-			}
-			result := executionResult(command)
-			result.Payload, _ = json.Marshal(output)
-			if err := catalog.Complete(t.Context(), result); err != nil {
-				t.Fatal(err)
-			}
-			if test == "across executions" {
-				second := executionCommand(2)
-				if _, _, err := catalog.Claim(t.Context(), second); err != nil {
-					t.Fatal(err)
-				}
-				ref.CommandID = second.ID
-				output.Artifacts = []artifact.Ref{ref}
-				result = executionResult(second)
-				result.Payload, _ = json.Marshal(output)
-				if err := catalog.Complete(t.Context(), result); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			_, err = catalog.FindArtifact(t.Context(), ref.ID)
-
-			if err == nil || errors.Is(err, artifact.ErrUnknownArtifact) {
-				t.Fatalf("conflicting artifact ownership was not reported: %v", err)
-			}
-		})
+	replay := failure
+	replay.CreatedAt = replay.CreatedAt.Add(time.Hour)
+	if err := catalog.Complete(t.Context(), replay); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Complete(t.Context(), executionResult(command)); !errors.Is(err, executions.ErrExecutionConflict) {
+		t.Fatalf("success replaced a failed outcome: %v", err)
+	}
+	unchanged, err := catalog.Get(t.Context(), command.AgentID, command.ID)
+	if err != nil || !reflect.DeepEqual(unchanged, stored) {
+		t.Fatalf("failed replay changed saved outcome: %#v, error=%v", unchanged, err)
 	}
 }
 
@@ -362,6 +282,14 @@ func executionResult(command messages.Message) messages.Message {
 	return messages.Message{ID: "30000000" + command.ID[8:], Type: messages.ActionSucceeded, AgentID: command.AgentID, CorrelationID: command.ID, Work: command.Work, Payload: json.RawMessage(`{"action_name":"check","output":{"serial":9007199254740993}}`), CreatedAt: command.CreatedAt.Add(time.Nanosecond)}
 }
 
-func executionArtifact(command messages.Message, index int) artifact.Ref {
-	return artifact.Ref{ID: fmt.Sprintf("40000000-0000-4000-8000-%012x", index), Name: "result.json", MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64), AgentID: command.AgentID, ActionName: "check", CommandID: command.ID, CreatedAt: command.CreatedAt.Add(2 * time.Nanosecond)}
+func executionArtifact(command messages.Message, index int) artifact.Artifact {
+	return artifact.Artifact{
+		ID: fmt.Sprintf("40000000-0000-4000-8000-%012x", index), Name: "result",
+		AgentID: command.AgentID, ActionName: "check", CommandID: command.ID,
+		CreatedAt: command.CreatedAt.Add(2 * time.Nanosecond),
+		Files: []artifact.ArtifactFile{{
+			ID: fmt.Sprintf("50000000-0000-4000-8000-%012x", index), Name: "result.json",
+			MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64),
+		}},
+	}
 }

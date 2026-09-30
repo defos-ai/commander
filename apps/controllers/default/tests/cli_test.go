@@ -29,7 +29,7 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:5672", dependency: "rabbitmq"},
 		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:5671", dependency: "rabbitmq"},
 		{name: "unsupported broker", flag: "bus-url", url: "nats://user:" + secret + "@127.0.0.1:4222"},
-		{name: "unavailable artifact store", flag: "storage-url", url: "s3://user:" + secret + "@artifacts/bucket", dependency: "artifact"},
+		{name: "unavailable report store", flag: "storage-url", url: "s3://user:" + secret + "@artifacts/bucket", dependency: "report"},
 		{name: "uppercase FILE URL", flag: "database-url", url: "postgres://127.0.0.1:5432/commander", filesystemForm: "FILE"},
 		{name: "uppercase FS URL", flag: "database-url", url: "postgres://127.0.0.1:5432/commander", filesystemForm: "FS"},
 		{name: "absolute path containing colon", flag: "database-url", url: "postgres://127.0.0.1:5432/commander", filesystemForm: "path"},

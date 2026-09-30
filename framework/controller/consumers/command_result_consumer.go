@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	agentevents "commander/framework/comms/clients/agent/events"
 	controllerevents "commander/framework/comms/clients/controller/events"
@@ -22,6 +23,7 @@ import (
 type CommandResultConsumer struct {
 	Inventory  agentmodel.AgentStore
 	Executions executions.ExecutionStore
+	Artifacts  artifactstore.ArtifactStore
 	Bus        comms.Bus
 	State      *state.State
 }
@@ -65,17 +67,10 @@ func (c CommandResultConsumer) acceptActionResult(ctx context.Context, message m
 	if err := call.Validate(); err != nil || call.Work != command.Work {
 		return errors.New("invalid claimed action request")
 	}
-	output, resultErr := executions.DecodeActionResult(message, command.AgentID, command.ID, call)
+	_, resultErr := executions.DecodeActionResult(message, command.AgentID, command.ID, call)
 	var failure *executions.CommandFailure
 	if resultErr != nil && !errors.As(resultErr, &failure) {
 		return InvalidMessage(resultErr)
-	}
-	refs, err := executions.OutputArtifacts(message, output)
-	if err != nil {
-		return InvalidMessage(err)
-	}
-	if err := c.State.ValidateArtifacts(refs); err != nil {
-		return InvalidMessage(err)
 	}
 
 	// The database is the acknowledgement boundary. Neither the caller nor
@@ -86,7 +81,7 @@ func (c CommandResultConsumer) acceptActionResult(ctx context.Context, message m
 		}
 		return fmt.Errorf("persist action result: %w", err)
 	}
-	if err := c.State.RestoreArtifacts(refs); err != nil {
+	if err := (ArtifactConsumer{Store: c.Artifacts}).Consume(ctx, message); err != nil {
 		return err
 	}
 	if stored.Result == nil {
