@@ -27,10 +27,6 @@ func (o *Operation) Recover(now time.Time) (bool, error) {
 	return true, nil
 }
 
-func (t Task) NeedsRecovery() bool {
-	return t.Status == TaskRunning || t.Status == TaskInterrupted
-}
-
 func (o Operation) validateRecovery() error {
 	switch o.Status {
 	case Planning, Running, Waiting, Completed, Failed, Cancelled:
@@ -62,7 +58,7 @@ func (o Operation) validateRecovery() error {
 			if task.Result.ActionName != task.ActionName {
 				return fmt.Errorf("task %s result belongs to another action", task.ID)
 			}
-			if err := (AgentObservation{AgentID: task.AgentID, Result: *task.Result}).Validate(); err != nil {
+			if err := validateAgentResult(task.AgentID, *task.Result); err != nil {
 				return fmt.Errorf("task %s result: %w", task.ID, err)
 			}
 		}

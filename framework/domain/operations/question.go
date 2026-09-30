@@ -8,6 +8,41 @@ import (
 	"commander/framework/id"
 )
 
+type QuestionStatus string
+
+const (
+	QuestionPending  QuestionStatus = "pending"
+	QuestionAnswered QuestionStatus = "answered"
+	QuestionExpired  QuestionStatus = "expired"
+)
+
+// A pending question blocks its StepID. An empty StepID blocks all new tasks.
+// Work already assigned continues and its results remain available.
+type Question struct {
+	ID         string         `json:"id"`
+	Status     QuestionStatus `json:"status"`
+	StepID     string         `json:"step_id,omitempty"`
+	TaskID     string         `json:"task_id,omitempty"`
+	Text       string         `json:"text"`
+	Options    []string       `json:"options,omitempty"`
+	Answer     string         `json:"answer,omitempty"`
+	AskedAt    time.Time      `json:"asked_at"`
+	AnsweredAt *time.Time     `json:"answered_at,omitempty"`
+	ExpiresAt  time.Time      `json:"expires_at"`
+}
+
+// Pending questions block new work until an answer or durable expiration.
+func (q Question) Pending() bool { return q.Status == QuestionPending }
+
+func (q Question) Clone() Question {
+	q.Options = append([]string(nil), q.Options...)
+	if q.AnsweredAt != nil {
+		value := *q.AnsweredAt
+		q.AnsweredAt = &value
+	}
+	return q
+}
+
 func (o *Operation) AskQuestion(question Question, version uint64) error {
 	if o.Status.Terminal() {
 		return ErrFinished

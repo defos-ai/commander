@@ -7,16 +7,7 @@ import (
 
 	actionmodel "commander/framework/domain/actions"
 	"commander/framework/domain/missions"
-	"commander/framework/id"
 )
-
-// NewTask constructs a queued assignment with a stable command identity.
-func NewTask(operationID, stepID, parentID string, action actionmodel.NextAction) Task {
-	taskID := id.TaskID()
-	return Task{ID: taskID, CommandID: taskID, OperationID: operationID, StepID: stepID,
-		ParentTaskID: parentID, AgentID: action.AgentID,
-		ActionName: action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}
-}
 
 // continueTask is part of the same operation update as the result. No publication
 // happens here: child IDs and the decision are committed before the scheduler runs.

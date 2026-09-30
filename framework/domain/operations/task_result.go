@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"commander/framework/artifact"
 	"commander/framework/domain/actions"
 	"commander/framework/id"
 )
@@ -90,7 +91,7 @@ func (r TaskResult) validate() error {
 		if r.Result == nil || r.Error != "" {
 			return errors.New("successful task result requires output without an error")
 		}
-		return (AgentObservation{AgentID: r.AgentID, Result: *r.Result}).Validate()
+		return validateAgentResult(r.AgentID, *r.Result)
 	case TaskFailed, TaskInterrupted:
 		if r.Result != nil || strings.TrimSpace(r.Error) == "" {
 			return errors.New("failed or interrupted task result requires an error without output")
@@ -99,6 +100,25 @@ func (r TaskResult) validate() error {
 	default:
 		return errors.New("task result must be succeeded, failed, or interrupted")
 	}
+}
+
+func validateAgentResult(agentID string, result actions.ActionOutput) error {
+	if !id.ValidAgent(agentID) {
+		return errors.New("invalid observation agent ID")
+	}
+	if err := result.Validate(); err != nil {
+		return err
+	}
+	refs := append([]artifact.Ref(nil), result.Artifacts...)
+	if result.OutputArtifact != nil {
+		refs = append(refs, *result.OutputArtifact)
+	}
+	for _, ref := range refs {
+		if ref.AgentID != agentID || ref.ActionName != result.ActionName {
+			return errors.New("observation artifact ownership does not match its agent and action")
+		}
+	}
+	return nil
 }
 
 func sameTaskResult(task Task, result TaskResult) bool {

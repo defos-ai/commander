@@ -1,9 +1,6 @@
 package operations
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 func (operation Operation) ValidateStep(stepID string) error {
 	if stepID == "" {
@@ -48,11 +45,4 @@ func (operation *Operation) RefreshStatus() {
 			return
 		}
 	}
-}
-
-// AppendEvent records an event at the next operation-local sequence.
-func (operation *Operation) AppendEvent(kind EventType, taskID, questionID, message string) {
-	operation.Events = append(operation.Events, Event{Sequence: uint64(len(operation.Events) + 1),
-		OperationID: operation.ID, Type: kind, Status: operation.Status, TaskID: taskID,
-		QuestionID: questionID, Message: message, CreatedAt: time.Now().UTC()})
 }
