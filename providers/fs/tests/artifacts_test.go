@@ -13,8 +13,7 @@ import (
 
 	"commander/framework/domain/artifacts"
 	"commander/framework/id"
-	filefs "commander/providers/fs/artifact"
-	artifactfs "commander/providers/fs/controller/artifacts"
+	artifactfs "commander/providers/fs/artifacts"
 )
 
 func TestArtifactFsStore(t *testing.T) {
@@ -121,7 +120,7 @@ func TestConcurrentArtifactFsCreates(t *testing.T) {
 func TestArtifactFilesStaySeparateFromMetadata(t *testing.T) {
 	root := t.TempDir()
 	storage, database := filepath.Join(root, "storage"), filepath.Join(root, "database")
-	files, err := filefs.NewArtifactFileFsStore(storage)
+	files, err := artifactfs.NewArtifactFileFsStore(storage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +168,7 @@ func TestArtifactFilesStaySeparateFromMetadata(t *testing.T) {
 
 func TestArtifactFileSources(t *testing.T) {
 	root := t.TempDir()
-	files, err := filefs.NewArtifactFileFsStore(filepath.Join(root, "storage"))
+	files, err := artifactfs.NewArtifactFileFsStore(filepath.Join(root, "storage"))
 	if err != nil {
 		t.Fatal(err)
 	}

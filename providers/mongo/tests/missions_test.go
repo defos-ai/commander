@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"commander/framework/domain/missions"
-	mongomissions "commander/providers/mongo/controller/missions"
+	mongomissions "commander/providers/mongo/missions"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

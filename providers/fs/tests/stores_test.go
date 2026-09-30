@@ -19,8 +19,8 @@ import (
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
-	executionfs "commander/providers/fs/controller/executions"
-	operationfs "commander/providers/fs/controller/operations"
+	executionfs "commander/providers/fs/executions"
+	operationfs "commander/providers/fs/operations"
 )
 
 func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {

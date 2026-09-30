@@ -10,7 +10,7 @@ import (
 
 	"commander/framework/domain/reports"
 	"commander/framework/id"
-	reports3 "commander/providers/s3/controller/reports"
+	reports3 "commander/providers/s3/reports"
 )
 
 func TestReportS3StoreReplayAndImmutability(t *testing.T) {

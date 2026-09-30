@@ -14,7 +14,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
-	mongoexecutions "commander/providers/mongo/controller/executions"
+	mongoexecutions "commander/providers/mongo/executions"
 )
 
 func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {

@@ -57,12 +57,14 @@ constructor you need; see also the [Mongo](mongo/README.md#quick-start) and
 | Constructor | Host setting | Framework interface |
 | --- | --- | --- |
 | [`comms.NewFsBus`](fs/comms/fs_bus.go) | `BUS_URL` | `comms.Bus` |
-| [`artifact.NewArtifactFileFsStore`](fs/artifact/artifact_file_fs_store.go) | `STORAGE_URL` | `artifacts.ArtifactFileStore` |
-| [`artifacts.NewArtifactFsStore`](fs/controller/artifacts/artifact_fs_store.go) | `DATABASE_URL` | `artifacts.ArtifactStore` |
-| [`reports.NewReportFsStore`](fs/controller/reports/report_fs_store.go) | `STORAGE_URL` | `reports.ReportStore` |
-| [`missions.NewMissionFsStore`](fs/controller/missions/mission_fs_store.go) | `DATABASE_URL` | `missions.MissionStore` |
+| [`artifacts.NewArtifactFileFsStore`](fs/artifacts/artifact_file_fs_store.go) | `STORAGE_URL` | `artifacts.ArtifactFileStore` |
+| [`artifacts.NewArtifactFsStore`](fs/artifacts/artifact_fs_store.go) | `DATABASE_URL` | `artifacts.ArtifactStore` |
+| [`reports.NewReportFsStore`](fs/reports/report_fs_store.go) | `STORAGE_URL` | `reports.ReportStore` |
+| [`missions.NewMissionFsStore`](fs/missions/mission_fs_store.go) | `DATABASE_URL` | `missions.MissionStore` |
 
-Other database stores have constructors in [`fs/controller/`](fs/controller/).
+Stores are grouped by domain under each provider, such as `fs/operations/`,
+`mongo/missions/`, and `s3/reports/`. Both filesystem artifact stores live in
+`fs/artifacts/`.
 Filesystem constructors accept paths; [`fs.FilesystemPath`](fs/path.go) converts
 configured paths and `file://` or `fs://` URLs without opening resources.
 
@@ -76,7 +78,7 @@ import (
 
     "commander/framework/domain/missions"
     "commander/providers/fs"
-    fsmissions "commander/providers/fs/controller/missions"
+    fsmissions "commander/providers/fs/missions"
 )
 
 func ListMissions(ctx context.Context, databaseURL string) ([]missions.Mission, error) {

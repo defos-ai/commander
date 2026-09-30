@@ -41,7 +41,7 @@ apps/agents/<agent-type>/
    keep only dependencies your agent uses, and add it with
    `go work use ./apps/agents/<agent-type>` from the repository root.
 2. Generate an ID with `id.AgentID("<agent-type>")` for `agent.AgentConfig.ID`.
-   Construct `artifact.NewArtifactFileFsStore(storageRoot)` for file storage.
+   Construct `artifacts.NewArtifactFileFsStore(storageRoot)` for file storage.
 3. Construct `agent.NewAgent` with your fixed `Type`, responsibilities, fresh action
    instances, granted permissions, and injected `ArtifactFileStore`.
 4. Construct providers in the app's `cli/factory.go` and pass framework interfaces
@@ -190,8 +190,8 @@ go mod edit -require=commander/providers/fs@v0.0.0
 go mod edit -replace=commander/providers/fs=/absolute/path/to/commander/providers/fs
 ```
 
-Import `commander/providers/fs/comms` and `commander/providers/fs/artifact`
-for `comms.NewFsBus` and `artifact.NewArtifactFileFsStore`. Convert configured URLs
+Import `commander/providers/fs/comms` and `commander/providers/fs/artifacts`
+for `comms.NewFsBus` and `artifacts.NewArtifactFileFsStore`. Convert configured URLs
 with `fs.FilesystemPath` from `commander/providers/fs` before passing paths to
 these constructors. Other provider modules are optional.
 Both replacements belong in your project's `go.mod`. `v0.0.0` is a local

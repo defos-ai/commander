@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	actionmodel "commander/framework/domain/actions"
-	"commander/providers/fs/controller/internal/catalog"
+	"commander/providers/fs/internal/catalog"
 )
 
 // ActionFsStore persists catalog metadata learned from agents in root/actions.json.

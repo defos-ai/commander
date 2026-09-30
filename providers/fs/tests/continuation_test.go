@@ -14,7 +14,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
-	operationfs "commander/providers/fs/controller/operations"
+	operationfs "commander/providers/fs/operations"
 )
 
 func TestOperationContinuationHasOneDecisionAcrossStoreInstances(t *testing.T) {

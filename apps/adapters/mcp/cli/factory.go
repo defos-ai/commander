@@ -19,23 +19,22 @@ import (
 	"commander/framework/domain/reports"
 	frameworktesting "commander/framework/testing"
 	"commander/providers/fs"
-	fsartifact "commander/providers/fs/artifact"
+	fsactions "commander/providers/fs/actions"
+	fsagents "commander/providers/fs/agents"
+	fsartifacts "commander/providers/fs/artifacts"
 	fscomms "commander/providers/fs/comms"
-	fsactions "commander/providers/fs/controller/actions"
-	fsagents "commander/providers/fs/controller/agents"
-	fsartifacts "commander/providers/fs/controller/artifacts"
-	fsmissions "commander/providers/fs/controller/missions"
-	fsoperations "commander/providers/fs/controller/operations"
-	fsreports "commander/providers/fs/controller/reports"
+	fsmissions "commander/providers/fs/missions"
+	fsoperations "commander/providers/fs/operations"
+	fsreports "commander/providers/fs/reports"
 	fstesting "commander/providers/fs/testing"
-	mongoactions "commander/providers/mongo/controller/actions"
-	mongoagents "commander/providers/mongo/controller/agents"
-	mongoartifacts "commander/providers/mongo/controller/artifacts"
-	mongomissions "commander/providers/mongo/controller/missions"
-	mongooperations "commander/providers/mongo/controller/operations"
+	mongoactions "commander/providers/mongo/actions"
+	mongoagents "commander/providers/mongo/agents"
+	mongoartifacts "commander/providers/mongo/artifacts"
+	mongomissions "commander/providers/mongo/missions"
+	mongooperations "commander/providers/mongo/operations"
 	mongostore "commander/providers/mongo/store"
-	s3artifact "commander/providers/s3/artifact"
-	s3reports "commander/providers/s3/controller/reports"
+	s3artifacts "commander/providers/s3/artifacts"
+	s3reports "commander/providers/s3/reports"
 	s3store "commander/providers/s3/store"
 )
 
@@ -353,12 +352,12 @@ func (d *dependencies) createArtifactFileStore(ctx context.Context, rawURL strin
 		if err != nil {
 			return nil, err
 		}
-		return fsartifact.NewArtifactFileFsStore(path)
+		return fsartifacts.NewArtifactFileFsStore(path)
 	case "s3":
 		if err := d.connectS3(ctx, rawURL); err != nil {
 			return nil, err
 		}
-		return s3artifact.NewArtifactFileS3Store(d.s3)
+		return s3artifacts.NewArtifactFileS3Store(d.s3)
 	default:
 		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
 	}

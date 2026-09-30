@@ -39,7 +39,7 @@ configured prefix.
 
 ```go
 import (
-    s3artifact "commander/providers/s3/artifact"
+    s3artifacts "commander/providers/s3/artifacts"
     "commander/providers/s3/store"
 )
 
@@ -47,7 +47,7 @@ storage, err := store.Open(ctx, "s3://your-bucket/commander")
 if err != nil {
     return err
 }
-files, err := s3artifact.NewArtifactFileS3Store(storage)
+files, err := s3artifacts.NewArtifactFileS3Store(storage)
 ```
 
 The workspace includes `commander/providers/s3`. Private projects currently use

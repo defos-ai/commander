@@ -11,7 +11,7 @@ import (
 
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
-	mongoagents "commander/providers/mongo/controller/agents"
+	mongoagents "commander/providers/mongo/agents"
 )
 
 func TestAgentMongoStore(t *testing.T) {

@@ -63,7 +63,7 @@ the filesystem provider.
 
 ```go
 import (
-    mongomissions "commander/providers/mongo/controller/missions"
+    mongomissions "commander/providers/mongo/missions"
     "commander/providers/mongo/store"
 )
 
@@ -94,7 +94,7 @@ docker compose -f compose.full.yaml down --volumes
 
 Database tests skip when `COMMANDER_TEST_MONGO_URL` is unset. Use a dedicated test
 database: tests clean their collections before and after each case. CI runs the
-same suite in [test-provider.yml](../../../.github/workflows/test-provider.yml).
+same suite in [test-provider.yml](../../.github/workflows/test-provider.yml).
 Optional controller and MCP startup tests use the same environment variable,
 with separate `_controller_startup` and `_mcp_startup` databases. They create
 indexes and verify startup/shutdown without deleting database contents.

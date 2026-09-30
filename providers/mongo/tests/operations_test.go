@@ -17,7 +17,7 @@ import (
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
-	mongooperations "commander/providers/mongo/controller/operations"
+	mongooperations "commander/providers/mongo/operations"
 	"commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"

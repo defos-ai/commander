@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"commander/framework/domain/actions"
-	mongoactions "commander/providers/mongo/controller/actions"
+	mongoactions "commander/providers/mongo/actions"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

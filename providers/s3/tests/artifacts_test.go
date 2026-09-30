@@ -13,7 +13,7 @@ import (
 
 	"commander/framework/domain/artifacts"
 	"commander/framework/id"
-	files3 "commander/providers/s3/artifact"
+	files3 "commander/providers/s3/artifacts"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 )

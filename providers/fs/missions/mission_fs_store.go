@@ -2,7 +2,7 @@ package missions
 
 import (
 	"commander/framework/domain/missions"
-	"commander/providers/fs/controller/internal/catalog"
+	"commander/providers/fs/internal/catalog"
 )
 
 // MissionFsStore stores mission records in root/missions.json.

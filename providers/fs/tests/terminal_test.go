@@ -11,7 +11,7 @@ import (
 
 	"commander/framework/domain/operations"
 	"commander/framework/id"
-	operationfs "commander/providers/fs/controller/operations"
+	operationfs "commander/providers/fs/operations"
 )
 
 func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {

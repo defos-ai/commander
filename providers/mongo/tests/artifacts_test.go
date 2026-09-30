@@ -9,7 +9,7 @@ import (
 
 	"commander/framework/domain/artifacts"
 	"commander/framework/id"
-	mongoartifacts "commander/providers/mongo/controller/artifacts"
+	mongoartifacts "commander/providers/mongo/artifacts"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

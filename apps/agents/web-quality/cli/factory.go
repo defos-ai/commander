@@ -11,9 +11,9 @@ import (
 	"commander/framework/comms"
 	"commander/framework/domain/artifacts"
 	"commander/providers/fs"
-	fsartifact "commander/providers/fs/artifact"
+	fsartifacts "commander/providers/fs/artifacts"
 	fscomms "commander/providers/fs/comms"
-	s3artifact "commander/providers/s3/artifact"
+	s3artifacts "commander/providers/s3/artifacts"
 	s3store "commander/providers/s3/store"
 )
 
@@ -86,13 +86,13 @@ func createArtifactFileStore(ctx context.Context, storageURL string) (artifacts.
 		if err != nil {
 			return nil, err
 		}
-		return fsartifact.NewArtifactFileFsStore(root)
+		return fsartifacts.NewArtifactFileFsStore(root)
 	case "s3":
 		storage, err := s3store.Open(ctx, storageURL)
 		if err != nil {
 			return nil, err
 		}
-		return s3artifact.NewArtifactFileS3Store(storage)
+		return s3artifacts.NewArtifactFileS3Store(storage)
 	default:
 		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
 	}
