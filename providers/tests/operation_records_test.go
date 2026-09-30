@@ -18,7 +18,8 @@ import (
 func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 	dir := t.TempDir()
 	store := newDispatchStore(t, dir)
-	op := operations.Operation{ID: id.OperationID(), Status: operations.Running}
+	op := operations.Operation{ID: id.OperationID(), Status: operations.Running,
+		Events: []operations.Event{{Sequence: 10, Type: operations.TaskFinished}, {Sequence: 2, Type: operations.OperationStarted}}}
 	// Storage sorts record names, but public snapshots retain the caller's order.
 	for _, recordID := range []string{"ffffffff-ffff-4fff-8fff-ffffffffffff", "00000000-0000-4000-8000-000000000001"} {
 		op.Tasks = append(op.Tasks, operations.Task{ID: recordID, OperationID: op.ID,
@@ -39,12 +40,15 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 	if err := json.Unmarshal(before["operation"], &metadata); err != nil {
 		t.Fatal(err)
 	}
-	if len(before) != 5 || metadata["tasks"] != nil || metadata["questions"] != nil || metadata["events"] == nil {
-		t.Fatalf("operation metadata must reference separate bodies and retain events: %s", before["operation"])
+	if len(before) != 7 || metadata["tasks"] != nil || metadata["questions"] != nil || metadata["events"] != nil {
+		t.Fatalf("operation metadata must reference separate task, question and event bodies: %s", before["operation"])
 	}
 	wantIDs := []string{op.Tasks[0].ID, op.Tasks[1].ID}
 	assertResultJSONEqual(t, metadata["task_ids"], wantIDs)
 	assertResultJSONEqual(t, metadata["question_ids"], wantIDs)
+	assertResultJSONEqual(t, metadata["event_sequences"], []uint64{10, 2})
+	assertResultJSONEqual(t, before["events/10"], op.Events[0])
+	assertResultJSONEqual(t, before["events/2"], op.Events[1])
 	files := map[string]os.FileInfo{}
 	for name, body := range before {
 		info, err := os.Stat(recordBlob(path, string(body)))
@@ -53,11 +57,14 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 		}
 		files[name] = info
 	}
-	for _, metadataOnly := range []bool{false, true} {
+	for _, mutation := range []string{"bodies", "append event", "metadata"} {
 		published, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-			if metadataOnly {
+			switch mutation {
+			case "metadata":
 				next.Status = operations.Waiting
-			} else {
+			case "append event":
+				next.Events = append(next.Events, operations.Event{Sequence: 11, OperationID: op.ID, Type: operations.QuestionAsked})
+			case "bodies":
 				next.Tasks[0].Result.Output = json.RawMessage(`{"page":2}`)
 				next.Questions[0].Text = "Updated question"
 			}
@@ -71,7 +78,7 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 			t.Fatal(err)
 		}
 		for name, body := range after {
-			if name == "operation" || !metadataOnly && (name == "tasks/"+op.Tasks[0].ID || name == "questions/"+op.Questions[0].ID) {
+			if name == "operation" || before[name] == nil || mutation == "bodies" && (name == "tasks/"+op.Tasks[0].ID || name == "questions/"+op.Questions[0].ID) {
 				continue
 			}
 			info, err := os.Stat(recordBlob(path, string(body)))
@@ -112,7 +119,7 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 }
 
 func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
-	for _, kind := range []string{"tasks", "questions"} {
+	for _, kind := range []string{"tasks", "questions", "events"} {
 		for _, damage := range []string{"missing", "orphan", "wrong identity", "invalid body"} {
 			t.Run(kind+"/"+damage, func(t *testing.T) {
 				dir := t.TempDir()
@@ -125,6 +132,8 @@ func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
 				name := "tasks/" + op.Tasks[0].ID
 				if kind == "questions" {
 					name = "questions/" + question.ID
+				} else if kind == "events" {
+					name = "events/1"
 				}
 				records := openRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
 				if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
@@ -132,13 +141,21 @@ func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
 					case "missing":
 						delete(next, name)
 					case "orphan":
-						next[kind+"/"+id.TaskID()] = next[name]
+						orphan := kind + "/" + id.TaskID()
+						if kind == "events" {
+							orphan = "events/99"
+						}
+						next[orphan] = next[name]
 					case "wrong identity":
 						var body map[string]json.RawMessage
 						if err := json.Unmarshal(next[name], &body); err != nil {
 							return err
 						}
-						body["id"], _ = json.Marshal(id.TaskID())
+						if kind == "events" {
+							body["sequence"] = json.RawMessage(`99`)
+						} else {
+							body["id"], _ = json.Marshal(id.TaskID())
+						}
 						next[name], _ = json.Marshal(body)
 					case "invalid body":
 						next[name] = json.RawMessage(`null`)

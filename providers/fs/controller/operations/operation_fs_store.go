@@ -8,8 +8,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -20,7 +18,7 @@ import (
 	"commander/providers/internal/jsonfile"
 )
 
-// OperationFsStore atomically publishes metadata, tasks, and questions through
+// OperationFsStore atomically publishes metadata, tasks, questions, and events through
 // operations/<id>.json. Writers share a lock only with the same operation.
 type OperationFsStore struct {
 	root      string
@@ -138,65 +136,6 @@ func (s *OperationFsStore) List(ctx context.Context) ([]operations.Operation, er
 		result = append(result, operation)
 	}
 	return result, nil
-}
-
-func (s *OperationFsStore) GetTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
-	if !id.Valid(taskID) {
-		return operations.Task{}, errors.New("task ID must be a canonical UUID")
-	}
-	operation, err := s.Get(ctx, operationID)
-	if err != nil {
-		return operations.Task{}, err
-	}
-	for _, task := range operation.Tasks {
-		if task.ID == taskID {
-			return task, nil
-		}
-	}
-	return operations.Task{}, operations.ErrUnknownTask
-}
-
-func (s *OperationFsStore) ListTasks(ctx context.Context, operationID, afterTaskID string, limit int) ([]operations.Task, error) {
-	if limit <= 0 {
-		return nil, errors.New("task limit must be positive")
-	}
-	if afterTaskID != "" && !id.Valid(afterTaskID) {
-		return nil, errors.New("task cursor must be a canonical UUID")
-	}
-	operation, err := s.Get(ctx, operationID)
-	if err != nil {
-		return nil, err
-	}
-	start := 0
-	if afterTaskID != "" {
-		index := slices.IndexFunc(operation.Tasks, func(task operations.Task) bool { return task.ID == afterTaskID })
-		if index < 0 {
-			return nil, operations.ErrUnknownTask
-		}
-		start = index + 1
-	}
-	return operation.Tasks[start : start+min(limit, len(operation.Tasks)-start)], nil
-}
-
-func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, afterSequence uint64, limit int) ([]operations.Event, error) {
-	if limit <= 0 {
-		return nil, errors.New("event limit must be positive")
-	}
-	operation, err := s.Get(ctx, operationID)
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(operation.Events, func(i, j int) bool { return operation.Events[i].Sequence < operation.Events[j].Sequence })
-	events := make([]operations.Event, 0, min(limit, len(operation.Events)))
-	for _, event := range operation.Events {
-		if event.Sequence > afterSequence {
-			events = append(events, event)
-			if len(events) == limit {
-				break
-			}
-		}
-	}
-	return events, nil
 }
 
 func (s *OperationFsStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {

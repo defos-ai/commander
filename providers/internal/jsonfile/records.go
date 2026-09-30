@@ -46,27 +46,57 @@ func OpenRecords(ctx context.Context, path string) (*Records, error) {
 }
 
 func (r *Records) Read(ctx context.Context) (map[string]json.RawMessage, error) {
+	var result map[string]json.RawMessage
+	err := r.View(ctx, func(view *RecordView) error {
+		next := make(map[string]json.RawMessage, view.Len())
+		for _, ref := range view.refs {
+			data, err := view.Get(ref.Name)
+			if err != nil {
+				return err
+			}
+			next[ref.Name] = data
+		}
+		result = next
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, err
+}
+
+// View pins one manifest without a writer lock and reads bodies on demand. If
+// collection removes an old blob, the whole callback may run again against a
+// newer manifest. Keep results local to each attempt and avoid external effects.
+func (r *Records) View(ctx context.Context, read func(*RecordView) error) error {
+	if read == nil {
+		return errors.New("record reader is required")
+	}
 	for {
 		data, err := Read(ctx, r.manifest.path)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		manifest, err := decodeRecords(data, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		records, err := r.readRecords(ctx, manifest.Records)
-		if !errors.Is(err, os.ErrNotExist) {
-			return records, err
+		err = read(&RecordView{records: r, refs: manifest.Records, ctx: ctx})
+		var missing *missingRecord
+		if !errors.As(err, &missing) {
+			if err != nil {
+				return err
+			}
+			return ctx.Err()
 		}
 		// A subsequent writer may collect an older reader's blobs. Restart the
 		// entire read from the new manifest rather than mixing two snapshots.
 		latest, readErr := Read(ctx, r.manifest.path)
 		if readErr != nil {
-			return nil, readErr
+			return readErr
 		}
 		if bytes.Equal(data, latest) {
-			return nil, fmt.Errorf("committed record is missing: %v", err)
+			return fmt.Errorf("committed record is missing: %v", err)
 		}
 	}
 }

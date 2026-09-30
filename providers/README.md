@@ -24,14 +24,16 @@ renames, and hard links. The [message-handling guide](../framework/comms/README.
 defines consumer acknowledgement policy.
 
 Each `DATABASE_URL/operations/<operation-id>.json` is a manifest with its own
-writer lock. Metadata, individual tasks, and individual questions live in
+writer lock. Metadata, individual tasks, questions, and events live in
 content-addressed files under `<operation-id>.json.records/`. Metadata keeps
-ordered task/question IDs and the event history. One manifest replacement
+ordered task/question IDs and event sequences. One manifest replacement
 commits related changes together; unchanged record files are reused. Reads
 assemble consistent snapshots without taking a write lock.
 `OperationStore.GetTask` queries one task; `ListTasks` pages in assignment order
 after a task ID, and `ListEvents` pages after an event sequence. Limits must be
-positive. These filesystem queries currently read the operation snapshot.
+positive. These queries read the manifest, metadata, and selected record bodies;
+they do not load unrelated task results, questions, or event history. Full
+operation reads and mutations still assemble the complete operation.
 
 ## Quick start
 
@@ -85,9 +87,12 @@ manifest publication can return `ErrWriteUncertain`; an identical retry confirms
 durability without creating another revision. The containing directory must be
 prepared durably before opening a record set.
 
-The operation provider uses it for metadata, tasks, and questions. Event history
-remains part of metadata for now. Existing development snapshots use an older
-format; start with fresh state rather than migrating them.
+`Records.View` reads selected bodies from one manifest without locking; if
+collection removes an older file, it retries the entire callback on a newer
+snapshot. The operation provider uses this for task and event queries.
+
+Existing development snapshots use an older format; start with fresh state
+rather than migrating them.
 
 ### Adding a backend
 

@@ -191,8 +191,8 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			t.Fatal(err)
 		}
-		if len(manifest) != 1 || manifest[0].Version != 1 || len(manifest[0].Records) != 1+len(op.Tasks)+len(op.Questions) {
-			t.Fatalf("operation manifest must reference metadata and each task and question: %+v", manifest)
+		if len(manifest) != 1 || manifest[0].Version != 1 || len(manifest[0].Records) != 1+len(op.Tasks)+len(op.Questions)+len(op.Events) {
+			t.Fatalf("operation manifest must reference metadata and each task, question and event: %+v", manifest)
 		}
 		records, err := openRecords(t, path).Read(t.Context())
 		if err != nil {
@@ -202,7 +202,7 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		if err := json.Unmarshal(records["operation"], &metadata); err != nil {
 			t.Fatal(err)
 		}
-		for _, field := range []string{"tasks", "questions"} {
+		for _, field := range []string{"tasks", "questions", "events"} {
 			if _, exists := metadata[field]; exists {
 				t.Fatalf("operation metadata contains embedded %s", field)
 			}
