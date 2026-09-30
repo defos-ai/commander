@@ -26,6 +26,7 @@ import (
 	fsmissions "commander/providers/fs/controller/missions"
 	fsoperations "commander/providers/fs/controller/operations"
 	fsreports "commander/providers/fs/controller/reports"
+	mongoactions "commander/providers/mongo/controller/actions"
 	mongomissions "commander/providers/mongo/controller/missions"
 	mongostore "commander/providers/mongo/store"
 )
@@ -84,7 +85,7 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
-	deps.ActionStore, err = createActionStore(ctx, configuration.databaseURL)
+	deps.ActionStore, err = deps.createActionStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
@@ -193,7 +194,7 @@ func createOperationStore(ctx context.Context, rawURL string) (operations.Operat
 	}
 }
 
-func createActionStore(ctx context.Context, rawURL string) (actions.ActionStore, error) {
+func (d *dependencies) createActionStore(ctx context.Context, rawURL string) (actions.ActionStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -206,7 +207,10 @@ func createActionStore(ctx context.Context, rawURL string) (actions.ActionStore,
 		}
 		return fsactions.NewActionFsStore(path)
 	case "mongodb", "mongodb+srv":
-		return nil, errors.New("MongoDB action store is not implemented")
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoactions.NewActionMongoStore(d.mongo), nil
 	default:
 		return nil, fmt.Errorf("unsupported action store scheme %q", scheme)
 	}
