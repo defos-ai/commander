@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
+	"commander/framework/domain/artifacts"
 	"commander/providers/fs"
 	fsartifact "commander/providers/fs/artifact"
 	fscomms "commander/providers/fs/comms"
@@ -19,7 +19,7 @@ import (
 
 type dependencies struct {
 	Bus               comms.Bus
-	ArtifactFileStore artifactstore.ArtifactFileStore
+	ArtifactFileStore artifacts.ArtifactFileStore
 	closers           []func() error
 }
 
@@ -76,7 +76,7 @@ func createBus(ctx context.Context, busURL string) (comms.Bus, error) {
 	}
 }
 
-func createArtifactFileStore(ctx context.Context, storageURL string) (artifactstore.ArtifactFileStore, error) {
+func createArtifactFileStore(ctx context.Context, storageURL string) (artifacts.ArtifactFileStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

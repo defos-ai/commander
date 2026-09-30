@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"commander/framework/artifact"
 	"commander/framework/domain"
 	agentmodel "commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
@@ -47,8 +47,8 @@ var errorCodes = []struct {
 	{"controller_closed", domain.ErrControllerClosed},
 	{"unknown_agent", agentmodel.ErrUnknownAgent},
 	{"agent_not_running", agentmodel.ErrAgentNotRunning},
-	{"unknown_artifact", artifact.ErrUnknownArtifact},
-	{"artifact_conflict", artifact.ErrArtifactConflict},
+	{"unknown_artifact", artifacts.ErrUnknownArtifact},
+	{"artifact_conflict", artifacts.ErrArtifactConflict},
 	{"unknown_mission", missions.ErrUnknownMission},
 	{"unknown_operation", operations.ErrUnknownOperation},
 	{"operation_conflict", operations.ErrOperationConflict},

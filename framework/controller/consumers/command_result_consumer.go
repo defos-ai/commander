@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	agentevents "commander/framework/comms/clients/agent/events"
 	controllerevents "commander/framework/comms/clients/controller/events"
@@ -14,6 +13,7 @@ import (
 	"commander/framework/domain"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	"commander/framework/internal/state"
 )
@@ -23,7 +23,7 @@ import (
 type CommandResultConsumer struct {
 	Inventory  agentmodel.AgentStore
 	Executions executions.ExecutionStore
-	Artifacts  artifactstore.ArtifactStore
+	Artifacts  artifacts.ArtifactStore
 	Bus        comms.Bus
 	State      *state.State
 }

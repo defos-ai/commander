@@ -57,8 +57,8 @@ constructor you need; see also the [Mongo](mongo/README.md#quick-start) and
 | Constructor | Host setting | Framework interface |
 | --- | --- | --- |
 | [`comms.NewFsBus`](fs/comms/fs_bus.go) | `BUS_URL` | `comms.Bus` |
-| [`artifact.NewArtifactFileFsStore`](fs/artifact/artifact_file_fs_store.go) | `STORAGE_URL` | `artifactstore.ArtifactFileStore` |
-| [`artifacts.NewArtifactFsStore`](fs/controller/artifacts/artifact_fs_store.go) | `DATABASE_URL` | `artifactstore.ArtifactStore` |
+| [`artifact.NewArtifactFileFsStore`](fs/artifact/artifact_file_fs_store.go) | `STORAGE_URL` | `artifacts.ArtifactFileStore` |
+| [`artifacts.NewArtifactFsStore`](fs/controller/artifacts/artifact_fs_store.go) | `DATABASE_URL` | `artifacts.ArtifactStore` |
 | [`reports.NewReportFsStore`](fs/controller/reports/report_fs_store.go) | `STORAGE_URL` | `reports.ReportStore` |
 | [`missions.NewMissionFsStore`](fs/controller/missions/mission_fs_store.go) | `DATABASE_URL` | `missions.MissionStore` |
 
@@ -92,6 +92,7 @@ func ListMissions(ctx context.Context, databaseURL string) ([]missions.Mission, 
 }
 ```
 
+Both artifact interfaces are defined in `framework/domain/artifacts`.
 Agents receive an `ArtifactFileStore` for uploads. Controllers receive an
 `ArtifactStore` for accepted metadata; MCP receives both for queries and file
 reads. FS metadata lives at `DATABASE_URL/artifacts/<id>.json`; bytes live at
@@ -122,8 +123,8 @@ rather than migrating them.
 ### Adding a backend
 
 1. Add a separate module under `providers/<backend>/`, keeping its driver dependencies local (see `mongo/`).
-   Implement interfaces from `framework/comms`, `framework/artifact`, or
-   `framework/domain`; providers must not depend on application runtimes.
+   Implement interfaces from `framework/comms` or `framework/domain`;
+   providers must not depend on application runtimes.
 2. Export concrete constructors. The app's `cli/factory.go` selects and constructs
    its providers, shares connections between stores, and returns framework interfaces.
    Providers own connection mechanics; the app closes resources after consumers stop.

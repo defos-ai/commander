@@ -9,15 +9,14 @@ import (
 	"io"
 	"os"
 
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	"commander/providers/s3/store"
 )
 
 type ArtifactFileS3Store struct{ store *store.S3Store }
 
-var _ artifactstore.ArtifactFileStore = (*ArtifactFileS3Store)(nil)
+var _ artifacts.ArtifactFileStore = (*ArtifactFileS3Store)(nil)
 
 func NewArtifactFileS3Store(storage *store.S3Store) (*ArtifactFileS3Store, error) {
 	if storage == nil {
@@ -26,12 +25,12 @@ func NewArtifactFileS3Store(storage *store.S3Store) (*ArtifactFileS3Store, error
 	return &ArtifactFileS3Store{store: storage}, nil
 }
 
-func (s *ArtifactFileS3Store) Put(ctx context.Context, artifactID string, source artifact.FileSource) (artifact.ArtifactFile, error) {
+func (s *ArtifactFileS3Store) Put(ctx context.Context, artifactID string, source artifacts.FileSource) (artifacts.ArtifactFile, error) {
 	if err := validateContextAndID(ctx, artifactID); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if err := source.Validate(); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if source.MediaType == "" {
 		source.MediaType = "application/octet-stream"
@@ -40,7 +39,7 @@ func (s *ArtifactFileS3Store) Put(ctx context.Context, artifactID string, source
 	if source.Path != "" {
 		file, err := openRegular(source.Path)
 		if err != nil {
-			return artifact.ArtifactFile{}, err
+			return artifacts.ArtifactFile{}, err
 		}
 		defer file.Close()
 		reader = file
@@ -48,22 +47,22 @@ func (s *ArtifactFileS3Store) Put(ctx context.Context, artifactID string, source
 	digest := sha256.New()
 	size, err := io.Copy(digest, contextReader{ctx: ctx, reader: reader})
 	if err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if _, err := reader.Seek(0, io.SeekStart); err != nil {
-		return artifact.ArtifactFile{}, errors.New("could not rewind artifact source")
+		return artifacts.ArtifactFile{}, errors.New("could not rewind artifact source")
 	}
-	file := artifact.ArtifactFile{
+	file := artifacts.ArtifactFile{
 		ID: id.ArtifactFileID(), Name: source.Name, MediaType: source.MediaType,
 		Size: size, SHA256: hex.EncodeToString(digest.Sum(nil)),
 	}
 	if err := s.store.Put(ctx, fileKey(artifactID, file.ID), reader, file.Size, file.MediaType, file.SHA256); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	return file, nil
 }
 
-func (s *ArtifactFileS3Store) Get(ctx context.Context, artifactID string, file artifact.ArtifactFile) ([]byte, error) {
+func (s *ArtifactFileS3Store) Get(ctx context.Context, artifactID string, file artifacts.ArtifactFile) ([]byte, error) {
 	if err := validateContextAndID(ctx, artifactID); err != nil {
 		return nil, err
 	}
@@ -72,7 +71,7 @@ func (s *ArtifactFileS3Store) Get(ctx context.Context, artifactID string, file a
 	}
 	data, err := s.store.GetExact(ctx, fileKey(artifactID, file.ID), file.Size)
 	if errors.Is(err, store.ErrObjectNotFound) {
-		return nil, artifact.ErrUnknownArtifact
+		return nil, artifacts.ErrUnknownArtifact
 	}
 	if err != nil {
 		return nil, err

@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"strings"
 
-	"commander/framework/artifact"
 	"commander/framework/domain"
+	"commander/framework/domain/artifacts"
 )
 
 type ActionOutput struct {
-	ActionName  string              `json:"action_name"`
-	Output      json.RawMessage     `json:"output"`
-	Artifacts   []artifact.Artifact `json:"artifacts,omitempty"`
-	NextActions []NextAction        `json:"next_actions,omitempty"`
+	ActionName  string               `json:"action_name"`
+	Output      json.RawMessage      `json:"output"`
+	Artifacts   []artifacts.Artifact `json:"artifacts,omitempty"`
+	NextActions []NextAction         `json:"next_actions,omitempty"`
 }
 
 func (o ActionOutput) Validate() error {
@@ -39,6 +39,6 @@ func (o ActionOutput) Validate() error {
 func (o ActionOutput) Clone() ActionOutput {
 	o.Output = bytes.Clone(o.Output)
 	o.NextActions = CloneNextActions(o.NextActions)
-	o.Artifacts = artifact.CloneAll(o.Artifacts)
+	o.Artifacts = artifacts.CloneAll(o.Artifacts)
 	return o
 }

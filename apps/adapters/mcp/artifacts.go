@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"commander/framework/artifact"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -36,7 +36,7 @@ func addArtifactResources(server *mcp.Server, config Config) {
 	})
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: artifactPrefix + "{id}/files/{file_id}", Name: "mission_artifact_file",
-		Description: "Read a file belonging to a stored artifact. IDs identify records, never filesystem paths.",
+		Description: "Read a file belonging to a stored artifacts. IDs identify records, never filesystem paths.",
 	}, func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		uri := request.Params.URI
 		path, ok := strings.CutPrefix(uri, artifactPrefix)
@@ -71,13 +71,13 @@ func addArtifactResources(server *mcp.Server, config Config) {
 }
 
 func artifactResourceError(uri string, err error) error {
-	if errors.Is(err, artifact.ErrUnknownArtifact) {
+	if errors.Is(err, artifacts.ErrUnknownArtifact) {
 		return mcp.ResourceNotFoundError(uri)
 	}
 	return fmt.Errorf("read artifact resource: %w", err)
 }
 
-func artifactLinks(value artifact.Artifact) []mcp.Content {
+func artifactLinks(value artifacts.Artifact) []mcp.Content {
 	links := make([]mcp.Content, 0, len(value.Files))
 	for _, file := range value.Files {
 		links = append(links, &mcp.ResourceLink{URI: artifactPrefix + value.ID + "/files/" + file.ID, Name: file.Name, MIMEType: file.MediaType, Size: &file.Size})

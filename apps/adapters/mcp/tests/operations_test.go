@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
 	"commander/framework/id"
@@ -76,7 +76,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	left = a.wait(first.ID, allTasksSucceeded)
 
 	artifactOwners := map[string]string{}
-	var previousArtifact *artifact.Artifact
+	var previousArtifact *artifacts.Artifact
 	for _, op := range []operationDetail{left, right} {
 		assertTaskQueries(t, a, op)
 		for _, task := range op.Tasks {
@@ -375,7 +375,7 @@ func TestOperationCancellationAndFailure(t *testing.T) {
 	}
 }
 
-func assertScreenshots(t *testing.T, a *api, expected artifact.Artifact) {
+func assertScreenshots(t *testing.T, a *api, expected artifacts.Artifact) {
 	t.Helper()
 	uri := "missions://artifacts/" + expected.ID
 	result, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: uri})
@@ -385,7 +385,7 @@ func assertScreenshots(t *testing.T, a *api, expected artifact.Artifact) {
 	if len(result.Contents) != 1 || result.Contents[0].MIMEType != "application/json" {
 		t.Fatal("artifact resource must return metadata")
 	}
-	var saved artifact.Artifact
+	var saved artifacts.Artifact
 	if err := json.Unmarshal([]byte(result.Contents[0].Text), &saved); err != nil {
 		t.Fatal(err)
 	}

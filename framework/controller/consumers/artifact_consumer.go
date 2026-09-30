@@ -5,17 +5,16 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms/messages"
 	"commander/framework/domain"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 )
 
 // ArtifactConsumer indexes artifacts from an already accepted, durable action result.
 // Replaying that result repairs metadata if an earlier database write failed.
-type ArtifactConsumer struct{ Store artifactstore.ArtifactStore }
+type ArtifactConsumer struct{ Store artifacts.ArtifactStore }
 
 func (c ArtifactConsumer) Consume(ctx context.Context, message messages.Message) error {
 	if message.Type != messages.ActionSucceeded {
@@ -31,7 +30,7 @@ func (c ArtifactConsumer) Consume(ctx context.Context, message messages.Message)
 	}
 	for _, record := range records {
 		if err := c.Store.Create(ctx, record); err != nil {
-			if errors.Is(err, artifact.ErrArtifactConflict) {
+			if errors.Is(err, artifacts.ErrArtifactConflict) {
 				return InvalidMessage(err)
 			}
 			return fmt.Errorf("persist artifact metadata: %w", err)

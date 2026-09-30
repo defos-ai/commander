@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
 	"commander/framework/controller"
 	"commander/framework/controller/consumers"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	"commander/framework/id"
 	"commander/framework/internal/state"
@@ -25,7 +25,7 @@ func TestArtifactsRecoveredBeforeResultAcceptance(t *testing.T) {
 	command, result, output := artifactResult(t)
 	durable := &artifactExecutions{record: executions.Execution{Command: command, StartedAt: time.Now().UTC()}}
 	unavailable := errors.New("artifact database unavailable")
-	catalog := &artifactCatalog{records: make(map[string]artifact.Artifact), failID: output.Artifacts[1].ID, failure: unavailable}
+	catalog := &artifactCatalog{records: make(map[string]artifacts.Artifact), failID: output.Artifacts[1].ID, failure: unavailable}
 	bus := artifactBus()
 	consumer := consumers.CommandResultConsumer{Inventory: &inventory{}, Executions: durable, Artifacts: catalog, Bus: bus, State: state.New(ctx, time.Hour)}
 
@@ -119,7 +119,7 @@ func TestRejectedResultsDoNotCreateArtifacts(t *testing.T) {
 			}
 			result.Payload = artifactJSON(t, output)
 			durable := &artifactExecutions{record: executions.Execution{Command: command, StartedAt: time.Now().UTC()}}
-			catalog := &artifactCatalog{records: make(map[string]artifact.Artifact)}
+			catalog := &artifactCatalog{records: make(map[string]artifacts.Artifact)}
 			bus := artifactBus()
 			consumer := consumers.CommandResultConsumer{Inventory: &inventory{}, Executions: durable, Artifacts: catalog, Bus: bus, State: state.New(t.Context(), time.Hour)}
 
@@ -138,7 +138,7 @@ func TestRejectedResultsDoNotCreateArtifacts(t *testing.T) {
 	t.Run("conflicting result replay", func(t *testing.T) {
 		command, accepted, output := artifactResult(t)
 		durable := &artifactExecutions{record: executions.Execution{Command: command, StartedAt: time.Now().UTC()}}
-		catalog := &artifactCatalog{records: make(map[string]artifact.Artifact)}
+		catalog := &artifactCatalog{records: make(map[string]artifacts.Artifact)}
 		bus := artifactBus()
 		consumer := consumers.CommandResultConsumer{Inventory: &inventory{}, Executions: durable, Artifacts: catalog, Bus: bus, State: state.New(t.Context(), time.Hour)}
 		if err := consumer.Consume(t.Context(), accepted); err != nil {
@@ -159,7 +159,7 @@ func TestRejectedResultsDoNotCreateArtifacts(t *testing.T) {
 		if catalog.writes != writes || !bytes.Equal(durable.record.Result.Payload, accepted.Payload) {
 			t.Fatal("conflicting replay changed the durable result or attempted artifact registration")
 		}
-		if _, err := catalog.Get(t.Context(), output.Artifacts[0].ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
+		if _, err := catalog.Get(t.Context(), output.Artifacts[0].ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 			t.Fatalf("conflicting replay registered a new artifact: %v", err)
 		}
 		assertNoArtifactReceipt(t, bus)
@@ -171,11 +171,11 @@ func artifactResult(t *testing.T) (messages.Message, messages.Message, actions.A
 	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New()}
 	call := actions.ActionCall{ActionName: "capture", Work: work, Input: json.RawMessage(`{"url":"https://example.test"}`)}
 	command := messages.Message{ID: work.TaskID, Type: messages.RunAction, AgentID: agentID, Work: work, Payload: artifactJSON(t, call), CreatedAt: time.Now().UTC()}
-	metadata := func(name, mediaType string) artifact.Artifact {
-		return artifact.Artifact{ID: id.New(), Name: name, AgentID: agentID, ActionName: call.ActionName, CommandID: command.ID, CreatedAt: time.Now().UTC(),
-			Files: []artifact.ArtifactFile{{ID: id.New(), Name: name, MediaType: mediaType, Size: 2, SHA256: strings.Repeat("a", 64)}}}
+	metadata := func(name, mediaType string) artifacts.Artifact {
+		return artifacts.Artifact{ID: id.New(), Name: name, AgentID: agentID, ActionName: call.ActionName, CommandID: command.ID, CreatedAt: time.Now().UTC(),
+			Files: []artifacts.ArtifactFile{{ID: id.New(), Name: name, MediaType: mediaType, Size: 2, SHA256: strings.Repeat("a", 64)}}}
 	}
-	output := actions.ActionOutput{ActionName: call.ActionName, Output: json.RawMessage(`{}`), Artifacts: []artifact.Artifact{
+	output := actions.ActionOutput{ActionName: call.ActionName, Output: json.RawMessage(`{}`), Artifacts: []artifacts.Artifact{
 		metadata("desktop.png", "image/png"), metadata("mobile.png", "image/png"),
 	}}
 	result := messages.Message{ID: id.New(), Type: messages.ActionSucceeded, AgentID: agentID, CorrelationID: command.ID, Work: work, Payload: artifactJSON(t, output), CreatedAt: time.Now().UTC()}
@@ -205,28 +205,28 @@ func assertNoArtifactReceipt(t *testing.T, bus *testBus) {
 }
 
 type artifactCatalog struct {
-	records map[string]artifact.Artifact
+	records map[string]artifacts.Artifact
 	failID  string
 	failure error
 	writes  int
 }
 
-func (s *artifactCatalog) Create(_ context.Context, record artifact.Artifact) error {
+func (s *artifactCatalog) Create(_ context.Context, record artifacts.Artifact) error {
 	s.writes++
 	if record.ID == s.failID && s.failure != nil {
 		return s.failure
 	}
 	if previous, found := s.records[record.ID]; found && !previous.Equal(record) {
-		return artifact.ErrArtifactConflict
+		return artifacts.ErrArtifactConflict
 	}
 	s.records[record.ID] = record.Clone()
 	return nil
 }
 
-func (s *artifactCatalog) Get(_ context.Context, artifactID string) (artifact.Artifact, error) {
+func (s *artifactCatalog) Get(_ context.Context, artifactID string) (artifacts.Artifact, error) {
 	record, found := s.records[artifactID]
 	if !found {
-		return artifact.Artifact{}, artifact.ErrUnknownArtifact
+		return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
 	}
 	return record.Clone(), nil
 }

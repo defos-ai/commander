@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	mongoartifacts "commander/providers/mongo/controller/artifacts"
 
@@ -21,7 +21,7 @@ func TestArtifactMongoStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := mongoArtifactFixture()
-	if _, err := catalog.Get(t.Context(), value.ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
+	if _, err := catalog.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("missing artifact: %v", err)
 	}
 
@@ -43,7 +43,7 @@ func TestArtifactMongoStore(t *testing.T) {
 		case "timestamp":
 			changed.CreatedAt = changed.CreatedAt.Add(time.Nanosecond)
 		}
-		if err := catalog.Create(t.Context(), changed); !errors.Is(err, artifact.ErrArtifactConflict) {
+		if err := catalog.Create(t.Context(), changed); !errors.Is(err, artifacts.ErrArtifactConflict) {
 			t.Fatalf("changed %s replaced artifact: %v", field, err)
 		}
 	}
@@ -116,7 +116,7 @@ func TestConcurrentArtifactMongoCreates(t *testing.T) {
 		switch {
 		case err == nil:
 			successes++
-		case errors.Is(err, artifact.ErrArtifactConflict):
+		case errors.Is(err, artifacts.ErrArtifactConflict):
 			conflicts++
 		default:
 			t.Fatalf("concurrent create: %v", err)
@@ -136,10 +136,10 @@ func TestConcurrentArtifactMongoCreates(t *testing.T) {
 	}
 }
 
-func mongoArtifactFixture() artifact.Artifact {
-	return artifact.Artifact{ID: id.ArtifactID(), Name: "screenshots", AgentID: "web-quality-agent-1234abcd",
+func mongoArtifactFixture() artifacts.Artifact {
+	return artifacts.Artifact{ID: id.ArtifactID(), Name: "screenshots", AgentID: "web-quality-agent-1234abcd",
 		ActionName: "capture-page", CommandID: id.MessageID(), CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC),
-		Files: []artifact.ArtifactFile{
+		Files: []artifacts.ArtifactFile{
 			{ID: id.ArtifactFileID(), Name: "desktop.png", MediaType: "image/png", Size: 128, SHA256: strings.Repeat("a", 64)},
 			{ID: id.ArtifactFileID(), Name: "mobile.png", MediaType: "image/png", Size: 64, SHA256: strings.Repeat("b", 64)},
 		}}

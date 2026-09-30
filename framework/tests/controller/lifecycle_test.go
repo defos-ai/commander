@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	controllerevents "commander/framework/comms/clients/controller/events"
 	"commander/framework/comms/messages"
 	"commander/framework/controller"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 )
 
@@ -272,4 +272,4 @@ func (s *inventory) DeleteExpired(_ context.Context, cutoff time.Time) ([]agents
 
 type unusedActions struct{ actions.ActionStore }
 type unusedExecutions struct{ executions.ExecutionStore }
-type unusedArtifacts struct{ artifactstore.ArtifactStore }
+type unusedArtifacts struct{ artifacts.ArtifactStore }

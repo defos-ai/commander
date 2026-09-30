@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	filefs "commander/providers/fs/artifact"
 	artifactfs "commander/providers/fs/controller/artifacts"
@@ -28,7 +28,7 @@ func TestArtifactFsStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := artifactFixture()
-	if _, err := first.Get(t.Context(), value.ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
+	if _, err := first.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("unknown artifact: %v", err)
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
@@ -54,7 +54,7 @@ func TestArtifactFsStore(t *testing.T) {
 	}
 	changed := value.Clone()
 	changed.Files[0].Name = "changed.png"
-	if err := second.Create(t.Context(), changed); !errors.Is(err, artifact.ErrArtifactConflict) {
+	if err := second.Create(t.Context(), changed); !errors.Is(err, artifacts.ErrArtifactConflict) {
 		t.Fatalf("changed files overwrote artifact: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestConcurrentArtifactFsCreates(t *testing.T) {
 		switch {
 		case err == nil:
 			successes++
-		case errors.Is(err, artifact.ErrArtifactConflict):
+		case errors.Is(err, artifacts.ErrArtifactConflict):
 			conflicts++
 		default:
 			t.Fatalf("concurrent create: %v", err)
@@ -131,12 +131,12 @@ func TestArtifactFilesStaySeparateFromMetadata(t *testing.T) {
 	}
 	payload := []byte("screenshot bytes")
 	value := artifactFixture()
-	file, err := files.Put(t.Context(), value.ID, artifact.FileSource{Name: "../../display.png", MediaType: "image/png", Data: payload})
+	file, err := files.Put(t.Context(), value.ID, artifacts.FileSource{Name: "../../display.png", MediaType: "image/png", Data: payload})
 	if err != nil {
 		t.Fatal(err)
 	}
-	value.Files = []artifact.ArtifactFile{file}
-	if _, err := metadata.Get(t.Context(), value.ID); !errors.Is(err, artifact.ErrUnknownArtifact) {
+	value.Files = []artifacts.ArtifactFile{file}
+	if _, err := metadata.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("file publication created metadata: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func TestArtifactFileSources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, source := range []artifact.FileSource{
+	for _, source := range []artifacts.FileSource{
 		{Name: "empty", Data: []byte{}},
 		{Name: "input", Path: input},
 	} {
@@ -192,7 +192,7 @@ func TestArtifactFileSources(t *testing.T) {
 			t.Fatalf("source roundtrip: %+v, %v", file, err)
 		}
 	}
-	for _, source := range []artifact.FileSource{
+	for _, source := range []artifacts.FileSource{
 		{Name: "no source"},
 		{Name: "two sources", Data: []byte{}, Path: input},
 		{Name: "directory", Path: root},
@@ -205,10 +205,10 @@ func TestArtifactFileSources(t *testing.T) {
 	if err := os.Symlink(input, link); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	if _, err := files.Put(t.Context(), artifactID, artifact.FileSource{Name: "symlink", Path: link}); err == nil {
+	if _, err := files.Put(t.Context(), artifactID, artifacts.FileSource{Name: "symlink", Path: link}); err == nil {
 		t.Fatal("symlink source accepted")
 	}
-	file, err := files.Put(t.Context(), artifactID, artifact.FileSource{Name: "regular", Path: input})
+	file, err := files.Put(t.Context(), artifactID, artifacts.FileSource{Name: "regular", Path: input})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,9 +224,9 @@ func TestArtifactFileSources(t *testing.T) {
 	}
 }
 
-func artifactFixture() artifact.Artifact {
+func artifactFixture() artifacts.Artifact {
 	digest := sha256.Sum256([]byte("data"))
-	return artifact.Artifact{ID: id.ArtifactID(), Name: "page screenshots", AgentID: "web-quality-agent-1234abcd",
+	return artifacts.Artifact{ID: id.ArtifactID(), Name: "page screenshots", AgentID: "web-quality-agent-1234abcd",
 		ActionName: "capture-page", CommandID: id.MessageID(), CreatedAt: time.Now().UTC(),
-		Files: []artifact.ArtifactFile{{ID: id.ArtifactFileID(), Name: "desktop.png", MediaType: "image/png", Size: 4, SHA256: hex.EncodeToString(digest[:])}}}
+		Files: []artifacts.ArtifactFile{{ID: id.ArtifactFileID(), Name: "desktop.png", MediaType: "image/png", Size: 4, SHA256: hex.EncodeToString(digest[:])}}}
 }

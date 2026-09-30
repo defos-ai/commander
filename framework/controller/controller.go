@@ -9,13 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	"commander/framework/comms/messages"
 	"commander/framework/controller/leases"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	"commander/framework/id"
 	"commander/framework/internal/state"
@@ -27,7 +26,7 @@ var (
 	ErrControllerClosed = state.ErrControllerClosed
 	ErrUnknownAgent     = agentmodel.ErrUnknownAgent
 	ErrAgentNotRunning  = state.ErrAgentNotRunning
-	ErrUnknownArtifact  = artifact.ErrUnknownArtifact
+	ErrUnknownArtifact  = artifacts.ErrUnknownArtifact
 )
 
 type ControllerConfig struct {
@@ -35,7 +34,7 @@ type ControllerConfig struct {
 	Type string
 	// ID identifies this process; empty generates <type>-controller-<8hex>.
 	ID                 string
-	ArtifactStore      artifactstore.ArtifactStore
+	ArtifactStore      artifacts.ArtifactStore
 	AgentStore         agentmodel.AgentStore
 	ActionStore        actionmodel.ActionStore
 	ExecutionStore     executions.ExecutionStore
@@ -54,7 +53,7 @@ type Controller struct {
 	controllerType     string
 	bus                comms.Bus
 	logger             *slog.Logger
-	artifactStore      artifactstore.ArtifactStore
+	artifactStore      artifacts.ArtifactStore
 	executionStore     executions.ExecutionStore
 	events             comms.Subscription
 	cancel             context.CancelCauseFunc

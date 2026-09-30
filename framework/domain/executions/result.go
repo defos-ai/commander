@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
 	"commander/framework/domain"
 	actionmodel "commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 )
 
 func DecodeActionResult(message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
@@ -44,9 +44,9 @@ func DecodeActionResult(message messages.Message, agentID, commandID string, cal
 	return output, nil
 }
 
-func OutputArtifacts(message messages.Message, output actionmodel.ActionOutput) ([]artifact.Artifact, error) {
-	refs := append([]artifact.Artifact(nil), output.Artifacts...)
-	seen := make(map[string]artifact.Artifact, len(refs))
+func OutputArtifacts(message messages.Message, output actionmodel.ActionOutput) ([]artifacts.Artifact, error) {
+	refs := append([]artifacts.Artifact(nil), output.Artifacts...)
+	seen := make(map[string]artifacts.Artifact, len(refs))
 	for _, ref := range refs {
 		if err := ref.Validate(); err != nil {
 			return nil, err

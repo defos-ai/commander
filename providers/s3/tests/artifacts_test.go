@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"commander/framework/artifact"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	files3 "commander/providers/s3/artifact"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -32,12 +32,12 @@ func TestArtifactFileSourcesAndIntegrity(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name   string
-		source artifact.FileSource
+		source artifacts.FileSource
 		data   []byte
 	}{
-		{"bytes", artifact.FileSource{Name: "../../display.png", MediaType: "image/png", Data: payload}, payload},
-		{"path", artifact.FileSource{Name: "download.bin", Path: path}, payload},
-		{"empty", artifact.FileSource{Name: "empty.bin", Data: []byte{}}, []byte{}},
+		{"bytes", artifacts.FileSource{Name: "../../display.png", MediaType: "image/png", Data: payload}, payload},
+		{"path", artifacts.FileSource{Name: "download.bin", Path: path}, payload},
+		{"empty", artifacts.FileSource{Name: "empty.bin", Data: []byte{}}, []byte{}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			file, err := files.Put(t.Context(), artifactID, test.source)
@@ -55,7 +55,7 @@ func TestArtifactFileSourcesAndIntegrity(t *testing.T) {
 			if test.source.MediaType == "" && file.MediaType != "application/octet-stream" {
 				t.Fatalf("default media type: %s", file.MediaType)
 			}
-			if _, err := files.Get(t.Context(), id.ArtifactID(), file); !errors.Is(err, artifact.ErrUnknownArtifact) {
+			if _, err := files.Get(t.Context(), id.ArtifactID(), file); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 				t.Fatalf("another artifact accessed this file: %v", err)
 			}
 			wrongSize := file
@@ -88,7 +88,7 @@ func TestArtifactFileRejectsInvalidAndCancelledRequests(t *testing.T) {
 	}
 	artifactID := id.ArtifactID()
 	root := t.TempDir()
-	for _, source := range []artifact.FileSource{
+	for _, source := range []artifacts.FileSource{
 		{Name: "no source"},
 		{Name: "two sources", Data: []byte{}, Path: root},
 		{Name: "directory", Path: root},
@@ -98,7 +98,7 @@ func TestArtifactFileRejectsInvalidAndCancelledRequests(t *testing.T) {
 			t.Fatalf("invalid source accepted: %+v", source)
 		}
 	}
-	source := artifact.FileSource{Name: "valid", Data: []byte("data")}
+	source := artifacts.FileSource{Name: "valid", Data: []byte("data")}
 	if _, err := files.Put(t.Context(), "../outside", source); err == nil {
 		t.Fatal("invalid artifact ID accepted")
 	}
@@ -107,11 +107,11 @@ func TestArtifactFileRejectsInvalidAndCancelledRequests(t *testing.T) {
 	if _, err := files.Put(cancelled, artifactID, source); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled write: %v", err)
 	}
-	file := artifact.ArtifactFile{ID: id.ArtifactFileID(), Name: "missing", MediaType: "application/octet-stream", Size: 0, SHA256: strings.Repeat("0", 64)}
+	file := artifacts.ArtifactFile{ID: id.ArtifactFileID(), Name: "missing", MediaType: "application/octet-stream", Size: 0, SHA256: strings.Repeat("0", 64)}
 	if _, err := files.Get(cancelled, artifactID, file); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled read: %v", err)
 	}
-	if _, err := files.Get(t.Context(), artifactID, file); !errors.Is(err, artifact.ErrUnknownArtifact) {
+	if _, err := files.Get(t.Context(), artifactID, file); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("missing file: %v", err)
 	}
 	page, err := f.client.ListObjectsV2(t.Context(), &awss3.ListObjectsV2Input{Bucket: aws.String(f.bucket), Prefix: aws.String(f.prefix)})

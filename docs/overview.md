@@ -25,7 +25,8 @@ and the other concepts used here.
 Arrows represent code dependencies. Hosts construct providers and inject their
 interfaces into framework runtimes. The framework imports neither providers nor
 application hosts. Applications communicate through shared contracts rather than
-importing each other's runtimes.
+importing each other's runtimes. Artifact models and storage interfaces belong
+to `framework/domain/artifacts`.
 
 API, General Agent, MongoDB, S3, and RabbitMQ in the diagram are planned extensions;
 see [available providers](../providers/README.md#existing-providers) for implemented backends.

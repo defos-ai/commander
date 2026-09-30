@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	"commander/providers/mongo/internal/bsonvalue"
 	"commander/providers/mongo/store"
@@ -19,16 +18,16 @@ const collection = "artifacts"
 
 type ArtifactMongoStore struct{ database *store.MongoStore }
 
-var _ artifactstore.ArtifactStore = (*ArtifactMongoStore)(nil)
+var _ artifacts.ArtifactStore = (*ArtifactMongoStore)(nil)
 
 type artifactDocument struct {
-	ID         string                  `bson:"_id"`
-	Name       string                  `bson:"name"`
-	AgentID    string                  `bson:"agent_id"`
-	ActionName string                  `bson:"action_name"`
-	CommandID  string                  `bson:"command_id,omitempty"`
-	CreatedAt  bsonvalue.Timestamp     `bson:"created_at"`
-	Files      []artifact.ArtifactFile `bson:"files"`
+	ID         string                   `bson:"_id"`
+	Name       string                   `bson:"name"`
+	AgentID    string                   `bson:"agent_id"`
+	ActionName string                   `bson:"action_name"`
+	CommandID  string                   `bson:"command_id,omitempty"`
+	CreatedAt  bsonvalue.Timestamp      `bson:"created_at"`
+	Files      []artifacts.ArtifactFile `bson:"files"`
 }
 
 func NewArtifactMongoStore(ctx context.Context, database *store.MongoStore) (*ArtifactMongoStore, error) {
@@ -46,7 +45,7 @@ func NewArtifactMongoStore(ctx context.Context, database *store.MongoStore) (*Ar
 	return &ArtifactMongoStore{database: database}, nil
 }
 
-func (s *ArtifactMongoStore) Create(ctx context.Context, value artifact.Artifact) error {
+func (s *ArtifactMongoStore) Create(ctx context.Context, value artifacts.Artifact) error {
 	if err := checkContext(ctx); err != nil {
 		return err
 	}
@@ -65,34 +64,34 @@ func (s *ArtifactMongoStore) Create(ctx context.Context, value artifact.Artifact
 		return err
 	}
 	if !stored.Equal(value) {
-		return artifact.ErrArtifactConflict
+		return artifacts.ErrArtifactConflict
 	}
 	return nil
 }
 
-func (s *ArtifactMongoStore) Get(ctx context.Context, artifactID string) (artifact.Artifact, error) {
+func (s *ArtifactMongoStore) Get(ctx context.Context, artifactID string) (artifacts.Artifact, error) {
 	if err := checkContext(ctx); err != nil {
-		return artifact.Artifact{}, err
+		return artifacts.Artifact{}, err
 	}
 	if !id.Valid(artifactID) {
-		return artifact.Artifact{}, errors.New("artifact ID must be a canonical UUID")
+		return artifacts.Artifact{}, errors.New("artifact ID must be a canonical UUID")
 	}
 	var document artifactDocument
 	if err := s.database.GetByID(ctx, collection, artifactID, &document); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return artifact.Artifact{}, artifact.ErrUnknownArtifact
+			return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
 		}
-		return artifact.Artifact{}, err
+		return artifacts.Artifact{}, err
 	}
 	createdAt, err := document.CreatedAt.Decode()
 	if err != nil {
-		return artifact.Artifact{}, fmt.Errorf("stored artifact timestamp: %w", err)
+		return artifacts.Artifact{}, fmt.Errorf("stored artifact timestamp: %w", err)
 	}
-	value := artifact.Artifact{ID: document.ID, Name: document.Name, AgentID: document.AgentID,
+	value := artifacts.Artifact{ID: document.ID, Name: document.Name, AgentID: document.AgentID,
 		ActionName: document.ActionName, CommandID: document.CommandID,
 		CreatedAt: createdAt, Files: document.Files}
 	if err := value.Validate(); err != nil {
-		return artifact.Artifact{}, fmt.Errorf("invalid stored artifact: %w", err)
+		return artifacts.Artifact{}, fmt.Errorf("invalid stored artifact: %w", err)
 	}
 	return value, nil
 }

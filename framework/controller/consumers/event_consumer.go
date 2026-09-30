@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	controllerevents "commander/framework/comms/clients/controller/events"
 	"commander/framework/comms/messages"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	"commander/framework/internal/state"
 )
@@ -28,7 +28,7 @@ type EventConsumer struct {
 	Inventory  agentmodel.AgentStore
 	Actions    actionmodel.ActionStore
 	Executions executions.ExecutionStore
-	Artifacts  artifactstore.ArtifactStore
+	Artifacts  artifacts.ArtifactStore
 	State      *state.State
 }
 

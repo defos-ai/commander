@@ -11,15 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	"commander/providers/fs/internal/jsonfile"
 )
 
 type ArtifactFsStore struct{ root string }
 
-var _ artifactstore.ArtifactStore = (*ArtifactFsStore)(nil)
+var _ artifacts.ArtifactStore = (*ArtifactFsStore)(nil)
 var errAlreadyCreated = errors.New("artifact is already stored")
 
 func NewArtifactFsStore(root string) (*ArtifactFsStore, error) {
@@ -36,7 +35,7 @@ func NewArtifactFsStore(root string) (*ArtifactFsStore, error) {
 	return &ArtifactFsStore{root: absolute}, nil
 }
 
-func (s *ArtifactFsStore) Create(ctx context.Context, value artifact.Artifact) error {
+func (s *ArtifactFsStore) Create(ctx context.Context, value artifacts.Artifact) error {
 	path, err := s.path(ctx, value.ID)
 	if err != nil {
 		return err
@@ -44,7 +43,7 @@ func (s *ArtifactFsStore) Create(ctx context.Context, value artifact.Artifact) e
 	if err := value.Validate(); err != nil {
 		return err
 	}
-	encoded, err := json.Marshal([]artifact.Artifact{value})
+	encoded, err := json.Marshal([]artifacts.Artifact{value})
 	if err != nil {
 		return err
 	}
@@ -57,14 +56,14 @@ func (s *ArtifactFsStore) Create(ctx context.Context, value artifact.Artifact) e
 	}
 	err = record.Update(ctx, func(data []byte) ([]byte, error) {
 		stored, err := decode(data, value.ID)
-		if errors.Is(err, artifact.ErrUnknownArtifact) {
+		if errors.Is(err, artifacts.ErrUnknownArtifact) {
 			return encoded, nil
 		}
 		if err != nil {
 			return nil, err
 		}
 		if !stored.Equal(value) {
-			return nil, artifact.ErrArtifactConflict
+			return nil, artifacts.ErrArtifactConflict
 		}
 		return nil, errAlreadyCreated
 	})
@@ -74,17 +73,17 @@ func (s *ArtifactFsStore) Create(ctx context.Context, value artifact.Artifact) e
 	return err
 }
 
-func (s *ArtifactFsStore) Get(ctx context.Context, artifactID string) (artifact.Artifact, error) {
+func (s *ArtifactFsStore) Get(ctx context.Context, artifactID string) (artifacts.Artifact, error) {
 	path, err := s.path(ctx, artifactID)
 	if err != nil {
-		return artifact.Artifact{}, err
+		return artifacts.Artifact{}, err
 	}
 	data, err := jsonfile.Read(ctx, path)
 	if errors.Is(err, os.ErrNotExist) {
-		return artifact.Artifact{}, artifact.ErrUnknownArtifact
+		return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
 	}
 	if err != nil {
-		return artifact.Artifact{}, err
+		return artifacts.Artifact{}, err
 	}
 	return decode(data, artifactID)
 }
@@ -102,28 +101,28 @@ func (s *ArtifactFsStore) path(ctx context.Context, artifactID string) (string, 
 	return filepath.Join(s.root, "artifacts", artifactID+".json"), nil
 }
 
-func decode(data []byte, artifactID string) (artifact.Artifact, error) {
-	var records []artifact.Artifact
+func decode(data []byte, artifactID string) (artifacts.Artifact, error) {
+	var records []artifacts.Artifact
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&records); err != nil {
-		return artifact.Artifact{}, fmt.Errorf("artifact record: %w", err)
+		return artifacts.Artifact{}, fmt.Errorf("artifact record: %w", err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return artifact.Artifact{}, errors.New("artifact record must contain one JSON array")
+		return artifacts.Artifact{}, errors.New("artifact record must contain one JSON array")
 	}
 	if records == nil || len(records) > 1 {
-		return artifact.Artifact{}, errors.New("artifact record must contain at most one artifact")
+		return artifacts.Artifact{}, errors.New("artifact record must contain at most one artifact")
 	}
 	if len(records) == 0 {
-		return artifact.Artifact{}, artifact.ErrUnknownArtifact
+		return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
 	}
 	value := records[0]
 	if value.ID != artifactID {
-		return artifact.Artifact{}, errors.New("stored artifact ID does not match its record")
+		return artifacts.Artifact{}, errors.New("stored artifact ID does not match its record")
 	}
 	if err := value.Validate(); err != nil {
-		return artifact.Artifact{}, fmt.Errorf("invalid stored artifact: %w", err)
+		return artifacts.Artifact{}, fmt.Errorf("invalid stored artifact: %w", err)
 	}
 	return value, nil
 }

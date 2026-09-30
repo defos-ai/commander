@@ -16,10 +16,9 @@ import (
 	"commander/framework/agent/action"
 	"commander/framework/agent/consumers"
 	"commander/framework/agent/environment"
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/domain"
 	actionmodel "commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 )
 
@@ -36,7 +35,7 @@ type AgentConfig struct {
 	PublicConfig       json.RawMessage
 	Environment        environment.Environment
 	// ArtifactFileStore is required and is created by the host.
-	ArtifactFileStore artifactstore.ArtifactFileStore
+	ArtifactFileStore artifacts.ArtifactFileStore
 	// Logger receives runtime events without action inputs or results. Nil is silent.
 	Logger *slog.Logger
 	// Nil uses thirty seconds; zero disables periodic announcements.
@@ -128,7 +127,7 @@ func (a *Agent) Status() AgentStatus {
 	return a.state.Load().status
 }
 
-func (a *Agent) ArtifactFileStore() artifactstore.ArtifactFileStore {
+func (a *Agent) ArtifactFileStore() artifacts.ArtifactFileStore {
 	return a.config.ArtifactFileStore
 }
 
@@ -290,7 +289,7 @@ func (a *Agent) packageOutput(ctx context.Context, name string, result action.Re
 		return ActionOutput{}, err
 	}
 	output := ActionOutput{ActionName: name, Output: bytes.Clone(result.Output), NextActions: actionmodel.CloneNextActions(result.NextActions)}
-	owner := artifact.Owner{AgentID: a.ID(), ActionName: name, CommandID: commandID}
+	owner := artifacts.Owner{AgentID: a.ID(), ActionName: name, CommandID: commandID}
 	for _, attachment := range result.Artifacts {
 		ref, err := a.publishArtifact(ctx, attachment, owner)
 		if err != nil {
@@ -307,26 +306,26 @@ func (a *Agent) packageOutput(ctx context.Context, name string, result action.Re
 	return output, nil
 }
 
-func (a *Agent) publishArtifact(ctx context.Context, source action.Artifact, owner artifact.Owner) (artifact.Artifact, error) {
-	record := artifact.Artifact{ID: id.ArtifactID(), Name: source.Name, AgentID: owner.AgentID,
-		ActionName: owner.ActionName, CommandID: owner.CommandID, CreatedAt: time.Now().UTC(), Files: []artifact.ArtifactFile{}}
+func (a *Agent) publishArtifact(ctx context.Context, source action.Artifact, owner artifacts.Owner) (artifacts.Artifact, error) {
+	record := artifacts.Artifact{ID: id.ArtifactID(), Name: source.Name, AgentID: owner.AgentID,
+		ActionName: owner.ActionName, CommandID: owner.CommandID, CreatedAt: time.Now().UTC(), Files: []artifacts.ArtifactFile{}}
 	if err := record.Validate(); err != nil {
-		return artifact.Artifact{}, err
+		return artifacts.Artifact{}, err
 	}
 	for _, file := range source.Files {
 		if err := file.Validate(); err != nil {
-			return artifact.Artifact{}, err
+			return artifacts.Artifact{}, err
 		}
 	}
 	for _, sourceFile := range source.Files {
 		file, err := a.config.ArtifactFileStore.Put(ctx, record.ID, sourceFile)
 		if err != nil {
-			return artifact.Artifact{}, err
+			return artifacts.Artifact{}, err
 		}
 		record.Files = append(record.Files, file)
 	}
 	if err := record.Validate(); err != nil {
-		return artifact.Artifact{}, err
+		return artifacts.Artifact{}, err
 	}
 	return record, nil
 }

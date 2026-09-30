@@ -10,11 +10,11 @@ import (
 	"commander/framework/agent"
 	"commander/framework/agent/action"
 	"commander/framework/agent/environment"
-	"commander/framework/artifact"
 	"commander/framework/comms"
 	controllerevents "commander/framework/comms/clients/controller/events"
 	"commander/framework/comms/messages"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 )
 
 func TestAgentSnapshotsRemainReadableDuringAnnouncementsAndRestart(t *testing.T) {
@@ -217,9 +217,9 @@ func nextAnnouncement(t *testing.T, ctx context.Context, bus *announcementBus) a
 
 type unusedArtifacts struct{}
 
-func (unusedArtifacts) Put(context.Context, string, artifact.FileSource) (artifact.ArtifactFile, error) {
-	return artifact.ArtifactFile{}, errors.New("unexpected artifact write")
+func (unusedArtifacts) Put(context.Context, string, artifacts.FileSource) (artifacts.ArtifactFile, error) {
+	return artifacts.ArtifactFile{}, errors.New("unexpected artifact write")
 }
-func (unusedArtifacts) Get(context.Context, string, artifact.ArtifactFile) ([]byte, error) {
+func (unusedArtifacts) Get(context.Context, string, artifacts.ArtifactFile) ([]byte, error) {
 	return nil, errors.New("unexpected artifact read")
 }

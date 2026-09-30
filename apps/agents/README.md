@@ -129,7 +129,8 @@ their specific settings; adding an action should not require new CLI fields.
 ### Return files
 
 Set `Result.Artifacts` to `[]action.Artifact`. Each artifact groups named
-`artifact.FileSource` entries, supplied as `Data` bytes or a local `Path`.
+`artifacts.FileSource` entries from `framework/domain/artifacts`, supplied as
+`Data` bytes or a local `Path`.
 The agent uploads files through `ArtifactFileStore` and announces their metadata;
 the controller saves that metadata in its database. Files stay in shared storage.
 See [capture-page](web-quality/actions/capture_page.go) for desktop/mobile images
@@ -179,10 +180,10 @@ go mod edit -require=commander/framework@v0.0.0
 go mod edit -replace=commander/framework=/absolute/path/to/commander/framework
 ```
 
-Import `commander/framework/agent`, `commander/framework/agent/action`, and
-`commander/framework/domain/actions`. Supply
-implementations of `comms.Bus` and `artifactstore.ArtifactFileStore`, or use the bundled
-filesystem provider by also adding:
+Import `commander/framework/agent`, `commander/framework/agent/action`,
+`commander/framework/domain/actions`, and `commander/framework/domain/artifacts`.
+Supply implementations of `comms.Bus` and `artifacts.ArtifactFileStore`, or use the
+bundled filesystem provider by also adding:
 
 ```sh
 go mod edit -require=commander/providers/fs@v0.0.0

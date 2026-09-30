@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 
 	"commander/framework/agent/action"
-	"commander/framework/artifact"
 	actionmodel "commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
@@ -54,7 +54,7 @@ func (a *CapturePage) Run(ctx context.Context, raw json.RawMessage, grants []str
 		if err := chromedp.Run(browserCtx, chromedp.EmulateViewport(int64(v.Width), int64(v.Height)), chromedp.Navigate(target.String()), chromedp.Evaluate(`document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))`, nil, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) }), chromedp.Title(&out.Title), chromedp.Location(&out.URL), chromedp.Evaluate(`document.documentElement.scrollWidth > innerWidth + 1`, &v.HorizontalOverflow), chromedp.CaptureScreenshot(&screenshot)); err != nil {
 			return action.Result{}, err
 		}
-		screenshots.Files = append(screenshots.Files, artifact.FileSource{Name: v.FileName, MediaType: "image/png", Data: screenshot})
+		screenshots.Files = append(screenshots.Files, artifacts.FileSource{Name: v.FileName, MediaType: "image/png", Data: screenshot})
 	}
 	out.Title = boundedText(out.Title, 300)
 	result, err := action.JSONResult(out)

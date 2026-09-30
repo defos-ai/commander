@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	artifactstore "commander/framework/artifact/store"
 	"commander/framework/comms"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -41,8 +41,8 @@ import (
 
 type dependencies struct {
 	Bus               comms.Bus
-	ArtifactStore     artifactstore.ArtifactStore
-	ArtifactFileStore artifactstore.ArtifactFileStore
+	ArtifactStore     artifacts.ArtifactStore
+	ArtifactFileStore artifacts.ArtifactFileStore
 	AgentStore        agents.AgentStore
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
@@ -135,7 +135,7 @@ func createBus(ctx context.Context, rawURL string) (comms.Bus, error) {
 	}
 }
 
-func (d *dependencies) createArtifactStore(ctx context.Context, rawURL string) (artifactstore.ArtifactStore, error) {
+func (d *dependencies) createArtifactStore(ctx context.Context, rawURL string) (artifacts.ArtifactStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -343,7 +343,7 @@ func createTestCleaner(ctx context.Context, storageURL, databaseURL string) (fra
 	return fstesting.NewTestFsCleaner(storagePath, databasePath)
 }
 
-func (d *dependencies) createArtifactFileStore(ctx context.Context, rawURL string) (artifactstore.ArtifactFileStore, error) {
+func (d *dependencies) createArtifactFileStore(ctx context.Context, rawURL string) (artifacts.ArtifactFileStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

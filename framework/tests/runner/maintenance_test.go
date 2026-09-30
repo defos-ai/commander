@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/controller/runner"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
 )
@@ -35,9 +35,9 @@ func TestRecoveryUsesLatestOperationAfterList(t *testing.T) {
 					latest, err = base.Cancel(t.Context(), op.ID)
 					return err
 				}
-				ref := artifact.Artifact{ID: id.ArtifactID(), Name: "result.json", AgentID: agentID, ActionName: "inspect", CommandID: op.Tasks[0].ID, CreatedAt: time.Now().UTC(),
-					Files: []artifact.ArtifactFile{{ID: id.ArtifactFileID(), Name: "result.json", MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64)}}}
-				result := actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{}`), Artifacts: []artifact.Artifact{ref}}
+				ref := artifacts.Artifact{ID: id.ArtifactID(), Name: "result.json", AgentID: agentID, ActionName: "inspect", CommandID: op.Tasks[0].ID, CreatedAt: time.Now().UTC(),
+					Files: []artifacts.ArtifactFile{{ID: id.ArtifactFileID(), Name: "result.json", MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64)}}}
+				result := actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{}`), Artifacts: []artifacts.Artifact{ref}}
 				latest, err = base.FinishTask(t.Context(), op.ID, operations.TaskResult{TaskID: op.Tasks[0].ID, AgentID: agentID,
 					Status: operations.TaskSucceeded, Result: &result, FinishedAt: time.Now().UTC()})
 				if err != nil {

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/artifact"
 	"commander/framework/comms/messages"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/executions"
 	mongoexecutions "commander/providers/mongo/controller/executions"
 )
@@ -150,9 +150,9 @@ func TestConcurrentExecutionClaimsAndCompletions(t *testing.T) {
 	}
 	responses := []messages.Message{executionResult(command), executionResult(command)}
 	responses[1].ID = executionResult(executionCommand(2)).ID
-	references := []artifact.Artifact{executionArtifact(command, 1), executionArtifact(command, 2)}
+	references := []artifacts.Artifact{executionArtifact(command, 1), executionArtifact(command, 2)}
 	for i, ref := range references {
-		responses[i].Payload, _ = json.Marshal(actions.ActionOutput{ActionName: "check", Output: json.RawMessage(`{}`), Artifacts: []artifact.Artifact{ref}})
+		responses[i].Payload, _ = json.Marshal(actions.ActionOutput{ActionName: "check", Output: json.RawMessage(`{}`), Artifacts: []artifacts.Artifact{ref}})
 	}
 	type completion struct {
 		index int
@@ -282,12 +282,12 @@ func executionResult(command messages.Message) messages.Message {
 	return messages.Message{ID: "30000000" + command.ID[8:], Type: messages.ActionSucceeded, AgentID: command.AgentID, CorrelationID: command.ID, Work: command.Work, Payload: json.RawMessage(`{"action_name":"check","output":{"serial":9007199254740993}}`), CreatedAt: command.CreatedAt.Add(time.Nanosecond)}
 }
 
-func executionArtifact(command messages.Message, index int) artifact.Artifact {
-	return artifact.Artifact{
+func executionArtifact(command messages.Message, index int) artifacts.Artifact {
+	return artifacts.Artifact{
 		ID: fmt.Sprintf("40000000-0000-4000-8000-%012x", index), Name: "result",
 		AgentID: command.AgentID, ActionName: "check", CommandID: command.ID,
 		CreatedAt: command.CreatedAt.Add(2 * time.Nanosecond),
-		Files: []artifact.ArtifactFile{{
+		Files: []artifacts.ArtifactFile{{
 			ID: fmt.Sprintf("50000000-0000-4000-8000-%012x", index), Name: "result.json",
 			MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64),
 		}},

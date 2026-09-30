@@ -24,8 +24,8 @@ interfaces. Use the bundled [providers](../providers/README.md) or your own impl
 
 - Put execution behavior in `agent`, coordination in `controller`, and operation
   transitions in `controller/runner`.
-- Keep shared models and store interfaces in `domain` or `artifact`; define
-  commands and events in `comms/clients`. Update consumers and recovery together.
+- Keep shared models and store interfaces in `domain`, including `domain/artifacts`.
+  Define commands and events in `comms/clients`. Update consumers and recovery together.
 - Use plural domain packages with singular models and matching stores:
   `agents.Agent` and `agents.AgentStore`, in `agent.go` and `agent_store.go`.
 - Add public behavior tests under `framework/tests/`, following the shared

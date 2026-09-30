@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	artifactstore "commander/framework/artifact/store"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain"
 	actionmodel "commander/framework/domain/actions"
 	agentmodel "commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -90,8 +90,8 @@ type Config struct {
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
 	ReportStore       reports.ReportStore
-	ArtifactStore     artifactstore.ArtifactStore
-	ArtifactFileStore artifactstore.ArtifactFileStore
+	ArtifactStore     artifacts.ArtifactStore
+	ArtifactFileStore artifacts.ArtifactFileStore
 	ActionStore       actionmodel.ActionStore
 	Logger            *slog.Logger
 	// TestCleaner is exposed only when ENV=tests. Call between settled tests.

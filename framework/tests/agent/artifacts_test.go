@@ -12,8 +12,8 @@ import (
 
 	"commander/framework/agent"
 	"commander/framework/agent/action"
-	"commander/framework/artifact"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 )
 
@@ -22,7 +22,7 @@ func TestAgentPublishesArtifactFiles(t *testing.T) {
 	summary := json.RawMessage(`{"items":20000}`)
 	execute := &artifactAction{Base: action.NewBase(actions.Action{Name: "inspect"}), result: action.Result{
 		Output:    summary,
-		Artifacts: []action.Artifact{{Name: "Evidence", Files: []artifact.FileSource{{Name: "evidence.txt", MediaType: "text/plain", Data: data}}}},
+		Artifacts: []action.Artifact{{Name: "Evidence", Files: []artifacts.FileSource{{Name: "evidence.txt", MediaType: "text/plain", Data: data}}}},
 	}}
 	files := &outputFiles{}
 	instance, err := agent.NewAgent(agent.AgentConfig{Type: "fixture", Actions: []action.Executor{execute}, ArtifactFileStore: files})
@@ -77,23 +77,23 @@ func (a *artifactAction) Run(context.Context, json.RawMessage, []string) (action
 
 type outputFiles struct {
 	artifactID string
-	file       artifact.ArtifactFile
+	file       artifacts.ArtifactFile
 	data       []byte
 	failure    error
 }
 
-func (s *outputFiles) Put(_ context.Context, artifactID string, source artifact.FileSource) (artifact.ArtifactFile, error) {
+func (s *outputFiles) Put(_ context.Context, artifactID string, source artifacts.FileSource) (artifacts.ArtifactFile, error) {
 	if s.failure != nil {
-		return artifact.ArtifactFile{}, s.failure
+		return artifacts.ArtifactFile{}, s.failure
 	}
 	digest := sha256.Sum256(source.Data)
 	s.artifactID, s.data = artifactID, bytes.Clone(source.Data)
-	s.file = artifact.ArtifactFile{ID: id.ArtifactFileID(), Name: source.Name, MediaType: source.MediaType, Size: int64(len(source.Data)), SHA256: hex.EncodeToString(digest[:])}
+	s.file = artifacts.ArtifactFile{ID: id.ArtifactFileID(), Name: source.Name, MediaType: source.MediaType, Size: int64(len(source.Data)), SHA256: hex.EncodeToString(digest[:])}
 	return s.file, nil
 }
-func (s *outputFiles) Get(_ context.Context, artifactID string, file artifact.ArtifactFile) ([]byte, error) {
+func (s *outputFiles) Get(_ context.Context, artifactID string, file artifacts.ArtifactFile) ([]byte, error) {
 	if artifactID != s.artifactID || file != s.file {
-		return nil, artifact.ErrUnknownArtifact
+		return nil, artifacts.ErrUnknownArtifact
 	}
 	return bytes.Clone(s.data), nil
 }

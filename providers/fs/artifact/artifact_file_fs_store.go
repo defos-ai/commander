@@ -13,15 +13,14 @@ import (
 	"runtime"
 	"strings"
 
-	"commander/framework/artifact"
-	artifactstore "commander/framework/artifact/store"
+	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	"commander/providers/fs/internal/jsonfile"
 )
 
 type ArtifactFileFsStore struct{ root string }
 
-var _ artifactstore.ArtifactFileStore = (*ArtifactFileFsStore)(nil)
+var _ artifacts.ArtifactFileStore = (*ArtifactFileFsStore)(nil)
 
 func NewArtifactFileFsStore(root string) (*ArtifactFileFsStore, error) {
 	if root == "" {
@@ -37,12 +36,12 @@ func NewArtifactFileFsStore(root string) (*ArtifactFileFsStore, error) {
 	return &ArtifactFileFsStore{root: absolute}, nil
 }
 
-func (s *ArtifactFileFsStore) Put(ctx context.Context, artifactID string, source artifact.FileSource) (artifact.ArtifactFile, error) {
+func (s *ArtifactFileFsStore) Put(ctx context.Context, artifactID string, source artifacts.FileSource) (artifacts.ArtifactFile, error) {
 	if err := checkContext(ctx); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if err := source.Validate(); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if source.MediaType == "" {
 		source.MediaType = "application/octet-stream"
@@ -51,56 +50,56 @@ func (s *ArtifactFileFsStore) Put(ctx context.Context, artifactID string, source
 	if source.Path != "" {
 		input, err := openRegular(source.Path)
 		if err != nil {
-			return artifact.ArtifactFile{}, err
+			return artifacts.ArtifactFile{}, err
 		}
 		defer input.Close()
 		reader = input
 	}
 	directory, err := s.directory(artifactID, true)
 	if err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if err := jsonfile.PrepareDirectory(directory); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	output, err := os.CreateTemp(directory, ".pending-*")
 	if err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	defer os.Remove(output.Name())
 	defer output.Close()
 	if err := output.Chmod(0600); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	digest := sha256.New()
 	size, err := io.CopyBuffer(io.MultiWriter(output, digest), contextReader{ctx, reader}, make([]byte, 64*1024))
 	if err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if err := output.Sync(); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if err := output.Close(); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
-	file := artifact.ArtifactFile{ID: id.ArtifactFileID(), Name: source.Name,
+	file := artifacts.ArtifactFile{ID: id.ArtifactFileID(), Name: source.Name,
 		MediaType: source.MediaType, Size: size, SHA256: hex.EncodeToString(digest.Sum(nil))}
 	if err := ctx.Err(); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	destination := filepath.Join(directory, file.ID)
 	// Publishing a completed file must never replace another artifact's bytes.
 	if err := os.Link(output.Name(), destination); err != nil {
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	if err := syncDirectory(directory); err != nil {
 		_ = os.Remove(destination)
-		return artifact.ArtifactFile{}, err
+		return artifacts.ArtifactFile{}, err
 	}
 	return file, nil
 }
 
-func (s *ArtifactFileFsStore) Get(ctx context.Context, artifactID string, file artifact.ArtifactFile) ([]byte, error) {
+func (s *ArtifactFileFsStore) Get(ctx context.Context, artifactID string, file artifacts.ArtifactFile) ([]byte, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err
 	}
