@@ -18,11 +18,11 @@ import (
 	"commander/framework/id"
 )
 
-// Consumer processes adapter requests independently of agent events. A bounded
-// number of requests can wait for actions without blocking other commands or agent events.
+// Consumer processes adapter commands independently of agent events. A bounded
+// number of commands can wait for actions without blocking other commands or agent events.
 type Consumer struct {
 	bus           comms.Bus
-	requests      comms.Subscription
+	commands      comms.Subscription
 	cancellations comms.Subscription
 	controller    controllercommands.Controller
 	operations    controllercommands.Operations
@@ -36,7 +36,7 @@ type Consumer struct {
 }
 
 // NewConsumer subscribes before returning so a host can advertise readiness
-// only after both requests and cancellation notices have a receiver.
+// only after both commands and cancellation notices have a receiver.
 func NewConsumer(ctx context.Context, bus comms.Bus, controllerType string, controller controllercommands.Controller, operations controllercommands.Operations, logger *slog.Logger) (*Consumer, error) {
 	if ctx == nil || bus == nil || controller == nil || operations == nil {
 		return nil, errors.New("adapter consumer requires a bus, controller, and operations")
@@ -44,22 +44,22 @@ func NewConsumer(ctx context.Context, bus comms.Bus, controllerType string, cont
 	if err := messages.ValidateControllerType(controllerType); err != nil {
 		return nil, err
 	}
-	requests, err := bus.Subscribe(ctx, messages.ControllerRequests(controllerType))
+	commands, err := bus.Subscribe(ctx, messages.ControllerCommands(controllerType))
 	if err != nil {
 		return nil, err
 	}
 	cancellations, err := bus.Subscribe(ctx, messages.ControllerCancellations(controllerType))
 	if err != nil {
-		return nil, errors.Join(err, requests.Close())
+		return nil, errors.Join(err, commands.Close())
 	}
 	lifetime, cancel := context.WithCancel(ctx)
-	return &Consumer{ctx: lifetime, cancel: cancel, bus: bus, requests: requests, cancellations: cancellations, controller: controller, operations: operations, logger: logger, ledger: requestLedger{active: make(map[string]*requestState), canceled: make(map[string]string)}}, nil
+	return &Consumer{ctx: lifetime, cancel: cancel, bus: bus, commands: commands, cancellations: cancellations, controller: controller, operations: operations, logger: logger, ledger: requestLedger{active: make(map[string]*requestState), canceled: make(map[string]string)}}, nil
 }
 
 func (c *Consumer) Close() error {
 	c.closeOnce.Do(func() {
 		c.cancel()
-		c.closeErr = errors.Join(c.requests.Close(), c.cancellations.Close())
+		c.closeErr = errors.Join(c.commands.Close(), c.cancellations.Close())
 	})
 	return c.closeErr
 }
@@ -82,7 +82,7 @@ func (c *Consumer) Consume(ctx context.Context) error {
 	coordinator := requestCoordinator{claims: make(chan requestClaim), completions: make(chan requestCompletion), cancellations: make(chan requestCancellation)}
 	finished := make(chan error, 2)
 	go func() {
-		consumer := comms.Consumer{Subscription: c.requests, Logger: c.logger, Concurrency: 16, ContinueOnError: continueAfterInvalidInput}
+		consumer := comms.Consumer{Subscription: c.commands, Logger: c.logger, Concurrency: 16, ContinueOnError: continueAfterInvalidInput}
 		finished <- consumer.Consume(ctx, func(ctx context.Context, m messages.Message) error { return c.consumeRequest(ctx, coordinator, m) })
 	}()
 	go func() {

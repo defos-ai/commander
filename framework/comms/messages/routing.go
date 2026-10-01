@@ -8,15 +8,11 @@ import (
 
 const DefaultControllerType = "default"
 
-// AgentEvents is the default controller type's event topic. Use ControllerEvents for
-// independently routed controller types sharing the same transport.
-const AgentEvents = "controllers." + DefaultControllerType + ".events"
-
 func AgentCommands(agentID string) string { return "agents." + agentID + ".commands" }
 
-// AgentReceipts is consumed independently so long-running commands cannot delay
+// AgentEvents is consumed independently so long-running commands cannot delay
 // confirmation that earlier action outcomes have reached the controller database.
-func AgentReceipts(agentID string) string { return "agents." + agentID + ".receipts" }
+func AgentEvents(agentID string) string { return "agents." + agentID + ".events" }
 
 func ControllerEvents(controllerType string) string {
 	return "controllers." + controllerType + ".events"
@@ -30,8 +26,8 @@ func ValidateControllerType(controllerType string) error {
 	return nil
 }
 
-func ControllerRequests(controllerType string) string {
-	return "controllers." + controllerType + ".requests"
+func ControllerCommands(controllerType string) string {
+	return "controllers." + controllerType + ".commands"
 }
 func ControllerCancellations(controllerType string) string {
 	return "controllers." + controllerType + ".cancellations"

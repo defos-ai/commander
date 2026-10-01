@@ -108,7 +108,7 @@ func (c *Client) call(ctx context.Context, method string, params interface{ Vali
 		}
 	}()
 
-	if err := c.bus.Publish(ctx, messages.ControllerRequests(messages.DefaultControllerType), m); err != nil {
+	if err := c.bus.Publish(ctx, messages.ControllerCommands(messages.DefaultControllerType), m); err != nil {
 		if ctx.Err() != nil {
 			c.cancelRequest(m.ID)
 			err = c.callError(ctx)

@@ -37,10 +37,10 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	workersCtx, stopWorkers := context.WithCancel(ctx)
 	var heartbeatDone chan struct{}
 	var resultsDone chan struct{}
-	var receiptsDone chan struct{}
+	var eventsDone chan struct{}
 	var outcomesDone <-chan struct{}
 	var subscription comms.Subscription
-	var receipts comms.Subscription
+	var eventSubscription comms.Subscription
 	var stopCommandID string
 	var stopAnnouncementErr error
 	stopAcknowledged := false
@@ -66,8 +66,8 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		if resultsDone != nil {
 			<-resultsDone
 		}
-		if receiptsDone != nil {
-			<-receiptsDone
+		if eventsDone != nil {
+			<-eventsDone
 		}
 		if outcomesDone != nil {
 			<-outcomesDone
@@ -87,8 +87,8 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		// Keep the serving claim through the final announcement so a concurrent
 		// restart cannot publish its startup ahead of this stopped snapshot.
 		defer func() {
-			if receipts != nil {
-				if err := receipts.Close(); err != nil && !errors.Is(err, comms.ErrClosed) {
+			if eventSubscription != nil {
+				if err := eventSubscription.Close(); err != nil && !errors.Is(err, comms.ErrClosed) {
 					serveErr = errors.Join(serveErr, err)
 				}
 			}
@@ -119,17 +119,17 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		return err
 	}
 	consumer.Subscription = subscription
-	receipts, err = bus.Subscribe(ctx, messages.AgentReceipts(a.ID()))
+	eventSubscription, err = bus.Subscribe(ctx, messages.AgentEvents(a.ID()))
 	if err != nil {
 		return err
 	}
 	outcomesDone = a.outcomes.Start(workersCtx)
-	receiptsDone = make(chan struct{})
+	eventsDone = make(chan struct{})
 	confirmation := consumers.ResultReceiptConsumer{
 		AgentID: a.ID(), Outcomes: &a.outcomes, Logger: a.config.Logger,
 	}
-	receiptConsumer := comms.Consumer{
-		Subscription: receipts, Logger: a.config.Logger,
+	eventConsumer := comms.Consumer{
+		Subscription: eventSubscription, Logger: a.config.Logger,
 		AfterAck: func(receipt messages.Message) {
 			if err := confirmation.AfterAck(workersCtx, receipt); err != nil && workersCtx.Err() == nil {
 				endService(err)
@@ -137,8 +137,8 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		},
 	}
 	go func() {
-		defer close(receiptsDone)
-		err := receiptConsumer.Consume(workersCtx, confirmation.Consume)
+		defer close(eventsDone)
+		err := eventConsumer.Consume(workersCtx, confirmation.Consume)
 		if workersCtx.Err() == nil {
 			endService(err)
 		}

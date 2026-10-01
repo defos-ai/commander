@@ -15,16 +15,16 @@ Comms selects the default controller route for adapters and agents.
 
 | Publisher → consumer | Destination | Messages |
 | --- | --- | --- |
-| Adapter → controller | `controllers.default.requests` | `adapter.request`: method, serialized command and deadline |
+| Adapter → controller | `controllers.default.commands` | `adapter.request`: method, serialized command and deadline |
 | Adapter → controller | `controllers.default.cancellations` | `adapter.request.canceled` |
 | Controller → adapter | `adapters.<adapter-id>.replies` | `controller.response`: result or domain error |
 | Controller → agent | `agents.<agent-id>.commands` | `action.run`, `agent.discover`, `agent.stop` |
-| Controller → agent | `agents.<agent-id>.receipts` | `action.result.accepted` |
+| Controller → agent | `agents.<agent-id>.events` | `action.result.accepted` |
 | Agent → controller | `controllers.default.events` | Lifecycle events, `action.succeeded`, `command.failed` |
 
-The proposed RabbitMQ design may rename `requests` to `commands`; that rename and
-the broker provider are not implemented. Destination names must follow
-[`routing.go`](routing.go), not a future topology.
+Destination names follow [`routing.go`](routing.go), including
+`ControllerCommands(controllerType)` and `AgentEvents(agentID)`.
+The RabbitMQ provider is not implemented.
 
 ## Payloads
 

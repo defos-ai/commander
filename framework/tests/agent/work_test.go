@@ -145,10 +145,14 @@ type workBus struct {
 }
 
 func (b *workBus) Subscribe(_ context.Context, topic string) (comms.Subscription, error) {
-	if topic == messages.AgentCommands(b.agentID) {
+	switch topic {
+	case "agents." + b.agentID + ".commands":
 		return workSubscription{commands: b.commands}, nil
+	case "agents." + b.agentID + ".events":
+		return idleSubscription{}, nil
+	default:
+		return nil, errors.New("unexpected agent destination: " + topic)
 	}
-	return idleSubscription{}, nil
 }
 
 type workSubscription struct {

@@ -93,24 +93,24 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		defer cancel()
 		result = errors.Join(result, execution.Close(shutdown))
 	}()
-	requestCtx, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
-	defer cancelRequests()
-	requests, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination, execution, logger)
+	commandCtx, cancelCommands := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelCommands()
+	commands, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination, execution, logger)
 	if err != nil {
 		return err
 	}
-	requestsDone := make(chan struct{})
-	var requestErr error
+	commandsDone := make(chan struct{})
+	var commandErr error
 	go func() {
-		defer close(requestsDone)
-		requestErr = requests.Consume(requestCtx)
+		defer close(commandsDone)
+		commandErr = commands.Consume(commandCtx)
 	}()
 	defer func() {
-		cancelRequests()
-		result = errors.Join(result, requests.Close())
-		<-requestsDone
-		if requestErr != nil && !errors.Is(requestErr, context.Canceled) {
-			result = errors.Join(result, requestErr)
+		cancelCommands()
+		result = errors.Join(result, commands.Close())
+		<-commandsDone
+		if commandErr != nil && !errors.Is(commandErr, context.Canceled) {
+			result = errors.Join(result, commandErr)
 		}
 	}()
 	logger.Info("Controller ready", "transport", "bus")
@@ -123,7 +123,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		return nil
 	case <-coordination.Done():
 		return fmt.Errorf("controller coordination stopped: %w", coordination.Err())
-	case <-requestsDone:
+	case <-commandsDone:
 		return errors.New("adapter consumer stopped")
 	}
 }

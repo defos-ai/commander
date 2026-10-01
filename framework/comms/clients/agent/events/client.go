@@ -34,5 +34,5 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 	if err := domain.Decode(message.Payload, &receipt); err != nil {
 		return err
 	}
-	return c.Bus.Publish(ctx, messages.AgentReceipts(message.AgentID), message)
+	return c.Bus.Publish(ctx, messages.AgentEvents(message.AgentID), message)
 }

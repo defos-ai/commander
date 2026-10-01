@@ -77,9 +77,9 @@ func TestAdapterReplaysOutcomeAfterFailedPublication(t *testing.T) {
 	ctx, bus, backend, consumer := adapterFixture(t)
 	running := runAdapter(t, ctx, consumer)
 	request := adapterRequest(t)
-	publish(t, ctx, bus, messages.ControllerRequests("default"), request)
+	publish(t, ctx, bus, messages.ControllerCommands("default"), request)
 	work := receive(t, ctx, backend.started)
-	publish(t, ctx, bus, messages.ControllerRequests("default"), request)
+	publish(t, ctx, bus, messages.ControllerCommands("default"), request)
 	bus.failReply.Store(true)
 
 	work.finish <- agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: work.agentID}}
@@ -95,7 +95,7 @@ func TestAdapterReplaysOutcomeAfterFailedPublication(t *testing.T) {
 		<-bus.replies
 	}
 	runAdapter(t, ctx, consumer)
-	publish(t, ctx, bus, messages.ControllerRequests("default"), request)
+	publish(t, ctx, bus, messages.ControllerCommands("default"), request)
 	replay := receive(t, ctx, bus.replies)
 
 	if !reflect.DeepEqual(original, replay) || backend.calls.Load() != 1 {
@@ -117,7 +117,7 @@ func TestAdapterRemembersCancellationBeforeRequest(t *testing.T) {
 		t.Fatalf("unexpected acknowledgement: %s", ack)
 	}
 
-	publish(t, ctx, bus, messages.ControllerRequests("default"), request)
+	publish(t, ctx, bus, messages.ControllerCommands("default"), request)
 	response := receive(t, ctx, bus.replies)
 	var reply adapterevents.ControllerReply
 	if err := json.Unmarshal(response.Payload, &reply); err != nil {
@@ -186,7 +186,7 @@ func adapterFixture(t *testing.T) (context.Context, *adapterBus, *adapterBackend
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	t.Cleanup(cancel)
 	bus := &adapterBus{topics: map[string]chan messages.Message{
-		messages.ControllerRequests("default"):      make(chan messages.Message, 32),
+		"controllers.default.commands":              make(chan messages.Message, 32),
 		messages.ControllerCancellations("default"): make(chan messages.Message, 32),
 		messages.AdapterReplies(adapterID):          make(chan messages.Message, 32),
 	}, replies: make(chan messages.Message, 32), acked: make(chan string, 64)}

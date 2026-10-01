@@ -39,7 +39,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&heartbeat, "heartbeat-timeout", controller.DefaultHeartbeatTimeout.String(), "Agent lease duration (HEARTBEAT_TIMEOUT)")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: commander-controller [flags]")
-		fmt.Fprintln(stderr, "Coordinate agents and operations. Adapters send requests through the shared broker.")
+		fmt.Fprintln(stderr, "Coordinate agents and operations. Adapters send commands through the shared broker.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
