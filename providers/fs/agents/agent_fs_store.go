@@ -24,6 +24,13 @@ import (
 // conditional lease expiry across processes.
 type AgentFsStore struct{ root string }
 
+// An expired record remains only while its source observation can still arrive
+// within the controller's lifecycle freshness window.
+type inventoryRecord struct {
+	agentmodel.Agent
+	Expired bool `json:"expired,omitempty"`
+}
+
 var _ agentmodel.AgentStore = (*AgentFsStore)(nil)
 
 func NewAgentFsStore(root string) (*AgentFsStore, error) {
@@ -89,7 +96,17 @@ func (s *AgentFsStore) Upsert(ctx context.Context, record agentmodel.Agent) erro
 		return err
 	}
 	snapshot := record.Clone()
-	return s.locked(ctx, func() error { return s.write(ctx, snapshot) })
+	return s.locked(ctx, func() error {
+		stored, err := s.read(ctx, snapshot.ID)
+		if err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
+			return err
+		}
+		if err == nil && !stored.ObservedAt.IsZero() && !snapshot.ObservedAt.After(stored.ObservedAt) {
+			return agentmodel.ErrStaleObservation
+		}
+		_, err = s.write(ctx, inventoryRecord{Agent: snapshot})
+		return err
+	})
 }
 
 func (s *AgentFsStore) Get(ctx context.Context, agentID string) (agentmodel.Agent, error) {
@@ -101,9 +118,15 @@ func (s *AgentFsStore) Get(ctx context.Context, agentID string) (agentmodel.Agen
 	}
 	var result agentmodel.Agent
 	err := s.locked(ctx, func() error {
-		var err error
-		result, err = s.read(ctx, agentID)
-		return err
+		stored, err := s.read(ctx, agentID)
+		if err != nil {
+			return err
+		}
+		if stored.Expired {
+			return agentmodel.ErrUnknownAgent
+		}
+		result = stored.Agent
+		return nil
 	})
 	return result, err
 }
@@ -111,9 +134,16 @@ func (s *AgentFsStore) Get(ctx context.Context, agentID string) (agentmodel.Agen
 func (s *AgentFsStore) List(ctx context.Context) ([]agentmodel.Agent, error) {
 	result := []agentmodel.Agent{}
 	err := s.locked(ctx, func() error {
-		var err error
-		result, err = s.list(ctx)
-		return err
+		records, err := s.list(ctx)
+		if err != nil {
+			return err
+		}
+		for _, record := range records {
+			if !record.Expired {
+				result = append(result, record.Agent)
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -121,8 +151,8 @@ func (s *AgentFsStore) List(ctx context.Context) ([]agentmodel.Agent, error) {
 	return result, nil
 }
 
-func (s *AgentFsStore) list(ctx context.Context) ([]agentmodel.Agent, error) {
-	records := []agentmodel.Agent{}
+func (s *AgentFsStore) list(ctx context.Context) ([]inventoryRecord, error) {
+	records := []inventoryRecord{}
 	entries, err := os.ReadDir(s.directory())
 	if errors.Is(err, os.ErrNotExist) {
 		return records, nil
@@ -152,7 +182,8 @@ func (s *AgentFsStore) list(ctx context.Context) ([]agentmodel.Agent, error) {
 }
 
 // DeleteExpired compares each current heartbeat while holding the same lock as
-// Upsert. Returned records were removed, including when a later removal fails.
+// Upsert. Recent observation marks survive as hidden tombstones until cutoff
+// catches up; returned records became absent, even if a later write fails.
 func (s *AgentFsStore) DeleteExpired(ctx context.Context, cutoff time.Time) ([]agentmodel.Agent, error) {
 	deleted := []agentmodel.Agent{}
 	err := s.locked(ctx, func() error {
@@ -160,19 +191,35 @@ func (s *AgentFsStore) DeleteExpired(ctx context.Context, cutoff time.Time) ([]a
 		if err != nil {
 			return err
 		}
+		removed := false
 		for _, record := range records {
-			if !record.LastHeartbeat.IsZero() && record.LastHeartbeat.After(cutoff) {
+			if record.Expired && record.ObservedAt.After(cutoff) ||
+				!record.Expired && !record.LastHeartbeat.IsZero() && record.LastHeartbeat.After(cutoff) {
 				continue
 			}
 			if err := ctx.Err(); err != nil {
 				return err
 			}
+			if !record.Expired && record.ObservedAt.After(cutoff) {
+				record.Expired = true
+				committed, err := s.write(ctx, record)
+				if committed {
+					deleted = append(deleted, record.Agent)
+				}
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			if err := os.Remove(filepath.Join(s.directory(), record.ID+".json")); err != nil {
 				return err
 			}
-			deleted = append(deleted, record)
+			removed = true
+			if !record.Expired {
+				deleted = append(deleted, record.Agent)
+			}
 		}
-		if len(deleted) > 0 {
+		if removed {
 			return syncInventoryDirectory(s.directory())
 		}
 		return nil
@@ -180,84 +227,83 @@ func (s *AgentFsStore) DeleteExpired(ctx context.Context, cutoff time.Time) ([]a
 	return deleted, err
 }
 
-func (s *AgentFsStore) read(ctx context.Context, agentID string) (agentmodel.Agent, error) {
+func (s *AgentFsStore) read(ctx context.Context, agentID string) (inventoryRecord, error) {
 	if err := ctx.Err(); err != nil {
-		return agentmodel.Agent{}, err
+		return inventoryRecord{}, err
 	}
 	return readInventoryRecord(ctx, filepath.Join(s.directory(), agentID+".json"), agentID)
 }
 
-func readInventoryRecord(ctx context.Context, path, agentID string) (agentmodel.Agent, error) {
+func readInventoryRecord(ctx context.Context, path, agentID string) (inventoryRecord, error) {
 	if err := regularInventoryFile(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return agentmodel.Agent{}, agentmodel.ErrUnknownAgent
+			return inventoryRecord{}, agentmodel.ErrUnknownAgent
 		}
-		return agentmodel.Agent{}, err
+		return inventoryRecord{}, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return agentmodel.Agent{}, err
+		return inventoryRecord{}, err
 	}
-	var stored agentmodel.Agent
+	var stored inventoryRecord
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&stored); err != nil {
-		return agentmodel.Agent{}, fmt.Errorf("decode inventory record: %w", err)
+		return inventoryRecord{}, fmt.Errorf("decode inventory record: %w", err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return agentmodel.Agent{}, errors.New("inventory file must contain exactly one record")
+		return inventoryRecord{}, errors.New("inventory file must contain exactly one record")
 	}
-	if err := validateInventoryRecord(stored); err != nil {
-		return agentmodel.Agent{}, err
+	if err := validateInventoryRecord(stored.Agent); err != nil {
+		return inventoryRecord{}, err
 	}
 	if stored.ID != agentID {
-		return agentmodel.Agent{}, errors.New("inventory record identity does not match its path")
+		return inventoryRecord{}, errors.New("inventory record identity does not match its path")
 	}
 	if err := ctx.Err(); err != nil {
-		return agentmodel.Agent{}, err
+		return inventoryRecord{}, err
 	}
 	return stored, nil
 }
 
-func (s *AgentFsStore) write(ctx context.Context, record agentmodel.Agent) error {
-	// Do not conceal corruption in an existing observation.
-	if _, err := s.read(ctx, record.ID); err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
-		return err
-	}
+// write reports whether the rename committed, even if directory sync fails.
+// Callers already read the existing observation under the inventory lock, so a
+// replacement cannot conceal malformed records.
+func (s *AgentFsStore) write(ctx context.Context, record inventoryRecord) (bool, error) {
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		return err
+		return false, err
 	}
 	directory := s.directory()
 	if err := os.MkdirAll(directory, 0700); err != nil {
-		return err
+		return false, err
 	}
 	file, err := os.CreateTemp(directory, "."+record.ID+"-*.tmp")
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer os.Remove(file.Name())
 	defer file.Close()
 	if _, err := file.Write(append(data, '\n')); err != nil {
-		return err
+		return false, err
 	}
 	if err := file.Sync(); err != nil {
-		return err
+		return false, err
 	}
 	if err := file.Close(); err != nil {
-		return err
+		return false, err
 	}
 	path := filepath.Join(directory, record.ID+".json")
 	if err := regularInventoryFile(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+		return false, err
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 	if err := os.Rename(file.Name(), path); err != nil {
-		return err
+		return false, err
 	}
-	return syncInventoryDirectory(directory)
+	return true, syncInventoryDirectory(directory)
 }
 
 func regularInventoryFile(path string) error {

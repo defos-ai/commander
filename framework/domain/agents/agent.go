@@ -10,10 +10,12 @@ import (
 const DefaultHeartbeatTimeout = 45 * time.Second
 
 // Agent is a received public snapshot with controller-owned liveness data.
-// LastSeen records activity; LastHeartbeat alone renews the agent's lease.
+// LastSeen records receipt time; ObservedAt orders source observations.
+// LastHeartbeat is the source heartbeat time and alone renews the agent's lease.
 // A zero LastHeartbeat has no lease. Stores retain the observed status.
 type Agent struct {
 	AgentSnapshot
+	ObservedAt     time.Time `json:"observed_at,omitzero"`
 	LastSeen       time.Time `json:"last_seen"`
 	LastHeartbeat  time.Time `json:"last_heartbeat"`
 	LeaseExpiresAt time.Time `json:"lease_expires_at,omitzero"`

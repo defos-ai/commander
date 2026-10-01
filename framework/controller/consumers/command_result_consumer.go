@@ -114,9 +114,9 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 	if err != nil {
 		return fmt.Errorf("read agent inventory for result: %w", err)
 	}
-	// A delayed result must not undo a newer heartbeat or a new action command.
-	// Replays of already completed results never reach this method.
-	if record.Status == agentmodel.AgentStopped || record.LastSeen.After(message.CreatedAt) ||
+	// Result persistence remains valid even when its inventory observation is stale.
+	fresh, timestampErr := freshObservation(message.CreatedAt, receivedAt, c.State.HeartbeatTimeout)
+	if !fresh || timestampErr != nil || record.Status == agentmodel.AgentStopped || !message.CreatedAt.After(record.ObservedAt) ||
 		record.Work != nil && record.Work.CommandID != message.CorrelationID {
 		return nil
 	}
@@ -131,7 +131,10 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 		return nil
 	}
 	record.Status, record.Work, record.LastSeen = agentmodel.AgentReady, nil, receivedAt
-	if err := c.Inventory.Upsert(ctx, record); err != nil {
+	record.ObservedAt = message.CreatedAt
+	if err := c.Inventory.Upsert(ctx, record); errors.Is(err, agentmodel.ErrStaleObservation) {
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("persist agent completion: %w", err)
 	}
 	if c.State.CheckOpen() == nil {

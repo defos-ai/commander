@@ -23,7 +23,8 @@ type Store interface {
 }
 
 // Registry applies an agent lease policy to saved observations. The host
-// schedules Sweep; receipt timestamps come from the controller, not agent clocks.
+// schedules Sweep; heartbeat source times prevent delayed delivery from extending
+// a lease. Agent and controller clocks must be synchronized.
 type Registry struct {
 	store   Store
 	timeout time.Duration

@@ -25,6 +25,19 @@ type AgentEventConsumer struct {
 
 func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Message) error {
 	receivedAt := time.Now().UTC()
+	if message.Type != controllerevents.CommandFailed {
+		fresh, err := freshObservation(message.CreatedAt, receivedAt, c.State.HeartbeatTimeout)
+		if err != nil {
+			return InvalidMessage(err)
+		}
+		if !fresh {
+			if pending, ok := c.State.Pending[message.CorrelationID]; ok && pending.AgentID == message.AgentID {
+				delete(c.State.Pending, message.CorrelationID)
+				pending.Reply <- state.CommandReply{Message: message, Err: errors.New("agent reply is older than the heartbeat timeout")}
+			}
+			return nil
+		}
+	}
 	record, err := c.Inventory.Get(ctx, message.AgentID)
 	if err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
 		return fmt.Errorf("read agent inventory for event: %w", err)
@@ -34,25 +47,22 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 		return InvalidMessage(errors.New("event refers to an unknown agent"))
 	}
 	var resultErr error
+	changed := false
 	switch message.Type {
 	case controllerevents.AgentStarted, controllerevents.AgentHeartbeat, controllerevents.AgentUpdated, controllerevents.AgentStopped:
-		record.AgentSnapshot, resultErr = descriptionReply(message)
-		if resultErr == nil && message.Type == controllerevents.AgentStopped && record.Status != agentmodel.AgentStopped {
+		var snapshot agentmodel.AgentSnapshot
+		snapshot, resultErr = descriptionReply(message)
+		if resultErr == nil && message.Type == controllerevents.AgentStopped && snapshot.Status != agentmodel.AgentStopped {
 			resultErr = errors.New("stopped event must describe a stopped agent")
 		}
-		if resultErr == nil && (message.Type == controllerevents.AgentStarted || message.Type == controllerevents.AgentHeartbeat) {
-			record.LastHeartbeat = receivedAt
-			record.LeaseExpiresAt = receivedAt.Add(c.State.HeartbeatTimeout)
-		}
 		if resultErr == nil {
-			for _, entry := range record.Actions {
-				// Catalog definitions are shared across agents. Readiness and its
-				// reason remain on the agent that reported them.
-				entry.Status, entry.StatusReason = actionmodel.Unknown, ""
-				entry.MissingRequirements = nil
-				if err := c.Actions.Upsert(ctx, entry); err != nil {
-					return fmt.Errorf("persist announced action %q: %w", entry.Name, err)
-				}
+			record, changed, err = c.observe(ctx, record, snapshot, message, receivedAt)
+			if errors.Is(err, agentmodel.ErrUnknownAgent) {
+				// The store retained an expiry marker and rejected an older replay.
+				return nil
+			}
+			if err != nil {
+				return err
 			}
 		}
 	case controllerevents.CommandFailed:
@@ -64,16 +74,10 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 	default:
 		return InvalidMessage(fmt.Errorf("unsupported event type %q", message.Type))
 	}
-	if resultErr == nil {
-		record.LastSeen, record.Stale = receivedAt, false
-		if err := c.Inventory.Upsert(ctx, record); err != nil {
-			return fmt.Errorf("persist agent observation: %w", err)
-		}
-	}
 	if err := c.State.CheckOpen(); err != nil {
 		return err
 	}
-	if resultErr == nil {
+	if changed {
 		c.State.Notify()
 	}
 	var handlingErr error
@@ -95,10 +99,45 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 		delete(c.State.Pending, message.CorrelationID)
 		pending.Reply <- state.CommandReply{Message: message, Record: c.State.Snapshot(record, time.Now().UTC()), Err: resultErr}
 	}
-	if resultErr == nil && message.Type == controllerevents.AgentStopped {
+	if changed && message.Type == controllerevents.AgentStopped && record.Status == agentmodel.AgentStopped {
 		c.State.FailAgent(message.AgentID, state.ErrAgentNotRunning)
 	}
 	return handlingErr
+}
+
+func (c AgentEventConsumer) observe(ctx context.Context, record agentmodel.Agent, snapshot agentmodel.AgentSnapshot, message messages.Message, receivedAt time.Time) (agentmodel.Agent, bool, error) {
+	if message.CreatedAt.After(record.ObservedAt) {
+		record.AgentSnapshot = snapshot
+		record.ObservedAt, record.LastSeen, record.Stale = message.CreatedAt, receivedAt, false
+		if message.Type == controllerevents.AgentStarted || message.Type == controllerevents.AgentHeartbeat {
+			record.LastHeartbeat = message.CreatedAt
+			if record.LastHeartbeat.After(receivedAt) {
+				record.LastHeartbeat = receivedAt
+			}
+			record.LeaseExpiresAt = record.LastHeartbeat.Add(c.State.HeartbeatTimeout)
+		}
+		if err := c.Inventory.Upsert(ctx, record); errors.Is(err, agentmodel.ErrStaleObservation) {
+			current, err := c.Inventory.Get(ctx, message.AgentID)
+			if err != nil {
+				return agentmodel.Agent{}, false, err
+			}
+			record = current
+		} else if err != nil {
+			return agentmodel.Agent{}, false, fmt.Errorf("persist agent observation: %w", err)
+		}
+	}
+	if message.CreatedAt.Equal(record.ObservedAt) {
+		// Repeating the accepted observation can repair catalog writes that
+		// failed after inventory was saved. Never replay older definitions.
+		for _, entry := range record.Actions {
+			entry.Status, entry.StatusReason = actionmodel.Unknown, ""
+			entry.MissingRequirements = nil
+			if err := c.Actions.Upsert(ctx, entry); err != nil {
+				return agentmodel.Agent{}, false, fmt.Errorf("persist announced action %q: %w", entry.Name, err)
+			}
+		}
+	}
+	return record, message.CreatedAt.Equal(record.ObservedAt), nil
 }
 
 func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error) {

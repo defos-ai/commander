@@ -12,6 +12,9 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	mongoagents "commander/providers/mongo/agents"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func TestAgentMongoStore(t *testing.T) {
@@ -73,6 +76,182 @@ func TestAgentMongoStore(t *testing.T) {
 	items, err = catalog.List(t.Context())
 	if err != nil || !reflect.DeepEqual(items, []agents.Agent{other, updated}) {
 		t.Fatalf("replacement retained fields or changed another agent: %#v, error = %v", items, err)
+	}
+}
+
+func TestAgentMongoStoreOrdersObservationsAcrossRestart(t *testing.T) {
+	database := openStore(t, "agents")
+	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed := time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)
+	original := inventoryAgent(1, observed.Add(-time.Hour))
+	if err := catalog.Upsert(t.Context(), original); err != nil {
+		t.Fatal(err)
+	}
+	original.ObservedAt = observed
+	if err := catalog.Upsert(t.Context(), original); err != nil {
+		t.Fatalf("nonzero observation did not replace a zero observation: %v", err)
+	}
+	catalog, err = mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := catalog.Get(t.Context(), original.ID)
+	if err != nil || !reflect.DeepEqual(stored, original) {
+		t.Fatalf("restart changed observation precision or content: %#v, error = %v", stored, err)
+	}
+	for _, timestamp := range []time.Time{time.Time{}, observed.Add(-time.Nanosecond), observed} {
+		rejected := original.Clone()
+		rejected.ObservedAt = timestamp
+		rejected.LastSeen = observed.Add(time.Hour)
+		rejected.LastHeartbeat = observed.Add(time.Hour)
+		rejected.Status = agents.AgentStopped
+		if err := catalog.Upsert(t.Context(), rejected); !errors.Is(err, agents.ErrStaleObservation) {
+			t.Fatalf("observation %s was not rejected as stale: %v", timestamp, err)
+		}
+		stored, err := catalog.Get(t.Context(), original.ID)
+		if err != nil || !reflect.DeepEqual(stored, original) {
+			t.Fatalf("stale observation changed the saved agent: %#v, error = %v", stored, err)
+		}
+	}
+	updated := original.Clone()
+	updated.ObservedAt = observed.Add(time.Nanosecond)
+	updated.LastSeen = original.LastSeen.Add(-time.Second)
+	updated.LastHeartbeat = original.LastHeartbeat.Add(-time.Second)
+	updated.Status = agents.AgentStopped
+	if err := catalog.Upsert(t.Context(), updated); err != nil {
+		t.Fatalf("strictly newer observation rejected: %v", err)
+	}
+	items, err := catalog.List(t.Context())
+	if err != nil || !reflect.DeepEqual(items, []agents.Agent{updated}) {
+		t.Fatalf("newer observation did not replace the saved agent: %#v, error = %v", items, err)
+	}
+}
+
+func TestAgentMongoStoreExpiredObservationsBlockStaleReactivation(t *testing.T) {
+	database := openStore(t, "agents")
+	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutoff := time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)
+	original := inventoryAgent(1, cutoff)
+	original.ObservedAt = cutoff.Add(2 * time.Nanosecond)
+	if err := catalog.Upsert(t.Context(), original); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := catalog.DeleteExpired(t.Context(), cutoff)
+	if err != nil || !reflect.DeepEqual(removed, []agents.Agent{original}) {
+		t.Fatalf("expiry changed the saved observation: %#v, error = %v", removed, err)
+	}
+	var expired bson.M
+	if err := database.GetByID(t.Context(), "agents", original.ID, &expired); err != nil || expired["expired"] != true {
+		t.Fatalf("newer observation was not retained as an expired record: %#v, error = %v", expired, err)
+	}
+	catalog, err = mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := catalog.Get(t.Context(), original.ID); !errors.Is(err, agents.ErrUnknownAgent) {
+		t.Fatalf("expired record remained visible after restart: %v", err)
+	}
+	items, err := catalog.List(t.Context())
+	if err != nil || len(items) != 0 {
+		t.Fatalf("expired record appeared in inventory after restart: %#v, error = %v", items, err)
+	}
+	for _, timestamp := range []time.Time{time.Time{}, original.ObservedAt.Add(-time.Nanosecond), original.ObservedAt} {
+		rejected := original.Clone()
+		rejected.ObservedAt = timestamp
+		rejected.LastHeartbeat = cutoff.Add(time.Hour)
+		rejected.LastSeen = cutoff.Add(time.Hour)
+		if err := catalog.Upsert(t.Context(), rejected); !errors.Is(err, agents.ErrStaleObservation) {
+			t.Fatalf("observation %s reactivated an expired agent: %v", timestamp, err)
+		}
+		var document bson.M
+		if err := database.GetByID(t.Context(), "agents", original.ID, &document); err != nil || !reflect.DeepEqual(document, expired) {
+			t.Fatalf("stale observation changed the expired record: %#v, error = %v", document, err)
+		}
+	}
+	if removed, err := catalog.DeleteExpired(t.Context(), original.ObservedAt.Add(-time.Nanosecond)); err != nil || len(removed) != 0 {
+		t.Fatalf("later sweep returned a retained expired record: %#v, error = %v", removed, err)
+	}
+	updated := original.Clone()
+	updated.ObservedAt = original.ObservedAt.Add(time.Nanosecond)
+	updated.LastHeartbeat = cutoff.Add(time.Hour)
+	if err := catalog.Upsert(t.Context(), updated); err != nil {
+		t.Fatalf("strictly newer observation did not reactivate the agent: %v", err)
+	}
+	stored, err := catalog.Get(t.Context(), original.ID)
+	if err != nil || !reflect.DeepEqual(stored, updated) {
+		t.Fatalf("reactivated agent changed: %#v, error = %v", stored, err)
+	}
+	items, err = catalog.List(t.Context())
+	if err != nil || !reflect.DeepEqual(items, []agents.Agent{updated}) {
+		t.Fatalf("reactivated agent was not listed: %#v, error = %v", items, err)
+	}
+}
+
+func TestAgentMongoStorePrunesExpiredObservations(t *testing.T) {
+	database := openStore(t, "agents")
+	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutoff := time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)
+	expected := make(map[string]agents.Agent)
+	var retained agents.Agent
+	for i, observed := range []time.Time{time.Time{}, cutoff.Add(-time.Nanosecond), cutoff, cutoff.Add(time.Nanosecond)} {
+		record := inventoryAgent(i, cutoff)
+		record.ObservedAt = observed
+		if err := catalog.Upsert(t.Context(), record); err != nil {
+			t.Fatal(err)
+		}
+		expected[record.ID] = record
+		if observed.After(cutoff) {
+			retained = record
+		}
+	}
+	removed, err := catalog.DeleteExpired(t.Context(), cutoff)
+	if err != nil || len(removed) != len(expected) {
+		t.Fatalf("expired records = %#v, error = %v", removed, err)
+	}
+	for _, record := range removed {
+		if want, ok := expected[record.ID]; !ok || !reflect.DeepEqual(record, want) {
+			t.Fatalf("expiry changed or duplicated an observation: %#v", record)
+		}
+		delete(expected, record.ID)
+		var document bson.M
+		err := database.GetByID(t.Context(), "agents", record.ID, &document)
+		if record.ID == retained.ID {
+			if err != nil || document["expired"] != true {
+				t.Fatalf("newer observation was not retained: %#v, error = %v", document, err)
+			}
+		} else if !errors.Is(err, mongo.ErrNoDocuments) {
+			t.Fatalf("observation at or before cutoff was not physically deleted: %s, error = %v", record.ID, err)
+		}
+	}
+	catalog, err = mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed, err := catalog.DeleteExpired(t.Context(), cutoff); err != nil || len(removed) != 0 {
+		t.Fatalf("repeated sweep returned an expired record: %#v, error = %v", removed, err)
+	}
+	var document bson.M
+	if err := database.GetByID(t.Context(), "agents", retained.ID, &document); err != nil || document["expired"] != true {
+		t.Fatalf("sweep pruned an observation newer than cutoff: %#v, error = %v", document, err)
+	}
+	if removed, err := catalog.DeleteExpired(t.Context(), retained.ObservedAt); err != nil || len(removed) != 0 {
+		t.Fatalf("cleanup returned an already expired record: %#v, error = %v", removed, err)
+	}
+	if err := database.GetByID(t.Context(), "agents", retained.ID, &document); !errors.Is(err, mongo.ErrNoDocuments) {
+		t.Fatalf("expired observation at cutoff was not physically deleted: %v", err)
+	}
+	items, err := catalog.List(t.Context())
+	if err != nil || len(items) != 0 {
+		t.Fatalf("cleanup left active agents: %#v, error = %v", items, err)
 	}
 }
 
@@ -186,11 +365,12 @@ func TestAgentMongoStoreExpiresOnlyHeartbeatLeases(t *testing.T) {
 }
 
 func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
-	first, err := mongoagents.NewAgentMongoStore(t.Context(), openStore(t, "agents"))
+	database := openStore(t, "agents")
+	first, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := mongoagents.NewAgentMongoStore(t.Context(), openStore(t, "agents"))
+	second, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,9 +382,12 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 		err     error
 	}
 
-	for _, renew := range []bool{false, true} {
+	for round, renew := range []bool{false, true} {
+		observed := cutoff.Add(time.Duration(round+1) * time.Nanosecond)
 		for i := range count {
-			if err := first.Upsert(t.Context(), inventoryAgent(i, cutoff)); err != nil {
+			record := inventoryAgent(i, cutoff)
+			record.ObservedAt = observed
+			if err := first.Upsert(t.Context(), record); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -222,7 +405,9 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 			for i := range count {
 				go func() {
 					<-start
-					written <- catalogs[i%len(catalogs)].Upsert(t.Context(), inventoryAgent(i, cutoff.Add(time.Nanosecond)))
+					record := inventoryAgent(i, cutoff.Add(time.Nanosecond))
+					record.ObservedAt = observed.Add(time.Nanosecond)
+					written <- catalogs[i%len(catalogs)].Upsert(t.Context(), record)
 				}()
 			}
 		}
@@ -256,7 +441,9 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 			t.Fatalf("renew=%t: inventory after races = %#v, error = %v", renew, items, err)
 		}
 		for i, record := range items {
-			if !reflect.DeepEqual(record, inventoryAgent(i, cutoff.Add(time.Nanosecond))) {
+			want := inventoryAgent(i, cutoff.Add(time.Nanosecond))
+			want.ObservedAt = observed.Add(time.Nanosecond)
+			if !reflect.DeepEqual(record, want) {
 				t.Fatalf("sweep lost or changed a fresh heartbeat: %#v", record)
 			}
 		}

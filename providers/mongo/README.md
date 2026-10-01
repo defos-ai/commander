@@ -69,7 +69,10 @@ The same variable enables optional controller and MCP startup tests; see the
 ### Persistence and recovery
 
 Mission and action names are unique document IDs. Agent records contain advertised
-action readiness and indexed heartbeat timestamps. JSON schemas and operation
+action readiness and indexed heartbeat timestamps. Conditional writes reject equal
+or older source observations. Expiry hides recent observations with a private
+marker until they leave the heartbeat window; fresh observations reactivate the
+record atomically. JSON schemas and operation
 bodies preserve numeric precision; observation times retain sub-millisecond
 precision alongside BSON dates. Executions atomically claim commands and keep
 terminal outcomes immutable. The controller indexes immutable artifact metadata

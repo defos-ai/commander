@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -181,7 +182,7 @@ func TestCompletionClearsOnlyMatchingWork(t *testing.T) {
 			}
 			store := &inventory{}
 			if err := store.Upsert(t.Context(), agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID,
-				Status: agents.AgentWorking, Work: current}, LastSeen: command.CreatedAt}); err != nil {
+				Status: agents.AgentWorking, Work: current}, LastSeen: command.CreatedAt, ObservedAt: command.CreatedAt}); err != nil {
 				t.Fatal(err)
 			}
 			consumer := consumers.CommandResultConsumer{
@@ -201,6 +202,55 @@ func TestCompletionClearsOnlyMatchingWork(t *testing.T) {
 				}
 			} else if record.Status != agents.AgentReady || record.Work != nil {
 				t.Fatalf("completion left finished work in inventory: %+v", record)
+			}
+		})
+	}
+}
+
+func TestDelayedResultsPersistWithoutChangingInventory(t *testing.T) {
+	for _, scenario := range []string{"newer observation", "expired result", "missing agent"} {
+		t.Run(scenario, func(t *testing.T) {
+			command, result, _ := artifactResult(t)
+			if scenario == "expired result" {
+				command.CreatedAt = command.CreatedAt.Add(-2 * time.Hour)
+				result.CreatedAt = result.CreatedAt.Add(-2 * time.Hour)
+			}
+			store := &inventory{}
+			if scenario != "missing agent" {
+				record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Status: agents.AgentUnavailable,
+					Work: &agents.Work{CommandID: command.ID, ActionName: "capture"}},
+					ObservedAt: result.CreatedAt.Add(time.Second), LastSeen: time.Now().UTC()}
+				if scenario == "expired result" {
+					record.ObservedAt = command.CreatedAt
+				}
+				if err := store.Upsert(t.Context(), record); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := store.record.Load()
+			durable := &artifactExecutions{record: executions.Execution{Command: command, StartedAt: command.CreatedAt}}
+			catalog := &artifactCatalog{records: make(map[string]artifacts.Artifact)}
+			bus := artifactBus()
+			consumer := consumers.CommandResultConsumer{Inventory: store, Executions: durable,
+				Artifacts: catalog, Bus: bus, State: state.New(t.Context(), time.Minute)}
+
+			if err := consumer.Consume(t.Context(), result); err != nil {
+				t.Fatal(err)
+			}
+
+			if durable.record.Result == nil || durable.record.Result.ID != result.ID || len(catalog.records) != 2 {
+				t.Fatal("late result or artifacts were lost")
+			}
+			if !reflect.DeepEqual(before, store.record.Load()) {
+				t.Fatalf("late result changed inventory: %+v", store.record.Load())
+			}
+			select {
+			case receipt := <-bus.commands:
+				if receipt.Type != messages.ActionResultAccepted || receipt.CorrelationID != command.ID {
+					t.Fatalf("unexpected receipt: %+v", receipt)
+				}
+			default:
+				t.Fatal("late durable result did not receive acceptance")
 			}
 		})
 	}

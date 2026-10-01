@@ -70,6 +70,19 @@ sends an agent a result receipt only after durable persistence. The agent retrie
 unconfirmed outcomes from its process cache. See the
 [result protocol](messages/README.md#correlation-and-acknowledgements).
 
+## Delayed agent events
+
+Agent inventory applies source observations in timestamp order. Replays cannot
+roll back readiness or current work, and heartbeats renew leases from their
+source time, not arrival time. Lifecycle events older than the heartbeat timeout
+are ignored. Agent and controller clocks must stay synchronized; timestamps more
+than five seconds ahead of the controller are rejected.
+
+Stores briefly retain a hidden ordering marker after lease expiry so delayed
+snapshots cannot recreate older state. A fresh heartbeat can restore the agent.
+Late action results still persist against their execution record and receive
+acceptance, without changing newer inventory.
+
 ## Future broker providers
 
 RabbitMQ is not implemented. A broker provider must implement the declared inbox

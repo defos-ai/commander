@@ -94,6 +94,14 @@ inspection. There is no automatic redelivery, subscription recovery, or dead-let
 queue. Reopening the bus does not replay old commands. See the
 [message-handling guide](../../framework/comms/README.md) for consumer settlement policy.
 
+### Agent observations
+
+`DATABASE_URL/agents/<agent-id>.json` stores the latest source observation.
+Inventory writes and expiry share a file lock: equal or older observations cannot
+replace a saved snapshot. Expired records disappear from queries; a private marker
+remains only while its observation time is within the heartbeat window, then is
+removed. The same file protects ordering across store or controller restarts.
+
 ### Atomic operation records
 
 `DATABASE_URL/operations/<operation-id>.json` is a versioned manifest with a
