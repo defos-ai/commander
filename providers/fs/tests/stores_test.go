@@ -644,3 +644,44 @@ func TestExecutionClaimAndOutcomeRemainStableAcrossReopen(t *testing.T) {
 		t.Fatalf("conflict changed saved execution: %+v, %v", unchanged, err)
 	}
 }
+
+func TestExecutionClaimPreservesOriginalDeadlineAcrossReopen(t *testing.T) {
+	deadline := time.Date(2026, 10, 1, 12, 0, 0, 123456789, time.UTC)
+	for _, tc := range []struct {
+		name      string
+		expiresAt time.Time
+	}{
+		{"no deadline", time.Time{}},
+		{"nanosecond deadline", deadline},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			store, err := executionfs.NewExecutionFsStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			command, err := agentcommands.NewRunAction("review-agent-00000001", actions.ActionCall{ActionName: "inspect", Input: json.RawMessage(`{}`)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			command.ExpiresAt = tc.expiresAt
+			saved, claimed, err := store.Claim(t.Context(), command)
+			if err != nil || !claimed || !reflect.DeepEqual(saved.Command, command) {
+				t.Fatalf("initial claim changed command: %+v, claimed=%t, error=%v", saved, claimed, err)
+			}
+			reopened, err := executionfs.NewExecutionFsStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, suggested := range []time.Time{deadline.Add(time.Hour), time.Time{}, deadline.Add(-time.Hour)} {
+				retry := command
+				retry.CreatedAt = retry.CreatedAt.Add(time.Hour)
+				retry.ExpiresAt = suggested
+				restored, claimed, err := reopened.Claim(t.Context(), retry)
+				if err != nil || claimed || !reflect.DeepEqual(restored, saved) {
+					t.Fatalf("retry with deadline %v changed reservation: %+v, claimed=%t, error=%v", suggested, restored, claimed, err)
+				}
+			}
+		})
+	}
+}

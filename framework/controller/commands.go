@@ -16,6 +16,8 @@ import (
 	"commander/framework/internal/state"
 )
 
+const defaultCommandLifetime = 5 * time.Minute
+
 type CommandFailure = executions.CommandFailure
 
 func (c *Controller) DiscoverActions(ctx context.Context, agentID string, scope *agentmodel.DiscoveryScope) (agentmodel.Agent, error) {
@@ -28,8 +30,9 @@ func (c *Controller) DiscoverActions(ctx context.Context, agentID string, scope 
 }
 
 // RunAction invokes exactly the caller-selected action. Request cancellation ends
-// the wait; an already-published command may still execute. Claims and outcomes
-// remain in the controller database, so reusing a task ID never dispatches again.
+// the wait; an already-published command may still start before its admission
+// deadline. Claims and outcomes remain in the controller database, so reusing a
+// task ID never dispatches again.
 func (c *Controller) RunAction(ctx context.Context, agentID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
 	message, err := agentcommands.NewRunAction(agentID, call)
 	if err != nil {
@@ -65,6 +68,10 @@ func (c *Controller) command(ctx context.Context, message messages.Message, expe
 	}
 	if err := ctx.Err(); err != nil {
 		return state.CommandReply{}, err
+	}
+	message.ExpiresAt, _ = ctx.Deadline()
+	if message.ExpiresAt.IsZero() {
+		message.ExpiresAt = message.CreatedAt.Add(defaultCommandLifetime)
 	}
 	waiting, done := c.inventoryContext(ctx)
 	defer done()

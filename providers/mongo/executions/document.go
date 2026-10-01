@@ -27,13 +27,14 @@ type messageDocument struct {
 	Work          messages.WorkContext `bson:"work"`
 	Payload       json.RawMessage      `bson:"payload"`
 	CreatedAt     bsonvalue.Timestamp  `bson:"created_at"`
+	ExpiresAt     bsonvalue.Timestamp  `bson:"expires_at"`
 }
 
 func encodeMessage(message messages.Message) messageDocument {
 	return messageDocument{
 		ID: message.ID, Type: message.Type, AgentID: message.AgentID, AdapterID: message.AdapterID,
 		CorrelationID: message.CorrelationID, Work: message.Work, Payload: bytes.Clone(message.Payload),
-		CreatedAt: bsonvalue.NewTimestamp(message.CreatedAt),
+		CreatedAt: bsonvalue.NewTimestamp(message.CreatedAt), ExpiresAt: bsonvalue.NewTimestamp(message.ExpiresAt),
 	}
 }
 
@@ -42,9 +43,13 @@ func (d messageDocument) decode() (messages.Message, error) {
 	if err != nil {
 		return messages.Message{}, err
 	}
+	expiresAt, err := d.ExpiresAt.Decode()
+	if err != nil {
+		return messages.Message{}, err
+	}
 	return messages.Message{
 		ID: d.ID, Type: d.Type, AgentID: d.AgentID, AdapterID: d.AdapterID,
-		CorrelationID: d.CorrelationID, Work: d.Work, Payload: bytes.Clone(d.Payload), CreatedAt: createdAt,
+		CorrelationID: d.CorrelationID, Work: d.Work, Payload: bytes.Clone(d.Payload), CreatedAt: createdAt, ExpiresAt: expiresAt,
 	}, nil
 }
 

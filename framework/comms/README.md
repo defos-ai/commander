@@ -70,6 +70,18 @@ sends an agent a result receipt only after durable persistence. The agent retrie
 unconfirmed outcomes from its process cache. See the
 [result protocol](messages/README.md#correlation-and-acknowledgements).
 
+## Command admission deadlines
+
+The controller sets `expires_at` on agent commands from the caller/task deadline,
+with a five-minute start window when no deadline is supplied. An agent reports a
+failure if new action, discovery, or stop work arrives too late. Expiry does not
+cancel work already started.
+
+Action deduplication runs before this check: a completed action replays its saved
+result even after expiry. Recovery preserves the original command and deadline;
+retrying cannot extend them. Hand-built commands with no expiry have no admission
+limit. Host clocks must be synchronized.
+
 ## Delayed agent events
 
 Agent inventory applies source observations in timestamp order. Replays cannot

@@ -21,6 +21,8 @@ type Message struct {
 	Work          WorkContext     `json:"work,omitzero"`
 	Payload       json.RawMessage `json:"payload"`
 	CreatedAt     time.Time       `json:"created_at"`
+	// ExpiresAt limits when new command work may start; completed outcomes can still replay.
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
 }
 
 func NewMessage(kind MessageType, agentID string, payload any) (Message, error) {

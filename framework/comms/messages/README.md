@@ -45,7 +45,10 @@ The `work` snapshot identifies the latest active assignment; it is not work hist
 
 MCP input structs are requests; bus payloads are commands. A `CommandEnvelope`
 contains the method, parameters and deadline. Its outer `Message` supplies delivery
-identity, correlation, sender/destination and timestamps.
+identity, correlation, sender/destination and timestamps. Controller-to-agent
+commands also carry `expires_at`, the latest time new work can start. Saved
+outcomes remain replayable after that time; see
+[admission deadlines](../README.md#command-admission-deadlines).
 
 ## Correlation and acknowledgements
 

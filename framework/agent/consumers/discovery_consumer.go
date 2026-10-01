@@ -21,6 +21,9 @@ func (c DiscoveryConsumer) Consume(ctx context.Context, command messages.Message
 	var payload agentcommands.DiscoverActionsCommand
 	commandErr := domain.Decode(command.Payload, &payload)
 	if commandErr == nil {
+		if err := commandAdmissionError(command); err != nil {
+			return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command, err)
+		}
 		commandErr = c.Runtime.Discover(ctx, payload.Scope)
 	}
 	correlationID := command.ID

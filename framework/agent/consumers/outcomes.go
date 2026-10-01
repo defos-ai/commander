@@ -96,7 +96,7 @@ func (o *Outcomes) claim(ctx context.Context, command messages.Message) (*messag
 		if record, exists := o.records[command.ID]; exists {
 			previous := record.command
 			if previous.Type != command.Type || previous.AgentID != command.AgentID || previous.Work != command.Work ||
-				previous.CorrelationID != command.CorrelationID || !previous.CreatedAt.Equal(command.CreatedAt) || !bytes.Equal(previous.Payload, command.Payload) {
+				previous.CorrelationID != command.CorrelationID || !previous.CreatedAt.Equal(command.CreatedAt) || !previous.ExpiresAt.Equal(command.ExpiresAt) || !bytes.Equal(previous.Payload, command.Payload) {
 				return claim{}, errors.New("command ID already received with different content")
 			}
 			if record.result == nil {

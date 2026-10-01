@@ -25,6 +25,9 @@ func (c StopConsumer) Consume(ctx context.Context, command messages.Message) err
 	if err := domain.Decode(command.Payload, &agentcommands.StopAgentCommand{}); err != nil {
 		return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command, err)
 	}
+	if err := commandAdmissionError(command); err != nil {
+		return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command, err)
+	}
 	c.Logger.Info("stop requested", "command_id", command.ID)
 	draining, cancel := context.WithTimeout(ctx, 5*time.Second)
 	err := c.Outcomes.drain(draining)
@@ -32,6 +35,9 @@ func (c StopConsumer) Consume(ctx context.Context, command messages.Message) err
 	if err != nil {
 		return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command,
 			fmt.Errorf("pending action results were not accepted; agent remains available: %w", err))
+	}
+	if err := commandAdmissionError(command); err != nil {
+		return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command, err)
 	}
 	return c.Runtime.Shutdown(ctx, command.ID)
 }

@@ -43,6 +43,9 @@ func (c ActionConsumer) Consume(ctx context.Context, command messages.Message) e
 	if commandErr == nil && call.Work != command.Work {
 		commandErr = errors.New("command work context does not match payload")
 	}
+	if commandErr == nil {
+		commandErr = commandAdmissionError(command)
+	}
 	var output actionmodel.ActionOutput
 	if commandErr == nil {
 		output, commandErr = c.Runtime.Execute(ctx, call, command.ID)
