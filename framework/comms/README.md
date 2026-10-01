@@ -70,6 +70,21 @@ sends an agent a result receipt only after durable persistence. The agent retrie
 unconfirmed outcomes from its process cache. See the
 [result protocol](messages/README.md#correlation-and-acknowledgements).
 
+## Adapter command replay
+
+The controller retains up to 4,096 running or completed adapter requests in
+memory. Duplicate requests share the original execution and reply. Completed
+replies remain protected until their original deadlines expire; running handlers
+stay tracked until completion even if their contexts have been canceled.
+
+When the ledger is full, new requests wait for space, bounded by their own
+deadlines and consumer shutdown. An expired request with no retained reply gets
+a timeout response without executing. Only completed, expired entries can be
+removed to admit more work. Cancellation messages have a separate consumer.
+
+This protects redelivery within the same controller process. Durable deduplication
+is still required before enabling shared command queues across controller restarts.
+
 ## Command admission deadlines
 
 The controller sets `expires_at` on agent commands from the caller/task deadline,

@@ -130,15 +130,7 @@ func (c *Consumer) consumeRequest(ctx context.Context, coordinator requestCoordi
 	if err := envelope.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
-	claim := requestClaim{ctx: ctx, message: m, deadline: envelope.Deadline, reply: make(chan claimedRequest, 1)}
-	select {
-	case coordinator.claims <- claim:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	// Once registered, the owner must receive a terminal outcome even if the
-	// caller is cancelled before the worker gets its registration result.
-	claimed := <-claim.reply
+	claimed := coordinator.claim(ctx, m, envelope.Deadline)
 	if claimed.err != nil {
 		return claimed.err
 	}

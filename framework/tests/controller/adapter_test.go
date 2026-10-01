@@ -141,8 +141,9 @@ type adapterWork struct {
 }
 type adapterBackend struct {
 	commands.Controller
-	started chan adapterWork
-	calls   atomic.Int64
+	started       chan adapterWork
+	calls         atomic.Int64
+	waitForFinish bool
 }
 
 func (b *adapterBackend) DiscoverActions(ctx context.Context, agentID string, _ *agents.DiscoveryScope) (agents.Agent, error) {
@@ -152,6 +153,9 @@ func (b *adapterBackend) DiscoverActions(ctx context.Context, agentID string, _ 
 	case b.started <- work:
 	case <-ctx.Done():
 		return agents.Agent{}, ctx.Err()
+	}
+	if b.waitForFinish {
+		return <-work.finish, nil
 	}
 	select {
 	case result := <-work.finish:
@@ -191,7 +195,7 @@ func adapterFixture(t *testing.T) (context.Context, *adapterBus, *adapterBackend
 		"controllers.default.commands":              make(chan messages.Message, 32),
 		messages.ControllerCancellations("default"): make(chan messages.Message, 32),
 		messages.AdapterReplies(adapterID):          make(chan messages.Message, 32),
-	}, replies: make(chan messages.Message, 32), acked: make(chan string, 64)}
+	}, replies: make(chan messages.Message, 32), acked: make(chan string, 64), rejected: make(chan string, 64)}
 	backend := &adapterBackend{started: make(chan adapterWork, 16)}
 	consumer, err := adapter.NewConsumer(ctx, bus, "default", controllerID, backend, unusedOperations{}, quietLogger())
 	if err != nil {
@@ -211,6 +215,7 @@ type adapterBus struct {
 	topics    map[string]chan messages.Message
 	replies   chan messages.Message
 	acked     chan string
+	rejected  chan string
 	failReply atomic.Bool
 }
 
@@ -241,30 +246,46 @@ func (b *adapterBus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subs
 	if !exists || inbox.Name != ownerID || inbox.Mode != comms.TransientExclusive {
 		return nil, fmt.Errorf("unexpected inbox configuration: %+v", inbox)
 	}
-	return adapterSubscription{messages: topic, acked: b.acked}, nil
+	return adapterSubscription{messages: topic, acked: b.acked, rejected: b.rejected}, nil
 }
 func (*adapterBus) Close() error { return nil }
 
 type adapterSubscription struct {
 	messages <-chan messages.Message
 	acked    chan<- string
+	rejected chan<- string
 }
 
 func (s adapterSubscription) Next(ctx context.Context) (comms.Delivery, error) {
 	select {
 	case m := <-s.messages:
-		return testDelivery{message: m, onAck: func(ctx context.Context) error {
+		return adapterDelivery{testDelivery: testDelivery{message: m, onAck: func(ctx context.Context) error {
 			select {
 			case s.acked <- m.ID:
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
-		}}, nil
+		}}, rejected: s.rejected}, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
+
+type adapterDelivery struct {
+	testDelivery
+	rejected chan<- string
+}
+
+func (d adapterDelivery) Reject(ctx context.Context) error {
+	select {
+	case d.rejected <- d.message.ID:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (adapterSubscription) Close() error { return nil }
 func quietLogger() *slog.Logger          { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 func publish(t *testing.T, ctx context.Context, bus comms.Bus, topic string, m messages.Message) {
