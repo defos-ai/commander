@@ -37,18 +37,21 @@ type Consumer struct {
 
 // NewConsumer subscribes before returning so a host can advertise readiness
 // only after both commands and cancellation notices have a receiver.
-func NewConsumer(ctx context.Context, bus comms.Bus, controllerType string, controller controllercommands.Controller, operations controllercommands.Operations, logger *slog.Logger) (*Consumer, error) {
+func NewConsumer(ctx context.Context, bus comms.Bus, controllerType, controllerID string, controller controllercommands.Controller, operations controllercommands.Operations, logger *slog.Logger) (*Consumer, error) {
 	if ctx == nil || bus == nil || controller == nil || operations == nil {
 		return nil, errors.New("adapter consumer requires a bus, controller, and operations")
 	}
 	if err := messages.ValidateControllerType(controllerType); err != nil {
 		return nil, err
 	}
-	commands, err := bus.Subscribe(ctx, messages.ControllerCommands(controllerType))
+	if !id.ValidRuntime(controllerID, id.Controller) {
+		return nil, errors.New("adapter consumer requires a valid controller process ID")
+	}
+	commands, err := bus.Subscribe(ctx, comms.Inbox{Topic: messages.ControllerCommands(controllerType), Name: controllerID, Mode: comms.TransientExclusive})
 	if err != nil {
 		return nil, err
 	}
-	cancellations, err := bus.Subscribe(ctx, messages.ControllerCancellations(controllerType))
+	cancellations, err := bus.Subscribe(ctx, comms.Inbox{Topic: messages.ControllerCancellations(controllerType), Name: controllerID, Mode: comms.TransientExclusive})
 	if err != nil {
 		return nil, errors.Join(err, commands.Close())
 	}

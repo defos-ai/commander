@@ -114,12 +114,12 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}
 	}()
 	var err error
-	subscription, err = bus.Subscribe(ctx, messages.AgentCommands(a.ID()))
+	subscription, err = bus.Subscribe(ctx, comms.Inbox{Topic: messages.AgentCommands(a.ID()), Name: a.ID(), Mode: comms.TransientExclusive})
 	if err != nil {
 		return err
 	}
 	consumer.Subscription = subscription
-	eventSubscription, err = bus.Subscribe(ctx, messages.AgentEvents(a.ID()))
+	eventSubscription, err = bus.Subscribe(ctx, comms.Inbox{Topic: messages.AgentEvents(a.ID()), Name: a.ID(), Mode: comms.TransientExclusive})
 	if err != nil {
 		return err
 	}

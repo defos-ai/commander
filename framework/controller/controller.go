@@ -128,7 +128,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		return nil, fmt.Errorf("expire agent leases: %w", err)
 	}
 	lifetime, cancel := context.WithCancelCause(ctx)
-	events, err := bus.Subscribe(lifetime, messages.ControllerEvents(config.Type))
+	events, err := bus.Subscribe(lifetime, comms.Inbox{Topic: messages.ControllerEvents(config.Type), Name: config.ID, Mode: comms.TransientExclusive})
 	if err != nil {
 		cancel(err)
 		return nil, err

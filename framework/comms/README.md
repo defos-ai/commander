@@ -50,10 +50,20 @@ settlement on a handle is harmless; choosing the opposite outcome returns
 
 ## Delivery guarantees
 
-The current `Bus` contract fans out to **current subscribers of an exact topic**.
-It does not define durable queues or competing consumer groups. The FS provider
-retains unsettled and rejected deliveries but does not replay them into a new subscription;
-see [FS behavior](../../providers/fs/README.md).
+`Subscribe(ctx, comms.Inbox{Topic: topic, Name: name, Mode: mode})` opens an inbox.
+Identity is `(Topic, Name)`; different names on the same exact topic receive
+independent copies. All production hosts use their process ID as the name and
+`TransientExclusive` mode.
+
+| Mode | Contract |
+| --- | --- |
+| `TransientExclusive` | One active consumer; closing or losing it ends the inbox. Reopening receives new publications only. |
+| `DurableShared` | Retains work from first declaration through downtime; consumers sharing the inbox compete. Unsettled work can be redelivered and processing order is not guaranteed. |
+
+Only `TransientExclusive` is implemented by FS. `DurableShared` returns
+`ErrUnsupportedInbox`; durable replay and competing consumption are not activated.
+FS retains unsettled and rejected evidence without replaying it into a new
+subscription; see [FS behavior](../../providers/fs/README.md).
 
 Broker acknowledgement and business acceptance are different. The controller
 sends an agent a result receipt only after durable persistence. The agent retries
@@ -62,8 +72,8 @@ unconfirmed outcomes from its process cache. See the
 
 ## Future broker providers
 
-RabbitMQ is not implemented. Adding it needs explicit subscription lifetime,
-competing-consumer behavior, retry/failed-delivery policy and publish confirmation
-semantics. Those changes must preserve controller-owned assignment and result
-acceptance. Connecting a broker alone does not make multiple controllers safe;
+RabbitMQ is not implemented. A broker provider must implement the declared inbox
+modes, retry/failed-delivery policy and publish confirmation semantics while
+preserving controller-owned assignment and result acceptance. Connecting a broker
+alone does not make multiple controllers safe;
 see [current scope](../../docs/overview.md#current-scope).

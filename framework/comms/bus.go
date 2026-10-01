@@ -9,8 +9,10 @@ import (
 )
 
 var (
-	ErrClosed          = errors.New("message bus or subscription is closed")
-	ErrDeliverySettled = errors.New("delivery already settled with a different outcome")
+	ErrClosed           = errors.New("message bus or subscription is closed")
+	ErrDeliverySettled  = errors.New("delivery already settled with a different outcome")
+	ErrInboxInUse       = errors.New("inbox already has an active consumer")
+	ErrUnsupportedInbox = errors.New("inbox mode is not supported by this provider")
 )
 
 // Delivery identifies one received copy independently of Message.ID. Ack confirms
@@ -23,18 +25,20 @@ type Delivery interface {
 	Reject(context.Context) error
 }
 
-// Subscription delivers a subscriber's FIFO stream. Next's context cancels one
-// receive without invalidating earlier deliveries. Close ends delivery without
-// acknowledging outstanding work; retention belongs to the provider.
+// Subscription receives from an inbox. Next's context cancels one receive without
+// invalidating earlier deliveries. Close ends consumption without acknowledging
+// outstanding work or deleting a durable inbox.
 type Subscription interface {
 	Next(context.Context) (Delivery, error)
 	Close() error
 }
 
-// Bus fans messages out to current subscribers of an exact topic. Subscribe's
-// context applies to creation only; Close explicitly ends a subscription.
+// Bus publishes to declared inboxes bound to an exact topic. Different inbox
+// names receive independent copies. Subscribe declares an inbox and attaches a
+// consumer; its context applies to creation only. Providers must reject modes
+// they cannot implement with ErrUnsupportedInbox, never downgrade them.
 type Bus interface {
 	Publish(context.Context, string, messages.Message) error
-	Subscribe(context.Context, string) (Subscription, error)
+	Subscribe(context.Context, Inbox) (Subscription, error)
 	Close() error
 }

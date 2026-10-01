@@ -73,9 +73,17 @@ func (d *fsDelivery) settle(ctx context.Context, outcome fsSettlement) error {
 	defer finish()
 	// Use the topic lock, shared with registration and publication, rather
 	// than a lock on the message file that the last successful ACK removes.
-	err := s.topic.state.View(operation, func([]byte) error {
+	err := s.topic.state.View(operation, func(data []byte) error {
+		state, err := fsDecodeState(data, s.topic.name)
+		if err != nil {
+			return err
+		}
+		if !s.ownsInbox(state, time.Now()) {
+			s.cancel()
+			return comms.ErrClosed
+		}
 		path := fsMessagePath(s.topic.directory, d.sequence)
-		data, err := jsonfile.Read(operation, path)
+		data, err = jsonfile.Read(operation, path)
 		if err != nil {
 			return err
 		}
@@ -144,6 +152,9 @@ func (s *fsSubscription) unregister(ctx context.Context) error {
 			return nil, err
 		}
 		delete(state.Subscribers, s.id)
+		if state.Inboxes[s.inbox] == s.id {
+			delete(state.Inboxes, s.inbox)
+		}
 		return json.Marshal([]fsState{state})
 	})
 	if err != nil {
@@ -172,7 +183,7 @@ func (s *fsSubscription) renewLease() {
 				return nil, err
 			}
 			now := time.Now().UTC()
-			if !state.Subscribers[s.id].After(now) {
+			if !s.ownsInbox(state, now) {
 				// Expiry can leave gaps in the recipient snapshot. Never rejoin a
 				// cursor that may have missed publications while its lease lapsed.
 				return nil, comms.ErrClosed

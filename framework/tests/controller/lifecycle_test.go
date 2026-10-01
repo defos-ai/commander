@@ -134,6 +134,9 @@ func fixture(t *testing.T, timeout time.Duration) (context.Context, *controller.
 			t.Error(err)
 		}
 	})
+	if want := (comms.Inbox{Topic: messages.ControllerEvents(c.Type()), Name: c.ID(), Mode: comms.TransientExclusive}); bus.inbox != want {
+		t.Fatalf("controller event inbox=%+v, want %+v", bus.inbox, want)
+	}
 	bus.observe(t, ctx, controllerevents.AgentStarted, "")
 	return ctx, c, bus, store
 }
@@ -161,6 +164,7 @@ type testBus struct {
 	commands chan messages.Message
 	acked    chan string
 	closed   chan struct{}
+	inbox    comms.Inbox
 }
 
 func (b *testBus) Publish(ctx context.Context, _ string, m messages.Message) error {
@@ -171,7 +175,10 @@ func (b *testBus) Publish(ctx context.Context, _ string, m messages.Message) err
 		return ctx.Err()
 	}
 }
-func (b *testBus) Subscribe(context.Context, string) (comms.Subscription, error) { return b, nil }
+func (b *testBus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subscription, error) {
+	b.inbox = inbox
+	return b, nil
+}
 func (b *testBus) Next(ctx context.Context) (comms.Delivery, error) {
 	select {
 	case m := <-b.events:

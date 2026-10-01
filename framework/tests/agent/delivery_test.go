@@ -120,7 +120,7 @@ func (b *resultBus) Publish(ctx context.Context, _ string, message messages.Mess
 		return ctx.Err()
 	}
 }
-func (*resultBus) Subscribe(context.Context, string) (comms.Subscription, error) {
+func (*resultBus) Subscribe(context.Context, comms.Inbox) (comms.Subscription, error) {
 	return nil, errors.New("subscriptions are unused in this fault test")
 }
 func (*resultBus) Close() error { return nil }

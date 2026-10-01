@@ -23,11 +23,11 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 	publisher, receiver := openTestFsBus(t, root), openTestFsBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	first, err := publisher.Subscribe(ctx, "results")
+	first, err := publisher.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "first", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := receiver.Subscribe(ctx, "results")
+	second, err := receiver.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "second", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestBusDuplicateMessageIDsSettleIndependently(t *testing.T) {
 	bus := openTestFsBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	sub, err := bus.Subscribe(ctx, "results")
+	sub, err := bus.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "receiver", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,11 +115,11 @@ func TestBusSubscribersSettleTheSamePublicationIndependently(t *testing.T) {
 	publisher, receiver := openTestFsBus(t, root), openTestFsBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	first, err := publisher.Subscribe(ctx, "results")
+	first, err := publisher.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "first", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := receiver.Subscribe(ctx, "results")
+	second, err := receiver.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "second", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,6 +353,215 @@ func TestBusDeliveryMessageReturnsAnIndependentSnapshot(t *testing.T) {
 	assertBusSettlement(t, root, false)
 }
 
+func TestBusInboxIsExclusiveAcrossInstancesAndScopedByTopic(t *testing.T) {
+	root := t.TempDir()
+	firstBus, secondBus := openTestFsBus(t, root), openTestFsBus(t, root)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	inbox := comms.Inbox{Topic: "results", Name: "worker", Mode: comms.TransientExclusive}
+	first, err := firstBus.Subscribe(ctx, inbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bus := range []*fscomms.FsBus{firstBus, secondBus} {
+		if duplicate, err := bus.Subscribe(ctx, inbox); !errors.Is(err, comms.ErrInboxInUse) || duplicate != nil {
+			t.Fatalf("duplicate inbox returned %v, %v; want ErrInboxInUse", duplicate, err)
+		}
+	}
+	otherInbox := inbox
+	otherInbox.Topic = "other-results"
+	other, err := secondBus.Subscribe(ctx, otherInbox)
+	if err != nil {
+		t.Fatalf("same inbox name on another topic: %v", err)
+	}
+	firstMessage, otherMessage := testBusMessage(t), testBusMessage(t)
+	if err := secondBus.Publish(ctx, inbox.Topic, firstMessage); err != nil {
+		t.Fatal(err)
+	}
+	if err := firstBus.Publish(ctx, otherInbox.Topic, otherMessage); err != nil {
+		t.Fatal(err)
+	}
+	if err := nextBusDelivery(t, ctx, first, firstMessage).Ack(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := nextBusDelivery(t, ctx, other, otherMessage).Ack(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if records := storedBusMessages(t, root); len(records) != 0 {
+		t.Fatalf("topic-scoped inboxes received another topic's publication: %+v", records)
+	}
+}
+
+func TestBusReopenedInboxStartsAtTailAndRetainsOldDelivery(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		name := "closed"
+		if expired {
+			name = "expired"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			firstBus, secondBus := openTestFsBus(t, root), openTestFsBus(t, root)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			inbox := comms.Inbox{Topic: "results", Name: "worker", Mode: comms.TransientExclusive}
+			old, err := firstBus.Subscribe(ctx, inbox)
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldMessage := testBusMessage(t)
+			if err := firstBus.Publish(ctx, inbox.Topic, oldMessage); err != nil {
+				t.Fatal(err)
+			}
+			oldDelivery := nextBusDelivery(t, ctx, old, oldMessage)
+			before := storedBusMessages(t, root)
+			if len(before) != 1 || len(before[0].Pending) != 1 {
+				t.Fatalf("expected one outstanding delivery: %+v", before)
+			}
+			if expired {
+				expireBusSubscriber(t, root, before[0].Pending[0])
+			} else {
+				if err := old.Close(); err != nil {
+					t.Fatal(err)
+				}
+				if err := firstBus.Publish(ctx, inbox.Topic, testBusMessage(t)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			current, err := secondBus.Subscribe(ctx, inbox)
+			if err != nil {
+				t.Fatalf("reopen inbox after owner %s: %v", name, err)
+			}
+			for _, settle := range []func(context.Context) error{oldDelivery.Ack, oldDelivery.Reject} {
+				if err := settle(ctx); !errors.Is(err, comms.ErrClosed) {
+					t.Fatalf("old outstanding delivery settlement returned %v, want ErrClosed", err)
+				}
+			}
+			if delivery, err := old.Next(ctx); !errors.Is(err, comms.ErrClosed) || delivery != nil {
+				t.Fatalf("old subscription returned %v, %v; want ErrClosed", delivery, err)
+			}
+			if err := old.Close(); err != nil {
+				t.Fatalf("stale subscription close: %v", err)
+			}
+			if duplicate, err := firstBus.Subscribe(ctx, inbox); !errors.Is(err, comms.ErrInboxInUse) || duplicate != nil {
+				t.Fatalf("stale close released successor's ownership: %v, %v", duplicate, err)
+			}
+			fresh := testBusMessage(t)
+			if err := secondBus.Publish(ctx, inbox.Topic, fresh); err != nil {
+				t.Fatal(err)
+			}
+			if err := nextBusDelivery(t, ctx, current, fresh).Ack(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if after := storedBusMessages(t, root); !reflect.DeepEqual(before, after) {
+				t.Fatalf("reopen or new settlement changed old pending evidence: before=%+v, after=%+v", before, after)
+			}
+		})
+	}
+}
+
+func expireBusSubscriber(t *testing.T, root, subscriber string) {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(root, "*", "state.json"))
+	if err != nil || len(paths) != 1 {
+		t.Fatalf("expected one topic state: %v, %v", paths, err)
+	}
+	data, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var records []map[string]json.RawMessage
+	if err := json.Unmarshal(data, &records); err != nil || len(records) != 1 {
+		t.Fatalf("decode topic state: %s, %v", data, err)
+	}
+	var subscribers map[string]time.Time
+	if err := json.Unmarshal(records[0]["subscribers"], &subscribers); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := subscribers[subscriber]; !exists {
+		t.Fatalf("subscriber %s missing from persisted lease state", subscriber)
+	}
+	subscribers[subscriber] = time.Now().UTC().Add(-time.Minute)
+	records[0]["subscribers"], err = json.Marshal(subscribers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths[0], data, 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBusInvalidAndUnsupportedInboxesCreateNoPaths(t *testing.T) {
+	for _, scenario := range []struct {
+		name  string
+		inbox comms.Inbox
+		want  error
+	}{
+		{name: "durable", inbox: comms.Inbox{Topic: "results", Name: "worker", Mode: comms.DurableShared}, want: comms.ErrUnsupportedInbox},
+		{name: "zero", inbox: comms.Inbox{}},
+		{name: "blank_topic", inbox: comms.Inbox{Topic: " ", Name: "worker", Mode: comms.TransientExclusive}},
+		{name: "blank_name", inbox: comms.Inbox{Topic: "results", Name: " ", Mode: comms.TransientExclusive}},
+		{name: "padded_topic", inbox: comms.Inbox{Topic: " results", Name: "worker", Mode: comms.TransientExclusive}},
+		{name: "padded_name", inbox: comms.Inbox{Topic: "results", Name: "worker ", Mode: comms.TransientExclusive}},
+		{name: "invalid_topic", inbox: comms.Inbox{Topic: "\xff", Name: "worker", Mode: comms.TransientExclusive}},
+		{name: "invalid_name", inbox: comms.Inbox{Topic: "results", Name: "\xff", Mode: comms.TransientExclusive}},
+		{name: "missing_mode", inbox: comms.Inbox{Topic: "results", Name: "worker"}},
+		{name: "unknown_mode", inbox: comms.Inbox{Topic: "results", Name: "worker", Mode: "unknown"}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			parent := t.TempDir()
+			bus := openTestFsBus(t, filepath.Join(parent, "bus"))
+			if scenario.want != nil {
+				if err := scenario.inbox.Validate(); err != nil {
+					t.Fatalf("unsupported inbox must otherwise be valid: %v", err)
+				}
+			}
+			sub, err := bus.Subscribe(t.Context(), scenario.inbox)
+			if err == nil || sub != nil || (scenario.want != nil && !errors.Is(err, scenario.want)) {
+				t.Fatalf("invalid or unsupported inbox returned %v, %v; want %v", sub, err, scenario.want)
+			}
+			entries, err := os.ReadDir(parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("rejected inbox created filesystem paths: %v", entries)
+			}
+		})
+	}
+}
+
+func TestBusInvalidPublishTopicsCreateNoPaths(t *testing.T) {
+	for _, scenario := range []struct {
+		name  string
+		topic string
+	}{
+		{name: "empty"},
+		{name: "blank", topic: " "},
+		{name: "leading_whitespace", topic: " results"},
+		{name: "trailing_whitespace", topic: "results "},
+		{name: "invalid_utf8", topic: "\xff"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			parent := t.TempDir()
+			bus := openTestFsBus(t, filepath.Join(parent, "bus"))
+			if err := bus.Publish(t.Context(), scenario.topic, testBusMessage(t)); err == nil {
+				t.Fatal("invalid publication topic was accepted")
+			}
+			entries, err := os.ReadDir(parent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("invalid publication topic created filesystem paths: %v", entries)
+			}
+		})
+	}
+}
+
 func openTestFsBus(t *testing.T, root string) *fscomms.FsBus {
 	t.Helper()
 	bus, err := fscomms.NewFsBus(root)
@@ -394,7 +603,7 @@ func pendingBusDelivery(t *testing.T) (string, comms.Delivery, comms.Subscriptio
 	bus := openTestFsBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	sub, err := bus.Subscribe(ctx, "results")
+	sub, err := bus.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "receiver", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}

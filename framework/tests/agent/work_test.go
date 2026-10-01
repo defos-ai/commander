@@ -144,14 +144,17 @@ type workBus struct {
 	commands chan messages.Message
 }
 
-func (b *workBus) Subscribe(_ context.Context, topic string) (comms.Subscription, error) {
-	switch topic {
+func (b *workBus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subscription, error) {
+	if inbox.Name != b.agentID || inbox.Mode != comms.TransientExclusive {
+		return nil, errors.New("agent inbox must be transient and owned by its process ID")
+	}
+	switch inbox.Topic {
 	case "agents." + b.agentID + ".commands":
 		return workSubscription{commands: b.commands}, nil
 	case "agents." + b.agentID + ".events":
 		return idleSubscription{}, nil
 	default:
-		return nil, errors.New("unexpected agent destination: " + topic)
+		return nil, errors.New("unexpected agent destination: " + inbox.Topic)
 	}
 }
 

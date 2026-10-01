@@ -40,7 +40,7 @@ func NewClient(ctx context.Context, bus comms.Bus, adapterID string, logger *slo
 	if !id.ValidRuntime(adapterID, id.Adapter) {
 		return nil, errors.New("controller client requires a valid adapter ID")
 	}
-	subscription, err := bus.Subscribe(ctx, messages.AdapterReplies(adapterID))
+	subscription, err := bus.Subscribe(ctx, comms.Inbox{Topic: messages.AdapterReplies(adapterID), Name: adapterID, Mode: comms.TransientExclusive})
 	if err != nil {
 		return nil, err
 	}

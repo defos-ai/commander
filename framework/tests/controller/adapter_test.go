@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"reflect"
@@ -20,6 +21,7 @@ import (
 )
 
 const adapterID = "fixture-adapter-00000001"
+const controllerID = "default-controller-00000001"
 
 func TestControllerClientCorrelatesRepliesAndCancelsIndependently(t *testing.T) {
 	ctx, bus, backend, consumer := adapterFixture(t)
@@ -191,7 +193,7 @@ func adapterFixture(t *testing.T) (context.Context, *adapterBus, *adapterBackend
 		messages.AdapterReplies(adapterID):          make(chan messages.Message, 32),
 	}, replies: make(chan messages.Message, 32), acked: make(chan string, 64)}
 	backend := &adapterBackend{started: make(chan adapterWork, 16)}
-	consumer, err := adapter.NewConsumer(ctx, bus, "default", backend, unusedOperations{}, quietLogger())
+	consumer, err := adapter.NewConsumer(ctx, bus, "default", controllerID, backend, unusedOperations{}, quietLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,8 +232,16 @@ func (b *adapterBus) Publish(ctx context.Context, topic string, m messages.Messa
 		return ctx.Err()
 	}
 }
-func (b *adapterBus) Subscribe(_ context.Context, topic string) (comms.Subscription, error) {
-	return adapterSubscription{messages: b.topics[topic], acked: b.acked}, nil
+func (b *adapterBus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subscription, error) {
+	ownerID := controllerID
+	if inbox.Topic == messages.AdapterReplies(adapterID) {
+		ownerID = adapterID
+	}
+	topic, exists := b.topics[inbox.Topic]
+	if !exists || inbox.Name != ownerID || inbox.Mode != comms.TransientExclusive {
+		return nil, fmt.Errorf("unexpected inbox configuration: %+v", inbox)
+	}
+	return adapterSubscription{messages: topic, acked: b.acked}, nil
 }
 func (*adapterBus) Close() error { return nil }
 

@@ -32,9 +32,10 @@ const (
 	fsCloseTimeout  = time.Second
 )
 
-// FsBus fans out exact-topic messages through a shared filesystem directory.
-// Subscribers start at the committed tail and maintain independent live cursors;
-// reopening a bus never replays old commands. Instances and processes serialize
+// FsBus fans out exact-topic messages to distinct named transient inboxes.
+// Each inbox has one live owner. Subscribers start at the committed tail with
+// independent live cursors. Reopening a bus never replays old commands.
+// Instances and processes serialize
 // publication through file locks. Next reads only a small counter and the next
 // message, polling every 10ms when caught up.
 //
@@ -65,6 +66,7 @@ type fsState struct {
 	Topic       string               `json:"topic"`
 	Sequence    uint64               `json:"sequence"`
 	Subscribers map[string]time.Time `json:"subscribers,omitempty"`
+	Inboxes     map[string]string    `json:"inboxes,omitempty"`
 }
 
 type fsMessage struct {
@@ -83,6 +85,7 @@ type fsSubscription struct {
 	gate         chan struct{}
 	cursor       uint64 // protected by gate
 	id           string
+	inbox        string
 	closeMu      sync.Mutex
 	unregistered bool
 }
@@ -137,13 +140,9 @@ func (b *FsBus) Publish(ctx context.Context, topic string, message messages.Mess
 			return nil, errors.New("filesystem topic sequence is exhausted")
 		}
 		state.Sequence++
+		state.pruneExpired(time.Now())
 		pending := make([]string, 0, len(state.Subscribers))
-		now := time.Now()
-		for subscriber, expiry := range state.Subscribers {
-			if !expiry.After(now) {
-				delete(state.Subscribers, subscriber)
-				continue
-			}
+		for subscriber := range state.Subscribers {
 			pending = append(pending, subscriber)
 		}
 		slices.Sort(pending)
@@ -164,10 +163,17 @@ func (b *FsBus) Publish(ctx context.Context, topic string, message messages.Mess
 	return fsOperationError(ctx, b.ctx, err)
 }
 
-func (b *FsBus) Subscribe(ctx context.Context, topic string) (comms.Subscription, error) {
-	if err := fsValidateTopic(ctx, topic); err != nil {
+func (b *FsBus) Subscribe(ctx context.Context, inbox comms.Inbox) (comms.Subscription, error) {
+	if err := fsValidateTopic(ctx, inbox.Topic); err != nil {
 		return nil, err
 	}
+	if err := inbox.Validate(); err != nil {
+		return nil, err
+	}
+	if inbox.Mode != comms.TransientExclusive {
+		return nil, fmt.Errorf("%w: filesystem bus supports only transient-exclusive inboxes", comms.ErrUnsupportedInbox)
+	}
+	topic := inbox.Topic
 	operation, finish := fsOperationContext(ctx, b.ctx)
 	defer finish()
 	queue, err := b.openTopic(operation, topic)
@@ -183,24 +189,35 @@ func (b *FsBus) Subscribe(ctx context.Context, topic string) (comms.Subscription
 		return nil, comms.ErrClosed
 	}
 	lifetime, cancel := context.WithCancel(b.ctx)
-	s := &fsSubscription{bus: b, topic: queue, ctx: lifetime, cancel: cancel, gate: make(chan struct{}, 1), id: id.New()}
+	s := &fsSubscription{bus: b, topic: queue, ctx: lifetime, cancel: cancel, gate: make(chan struct{}, 1), id: id.New(), inbox: inbox.Name}
 	err = queue.state.Update(operation, func(data []byte) ([]byte, error) {
 		state, err := fsDecodeState(data, topic)
 		if err != nil {
 			return nil, err
 		}
+		now := time.Now().UTC()
+		state.pruneExpired(now)
+		if _, occupied := state.Inboxes[inbox.Name]; occupied {
+			return nil, comms.ErrInboxInUse
+		}
 		s.cursor = state.Sequence
 		if state.Subscribers == nil {
 			state.Subscribers = make(map[string]time.Time)
 		}
-		state.Subscribers[s.id] = time.Now().UTC().Add(fsLeaseLifetime)
+		if state.Inboxes == nil {
+			state.Inboxes = make(map[string]string)
+		}
+		state.Subscribers[s.id] = now.Add(fsLeaseLifetime)
+		state.Inboxes[inbox.Name] = s.id
 		return json.Marshal([]fsState{state})
 	})
 	if err != nil {
 		cancel()
-		// A failed directory sync can follow a committed registration. Keeping
-		// this entry lets Close retry cleanup; its lease also expires unaided.
-		b.subs[s] = struct{}{}
+		// Only an uncertain publication may have registered this generation.
+		// Retain it so Close can clean up without removing a successor's claim.
+		if errors.Is(err, jsonfile.ErrWriteUncertain) {
+			b.subs[s] = struct{}{}
+		}
 		return nil, fsOperationError(ctx, b.ctx, err)
 	}
 	b.subs[s] = struct{}{}
@@ -289,7 +306,7 @@ func (s *fsSubscription) readNext(ctx context.Context) (messages.Message, bool, 
 	if err != nil {
 		return messages.Message{}, false, err
 	}
-	if !state.Subscribers[s.id].After(time.Now()) {
+	if !s.ownsInbox(state, time.Now()) {
 		s.cancel()
 		return messages.Message{}, false, comms.ErrClosed
 	}
@@ -359,7 +376,30 @@ func fsDecodeState(data []byte, topic string) (fsState, error) {
 			return fsState{}, errors.New("filesystem queue has invalid subscriber lease")
 		}
 	}
+	for name, subscriber := range records[0].Inboxes {
+		inbox := comms.Inbox{Topic: topic, Name: name, Mode: comms.TransientExclusive}
+		if inbox.Validate() != nil || !id.Valid(subscriber) {
+			return fsState{}, errors.New("filesystem queue has invalid inbox ownership")
+		}
+	}
 	return records[0], nil
+}
+
+func (state *fsState) pruneExpired(now time.Time) {
+	for subscriber, expiry := range state.Subscribers {
+		if !expiry.After(now) {
+			delete(state.Subscribers, subscriber)
+		}
+	}
+	for name, subscriber := range state.Inboxes {
+		if _, live := state.Subscribers[subscriber]; !live {
+			delete(state.Inboxes, name)
+		}
+	}
+}
+
+func (s *fsSubscription) ownsInbox(state fsState, now time.Time) bool {
+	return state.Inboxes[s.inbox] == s.id && state.Subscribers[s.id].After(now)
 }
 
 func fsDecode(data []byte, value any) error {
@@ -456,8 +496,8 @@ func fsValidateTopic(ctx context.Context, topic string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if strings.TrimSpace(topic) == "" || !utf8.ValidString(topic) {
-		return errors.New("topic must be nonblank UTF-8 text")
+	if topic == "" || topic != strings.TrimSpace(topic) || !utf8.ValidString(topic) {
+		return errors.New("topic must be nonblank UTF-8 text without surrounding whitespace")
 	}
 	return nil
 }

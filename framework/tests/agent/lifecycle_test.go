@@ -197,7 +197,7 @@ func (b *announcementBus) Publish(ctx context.Context, _ string, message message
 		return ctx.Err()
 	}
 }
-func (*announcementBus) Subscribe(context.Context, string) (comms.Subscription, error) {
+func (*announcementBus) Subscribe(context.Context, comms.Inbox) (comms.Subscription, error) {
 	return idleSubscription{}, nil
 }
 func (*announcementBus) Close() error { return nil }

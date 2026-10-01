@@ -95,7 +95,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	}()
 	commandCtx, cancelCommands := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelCommands()
-	commands, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination, execution, logger)
+	commands, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination.ID(), coordination, execution, logger)
 	if err != nil {
 		return err
 	}

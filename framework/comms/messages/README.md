@@ -23,7 +23,9 @@ Comms selects the default controller route for adapters and agents.
 | Agent → controller | `controllers.default.events` | Lifecycle events, `action.succeeded`, `command.failed` |
 
 Destination names follow [`routing.go`](routing.go), including
-`ControllerCommands(controllerType)` and `AgentEvents(agentID)`.
+`ControllerCommands(controllerType)` and `AgentEvents(agentID)`. Current inboxes
+use `TransientExclusive` mode and the receiving process ID as their name, scoped
+to the destination topic. See [inbox lifetimes](../README.md#delivery-guarantees).
 The RabbitMQ provider is not implemented.
 
 ## Payloads

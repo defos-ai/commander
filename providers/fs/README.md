@@ -72,11 +72,17 @@ and framework/app checks.
 
 ### Delivery and recovery
 
-Subscriptions start at the current topic tail and must be live before messages
-are published. Each has its own cursor. `Next` returns a delivery handle with
-`Message()`, `Ack(ctx)` and `Reject(ctx)`. Each publication settles independently,
-including copies sharing a message ID. A message file is deleted only after all
-subscriptions registered at publication acknowledge their delivery.
+FS supports only `comms.TransientExclusive` inboxes. Requesting `DurableShared`
+returns `comms.ErrUnsupportedInbox`. Inbox identity is `(Topic, Name)`; a second
+active owner receives `comms.ErrInboxInUse`. Distinct names on the same topic
+receive independent copies.
+
+Subscriptions start at the current topic tail and must be live before publication.
+Closing or losing the owner ends the inbox; reopening its name starts fresh.
+`Next` returns a delivery handle with `Message()`, `Ack(ctx)` and `Reject(ctx)`.
+Each publication settles independently, including copies sharing a message ID.
+A message file is deleted only after all subscriptions registered at publication
+acknowledge their delivery.
 
 Rejecting a delivery retains its file as evidence without requeueing it. Repeating
 the same settlement on a handle is harmless; the opposite settlement returns
