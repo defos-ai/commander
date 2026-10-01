@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// ErrInvalidMessage marks rejected input. Consumers can retain it while allowing
+// ErrInvalidMessage marks rejected input. Consumers can reject it while allowing
 // other messages to proceed. Persistence and transport failures remain distinct.
 var ErrInvalidMessage = errors.New("invalid message")
 

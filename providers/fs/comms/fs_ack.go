@@ -10,94 +10,125 @@ import (
 	"time"
 
 	"commander/framework/comms"
+	"commander/framework/comms/messages"
 	"commander/providers/fs/internal/jsonfile"
 )
 
-func (s *fsSubscription) Ack(ctx context.Context, messageID string) error {
+type fsSettlement uint8
+
+const (
+	fsUnsettled fsSettlement = iota
+	fsAcknowledged
+	fsRejected
+)
+
+type fsDelivery struct {
+	subscription *fsSubscription
+	sequence     uint64
+	message      messages.Message
+	gate         chan struct{}
+	settlement   fsSettlement // protected by gate
+	durable      bool         // protected by gate
+}
+
+var _ comms.Delivery = (*fsDelivery)(nil)
+
+func (d *fsDelivery) Message() messages.Message {
+	message := d.message
+	message.Payload = slices.Clone(message.Payload)
+	return message
+}
+
+func (d *fsDelivery) Ack(ctx context.Context) error { return d.settle(ctx, fsAcknowledged) }
+
+func (d *fsDelivery) Reject(ctx context.Context) error { return d.settle(ctx, fsRejected) }
+
+func (d *fsDelivery) settle(ctx context.Context, outcome fsSettlement) error {
 	if ctx == nil {
-		return errors.New("message acknowledgement requires a context")
+		return errors.New("delivery settlement requires a context")
 	}
-	operation, finish := fsOperationContext(ctx, s.ctx)
-	defer finish()
 	select {
-	case s.ackGate <- struct{}{}:
-		defer func() { <-s.ackGate }()
-	case <-operation.Done():
-		return fsOperationError(ctx, s.ctx, operation.Err())
+	case d.gate <- struct{}{}:
+		defer func() { <-d.gate }()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	if err := operation.Err(); err != nil {
-		return fsOperationError(ctx, s.ctx, err)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	s.ackMu.Lock()
-	sequences, delivered := s.delivered[messageID]
-	sequences = slices.Clone(sequences)
-	acknowledged := s.acknowledged.Contains(messageID)
-	s.ackMu.Unlock()
-	if !delivered {
-		if acknowledged {
+	if d.settlement != fsUnsettled {
+		if d.settlement != outcome {
+			return comms.ErrDeliverySettled
+		}
+		if d.durable {
 			return nil
 		}
-		return comms.ErrNotDelivered
+		// A failed directory sync does not undo publication. Retry only the
+		// durability check, even if the subscription has since closed.
+		return d.syncSettlement()
 	}
-	for _, sequence := range sequences {
-		// Use the topic lock, shared with registration and publication, rather
-		// than a lock on the message file that the final ACK will remove.
-		err := s.topic.state.View(operation, func([]byte) error {
-			path := fsMessagePath(s.topic.directory, sequence)
-			data, err := jsonfile.Read(operation, path)
+
+	s := d.subscription
+	operation, finish := fsOperationContext(ctx, s.ctx)
+	defer finish()
+	// Use the topic lock, shared with registration and publication, rather
+	// than a lock on the message file that the last successful ACK removes.
+	err := s.topic.state.View(operation, func([]byte) error {
+		path := fsMessagePath(s.topic.directory, d.sequence)
+		data, err := jsonfile.Read(operation, path)
+		if err != nil {
+			return err
+		}
+		var records []fsMessage
+		if err := fsDecode(data, &records); err != nil {
+			return err
+		}
+		if len(records) != 1 || records[0].Sequence != d.sequence || records[0].Topic != s.topic.name {
+			return errors.New("delivery does not match stored message")
+		}
+		record := records[0]
+		if !slices.Contains(record.Pending, s.id) {
+			return errors.New("delivery has no pending recipient")
+		}
+		record.Pending = slices.DeleteFunc(record.Pending, func(recipient string) bool { return recipient == s.id })
+		if outcome == fsRejected {
+			record.Rejected = append(record.Rejected, s.id)
+			slices.Sort(record.Rejected)
+		}
+		if len(record.Pending) == 0 && len(record.Rejected) == 0 {
+			if err := operation.Err(); err != nil {
+				return err
+			}
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("remove acknowledged message: %w", err)
+			}
+		} else {
+			data, err := json.Marshal([]fsMessage{record})
 			if err != nil {
 				return err
 			}
-			var records []fsMessage
-			if err := fsDecode(data, &records); err != nil {
+			if err := fsReplaceMessage(operation, s.topic.directory, d.sequence, data); err != nil {
 				return err
 			}
-			if len(records) != 1 || records[0].Sequence != sequence || records[0].Topic != s.topic.name || records[0].Message.ID != messageID {
-				return errors.New("acknowledgement does not match stored message")
-			}
-			record := records[0]
-			removed := false
-			if len(record.Pending) == 0 {
-				return errors.New("message has no recipient metadata")
-			}
-			record.Pending = slices.DeleteFunc(record.Pending, func(recipient string) bool { return recipient == s.id })
-			if len(record.Pending) == 0 {
-				if err := operation.Err(); err != nil {
-					return err
-				}
-				if err := os.Remove(path); err != nil {
-					return fmt.Errorf("remove acknowledged message: %w", err)
-				}
-				removed = true
-			} else {
-				data, err := json.Marshal([]fsMessage{record})
-				if err != nil {
-					return err
-				}
-				if err := fsWriteMessage(operation, s.topic.directory, sequence, data); err != nil {
-					return err
-				}
-			}
-			// Remember each committed ACK before View checks cancellation. A retry
-			// then succeeds even if the final recipient already deleted the file.
-			s.ackMu.Lock()
-			remaining := slices.DeleteFunc(s.delivered[messageID], func(value uint64) bool { return value == sequence })
-			if len(remaining) == 0 {
-				delete(s.delivered, messageID)
-				s.acknowledged.Remember(messageID)
-			} else {
-				s.delivered[messageID] = remaining
-			}
-			s.ackMu.Unlock()
-			if removed {
-				return fsSyncDirectory(s.topic.directory)
-			}
-			return nil
-		})
-		if err != nil {
-			return fsOperationError(ctx, s.ctx, err)
 		}
+		// Remember the outcome immediately after rename/removal. A cancellation
+		// or sync failure must never allow an opposite settlement afterward.
+		d.settlement = outcome
+		return d.syncSettlement()
+	})
+	if d.durable {
+		// View checks cancellation after its callback; a committed, synced
+		// settlement remains successful if cancellation races that final check.
+		return nil
 	}
+	return fsOperationError(ctx, s.ctx, err)
+}
+
+func (d *fsDelivery) syncSettlement() error {
+	if err := fsSyncDirectory(d.subscription.topic.directory); err != nil {
+		return err
+	}
+	d.durable = true
 	return nil
 }
 

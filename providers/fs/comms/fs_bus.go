@@ -22,7 +22,6 @@ import (
 	"commander/framework/comms"
 	"commander/framework/comms/messages"
 	"commander/framework/id"
-	"commander/providers/fs/internal/ackhistory"
 	"commander/providers/fs/internal/jsonfile"
 )
 
@@ -41,8 +40,9 @@ const (
 //
 // Next advances a live cursor without acknowledging processing. A message file
 // is removed only after all subscriptions registered at publication acknowledge
-// it. Closing or losing a subscription retains its unacknowledged files; there
-// is no redelivery or subscription recovery. Hosts may inspect/clean retained
+// it. Reject retains the file as evidence after settling that delivery. Closing
+// or losing a subscription retains its unacknowledged files; there is no
+// redelivery or subscription recovery. Hosts may inspect/clean retained
 // failures while the bus is offline. Independently renewed subscriber leases
 // keep crashed processes out of future publications after at most one minute.
 // Interrupted publication may leave an uncommitted message file, which is
@@ -72,6 +72,7 @@ type fsMessage struct {
 	Sequence uint64           `json:"sequence"`
 	Message  messages.Message `json:"message"`
 	Pending  []string         `json:"pending"`
+	Rejected []string         `json:"rejected,omitempty"`
 }
 
 type fsSubscription struct {
@@ -82,10 +83,6 @@ type fsSubscription struct {
 	gate         chan struct{}
 	cursor       uint64 // protected by gate
 	id           string
-	ackMu        sync.Mutex
-	ackGate      chan struct{}
-	delivered    map[string][]uint64
-	acknowledged ackhistory.History
 	closeMu      sync.Mutex
 	unregistered bool
 }
@@ -186,7 +183,7 @@ func (b *FsBus) Subscribe(ctx context.Context, topic string) (comms.Subscription
 		return nil, comms.ErrClosed
 	}
 	lifetime, cancel := context.WithCancel(b.ctx)
-	s := &fsSubscription{bus: b, topic: queue, ctx: lifetime, cancel: cancel, gate: make(chan struct{}, 1), ackGate: make(chan struct{}, 1), id: id.New(), delivered: make(map[string][]uint64)}
+	s := &fsSubscription{bus: b, topic: queue, ctx: lifetime, cancel: cancel, gate: make(chan struct{}, 1), id: id.New()}
 	err = queue.state.Update(operation, func(data []byte) ([]byte, error) {
 		state, err := fsDecodeState(data, topic)
 		if err != nil {
@@ -240,9 +237,9 @@ func (s *fsSubscription) Close() error {
 	return s.unregister(ctx)
 }
 
-func (s *fsSubscription) Next(ctx context.Context) (messages.Message, error) {
+func (s *fsSubscription) Next(ctx context.Context) (comms.Delivery, error) {
 	if ctx == nil {
-		return messages.Message{}, errors.New("filesystem bus requires a context")
+		return nil, errors.New("filesystem bus requires a context")
 	}
 	operation, finish := fsOperationContext(ctx, s.ctx)
 	defer finish()
@@ -250,31 +247,28 @@ func (s *fsSubscription) Next(ctx context.Context) (messages.Message, error) {
 	case s.gate <- struct{}{}:
 		defer func() { <-s.gate }()
 	case <-operation.Done():
-		return messages.Message{}, fsOperationError(ctx, s.ctx, operation.Err())
+		return nil, fsOperationError(ctx, s.ctx, operation.Err())
 	}
 	for {
 		if err := operation.Err(); err != nil {
-			return messages.Message{}, fsOperationError(ctx, s.ctx, err)
+			return nil, fsOperationError(ctx, s.ctx, err)
 		}
 		message, available, err := s.readNext(operation)
 		if err != nil {
-			return messages.Message{}, fsOperationError(ctx, s.ctx, err)
+			return nil, fsOperationError(ctx, s.ctx, err)
 		}
 		if available {
 			if err := operation.Err(); err != nil {
-				return messages.Message{}, fsOperationError(ctx, s.ctx, err)
+				return nil, fsOperationError(ctx, s.ctx, err)
 			}
 			s.cursor++
-			s.ackMu.Lock()
-			s.delivered[message.ID] = append(s.delivered[message.ID], s.cursor)
-			s.ackMu.Unlock()
-			return message, nil
+			return &fsDelivery{subscription: s, sequence: s.cursor, message: message, gate: make(chan struct{}, 1)}, nil
 		}
 		timer := time.NewTimer(fsPollInterval)
 		select {
 		case <-operation.Done():
 			timer.Stop()
-			return messages.Message{}, fsOperationError(ctx, s.ctx, operation.Err())
+			return nil, fsOperationError(ctx, s.ctx, operation.Err())
 		case <-timer.C:
 		}
 	}
@@ -381,6 +375,15 @@ func fsDecode(data []byte, value any) error {
 }
 
 func fsWriteMessage(ctx context.Context, directory string, sequence uint64, data []byte) error {
+	if err := fsReplaceMessage(ctx, directory, sequence, data); err != nil {
+		return err
+	}
+	return fsSyncDirectory(directory)
+}
+
+// fsReplaceMessage returns after publication so delivery settlement can remember
+// the committed outcome even if the following directory sync fails.
+func fsReplaceMessage(ctx context.Context, directory string, sequence uint64, data []byte) error {
 	file, err := os.CreateTemp(directory, ".message-*.tmp")
 	if err != nil {
 		return err
@@ -410,10 +413,7 @@ func fsWriteMessage(ctx context.Context, directory string, sequence uint64, data
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := os.Rename(file.Name(), fsMessagePath(directory, sequence)); err != nil {
-		return err
-	}
-	return fsSyncDirectory(directory)
+	return os.Rename(file.Name(), fsMessagePath(directory, sequence))
 }
 
 func fsSyncDirectory(directory string) error {

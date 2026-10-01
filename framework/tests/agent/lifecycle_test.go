@@ -204,12 +204,11 @@ func (*announcementBus) Close() error { return nil }
 
 type idleSubscription struct{}
 
-func (idleSubscription) Next(ctx context.Context) (messages.Message, error) {
+func (idleSubscription) Next(ctx context.Context) (comms.Delivery, error) {
 	<-ctx.Done()
-	return messages.Message{}, ctx.Err()
+	return nil, ctx.Err()
 }
-func (idleSubscription) Ack(context.Context, string) error { return nil }
-func (idleSubscription) Close() error                      { return nil }
+func (idleSubscription) Close() error { return nil }
 
 func nextAnnouncement(t *testing.T, ctx context.Context, bus *announcementBus) announcement {
 	t.Helper()

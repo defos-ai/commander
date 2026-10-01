@@ -23,12 +23,12 @@ type Consumer struct {
 
 	// Concurrency bounds simultaneous handlers. Zero or one preserves FIFO
 	// processing. Higher values require concurrency-safe handlers. Callbacks remain
-	// serialized; copies of one ID are acknowledged only after all have succeeded.
+	// serialized; each delivery is settled independently.
 	Concurrency int
 
-	// ContinueOnError allows consumption to continue after a handler fails.
-	// The failed delivery remains unacknowledged. Receive, ACK and cancellation
-	// errors always end consumption. By default, handler errors do too.
+	// ContinueOnError allows consumption to continue after rejecting a failed
+	// delivery. Receive, settlement and cancellation errors always end consumption.
+	// By default, handler errors do too.
 	ContinueOnError func(messages.Message, error) bool
 
 	// AfterAck runs after successful acknowledgement. Use it for local bookkeeping;
@@ -53,39 +53,42 @@ func (c Consumer) Consume(ctx context.Context, handler Handler) error {
 		if err := context.Cause(ctx); err != nil {
 			return err
 		}
-		message, err := c.Subscription.Next(ctx)
+		delivery, err := c.Subscription.Next(ctx)
 		if err != nil {
 			if cause := context.Cause(ctx); cause != nil {
 				return cause
 			}
 			return err
 		}
-		if err := c.consumeMessage(ctx, message, handler, logger); err != nil {
+		if err := context.Cause(ctx); err != nil {
+			return err
+		}
+		message := delivery.Message()
+		consumerMessageLogger(logger, message).DebugContext(ctx, "message received")
+		if err := c.settle(ctx, delivery, handler(ctx, message), logger); err != nil {
 			return err
 		}
 	}
 }
 
-func (c Consumer) consumeMessage(ctx context.Context, message messages.Message, handler Handler, logger *slog.Logger) error {
+func (c Consumer) settle(ctx context.Context, delivery Delivery, handlerErr error, logger *slog.Logger) error {
 	if err := context.Cause(ctx); err != nil {
 		return err
 	}
+	message := delivery.Message()
 	messageLogger := consumerMessageLogger(logger, message)
-	messageLogger.DebugContext(ctx, "message received")
-	if err := handler(ctx, message); err != nil {
-		messageLogger.ErrorContext(ctx, "message rejected; delivery retained", "error_type", fmt.Sprintf("%T", err))
-		if cause := context.Cause(ctx); cause != nil {
-			return cause
+	if handlerErr != nil {
+		if err := delivery.Reject(ctx); err != nil {
+			messageLogger.ErrorContext(ctx, "message rejection failed", "error_type", fmt.Sprintf("%T", err))
+			return errors.Join(handlerErr, fmt.Errorf("reject delivery: %w", err))
 		}
-		if c.ContinueOnError != nil && c.ContinueOnError(message, err) {
+		messageLogger.ErrorContext(ctx, "message rejected", "error_type", fmt.Sprintf("%T", handlerErr))
+		if c.ContinueOnError != nil && c.ContinueOnError(message, handlerErr) {
 			return nil
 		}
-		return err
+		return handlerErr
 	}
-	if err := context.Cause(ctx); err != nil {
-		return err
-	}
-	if err := c.Subscription.Ack(ctx, message.ID); err != nil {
+	if err := delivery.Ack(ctx); err != nil {
 		messageLogger.ErrorContext(ctx, "message acknowledgement failed", "error_type", fmt.Sprintf("%T", err))
 		return err
 	}
@@ -104,125 +107,50 @@ func (c Consumer) consumeConcurrent(ctx context.Context, handler Handler, logger
 		workers.Wait()
 	}()
 	type outcome struct {
-		message messages.Message
-		err     error
+		delivery Delivery
+		err      error
 	}
-	type group struct {
-		pending  int
-		rejected bool
-		done     []messages.Message
-	}
-	groups := make(map[string]*group)
 	completed := make(chan outcome, c.Concurrency)
 	var receiving chan outcome
-	var stopReceive context.CancelFunc
 	unsettled := 0
-
-	// Registration belongs to the coordinator. Next may return a delivery even
-	// as its receive context is cancelled; that copy must count before any ACK.
-	accept := func(next outcome) error {
-		if err := context.Cause(ctx); err != nil {
-			return err
-		}
-		if next.err != nil {
-			return next.err
-		}
-		message := next.message
-		g := groups[message.ID]
-		if g == nil {
-			g = &group{}
-			groups[message.ID] = g
-		}
-		g.pending++
-		unsettled++
-		consumerMessageLogger(logger, message).DebugContext(ctx, "message received")
-		workers.Go(func() {
-			err := context.Cause(ctx)
-			if err == nil {
-				err = handler(ctx, message)
-			}
-			completed <- outcome{message, err}
-		})
-		return nil
-	}
 	for {
 		if err := context.Cause(ctx); err != nil {
 			return err
 		}
 		if receiving == nil && unsettled < c.Concurrency {
-			receiveCtx, stop := context.WithCancel(ctx)
-			stopReceive = stop
 			next := make(chan outcome, 1)
 			receiving = next
 			workers.Go(func() {
-				message, err := c.Subscription.Next(receiveCtx)
-				next <- outcome{message, err}
+				delivery, err := c.Subscription.Next(ctx)
+				next <- outcome{delivery, err}
 			})
 		}
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case next := <-receiving:
-			stopReceive()
 			receiving = nil
-			if err := accept(next); err != nil {
-				return err
-			}
-		case finished := <-completed:
 			if err := context.Cause(ctx); err != nil {
 				return err
 			}
-			g := groups[finished.message.ID]
-			g.pending--
-			if finished.err != nil {
-				consumerMessageLogger(logger, finished.message).ErrorContext(ctx, "message rejected; delivery retained", "error_type", fmt.Sprintf("%T", finished.err))
-				if err := context.Cause(ctx); err != nil {
-					return err
-				}
-				if c.ContinueOnError == nil || !c.ContinueOnError(finished.message, finished.err) {
-					return finished.err
-				}
-				g.rejected = true
-				unsettled -= len(g.done) + 1
-				g.done = nil
-			} else if g.rejected {
-				unsettled--
-			} else {
-				g.done = append(g.done, finished.message)
+			if next.err != nil {
+				return next.err
 			}
-
-			// Ack(ID) covers every copy returned by Next. Stop and join the sole
-			// receive before inspecting complete groups, including any raced copy.
-			if receiving != nil {
-				stopReceive()
-				next := <-receiving
-				receiving = nil
-				if !errors.Is(next.err, context.Canceled) {
-					if err := accept(next); err != nil {
-						return err
-					}
+			unsettled++
+			message := next.delivery.Message()
+			consumerMessageLogger(logger, message).DebugContext(ctx, "message received")
+			workers.Go(func() {
+				err := context.Cause(ctx)
+				if err == nil {
+					err = handler(ctx, message)
 				}
+				completed <- outcome{next.delivery, err}
+			})
+		case finished := <-completed:
+			if err := c.settle(ctx, finished.delivery, finished.err, logger); err != nil {
+				return err
 			}
-			for messageID, g := range groups {
-				if g.pending != 0 || g.rejected {
-					continue
-				}
-				if err := context.Cause(ctx); err != nil {
-					return err
-				}
-				if err := c.Subscription.Ack(ctx, messageID); err != nil {
-					consumerMessageLogger(logger, g.done[0]).ErrorContext(ctx, "message acknowledgement failed", "error_type", fmt.Sprintf("%T", err))
-					return err
-				}
-				delete(groups, messageID)
-				unsettled -= len(g.done)
-				for _, message := range g.done {
-					consumerMessageLogger(logger, message).DebugContext(ctx, "message acknowledged")
-					if c.AfterAck != nil {
-						c.AfterAck(message)
-					}
-				}
-			}
+			unsettled--
 		}
 	}
 }

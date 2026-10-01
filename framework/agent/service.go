@@ -47,7 +47,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	consumer := comms.Consumer{
 		Logger: a.config.Logger,
 		ContinueOnError: func(command messages.Message, err error) bool {
-			// Artifact failures and conflicting commands stay retained while
+			// Artifact failures and conflicting commands are rejected while
 			// later independent commands can still be processed.
 			return command.Type == agentcommands.RunAction && !errors.Is(err, comms.ErrClosed)
 		},

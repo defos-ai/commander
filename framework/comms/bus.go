@@ -9,23 +9,25 @@ import (
 )
 
 var (
-	ErrClosed       = errors.New("message bus or subscription is closed")
-	ErrNotDelivered = errors.New("message is not a known delivery for this subscription")
+	ErrClosed          = errors.New("message bus or subscription is closed")
+	ErrDeliverySettled = errors.New("delivery already settled with a different outcome")
 )
 
+// Delivery identifies one received copy independently of Message.ID. Ack confirms
+// processing; Reject records failed processing. Repeating a successful settlement
+// is harmless; attempting the opposite returns ErrDeliverySettled. Failed
+// settlement may be retried. Retention and redelivery belong to the provider.
+type Delivery interface {
+	Message() messages.Message
+	Ack(context.Context) error
+	Reject(context.Context) error
+}
+
 // Subscription delivers a subscriber's FIFO stream. Next's context cancels one
-// receive. Next does not acknowledge processing; replay and redelivery guarantees
-// belong to the bus implementation.
-// Ack confirms processing of a message returned by this subscription, using its
-// ID, independently of CorrelationID. The built-in buses remember 4096 recently
-// acknowledged IDs for harmless retries; an older, forgotten ID returns
-// ErrNotDelivered without changing any message. If an ID is published more than
-// once, Ack covers its deliveries so far, never occurrences that Next has not
-// returned yet. Close ends delivery without acknowledging outstanding work;
-// retention and recovery after closure belong to the implementation.
+// receive without invalidating earlier deliveries. Close ends delivery without
+// acknowledging outstanding work; retention belongs to the provider.
 type Subscription interface {
-	Next(context.Context) (messages.Message, error)
-	Ack(context.Context, string) error
+	Next(context.Context) (Delivery, error)
 	Close() error
 }
 

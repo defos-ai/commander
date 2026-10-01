@@ -172,18 +172,29 @@ func (b *testBus) Publish(ctx context.Context, _ string, m messages.Message) err
 	}
 }
 func (b *testBus) Subscribe(context.Context, string) (comms.Subscription, error) { return b, nil }
-func (b *testBus) Next(ctx context.Context) (messages.Message, error) {
+func (b *testBus) Next(ctx context.Context) (comms.Delivery, error) {
 	select {
 	case m := <-b.events:
-		return m, nil
+		return testDelivery{message: m, onAck: func(context.Context) error {
+			b.acked <- m.ID
+			return nil
+		}}, nil
 	case <-b.closed:
-		return messages.Message{}, comms.ErrClosed
+		return nil, comms.ErrClosed
 	case <-ctx.Done():
-		return messages.Message{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 }
-func (b *testBus) Ack(_ context.Context, id string) error { b.acked <- id; return nil }
-func (b *testBus) Close() error                           { close(b.closed); return nil }
+func (b *testBus) Close() error { close(b.closed); return nil }
+
+type testDelivery struct {
+	message messages.Message
+	onAck   func(context.Context) error
+}
+
+func (d testDelivery) Message() messages.Message     { return d.message }
+func (d testDelivery) Ack(ctx context.Context) error { return d.onAck(ctx) }
+func (testDelivery) Reject(context.Context) error    { return nil }
 func (b *testBus) send(t *testing.T, ctx context.Context, kind messages.MessageType, correlation string) messages.Message {
 	t.Helper()
 	snapshot := agents.AgentSnapshot{ID: agentID, Type: "fixture", Status: agents.AgentReady,

@@ -73,12 +73,20 @@ and framework/app checks.
 ### Delivery and recovery
 
 Subscriptions start at the current topic tail and must be live before messages
-are published. Each has its own cursor. A message file is deleted only after all
-subscriptions registered at publication acknowledge it. Closing or losing a
-subscription retains unacknowledged files for inspection; there is no automatic
-redelivery, subscription recovery, or dead-letter queue. Reopening the bus does
-not replay old commands. See the [message-handling guide](../../framework/comms/README.md)
-for consumer acknowledgement policy.
+are published. Each has its own cursor. `Next` returns a delivery handle with
+`Message()`, `Ack(ctx)` and `Reject(ctx)`. Each publication settles independently,
+including copies sharing a message ID. A message file is deleted only after all
+subscriptions registered at publication acknowledge their delivery.
+
+Rejecting a delivery retains its file as evidence without requeueing it. Repeating
+the same settlement on a handle is harmless; the opposite settlement returns
+`comms.ErrDeliverySettled`. Settlement retries use that handle, without a bounded
+message-ID acknowledgement history.
+
+Closing or losing a subscription retains unsettled and rejected files for
+inspection. There is no automatic redelivery, subscription recovery, or dead-letter
+queue. Reopening the bus does not replay old commands. See the
+[message-handling guide](../../framework/comms/README.md) for consumer settlement policy.
 
 ### Atomic operation records
 

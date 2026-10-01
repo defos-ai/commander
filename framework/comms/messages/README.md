@@ -75,9 +75,10 @@ persistence fails, outcome replay can repair it without uploading files again or
 rerunning the action. Agent command deduplication and pending results are held
 in memory for that process's lifetime.
 
-`Subscription.Ack` separately confirms delivery processing to the bus. It does
-not prove an outcome reached the controller database. Receipts have their own
-subscription so active actions cannot block them.
+`Delivery.Ack(ctx)` separately confirms successful processing of one delivery;
+`Delivery.Reject(ctx)` records unsuccessful processing. Neither replaces the
+controller's durable result receipt. Receipts have their own subscription so
+active actions cannot block them.
 
 See [consumer behavior](../README.md) and
 [restart recovery](../../../docs/overview.md#state-and-restart-recovery) for limits

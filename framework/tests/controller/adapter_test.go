@@ -240,20 +240,19 @@ type adapterSubscription struct {
 	acked    chan<- string
 }
 
-func (s adapterSubscription) Next(ctx context.Context) (messages.Message, error) {
+func (s adapterSubscription) Next(ctx context.Context) (comms.Delivery, error) {
 	select {
 	case m := <-s.messages:
-		return m, nil
+		return testDelivery{message: m, onAck: func(ctx context.Context) error {
+			select {
+			case s.acked <- m.ID:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}}, nil
 	case <-ctx.Done():
-		return messages.Message{}, ctx.Err()
-	}
-}
-func (s adapterSubscription) Ack(ctx context.Context, id string) error {
-	select {
-	case s.acked <- id:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 }
 func (adapterSubscription) Close() error { return nil }

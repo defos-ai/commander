@@ -160,11 +160,19 @@ type workSubscription struct {
 	commands <-chan messages.Message
 }
 
-func (s workSubscription) Next(ctx context.Context) (messages.Message, error) {
+func (s workSubscription) Next(ctx context.Context) (comms.Delivery, error) {
 	select {
 	case message := <-s.commands:
-		return message, nil
+		return testDelivery{message: message}, nil
 	case <-ctx.Done():
-		return messages.Message{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 }
+
+type testDelivery struct {
+	message messages.Message
+}
+
+func (d testDelivery) Message() messages.Message  { return d.message }
+func (testDelivery) Ack(context.Context) error    { return nil }
+func (testDelivery) Reject(context.Context) error { return nil }
