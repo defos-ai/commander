@@ -1,67 +1,88 @@
 # Architecture overview
 
-Commander separates client access, coordination, and action execution. Each runs
-in its own application, built on shared framework contracts and infrastructure providers.
-
-Read [core abstractions](abstractions.md) for missions, operations, tasks, agents,
-and the other concepts used here.
-
-## Components
-
-| Layer | Current implementation | Guide |
-| --- | --- | --- |
-| Adapters | MCP | [Adapters](../apps/adapters/README.md) |
-| Controllers | Default controller | [Controllers](../apps/controllers/README.md) |
-| Agents | Cyber security agent | [Agents](../apps/agents/README.md) |
-| Shared library | Framework | [Framework](../framework/README.md) |
-| Infrastructure | Filesystem | [Providers](../providers/README.md#existing-providers) |
-
-## Dependencies
-
-![Commander dependencies](dependencies.png)
-
-[Editable diagram](dependencies.drawio).
-
-Arrows represent code dependencies. Hosts construct providers and inject their
-interfaces into framework runtimes. The framework imports neither providers nor
-application hosts. Applications communicate through shared contracts rather than
-importing each other's runtimes. Artifact models and storage interfaces belong
-to `framework/domain/artifacts`.
-
-API, General Agent, MongoDB, S3, and RabbitMQ in the diagram are planned extensions;
-see [available providers](../providers/README.md#existing-providers) for implemented backends.
+**Commander decides what; the controller decides who; agents execute.**
+Commander is usually an LLM in Playground or another AI client, connected through
+MCP. The current controller and agents run without their own LLMs.
 
 ## Execution flow
 
-1. An AI client sends a request through MCP.
-2. The adapter sends a command over the bus to the controller.
-3. The controller records the operation, selects eligible agents for each task's
-   action and input, and dispatches the work.
-4. Agents run actions, upload artifact files, and publish results with artifact
-   metadata. The controller saves outcomes and metadata in the database before
-   confirming acceptance to the agent.
-5. The adapter queries stores to show progress, questions, and reports to the client.
+```mermaid
+flowchart TD
+    User[Operator] <-->|Chat and questions| Commander[Commander: LLM in an AI client]
+    Commander <-->|MCP tools| Adapter[MCP adapter]
+    Adapter -->|Operation commands via bus| Controller[Controller]
+    Controller -->|Assigned actions via bus| Agent[Agents]
+    Agent -->|Status, current work and results via bus| Controller
+    Controller -->|Persist progress and outcomes| Database[(Database)]
+    Agent -->|Upload artifact files| Storage[(File storage)]
+    Controller -->|Save reports| Storage
+    Adapter -->|Query saved data| Database
+    Adapter -->|Read files and reports| Storage
+```
 
-The AI client provides direction and handles model decisions. Host-configured
-automatic transitions let the controller queue follow-up work without a model call. Commands and events are serializable contracts in
-[`framework/comms/clients`](../framework/comms/clients/).
-Only MCP opens an HTTP port; controllers and agents run as message consumers.
+For the included website review:
+
+1. Commander reads `review-website`, starts an operation, and assigns `discover-pages`.
+2. The controller checks required actions against live agents and selects a ready
+   instance with free capacity. Assignments specify an action and input, not an agent ID.
+3. Discovery proposes checks for each page. The mission's automation queues those
+   checks without another model call; the controller distributes them across agents.
+4. Agents publish results. The controller saves outcomes and artifact metadata
+   before confirming acceptance; file bytes stay in storage.
+5. Commander reviews collected results, requests operator guidance if needed,
+   and explicitly completes the operation with a report.
+
+MCP exposes operation commands and queries, including agent readiness and current
+`work`. The controller owns instance selection and agent administration. Only MCP
+opens an HTTP port; controllers and agents consume messages. See
+[core concepts](abstractions.md) for tasks, automation, questions and evidence.
+
+## Dependencies
+
+```mermaid
+flowchart TD
+    Apps[Applications: adapters, controllers, agents, Playground] --> Framework[Framework: runtimes, domain, messaging]
+    Apps --> Providers[Providers: FS, MongoDB, S3]
+    Providers --> Contracts[Framework interfaces and domain models]
+    Framework --> Contracts
+```
+
+Hosts construct providers and inject interfaces. The framework imports no providers
+or applications. Runtimes communicate through shared contracts without importing
+each other; Playground can compose the hosts in all-in-one mode.
+
+| Area | Responsibility | Details |
+| --- | --- | --- |
+| `framework/` | Shared runtime behavior, domain models and interfaces | [Framework](../framework/README.md) |
+| `apps/` | Concrete hosts, actions and client experience | [Agents](../apps/agents/README.md), [controllers](../apps/controllers/README.md), [adapters](../apps/adapters/README.md), [Playground](../apps/playground/README.md) |
+| `providers/` | Messaging, database and file-storage implementations | [Providers](../providers/README.md) |
 
 ## State and restart recovery
 
-State is shared through the bus, storage, and database configured in
-[local setup](deployment.md#configuration). The adapter can query saved data while
-the controller is stopped; commands require a running controller.
+The database stores progress, inventory and artifact metadata; file storage holds
+artifact bytes and reports. Processes also retain subscriptions, active calls and
+scheduling state: they are not entirely stateless.
 
-Restarting MCP leaves coordination running. The controller restores saved operations,
-queued work, questions, and outcomes. Queued tasks resume scheduling. For running
-tasks, a saved result is reused; otherwise the exact saved command can be redelivered
-to its original live agent process. The agent's lifetime command ledger prevents
-repeat execution. A replacement agent has a new ID and never receives that replay.
-Interrupted tasks are checked against saved outcomes without redelivery. If no
-definitive result is available, they remain interrupted for the model to inspect.
+| Failure | Current behavior |
+| --- | --- |
+| MCP restarts | Coordination continues. Saved data remains queryable; a lost command reply does not prove the command failed. |
+| Controller restarts | It reloads operations, reconciles saved outcomes and resumes queued work. A saved dispatch may be replayed only to its original live agent using the same command ID. |
+| Agent dies | Its heartbeat expires. Undispatched tasks can use other ready agents; an unknown outcome from dispatched work is not silently rerun on a replacement. |
 
-Run one active controller per database. Coordination between controller replicas
-is not implemented. The filesystem bus currently requires live subscribers and
-does not automatically redeliver retained messages after a restart. See [message contracts](../framework/comms/messages/README.md)
-for delivery details and [local setup](deployment.md) to run the current system.
+The agent's command deduplication and pending result cache last for that process's
+lifetime. Interrupted tasks are checked against durable outcomes; if none exists,
+they remain interrupted for review. This is not an exactly-once execution guarantee.
+
+## Current scope
+
+- **One active controller per database.** Multiple-controller ownership and shared
+  capacity reservations are not implemented.
+- **Implemented providers:** filesystem bus/database/files, MongoDB database,
+  and S3-compatible files/reports. Full Compose uses MongoDB and MinIO with an FS bus.
+- **Messaging is still local FS fanout.** It requires live subscribers and does not
+  automatically redeliver retained messages to a replacement subscription.
+  RabbitMQ is a next step, not an available provider.
+
+See [message handling](../framework/comms/README.md),
+[local setup](deployment.md), and [tests](../framework/tests/README.md) for the
+current guarantees and ways to verify them.

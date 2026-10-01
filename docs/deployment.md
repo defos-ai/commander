@@ -1,74 +1,66 @@
 # Local setup and configuration
 
-Local setup uses Docker Compose with filesystem providers, or MongoDB and MinIO. Production deployment instructions will follow when hosting support
-is available.
+Start with [the root quick start](../README.md#quick-start). These Compose stacks
+are local development setups; production deployment is not yet documented.
 
 ## Local Compose
 
-From the repository root, start MCP, one controller, and two web-quality agents:
+Choose one stack from the repository root. Each runs MCP, one controller and two
+web-quality agents; Playground connects as a separate interactive client.
+
+**Filesystem:**
 
 ```sh
 docker compose up --build -d
+docker compose run --build --rm playground
 ```
 
-Compose creates shared Docker volumes automatically. A short-lived `volume-init`
-service sets their root directories' ownership to `1000:1000` before the
-controller starts. All application containers run as this non-root user.
-Filesystem paths, mounts, and initialization belong to Compose; application
-images do not configure storage backends or create state directories.
+**MongoDB + MinIO:**
 
-Connect your client to `http://localhost:4273/mcp`; see [client setup](../apps/adapters/README.md#quick-start).
-For terminal chat without installing Go, run `docker compose run --build --rm playground`.
-For a temporary native session, see [Playground's all-in-one mode](../apps/playground/README.md#go-one-executable).
-Use `docker compose logs -f` for logs and `docker compose down` to stop services.
-Stopping services preserves state; `docker compose down --volumes` deletes it.
-Loading a mission file upserts definitions and does not remove saved missions.
-When switching from the old bundled agents, `docker compose up --build -d --remove-orphans`
-also removes their old containers. For a completely fresh development setup,
-`docker compose down --volumes --remove-orphans` deletes stored operations,
-missions and artifacts before the next startup.
-Try `review-website` with `https://defos.ai` or your own website.
-Agent configuration and workflow scenarios are in the [web quality guide](../apps/agents/web-quality/README.md).
+```sh
+docker compose -f compose.full.yaml up --build -d
+docker compose -f compose.full.yaml run --build --rm playground
+```
 
-For MongoDB and S3 storage, use `docker compose -f compose.full.yaml up --build -d`.
-This starts a Mongo replica set and MinIO, initializes the storage bucket, and
-keeps the bus on a shared filesystem volume. See the [Mongo](../providers/mongo/README.md)
-and [S3](../providers/s3/README.md) guides for connection settings and tests.
+Full Compose replaces the database with MongoDB and file storage with MinIO;
+the bus still uses FS. Both stacks use the `commander` project name and are
+alternatives. See [Mongo](../providers/mongo/README.md) and [S3](../providers/s3/README.md)
+for connection details. Bundled credentials are for local development.
+
+Connect another AI client to `http://localhost:4273/mcp` using the
+[adapter guide](../apps/adapters/README.md#quick-start). For a temporary session
+without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#go-one-executable).
 
 ## Configuration
 
-| Variable | Purpose | Compose default |
+| Environment variable | CLI flag | Purpose |
 | --- | --- | --- |
-| `COMMANDER_MCP_PORT` | Published MCP port | `4273` |
-| `BUS_URL` | Message bus | `file:///state/bus` |
-| `STORAGE_URL` | Artifact files and reports | `file:///state/storage` |
-| `DATABASE_URL` | Controller and adapter database | `file:///state/database` |
-| `LOG_LEVEL` / `LOG_FORMAT` | Logging | `info` / `json` |
+| `BUS_URL` | `--bus-url` | Messaging |
+| `DATABASE_URL` | `--database-url` | Controller/MCP database |
+| `STORAGE_URL` | `--storage-url` | Artifact files and reports |
+| `LOG_LEVEL` | `--log-level` | Log verbosity |
+| `LOG_FORMAT` | `--log-format` | `text` or `json` logs |
 
-Application CLI flags override environment values. Standalone host defaults use
-`./state/bus`, `./state/storage`, and `./state/database`; run each binary with
-`--help` for available flags. MCP and the controller share all three locations;
-agents share the bus and storage. See [providers](../providers/README.md) for supported URLs.
+Flags override environment values. Native hosts default to `./state/bus`,
+`./state/database`, and `./state/storage`. Agents need bus and file storage only.
+Compose supplies backend settings; application images do not choose providers.
+`COMMANDER_MCP_PORT` changes the published Compose port (default `4273`).
+Run a host with `--help` for its flags. Action-specific dependencies belong in the
+[agent guide](../apps/agents/web-quality/README.md); model settings belong in
+[Playground](../apps/playground/README.md).
 
 ## State
 
-The default `compose.yaml` uses these volumes:
+Compose creates named Docker volumes; no host `state/` directory is needed.
+The FS stack shares `bus` and `storage` across hosts, and `database` between the
+controller and MCP. A startup helper sets volume ownership for non-root hosts.
+Full Compose uses its MongoDB and MinIO volumes for persistent data instead.
 
-| Docker volume | Container path | Shared by |
-| --- | --- | --- |
-| `bus` | `/state/bus` | Controller, MCP, agents |
-| `storage` | `/state/storage` | Controller, MCP, agents |
-| `database` | `/state/database` | Controller, MCP |
+Compose passes `--with-missions` to load the example mission. This upserts supplied
+missions without removing others; without the flag the controller loads none.
+See [mission configuration](../apps/controllers/README.md#quick-start).
 
-These volumes hold messages, artifacts/reports, and database records respectively.
-Compose prefixes their names with the project name, normally `commander`.
-Agents do not mount the database volume.
-
-Compose supplies the example mission file as a read-only config and passes `--with-missions`
-to upsert `review-website` at controller startup. Without that flag, no missions are loaded; see
-[controller setup](../apps/controllers/README.md#quick-start). The controller populates
-`actions.json` from agent announcements. Standalone hosts use local `state/`
-directories, which are ignored by Git; Compose does not use those directories.
-
-See the [architecture overview](overview.md#state-and-restart-recovery) for
-component responsibilities, restart behavior, and current scaling limits.
+Use `docker compose logs -f` for logs and `docker compose down` to stop.
+**`docker compose down --volumes` deletes saved state.** Add
+`-f compose.full.yaml` to those commands for the full stack.
+For restart behavior and scaling limits, see [architecture](overview.md#state-and-restart-recovery).

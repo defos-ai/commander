@@ -1,119 +1,87 @@
 # Testing
 
-GitHub Actions runs separate suites for [framework](../../.github/workflows/test-framework.yml),
-[FS](../../.github/workflows/test-provider-fs.yml),
-[Mongo](../../.github/workflows/test-provider-mongo.yml),
-[S3](../../.github/workflows/test-provider-s3.yml),
-[controller](../../.github/workflows/test-controller.yml),
-[agent](../../.github/workflows/test-agent.yml),
-[MCP](../../.github/workflows/test-mcp.yml), and
-[Playground](../../.github/workflows/test-playground.yml).
+Use MCP API tests for behavior across hosts and unit tests for complex invariants.
+Tests use local fixtures and scripted models; no model API key or public website
+is required. Run commands below from the repository root.
 
-Code changes trigger the changed component and its consumers:
+## Unit tests
 
-| Changed component | Suites |
+Choose the affected module:
+
+```sh
+go test -race -count=1 -timeout=3m ./framework/...
+go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
+go test -race -count=1 -timeout=3m ./apps/playground/...
+```
+
+Framework tests cover recovery, atomic decisions, automation and result delivery.
+App tests cover mission loading, actions and client behavior. Playground includes
+an all-in-one workflow using a scripted model, operator answers and a saved report.
+These tests need no real model or browser; MCP tests cover browser execution.
+
+## Provider tests
+
+```sh
+go test -race -count=1 -timeout=3m ./providers/fs/...
+```
+
+Mongo and S3 suites use real local services. Follow their setup/test commands:
+[MongoDB](../../providers/mongo/README.md#development-and-testing) ·
+[S3/MinIO](../../providers/s3/README.md#development-and-testing).
+
+## MCP API tests
+
+```sh
+docker compose -f compose.test.yaml up --build --wait
+go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
+docker compose -f compose.test.yaml down --volumes
+```
+
+Run the cleanup command even if tests fail. The standalone stack uses project
+`commander-test`, separate volumes, two agents with Chromium, and MCP at
+`http://127.0.0.1:14273/mcp`. Tests use that endpoint automatically. For logs:
+`docker compose -f compose.test.yaml logs`.
+
+| Test group | Covers |
+| --- | --- |
+| `missions_test.go` | Catalog, validation and caller-supplied operation IDs. |
+| `agents_test.go` | Agent/action visibility and dependency rediscovery. |
+| `operations_test.go` | Website workflow, continuations, artifacts, reports, isolation, capacity and cancellation. |
+| `questions_test.go` | Latest question, answering and expiration. |
+
+Before each test, `clean_up_state` clears saved test data, restores configured
+missions and waits for inventory. This tool exists only with `ENV=tests`.
+**It preserves bus messages, subscriptions and host memory.** Tests run sequentially
+and finish their work before the next cleanup. The Go fixture uses MCP; it never
+controls Docker or reads shared volumes.
+
+The additional Mongo startup check runs when `COMMANDER_TEST_MONGO_URL` is set;
+CI supplies a replica-set connection. The main API scenarios use the FS test stack.
+
+## CI
+
+Each suite has a separate workflow and a manual **Run workflow** entry:
+
+| Code changed | Test suites triggered |
 | --- | --- |
 | Framework | All |
-| FS | FS, controller, agent, MCP, Playground |
-| Mongo | Mongo, controller, MCP, Playground |
-| S3 | S3, controller, agent, MCP, Playground |
+| FS / S3 provider | That provider, controller, agent, MCP, Playground |
+| Mongo provider | Mongo, controller, MCP, Playground |
 | Controller | Controller, MCP, Playground |
 | Agent | Agent, MCP, Playground |
 | MCP | MCP, Playground |
 | Playground | Playground |
 
-Changes to `go.work`, `go.work.sum`, or any `go.mod`/`go.sum` run all suites.
-Markdown-only changes do not run tests. Test Compose, host Dockerfiles, and
-`.dockerignore` trigger MCP; full Compose triggers Mongo, S3, controller, and MCP.
-Each workflow also supports **Run workflow** for manual execution.
-
-MCP tests exercise the FS-backed Compose stack. Provider suites test their own
-storage contracts; controller and MCP suites also verify startup with Mongo.
-Playground tests include `--all-in-one` behavior.
-
-No model API key or public website is needed.
-
-## Unit tests
-
-From the repository root:
-
-```sh
-go test -race -count=1 ./framework/... \
-  ./apps/controllers/default/... ./apps/agents/web-quality/... ./apps/playground/...
-```
-
-Framework tests focus on recovery, automation, concurrent decisions and retrying
-unconfirmed results without executing commands twice. App tests cover mission
-loading, website checks, rendering and Playground's local hosts. Playground also
-completes an SEO review through a scripted model, keyboard-selected operator
-answer and saved report, and checks recovery after model errors or Ctrl+C. These tests
-need no Docker or browser; browser execution is covered by the MCP suite.
-
-## Provider tests
-
-Run the FS suite from the repository root:
-
-```sh
-go test -race -count=1 ./providers/fs/...
-```
-
-The separate Mongo module uses a real database. See the
-[Mongo testing guide](../../providers/mongo/README.md#development-and-testing)
-for its Compose and test commands. CI starts and cleans up Mongo automatically.
-The [S3 testing guide](../../providers/s3/README.md#development-and-testing)
-has equivalent commands for MinIO.
-
-## MCP API tests
-
-From the repository root, run these three commands:
-
-```sh
-docker compose -f compose.test.yaml up --build --wait
-go test -count=1 ./apps/adapters/mcp/tests
-docker compose -f compose.test.yaml down --volumes
-```
-
-`compose.test.yaml` is standalone. It uses the fixed project `commander-test`,
-its own volumes and images, and MCP at `http://127.0.0.1:14273/mcp`.
-Tests use that endpoint automatically; no environment setup is needed.
-`--wait` starts services in the background and waits for readiness.
-Run the cleanup command even if tests fail.
-
-For service logs, use `docker compose -f compose.test.yaml logs`.
-CI saves logs on failure and always removes the test containers and volumes.
-
-### Test groups
-
-Tests live under [`apps/adapters/mcp/tests`](../../apps/adapters/mcp/tests):
-
-- `missions_test.go`: catalog, input validation and caller-provided IDs.
-- `agents_test.go`: catalogs, execution, and queued work resuming after a missing
-  dependency becomes available through rediscovery.
-- `operations_test.go`: automatic website review, grouped decisions, artifacts,
-  event cursors, reports, concurrent operation isolation, capacity limits,
-  cancellation during execution and failure.
-- `questions_test.go`: latest question, operator answers and expiration.
-
-Before each test, setup calls the MCP `clean_up_state` tool. It clears database
-and storage test data, restores configured missions and waits for agent heartbeats
-to repopulate inventory. Bus messages, subscriptions and host memory are preserved.
-The tool is registered only with `ENV=tests` in the test Compose stack and uses
-`framework/testing.TestCleaner`, without changing production store interfaces.
-
-Tests run sequentially and must finish their work before the next cleanup; this
-is persisted-data cleanup, not a full runtime reset. The Go fixture only uses MCP
-and never invokes Docker or reads shared volumes. Compose lifecycle belongs to the
-three commands above and the CI workflow; volume removal is final housekeeping.
-
-The test stack includes two agents with Chromium and the default mission;
-website fixtures are served by the tests and reached through `host.docker.internal`.
+Workspace/module dependency changes run all suites. Markdown-only changes do not.
+Compose and Dockerfile changes trigger the relevant integration suites. See
+[workflow definitions](../../.github/workflows) for the exact filters.
+CI bounds test runs, collects failed-service logs and removes test containers.
 
 ## Writing tests
 
-- Use **Arrange, Act, Assert** and public interfaces.
-- Add an MCP API scenario for behavior spanning apps; keep shared setup in
-  `fixture_test.go` and one file per feature group.
-- Add unit tests for complex invariants and failure paths, rather than mirroring
-  implementation details or retesting every constructor.
-- Keep tests in each module's `tests/` folder where possible.
+- Follow **Arrange, Act, Assert** through public behavior.
+- Add MCP scenarios for cross-host behavior, one file per feature group.
+- Unit-test complex invariants and failure paths; avoid mirroring implementation.
+- Keep tests under each module's `tests/` directory where possible.
 - Use deterministic fixtures, bounded waits and disposable state.

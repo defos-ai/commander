@@ -2,168 +2,73 @@
 
 ## Overview
 
-Providers implement the framework's messaging and persistence interfaces.
-Application hosts select provider modules, open their connection URLs, and inject
-them into the runtime, keeping infrastructure details out of agents and controllers.
+Providers connect framework interfaces to messaging, databases, and file storage.
+Apps construct them in `cli/factory.go` and inject framework interfaces into
+agents, controllers, and adapters.
 
 ### Existing providers
 
-| Provider | Implements | Connection formats |
+| Provider | Available implementations | Connection formats |
 | --- | --- | --- |
-| [`fs`](fs/) | Message bus, artifacts, reports, inventory, executions, missions, operations, and action catalogs | Local paths, `~/path`, `file:///path`, `fs:///path` |
-| [`mongo`](mongo/) | Missions, actions, agent inventory, executions, operations, artifact metadata | `mongodb://`, `mongodb+srv://` |
-| [`s3`](s3/) | Artifact files and reports | `s3://bucket/optional-prefix` |
+| [Filesystem](fs/README.md) | Bus, database stores, artifact files, reports | Local paths, `~/path`, `file:///path`, `fs:///path` |
+| [MongoDB](mongo/README.md) | Missions, actions, agent inventory, executions, operations, artifact metadata | `mongodb://`, `mongodb+srv://` |
+| [S3](s3/README.md) | Artifact files and reports | `s3://bucket/optional-prefix` |
 
-Each provider is a separate Go module: `commander/providers/fs`,
-`commander/providers/mongo`, or `commander/providers/s3`. There is no shared `commander/providers` module;
-import only the backends your host uses. Providers export concrete stores and
-brokers. Each app's `cli/factory.go` maps configured URLs to their constructors
-and gives `cli.go` framework interfaces. Each dependency has its own factory:
-filesystem inputs select FS, and `mongodb://` or `mongodb+srv://` select Mongo
-where implemented. Missing stores and unsupported schemes return explicit errors
-without falling back to FS. All controller database stores support Mongo;
-operation updates require a replica set or sharded cluster for transactions.
-Artifact-file and report factories select S3 for `s3://` URLs. Bus factories
-reserve `amqp://` and `amqps://` for RabbitMQ, which is not implemented yet.
+RabbitMQ is planned. Bus factories recognize `amqp://` and `amqps://` but return
+an explicit not-implemented error.
 
-### Filesystem behavior
-
-The bus retains unacknowledged files for inspection, but does not automatically
-redeliver them or provide a dead-letter queue. Subscriptions must be live when
-messages are published. Shared filesystems must support file locks, atomic
-renames, and hard links. The [message-handling guide](../framework/comms/README.md)
-defines consumer acknowledgement policy.
-
-Each `DATABASE_URL/operations/<operation-id>.json` is a manifest with its own
-writer lock. Metadata, individual tasks, questions, and events live in
-content-addressed files under `<operation-id>.json.records/`. Metadata keeps
-ordered task/question IDs and event sequences. One manifest replacement
-commits related changes together; unchanged record files are reused. Reads
-assemble consistent snapshots without taking a write lock.
-`OperationStore.GetTask` queries one task; `ListTasks` pages in assignment order
-after a task ID, and `ListEvents` pages after an event sequence. Limits must be
-positive. These queries read the manifest, metadata, and selected record bodies;
-they do not load unrelated task results, questions, or event history. Full
-operation reads and mutations still assemble the complete operation.
+Each backend is a separate Go module: `commander/providers/fs`,
+`commander/providers/mongo`, or `commander/providers/s3`. Import only the modules
+your host needs; there is no shared `commander/providers` module.
 
 ## Quick start
 
-For a private project, follow the [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository)
-to add `commander/framework` and `commander/providers/fs`. Within this repository,
-[go.work](../go.work) already connects the provider modules. Import the filesystem
-constructor you need; see also the [Mongo](mongo/README.md#quick-start) and
-[S3](s3/README.md#quick-start) guides:
+Choose backends independently through the host settings:
 
-| Constructor | Host setting | Framework interface |
+| Setting | Selects | Available backends |
 | --- | --- | --- |
-| [`comms.NewFsBus`](fs/comms/fs_bus.go) | `BUS_URL` | `comms.Bus` |
-| [`artifacts.NewArtifactFileFsStore`](fs/artifacts/artifact_file_fs_store.go) | `STORAGE_URL` | `artifacts.ArtifactFileStore` |
-| [`artifacts.NewArtifactFsStore`](fs/artifacts/artifact_fs_store.go) | `DATABASE_URL` | `artifacts.ArtifactStore` |
-| [`reports.NewReportFsStore`](fs/reports/report_fs_store.go) | `STORAGE_URL` | `reports.ReportStore` |
-| [`missions.NewMissionFsStore`](fs/missions/mission_fs_store.go) | `DATABASE_URL` | `missions.MissionStore` |
+| `BUS_URL` | Messages between apps | FS |
+| `DATABASE_URL` | Catalogs, inventory, executions, operations, artifact metadata | FS, MongoDB |
+| `STORAGE_URL` | Artifact bytes and reports | FS, S3 |
 
-Stores are grouped by domain under each provider, such as `fs/operations/`,
-`mongo/missions/`, and `s3/reports/`. Both filesystem artifact stores live in
-`fs/artifacts/`.
-Filesystem constructors accept paths; [`fs.FilesystemPath`](fs/path.go) converts
-configured paths and `file://` or `fs://` URLs without opening resources.
+The [local stack](../README.md#quick-start) uses FS throughout.
+[`compose.full.yaml`](../compose.full.yaml) uses MongoDB and MinIO with an FS bus.
+See [deployment configuration](../docs/deployment.md#configuration) for host
+settings, and each provider's guide for constructors and backend setup. The
+repository [workspace](../go.work) includes all modules; private projects use
+[local module replacements](../apps/agents/README.md#develop-an-agent-in-a-private-repository).
 
-For example, query missions through a filesystem database:
+Agents upload bytes through `ArtifactFileStore`; controllers accept metadata
+through `ArtifactStore`; MCP uses both to expose accepted artifacts. Uploading
+bytes alone does not make an artifact visible through MCP. Failed or interrupted
+work can leave unreferenced files; automatic orphan cleanup is not implemented.
 
-```go
-package queries
+### Filesystem behavior
 
-import (
-    "context"
-
-    "commander/framework/domain/missions"
-    "commander/providers/fs"
-    fsmissions "commander/providers/fs/missions"
-)
-
-func ListMissions(ctx context.Context, databaseURL string) ([]missions.Mission, error) {
-    root, err := fs.FilesystemPath(databaseURL)
-    if err != nil {
-        return nil, err
-    }
-    store, err := fsmissions.NewMissionFsStore(root)
-    if err != nil {
-        return nil, err
-    }
-    return store.List(ctx)
-}
-```
-
-Both artifact interfaces are defined in `framework/domain/artifacts`.
-Agents receive an `ArtifactFileStore` for uploads. Controllers receive an
-`ArtifactStore` for accepted metadata; MCP receives both for queries and file
-reads. FS metadata lives at `DATABASE_URL/artifacts/<id>.json`; bytes live at
-`STORAGE_URL/artifacts/<artifact-id>/<file-id>`. Uploading bytes alone does not
-make them visible through MCP. A crash before metadata acceptance can leave
-unreferenced files; automatic file cleanup is not implemented yet. Close brokers
-and shared database clients after consumers stop; filesystem stores need no close.
-See [configuration](../docs/deployment.md#configuration) for connection settings.
+See the FS guide for [delivery and recovery](fs/README.md#delivery-and-recovery)
+and [atomic operation records](fs/README.md#atomic-operation-records).
 
 ## Development and testing
 
-### Atomic filesystem record sets
+To add a backend:
 
-`fs/internal/jsonfile.Records` stages immutable JSON records and publishes them with
-one versioned manifest. Writers lock only that record set; readers take no lock.
-Unchanged records are reused, and later writes collect abandoned files. Only
-manifest publication can return `ErrWriteUncertain`; an identical retry confirms
-durability without creating another revision. The containing directory must be
-prepared durably before opening a record set.
+1. Create `providers/<backend>/` as its own module. Implement interfaces from
+   [`framework/comms`](../framework/comms/README.md) or
+   [`framework/domain`](../framework/domain/), keeping driver dependencies and
+   storage helpers inside the provider.
+2. Export concrete constructors. Add selection to each affected app's
+   `cli/factory.go`; unsupported schemes must fail explicitly. Apps share clients
+   across stores and close resources after their consumers stop.
+3. Preserve acknowledgement, artifact ownership, immutable report and execution
+   outcomes, and atomic operation transitions. Apply transitions to the latest
+   saved state; keep locks and revisions internal. Follow the
+   [`OperationStore` contract](../framework/domain/operations/operation_store.go)
+   for retries, conflicts, recovery, and uncertain writes. Reconcile uncertain
+   writes before dispatching further work.
+4. Test public behavior, concurrent updates, retries, and storage failures in the
+   provider module. Follow the [testing guide](../framework/tests/README.md).
 
-`Records.View` reads selected bodies from one manifest without locking; if
-collection removes an older file, it retries the entire callback on a newer
-snapshot. The operation provider uses this for task and event queries.
-
-Existing development snapshots use an older format; start with fresh state
-rather than migrating them.
-
-### Adding a backend
-
-1. Add a separate module under `providers/<backend>/`, keeping its driver dependencies local (see `mongo/`).
-   Implement interfaces from `framework/comms` or `framework/domain`;
-   providers must not depend on application runtimes.
-2. Export concrete constructors. The app's `cli/factory.go` selects and constructs
-   its providers, shares connections between stores, and returns framework interfaces.
-   Providers own connection mechanics; the app closes resources after consumers stop.
-3. Preserve the contracts for message acknowledgement, artifact ownership,
-   immutable reports, execution outcomes, and atomic operation updates.
-   `OperationStore` exposes explicit transitions against the latest saved operation;
-   locks and storage revisions stay inside the provider.
-   `RefreshPreflight` assesses the saved mission against an inventory snapshot,
-   skipping unchanged readiness. `Recover` validates saved work and settles due
-   questions before returning the operation used to restore tasks.
-   `QueueTask` saves a direct assignment with its event and status update;
-   retries with the same task ID preserve saved progress without another write.
-   `DispatchTask` atomically claims an eligible queued task and saves its agent,
-   timing, dispatch event, and operation status together, preserving its command ID.
-   `FinishTask` saves the result, continuation, automatic follow-ups, and events
-   together. Identical results return the saved state without rewriting it;
-   conflicting outcomes cannot replace a final result.
-   `ResolveContinuation` checks the decision version and saves its follow-up tasks
-   and events atomically; a stale version cannot create a second branch.
-   Question methods save their linked decision, status, and events together.
-   `AnswerQuestion` commits expiration instead of a late answer; callers inspect
-   the returned question status. `ExpireQuestions` skips writes when nothing is due.
-   `Complete` rechecks completion eligibility and saves output, the report reference,
-   and resolved model decisions together. The caller publishes the immutable report first.
-   `Fail` records failure and cancels queued work while preserving dispatched tasks.
-   `Cancel` commits operation and queued-task cancellation with its event;
-   dispatched tasks can still record results without starting new work.
-4. Add public behavior tests inside the provider module, including concurrent writes,
-   retries, and storage failures. Follow the shared [testing conventions](../framework/tests/README.md#writing-tests).
-
-Run filesystem-provider checks from the repository root:
-
-```sh
-go test -race -count=1 ./providers/fs/...
-go vet ./providers/fs/...
-```
-
-CI runs these in [test-provider-fs.yml](../.github/workflows/test-provider-fs.yml).
-Run affected [framework and host tests](../framework/tests/README.md) when changing
-shared behavior. Keep provider helpers inside that provider's module.
+Provider-specific checks live in the [FS](fs/README.md#development-and-testing),
+[MongoDB](mongo/README.md#development-and-testing), and
+[S3](s3/README.md#development-and-testing) guides. Run affected framework and app
+tests when shared behavior changes.

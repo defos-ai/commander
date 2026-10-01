@@ -2,42 +2,46 @@
 
 ## Overview
 
-The framework is the reusable Go library for agent execution, controller
-coordination, messaging, and shared domain models. Applications supply their
-actions and configuration; providers implement the bus and stores.
+The framework provides reusable agent execution, controller coordination, domain
+models and messaging contracts. Apps supply actions and host configuration;
+providers supply the bus and stores. It requires no built-in LLM or specific database.
 
-See [core abstractions](../docs/abstractions.md) for the domain concepts and the
-[architecture overview](../docs/overview.md) for dependencies and execution flow.
+Read [core concepts](../docs/abstractions.md) for terminology and
+[architecture](../docs/overview.md) for execution flow and dependencies.
 
 ## Quick start
 
-Use Go 1.26.7+ and start from a concrete implementation:
+Use the repository's Go workspace and start from a concrete implementation:
 
-- [Agents](../apps/agents/README.md): create an agent, add actions, or work in a private repository.
-- [Controllers](../apps/controllers/README.md): host coordination and operation tracking.
-- [Adapters](../apps/adapters/README.md): expose Commander to external clients.
+- [Agent](../apps/agents/README.md): register actions and run an agent, including in a private project.
+- [Controller](../apps/controllers/README.md): coordinate operations and mission automation.
+- [Adapter](../apps/adapters/README.md): expose operation commands and saved data to clients.
 
-Import the framework packages you need and inject infrastructure through their
-interfaces. Use the bundled [providers](../providers/README.md) or your own implementations.
+Import the framework packages you need and inject their interfaces. The bundled
+[providers](../providers/README.md) are optional, separate modules.
+Current module paths use `commander/...`; private projects use the
+[local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository).
 
 ## Development and testing
 
-- Put execution behavior in `agent`, coordination in `controller`, and operation
-  transitions in `controller/runner`.
-- Keep shared models and store interfaces in `domain`, including `domain/artifacts`.
-  Define commands and events in `comms/clients`. Update consumers and recovery together.
-- Use plural domain packages with singular models and matching stores:
-  `agents.Agent` and `agents.AgentStore`, in `agent.go` and `agent_store.go`.
-- Add public behavior tests under `framework/tests/`, following the shared
-  [testing conventions](tests/README.md#writing-tests). Run affected app tests for
-  changes across processes.
+| Package | Put changes here when… |
+| --- | --- |
+| `agent` | Changing action execution, discovery or result delivery. |
+| `controller` | Changing coordination, scheduling or recovery. |
+| `domain` | Defining shared entities, state transitions and store interfaces. |
+| `comms` | Changing transport contracts, typed commands/events or consumers. |
+
+Keep providers and apps outside framework dependencies. Use singular entities and
+matching stores in plural packages: `agents.Agent`, `agents.AgentStore`. Update
+persistence, consumers and recovery together when changing a lifecycle.
 
 From the repository root:
 
 ```sh
-go test -race -count=1 ./framework/...
+go test -race -count=1 -timeout=3m ./framework/...
 go vet ./framework/...
 ```
 
-Details: [message contracts](comms/messages/README.md),
-[message handling](comms/README.md), and [testing](tests/README.md).
+Add tests for observable behavior and complex invariants under `framework/tests/`.
+See [testing](tests/README.md), [message handling](comms/README.md) and
+[wire contracts](comms/messages/README.md) for details.

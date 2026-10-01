@@ -2,9 +2,13 @@
 
 ## Overview
 
-Adapters connect external clients to Commander. They send commands through the
-message bus and query saved data through domain stores. The bundled
-[MCP adapter](mcp/) lets AI clients run missions and inspect results.
+Adapters connect clients to Commander: commands go through the message bus;
+queries read domain stores. The bundled [MCP adapter](mcp/) lets an LLM act as
+Commander: choose a mission, assign work, review evidence and resolve open decisions.
+The controller selects agent instances and runs mission automation.
+
+Normal MCP commands operate on tracked operations. Agent/action discovery remains
+available as queries; agent administration belongs to the controller.
 
 ## Quick start
 
@@ -14,62 +18,66 @@ With Go 1.26.7+, run from the repository root:
 go run ./apps/adapters/mcp/cmd/commander-mcp
 ```
 
-Start the [controller](../controllers/README.md#quick-start) in another terminal.
-Connect your MCP client to `http://localhost:4273/mcp`; repository configurations
-are provided for [VS Code](../../.vscode/mcp.json),
-[Codex](../../.codex/config.toml), and [Cursor](../../.cursor/mcp.json).
-See [local setup](../../docs/deployment.md) for Compose and connection settings.
+Start the [controller](../controllers/README.md#quick-start) and agents with matching
+connection settings. Connect your MCP client to `http://localhost:4273/mcp`.
+Examples: [VS Code](../../.vscode/mcp.json), [Codex](../../.codex/config.toml),
+[Cursor](../../.cursor/mcp.json). See [deployment](../../docs/deployment.md) for
+Compose, provider choices and host configuration.
 
-Successful MCP tool results contain JSON in one `content` text block, without
-`structuredContent`. File links are returned as additional resource-link blocks.
-Read `missions://artifacts/{id}` for saved artifact metadata, or
-`missions://artifacts/{id}/files/{file_id}` for one of its files.
+### Operation workflow
 
-`list_agents`, `list_actions` and `list_operations` return compact summaries.
-Use `describe_action` for an action's schemas (optionally with `agent_id` for that
-agent's version), `describe_agent` for full agent details, and `get_operation`
-for task results and questions. `list_missions` returns mission names and
-objectives; call `describe_mission` with `mission_name` for the selected mission's
-full actions, automation rules and input/output schemas before starting it.
-`get_report` returns a completed operation's report.
+1. Use `list_missions`, then `describe_mission` to read the selected mission's
+   objective, actions, automation and schemas. Inspect action schemas with
+   `describe_action`; optional `agent_id` selects an instance's definition.
+2. Call `start_operation`, inspect its preflight, then `assign_task` with
+   `action_name` and `input`. The controller chooses a ready instance with capacity.
+   Missing required-action coverage keeps tasks queued. Omit `step_id` unless the
+   mission explicitly declares that step.
+3. Follow results with `get_operation` or the paged tools below. Resolve pending
+   continuations with `resolve_continuation`, using the current task/version and
+   selected actions; an empty array finishes that branch.
+4. For an operator decision, call `ask_question`, present it, and record the actual
+   response with `answer_question`. Questions allow four options or free text and
+   default to a two-minute deadline. Expiry returns the decision to the model.
+5. After reviewing evidence and resolving work, call `complete_operation` with
+   output matching the mission schema. Read the saved report with `get_report`.
+   `fail_operation` and `cancel_operation` end work when appropriate; dispatched
+   tasks may still finish after cancellation.
 
-`operation_tasks` returns task summaries in assignment order; `operation_events`
-returns events in sequence order. Both accept `operation_id`, an optional `cursor`,
-and `limit` (1–1,000, default 100). Omit `cursor` to start, then copy `next_cursor`
-unchanged into the next request for the same operation and tool. An empty page
-keeps the cursor unchanged. Only `operation_events` supports `wait_seconds`, up to
-30 seconds for new events.
+See [preflight](../../docs/abstractions.md#discovery-and-preflight) and
+[continuations](../../docs/abstractions.md#next-actions-and-continuations) for the
+decision rules. Finished operations are read-only; new work needs a new operation.
 
-Use `get_task` with both `operation_id` and `task_id` for its full input, result,
-artifacts and continuation, without retrieving the rest of the operation.
+### Queries and artifacts
 
-Operation responses include [preflight](../../docs/abstractions.md#discovery-and-preflight):
-required-action coverage and missing agent requirements. Explain blockers before
-assigning work; queued tasks wait until discovery reports sufficient coverage.
-Use `assign_task` with `action_name` and `input`; the controller selects a ready
-agent and records its ID on the task. `list_agents` and `describe_agent` show
-`work` alongside freshness. Agent administration stays in the controller.
+| Tool | Use |
+| --- | --- |
+| `list_agents`, `list_actions`, `list_operations` | Compact summaries. |
+| `describe_agent` | Full catalog, readiness, freshness and current `work` snapshot. |
+| `get_operation` | Tasks, results, preflight, continuations and questions. `last_question` is displayed; `remaining_questions` counts the others. |
+| `operation_tasks` | Task summaries in assignment order. |
+| `operation_events` | Events in sequence order; optional `wait_seconds` up to 30. |
+| `get_task` | One task's full input, result, artifacts and continuation; requires `operation_id` and `task_id`. |
 
-Inspect `tasks[].continuation` through `get_operation`. Use `resolve_continuation`
-with its task ID, current version, and selected actions (an empty array finishes
-the branch). The controller also selects agents for these actions. When guidance
-is needed, use a linked `ask_question`, present it to the user, and submit their
-actual answer with `answer_question`; the model then resumes the decision.
-`get_operation` exposes `last_question` and `remaining_questions` (excluding the
-displayed question). Questions have at most four options and a two-minute default
-deadline, configurable with `timeout_seconds`. Expiry returns the decision to the
-model without an operator answer; full history stays available.
-See [continuations](../../docs/abstractions.md#next-actions-and-continuations).
+Paged tools take `operation_id`, optional `cursor`, and `limit` (default 100,
+maximum 1,000). Copy `next_cursor` unchanged into the next call for the same tool
+and operation; empty pages preserve it. Agent `work` is a snapshot; tasks and
+execution records hold history.
+
+Successful tool results contain JSON in one text `content` block, without
+`structuredContent`; file references add resource-link blocks. Read
+`missions://artifacts/{id}` for artifact metadata and
+`missions://artifacts/{id}/files/{file_id}` for file content.
 
 ## Development and testing
 
-- Add MCP tools in [`mcp/`](mcp/); keep startup and configuration in [`mcp/cli/`](mcp/cli/).
-- For another adapter, add `<adapter-type>/` with its own module, CLI, entrypoint,
-  and tests. Use domain stores for queries and comms clients for commands.
-- Cover external behavior in the adapter's `tests/` folder.
+Add tools in [`mcp/`](mcp/) and startup/configuration in [`mcp/cli/`](mcp/cli/).
+Another adapter gets its own module, CLI, entrypoint and `tests/` directory.
+Use domain stores for queries and the typed
+[controller command client](../../framework/comms/clients/controller/commands/)
+for operation commands; see the [comms guide](../../framework/comms/README.md).
 
-Run the grouped MCP API tests against isolated Compose services using the
+Run the grouped API tests with the isolated Compose services in the
 [MCP test setup](../../framework/tests/README.md#mcp-api-tests).
-
-See the [framework guide](../../framework/README.md) for shared contracts and
-[testing conventions](../../framework/tests/README.md#writing-tests) for coverage.
+Follow the [framework contracts](../../framework/README.md) and
+[testing conventions](../../framework/tests/README.md#writing-tests).

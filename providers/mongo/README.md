@@ -1,65 +1,33 @@
-# Mongo provider
+# MongoDB provider
 
 ## Overview
 
-An independent Go module implementing framework database stores with MongoDB.
-Currently available: `MissionMongoStore`, `ActionMongoStore`, `AgentMongoStore`,
-`ExecutionMongoStore`, `OperationMongoStore`, `ArtifactMongoStore`, and the shared `MongoStore` for
-queries, conditional writes, indexes, and transactions. Controller and MCP hosts
-select these stores when `DATABASE_URL` uses `mongodb://` or `mongodb+srv://`.
-Operation updates require a replica set or sharded cluster for transactions.
-
-`MongoStore` owns one client shared by injected domain stores. Mission and action
-names are unique document IDs in separate collections. Fields use their JSON
-names; JSON schemas remain verbatim BSON binary values so large numbers and
-extension fields round-trip. Action catalogs accept only empty or `unknown`
-status; readiness belongs to each agent. Agent inventory stores one document per
-agent ID, including its advertised action readiness. A compound heartbeat index
-supports atomic expiry checks. Observation timestamps retain sub-millisecond
-precision alongside BSON dates, keeping ordering and expiry boundaries exact.
-
-Executions atomically claim commands and preserve immutable terminal outcomes.
-Accepted artifact metadata is immutable in the `artifacts` collection. The
-controller indexes it after saving a validated successful execution, before
-sending its receipt. Replaying or recovering that result repairs incomplete
-metadata writes. File bytes use the separately configured `ArtifactFileStore`.
-
-Operations use `operations`, `operation_tasks`, `operation_questions`, and
-`operation_events` collections. Each transition commits metadata and changed
-children in one transaction; unchanged child records are not rewritten. A private
-parent revision serializes competing changes to the same operation. Task order
-and event sequence have indexed cursors. JSON bodies preserve numeric precision
-and timestamps, with searchable identity/order fields stored separately in BSON.
-Transitions currently read the full operation to apply shared domain rules; this
-is not yet a large-operation throughput optimization.
+`commander/providers/mongo` implements the database stores for missions, actions,
+agent inventory, executions, operations, and accepted artifact metadata.
+Controller and MCP factories select it for `mongodb://` or `mongodb+srv://`
+`DATABASE_URL` values. Artifact bytes and reports use the separate `STORAGE_URL`.
+Operation storage requires a replica set or sharded cluster for transactions.
 
 ## Quick start
 
-From the repository root, start Mongo:
+From the repository root, start the local MongoDB service:
 
 ```sh
 docker compose -f compose.full.yaml up --wait mongo
 ```
 
-For the complete local app stack, run
-`docker compose -f compose.full.yaml up --build -d`. It uses Mongo for database
-stores, MinIO for artifact files and reports, and a filesystem volume for the bus.
-Compose initializes a single-node replica set and persists data in a named volume.
-The host port defaults to `27017` (`MONGO_PORT` overrides it).
+Compose initializes a single-node replica set and persists data in a named
+volume. The host port defaults to `27017`; `MONGO_PORT` overrides it. For the
+complete MongoDB + MinIO + FS bus stack, follow the
+[deployment guide](../../docs/deployment.md).
 
-The repository workspace already includes this module. In a private project's
-`go.mod`, use local replacements for now:
+URLs must include a database name. Use
+`mongodb://127.0.0.1:27017/commander?replicaSet=rs0&directConnection=true` from the
+host; Compose apps use `mongodb://mongo:27017/commander?replicaSet=rs0`.
+`directConnection=true` lets host clients use the forwarded port even though
+the replica-set member advertises its container hostname.
 
-```go
-require commander/providers/mongo v0.0.0
-
-replace commander/providers/mongo => /path/to/commander/providers/mongo
-replace commander/framework => /path/to/commander/framework
-```
-
-Run `go mod tidy` after adding imports. Public GitHub imports require the separate
-module-path update. Mongo consumers need this module and the framework, without
-the filesystem provider.
+Apps share one [`MongoStore`](store/mongo_store.go) client across domain stores:
 
 ```go
 import (
@@ -73,37 +41,51 @@ database, err := store.Open(ctx,
 if err != nil {
     return err
 }
-// The host closes database after all stores stop using it.
+// The host calls database.Close with a shutdown context after consumers stop.
 missionStore := mongomissions.NewMissionMongoStore(database)
 err = missionStore.Upsert(ctx, mission)
 ```
 
-URLs require a database name and support `mongodb://` and `mongodb+srv://`.
-Use `mongo:27017` inside Compose; host connections use `directConnection=true`
-because the replica-set member advertises its container hostname.
+The repository workspace includes this module. Private projects use
+[local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
+for `commander/framework` and `commander/providers/mongo`.
 
 ## Development and testing
 
-Run the provider tests against the real Mongo service:
+With MongoDB running, run from the repository root:
 
 ```sh
 COMMANDER_TEST_MONGO_URL='mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true' \
   go test -race -count=1 -timeout=3m ./providers/mongo/...
-docker compose -f compose.full.yaml down --volumes
+go vet ./providers/mongo/...
 ```
 
-Database tests skip when `COMMANDER_TEST_MONGO_URL` is unset. Use a dedicated test
+Integration tests skip without `COMMANDER_TEST_MONGO_URL`. Use a dedicated test
 database: tests clean their collections before and after each case. CI runs the
-same suite in [test-provider-mongo.yml](../../.github/workflows/test-provider-mongo.yml).
-Optional controller and MCP startup tests use the same environment variable,
-with separate `_controller_startup` and `_mcp_startup` databases. They create
-indexes and verify startup/shutdown without deleting database contents. CI runs
-these in [test-controller.yml](../../.github/workflows/test-controller.yml) and
-[test-mcp.yml](../../.github/workflows/test-mcp.yml).
+suite in [test-provider-mongo.yml](../../.github/workflows/test-provider-mongo.yml).
+The same variable enables optional controller and MCP startup tests; see the
+[testing guide](../../framework/tests/README.md).
 
-Keep collection names, document mapping, and domain errors in each domain store.
-The shared store exposes BSON queries and driver errors without interpreting
-mission or operation state. Transaction callbacks may retry: use their supplied
-context and keep external effects outside the callback. Store-specific error
-mapping belongs to domain providers; callers reconcile uncertain writes before
-dispatching further work.
+### Persistence and recovery
+
+Mission and action names are unique document IDs. Agent records contain advertised
+action readiness and indexed heartbeat timestamps. JSON schemas and operation
+bodies preserve numeric precision; observation times retain sub-millisecond
+precision alongside BSON dates. Executions atomically claim commands and keep
+terminal outcomes immutable. The controller indexes immutable artifact metadata
+after saving a successful result and before acknowledging acceptance. Result
+replay and recovery repair incomplete metadata writes.
+
+Operations use `operations`, `operation_tasks`, `operation_questions`, and
+`operation_events` collections. A transaction commits metadata and changed
+children together; unchanged children are not rewritten. A private parent
+revision serializes changes to the same operation. Task order and event sequence
+have indexed cursors. Transitions still read the full operation to apply shared
+domain rules.
+
+Keep collection names, document mapping, and domain errors in domain stores.
+The shared `MongoStore` handles BSON queries, indexes, and transactions.
+Transaction callbacks can retry: use the supplied context and keep external
+effects outside the callback. Follow the
+[`OperationStore` contract](../../framework/domain/operations/operation_store.go)
+for reconciling uncertain writes before dispatching further work.
