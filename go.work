@@ -5,6 +5,7 @@ use (
 	./providers/fs
 	./providers/mongo
 	./providers/s3
+	./providers/rabbitmq
 	./apps/agents/web-quality
 	./apps/controllers/default
 	./apps/adapters/mcp

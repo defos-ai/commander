@@ -13,13 +13,16 @@ agents, controllers, and adapters.
 | [Filesystem](fs/README.md) | Bus, database stores, artifact files, reports | Local paths, `~/path`, `file:///path`, `fs:///path` |
 | [MongoDB](mongo/README.md) | Missions, actions, agent inventory, executions, operations, artifact metadata | `mongodb://`, `mongodb+srv://` |
 | [S3](s3/README.md) | Artifact files and reports | `s3://bucket/optional-prefix` |
+| [RabbitMQ](rabbitmq/README.md) | Standalone message bus | `amqp://`, `amqps://` |
 
-RabbitMQ is planned. Bus factories recognize `amqp://` and `amqps://` but return
-an explicit not-implemented error.
+RabbitMQ is available as a standalone provider. Production host bus factories
+still use FS; they recognize `amqp://` and `amqps://` but return an explicit
+not-implemented error. RabbitMQ host and Compose wiring is a later increment.
 
 Each backend is a separate Go module: `commander/providers/fs`,
-`commander/providers/mongo`, or `commander/providers/s3`. Import only the modules
-your host needs; there is no shared `commander/providers` module.
+`commander/providers/mongo`, `commander/providers/s3`, or
+`commander/providers/rabbitmq`. Import only the modules your host needs; there is
+no shared `commander/providers` module.
 
 ## Quick start
 
@@ -69,6 +72,7 @@ To add a backend:
    provider module. Follow the [testing guide](../framework/tests/README.md).
 
 Provider-specific checks live in the [FS](fs/README.md#development-and-testing),
-[MongoDB](mongo/README.md#development-and-testing), and
-[S3](s3/README.md#development-and-testing) guides. Run affected framework and app
-tests when shared behavior changes.
+[MongoDB](mongo/README.md#development-and-testing),
+[S3](s3/README.md#development-and-testing), and
+[RabbitMQ](rabbitmq/README.md#development-and-testing) guides. Run affected
+framework and app tests when shared behavior changes.

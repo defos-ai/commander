@@ -61,7 +61,9 @@ independent copies. All production hosts use their process ID as the name and
 | `DurableShared` | Retains work from first declaration through downtime; consumers sharing the inbox compete. Unsettled work can be redelivered and processing order is not guaranteed. |
 
 Only `TransientExclusive` is implemented by FS. `DurableShared` returns
-`ErrUnsupportedInbox`; durable replay and competing consumption are not activated.
+`ErrUnsupportedInbox`; production hosts do not activate durable replay or
+competing consumption. The standalone [RabbitMQ provider](../../providers/rabbitmq/README.md)
+implements both modes; host factories still use FS.
 FS retains unsettled and rejected evidence without replaying it into a new
 subscription; see [FS behavior](../../providers/fs/README.md).
 
@@ -110,10 +112,12 @@ snapshots cannot recreate older state. A fresh heartbeat can restore the agent.
 Late action results still persist against their execution record and receive
 acceptance, without changing newer inventory.
 
-## Future broker providers
+## RabbitMQ provider
 
-RabbitMQ is not implemented. A broker provider must implement the declared inbox
-modes, retry/failed-delivery policy and publish confirmation semantics while
-preserving controller-owned assignment and result acceptance. Connecting a broker
-alone does not make multiple controllers safe;
+The standalone [RabbitMQ provider](../../providers/rabbitmq/README.md) implements
+the bus contract, including both inbox modes and publish confirmations.
+Production host factories and Compose stacks still use FS for messaging;
+RabbitMQ integration is a later increment. Controller-owned assignment and
+result acceptance remain framework responsibilities. Connecting a broker alone
+does not make multiple controllers safe;
 see [current scope](../../docs/overview.md#current-scope).
