@@ -77,11 +77,12 @@ they remain interrupted for review. This is not an exactly-once execution guaran
 
 - **One active controller per database.** Multiple-controller ownership and shared
   capacity reservations are not implemented.
-- **Implemented providers:** filesystem bus/database/files, MongoDB database,
-  and S3-compatible files/reports. Full Compose uses MongoDB and MinIO with an FS bus.
-- **Messaging is still local FS fanout.** It requires live subscribers and does not
-  automatically redeliver retained messages to a replacement subscription.
-  RabbitMQ is a next step, not an available provider.
+- **Implemented providers:** filesystem bus/database/files, RabbitMQ messaging,
+  MongoDB database, and S3-compatible files/reports. Full Compose still uses MongoDB
+  and MinIO with an FS bus; native hosts can select RabbitMQ through `BUS_URL`.
+- **Hosts use transient inboxes.** Replacing a host does not replay its old inbox.
+  RabbitMQ supports durable shared inboxes, but hosts do not activate them yet.
+  FS retains failed delivery evidence without automatic redelivery.
 
 See [message handling](../framework/comms/README.md),
 [local setup](deployment.md), and [tests](../framework/tests/README.md) for the

@@ -13,11 +13,10 @@ agents, controllers, and adapters.
 | [Filesystem](fs/README.md) | Bus, database stores, artifact files, reports | Local paths, `~/path`, `file:///path`, `fs:///path` |
 | [MongoDB](mongo/README.md) | Missions, actions, agent inventory, executions, operations, artifact metadata | `mongodb://`, `mongodb+srv://` |
 | [S3](s3/README.md) | Artifact files and reports | `s3://bucket/optional-prefix` |
-| [RabbitMQ](rabbitmq/README.md) | Standalone message bus | `amqp://`, `amqps://` |
+| [RabbitMQ](rabbitmq/README.md) | Message bus | `amqp://`, `amqps://` |
 
-RabbitMQ is available as a standalone provider. Production host bus factories
-still use FS; they recognize `amqp://` and `amqps://` but return an explicit
-not-implemented error. RabbitMQ host and Compose wiring is a later increment.
+Controller, MCP, and agent factories select RabbitMQ for `amqp://` and `amqps://`
+bus URLs. Compose stacks still configure the FS bus.
 
 Each backend is a separate Go module: `commander/providers/fs`,
 `commander/providers/mongo`, `commander/providers/s3`, or
@@ -30,7 +29,7 @@ Choose backends independently through the host settings:
 
 | Setting | Selects | Available backends |
 | --- | --- | --- |
-| `BUS_URL` | Messages between apps | FS |
+| `BUS_URL` | Messages between apps | FS, RabbitMQ |
 | `DATABASE_URL` | Catalogs, inventory, executions, operations, artifact metadata | FS, MongoDB |
 | `STORAGE_URL` | Artifact bytes and reports | FS, S3 |
 

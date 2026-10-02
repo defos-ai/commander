@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/url"
@@ -28,8 +29,8 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 	}{
 		{name: "Mongo connection unavailable", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander?serverSelectionTimeoutMS=50", connectionFailure: true},
 		{name: "unsupported database", flag: "database-url", url: "postgres://user:" + secret + "@127.0.0.1:5432/commander"},
-		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:5672", dependency: "rabbitmq"},
-		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:5671", dependency: "rabbitmq"},
+		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:1", dependency: "rabbitmq"},
+		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:1", dependency: "rabbitmq"},
 		{name: "unsupported broker", flag: "bus-url", url: "nats://user:" + secret + "@127.0.0.1:4222"},
 		{name: "S3 URL with credentials", flag: "storage-url", url: "s3://user:" + secret + "@artifacts/bucket", invalidConfig: true},
 		{name: "uppercase FILE URL", flag: "database-url", url: "postgres://127.0.0.1:5432/commander", filesystemForm: "FILE"},
@@ -84,8 +85,9 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 					t.Errorf("expected a MongoDB connection timeout: %v", err)
 				}
 			} else if test.dependency != "" {
-				if !strings.Contains(message, test.dependency) || !strings.Contains(message, "not implemented") {
-					t.Errorf("startup must identify its unimplemented %s dependency: %v", test.dependency, err)
+				var connectionError *net.OpError
+				if !strings.Contains(message, test.dependency) || !errors.As(err, &connectionError) {
+					t.Errorf("expected a %s connection failure: %v", test.dependency, err)
 				}
 			} else if !strings.Contains(message, "unsupported") && !strings.Contains(message, "not implemented") {
 				t.Errorf("startup did not explain the unavailable provider: %v", err)

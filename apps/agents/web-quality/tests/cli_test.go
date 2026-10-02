@@ -3,6 +3,8 @@ package webquality_test
 import (
 	"bytes"
 	"context"
+	"errors"
+	"net"
 	"net/url"
 	"path/filepath"
 	"runtime"
@@ -21,8 +23,8 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 		invalidConfig   bool
 		filesystemForm  string
 	}{
-		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:5672", dependency: "rabbitmq"},
-		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:5671", dependency: "rabbitmq"},
+		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:1", dependency: "rabbitmq"},
+		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:1", dependency: "rabbitmq"},
 		{name: "unsupported broker", flag: "bus-url", url: "nats://user:" + secret + "@127.0.0.1:4222"},
 		{name: "S3 URL with credentials", flag: "storage-url", url: "s3://user:" + secret + "@artifacts/bucket", invalidConfig: true},
 		{name: "uppercase FILE URL", flag: "bus-url", url: "nats://127.0.0.1:4222", filesystemForm: "FILE"},
@@ -57,7 +59,7 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 			err := cli.Run(ctx, args, &logs)
 
 			if ctx.Err() != nil {
-				t.Fatalf("startup waited for provider I/O instead of rejecting the unavailable dependency: %v", err)
+				t.Fatalf("startup did not report the unavailable dependency before its deadline: %v", err)
 			}
 			if err == nil {
 				t.Fatal("startup accepted an unavailable provider")
@@ -71,10 +73,14 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 					t.Errorf("startup did not explain invalid S3 configuration: %v", err)
 				}
 			} else if test.dependency != "" {
-				if !strings.Contains(message, test.dependency) || !strings.Contains(message, "not implemented") {
-					t.Errorf("startup must identify its unimplemented %s dependency: %v", test.dependency, err)
+				if !strings.Contains(message, test.dependency) || !strings.Contains(message, "connect failed") {
+					t.Errorf("startup must identify the failed %s connection: %v", test.dependency, err)
 				}
-			} else if !strings.Contains(message, "unsupported") && !strings.Contains(message, "not implemented") {
+				var connectionErr *net.OpError
+				if !errors.As(err, &connectionErr) {
+					t.Errorf("startup must preserve the underlying connection error: %v", err)
+				}
+			} else if !strings.Contains(message, "unsupported") {
 				t.Errorf("startup did not explain the unavailable provider: %v", err)
 			}
 			if strings.Contains(err.Error(), secret) || strings.Contains(logs.String(), secret) {

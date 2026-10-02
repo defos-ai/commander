@@ -33,6 +33,7 @@ import (
 	mongomissions "commander/providers/mongo/missions"
 	mongooperations "commander/providers/mongo/operations"
 	mongostore "commander/providers/mongo/store"
+	rabbitcomms "commander/providers/rabbitmq/comms"
 	s3reports "commander/providers/s3/reports"
 	s3store "commander/providers/s3/store"
 )
@@ -119,7 +120,7 @@ func createBus(ctx context.Context, rawURL string) (comms.Bus, error) {
 		}
 		return fscomms.NewFsBus(path)
 	case "amqp", "amqps":
-		return nil, errors.New("RabbitMQ bus is not implemented")
+		return rabbitcomms.NewRabbitMQBus(ctx, rawURL, rabbitcomms.Options{})
 	default:
 		return nil, fmt.Errorf("unsupported bus scheme %q", scheme)
 	}

@@ -13,6 +13,7 @@ import (
 	"commander/providers/fs"
 	fsartifacts "commander/providers/fs/artifacts"
 	fscomms "commander/providers/fs/comms"
+	rabbitmqcomms "commander/providers/rabbitmq/comms"
 	s3artifacts "commander/providers/s3/artifacts"
 	s3store "commander/providers/s3/store"
 )
@@ -70,7 +71,7 @@ func createBus(ctx context.Context, busURL string) (comms.Bus, error) {
 		}
 		return fscomms.NewFsBus(root)
 	case "amqp", "amqps":
-		return nil, errors.New("RabbitMQ bus is not implemented")
+		return rabbitmqcomms.NewRabbitMQBus(ctx, busURL, rabbitmqcomms.Options{})
 	default:
 		return nil, fmt.Errorf("unsupported bus scheme %q", scheme)
 	}

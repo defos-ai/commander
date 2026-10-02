@@ -4,9 +4,9 @@
 
 `commander/providers/rabbitmq` implements `comms.Bus` over AMQP 0-9-1 with
 [`amqp091-go`](https://github.com/rabbitmq/amqp091-go). It supports `amqp://` and `amqps://` URLs and both
-framework inbox modes. This module can be used directly; production host
-factories and both Compose stacks still use the FS bus. Setting a host's
-`BUS_URL` to RabbitMQ still returns a not-implemented error.
+framework inbox modes. Controller, MCP, and web-quality agent factories select
+this provider when `BUS_URL` or `--bus-url` uses either scheme. Both Compose
+stacks still configure the FS bus; broker service wiring is the next increment.
 
 ## Public API
 
