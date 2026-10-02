@@ -5,8 +5,29 @@
 `commander/providers/rabbitmq` implements `comms.Bus` over AMQP 0-9-1 with
 [`amqp091-go`](https://github.com/rabbitmq/amqp091-go). It supports `amqp://` and `amqps://` URLs and both
 framework inbox modes. Controller, MCP, and web-quality agent factories select
-this provider when `BUS_URL` or `--bus-url` uses either scheme. Both Compose
-stacks still configure the FS bus; broker service wiring is the next increment.
+this provider when `BUS_URL` or `--bus-url` uses either scheme.
+[`compose.full.yaml`](../../compose.full.yaml) selects RabbitMQ; the default
+Compose stack uses FS.
+
+Hosts use transient inboxes, so a replacement host does not inherit its old
+queue. One active controller per database is supported.
+
+## Quick start
+
+From the repository root:
+
+```sh
+docker compose -f compose.full.yaml up --build -d
+```
+
+The full stack supplies `amqp://commander:commander-local-secret@rabbitmq:5672/`
+to its hosts. Native hosts can use the same URL with `127.0.0.1` instead of
+`rabbitmq`. The [management UI](http://localhost:15672) uses the same credentials.
+`RABBITMQ_USER` and `RABBITMQ_PASSWORD` set initial broker credentials;
+`RABBITMQ_PORT` and `RABBITMQ_MANAGEMENT_PORT` change the published local ports
+(defaults `5672` and `15672`). `BUS_URL` can select an external broker.
+
+See [local setup](../../docs/deployment.md#local-compose) for MCP and Playground.
 
 ## Public API
 
@@ -92,11 +113,12 @@ durable business deduplication across controller restarts remains future work.
 
 ## Development and testing
 
-Start a dedicated local broker from the repository root:
+Start a dedicated test broker from the repository root. Port `5673` keeps it
+separate from full Compose:
 
 ```sh
 docker run -d --rm --name commander-rabbitmq-test \
-  -p 127.0.0.1:5672:5672 \
+  -p 127.0.0.1:5673:5672 \
   -e RABBITMQ_DEFAULT_USER=commander \
   -e RABBITMQ_DEFAULT_PASS=commander-test \
   --health-cmd 'rabbitmq-diagnostics -q ping' \
@@ -108,7 +130,7 @@ Wait until `docker inspect --format '{{.State.Health.Status}}'
 commander-rabbitmq-test` reports `healthy`, then run:
 
 ```sh
-COMMANDER_TEST_RABBITMQ_URL='amqp://commander:commander-test@127.0.0.1:5672/' \
+COMMANDER_TEST_RABBITMQ_URL='amqp://commander:commander-test@127.0.0.1:5673/' \
   go test -race -count=1 -timeout=3m ./providers/rabbitmq/...
 go vet ./providers/rabbitmq/...
 docker stop commander-rabbitmq-test

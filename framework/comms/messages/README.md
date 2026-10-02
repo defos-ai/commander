@@ -10,8 +10,8 @@ an agent instance. Agent results and status flow back to the controller.
 
 ## Destinations
 
-These are the **current exact-topic destinations**, not RabbitMQ queues.
-Comms selects the default controller route for adapters and agents.
+Destinations are exact topic names. Comms selects the default controller route
+for adapters and agents.
 
 | Publisher → consumer | Destination | Messages |
 | --- | --- | --- |
@@ -26,7 +26,8 @@ Destination names follow [`routing.go`](routing.go), including
 `ControllerCommands(controllerType)` and `AgentEvents(agentID)`. Current inboxes
 use `TransientExclusive` mode and the receiving process ID as their name, scoped
 to the destination topic. See [inbox lifetimes](../README.md#delivery-guarantees).
-The RabbitMQ provider is not implemented.
+The [RabbitMQ provider](../../../providers/rabbitmq/README.md#delivery-and-recovery)
+derives queue names from topic and inbox identity.
 
 ## Payloads
 

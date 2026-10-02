@@ -18,7 +18,7 @@ docker compose -f compose.full.yaml up --wait mongo
 
 Compose initializes a single-node replica set and persists data in a named
 volume. The host port defaults to `27017`; `MONGO_PORT` overrides it. For the
-complete MongoDB + MinIO + FS bus stack, follow the
+complete RabbitMQ + MongoDB + MinIO stack, follow the
 [deployment guide](../../docs/deployment.md).
 
 URLs must include a database name. Use

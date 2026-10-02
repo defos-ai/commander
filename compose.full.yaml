@@ -1,7 +1,7 @@
 name: commander-full
 
 x-environment: &environment
-  BUS_URL: ${BUS_URL:-file:///state/bus}
+  BUS_URL: ${BUS_URL:-amqp://${RABBITMQ_USER:-commander}:${RABBITMQ_PASSWORD:-commander-local-secret}@rabbitmq:5672/}
   STORAGE_URL: ${STORAGE_URL:-s3://commander}
   AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://minio:9000}
   AWS_REGION: ${AWS_REGION:-us-east-1}
@@ -21,8 +21,6 @@ x-runtime: &runtime
 x-agent: &agent
   <<: *runtime
   shm_size: 256mb
-  volumes:
-    - bus:/state/bus
   image: commander-web-quality-agent:local
   pull_policy: never
   environment:
@@ -31,8 +29,29 @@ x-agent: &agent
   depends_on:
     controller:
       condition: service_started
+    rabbitmq:
+      condition: service_healthy
 
 services:
+  rabbitmq:
+    image: rabbitmq:4.2.9-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-commander}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-commander-local-secret}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 10s
+
   mongo:
     image: mongo:8.0.32
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
@@ -99,21 +118,6 @@ services:
         mc alias set local http://minio:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
         mc mb --ignore-existing local/commander
 
-  volume-init:
-    # Reuse the controller image for local volume permissions only.
-    image: commander-controller:local
-    pull_policy: never
-    user: "0:0"
-    network_mode: none
-    read_only: true
-    cap_drop: [ALL]
-    cap_add: [CHOWN]
-    security_opt: ["no-new-privileges:true"]
-    entrypoint: ["chown"]
-    command: ["1000:1000", "/bus"]
-    volumes:
-      - bus:/bus
-
   controller:
     <<: *runtime
     image: commander-controller:local
@@ -122,16 +126,14 @@ services:
       context: .
       dockerfile: apps/controllers/default/docker/Dockerfile
     depends_on:
-      volume-init:
-        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
       mongo:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     command:
       - --with-missions=/data/default-missions.json
-    volumes:
-      - bus:/state/bus
     configs:
       - source: default-missions
         target: /data/default-missions.json
@@ -149,8 +151,6 @@ services:
     command:
       - --listen-address=:4273
       - --allowed-hosts=localhost,127.0.0.1,::1,mcp
-    volumes:
-      - bus:/state/bus
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
@@ -159,6 +159,8 @@ services:
     depends_on:
       controller:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
       mongo:
         condition: service_healthy
       minio-init:
@@ -214,7 +216,7 @@ services:
         condition: service_started
 
 volumes:
-  bus:
+  rabbitmq:
   minio:
   mongo:
 

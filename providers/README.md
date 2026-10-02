@@ -16,7 +16,7 @@ agents, controllers, and adapters.
 | [RabbitMQ](rabbitmq/README.md) | Message bus | `amqp://`, `amqps://` |
 
 Controller, MCP, and agent factories select RabbitMQ for `amqp://` and `amqps://`
-bus URLs. Compose stacks still configure the FS bus.
+bus URLs. Full Compose selects RabbitMQ; the default Compose stack uses FS.
 
 Each backend is a separate Go module: `commander/providers/fs`,
 `commander/providers/mongo`, `commander/providers/s3`, or
@@ -34,7 +34,7 @@ Choose backends independently through the host settings:
 | `STORAGE_URL` | Artifact bytes and reports | FS, S3 |
 
 The [local stack](../README.md#quick-start) uses FS throughout.
-[`compose.full.yaml`](../compose.full.yaml) uses MongoDB and MinIO with an FS bus.
+[`compose.full.yaml`](../compose.full.yaml) uses RabbitMQ, MongoDB, and MinIO.
 See [deployment configuration](../docs/deployment.md#configuration) for host
 settings, and each provider's guide for constructors and backend setup. The
 repository [workspace](../go.work) includes all modules; private projects use

@@ -116,7 +116,8 @@ acceptance, without changing newer inventory.
 
 The [RabbitMQ provider](../../providers/rabbitmq/README.md) implements the bus
 contract, including both inbox modes and publish confirmations. Host factories
-select it for `amqp://` and `amqps://` bus URLs; Compose stacks still configure FS.
-Controller-owned assignment and result acceptance remain framework responsibilities. Connecting a broker alone
-does not make multiple controllers safe;
+select it for `amqp://` and `amqps://` bus URLs. Full Compose uses RabbitMQ;
+the default Compose stack uses FS. Hosts use transient inboxes in both stacks.
+Controller-owned assignment and result acceptance remain framework responsibilities.
+Connecting a broker alone does not make multiple controllers safe;
 see [current scope](../../docs/overview.md#current-scope).

@@ -11,7 +11,7 @@ Apps share it between `ArtifactFileS3Store` and `ReportS3Store`.
 
 ## Quick start
 
-Start the complete local stack with MongoDB, MinIO, and an FS bus:
+Start the complete local stack with RabbitMQ, MongoDB, and MinIO:
 
 ```sh
 docker compose -f compose.full.yaml up --build -d

@@ -42,7 +42,7 @@ opens an HTTP port; controllers and agents consume messages. See
 ```mermaid
 flowchart TD
     Apps[Applications: adapters, controllers, agents, Playground] --> Framework[Framework: runtimes, domain, messaging]
-    Apps --> Providers[Providers: FS, MongoDB, S3]
+    Apps --> Providers[Providers: FS, RabbitMQ, MongoDB, S3]
     Providers --> Contracts[Framework interfaces and domain models]
     Framework --> Contracts
 ```
@@ -78,8 +78,8 @@ they remain interrupted for review. This is not an exactly-once execution guaran
 - **One active controller per database.** Multiple-controller ownership and shared
   capacity reservations are not implemented.
 - **Implemented providers:** filesystem bus/database/files, RabbitMQ messaging,
-  MongoDB database, and S3-compatible files/reports. Full Compose still uses MongoDB
-  and MinIO with an FS bus; native hosts can select RabbitMQ through `BUS_URL`.
+  MongoDB database, and S3-compatible files/reports. Full Compose uses RabbitMQ,
+  MongoDB, and MinIO; the default Compose stack uses FS throughout.
 - **Hosts use transient inboxes.** Replacing a host does not replay its old inbox.
   RabbitMQ supports durable shared inboxes, but hosts do not activate them yet.
   FS retains failed delivery evidence without automatic redelivery.

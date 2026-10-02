@@ -15,17 +15,18 @@ docker compose up --build -d
 docker compose run --build --rm playground
 ```
 
-**MongoDB + MinIO:**
+**RabbitMQ + MongoDB + MinIO:**
 
 ```sh
 docker compose -f compose.full.yaml up --build -d
 docker compose -f compose.full.yaml run --build --rm playground
 ```
 
-Full Compose replaces the database with MongoDB and file storage with MinIO;
-the bus still uses FS. Both stacks use the `commander` project name and are
-alternatives. See [Mongo](../providers/mongo/README.md) and [S3](../providers/s3/README.md)
-for connection details. Bundled credentials are for local development.
+Full Compose uses RabbitMQ for messaging, MongoDB for the database, and MinIO
+for file storage. The stacks use separate projects (`commander` and
+`commander-full`), but share the default MCP port. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
+[MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
+connection details. Bundled credentials are for local development.
 
 Connect another AI client to `http://localhost:4273/mcp` using the
 [adapter guide](../apps/adapters/README.md#quick-start). For a temporary session
@@ -54,7 +55,9 @@ Run a host with `--help` for its flags. Action-specific dependencies belong in t
 Compose creates named Docker volumes; no host `state/` directory is needed.
 The FS stack shares `bus` and `storage` across hosts, and `database` between the
 controller and MCP. A startup helper sets volume ownership for non-root hosts.
-Full Compose uses its MongoDB and MinIO volumes for persistent data instead.
+Full Compose persists RabbitMQ, MongoDB, and MinIO data in their own volumes;
+application hosts need no shared filesystem volumes. Host inboxes remain
+transient: broker persistence does not preserve a replaced host's inbox.
 
 Compose passes `--with-missions` to load the example mission. This upserts supplied
 missions without removing others; without the flag the controller loads none.
