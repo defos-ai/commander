@@ -63,7 +63,7 @@ func TestOperationsReturnCompleteSavedRecordsInCreationOrder(t *testing.T) {
 	}
 }
 
-func TestOperationQueriesAuthenticateAndRejectMutations(t *testing.T) {
+func TestOperationQueriesAuthenticateAndRejectUnsupportedMethods(t *testing.T) {
 	fixture := newFixture(t)
 	op := saveOperation(t, operationStore(t, fixture), operationRecord(1))
 	server := startAPI(t, fixture.localArgs())
@@ -76,6 +76,10 @@ func TestOperationQueriesAuthenticateAndRejectMutations(t *testing.T) {
 			assertAPIError(t, server.request(t, http.MethodGet, path), http.StatusUnauthorized, "authentication_required")
 			for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 				result := server.request(t, method, path, authenticate)
+				if method == http.MethodPost && (path == "/api/v1/operations" || path == base+"/tasks") {
+					assertAPIError(t, result, http.StatusBadRequest, "invalid_request")
+					continue
+				}
 				if result.status != http.StatusMethodNotAllowed {
 					t.Fatalf("%s returned %d, want 405: %s", method, result.status, result.body)
 				}

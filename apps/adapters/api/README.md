@@ -3,8 +3,8 @@
 ## Overview
 
 The API adapter lets HTTP clients inspect Commander missions, actions, agents
-and saved operation state through domain stores. Command endpoints are planned;
-commands will go to the controller over the bus.
+and saved operation state through domain stores, and send operation commands to
+the controller over the bus.
 
 `GET`/`HEAD /healthz` checks liveness; `/readyz` checks metadata database
 readability. These probes are public on every host for load balancers. Readiness
@@ -64,6 +64,29 @@ Question lists contain saved history in `items`, the newest pending question
 that is not overdue in `last_question`, and the count of other eligible questions
 in `remaining_questions`. The latter fields are `null` and `0` when none is
 eligible or the operation is terminal. Reads never expire saved questions.
+
+## Operation commands
+
+Commands use the same authentication and origin checks as queries.
+
+| Command | Endpoint | Body | Success |
+| --- | --- | --- | --- |
+| Start | `POST /api/v1/operations` | Required nonblank `mission_name` and `input` (any JSON value, including `null`); optional UUID `operation_id` | `201` full operation + `Location` |
+| Assign task | `POST /api/v1/operations/{operation_id}/tasks` | Required nonblank `action_name`; optional object `input` (not `null`) and string `step_id` | `201` full task + `Location` |
+| Cancel | `POST /api/v1/operations/{operation_id}/cancel` | Empty body or `{}` | `200` full operation |
+
+Nonempty bodies require `application/json` (charset parameters are accepted),
+with a 1 MiB limit; unknown fields are rejected. Task assignment takes the
+operation ID from the URL and does not accept `operation_id` or `agent_id` in its
+body. The controller selects the agent; unknown actions may remain queued.
+Invalid mission input or an unknown step returns `422 invalid_input`.
+Cancellation stops queued work; already dispatched tasks may still finish.
+
+Commands time out after 10 seconds without automatic retries. A timeout or
+uncertain result can follow accepted work: query saved state before resubmitting.
+Reusing a start ID returns `409 operation_conflict`; repeated assignments create
+new tasks, and cancelling a finished operation returns `409 operation_finished`.
+Swagger lists request schemas, response headers and error codes.
 
 ## Documentation and configuration
 

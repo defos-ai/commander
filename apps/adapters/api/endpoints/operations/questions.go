@@ -15,11 +15,11 @@ type questionList struct {
 }
 
 func registerQuestions(mux *http.ServeMux, store operations.OperationStore) {
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/questions", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}/questions", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		operation, err := store.Get(r.Context(), r.PathValue("operation_id"))
 		endpoints.WriteQueryResult(w, questionsResponse(operation, time.Now().UTC()), err)
 	}))
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/questions/{question_id}", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}/questions/{question_id}", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		operation, err := store.Get(r.Context(), r.PathValue("operation_id"))
 		if err != nil {
 			endpoints.WriteQueryResult(w, nil, err)

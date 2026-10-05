@@ -129,10 +129,14 @@ func (s *runningAPI) request(t *testing.T, method, path string, configure ...fun
 	return response{status: result.StatusCode, header: result.Header, body: string(body)}
 }
 
-func decodeResponse[T any](t *testing.T, result response) T {
+func decodeResponse[T any](t *testing.T, result response, expectedStatus ...int) T {
 	t.Helper()
-	if result.status != http.StatusOK {
-		t.Fatalf("status=%d, want 200: %s", result.status, result.body)
+	status := http.StatusOK
+	if len(expectedStatus) > 0 {
+		status = expectedStatus[0]
+	}
+	if result.status != status {
+		t.Fatalf("status=%d, want %d: %s", result.status, status, result.body)
 	}
 	var value T
 	if err := json.Unmarshal([]byte(result.body), &value); err != nil {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	commands "commander/framework/comms/clients/controller/commands"
+	"commander/framework/domain"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -42,7 +43,7 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	}
 	input := append(json.RawMessage(nil), command.Input...)
 	if err := definition.ValidateInput(input); err != nil {
-		return operations.Operation{}, err
+		return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 	}
 	now := time.Now().UTC()
 	operationID := command.OperationID

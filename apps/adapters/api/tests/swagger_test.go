@@ -74,6 +74,9 @@ func TestSwaggerServesProtectedLocalUIAndOpenAPI(t *testing.T) {
 		if path == "/docs/swagger-ui-bundle.js" && !strings.Contains(asset.body, "SwaggerUIBundle") {
 			t.Error("docs bundle is not Swagger UI")
 		}
+		if path == "/docs/initializer.js" && !strings.Contains(asset.body, `supportedSubmitMethods: ["get", "post"]`) {
+			t.Error("Swagger UI must allow query and command submission")
+		}
 	}
 	type documentSpec struct {
 		OpenAPI  string                `json:"openapi"`
@@ -242,6 +245,177 @@ func TestSwaggerOperationContractsMatchHTTPResponses(t *testing.T) {
 	}
 	if !slices.Contains(questions.Required, "last_question") || !slices.Contains(questions.Required, "remaining_questions") || len(questions.Properties["last_question"].AnyOf) != 2 || questions.Properties["last_question"].AnyOf[1].Type != "null" {
 		t.Error("question list must require nullable last_question and remaining_questions")
+	}
+}
+
+func TestSwaggerCommandContracts(t *testing.T) {
+	fixture := newFixture(t)
+	t.Setenv("API_SWAGGER_ENABLED", "true")
+	server := startAPI(t, fixture.localArgs())
+	type mediaType struct {
+		Schema jsonschema.Schema `json:"schema"`
+	}
+	type responseSpec struct {
+		Description string               `json:"description"`
+		Content     map[string]mediaType `json:"content"`
+		Headers     map[string]struct {
+			Required bool              `json:"required"`
+			Schema   jsonschema.Schema `json:"schema"`
+		} `json:"headers"`
+	}
+	type commandSpec struct {
+		OperationID string          `json:"operationId"`
+		Description string          `json:"description"`
+		Security    json.RawMessage `json:"security"`
+		RequestBody struct {
+			Required    bool                 `json:"required"`
+			Description string               `json:"description"`
+			Content     map[string]mediaType `json:"content"`
+		} `json:"requestBody"`
+		Parameters []struct {
+			Name     string            `json:"name"`
+			In       string            `json:"in"`
+			Required bool              `json:"required"`
+			Schema   jsonschema.Schema `json:"schema"`
+		} `json:"parameters"`
+		Responses map[string]responseSpec `json:"responses"`
+	}
+	type commandDocument struct {
+		Paths      map[string]map[string]commandSpec `json:"paths"`
+		Components struct {
+			Schemas map[string]*jsonschema.Schema `json:"schemas"`
+		} `json:"components"`
+	}
+	document := decodeResponse[commandDocument](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	for _, test := range []struct {
+		name, suffix, status, model, missing string
+		valid, invalid                       []string
+	}{
+		{
+			name: "start", status: "201", model: "Operation", missing: "mission_not_found",
+			valid: []string{
+				`{"mission_name":"inspect","input":null}`,
+				`{"mission_name":"inspect","input":[1,"two",null]}`,
+				`{"mission_name":"inspect","input":true}`,
+				`{"mission_name":"inspect","input":42}`,
+				`{"mission_name":"inspect","input":"text"}`,
+				`{"operation_id":"12345678-1234-1234-1234-123456789abc","mission_name":"inspect","input":{}}`,
+			},
+			invalid: []string{
+				`{"mission_name":"inspect"}`, `{"input":{}}`, `{"mission_name":" \t","input":null}`,
+				`{"mission_name":null,"input":{}}`, `{"operation_id":"INVALID","mission_name":"inspect","input":{}}`,
+				`{"operation_id":null,"mission_name":"inspect","input":{}}`, `{"mission_name":"inspect","input":{},"extra":true}`,
+			},
+		},
+		{
+			name: "assign", suffix: "/{operation_id}/tasks", status: "201", model: "Task", missing: "operation_not_found",
+			valid: []string{`{"action_name":"inspect"}`, `{"action_name":"inspect","input":{"any":[1,null]},"step_id":"step"}`},
+			invalid: []string{
+				`{}`, `{"action_name":""}`, `{"action_name":" \t"}`, `{"action_name":null}`,
+				`{"action_name":"inspect","input":null}`, `{"action_name":"inspect","input":[]}`,
+				`{"action_name":"inspect","input":"text"}`, `{"action_name":"inspect","step_id":null}`,
+				`{"action_name":"inspect","operation_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"action_name":"inspect","agent_id":"chosen-agent"}`,
+			},
+		},
+		{
+			name: "cancel", suffix: "/{operation_id}/cancel", status: "200", model: "Operation", missing: "operation_not_found",
+			valid: []string{`{}`}, invalid: []string{`null`, `[]`, `{"operation_id":"12345678-1234-1234-1234-123456789abc"}`},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			endpoint, ok := document.Paths["/api/v1/operations"+test.suffix]["post"]
+			if !ok || endpoint.OperationID == "" {
+				t.Fatal("missing command endpoint")
+			}
+			if len(endpoint.Security) != 0 {
+				t.Error("command must inherit global Basic authentication")
+			}
+			if endpoint.RequestBody.Required != (test.name != "cancel") {
+				t.Error("only cancellation may omit the body")
+			}
+			if len(endpoint.RequestBody.Content) != 1 || !strings.Contains(endpoint.RequestBody.Description, "1 MiB") {
+				t.Error("body must document JSON content and the size limit")
+			}
+			if !strings.Contains(endpoint.Description, "10-second") || !strings.Contains(endpoint.Description, "no automatic retry") || !strings.Contains(endpoint.Description, "query saved state") {
+				t.Error("command must explain timeouts and resubmission")
+			}
+			if test.suffix != "" {
+				if len(endpoint.Parameters) != 1 {
+					t.Fatal("command must have one operation path parameter")
+				}
+				parameter := endpoint.Parameters[0]
+				if parameter.Name != "operation_id" || parameter.In != "path" || !parameter.Required || parameter.Schema.Format != "uuid" || parameter.Schema.Pattern == "" {
+					t.Errorf("incorrect operation path parameter: %+v", parameter)
+				}
+				if !strings.Contains(endpoint.Responses["400"].Description, "invalid_operation_id") {
+					t.Error("missing invalid_operation_id response")
+				}
+			}
+			for status, codes := range map[string][]string{
+				"400": {"invalid_request", "invalid_request_origin"}, "401": {"authentication_required"},
+				"403": {"host_not_allowed", "cross_origin_request"}, "404": {test.missing}, "409": {"operation_conflict"},
+				"413": {"request_too_large"}, "415": {"unsupported_media_type"}, "500": {"internal_error"},
+				"503": {"operation_write_uncertain", "command_outcome_unknown", "controller_unavailable", "request_canceled"},
+				"504": {"request_timeout"},
+			} {
+				response := endpoint.Responses[status]
+				for _, code := range codes {
+					if !strings.Contains(response.Description, code) {
+						t.Errorf("missing %s error %s", status, code)
+					}
+				}
+				if response.Content["application/json"].Schema.Ref != "#/components/schemas/Error" {
+					t.Errorf("%s response must use the JSON error schema", status)
+				}
+			}
+			if test.name != "cancel" && !strings.Contains(endpoint.Responses["422"].Description, "invalid_input") {
+				t.Error("missing invalid_input response")
+			}
+			if test.name == "assign" && !strings.Contains(endpoint.Responses["409"].Description, "question_pending") {
+				t.Error("missing question_pending response")
+			}
+			if test.name != "start" && !strings.Contains(endpoint.Responses["409"].Description, "operation_finished") {
+				t.Error("missing operation_finished response")
+			}
+			success := endpoint.Responses[test.status]
+			if success.Content["application/json"].Schema.Ref != "#/components/schemas/"+test.model {
+				t.Error("success must return the full record schema")
+			}
+			if test.status == "201" {
+				location := success.Headers["Location"]
+				if !location.Required || location.Schema.Type != "string" || location.Schema.Format != "uri-reference" {
+					t.Error("created response must document the Location header")
+				}
+				if _, ok := endpoint.Responses["200"]; ok {
+					t.Error("created command incorrectly documents 200 success")
+				}
+			}
+			requestRef := endpoint.RequestBody.Content["application/json"].Schema.Ref
+			schema := document.Components.Schemas[strings.TrimPrefix(requestRef, "#/components/schemas/")]
+			if schema == nil {
+				t.Fatal("missing request schema")
+			}
+			resolved, err := schema.Resolve(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, accepted := range []bool{true, false} {
+				payloads := test.invalid
+				if accepted {
+					payloads = test.valid
+				}
+				for _, raw := range payloads {
+					var payload any
+					if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+						t.Fatal(err)
+					}
+					if err := resolved.Validate(payload); (err == nil) != accepted {
+						t.Errorf("request %s: accepted=%t, validation=%v", raw, accepted, err)
+					}
+				}
+			}
+		})
 	}
 }
 

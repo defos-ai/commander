@@ -10,7 +10,7 @@ import (
 )
 
 func registerOperations(mux *http.ServeMux, store operations.OperationStore) {
-	mux.HandleFunc("GET /api/v1/operations", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		items, err := store.List(r.Context())
 		slices.SortFunc(items, func(a, b operations.Operation) int {
 			if order := b.CreatedAt.Compare(a.CreatedAt); order != 0 {
@@ -20,7 +20,7 @@ func registerOperations(mux *http.ServeMux, store operations.OperationStore) {
 		})
 		endpoints.WriteQueryResult(w, endpoints.ListResponse(items), err)
 	}))
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		item, err := store.Get(r.Context(), r.PathValue("operation_id"))
 		endpoints.WriteQueryResult(w, item, err)
 	}))

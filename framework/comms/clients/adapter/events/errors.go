@@ -57,6 +57,7 @@ var errorCodes = []struct {
 	{"operation_finished", operations.ErrFinished},
 	{"question_pending", operations.ErrQuestionPending},
 	{"task_not_running", operations.ErrNotRunning},
+	{"invalid_input", domain.ErrInvalidInput},
 }
 
 func EncodeError(err error) *ControllerError {

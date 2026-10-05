@@ -50,6 +50,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		options.TypeSchemas[model.typeOf] = schema
 	}
 	openAPIOperationPaths(paths)
+	openAPICommandPaths(paths, components)
 	return nil
 }
 
@@ -116,6 +117,95 @@ func openAPIOperationPaths(paths map[string]any) {
 			responses["404"] = endpoints.OpenAPIResponse(route.missing, endpoints.OpenAPIRef("Error"))
 		}
 		paths[route.path] = map[string]any{"get": endpoint}
+	}
+}
+
+func openAPICommandPaths(paths, components map[string]any) {
+	components["StartOperationRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"mission_name", "input"},
+		"properties": map[string]any{
+			"operation_id": map[string]any{
+				"type": "string", "format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
+				"description": "Optional canonical lowercase UUID. Omit to generate an ID. Reusing an existing ID returns operation_conflict; this is not an idempotency key.",
+			},
+			"mission_name": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
+			"input": map[string]any{
+				"description": "Required JSON value, including null, arrays and scalars. The controller validates it against the selected mission's input schema.",
+			},
+		},
+	}
+	components["AssignOperationTaskRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"action_name"},
+		"properties": map[string]any{
+			"action_name": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
+			"input":       map[string]any{"type": "object", "description": "Optional task input object. Explicit null is invalid."},
+			"step_id":     map[string]any{"type": "string", "description": "Optional mission step ID. An unknown step returns invalid_input."},
+		},
+	}
+	components["CancelOperationRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false,
+	}
+	const root = "/api/v1/operations"
+	const operation = root + "/{operation_id}"
+	const commandDescription = " Commands go to the controller over the bus with a 10-second request timeout and no automatic retry. A timeout, operation_write_uncertain or command_outcome_unknown can follow accepted work; query saved state before resubmitting."
+	for _, route := range []struct {
+		path, id, summary, description, request, response, status, missing, conflict, location string
+		bodyRequired, invalidInput                                                             bool
+	}{
+		{
+			path: root, id: "startOperation", summary: "Start an operation",
+			description: "Starts the named mission and returns the full created operation. mission_name must be nonblank and input must be present. Repeating a supplied operation_id returns 409 operation_conflict.",
+			request:     "StartOperationRequest", response: "Operation", status: "201", missing: "mission_not_found", conflict: "operation_conflict",
+			location: "/api/v1/operations/{operation_id}", bodyRequired: true, invalidInput: true,
+		},
+		{
+			path: operation + "/tasks", id: "assignOperationTask", summary: "Assign an operation task",
+			description: "Returns the full assigned task. action_name must be nonblank. The path supplies operation_id; operation_id and agent_id are not accepted in the body. The controller selects the agent, and an unknown action can remain queued. Repeated assignment creates another task.",
+			request:     "AssignOperationTaskRequest", response: "Task", status: "201", missing: "operation_not_found", conflict: "operation_conflict, operation_finished or question_pending",
+			location: "/api/v1/operations/{operation_id}/tasks/{task_id}", bodyRequired: true, invalidInput: true,
+		},
+		{
+			path: operation + "/cancel", id: "cancelOperation", summary: "Cancel an operation",
+			description: "Cancels an operation and returns the full updated operation. Queued tasks are cancelled; already dispatched work may still finish. The body may be empty or {} only. Cancelling an already finished or cancelled operation returns 409 operation_finished.",
+			request:     "CancelOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict or operation_finished",
+		},
+	} {
+		endpoint := endpoints.OpenAPIQueryOperation(route.id, route.summary, "Operations", endpoints.OpenAPIRef(route.response))
+		endpoint["description"] = route.description + commandDescription
+		endpoint["requestBody"] = map[string]any{
+			"required":    route.bodyRequired,
+			"description": "At most 1 MiB. Nonempty bodies require application/json; charset parameters are accepted. Unknown properties, invalid JSON and invalid body fields return invalid_request.",
+			"content":     map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef(route.request)}},
+		}
+		responses := endpoint["responses"].(map[string]any)
+		delete(responses, "200")
+		success := endpoints.OpenAPIResponse("Success", endpoints.OpenAPIRef(route.response))
+		if route.location != "" {
+			success["headers"] = map[string]any{"Location": map[string]any{
+				"description": "Relative URL of the created resource: " + route.location, "required": true,
+				"schema": map[string]any{"type": "string", "format": "uri-reference"},
+			}}
+		}
+		responses[route.status] = success
+		invalid := "invalid_request or invalid_request_origin"
+		if route.path != root {
+			endpoint["parameters"] = []any{openAPIUUIDParameter("operation_id")}
+			invalid = "invalid_operation_id, " + invalid
+		}
+		responses["400"] = endpoints.OpenAPIResponse(invalid, endpoints.OpenAPIRef("Error"))
+		responses["404"] = endpoints.OpenAPIResponse(route.missing, endpoints.OpenAPIRef("Error"))
+		responses["409"] = endpoints.OpenAPIResponse(route.conflict, endpoints.OpenAPIRef("Error"))
+		responses["413"] = endpoints.OpenAPIResponse("request_too_large", endpoints.OpenAPIRef("Error"))
+		responses["415"] = endpoints.OpenAPIResponse("unsupported_media_type", endpoints.OpenAPIRef("Error"))
+		if route.invalidInput {
+			responses["422"] = endpoints.OpenAPIResponse("invalid_input", endpoints.OpenAPIRef("Error"))
+		}
+		responses["503"] = endpoints.OpenAPIResponse("operation_write_uncertain, command_outcome_unknown, controller_unavailable or request_canceled. An uncertain write takes precedence over a concurrent request timeout; query saved state before resubmitting.", endpoints.OpenAPIRef("Error"))
+		responses["504"] = endpoints.OpenAPIResponse("request_timeout. Work may already have been accepted; query saved state before resubmitting.", endpoints.OpenAPIRef("Error"))
+		if paths[route.path] == nil {
+			paths[route.path] = map[string]any{}
+		}
+		paths[route.path].(map[string]any)["post"] = endpoint
 	}
 }
 

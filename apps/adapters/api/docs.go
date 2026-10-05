@@ -33,7 +33,7 @@ const documentationInitializer = `window.ui = SwaggerUIBundle({
   validatorUrl: null,
   persistAuthorization: false,
   queryConfigEnabled: false,
-  supportedSubmitMethods: ["get"],
+  supportedSubmitMethods: ["get", "post"],
   presets: [SwaggerUIBundle.presets.apis]
 });
 `

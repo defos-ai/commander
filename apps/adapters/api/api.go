@@ -45,7 +45,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
 	endpoints.RegisterAgents(mux, config.AgentStore)
-	operationendpoints.Register(mux, config.OperationStore)
+	operationendpoints.Register(mux, config.OperationStore, config.Operations)
 	if config.SwaggerEnabled {
 		if err := registerDocumentation(mux); err != nil {
 			return nil, err

@@ -106,7 +106,7 @@ func openAPIDocument() ([]byte, error) {
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.1.0",
-			"description": "Read Commander catalogs and saved operation state. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"description": "Read Commander catalogs and saved operation state, or send operation commands to the controller over the bus. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},

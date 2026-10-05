@@ -4,3 +4,5 @@ package domain
 import "errors"
 
 var ErrControllerClosed = errors.New("controller is closed")
+
+var ErrInvalidInput = errors.New("invalid input")

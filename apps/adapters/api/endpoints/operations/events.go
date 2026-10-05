@@ -9,7 +9,7 @@ import (
 )
 
 func registerEvents(mux *http.ServeMux, store operations.OperationStore) {
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/events", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}/events", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		cursor, limit, ok := readPage(w, r)
 		if !ok {
 			return

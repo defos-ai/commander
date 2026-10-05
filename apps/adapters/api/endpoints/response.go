@@ -26,7 +26,7 @@ func ListResponse[T any](items []T) List[T] {
 func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 	switch {
 	case err == nil:
-		writeJSON(w, http.StatusOK, value)
+		WriteJSON(w, http.StatusOK, value)
 	case errors.Is(err, missions.ErrUnknownMission):
 		WriteError(w, http.StatusNotFound, "mission_not_found")
 	case errors.Is(err, actions.ErrUnknownAction):
@@ -44,7 +44,7 @@ func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func WriteJSON(w http.ResponseWriter, status int, value any) {
 	data, err := json.Marshal(value)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "internal_error")

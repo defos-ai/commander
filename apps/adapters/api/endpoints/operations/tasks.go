@@ -9,7 +9,7 @@ import (
 )
 
 func registerTasks(mux *http.ServeMux, store operations.OperationStore) {
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/tasks", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}/tasks", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		cursor, limit, ok := readPage(w, r)
 		if !ok {
 			return
@@ -24,7 +24,7 @@ func registerTasks(mux *http.ServeMux, store operations.OperationStore) {
 		}
 		endpoints.WriteQueryResult(w, pageResponse(items, cursor), err)
 	}))
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/tasks/{task_id}", queryHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}/tasks/{task_id}", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		item, err := store.GetTask(r.Context(), r.PathValue("operation_id"), r.PathValue("task_id"))
 		endpoints.WriteQueryResult(w, item, err)
 	}))
