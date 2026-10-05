@@ -15,7 +15,6 @@ export function ConnectionsPage({ connections = [], statuses = {}, onAdd, onOpen
   return (
     <div className="connections-page">
       <header className="connections-hero">
-        <p className="eyebrow">{t($ => $.connections.eyebrow)}</p>
         <h1><Brand /></h1>
         <p className="connections-introduction">{t($ => $.connections.introduction)}</p>
       </header>
@@ -34,7 +33,7 @@ export function ConnectionsPage({ connections = [], statuses = {}, onAdd, onOpen
           </div>
         )}
       </main>
-      <footer className="connections-footer eyebrow">{t($ => $.connections.footer)}</footer>
+      <footer className="connections-footer">{t($ => $.connections.footer)}</footer>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 export default {
   brand: 'COMMANDER',
   connections: {
-    eyebrow: 'Mission control',
-    introduction: 'Your Commander APIs, in one place.',
+    introduction: 'Your Commander APIs, in one place',
     title: 'Connections',
     count_one: '{{count}} connection',
     count_other: '{{count}} connections',
@@ -18,7 +17,7 @@ export default {
       degraded: 'Not ready',
       unreachable: 'Unreachable',
     },
-    footer: 'Commander → Controller → Agent',
+    footer: 'Defos @ 2026',
   },
   shell: {
     navigation: 'Workspace navigation',

@@ -1,7 +1,7 @@
 .connections-page { min-height: 100svh; display: flex; flex-direction: column; padding: 0 32px; }
 .connections-hero { text-align: center; padding: clamp(72px, 12vh, 132px) 0 78px; }
-.connections-hero h1 { margin: 19px 0 22px; font-size: clamp(40px, 7.6vw, 92px); line-height: 1; }
-.connections-introduction { color: var(--muted); font-size: 18px; line-height: 1.5; }
+.connections-hero h1 { margin: 0 0 22px; font-size: clamp(40px, 7.6vw, 92px); line-height: 1; }
+.connections-introduction { color: var(--muted); font: 400 18px/1.5 var(--font-mono); text-transform: uppercase; }
 .connections-main { width: min(100%, 1040px); margin: 0 auto; }
 .connections-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
 .connections-toolbar > div { display: flex; align-items: baseline; gap: 16px; }
@@ -11,7 +11,7 @@
 .empty-icon { color: var(--muted); display: flex; margin-bottom: 22px; }
 .connections-empty h3 { font-size: 20px; letter-spacing: -.025em; margin-bottom: 10px; }
 .connections-empty p { font-size: 15px; color: var(--muted); line-height: 1.6; }
-.connections-footer { margin-top: auto; padding: 54px 0 28px; text-align: center; font-size: 10px; letter-spacing: .04em; }
+.connections-footer { margin-top: auto; padding: 54px 0 28px; text-align: center; color: var(--muted); font: 400 10px/1.6 var(--font-mono); letter-spacing: .04em; }
 .connections-grid { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; list-style: none; }
 .connections-grid li { min-width: 0; }
 .connection-card { display: flex; flex-direction: column; align-items: stretch; width: 100%; height: 100%; padding: 24px; text-align: left; background: transparent; border: 1px solid var(--line); border-radius: 4px; transition: background .15s, border-color .15s; }
