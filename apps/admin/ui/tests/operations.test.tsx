@@ -77,7 +77,9 @@ describe('operations browser', () => {
     fireEvent.click(screen.getByText('Desktop capture', { selector: 'summary *' }).closest('summary')!);
     expect(screen.getByText('desktop.png')).toBeVisible();
     expect(screen.getByText('image/png')).toBeVisible();
-    expect(screen.queryByRole('button', { name: /answer|cancel operation|run action/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Answer question' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Cancel operation' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /run action/i })).not.toBeInTheDocument();
     expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
   });
 

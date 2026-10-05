@@ -99,7 +99,7 @@ function isPreflight(value: unknown): value is OperationPreflight {
     isNullableArray(value.actions, isActionReadiness);
 }
 
-function isOperation(value: unknown): value is Operation {
+export function isOperation(value: unknown): value is Operation {
   return isObject(value) && isIdentifier(value.id) && isMission(value.mission) && 'input' in value &&
     typeof value.status === 'string' && isOptionalString(value.report_id) && isOptionalString(value.error) &&
     isDate(value.created_at) && isDate(value.updated_at) &&

@@ -1,0 +1,26 @@
+.operation-controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.operation-command-form { display: grid; gap: 18px; margin-top: 20px; min-width: 0; }
+.operation-command-form code { font: 400 12px/1.7 var(--font-mono); overflow-wrap: anywhere; }
+.operation-command-form .form-field { min-width: 0; }
+.operation-command-form select, .operation-command-form textarea { width: 100%; min-width: 0; min-height: 44px; padding: 11px 12px; color: var(--ink); background: var(--panel); border: 1px solid #bcbcb4; border-radius: 4px; font-size: 15px; }
+.operation-command-form textarea { resize: vertical; font: 400 13px/1.7 var(--font-mono); }
+.operation-command-form textarea:disabled, .operation-command-form select:disabled { opacity: .65; }
+.operation-command-form textarea[aria-invalid='true'] { border-color: var(--red); }
+.operation-command-objective { white-space: pre-wrap; overflow-wrap: anywhere; }
+.operation-command-schema { min-width: 0; }
+.operation-command-schema > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 0; }
+.operation-command-schema .mission-section { margin-top: 16px; }
+.operation-command-schema .mission-section h2 { font-size: 16px; }
+.operation-command-error { display: grid; gap: 12px; padding: 16px; border-left: 2px solid var(--red); background: var(--panel); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.operation-command-error .button { justify-self: start; }
+.operation-command-identity { color: var(--muted); }
+.operation-command-identity code { font: 400 12px/1.7 var(--font-mono); overflow-wrap: anywhere; }
+.operation-command-options { padding: 0; margin: 0; display: grid; gap: 12px; border: 0; min-width: 0; }
+.operation-command-options legend { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+.operation-command-option { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; cursor: pointer; }
+.operation-command-option:has(input:checked) { border-color: var(--green); }
+.operation-command-option input { flex-shrink: 0; margin-top: 4px; accent-color: var(--green); }
+.operation-command-question { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+@media (max-width: 760px) {
+  .operation-command-form .dialog-actions .button { flex: 1 1 auto; white-space: nowrap; }
+}

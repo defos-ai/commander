@@ -3,11 +3,17 @@ import type {
   OperationPreflight, OperationQuestion, OperationTask,
 } from '../api/operation-types';
 import { useTranslation } from '../i18n';
+import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
+import { Button } from './Button';
 import '../styles/catalog.css';
 import '../styles/operations.css';
 
 export function operationProgress(tasks: OperationTask[] | null) {
   return { total: tasks?.length ?? 0, finished: tasks?.filter(task => task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled').length ?? 0 };
+}
+
+export function isActiveOperation(status: string) {
+  return status === 'planning' || status === 'running' || status === 'waiting';
 }
 
 export function OperationStatus({ status }: { status: string }) {
@@ -90,8 +96,9 @@ function Task({ task }: { task: OperationTask }) {
   </div></details>;
 }
 
-function Question({ question }: { question: OperationQuestion }) {
+function Question({ question, onAnswer }: { question: OperationQuestion; onAnswer?: () => void }) {
   const { t } = useTranslation();
+  const expired = useQuestionExpiry(question.expires_at);
   const { status } = question;
   return <article className="operation-question">
     <div className="operation-question-heading"><h3>{question.text}</h3><span className="catalog-status" data-tone={status === 'answered' ? 'ready' : 'muted'}>
@@ -99,6 +106,9 @@ function Question({ question }: { question: OperationQuestion }) {
     </span></div>
     {Boolean(question.options?.length) && <div className="operation-nested"><h4>{t($ => $.operations.options)}</h4><ol>{question.options?.map((option, index) => <li key={index}>{option}</li>)}</ol></div>}
     {question.answer && <div className="operation-nested"><h4>{t($ => $.operations.answer)}</h4><p>{question.answer}</p></div>}
+    {status === 'pending' && (expired
+      ? <p className="operation-nested catalog-muted">{t($ => $.operationCommands.expired)}</p>
+      : onAnswer && <Button className="operation-nested" onClick={onAnswer}>{t($ => $.operationCommands.answerTitle)}</Button>)}
     <dl className="detail-list">
       <div><dt>{t($ => $.operations.questionId)}</dt><dd><code>{question.id}</code></dd></div>
       {question.task_id && <div><dt>{t($ => $.operations.taskId)}</dt><dd><code>{question.task_id}</code></dd></div>}
@@ -154,7 +164,7 @@ function Artifact({ artifact }: { artifact: OperationArtifact }) {
   </details>;
 }
 
-export function OperationDetails({ operation }: { operation: Operation }) {
+export function OperationDetails({ operation, onAnswer }: { operation: Operation; onAnswer?: (question: OperationQuestion) => void }) {
   const { t } = useTranslation();
   const progress = operationProgress(operation.tasks);
   const artifacts = [...new Map(operation.tasks?.flatMap(task => task.result?.artifacts ?? []).map(artifact => [artifact.id, artifact])).values()];
@@ -179,7 +189,8 @@ export function OperationDetails({ operation }: { operation: Operation }) {
       {operation.tasks?.length ? <ul className="operation-items">{operation.tasks.map(task => <li key={task.id}><Task task={task} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noTasks)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.questions)}</h2>
-      {operation.questions?.length ? <><p className="catalog-muted">{t($ => $.operations.questionStatusNote)}</p><ul className="operation-items">{operation.questions.map(question => <li key={question.id}><Question question={question} /></li>)}</ul></> : <p className="catalog-muted">{t($ => $.operations.noQuestions)}</p>}
+      {operation.questions?.length ? <><p className="catalog-muted">{t($ => $.operations.questionStatusNote)}</p><ul className="operation-items">{operation.questions.map(question => <li key={question.id}><Question question={question}
+        onAnswer={onAnswer && isActiveOperation(operation.status) ? () => onAnswer(question) : undefined} /></li>)}</ul></> : <p className="catalog-muted">{t($ => $.operations.noQuestions)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.artifacts)}</h2>
       {artifacts.length ? <ul className="operation-items">{artifacts.map(artifact => <li key={artifact.id}><Artifact artifact={artifact} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noArtifacts)}</p>}

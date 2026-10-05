@@ -9,11 +9,18 @@ Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
 page keeps a grid of saved connections. Inside a connection, the sidebar provides
 Overview, Operations, Missions, Agents, Actions and connection settings.
 
-Operations supports search, status filters and read-only details: task progress,
+Operations supports search, status filters and details: task progress,
 agent readiness, decisions, questions, results, artifact files and event history.
 Snapshots refresh every 10 seconds while open. Task completion is shown separately
-from operation status. Artifact files show metadata; downloads, operation commands
-and the execution graph will follow in later increments.
+from operation status. Start an operation by selecting a mission and supplying
+its JSON input; Commander then plans the first task. You can cancel active
+operations and answer pending questions using an option or your own text.
+
+Commands go through the API to the controller. Cancellation stops new work;
+already-dispatched work may finish. A timeout leaves the outcome uncertain, so
+the UI offers to inspect the operation and never retries a command automatically.
+Artifact files currently show metadata; downloads and the execution graph follow
+in later increments.
 
 Missions supports search and read-only details: objectives, starting and required
 actions, automations, planning steps, and input/output schemas. Refresh loads the

@@ -3,6 +3,7 @@ import missions from './missions';
 import agents from './agents';
 import actions from './actions';
 import operations from './operations';
+import operationCommands from './operationCommands';
 
 export default {
   brand: 'COMMANDER',
@@ -11,6 +12,7 @@ export default {
   agents,
   actions,
   operations,
+  operationCommands,
   connections: {
     introduction: 'Administration of yours Command Centers',
     title: 'Connections',

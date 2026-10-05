@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, LoaderCircle, RefreshCw, Search, Workflow } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, LoaderCircle, Plus, RefreshCw, Search, Workflow } from 'lucide-react';
 import { getOperation, listOperations } from '../api/operations';
-import type { Operation } from '../api/operation-types';
-import { OperationDetails, OperationStatus, operationProgress } from '../components/OperationDetails';
+import type { Operation, OperationQuestion } from '../api/operation-types';
+import { isActiveOperation, OperationDetails, OperationStatus, operationProgress } from '../components/OperationDetails';
+import { StartOperationDialog } from '../components/StartOperationDialog';
+import { OperationCommandDialog } from '../components/OperationCommandDialog';
 import { Button } from '../components/Button';
 import type { Connection, Credentials } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
@@ -11,6 +13,9 @@ import '../styles/catalog.css';
 import '../styles/operations.css';
 
 const knownStatuses = ['planning', 'running', 'waiting', 'completed', 'failed', 'cancelled'] as const;
+type CommandModal = { url: string; credentials: Credentials } & (
+  { kind: 'start' } | { kind: 'cancel'; operation: Operation } | { kind: 'answer'; operation: Operation; question: OperationQuestion }
+);
 
 export function OperationsPage({ connection, credentials, onSignIn }: {
   connection: Connection;
@@ -21,6 +26,8 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
   const [selectedID, setSelectedID] = useState<string>();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [modal, setModal] = useState<CommandModal>();
+  const [notice, setNotice] = useState<'created' | 'cancelled' | 'answered'>();
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
   const query = useCatalogQuery<Operation>({ url: connection.url, credentials, id: selectedID, list: listOperations, get: getOperation, pollInterval: 10_000 });
@@ -30,13 +37,17 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
   const visible = items.filter(item => (!status || item.status === status) &&
     `${item.id} ${item.mission.name}`.toLocaleLowerCase().includes(filter));
   const error = !credentials ? 'authentication' : query.error?.kind;
+  const currentModal = credentials && modal?.url === connection.url && modal.credentials === credentials ? modal : undefined;
+  const commandOperation = currentModal && currentModal.kind !== 'start' ? query.item ?? currentModal.operation : undefined;
+  const commandQuestion = currentModal?.kind === 'answer' ? commandOperation?.questions?.find(question => question.id === currentModal.question.id) : undefined;
 
   useEffect(() => {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [selectedID]);
 
-  function select(id?: string) { focusHeading.current = true; setSelectedID(id); }
+  function select(id?: string) { focusHeading.current = true; setSelectedID(id); setNotice(undefined); }
   function clearFilters() { setSearch(''); setStatus(''); }
+  function inspect(id: string) { setModal(undefined); select(id); query.refresh(); }
 
   return <section className="catalog-page operations-page">
     {selectedID !== undefined && <button className="catalog-back" type="button" onClick={() => select()}>
@@ -46,10 +57,17 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
       <div><h1 ref={heading} tabIndex={-1}>{selectedID ?? t($ => $.operations.title)}</h1>
         {selectedID === undefined && <p>{t($ => $.operations.description)}</p>}
       </div>
-      {credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>
+      <div className="operation-controls">{credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>
         <RefreshCw size={15} aria-hidden="true" />{query.refreshing ? t($ => $.operations.refreshing) : t($ => $.operations.refresh)}
       </Button>}
+        {credentials && !error && selectedID === undefined && <Button onClick={() => setModal({ kind: 'start', url: connection.url, credentials })}>
+          <Plus size={15} aria-hidden="true" />{t($ => $.operationCommands.startTitle)}
+        </Button>}
+        {credentials && query.item && isActiveOperation(query.item.status) && <Button variant="secondary" className="danger-button"
+          onClick={() => setModal({ kind: 'cancel', operation: query.item!, url: connection.url, credentials })}>{t($ => $.operationCommands.cancelTitle)}</Button>}
+      </div>
     </div>
+    {notice && <p className="notice" role="status">{t($ => $.operationCommands.notices[notice])}</p>}
     {error ? <div className="notice" role="alert">
       <p>{t($ => $.operations.errors[error])}</p>
       {error === 'authentication' ? <Button onClick={onSignIn}>{t($ => $.operations.signIn)}</Button>
@@ -57,7 +75,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     </div> : query.loading ? <p className="catalog-loading" role="status">
       <LoaderCircle className="connection-form-spinner" size={17} aria-hidden="true" />
       {selectedID === undefined ? t($ => $.operations.loading) : t($ => $.operations.loadingDetail)}
-    </p> : query.item ? <OperationDetails operation={query.item} /> : <>
+    </p> : query.item ? <OperationDetails operation={query.item} onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} /> : <>
       {(items.length > 0 || filter || status) && <div className="catalog-toolbar">
         <div className="operation-filters">
           <label className="catalog-search"><Search size={17} aria-hidden="true" />
@@ -88,5 +106,14 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
       </div>}
     </>}
     {credentials && !query.loading && !error && <p className="catalog-updated">{t($ => $.operations.polling)} {query.checkedAt !== undefined && t($ => $.operations.checked, { time: new Date(query.checkedAt).toLocaleTimeString() })}</p>}
+    {currentModal?.kind === 'start' && <StartOperationDialog connection={connection} credentials={currentModal.credentials}
+      onClose={() => setModal(undefined)} onInspect={inspect} onStarted={operation => { setModal(undefined); select(operation.id); setNotice('created'); }} />}
+    {currentModal && currentModal.kind !== 'start' && commandOperation && <OperationCommandDialog
+      {...(currentModal.kind === 'answer' ? { command: 'answer' as const, question: commandQuestion ?? currentModal.question } : { command: 'cancel' as const })}
+      operation={commandOperation} connection={connection} credentials={currentModal.credentials}
+      available={!error && (currentModal.kind !== 'answer' || Boolean(commandQuestion))}
+      onClose={() => setModal(undefined)} onInspect={inspect} onCompleted={() => {
+        setNotice(currentModal.kind === 'cancel' ? 'cancelled' : 'answered'); setModal(undefined); query.refresh();
+      }} />}
   </section>;
 }
