@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"commander/adapters/api/endpoints"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
@@ -18,6 +19,7 @@ import (
 
 type Config struct {
 	Security          SecurityConfig
+	SwaggerEnabled    bool
 	Operations        controllercommands.Operations
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
@@ -39,6 +41,14 @@ func NewHandler(config Config) (http.Handler, error) {
 		return nil, errors.New("API requires controller commands and mission, operation, agent, action, report, artifact metadata and artifact file stores")
 	}
 	mux := http.NewServeMux()
+	endpoints.RegisterMissions(mux, config.MissionStore)
+	endpoints.RegisterActions(mux, config.ActionStore)
+	endpoints.RegisterAgents(mux, config.AgentStore)
+	if config.SwaggerEnabled {
+		if err := registerDocumentation(mux); err != nil {
+			return nil, err
+		}
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeHealth(w, http.StatusOK, "ok")
 	})

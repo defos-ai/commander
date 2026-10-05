@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -19,7 +20,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
+	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "API_SWAGGER_ENABLED", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
 		t.Setenv(name, "")
 	}
 	t.Setenv("API_USERNAME", "api-fixture-user")
@@ -126,4 +127,24 @@ func (s *runningAPI) request(t *testing.T, method, path string, configure ...fun
 		t.Fatal(err)
 	}
 	return response{status: result.StatusCode, header: result.Header, body: string(body)}
+}
+
+func decodeResponse[T any](t *testing.T, result response) T {
+	t.Helper()
+	if result.status != http.StatusOK {
+		t.Fatalf("status=%d, want 200: %s", result.status, result.body)
+	}
+	var value T
+	if err := json.Unmarshal([]byte(result.body), &value); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, result.body)
+	}
+	return value
+}
+
+func assertAPIError(t *testing.T, result response, status int, code string) {
+	t.Helper()
+	var payload map[string]string
+	if result.status != status || json.Unmarshal([]byte(result.body), &payload) != nil || len(payload) != 1 || payload["error"] != code {
+		t.Fatalf("status=%d body=%s, want %d with error %q", result.status, result.body, status, code)
+	}
 }

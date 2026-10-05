@@ -8,6 +8,8 @@ require (
 	commander/providers/mongo v0.0.0
 	commander/providers/rabbitmq v0.0.0
 	commander/providers/s3 v0.0.0
+	github.com/google/jsonschema-go v0.4.3
+	github.com/swaggo/files/v2 v2.0.2
 )
 
 require (
@@ -29,7 +31,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.1 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/rabbitmq/amqp091-go v1.15.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect

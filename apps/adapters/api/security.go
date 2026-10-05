@@ -3,12 +3,13 @@ package api
 import (
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 	"unicode"
+
+	"commander/adapters/api/endpoints"
 )
 
 type SecurityConfig struct {
@@ -72,23 +73,23 @@ func (s *security) protect(next http.Handler) http.Handler {
 		}
 		origin, err := s.proxy.origin(r)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request_origin")
+			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request_origin")
 			return
 		}
 		if origin.scheme == "https" {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		if _, allowed := s.hosts[origin.host]; !allowed {
-			writeError(w, http.StatusForbidden, "host_not_allowed")
+			endpoints.WriteError(w, http.StatusForbidden, "host_not_allowed")
 			return
 		}
 		if !sameOrigin(r, origin) {
-			writeError(w, http.StatusForbidden, "cross_origin_request")
+			endpoints.WriteError(w, http.StatusForbidden, "cross_origin_request")
 			return
 		}
 		if !s.authenticated(r) {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Commander", charset="UTF-8"`)
-			writeError(w, http.StatusUnauthorized, "authentication_required")
+			endpoints.WriteError(w, http.StatusUnauthorized, "authentication_required")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -138,12 +139,4 @@ func securityHeaders(w http.ResponseWriter) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-}
-
-func writeError(w http.ResponseWriter, status int, code string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(struct {
-		Error string `json:"error"`
-	}{Error: code})
 }

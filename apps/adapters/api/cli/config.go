@@ -22,6 +22,7 @@ type config struct {
 	databaseURL   string
 	listenAddress string
 	security      api.SecurityConfig
+	swagger       bool
 	logLevel      string
 	logFormat     string
 }
@@ -40,9 +41,10 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags.StringVar(&allowedHosts, "allowed-hosts", "", "Comma-separated HTTP hostnames/IPs without ports (API_ALLOWED_HOSTS; default localhost,127.0.0.1,::1)")
 	flags.StringVar(&trustedProxies, "trusted-proxies", "", "Comma-separated proxy IPs/CIDRs (API_TRUSTED_PROXIES; default none)")
 	flags.StringVar(&proxyHeaders, "proxy-headers", "", "Trusted proxy headers: none, forwarded, x-forwarded, x-forwarded-proto (API_PROXY_HEADERS; default none)")
+	flags.BoolVar(&result.swagger, "swagger", false, "Enable authenticated Swagger UI and OpenAPI document (API_SWAGGER_ENABLED; default false)")
 	flags.Usage = func() {
 		fmt.Fprintln(output, "Usage: commander-api [flags]")
-		fmt.Fprintln(output, "API host foundation: serves /healthz and /readyz. Business endpoints follow in later increments.")
+		fmt.Fprintln(output, "Read-only missions, actions and agents API; optional Swagger at /docs/.")
 		fmt.Fprintln(output, "API_USERNAME and API_PASSWORD must be supplied through the environment.")
 		flags.PrintDefaults()
 	}
@@ -54,6 +56,13 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	}
 	provided := make(map[string]bool)
 	flags.Visit(func(value *flag.Flag) { provided[value.Name] = true })
+	if !provided["swagger"] {
+		var err error
+		result.swagger, err = strconv.ParseBool(host.Value("", false, "API_SWAGGER_ENABLED", "false"))
+		if err != nil {
+			return config{}, errors.New("API_SWAGGER_ENABLED must be a boolean")
+		}
+	}
 	result.busURL = host.Value(result.busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
 	result.storageURL = host.Value(result.storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
 	result.databaseURL = host.Value(result.databaseURL, provided["database-url"], "DATABASE_URL", filepath.Join("state", "database"))

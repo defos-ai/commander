@@ -2,9 +2,9 @@
 
 ## Overview
 
-The API adapter connects HTTP clients to Commander: commands go to the
-controller over the bus, and queries read domain stores. The host and HTTP
-security boundary are implemented; business endpoints and Swagger come next.
+The API adapter lets HTTP clients inspect Commander missions, actions and
+agents through domain stores. Operation endpoints come next; commands will go
+to the controller over the bus.
 
 `GET`/`HEAD /healthz` checks liveness; `/readyz` checks metadata database
 readability. These probes are public on every host for load balancers. Readiness
@@ -16,8 +16,29 @@ From the repository root, with `API_USERNAME` and `API_PASSWORD` set:
 
 ```sh
 go run ./apps/adapters/api/cmd/commander-api
-curl http://127.0.0.1:4274/healthz
 ```
+
+In another terminal, query the catalog (`curl` prompts for the API password):
+
+```sh
+curl --user "$API_USERNAME" http://127.0.0.1:4274/api/v1/missions
+```
+
+| Catalog | List | Detail |
+| --- | --- | --- |
+| Missions | `GET /api/v1/missions` | `GET /api/v1/missions/{mission_name}` |
+| Actions | `GET /api/v1/actions` | `GET /api/v1/actions/{action_name}` |
+| Agents | `GET /api/v1/agents` | `GET /api/v1/agents/{agent_id}` |
+
+Lists return `{"items":[...]}`, sorted by name or agent ID. Details return the
+full record. Agent reads include current work and calculated lease freshness;
+action readiness belongs to each agent, while the action catalog describes
+available definitions. These endpoints read saved state without executing work.
+
+Set `API_SWAGGER_ENABLED=true` or pass `--swagger` to enable Swagger UI at
+`/docs/` and the OpenAPI document at `/openapi.json`. Both require authentication.
+Swagger assets are served locally; the UI and document are disabled by default.
+An explicit `--swagger=false` overrides the environment.
 
 Listener precedence: `--listen-address`, then `API_LISTEN_ADDRESS`, then
 `0.0.0.0:$PORT`, then `127.0.0.1:4274`. Heroku supplies `PORT`; containers can
@@ -61,4 +82,6 @@ go vet ./apps/adapters/api/...
 ```
 
 Keep concrete providers in `cli/factory.go` and inject their interfaces into
-the adapter. Boundary tests live in `tests/` and use temporary filesystem state.
+the adapter. Register resource routes in `endpoints/`, one file per resource,
+with only their required store interfaces. `api.go` wires routes and middleware.
+Boundary tests live in `tests/` and use temporary filesystem state.

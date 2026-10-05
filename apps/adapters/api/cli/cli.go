@@ -82,7 +82,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	}
 	defer func() { result = errors.Join(result, controller.Close()) }()
 	handler, err := api.NewHandler(api.Config{
-		Security:   configuration.security,
+		Security: configuration.security, SwaggerEnabled: configuration.swagger,
 		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
