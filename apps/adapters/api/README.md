@@ -2,8 +2,8 @@
 
 ## Overview
 
-The API adapter lets HTTP clients inspect Commander missions, actions, agents
-and saved operation state through domain stores, and send operation commands to
+The API adapter lets HTTP clients inspect Commander missions, actions, agents,
+saved operation state and reports through domain stores, and send operation commands to
 the controller over the bus.
 
 `GET`/`HEAD /healthz` checks liveness; `/readyz` checks metadata database
@@ -48,6 +48,7 @@ All operation routes require the same Basic authentication as the catalogs.
 | Events | `GET /api/v1/operations/{operation_id}/events?cursor=&limit=100` |
 | Questions | `GET /api/v1/operations/{operation_id}/questions` |
 | Question | `GET /api/v1/operations/{operation_id}/questions/{question_id}` |
+| Operation report | `GET /api/v1/operations/{operation_id}/report` |
 
 The operation list is unpaginated and returns `{"items":[...]}` with full saved
 records, newest first. Operation, task and question details return full records.
@@ -64,6 +65,21 @@ Question lists contain saved history in `items`, the newest pending question
 that is not overdue in `last_question`, and the count of other eligible questions
 in `remaining_questions`. The latter fields are `null` and `0` when none is
 eligible or the operation is terminal. Reads never expire saved questions.
+
+## Report queries
+
+`GET /api/v1/reports/{report_id}` returns the full saved report: `id`,
+`operation_id`, `mission`, `output` and `created_at`. Output may be any JSON value,
+including `null`. `GET /api/v1/operations/{operation_id}/report` reads a completed
+operation's `report_id` and retrieves the same report through the stores without
+contacting the controller. Both use the standard authentication, host checks,
+request timeout and no-cache headers; reads never create or alter reports.
+
+IDs must be canonical lowercase UUIDs; invalid IDs return `400 invalid_report_id`
+or `400 invalid_operation_id`. Missing operations return `404 operation_not_found`.
+Missing reports, absent report references and noncompleted operations return
+`404 report_not_found`. Corrupt records or mismatched report operation/mission
+return `500 internal_error`. Reports have no list or write endpoint.
 
 ## Operation commands
 

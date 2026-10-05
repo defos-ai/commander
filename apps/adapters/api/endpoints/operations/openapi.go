@@ -74,6 +74,12 @@ func openAPIOperationPaths(paths map[string]any) {
 			invalid: "invalid_operation_id", missing: "operation_not_found",
 		},
 		{
+			path: operation + "/report", id: "getOperationReport", summary: "Get an operation report",
+			description: "Reads the completed operation's report_id and returns the full saved report from the report store, without contacting the controller. A noncompleted operation, absent report reference or missing report returns report_not_found. A report whose operation or mission differs from the operation, or corrupt saved data, returns internal_error.",
+			schema:      endpoints.OpenAPIRef("Report"), parameters: []any{openAPIUUIDParameter("operation_id")},
+			invalid: "invalid_operation_id", missing: "operation_not_found or report_not_found",
+		},
+		{
 			path: operation + "/tasks", id: "listOperationTasks", summary: "List operation tasks",
 			description: "Returns full tasks in assignment order, strictly after the task identified by cursor. An omitted or empty cursor starts the first page. next_cursor is the last returned task ID, or the request cursor unchanged on an empty page (including an initial empty string). Unknown or duplicate query parameters and malformed query encoding are rejected.",
 			schema:      openAPIPage("Task"), parameters: openAPIPageParameters(false),

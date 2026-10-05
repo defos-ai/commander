@@ -10,6 +10,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
+	"commander/framework/domain/reports"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -46,6 +47,7 @@ func openAPIDocument() ([]byte, error) {
 		{"Mission", reflect.TypeFor[missions.Mission]()},
 		{"Action", reflect.TypeFor[actions.Action]()},
 		{"Agent", reflect.TypeFor[agents.Agent]()},
+		{"Report", reflect.TypeFor[reports.Report]()},
 	} {
 		schema, err := jsonschema.ForType(model.typeOf, options)
 		if err != nil {
@@ -60,6 +62,9 @@ func openAPIDocument() ([]byte, error) {
 		if model.name == "Agent" {
 			schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
 			schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
+		}
+		if model.name == "Report" {
+			schema.Properties["output"].Description = "Saved mission output; any JSON value, including null, arrays and scalars."
 		}
 		components[model.name] = schema
 		options.TypeSchemas[model.typeOf] = schema
@@ -99,6 +104,15 @@ func openAPIDocument() ([]byte, error) {
 		detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse(catalog.missingCode, endpoints.OpenAPIRef("Error"))
 		paths["/api/v1/"+catalog.path+"/{"+catalog.parameter+"}"] = map[string]any{"get": detail}
 	}
+	report := endpoints.OpenAPIQueryOperation("getReport", "Get a report", "Reports", endpoints.OpenAPIRef("Report"))
+	report["description"] = "Returns the full immutable saved report directly from the report store. Reads do not execute work or change saved state."
+	report["parameters"] = []any{map[string]any{
+		"name": "report_id", "in": "path", "required": true, "description": "Canonical lowercase UUID.",
+		"schema": map[string]any{"type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+	}}
+	report["responses"].(map[string]any)["400"] = endpoints.OpenAPIResponse("invalid_report_id or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	report["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("report_not_found", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/reports/{report_id}"] = map[string]any{"get": report}
 	if err := operationendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
@@ -106,7 +120,7 @@ func openAPIDocument() ([]byte, error) {
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.1.0",
-			"description": "Read Commander catalogs and saved operation state, or send operation commands to the controller over the bus. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"description": "Read Commander catalogs, saved operation state and reports, or send operation commands to the controller over the bus. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},

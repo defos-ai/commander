@@ -113,6 +113,7 @@ func TestSwaggerServesProtectedLocalUIAndOpenAPI(t *testing.T) {
 		"/api/v1/missions", "/api/v1/missions/{mission_name}", "/api/v1/actions", "/api/v1/actions/{action_name}", "/api/v1/agents", "/api/v1/agents/{agent_id}",
 		"/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/tasks", "/api/v1/operations/{operation_id}/tasks/{task_id}",
 		"/api/v1/operations/{operation_id}/events", "/api/v1/operations/{operation_id}/questions", "/api/v1/operations/{operation_id}/questions/{question_id}",
+		"/api/v1/reports/{report_id}", "/api/v1/operations/{operation_id}/report",
 	} {
 		endpoint, ok := document.Paths[path]
 		if !ok || endpoint.Get.Responses["200"] == nil {
@@ -120,6 +121,100 @@ func TestSwaggerServesProtectedLocalUIAndOpenAPI(t *testing.T) {
 		}
 		if string(endpoint.Get.Security) == "[]" {
 			t.Errorf("protected catalog %s declared public", path)
+		}
+	}
+}
+
+func TestSwaggerReportContracts(t *testing.T) {
+	fixture := newFixture(t)
+	t.Setenv("API_SWAGGER_ENABLED", "true")
+	server := startAPI(t, fixture.localArgs())
+	type reportEndpoint struct {
+		Security   json.RawMessage `json:"security"`
+		Parameters []struct {
+			Name     string            `json:"name"`
+			In       string            `json:"in"`
+			Required bool              `json:"required"`
+			Schema   jsonschema.Schema `json:"schema"`
+		} `json:"parameters"`
+		Responses map[string]struct {
+			Description string `json:"description"`
+			Content     map[string]struct {
+				Schema jsonschema.Schema `json:"schema"`
+			} `json:"content"`
+		} `json:"responses"`
+	}
+	type reportDocument struct {
+		Paths      map[string]map[string]reportEndpoint `json:"paths"`
+		Components struct {
+			Schemas map[string]*jsonschema.Schema `json:"schemas"`
+		} `json:"components"`
+	}
+	document := decodeResponse[reportDocument](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	if _, ok := document.Paths["/api/v1/reports"]; ok {
+		t.Error("reports must not expose a collection endpoint")
+	}
+	for _, tc := range []struct{ path, parameter, missing string }{
+		{"/api/v1/reports/{report_id}", "report_id", "report_not_found"},
+		{"/api/v1/operations/{operation_id}/report", "operation_id", "operation_not_found or report_not_found"},
+	} {
+		t.Run(tc.parameter, func(t *testing.T) {
+			route := document.Paths[tc.path]
+			endpoint, ok := route["get"]
+			if !ok || len(route) != 1 || string(endpoint.Security) == "[]" {
+				t.Fatal("report route must document only an authenticated GET")
+			}
+			if len(endpoint.Parameters) != 1 {
+				t.Fatal("report route must document its path ID")
+			}
+			parameter := endpoint.Parameters[0]
+			if parameter.Name != tc.parameter || parameter.In != "path" || !parameter.Required || parameter.Schema.Type != "string" || parameter.Schema.Format != "uuid" || parameter.Schema.Pattern != "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" {
+				t.Errorf("path parameter must require a canonical lowercase UUID: %+v", parameter)
+			}
+			if endpoint.Responses["200"].Content["application/json"].Schema.Ref != "#/components/schemas/Report" {
+				t.Error("report success must return the full Report schema")
+			}
+			for status, codes := range map[string][]string{
+				"400": {"invalid_" + tc.parameter, "invalid_request_origin"}, "401": {"authentication_required"},
+				"403": {"host_not_allowed", "cross_origin_request"}, "404": strings.Split(tc.missing, " or "),
+				"500": {"internal_error"}, "504": {"request_timeout"},
+			} {
+				response := endpoint.Responses[status]
+				for _, code := range codes {
+					if !strings.Contains(response.Description, code) {
+						t.Errorf("missing %s error %s", status, code)
+					}
+				}
+				if response.Content["application/json"].Schema.Ref != "#/components/schemas/Error" {
+					t.Errorf("%s response must use the JSON error schema", status)
+				}
+			}
+		})
+	}
+	schema := document.Components.Schemas["Report"]
+	if schema == nil || schema.Type != "object" || len(schema.Properties) != 5 {
+		t.Fatal("missing full Report component")
+	}
+	for _, field := range []string{"id", "operation_id", "mission", "output", "created_at"} {
+		if schema.Properties[field] == nil || !slices.Contains(schema.Required, field) {
+			t.Errorf("Report must include and require %s", field)
+		}
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, output := range []any{nil, map[string]any{"summary": "done"}, []any{1.0, "two", nil}, "done", 42.0, true} {
+		payload := map[string]any{
+			"id": id.ReportID(), "operation_id": id.OperationID(), "mission": "inspect",
+			"output": output, "created_at": time.Now().UTC().Format(time.RFC3339Nano),
+		}
+		if err := resolved.Validate(payload); err != nil {
+			t.Errorf("Report output must accept every JSON value, including null; output=%v: %v", output, err)
+		}
+		delete(payload, "output")
+		if err := resolved.Validate(payload); err == nil {
+			t.Error("Report must require output even when its value can be null")
 		}
 	}
 }

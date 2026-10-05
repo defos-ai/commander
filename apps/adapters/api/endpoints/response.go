@@ -10,6 +10,7 @@ import (
 	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
+	"commander/framework/domain/reports"
 )
 
 type List[T any] struct {
@@ -37,6 +38,8 @@ func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 		WriteError(w, http.StatusNotFound, "operation_not_found")
 	case errors.Is(err, operations.ErrUnknownTask):
 		WriteError(w, http.StatusNotFound, "task_not_found")
+	case errors.Is(err, reports.ErrUnknownReport):
+		WriteError(w, http.StatusNotFound, "report_not_found")
 	case errors.Is(err, context.DeadlineExceeded):
 		WriteError(w, http.StatusGatewayTimeout, "request_timeout")
 	default:
