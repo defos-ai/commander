@@ -9,12 +9,14 @@ import (
 	"reflect"
 	"testing"
 
+	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
 	fsmissions "commander/providers/fs/missions"
 )
 
 func TestMissionsCatalogReflectsStoredDefinitions(t *testing.T) {
 	fixture := newFixture(t)
+	t.Setenv("API_SWAGGER_ENABLED", "true")
 	store, err := fsmissions.NewMissionFsStore(filepath.Join(fixture.root, "database"))
 	if err != nil {
 		t.Fatal(err)
@@ -24,14 +26,20 @@ func TestMissionsCatalogReflectsStoredDefinitions(t *testing.T) {
 		RequiredActions: []string{"discover-pages", "check-links"}, StartingActions: []string{"discover-pages"},
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}`),
 		OutputSchema: json.RawMessage(`{"type":"object"}`),
-		Automations:  map[string]missions.Automation{"discover-pages": {Run: []string{"check-links"}, Continue: missions.WhenAll}},
+		Automations: map[string]missions.Automation{
+			"discover-pages": {Run: []string{"check-links"}, Continue: missions.WhenAll},
+			"check-links":    {Decide: missions.Model},
+		},
+		Steps: []missions.Step{{ID: "links", Objective: "Check discovered links", AgentTypes: []agents.AgentType{"web-quality"}, RequiredActions: []string{"check-links"}}},
 	}
 	if err := store.Upsert(t.Context(), mission); err != nil {
 		t.Fatal(err)
 	}
 	server := startAPI(t, fixture.localArgs())
 
-	detail := decodeResponse[missions.Mission](t, server.request(t, http.MethodGet, "/api/v1/missions/review-website", authenticate))
+	result := server.request(t, http.MethodGet, "/api/v1/missions/review-website", authenticate)
+	detail := decodeResponse[missions.Mission](t, result)
+	assertResponseSchema(t, server, "Mission", result)
 
 	if !reflect.DeepEqual(detail, mission) {
 		t.Fatalf("mission detail lost definition fields: got %+v, want %+v", detail, mission)

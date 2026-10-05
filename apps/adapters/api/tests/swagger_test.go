@@ -23,6 +23,31 @@ import (
 
 var documentationPaths = []string{"/docs", "/docs/", "/docs/swagger-ui.css", "/docs/swagger-ui-bundle.js", "/docs/initializer.js", "/openapi.json"}
 
+func assertResponseSchema(t *testing.T, server *runningAPI, name string, result response) {
+	t.Helper()
+	type schemaDocument struct {
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
+	}
+	document := decodeResponse[schemaDocument](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	data, err := json.Marshal(map[string]any{"$defs": document.Components.Schemas, "$ref": "#/$defs/" + name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(bytes.ReplaceAll(data, []byte("#/components/schemas/"), []byte("#/$defs/")), &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(decodeResponse[any](t, result)); err != nil {
+		t.Fatalf("%s response does not match the API model schema: %v", name, err)
+	}
+}
+
 func TestSwaggerIsDisabledByDefault(t *testing.T) {
 	fixture := newFixture(t)
 	server := startAPI(t, fixture.localArgs())

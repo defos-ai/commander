@@ -3,6 +3,7 @@ package endpoints
 import (
 	"net/http"
 
+	"commander/adapters/api/mappings"
 	"commander/framework/domain/reports"
 	"commander/framework/id"
 )
@@ -15,6 +16,6 @@ func RegisterReports(mux *http.ServeMux, store reports.ReportStore) {
 			return
 		}
 		report, err := store.Get(r.Context(), reportID)
-		WriteQueryResult(w, report, err)
+		WriteQueryResult(w, mappings.ToReportResponse(report), err)
 	}))
 }

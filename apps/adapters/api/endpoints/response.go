@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"commander/adapters/api/models"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
@@ -14,15 +15,11 @@ import (
 	"commander/framework/domain/reports"
 )
 
-type List[T any] struct {
-	Items []T `json:"items"`
-}
-
-func ListResponse[T any](items []T) List[T] {
+func ListResponse[T any](items []T) models.ListResponse[T] {
 	if items == nil {
 		items = []T{}
 	}
-	return List[T]{Items: items}
+	return models.ListResponse[T]{Items: items}
 }
 
 func WriteQueryResult(w http.ResponseWriter, value any, err error) {

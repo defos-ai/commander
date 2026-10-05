@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"commander/adapters/api/mappings"
 	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 )
@@ -17,7 +18,7 @@ import (
 func RegisterArtifacts(mux *http.ServeMux, store artifacts.ArtifactStore, files artifacts.ArtifactFileStore) {
 	mux.HandleFunc("GET /api/v1/artifacts/{artifact_id}", artifactRequestHandler(func(w http.ResponseWriter, r *http.Request) {
 		artifact, err := store.Get(r.Context(), r.PathValue("artifact_id"))
-		WriteQueryResult(w, artifact, err)
+		WriteQueryResult(w, mappings.ToArtifactResponse(artifact), err)
 	}))
 	mux.HandleFunc("GET /api/v1/artifacts/{artifact_id}/files/{file_id}", artifactRequestHandler(func(w http.ResponseWriter, r *http.Request) {
 		artifact, err := store.Get(r.Context(), r.PathValue("artifact_id"))

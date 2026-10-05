@@ -209,7 +209,8 @@ with `routes.go` registering its handlers. Shared HTTP helpers stay in `endpoint
 wires routes and middleware, and root `openapi.go` assembles the document.
 Boundary tests live in `tests/` and use temporary filesystem state.
 
-HTTP request types live in flat `models/*_model.go` files grouped by entity.
-`mappings/*_mapping.go` explicitly maps their fields and URL IDs to controller
-commands; handlers validate the commands before sending them. Keep API models
-independent of framework types, and derive request schemas from those models.
+HTTP models live in flat `models/*_model.go` files grouped by entity.
+`mappings/*_mapping.go` maps requests and URL IDs to controller commands, and
+catalog, report and artifact records to response models, including nested fields.
+Handlers validate commands before sending them. Keep API models independent of
+framework types and derive their Swagger schemas from the models.

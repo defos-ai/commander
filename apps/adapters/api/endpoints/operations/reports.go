@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/mappings"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
 )
@@ -28,6 +29,6 @@ func registerReports(mux *http.ServeMux, store operations.OperationStore, report
 			endpoints.WriteError(w, http.StatusInternalServerError, "internal_error")
 			return
 		}
-		endpoints.WriteQueryResult(w, report, nil)
+		endpoints.WriteQueryResult(w, mappings.ToReportResponse(report), nil)
 	}))
 }
