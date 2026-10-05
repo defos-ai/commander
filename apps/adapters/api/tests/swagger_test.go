@@ -114,6 +114,7 @@ func TestSwaggerServesProtectedLocalUIAndOpenAPI(t *testing.T) {
 		"/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/tasks", "/api/v1/operations/{operation_id}/tasks/{task_id}",
 		"/api/v1/operations/{operation_id}/events", "/api/v1/operations/{operation_id}/questions", "/api/v1/operations/{operation_id}/questions/{question_id}",
 		"/api/v1/reports/{report_id}", "/api/v1/operations/{operation_id}/report",
+		"/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}",
 	} {
 		endpoint, ok := document.Paths[path]
 		if !ok || endpoint.Get.Responses["200"] == nil {
@@ -216,6 +217,88 @@ func TestSwaggerReportContracts(t *testing.T) {
 		if err := resolved.Validate(payload); err == nil {
 			t.Error("Report must require output even when its value can be null")
 		}
+	}
+}
+
+func TestSwaggerArtifactContracts(t *testing.T) {
+	fixture := newFixture(t)
+	t.Setenv("API_SWAGGER_ENABLED", "true")
+	server := startAPI(t, fixture.localArgs())
+	type responseSpec struct {
+		Content map[string]struct {
+			Schema *jsonschema.Schema `json:"schema"`
+		} `json:"content"`
+		Headers map[string]struct {
+			Schema *jsonschema.Schema `json:"schema"`
+		} `json:"headers"`
+	}
+	type documentSpec struct {
+		Paths map[string]struct {
+			Get struct {
+				Parameters []struct {
+					Name     string            `json:"name"`
+					In       string            `json:"in"`
+					Required bool              `json:"required"`
+					Schema   jsonschema.Schema `json:"schema"`
+				} `json:"parameters"`
+				Responses map[string]responseSpec `json:"responses"`
+			} `json:"get"`
+		} `json:"paths"`
+		Components struct {
+			Schemas map[string]*jsonschema.Schema `json:"schemas"`
+		} `json:"components"`
+	}
+	document := decodeResponse[documentSpec](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	base := "/api/v1/artifacts/{artifact_id}"
+	metadata := document.Paths[base].Get.Responses["200"].Content["application/json"].Schema
+	if metadata == nil || metadata.Ref != "#/components/schemas/Artifact" {
+		t.Fatal("artifact metadata must return the full Artifact schema")
+	}
+	for path, names := range map[string][]string{base: {"artifact_id"}, base + "/files/{file_id}": {"artifact_id", "file_id"}} {
+		endpoint := document.Paths[path].Get
+		if len(endpoint.Parameters) != len(names) {
+			t.Fatalf("incorrect path parameters for %s", path)
+		}
+		for i, param := range endpoint.Parameters {
+			if param.Name != names[i] || param.In != "path" || !param.Required || param.Schema.Format != "uuid" || param.Schema.Pattern == "" {
+				t.Errorf("missing UUID path contract for %s: %+v", path, param)
+			}
+		}
+		for _, status := range []string{"400", "401", "403", "404", "500", "504"} {
+			if schema := endpoint.Responses[status].Content["application/json"].Schema; schema == nil || schema.Ref != "#/components/schemas/Error" {
+				t.Errorf("%s response for %s must be a JSON error", status, path)
+			}
+		}
+	}
+	download := document.Paths[base+"/files/{file_id}"].Get.Responses["200"]
+	if binary := download.Content["*/*"].Schema; binary == nil || binary.Type != "string" || binary.Format != "binary" || len(download.Content) != 1 {
+		t.Fatal("download must document raw bytes with the stored media type")
+	}
+	for header, kind := range map[string]string{"Content-Disposition": "string", "Content-Length": "integer"} {
+		if schema := download.Headers[header].Schema; schema == nil || schema.Type != kind {
+			t.Errorf("missing download header %s", header)
+		}
+	}
+	schema := document.Components.Schemas["Artifact"]
+	if schema == nil || schema.Properties["files"] == nil {
+		t.Fatal("missing artifact file descriptors")
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := map[string]any{
+		"id": id.ArtifactID(), "name": "Screenshot", "agent_id": "web-quality-agent-1234abcd", "action_name": "capture-page",
+		"created_at": time.Now().UTC().Format(time.RFC3339Nano), "files": []any{map[string]any{
+			"id": id.ArtifactFileID(), "name": "page.png", "media_type": "image/png", "size": 3.0, "sha256": strings.Repeat("a", 64),
+		}},
+	}
+	if err := resolved.Validate(payload); err != nil {
+		t.Fatalf("Artifact schema rejected metadata and file descriptors: %v", err)
+	}
+	delete(payload["files"].([]any)[0].(map[string]any), "sha256")
+	if err := resolved.Validate(payload); err == nil {
+		t.Fatal("artifact schema must require file integrity metadata")
 	}
 }
 

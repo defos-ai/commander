@@ -9,6 +9,7 @@ import (
 	operationendpoints "commander/adapters/api/endpoints/operations"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
+	"commander/framework/domain/artifacts"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/reports"
 
@@ -48,6 +49,7 @@ func openAPIDocument() ([]byte, error) {
 		{"Action", reflect.TypeFor[actions.Action]()},
 		{"Agent", reflect.TypeFor[agents.Agent]()},
 		{"Report", reflect.TypeFor[reports.Report]()},
+		{"Artifact", reflect.TypeFor[artifacts.Artifact]()},
 	} {
 		schema, err := jsonschema.ForType(model.typeOf, options)
 		if err != nil {
@@ -106,13 +108,11 @@ func openAPIDocument() ([]byte, error) {
 	}
 	report := endpoints.OpenAPIQueryOperation("getReport", "Get a report", "Reports", endpoints.OpenAPIRef("Report"))
 	report["description"] = "Returns the full immutable saved report directly from the report store. Reads do not execute work or change saved state."
-	report["parameters"] = []any{map[string]any{
-		"name": "report_id", "in": "path", "required": true, "description": "Canonical lowercase UUID.",
-		"schema": map[string]any{"type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
-	}}
+	report["parameters"] = []any{openAPIUUIDParameter("report_id")}
 	report["responses"].(map[string]any)["400"] = endpoints.OpenAPIResponse("invalid_report_id or invalid_request_origin", endpoints.OpenAPIRef("Error"))
 	report["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("report_not_found", endpoints.OpenAPIRef("Error"))
 	paths["/api/v1/reports/{report_id}"] = map[string]any{"get": report}
+	openAPIArtifactPaths(paths)
 	if err := operationendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func openAPIDocument() ([]byte, error) {
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.1.0",
-			"description": "Read Commander catalogs, saved operation state and reports, or send operation commands to the controller over the bus. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"description": "Read Commander catalogs, saved operation state, reports and artifacts, or send operation commands to the controller over the bus. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},
@@ -132,4 +132,36 @@ func openAPIDocument() ([]byte, error) {
 			}},
 		},
 	})
+}
+
+func openAPIUUIDParameter(name string) map[string]any {
+	return map[string]any{
+		"name": name, "in": "path", "required": true, "description": "Canonical lowercase UUID.",
+		"schema": map[string]any{"type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+	}
+}
+
+func openAPIArtifactPaths(paths map[string]any) {
+	artifact := endpoints.OpenAPIQueryOperation("getArtifact", "Get artifact metadata", "Artifacts", endpoints.OpenAPIRef("Artifact"))
+	artifact["description"] = "Returns saved artifact metadata and file descriptors directly from the database. Reads do not contact the controller or change saved state."
+	artifact["parameters"] = []any{openAPIUUIDParameter("artifact_id")}
+	artifact["responses"].(map[string]any)["400"] = endpoints.OpenAPIResponse("invalid_artifact_id or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	artifact["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("artifact_not_found", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/artifacts/{artifact_id}"] = map[string]any{"get": artifact}
+
+	file := endpoints.OpenAPIQueryOperation("getArtifactFile", "Download an artifact file", "Artifacts", nil)
+	file["description"] = "Returns raw file bytes as an attachment after checking artifact membership and verifying the saved size and SHA-256. Content-Type uses the stored media type, falling back to application/octet-stream when invalid. HEAD returns the same headers without a body. Downloads are read fully before responding; byte ranges are not supported."
+	file["parameters"] = []any{openAPIUUIDParameter("artifact_id"), openAPIUUIDParameter("file_id")}
+	responses := file["responses"].(map[string]any)
+	responses["200"] = map[string]any{
+		"description": "Verified file bytes, including empty files",
+		"content":     map[string]any{"*/*": map[string]any{"schema": map[string]any{"type": "string", "format": "binary"}}},
+		"headers": map[string]any{
+			"Content-Disposition": map[string]any{"description": "Attachment with a sanitized filename, encoded for Unicode when needed.", "schema": map[string]any{"type": "string"}},
+			"Content-Length":      map[string]any{"description": "Verified file length in bytes.", "schema": map[string]any{"type": "integer", "minimum": 0}},
+		},
+	}
+	responses["400"] = endpoints.OpenAPIResponse("invalid_artifact_id, invalid_file_id or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	responses["404"] = endpoints.OpenAPIResponse("artifact_not_found or artifact_file_not_found (unknown file, file not belonging to this artifact, or missing bytes)", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/artifacts/{artifact_id}/files/{file_id}"] = map[string]any{"get": file}
 }

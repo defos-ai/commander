@@ -3,7 +3,7 @@
 ## Overview
 
 The API adapter lets HTTP clients inspect Commander missions, actions, agents,
-saved operation state and reports through domain stores, and send operation commands to
+saved operation state, reports and artifacts through domain stores, and send operation commands to
 the controller over the bus.
 
 `GET`/`HEAD /healthz` checks liveness; `/readyz` checks metadata database
@@ -80,6 +80,26 @@ or `400 invalid_operation_id`. Missing operations return `404 operation_not_foun
 Missing reports, absent report references and noncompleted operations return
 `404 report_not_found`. Corrupt records or mismatched report operation/mission
 return `500 internal_error`. Reports have no list or write endpoint.
+
+## Artifact queries
+
+| Resource | Endpoint |
+| --- | --- |
+| Metadata and file descriptors | `GET /api/v1/artifacts/{artifact_id}` |
+| File download | `GET /api/v1/artifacts/{artifact_id}/files/{file_id}` |
+
+These read existing stores without contacting the controller. Downloads return
+raw bytes as an attachment with a sanitized filename and the stored media type
+(invalid types use `application/octet-stream`). The file must belong to the
+artifact and pass size/SHA-256 verification before any bytes are returned.
+`HEAD` returns headers without the body. Files are read fully into memory;
+range requests are not supported.
+
+Both routes use the same authentication, timeout and security headers as other
+queries. Invalid UUIDs return `400 invalid_artifact_id` or `invalid_file_id`;
+missing metadata returns `404 artifact_not_found`. Unknown files or missing bytes
+return `404 artifact_file_not_found`; corrupt metadata or file contents return
+`500 internal_error`.
 
 ## Operation commands
 
