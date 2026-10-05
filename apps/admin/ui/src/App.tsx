@@ -13,6 +13,8 @@ import { ConnectionsPage } from './pages/ConnectionsPage';
 import { ConnectionSettingsPage } from './pages/ConnectionSettingsPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { MissionsPage } from './pages/MissionsPage';
+import { AgentsPage } from './pages/AgentsPage';
+import { ActionsPage } from './pages/ActionsPage';
 
 type Modal = { kind: 'connect'; connection?: Connection } | { kind: 'remove'; connection: Connection };
 
@@ -41,12 +43,14 @@ export function App() {
   const storageNotice = !state.storageAvailable && <p className="notice" role="alert">{t($ => $.connections.storageError)}</p>;
 
   return <>
-    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'missions', 'settings']} onNavigate={setSection} onBack={() => setActiveID(undefined)}>
+    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'missions', 'agents', 'actions', 'settings']} onNavigate={setSection} onBack={() => setActiveID(undefined)}>
       {storageNotice}
       {section === 'settings' ? <ConnectionSettingsPage connection={active} signedIn={Boolean(state.credentials[active.id])}
         onEdit={() => edit(active.id)} onForget={() => state.forgetCredentials(active.id)} onRemove={() => remove(active.id)} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
-          : <OverviewPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}
+          : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
+            : section === 'actions' ? <ActionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
+              : <OverviewPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}
     </WorkspaceLayout> : <ConnectionsPage connections={state.connections} statuses={Object.fromEntries(Object.entries(state.checks).map(([id, check]) => [id, check.status]))}
       onOpen={open} onAdd={() => setModal({ kind: 'connect' })} onEdit={edit} onRemove={remove}>
       {storageNotice}
@@ -67,7 +71,7 @@ export function App() {
         state.save({ id, name: values.name, url }, credentials, check);
         focusAfterTransition.current = true;
         setModal(undefined);
-        if (activeID !== id || section !== 'missions') open(id);
+        if (activeID !== id || !['missions', 'agents', 'actions'].includes(section)) open(id);
       }} />}
     {modal?.kind === 'remove' && <Dialog open title={t($ => $.connections.removeTitle)} description={t($ => $.connections.removeDescription, { name: modal.connection.name })} onClose={() => setModal(undefined)}>
       <div className="dialog-actions">

@@ -1,46 +1,11 @@
 import type { Mission } from '../api/types';
 import { useTranslation } from '../i18n';
+import { SchemaDetails } from './SchemaDetails';
 
 function ActionNames({ names }: { names: string[] | null | undefined }) {
   const { t } = useTranslation();
   return names?.length ? <ul className="mission-action-names">{names.map((name, index) => <li key={`${index}:${name}`}>{name}</li>)}</ul>
     : <p className="mission-muted">{t($ => $.missions.none)}</p>;
-}
-
-function object(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function MissionSchema({ schema, direction }: { schema: Mission['input_schema']; direction: 'input' | 'output' }) {
-  const { t } = useTranslation();
-  const properties = Object.entries(object(schema?.properties) ?? {});
-  const required = Array.isArray(schema?.required) ? schema.required : [];
-  return <section className="mission-section">
-    <h2>{t($ => $.missions[direction])}</h2>
-    {!schema ? <p className="mission-muted">{t($ => $.missions.noSchema)}</p> : <>
-      {properties.length > 0 && <div className="mission-fields-scroll" tabIndex={0} role="region" aria-label={t($ => $.missions[direction])}>
-        <table className="mission-fields">
-          <thead><tr><th>{t($ => $.missions.field)}</th><th>{t($ => $.missions.type)}</th><th>{t($ => $.missions.descriptionLabel)}</th></tr></thead>
-          <tbody>{properties.map(([name, value]) => {
-            const field = object(value);
-            const type = typeof field?.type === 'string' ? field.type
-              : Array.isArray(field?.type) && field.type.every(item => typeof item === 'string') ? field.type.join(' | ')
-                : t($ => $.missions.schemaType);
-            return <tr key={name}>
-              <th scope="row"><code>{name}</code><span className="mission-field-requirement">{required.includes(name) ? t($ => $.missions.required) : t($ => $.missions.optional)}</span></th>
-              <td><code>{type}</code></td>
-              <td>{typeof field?.description === 'string' && <p>{field.description}</p>}
-                {field && 'default' in field && <p className="mission-muted">{t($ => $.missions.defaultValue, { value: JSON.stringify(field.default) })}</p>}
-              </td>
-            </tr>;
-          })}</tbody>
-        </table>
-      </div>}
-      <details className="mission-schema"><summary>{direction === 'input' ? t($ => $.missions.inputSchema) : t($ => $.missions.outputSchema)}</summary>
-        <pre>{JSON.stringify(schema, null, 2)}</pre>
-      </details>
-    </>}
-  </section>;
 }
 
 export function MissionDetails({ mission }: { mission: Mission }) {
@@ -69,7 +34,7 @@ export function MissionDetails({ mission }: { mission: Mission }) {
         {Boolean(step.required_actions?.length) && <div><h4>{t($ => $.missions.requiredActions)}</h4><ActionNames names={step.required_actions} /></div>}
       </li>)}</ol>
     </section>}
-    <MissionSchema schema={mission.input_schema} direction="input" />
-    <MissionSchema schema={mission.output_schema} direction="output" />
+    <SchemaDetails schema={mission.input_schema} direction="input" />
+    <SchemaDetails schema={mission.output_schema} direction="output" />
   </div>;
 }

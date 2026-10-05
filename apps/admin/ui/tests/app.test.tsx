@@ -24,7 +24,7 @@ function mockAPI() {
     if (intercepted) return intercepted;
     if (!state.online && !url.startsWith(localURL)) throw new TypeError('Network unavailable');
     if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
-    if (url.endsWith('/api/v1/missions')) {
+    if (['missions', 'agents', 'actions'].some(resource => url.endsWith(`/api/v1/${resource}`))) {
       return state.authorize && new Headers(init.headers).get('Authorization') === authorization
         ? Response.json({ items: [] })
         : Response.json({ error: 'authentication_required' }, { status: 401 });
@@ -155,28 +155,30 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByRole('alert').textContent).not.toContain(password);
   });
 
-  it('opens Missions from the sidebar and keeps that page selected after signing in', async () => {
+  it.each(['Missions', 'Agents', 'Actions'])('opens %s from the sidebar and keeps that page selected after signing in', async page => {
+    const resource = page.toLowerCase();
     persist([savedConnection]);
-    mockAPI();
+    const api = mockAPI();
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Open Remote Commander' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Missions' }));
-    expect(screen.getByRole('heading', { name: 'Missions', level: 1 })).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent('Sign in to view missions on this connection.');
+    fireEvent.click(screen.getByRole('button', { name: page }));
+    expect(screen.getByRole('heading', { name: page, level: 1 })).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(`Sign in to view ${resource} on this connection.`);
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     const dialog = fillConnection();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));
 
-    expect(await screen.findByRole('heading', { name: 'No missions yet' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: `No ${resource} yet` })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Missions' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: page })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('main')).toHaveFocus();
     expect(screen.queryByRole('heading', { name: 'Overview', level: 1 })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
     expect(screen.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Missions' }));
-    expect(await screen.findByRole('heading', { name: 'No missions yet' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: page }));
+    expect(await screen.findByRole('heading', { name: `No ${resource} yet` })).toBeVisible();
+    expect(api.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
   });
 
   it('rejects an existing URL after normalization without testing or saving it again', async () => {

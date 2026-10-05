@@ -7,12 +7,18 @@ theme, Grunt typography, Lucide icons and typed i18next translations.
 
 Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
 page keeps a grid of saved connections. Inside a connection, the sidebar provides
-Overview, Missions and connection settings. Agent, action and operation pages
-follow in later increments.
+Overview, Missions, Agents, Actions and connection settings. Operation pages
+follow in the next increment.
 
 Missions supports search and read-only details: objectives, starting and required
 actions, automations, planning steps, and input/output schemas. Refresh loads the
 current definitions from the selected API.
+
+Agents shows current work, host details, heartbeat freshness and each agent's
+action readiness and missing requirements. Actions shows catalog definitions,
+permissions and schemas; readiness belongs to individual agents. Both pages
+support search, details and a 30-second refresh while open. These pages are
+read-only; work is assigned through operations.
 
 ## Quick start
 

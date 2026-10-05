@@ -1,10 +1,14 @@
 import connectionForm from './connectionForm';
 import missions from './missions';
+import agents from './agents';
+import actions from './actions';
 
 export default {
   brand: 'COMMANDER',
   connectionForm,
   missions,
+  agents,
+  actions,
   connections: {
     introduction: 'Administration of yours Command Centers',
     title: 'Connections',
