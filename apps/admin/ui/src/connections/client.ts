@@ -57,7 +57,7 @@ function isAuthenticated(response: CheckResponse | null): boolean {
     'items' in response.body && Array.isArray(response.body.items);
 }
 
-function basicAuthorization(credentials: Credentials): string {
+export function basicAuthorization(credentials: Credentials): string {
   if (credentials.username.includes(':')) throw new Error('Invalid username');
   const bytes = new TextEncoder().encode(`${credentials.username}:${credentials.password}`);
   let binary = '';

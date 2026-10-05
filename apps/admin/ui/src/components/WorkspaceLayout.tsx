@@ -28,7 +28,6 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
     { section: 'missions' as const, label: t($ => $.shell.nav.missions), Icon: Compass },
     { section: 'agents' as const, label: t($ => $.shell.nav.agents), Icon: Bot },
     { section: 'actions' as const, label: t($ => $.shell.nav.actions), Icon: ClipboardList },
-    { section: 'settings' as const, label: t($ => $.shell.nav.settings), Icon: Settings2 },
   ];
 
   return <div className="platform-layout">
@@ -49,29 +48,37 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
           <X size={18} aria-hidden="true" />
         </button>}
       </div>
+      <div className="sidebar-connection">
+        <span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
+        <span className="sidebar-connection-name">{connection.name}</span>
+        <span className="sidebar-connection-url">{connection.url}</span>
+      </div>
       <nav aria-label={t($ => $.shell.navigation)}>
-        {navigation.filter(item => !sections || sections.includes(item.section)).map(({ section: destination, label, Icon }) => <button key={destination} type="button" className="sidebar-command"
-          aria-current={section === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
-          <Icon size={17} strokeWidth={1.4} aria-hidden="true" />
-          <span>{label}</span>
-          {section === destination && <span className="nav-marker" aria-hidden="true" />}
-        </button>)}
+        <div className="sidebar-primary">
+          {navigation.filter(item => !sections || sections.includes(item.section)).map(({ section: destination, label, Icon }) => <button key={destination} type="button" className="sidebar-command"
+            aria-current={section === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
+            <Icon size={17} strokeWidth={1.4} aria-hidden="true" />
+            <span>{label}</span>
+            {section === destination && <span className="nav-marker" aria-hidden="true" />}
+          </button>)}
+        </div>
+        <div className="sidebar-footer">
+          {(!sections || sections.includes('settings')) && <button type="button" className="sidebar-command"
+            aria-current={section === 'settings' ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate('settings'); }}>
+            <Settings2 size={17} strokeWidth={1.4} aria-hidden="true" />
+            <span>{t($ => $.shell.nav.settings)}</span>
+            {section === 'settings' && <span className="nav-marker" aria-hidden="true" />}
+          </button>}
+          <button type="button" className="sidebar-command" onClick={() => { sidebar.close(); onBack(); }}>
+            <ArrowLeft size={17} strokeWidth={1.4} aria-hidden="true" /><span>{t($ => $.shell.allConnections)}</span>
+          </button>
+        </div>
       </nav>
     </aside>
 
     <main id={contentId} className="workspace-main" tabIndex={-1} inert={sidebar.modal}>
       <div className="workspace-content">
-        <header className="workspace-header">
-          <div className="workspace-connection">
-            <span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
-            <span className="workspace-connection-name">{connection.name}</span>
-            <span className="workspace-connection-url">{connection.url}</span>
-          </div>
-          <button type="button" className="connections-back" onClick={onBack}>
-            <ArrowLeft size={16} aria-hidden="true" /><span>{t($ => $.shell.allConnections)}</span>
-          </button>
-        </header>
-        <div className="workspace-page">{children}</div>
+        {children}
       </div>
     </main>
   </div>;

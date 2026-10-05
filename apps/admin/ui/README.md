@@ -6,8 +6,13 @@ React, TypeScript and Vite frontend for Commander. It follows the platform's CSS
 theme, Grunt typography, Lucide icons and typed i18next translations.
 
 Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
-page keeps a grid of saved connections; each opens an overview and connection
-settings in the sidebar. Catalog and operation pages follow in later increments.
+page keeps a grid of saved connections. Inside a connection, the sidebar provides
+Overview, Missions and connection settings. Agent, action and operation pages
+follow in later increments.
+
+Missions supports search and read-only details: objectives, starting and required
+actions, automations, planning steps, and input/output schemas. Refresh loads the
+current definitions from the selected API.
 
 ## Quick start
 
@@ -44,9 +49,9 @@ npm test
 npm run build
 ```
 
-Keep pages in `src/pages`, shared controls in `src/components`, state hooks in
-`src/hooks`, and theme/layout CSS in `src/styles`. English strings live in
-`src/i18n/en.ts`; use typed translation selectors in components. Behavior tests
+Keep pages in `src/pages`, API reads and response types in `src/api`, shared
+controls in `src/components`, state hooks in `src/hooks`, and CSS in `src/styles`.
+English strings live in `src/i18n`; use typed translation selectors. Behavior tests
 live in `tests/`. No runtime imports from sibling repositories are needed.
 
 The COMMANDER wordmark uses the supplied Grunt Grotesk SemiBold, without a star.

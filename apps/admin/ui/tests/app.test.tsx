@@ -155,6 +155,30 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByRole('alert').textContent).not.toContain(password);
   });
 
+  it('opens Missions from the sidebar and keeps that page selected after signing in', async () => {
+    persist([savedConnection]);
+    mockAPI();
+    render(<App />);
+    await screen.findByText('Local Commander detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Remote Commander' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missions' }));
+    expect(screen.getByRole('heading', { name: 'Missions', level: 1 })).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent('Sign in to view missions on this connection.');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    const dialog = fillConnection();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));
+
+    expect(await screen.findByRole('heading', { name: 'No missions yet' })).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Missions' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('main')).toHaveFocus();
+    expect(screen.queryByRole('heading', { name: 'Overview', level: 1 })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Missions' }));
+    expect(await screen.findByRole('heading', { name: 'No missions yet' })).toBeVisible();
+  });
+
   it('rejects an existing URL after normalization without testing or saving it again', async () => {
     persist([savedConnection]);
     const api = mockAPI();

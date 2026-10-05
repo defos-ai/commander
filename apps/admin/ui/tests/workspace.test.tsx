@@ -39,6 +39,12 @@ describe('workspace navigation', () => {
     expect(screen.getByText('COMMANDER')).toBeVisible();
     expect(screen.getByText(connection.name)).toBeVisible();
     expect(screen.getByText(connection.url)).toBeVisible();
+    const navigation = screen.getByRole('navigation', { name: 'Workspace navigation' });
+    expect(within(navigation).getAllByRole('button').map(button => button.textContent)).toEqual([
+      'Overview', 'Operations', 'Missions', 'Agents', 'Actions', 'Connection settings', 'All connections',
+    ]);
+    expect(screen.getByRole('complementary')).toContainElement(screen.getByText(connection.name));
+    expect(screen.getByRole('main')).not.toContainElement(screen.getByText(connection.name));
     expect(screen.getByRole('heading', { name: 'Connection overview' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
@@ -61,7 +67,7 @@ describe('workspace navigation', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Workspace navigation' });
     const close = within(dialog).getByRole('button', { name: 'Close navigation' });
-    const last = within(dialog).getByRole('button', { name: 'Connection settings' });
+    const last = within(dialog).getByRole('button', { name: 'All connections' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(close).toHaveFocus();
     expect(screen.getByRole('main', { hidden: true })).toHaveAttribute('inert');
@@ -103,6 +109,18 @@ describe('workspace navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Missions' }));
 
     expect(onNavigate).toHaveBeenCalledExactlyOnceWith('missions');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveFocus());
+  });
+
+  it('closes mobile navigation when returning to all connections', async () => {
+    viewport(true);
+    const { onBack } = workspace();
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'All connections' }));
+
+    expect(onBack).toHaveBeenCalledOnce();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveFocus());
   });
