@@ -131,6 +131,35 @@ describe('operations browser', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('loads the execution graph only when opened and stops its polling when returning to details', async () => {
+    vi.useFakeTimers();
+    try {
+      const graph = { operation_id: operation.id, status: operation.status, updated_at: now,
+        nodes: [{ id: `task:${task.id}`, kind: 'task', task }], edges: [] };
+      const fetch = mockAPI(url => Response.json(url.endsWith('/graph') ? graph
+        : url.endsWith('/operations') ? { items: [operation] } : operation));
+      await act(async () => { render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); });
+      fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
+      await act(async () => {});
+      const graphCalls = () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/graph')).length;
+      expect(graphCalls()).toBe(0);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Execution graph' }));
+      await act(async () => {});
+
+      expect(screen.getByRole('button', { name: `Inspect Task ${task.action_name} · task:${task.id}` })).toBeVisible();
+      expect(graphCalls()).toBe(1);
+      expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(graphCalls()).toBe(2);
+      fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(graphCalls()).toBe(2);
+      expect(screen.getByText('Review website quality.')).toBeVisible();
+      expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('does not show late results from a previous connection or keep data after credentials are forgotten', async () => {
     let finish!: (response: Response) => void;
     const delayed = new Promise<Response>(resolve => { finish = resolve; });

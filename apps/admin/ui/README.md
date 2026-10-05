@@ -19,8 +19,13 @@ operations and answer pending questions using an option or your own text.
 Commands go through the API to the controller. Cancellation stops new work;
 already-dispatched work may finish. A timeout leaves the outcome uncertain, so
 the UI offers to inspect the operation and never retries a command automatically.
-Artifact files currently show metadata; downloads and the execution graph follow
-in later increments.
+
+Switch operation details to **Execution graph** to follow recorded tasks and their
+artifacts and files. Select a node to inspect its status and related work; zoom
+and scroll to explore larger graphs. It refreshes every 10 seconds and shows
+recorded work, including queued tasks, rather than a plan of future work.
+Artifact files currently show metadata; viewing reports and downloading files
+follow in later increments.
 
 Missions supports search and read-only details: objectives, starting and required
 actions, automations, planning steps, and input/output schemas. Refresh loads the

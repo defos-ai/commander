@@ -23,7 +23,7 @@ export function OperationStatus({ status }: { status: string }) {
   return <span className="catalog-status" data-tone={status === 'completed' ? 'ready' : status === 'failed' ? 'warning' : 'muted'}>{label}</span>;
 }
 
-function TaskStatus({ status }: { status: string }) {
+export function TaskStatus({ status }: { status: string }) {
   const { t } = useTranslation();
   const label = status === 'queued' || status === 'running' || status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'interrupted'
     ? t($ => $.operations.taskStatuses[status]) : status;

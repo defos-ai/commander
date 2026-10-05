@@ -5,6 +5,7 @@ import type { Operation, OperationQuestion } from '../api/operation-types';
 import { isActiveOperation, OperationDetails, OperationStatus, operationProgress } from '../components/OperationDetails';
 import { StartOperationDialog } from '../components/StartOperationDialog';
 import { OperationCommandDialog } from '../components/OperationCommandDialog';
+import { OperationGraphPanel } from '../components/OperationGraphPanel';
 import { Button } from '../components/Button';
 import type { Connection, Credentials } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
@@ -26,6 +27,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
   const [selectedID, setSelectedID] = useState<string>();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [view, setView] = useState<'details' | 'graph'>('details');
   const [modal, setModal] = useState<CommandModal>();
   const [notice, setNotice] = useState<'created' | 'cancelled' | 'answered'>();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -45,7 +47,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [selectedID]);
 
-  function select(id?: string) { focusHeading.current = true; setSelectedID(id); setNotice(undefined); }
+  function select(id?: string) { focusHeading.current = true; setSelectedID(id); setNotice(undefined); setView('details'); }
   function clearFilters() { setSearch(''); setStatus(''); }
   function inspect(id: string) { setModal(undefined); select(id); query.refresh(); }
 
@@ -57,7 +59,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
       <div><h1 ref={heading} tabIndex={-1}>{selectedID ?? t($ => $.operations.title)}</h1>
         {selectedID === undefined && <p>{t($ => $.operations.description)}</p>}
       </div>
-      <div className="operation-controls">{credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>
+      <div className="operation-controls">{credentials && view !== 'graph' && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>
         <RefreshCw size={15} aria-hidden="true" />{query.refreshing ? t($ => $.operations.refreshing) : t($ => $.operations.refresh)}
       </Button>}
         {credentials && !error && selectedID === undefined && <Button onClick={() => setModal({ kind: 'start', url: connection.url, credentials })}>
@@ -75,7 +77,14 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     </div> : query.loading ? <p className="catalog-loading" role="status">
       <LoaderCircle className="connection-form-spinner" size={17} aria-hidden="true" />
       {selectedID === undefined ? t($ => $.operations.loading) : t($ => $.operations.loadingDetail)}
-    </p> : query.item ? <OperationDetails operation={query.item} onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} /> : <>
+    </p> : query.item ? <>
+      <div className="operation-view-switch" role="group" aria-label={t($ => $.operationGraph.viewLabel)}>
+        <button type="button" aria-pressed={view === 'details'} onClick={() => setView('details')}>{t($ => $.operationGraph.details)}</button>
+        <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>{t($ => $.operationGraph.title)}</button>
+      </div>
+      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} onSignIn={onSignIn} />
+        : <OperationDetails operation={query.item} onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} />}
+    </> : <>
       {(items.length > 0 || filter || status) && <div className="catalog-toolbar">
         <div className="operation-filters">
           <label className="catalog-search"><Search size={17} aria-hidden="true" />
@@ -105,7 +114,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
         {filter || status ? <Button variant="secondary" onClick={clearFilters}>{t($ => $.operations.clearSearch)}</Button> : <p>{t($ => $.operations.emptyDescription)}</p>}
       </div>}
     </>}
-    {credentials && !query.loading && !error && <p className="catalog-updated">{t($ => $.operations.polling)} {query.checkedAt !== undefined && t($ => $.operations.checked, { time: new Date(query.checkedAt).toLocaleTimeString() })}</p>}
+    {credentials && !query.loading && !error && view !== 'graph' && <p className="catalog-updated">{t($ => $.operations.polling)} {query.checkedAt !== undefined && t($ => $.operations.checked, { time: new Date(query.checkedAt).toLocaleTimeString() })}</p>}
     {currentModal?.kind === 'start' && <StartOperationDialog connection={connection} credentials={currentModal.credentials}
       onClose={() => setModal(undefined)} onInspect={inspect} onStarted={operation => { setModal(undefined); select(operation.id); setNotice('created'); }} />}
     {currentModal && currentModal.kind !== 'start' && commandOperation && <OperationCommandDialog
