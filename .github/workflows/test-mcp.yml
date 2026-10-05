@@ -8,6 +8,7 @@ on:
       - 'go.work.sum'
       - '**/go.mod'
       - '**/go.sum'
+      - 'apps/adapters/api/**'
       - 'apps/adapters/mcp/**'
       - 'apps/controllers/default/**'
       - 'apps/agents/web-quality/**'
@@ -16,7 +17,7 @@ on:
       - 'providers/mongo/**'
       - 'providers/s3/**'
       - 'compose.test.yaml'
-      - 'compose.full.yaml'
+      - 'compose.full.test.yaml'
       - '.dockerignore'
       - '.github/workflows/test-mcp.yml'
       - '!**/*.md'
@@ -27,6 +28,7 @@ on:
       - 'go.work.sum'
       - '**/go.mod'
       - '**/go.sum'
+      - 'apps/adapters/api/**'
       - 'apps/adapters/mcp/**'
       - 'apps/controllers/default/**'
       - 'apps/agents/web-quality/**'
@@ -35,7 +37,7 @@ on:
       - 'providers/mongo/**'
       - 'providers/s3/**'
       - 'compose.test.yaml'
-      - 'compose.full.yaml'
+      - 'compose.full.test.yaml'
       - '.dockerignore'
       - '.github/workflows/test-mcp.yml'
       - '!**/*.md'
@@ -50,11 +52,19 @@ concurrency:
 
 jobs:
   test:
-    name: MCP against Compose
+    name: MCP against ${{ matrix.backend }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: fs
+            compose-file: compose.test.yaml
+          - backend: full
+            compose-file: compose.full.test.yaml
     env:
-      COMMANDER_TEST_MONGO_URL: "mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true"
+      COMPOSE_FILE: ${{ matrix.compose-file }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -65,30 +75,20 @@ jobs:
             **/go.sum
       - name: Vet MCP
         run: go vet ./apps/adapters/mcp/...
-      - name: Start MongoDB
-        run: docker compose -f compose.full.yaml up --wait --wait-timeout 90 mongo
       - name: Start test stack
-        run: docker compose -f compose.test.yaml up --build --wait --wait-timeout 120
+        run: docker compose up --build --wait --wait-timeout 120
       - name: Run MCP tests
-        run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
+        run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/...
       - name: Collect service logs
         if: failure() || cancelled()
-        run: docker compose -f compose.test.yaml logs --no-color > "$RUNNER_TEMP/commander-compose.log"
-      - name: Collect MongoDB logs
-        if: failure() || cancelled()
-        run: docker compose -f compose.full.yaml logs --no-color mongo > "$RUNNER_TEMP/commander-mcp-mongo.log"
+        run: docker compose logs --no-color > "$RUNNER_TEMP/commander-mcp-compose.log"
       - name: Stop test stack
         if: always()
-        run: docker compose -f compose.test.yaml down --volumes
-      - name: Stop MongoDB
-        if: always()
-        run: docker compose -f compose.full.yaml down --volumes
+        run: docker compose down --volumes
       - name: Upload service logs
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
-          name: mcp-test-logs
-          path: |
-            ${{ runner.temp }}/commander-compose.log
-            ${{ runner.temp }}/commander-mcp-mongo.log
+          name: mcp-test-logs-${{ matrix.backend }}
+          path: ${{ runner.temp }}/commander-mcp-compose.log
           if-no-files-found: ignore

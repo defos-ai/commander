@@ -56,11 +56,11 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	assertTaskQueries(t, b, right)
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": right.Tasks[0].ID}, "unknown task")
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": id.New()}, "unknown task")
-	a.fails("get_task", object{"operation_id": first.ID, "task_id": "not-a-uuid"}, "task")
+	a.fails("get_task", object{"operation_id": first.ID, "task_id": "not-a-uuid"}, "UUID")
 	a.fails("get_task", object{"operation_id": id.OperationID(), "task_id": left.Tasks[0].ID}, "unknown operation")
 	a.fails("operation_tasks", object{"operation_id": id.OperationID()}, "unknown operation")
 	a.fails("operation_tasks", object{"operation_id": first.ID, "cursor": right.Tasks[0].ID}, "unknown task")
-	a.fails("operation_tasks", object{"operation_id": first.ID, "cursor": "invalid"}, "cursor")
+	a.fails("operation_tasks", object{"operation_id": first.ID, "cursor": "invalid"}, "UUID")
 	assertInvalidPageLimits(t, "operation_tasks", first.ID)
 
 	release("/second")

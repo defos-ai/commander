@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"commander/adapters/api/endpoints"
@@ -16,6 +17,7 @@ import (
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
+	frameworktesting "commander/framework/testing"
 )
 
 type Config struct {
@@ -29,6 +31,7 @@ type Config struct {
 	ReportStore       reports.ReportStore
 	ArtifactStore     artifacts.ArtifactStore
 	ArtifactFileStore artifacts.ArtifactFileStore
+	TestCleaner       frameworktesting.TestCleaner
 }
 
 func NewHandler(config Config) (http.Handler, error) {
@@ -48,6 +51,9 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterReports(mux, config.ReportStore)
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
 	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.Operations)
+	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
+		endpoints.RegisterTestCleanup(mux, config.TestCleaner)
+	}
 	if config.SwaggerEnabled {
 		if err := registerDocumentation(mux); err != nil {
 			return nil, err

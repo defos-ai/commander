@@ -5,6 +5,7 @@
 Adapters connect clients to Commander: commands go through the message bus;
 queries read domain stores. The bundled [MCP adapter](mcp/) lets an LLM act as
 Commander: choose a mission, assign work, review evidence and resolve open decisions.
+The [HTTP API](api/README.md) exposes the same commands and queries for applications.
 The controller selects agent instances and runs mission automation.
 
 Normal MCP commands operate on tracked operations. Agent/action discovery remains
@@ -77,7 +78,7 @@ Use domain stores for queries and the typed
 [controller command client](../../framework/comms/clients/controller/commands/)
 for operation commands; see the [comms guide](../../framework/comms/README.md).
 
-Run the grouped API tests with the isolated Compose services in the
-[MCP test setup](../../framework/tests/README.md#mcp-api-tests).
+Run the grouped HTTP and MCP tests against either isolated Compose stack in the
+[test setup](../../framework/tests/README.md#mcp-api-tests).
 Follow the [framework contracts](../../framework/README.md) and
 [testing conventions](../../framework/tests/README.md#writing-tests).

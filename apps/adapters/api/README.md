@@ -218,16 +218,28 @@ ignored. The Dockerfile stays the same for each deployment.
 ## Development and testing
 
 ```sh
-go test -race -count=1 ./apps/adapters/api/...
-go vet ./apps/adapters/api/...
+export COMPOSE_FILE=compose.test.yaml # or compose.full.test.yaml
+docker compose up --build --wait
+go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/api/...
+docker compose down --volumes
 ```
+
+The same HTTP scenarios run against FS or MongoDB/RabbitMQ/MinIO. Small local
+host tests cover CLI configuration and security. See the
+[shared test setup](../../../framework/tests/README.md#mcp-api-tests) for
+credentials, isolation and running API and MCP together.
+
+Only `ENV=tests` enables authenticated `POST /api/v1/testing/cleanup` (empty body
+or `{}`). It returns `204` after clearing settled operations, reports and artifacts,
+or `409 test_state_busy` while work is active. Catalogs, delivery records, bus and
+host memory remain intact. This endpoint is absent from normal hosts and Swagger.
 
 Keep concrete providers in `cli/factory.go` and inject their interfaces into
 the adapter. Use plural names for endpoint groups, such as `endpoints/actions.go`.
 Operation routes, schemas and OpenAPI definitions live in `endpoints/operations/`,
 with `routes.go` registering its handlers. Shared HTTP helpers stay in `endpoints/`; `api.go`
 wires routes and middleware, and root `openapi.go` assembles the document.
-Boundary tests live in `tests/` and use temporary filesystem state.
+Workflow tests live in `tests/` and use the public HTTP endpoints.
 
 HTTP models live in flat `models/*_model.go` files grouped by entity.
 `mappings/*_mapping.go` maps requests and URL IDs to controller commands, and

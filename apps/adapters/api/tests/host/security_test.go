@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -9,53 +8,6 @@ import (
 
 func authenticate(request *http.Request) {
 	request.SetBasicAuth("api-fixture-user", "api-fixture-password")
-}
-
-func TestAuthenticationAndSecurityHeaders(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, fixture.localArgs())
-	for _, test := range []struct {
-		name      string
-		configure func(*http.Request)
-		status    int
-	}{
-		{name: "missing credentials", status: http.StatusUnauthorized},
-		{name: "incorrect password", status: http.StatusUnauthorized, configure: func(r *http.Request) { r.SetBasicAuth("api-fixture-user", "wrong-password") }},
-		{name: "incorrect username", status: http.StatusUnauthorized, configure: func(r *http.Request) { r.SetBasicAuth("wrong-user", "api-fixture-password") }},
-		{name: "malformed credentials", status: http.StatusUnauthorized, configure: func(r *http.Request) { r.Header.Set("Authorization", "Basic invalid-base64") }},
-		{name: "duplicate credentials", status: http.StatusUnauthorized, configure: func(r *http.Request) {
-			authenticate(r)
-			r.Header.Add("Authorization", r.Header.Get("Authorization"))
-		}},
-		{name: "valid credentials", status: http.StatusNotFound, configure: authenticate},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			result := server.request(t, http.MethodGet, "/api/v1/nonexistent", func(r *http.Request) {
-				if test.configure != nil {
-					test.configure(r)
-				}
-			})
-
-			if result.status != test.status {
-				t.Fatalf("status=%d, want %d: %s", result.status, test.status, result.body)
-			}
-			assertSecurityHeaders(t, result, false)
-			if result.status == http.StatusUnauthorized {
-				if got := result.header.Get("WWW-Authenticate"); got != `Basic realm="Commander", charset="UTF-8"` {
-					t.Errorf("unexpected authentication challenge: %q", got)
-				}
-				var payload map[string]any
-				if err := json.Unmarshal([]byte(result.body), &payload); err != nil || !strings.Contains(result.body, "authentication_required") {
-					t.Errorf("authentication error must be JSON with a stable error code: %s", result.body)
-				}
-			}
-			for _, secret := range []string{"api-fixture-user", "api-fixture-password", "wrong-password", "invalid-base64"} {
-				if strings.Contains(result.body, secret) {
-					t.Errorf("response exposed credential %q", secret)
-				}
-			}
-		})
-	}
 }
 
 func TestPublicHealthProbesBypassHostAndProxyChecks(t *testing.T) {

@@ -98,9 +98,9 @@ func NewServer(config Config) (*mcp.Server, error) {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
 	}
 	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
-		addTool(server, "clean_up_state", "Clear persisted test data between tests. Keeps missions, bus messages, subscriptions and host memory.", emptySchema,
-			func(_ context.Context, _ struct{}) (struct{}, error) {
-				return struct{}{}, config.TestCleaner.Clean()
+		addTool(server, "clean_up_state", "Clear settled test operations, reports and artifacts. Keeps catalogs, agents, delivery records, bus and host memory. Active work must finish first.", emptySchema,
+			func(ctx context.Context, _ struct{}) (struct{}, error) {
+				return struct{}{}, frameworktesting.CleanContext(ctx, config.TestCleaner)
 			})
 	}
 	addTool(server, "list_actions", "List action names, descriptions and required permissions. Use describe_action for schemas and list_agents for current availability and grants.", emptySchema,

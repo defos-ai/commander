@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
+	frameworktesting "commander/framework/testing"
 	"commander/providers/fs"
 	fsactions "commander/providers/fs/actions"
 	fsagents "commander/providers/fs/agents"
@@ -24,16 +26,19 @@ import (
 	fsmissions "commander/providers/fs/missions"
 	fsoperations "commander/providers/fs/operations"
 	fsreports "commander/providers/fs/reports"
+	fstesting "commander/providers/fs/testing"
 	mongoactions "commander/providers/mongo/actions"
 	mongoagents "commander/providers/mongo/agents"
 	mongoartifacts "commander/providers/mongo/artifacts"
 	mongomissions "commander/providers/mongo/missions"
 	mongooperations "commander/providers/mongo/operations"
 	mongostore "commander/providers/mongo/store"
+	mongotesting "commander/providers/mongo/testing"
 	rabbitmqcomms "commander/providers/rabbitmq/comms"
 	s3artifacts "commander/providers/s3/artifacts"
 	s3reports "commander/providers/s3/reports"
 	s3store "commander/providers/s3/store"
+	s3testing "commander/providers/s3/testing"
 )
 
 type dependencies struct {
@@ -45,6 +50,7 @@ type dependencies struct {
 	OperationStore    operations.OperationStore
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
+	TestCleaner       frameworktesting.TestCleaner
 	mongo             *mongostore.MongoStore
 	s3                *s3store.S3Store
 	closers           []func() error
@@ -98,6 +104,12 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	deps.ActionStore, err = deps.createActionStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	if os.Getenv("ENV") == "tests" {
+		deps.TestCleaner, err = deps.createTestCleaner(ctx, configuration.storageURL, configuration.databaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("test cleanup: %w", err)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -311,6 +323,58 @@ func connectionScheme(rawURL string) string {
 		}
 	}
 	return "file"
+}
+
+func (d *dependencies) createTestCleaner(ctx context.Context, storageURL, databaseURL string) (frameworktesting.TestCleaner, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var database, storage frameworktesting.TestCleaner
+	switch scheme := connectionScheme(databaseURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(databaseURL)
+		if err != nil {
+			return nil, err
+		}
+		database, err = fstesting.NewTestFsDatabaseCleaner(path)
+		if err != nil {
+			return nil, err
+		}
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, databaseURL); err != nil {
+			return nil, err
+		}
+		var err error
+		database, err = mongotesting.NewTestMongoCleaner(d.mongo)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported test database scheme %q", scheme)
+	}
+	switch scheme := connectionScheme(storageURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(storageURL)
+		if err != nil {
+			return nil, err
+		}
+		storage, err = fstesting.NewTestFsStorageCleaner(path)
+		if err != nil {
+			return nil, err
+		}
+	case "s3":
+		if err := d.connectS3(ctx, storageURL); err != nil {
+			return nil, err
+		}
+		var err error
+		storage, err = s3testing.NewTestS3Cleaner(d.s3)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported test storage scheme %q", scheme)
+	}
+	return frameworktesting.NewStateCleaner(d.OperationStore, d.AgentStore, database, storage)
 }
 
 func (d *dependencies) createArtifactFileStore(ctx context.Context, rawURL string) (artifacts.ArtifactFileStore, error) {

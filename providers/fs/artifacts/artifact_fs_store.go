@@ -20,6 +20,14 @@ type ArtifactFsStore struct{ root string }
 
 var _ artifacts.ArtifactStore = (*ArtifactFsStore)(nil)
 var errAlreadyCreated = errors.New("artifact is already stored")
+var errTestDeleted = errors.New("artifact was retired by test cleanup")
+
+// Retired IDs acknowledge delayed result replays without restoring metadata
+// whose files test cleanup has removed. This marker is never a public field.
+type artifactRecord struct {
+	artifacts.Artifact
+	TestDeleted bool `json:"test_deleted,omitempty"`
+}
 
 func NewArtifactFsStore(root string) (*ArtifactFsStore, error) {
 	if root == "" {
@@ -56,6 +64,9 @@ func (s *ArtifactFsStore) Create(ctx context.Context, value artifacts.Artifact) 
 	}
 	err = record.Update(ctx, func(data []byte) ([]byte, error) {
 		stored, err := decode(data, value.ID)
+		if errors.Is(err, errTestDeleted) {
+			return nil, errAlreadyCreated
+		}
 		if errors.Is(err, artifacts.ErrUnknownArtifact) {
 			return encoded, nil
 		}
@@ -85,7 +96,11 @@ func (s *ArtifactFsStore) Get(ctx context.Context, artifactID string) (artifacts
 	if err != nil {
 		return artifacts.Artifact{}, err
 	}
-	return decode(data, artifactID)
+	value, err := decode(data, artifactID)
+	if errors.Is(err, errTestDeleted) {
+		return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
+	}
+	return value, err
 }
 
 func (s *ArtifactFsStore) path(ctx context.Context, artifactID string) (string, error) {
@@ -102,7 +117,7 @@ func (s *ArtifactFsStore) path(ctx context.Context, artifactID string) (string, 
 }
 
 func decode(data []byte, artifactID string) (artifacts.Artifact, error) {
-	var records []artifacts.Artifact
+	var records []artifactRecord
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&records); err != nil {
@@ -121,8 +136,11 @@ func decode(data []byte, artifactID string) (artifacts.Artifact, error) {
 	if value.ID != artifactID {
 		return artifacts.Artifact{}, errors.New("stored artifact ID does not match its record")
 	}
-	if err := value.Validate(); err != nil {
+	if value.TestDeleted {
+		return artifacts.Artifact{}, errTestDeleted
+	}
+	if err := value.Artifact.Validate(); err != nil {
 		return artifacts.Artifact{}, fmt.Errorf("invalid stored artifact: %w", err)
 	}
-	return value, nil
+	return value.Artifact, nil
 }

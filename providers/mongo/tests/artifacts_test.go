@@ -10,6 +10,7 @@ import (
 	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	mongoartifacts "commander/providers/mongo/artifacts"
+	mongotesting "commander/providers/mongo/testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -133,6 +134,47 @@ func TestConcurrentArtifactMongoCreates(t *testing.T) {
 	var documents []bson.M
 	if err := database.Find(t.Context(), "artifacts", bson.D{}, &documents); err != nil || len(documents) != 1 {
 		t.Fatalf("replay created duplicate records: count=%d, %v", len(documents), err)
+	}
+}
+
+func TestArtifactMongoCleanupKeepsDelayedResultsRetired(t *testing.T) {
+	database := openStore(t, "artifacts")
+	catalog, err := mongoartifacts.NewArtifactMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := mongoArtifactFixture()
+	if err := catalog.Create(t.Context(), value); err != nil {
+		t.Fatal(err)
+	}
+	cleaner, err := mongotesting.NewTestMongoCleaner(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := cleaner.CleanContext(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := mongoartifacts.NewArtifactMongoStore(t.Context(), database)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := reopened.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
+			t.Fatalf("cleanup left public artifact metadata: %v", err)
+		}
+		if err := reopened.Create(t.Context(), value); err != nil {
+			t.Fatalf("delayed result must be acknowledged: %v", err)
+		}
+		if _, err := reopened.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
+			t.Fatalf("delayed result restored retired metadata: %v", err)
+		}
+	}
+	fresh := mongoArtifactFixture()
+	if err := catalog.Create(t.Context(), fresh); err != nil {
+		t.Fatalf("cleanup prevented new artifacts: %v", err)
+	}
+	if saved, err := catalog.Get(t.Context(), fresh.ID); err != nil || !saved.Equal(fresh) {
+		t.Fatalf("new artifact did not survive retirement of old results: %+v, %v", saved, err)
 	}
 }
 

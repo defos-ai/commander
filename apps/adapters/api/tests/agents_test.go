@@ -1,87 +1,82 @@
 package api_test
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
-	"path/filepath"
-	"reflect"
+	"sync"
 	"testing"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	fsagents "commander/providers/fs/agents"
+	"commander/adapters/api/models"
 )
 
-func TestAgentsShowCurrentWorkReadinessAndLeaseExpiry(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("API_SWAGGER_ENABLED", "true")
-	store, err := fsagents.NewAgentFsStore(filepath.Join(fixture.root, "database"))
-	if err != nil {
-		t.Fatal(err)
+func TestAgentsTrackDispatchedWorkUntilCancelledTaskFinishes(t *testing.T) {
+	a := connect(t)
+	initial := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
+	if len(initial.Items) != 2 || initial.Items[0].ID >= initial.Items[1].ID {
+		t.Fatalf("inventory should contain two sorted agents: %+v", initial)
 	}
-	now := time.Now().UTC()
-	working := agents.Agent{
-		AgentSnapshot: agents.AgentSnapshot{
-			ID: "web-quality-agent-bbbbbbbb", Type: "web-quality", Status: agents.AgentWorking,
-			Config:           json.RawMessage(`{"limits":{"pages":3}}`),
-			Work:             &agents.Work{OperationID: "operation", TaskID: "task", StepID: "links", CommandID: "command", ActionName: "check-links"},
-			Server:           agents.ServerInfo{IPAddress: "10.0.0.3", Hostname: "agent-pod"},
-			Actions:          []actions.Action{{Name: "capture-page", Status: actions.Unavailable, StatusReason: "Browser missing", MissingRequirements: []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "chromium"}}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
-			Responsibilities: []string{"Review websites"}, GrantedPermissions: []string{"network-access"},
-			DiscoveryScope: &agents.DiscoveryScope{Paths: []string{}, Services: []string{"browser"}},
-		},
-		ObservedAt: now, LastSeen: now, LastHeartbeat: now, LeaseExpiresAt: now.Add(time.Hour),
+	for _, agent := range initial.Items {
+		result := a.request(http.MethodGet, "/api/v1/agents/"+agent.ID, nil)
+		detail := decode[models.AgentResponse](t, result, http.StatusOK)
+		if detail.ID != agent.ID || detail.Stale || detail.Work != nil || detail.Status != "ready" {
+			t.Fatalf("agent is not ready: %+v", detail)
+		}
+		assertSchema(t, a, "Agent", result)
 	}
-	stale := working.Clone()
-	stale.ID = "web-quality-agent-aaaaaaaa"
-	stale.Status = agents.AgentReady
-	stale.Work = nil
-	stale.Config = nil
-	stale.DiscoveryScope = nil
-	stale.ObservedAt = time.Time{}
-	stale.GrantedPermissions = []string{}
-	stale.LeaseExpiresAt = now.Add(-time.Second)
-	for _, agent := range []agents.Agent{working, stale} {
-		if err := store.Upsert(t.Context(), agent); err != nil {
+	entered, release := make(chan struct{}, 1), make(chan struct{})
+	var once sync.Once
+	url := serveWebsite(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, "<html><head><title>Held review</title></head><body><h1>Review</h1></body></html>")
+	}))
+	t.Cleanup(func() { once.Do(func() { close(release) }) })
+	op := a.start(url)
+	task := a.task(op.ID, "check-seo", url)
+	select {
+	case <-entered:
+	case <-time.After(15 * time.Second):
+		t.Fatal("agent did not reach the controlled website")
+	}
+	running := a.wait(op.ID, func(op models.OperationResponse) bool { return len(op.Tasks) == 1 && op.Tasks[0].Status == "running" })
+	var worker models.AgentResponse
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		worker = read[models.AgentResponse](a, "/api/v1/agents/"+running.Tasks[0].AgentID)
+		if worker.Status == "working" && worker.Work != nil && worker.Work.TaskID == task.ID {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("inventory did not report dispatched task: %+v", worker)
+		}
+		if err := pause(a.ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
-	server := startAPI(t, fixture.localArgs())
-
-	list := decodeResponse[struct {
-		Items []agents.Agent `json:"items"`
-	}](t, server.request(t, http.MethodGet, "/api/v1/agents", authenticate))
-	result := server.request(t, http.MethodGet, "/api/v1/agents/"+working.ID, authenticate)
-	busy := decodeResponse[agents.Agent](t, result)
-	assertResponseSchema(t, server, "Agent", result)
-	expiredResult := server.request(t, http.MethodGet, "/api/v1/agents/"+stale.ID, authenticate)
-	expired := decodeResponse[agents.Agent](t, expiredResult)
-	assertResponseSchema(t, server, "Agent", expiredResult)
-	fields := decodeResponse[map[string]json.RawMessage](t, expiredResult)
-	if _, exists := fields["work"]; exists {
-		t.Error("idle work must remain omitted")
+	if worker.Stale || worker.Work.OperationID != op.ID || worker.Work.CommandID != task.CommandID || worker.Work.ActionName != "check-seo" {
+		t.Fatalf("work ownership differs: %+v", worker)
 	}
-	if _, exists := fields["observed_at"]; exists {
-		t.Error("zero observation time must remain omitted")
+	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil), http.StatusConflict, "test_state_busy")
+	assertError(t, a.request(http.MethodPost, operationPath(op.ID)+"/complete", object{"output": object{"url": url, "summary": "Too early", "findings": []object{}}}), http.StatusConflict, "operation_active_tasks")
+	cancelled := post[models.OperationResponse](a, operationPath(op.ID)+"/cancel", nil, http.StatusOK)
+	if cancelled.Status != "cancelled" || cancelled.Tasks[0].Status != "running" {
+		t.Fatalf("cancellation lost dispatched work: %+v", cancelled)
 	}
-	if string(fields["config"]) != "null" || string(fields["discovery_scope"]) != "null" || string(fields["granted_permissions"]) != "[]" {
-		t.Fatalf("response changed null or empty fields: %s", expiredResult.body)
+	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil), http.StatusConflict, "test_state_busy")
+	once.Do(func() { close(release) })
+	finished := a.wait(op.ID, tasksSettled)
+	if finished.Status != "cancelled" || finished.Tasks[0].Status != "succeeded" || finished.Tasks[0].Result == nil {
+		t.Fatalf("late result lost terminal operation status: %+v", finished)
 	}
-
-	if len(list.Items) != 2 || list.Items[0].ID != stale.ID || list.Items[1].ID != working.ID {
-		t.Fatalf("unexpected agent catalog order: %+v", list.Items)
-	}
-	if !reflect.DeepEqual(busy, working) {
-		t.Fatalf("agent detail lost work, host, or action readiness: got %+v, want %+v", busy, working)
-	}
-	if !expired.Stale || expired.Status != agents.AgentUnavailable || !list.Items[0].Stale || list.Items[0].Status != agents.AgentUnavailable {
-		t.Fatalf("expired lease still appears ready: detail=%+v list=%+v", expired, list.Items[0])
-	}
-	stored, err := store.Get(t.Context(), stale.ID)
-	if err != nil || stored.Stale || stored.Status != agents.AgentReady {
-		t.Fatalf("reading the API changed persisted agent state: %+v, %v", stored, err)
-	}
-	assertAPIError(t, server.request(t, http.MethodGet, "/api/v1/agents/web-quality-agent-cccccccc", authenticate), http.StatusNotFound, "agent_not_found")
-	assertAPIError(t, server.request(t, http.MethodGet, "/api/v1/agents"), http.StatusUnauthorized, "authentication_required")
+	assertError(t, a.request(http.MethodGet, "/api/v1/agents/not-valid", nil), http.StatusNotFound, "agent_not_found")
+	assertError(t, a.request(http.MethodGet, "/api/v1/agents/unknown-agent-1234abcd", nil), http.StatusNotFound, "agent_not_found")
 }

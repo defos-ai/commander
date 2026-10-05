@@ -14,6 +14,7 @@ import (
 	"commander/framework/domain/artifacts"
 	"commander/framework/id"
 	artifactfs "commander/providers/fs/artifacts"
+	fstesting "commander/providers/fs/testing"
 )
 
 func TestArtifactFsStore(t *testing.T) {
@@ -114,6 +115,57 @@ func TestConcurrentArtifactFsCreates(t *testing.T) {
 
 	if successes != 6 || conflicts != 6 {
 		t.Fatalf("conflicting creates: successes=%d, conflicts=%d", successes, conflicts)
+	}
+}
+
+func TestArtifactFsCleanupKeepsDelayedResultsRetired(t *testing.T) {
+	root := t.TempDir()
+	storage, database := filepath.Join(root, "storage"), filepath.Join(root, "database")
+	files, err := artifactfs.NewArtifactFileFsStore(storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := artifactfs.NewArtifactFsStore(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := artifactFixture()
+	file, err := files.Put(t.Context(), value.ID, artifacts.FileSource{Name: "evidence.txt", Data: []byte("accepted result")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.Files = []artifacts.ArtifactFile{file}
+	if err := metadata.Create(t.Context(), value); err != nil {
+		t.Fatal(err)
+	}
+	cleaner, err := fstesting.NewTestFsCleaner(storage, database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := cleaner.CleanContext(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		// A reopened store models a later delivery or another controller reader.
+		reopened, err := artifactfs.NewArtifactFsStore(database)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := reopened.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
+			t.Fatalf("cleanup left public artifact metadata: %v", err)
+		}
+		if err := reopened.Create(t.Context(), value); err != nil {
+			t.Fatalf("delayed result must be acknowledged: %v", err)
+		}
+		if _, err := reopened.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
+			t.Fatalf("delayed result restored retired metadata: %v", err)
+		}
+		if _, err := files.Get(t.Context(), value.ID, file); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("cleanup left artifact bytes: %v", err)
+		}
+	}
+	if err := metadata.Create(t.Context(), artifactFixture()); err != nil {
+		t.Fatalf("cleanup prevented new artifacts: %v", err)
 	}
 }
 

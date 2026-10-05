@@ -1,0 +1,218 @@
+name: commander-full-test
+
+x-environment: &environment
+  BUS_URL: amqp://commander-test:commander-test-secret@rabbitmq:5672/
+  STORAGE_URL: s3://commander-test
+  AWS_ENDPOINT_URL_S3: http://minio:9000
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: commander-test
+  AWS_SECRET_ACCESS_KEY: commander-test-secret
+  S3_USE_PATH_STYLE: "true"
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+
+x-runtime: &runtime
+  init: true
+  stop_grace_period: 30s
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-agent: &agent
+  <<: *runtime
+  image: commander-web-quality-agent:test
+  pull_policy: never
+  shm_size: 256mb
+  command: ["--heartbeat-interval=1s"]
+  environment:
+    <<: *environment
+    CHROMIUM_NO_SANDBOX: "true"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    controller:
+      condition: service_started
+    rabbitmq:
+      condition: service_healthy
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.9-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: commander-test
+      RABBITMQ_DEFAULT_PASS: commander-test-secret
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 10s
+
+  mongo:
+    image: mongo:8.0.32
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      # Avoid MongoDB TCMalloc crashes on newer kernels: SERVER-121912.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    volumes:
+      - mongo:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - >-
+          try { rs.status(); }
+          catch (error) {
+            if (error.codeName !== "NotYetInitialized") throw error;
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
+          }
+          quit(db.hello().isWritablePrimary ? 0 : 1);
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 5s
+
+  minio:
+    image: commander-minio:test
+    build:
+      context: ./providers/s3/tests/minio
+      target: minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: commander-test
+      MINIO_ROOT_PASSWORD: commander-test-secret
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 18
+      start_period: 5s
+
+  minio-init:
+    image: commander-minio-client:test
+    build:
+      context: ./providers/s3/tests/minio
+      target: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: commander-test
+      AWS_SECRET_ACCESS_KEY: commander-test-secret
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
+        mc mb --ignore-existing local/commander-test
+
+  controller:
+    <<: *runtime
+    image: commander-controller:test
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/controllers/default/docker/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    command: ["--with-missions=/data/default-missions.json"]
+    configs:
+      - source: default-missions
+        target: /data/default-missions.json
+    environment:
+      <<: *environment
+      DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
+
+  mcp:
+    <<: *runtime
+    image: commander-mcp:test
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/adapters/mcp/docker/Dockerfile
+    command:
+      - --listen-address=:4273
+      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
+    environment:
+      <<: *environment
+      DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
+      ENV: tests
+    ports:
+      - "127.0.0.1:14273:4273"
+    depends_on:
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  api:
+    <<: *runtime
+    image: commander-api:test
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/adapters/api/docker/Dockerfile
+    environment:
+      <<: *environment
+      DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
+      ENV: tests
+      API_USERNAME: api-fixture-user
+      API_PASSWORD: api-fixture-password
+      API_LISTEN_ADDRESS: 0.0.0.0:4274
+      API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api
+      API_SWAGGER_ENABLED: "true"
+    ports:
+      - "127.0.0.1:14274:4274"
+    depends_on:
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4274/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  web-1:
+    <<: *agent
+    build:
+      context: .
+      dockerfile: apps/agents/web-quality/docker/Dockerfile
+
+  web-2:
+    <<: *agent
+
+volumes:
+  rabbitmq:
+  minio:
+  mongo:
+
+configs:
+  default-missions:
+    file: ./apps/controllers/default/data/default-missions.json

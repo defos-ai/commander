@@ -3,57 +3,41 @@ package api_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
-	"path/filepath"
 	"reflect"
 	"testing"
 
-	"commander/framework/domain/actions"
-	fsactions "commander/providers/fs/actions"
+	"commander/adapters/api/models"
 )
 
-func TestActionsCatalogPreservesPermissionsAndSchemas(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("API_SWAGGER_ENABLED", "true")
-	store, err := fsactions.NewActionFsStore(filepath.Join(fixture.root, "database"))
-	if err != nil {
-		t.Fatal(err)
+func TestActionCatalogMatchesReadyAgents(t *testing.T) {
+	a := connect(t)
+	catalog := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
+	agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
+	if len(catalog.Items) != 6 {
+		t.Fatalf("expected six website actions: %+v", catalog)
 	}
-	action := actions.Action{
-		Name: "discover-pages", Description: "Discover same-hostname pages", Status: actions.Unknown,
-		RequiredPermissions: []string{"network-access"},
-		StatusReason:        "Configuration missing",
-		MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Secret: true}},
-		InputSchema:         json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}`),
-		OutputSchema:        json.RawMessage(`{"type":"object","properties":{"pages":{"type":"array"}}}`),
+	for i, action := range catalog.Items {
+		if i > 0 && catalog.Items[i-1].Name >= action.Name {
+			t.Fatal("action catalog is not sorted by name")
+		}
+		if !json.Valid(action.InputSchema) || !json.Valid(action.OutputSchema) || action.Description == "" {
+			t.Fatalf("action lacks definition: %+v", action)
+		}
+		path := "/api/v1/actions/" + action.Name
+		if detail := read[models.ActionResponse](a, path); !reflect.DeepEqual(detail, action) {
+			t.Fatalf("action detail differs from catalog: %+v", detail)
+		}
+		assertSchema(t, a, "Action", a.request(http.MethodGet, path, nil))
 	}
-	if err := store.Upsert(t.Context(), action); err != nil {
-		t.Fatal(err)
+	for _, agent := range agents.Items {
+		if len(agent.Actions) != 6 {
+			t.Fatalf("agent lacks actions: %+v", agent)
+		}
+		for _, action := range agent.Actions {
+			if action.Status != "ready" {
+				t.Fatalf("Compose must install browser/dependencies: %s: %+v", agent.ID, action)
+			}
+		}
 	}
-	second := action
-	second.Name = "capture/page"
-	if err := store.Upsert(t.Context(), second); err != nil {
-		t.Fatal(err)
-	}
-	server := startAPI(t, fixture.localArgs())
-
-	result := server.request(t, http.MethodGet, "/api/v1/actions/discover-pages", authenticate)
-	detail := decodeResponse[actions.Action](t, result)
-	assertResponseSchema(t, server, "Action", result)
-	list := decodeResponse[struct {
-		Items []actions.Action `json:"items"`
-	}](t, server.request(t, http.MethodGet, "/api/v1/actions", authenticate))
-
-	if !reflect.DeepEqual(detail, action) {
-		t.Fatalf("action detail lost metadata: got %+v, want %+v", detail, action)
-	}
-	if len(list.Items) != 2 || list.Items[0].Name != "capture/page" || list.Items[1].Name != "discover-pages" {
-		t.Fatalf("unexpected action catalog order: %+v", list.Items)
-	}
-	escaped := decodeResponse[actions.Action](t, server.request(t, http.MethodGet, "/api/v1/actions/"+url.PathEscape(second.Name), authenticate))
-	if !reflect.DeepEqual(escaped, second) {
-		t.Fatalf("escaped action name did not resolve: got %+v, want %+v", escaped, second)
-	}
-	assertAPIError(t, server.request(t, http.MethodGet, "/api/v1/actions/unknown", authenticate), http.StatusNotFound, "action_not_found")
-	assertAPIError(t, server.request(t, http.MethodGet, "/api/v1/actions"), http.StatusUnauthorized, "authentication_required")
+	assertError(t, a.request(http.MethodGet, "/api/v1/actions/missing", nil), http.StatusNotFound, "action_not_found")
 }

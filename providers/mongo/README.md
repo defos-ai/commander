@@ -63,8 +63,9 @@ go vet ./providers/mongo/...
 Integration tests skip without `COMMANDER_TEST_MONGO_URL`. Use a dedicated test
 database: tests clean their collections before and after each case. CI runs the
 suite in [test-provider-mongo.yml](../../.github/workflows/test-provider-mongo.yml).
-The same variable enables optional controller and MCP startup tests; see the
-[testing guide](../../framework/tests/README.md).
+The same variable enables the optional controller startup test. HTTP API and MCP
+workflows exercise MongoDB with RabbitMQ and MinIO; see the
+[testing guide](../../framework/tests/README.md#mcp-api-tests).
 
 ### Persistence and recovery
 

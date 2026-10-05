@@ -28,6 +28,9 @@ type artifactDocument struct {
 	CommandID  string                   `bson:"command_id,omitempty"`
 	CreatedAt  bsonvalue.Timestamp      `bson:"created_at"`
 	Files      []artifacts.ArtifactFile `bson:"files"`
+	// TestDeleted retains only identity after test cleanup, preventing delayed
+	// accepted result replays from restoring metadata for deleted files.
+	TestDeleted bool `bson:"test_deleted,omitempty"`
 }
 
 func NewArtifactMongoStore(ctx context.Context, database *store.MongoStore) (*ArtifactMongoStore, error) {
@@ -59,7 +62,17 @@ func (s *ArtifactMongoStore) Create(ctx context.Context, value artifacts.Artifac
 	if !mongo.IsDuplicateKeyError(err) {
 		return err
 	}
-	stored, err := s.Get(ctx, value.ID)
+	var previous artifactDocument
+	if err := s.database.GetByID(ctx, collection, value.ID, &previous); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return artifacts.ErrUnknownArtifact
+		}
+		return err
+	}
+	if previous.TestDeleted {
+		return nil
+	}
+	stored, err := previous.artifact()
 	if err != nil {
 		return err
 	}
@@ -82,6 +95,13 @@ func (s *ArtifactMongoStore) Get(ctx context.Context, artifactID string) (artifa
 			return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
 		}
 		return artifacts.Artifact{}, err
+	}
+	return document.artifact()
+}
+
+func (document artifactDocument) artifact() (artifacts.Artifact, error) {
+	if document.TestDeleted {
+		return artifacts.Artifact{}, artifacts.ErrUnknownArtifact
 	}
 	createdAt, err := document.CreatedAt.Decode()
 	if err != nil {
