@@ -12,3 +12,6 @@ state
 **/coverage.out
 **/coverage.html
 **/.DS_Store
+**/node_modules
+apps/admin/ui/dist
+apps/admin/ui/coverage

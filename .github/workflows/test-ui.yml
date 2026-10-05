@@ -1,0 +1,44 @@
+name: UI tests
+
+on:
+  push:
+    paths:
+      - 'apps/admin/ui/**'
+      - '.github/workflows/test-ui.yml'
+      - '!**/*.md'
+  pull_request:
+    paths:
+      - 'apps/admin/ui/**'
+      - '.github/workflows/test-ui.yml'
+      - '!**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/admin/ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/admin/ui/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test UI behavior
+        run: npm test
+      - name: Build
+        run: npm run build
