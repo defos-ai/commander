@@ -97,7 +97,7 @@ type AskQuestionCommand struct {
 }
 
 func (r AskQuestionCommand) Validate() error {
-	if r.TaskID != "" && (!id.Valid(r.TaskID) || r.Version == 0) {
+	if (r.TaskID != "" || r.Version != 0) && (!id.Valid(r.TaskID) || r.Version == 0) {
 		return errors.New("linked questions require a valid task_id and continuation version")
 	}
 	if err := validateOperationID(r.OperationID); err != nil {

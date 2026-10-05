@@ -2,6 +2,7 @@ package operations
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -65,7 +66,7 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 		}
 		c := o.Tasks[i].Continuation
 		if version == 0 || c == nil || c.Version != version || c.Status != ContinuationPending || c.DecisionBy != DecisionModel {
-			return errors.New("only a pending model decision can request operator intervention")
+			return fmt.Errorf("only a pending model decision can request operator intervention: %w", ErrContinuationConflict)
 		}
 		question.StepID = o.Tasks[i].StepID
 		c.DecisionBy, c.Status, c.QuestionID = DecisionUser, ContinuationWaiting, question.ID
@@ -117,9 +118,9 @@ func (o *Operation) AnswerQuestion(questionID, answer string) error {
 		}
 		switch question.Status {
 		case QuestionAnswered:
-			return errors.New("question is already answered")
+			return ErrQuestionAnswered
 		case QuestionExpired:
-			return errors.New("question has expired")
+			return ErrQuestionExpired
 		case QuestionPending:
 		default:
 			return errors.New("question is not pending")
@@ -149,7 +150,7 @@ func (o *Operation) AnswerQuestion(questionID, answer string) error {
 		o.UpdatedAt = time.Now().UTC()
 		return nil
 	}
-	return errors.New("unknown question")
+	return ErrUnknownQuestion
 }
 
 // Expiration never invents an answer or resumes a finished operation.

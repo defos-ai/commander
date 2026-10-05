@@ -145,12 +145,57 @@ func openAPICommandPaths(paths, components map[string]any) {
 	components["CancelOperationRequest"] = map[string]any{
 		"type": "object", "additionalProperties": false,
 	}
+	version := map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}
+	components["AskOperationQuestionRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"text"},
+		"dependentRequired": map[string][]string{"task_id": {"version"}, "version": {"task_id"}},
+		"properties": map[string]any{
+			"text": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
+			"options": map[string]any{
+				"type": "array", "maxItems": 4,
+				"items": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
+			},
+			"timeout_seconds": map[string]any{
+				"type": "integer", "minimum": 0, "maximum": 86400, "default": 120,
+				"description": "Question lifetime in seconds. Omit or use 0 for the 120-second default; otherwise use 1 through 86400.",
+			},
+			"step_id": map[string]any{"type": "string", "description": "Optional mission step ID. An unknown step returns invalid_input."},
+			"task_id": map[string]any{
+				"type": "string", "format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
+				"description": "Optional task whose pending continuation requires this question. Must be supplied together with version.",
+			},
+			"version": version,
+		},
+	}
+	components["AnswerOperationQuestionRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"answer"},
+		"properties": map[string]any{"answer": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
+	}
+	components["NextAction"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"action_name"},
+		"properties": map[string]any{
+			"action_name": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
+			"input":       map[string]any{"type": "object", "description": "Optional task input object. Explicit null is invalid."},
+			"reason":      map[string]any{"type": "string"},
+		},
+	}
+	components["ResolveOperationContinuationRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"version", "actions"},
+		"properties": map[string]any{
+			"version": version,
+			"actions": map[string]any{
+				"type": "array", "items": endpoints.OpenAPIRef("NextAction"),
+				"description": "Required explicit follow-up actions. An empty array resolves the continuation without assigning tasks.",
+			},
+		},
+	}
 	const root = "/api/v1/operations"
 	const operation = root + "/{operation_id}"
 	const commandDescription = " Commands go to the controller over the bus with a 10-second request timeout and no automatic retry. A timeout, operation_write_uncertain or command_outcome_unknown can follow accepted work; query saved state before resubmitting."
 	for _, route := range []struct {
 		path, id, summary, description, request, response, status, missing, conflict, location string
 		bodyRequired, invalidInput                                                             bool
+		resourceID                                                                             string
 	}{
 		{
 			path: root, id: "startOperation", summary: "Start an operation",
@@ -168,6 +213,24 @@ func openAPICommandPaths(paths, components map[string]any) {
 			path: operation + "/cancel", id: "cancelOperation", summary: "Cancel an operation",
 			description: "Cancels an operation and returns the full updated operation. Queued tasks are cancelled; already dispatched work may still finish. The body may be empty or {} only. Cancelling an already finished or cancelled operation returns 409 operation_finished.",
 			request:     "CancelOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict or operation_finished",
+		},
+		{
+			path: operation + "/questions", id: "askOperationQuestion", summary: "Ask an operation question",
+			description: "Creates a question and returns the full saved question. text and every option must be nonblank, with at most four options. Omitted or zero timeout_seconds means 120 seconds. Link a pending continuation by supplying both task_id and its current positive version. The path supplies operation_id.",
+			request:     "AskOperationQuestionRequest", response: "Question", status: "201", missing: "operation_not_found or task_not_found (linked question)", conflict: "operation_conflict, operation_finished or continuation_conflict",
+			location: "/api/v1/operations/{operation_id}/questions/{question_id}", bodyRequired: true, invalidInput: true,
+		},
+		{
+			path: operation + "/questions/{question_id}/answer", id: "answerOperationQuestion", summary: "Answer an operation question",
+			description: "Records guidance for a pending question and returns the full updated operation. answer must be nonblank; free-text answers need not match a listed option. Answering a linked question returns its continuation to model review; it does not queue selected actions. Expiry likewise returns the decision to review without inventing an answer. An answered or expired question cannot be answered again. The path supplies operation_id and question_id.",
+			request:     "AnswerOperationQuestionRequest", response: "Operation", status: "200", missing: "operation_not_found or question_not_found", conflict: "operation_conflict, operation_finished, question_answered or question_expired",
+			bodyRequired: true, resourceID: "question_id",
+		},
+		{
+			path: operation + "/tasks/{task_id}/continuation/resolve", id: "resolveOperationContinuation", summary: "Resolve an operation task continuation",
+			description: "Resolves a task's pending continuation at the supplied positive version and returns the full updated operation. actions must be an explicit array; [] resolves without follow-up work. Each action requires a nonblank action_name, with optional object input and string reason. The controller selects agents; agent_id is not accepted. The path supplies operation_id and task_id.",
+			request:     "ResolveOperationContinuationRequest", response: "Operation", status: "200", missing: "operation_not_found or task_not_found", conflict: "operation_conflict, operation_finished, continuation_conflict, question_pending or task_limit_exceeded",
+			bodyRequired: true, resourceID: "task_id",
 		},
 	} {
 		endpoint := endpoints.OpenAPIQueryOperation(route.id, route.summary, "Operations", endpoints.OpenAPIRef(route.response))
@@ -191,6 +254,10 @@ func openAPICommandPaths(paths, components map[string]any) {
 		if route.path != root {
 			endpoint["parameters"] = []any{openAPIUUIDParameter("operation_id")}
 			invalid = "invalid_operation_id, " + invalid
+		}
+		if route.resourceID != "" {
+			endpoint["parameters"] = append(endpoint["parameters"].([]any), openAPIUUIDParameter(route.resourceID))
+			invalid = "invalid_" + route.resourceID + ", " + invalid
 		}
 		responses["400"] = endpoints.OpenAPIResponse(invalid, endpoints.OpenAPIRef("Error"))
 		responses["404"] = endpoints.OpenAPIResponse(route.missing, endpoints.OpenAPIRef("Error"))

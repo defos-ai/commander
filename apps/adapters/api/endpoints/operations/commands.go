@@ -84,6 +84,16 @@ func writeCommandResult(w http.ResponseWriter, status int, location string, valu
 		endpoints.WriteError(w, http.StatusConflict, "operation_finished")
 	case errors.Is(err, operations.ErrQuestionPending):
 		endpoints.WriteError(w, http.StatusConflict, "question_pending")
+	case errors.Is(err, operations.ErrQuestionAnswered):
+		endpoints.WriteError(w, http.StatusConflict, "question_answered")
+	case errors.Is(err, operations.ErrQuestionExpired):
+		endpoints.WriteError(w, http.StatusConflict, "question_expired")
+	case errors.Is(err, operations.ErrContinuationConflict):
+		endpoints.WriteError(w, http.StatusConflict, "continuation_conflict")
+	case errors.Is(err, operations.ErrTaskLimitExceeded):
+		endpoints.WriteError(w, http.StatusConflict, "task_limit_exceeded")
+	case errors.Is(err, operations.ErrUnknownQuestion):
+		endpoints.WriteError(w, http.StatusNotFound, "question_not_found")
 	case errors.Is(err, domain.ErrInvalidInput):
 		endpoints.WriteError(w, http.StatusUnprocessableEntity, "invalid_input")
 	default:

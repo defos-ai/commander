@@ -146,11 +146,11 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 	}
 	i := taskIndex(op, taskID)
 	if i < 0 {
-		return errors.New("unknown task")
+		return ErrUnknownTask
 	}
 	c := op.Tasks[i].Continuation
 	if c == nil || c.Version != version || c.Status != ContinuationPending || c.DecisionBy != DecisionModel {
-		return errors.New("continuation is not pending at the supplied version; refresh get_operation")
+		return ErrContinuationConflict
 	}
 	for _, q := range op.Questions {
 		if q.Pending() && (q.TaskID == taskID || q.TaskID == "" && (q.StepID == "" || q.StepID == op.Tasks[i].StepID)) {
@@ -158,7 +158,7 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 		}
 	}
 	if len(op.Tasks)+len(actions) > 10000 {
-		return errors.New("operation task limit exceeded")
+		return ErrTaskLimitExceeded
 	}
 	c.ProposedActions = actionmodel.CloneNextActions(actions)
 	c.Version++

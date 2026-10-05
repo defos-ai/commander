@@ -288,11 +288,13 @@ func TestSwaggerCommandContracts(t *testing.T) {
 	}
 	document := decodeResponse[commandDocument](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
 	for _, test := range []struct {
-		name, suffix, status, model, missing string
-		valid, invalid                       []string
+		name, suffix, status, model string
+		missing, conflicts          []string
+		valid, invalid              []string
+		invalidInput                bool
 	}{
 		{
-			name: "start", status: "201", model: "Operation", missing: "mission_not_found",
+			name: "start", status: "201", model: "Operation", missing: []string{"mission_not_found"}, invalidInput: true,
 			valid: []string{
 				`{"mission_name":"inspect","input":null}`,
 				`{"mission_name":"inspect","input":[1,"two",null]}`,
@@ -308,7 +310,8 @@ func TestSwaggerCommandContracts(t *testing.T) {
 			},
 		},
 		{
-			name: "assign", suffix: "/{operation_id}/tasks", status: "201", model: "Task", missing: "operation_not_found",
+			name: "assign", suffix: "/{operation_id}/tasks", status: "201", model: "Task", missing: []string{"operation_not_found"},
+			conflicts: []string{"question_pending"}, invalidInput: true,
 			valid: []string{`{"action_name":"inspect"}`, `{"action_name":"inspect","input":{"any":[1,null]},"step_id":"step"}`},
 			invalid: []string{
 				`{}`, `{"action_name":""}`, `{"action_name":" \t"}`, `{"action_name":null}`,
@@ -319,8 +322,74 @@ func TestSwaggerCommandContracts(t *testing.T) {
 			},
 		},
 		{
-			name: "cancel", suffix: "/{operation_id}/cancel", status: "200", model: "Operation", missing: "operation_not_found",
+			name: "cancel", suffix: "/{operation_id}/cancel", status: "200", model: "Operation", missing: []string{"operation_not_found"},
 			valid: []string{`{}`}, invalid: []string{`null`, `[]`, `{"operation_id":"12345678-1234-1234-1234-123456789abc"}`},
+		},
+		{
+			name: "ask", suffix: "/{operation_id}/questions", status: "201", model: "Question",
+			missing: []string{"operation_not_found", "task_not_found"}, conflicts: []string{"continuation_conflict"}, invalidInput: true,
+			valid: []string{
+				`{"text":"Continue?"}`, `{"text":"Continue?","options":[],"timeout_seconds":0}`,
+				`{"text":"Continue?","options":["One","Two","Three","Four"],"timeout_seconds":86400,"step_id":"step"}`,
+				`{"text":"Continue?","timeout_seconds":1,"task_id":"12345678-1234-1234-1234-123456789abc","version":1}`,
+				`{"text":"Continue?","task_id":"12345678-1234-1234-1234-123456789abc","version":18446744073709551615}`,
+			},
+			invalid: []string{
+				`{}`, `null`, `[]`, `{"text":" \t"}`, `{"text":null}`,
+				`{"text":"Continue?","options":null}`, `{"text":"Continue?","options":"One"}`,
+				`{"text":"Continue?","options":["One","Two","Three","Four","Five"]}`,
+				`{"text":"Continue?","options":[""]}`, `{"text":"Continue?","options":[" \t"]}`,
+				`{"text":"Continue?","options":[null]}`, `{"text":"Continue?","options":[1]}`,
+				`{"text":"Continue?","timeout_seconds":null}`, `{"text":"Continue?","timeout_seconds":-1}`,
+				`{"text":"Continue?","timeout_seconds":86401}`, `{"text":"Continue?","timeout_seconds":1.5}`,
+				`{"text":"Continue?","timeout_seconds":"120"}`, `{"text":"Continue?","step_id":null}`,
+				`{"text":"Continue?","task_id":"12345678-1234-1234-1234-123456789abc"}`, `{"text":"Continue?","version":1}`,
+				`{"text":"Continue?","version":0}`, `{"text":"Continue?","task_id":null,"version":1}`,
+				`{"text":"Continue?","task_id":"INVALID","version":1}`, `{"text":"Continue?","task_id":"","version":1}`,
+				`{"text":"Continue?","task_id":"12345678-1234-1234-1234-123456789abc","version":0}`,
+				`{"text":"Continue?","task_id":"12345678-1234-1234-1234-123456789abc","version":null}`,
+				`{"text":"Continue?","task_id":"12345678-1234-1234-1234-123456789abc","version":1.5}`,
+				`{"text":"Continue?","operation_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"text":"Continue?","agent_id":"chosen-agent"}`, `{"text":"Continue?","extra":true}`,
+			},
+		},
+		{
+			name: "answer", suffix: "/{operation_id}/questions/{question_id}/answer", status: "200", model: "Operation",
+			missing: []string{"operation_not_found", "question_not_found"}, conflicts: []string{"question_answered", "question_expired"},
+			valid: []string{`{"answer":"Continue"}`},
+			invalid: []string{
+				`{}`, `null`, `[]`, `{"answer":""}`, `{"answer":" \t"}`, `{"answer":null}`, `{"answer":1}`,
+				`{"answer":"Continue","operation_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"answer":"Continue","question_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"answer":"Continue","extra":true}`,
+			},
+		},
+		{
+			name: "resolve", suffix: "/{operation_id}/tasks/{task_id}/continuation/resolve", status: "200", model: "Operation",
+			missing: []string{"operation_not_found", "task_not_found"}, conflicts: []string{"continuation_conflict", "question_pending", "task_limit_exceeded"},
+			valid: []string{
+				`{"version":1,"actions":[]}`, `{"version":18446744073709551615,"actions":[]}`,
+				`{"version":1,"actions":[{"action_name":"inspect"}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","input":{"any":[1,null]},"reason":"Approved"},{"action_name":"report","reason":""}]}`,
+			},
+			invalid: []string{
+				`{}`, `null`, `[]`, `{"version":1}`, `{"actions":[]}`, `{"version":0,"actions":[]}`,
+				`{"version":-1,"actions":[]}`, `{"version":null,"actions":[]}`, `{"version":1.5,"actions":[]}`,
+				`{"version":"1","actions":[]}`, `{"version":18446744073709560000,"actions":[]}`,
+				`{"version":1,"actions":null}`, `{"version":1,"actions":{}}`, `{"version":1,"actions":[null]}`,
+				`{"version":1,"actions":[{}]}`, `{"version":1,"actions":[{"action_name":""}]}`,
+				`{"version":1,"actions":[{"action_name":" \t"}]}`, `{"version":1,"actions":[{"action_name":null}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","input":null}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","input":[]}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","input":"text"}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","reason":null}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","reason":1}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","agent_id":"chosen-agent"}]}`,
+				`{"version":1,"actions":[{"action_name":"inspect","extra":true}]}`,
+				`{"version":1,"actions":[],"operation_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"version":1,"actions":[],"task_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"version":1,"actions":[],"agent_id":"chosen-agent"}`, `{"version":1,"actions":[],"extra":true}`,
+			},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -340,21 +409,20 @@ func TestSwaggerCommandContracts(t *testing.T) {
 			if !strings.Contains(endpoint.Description, "10-second") || !strings.Contains(endpoint.Description, "no automatic retry") || !strings.Contains(endpoint.Description, "query saved state") {
 				t.Error("command must explain timeouts and resubmission")
 			}
-			if test.suffix != "" {
-				if len(endpoint.Parameters) != 1 {
-					t.Fatal("command must have one operation path parameter")
+			if len(endpoint.Parameters) != strings.Count(test.suffix, "{") {
+				t.Fatal("command must document every path parameter")
+			}
+			for _, parameter := range endpoint.Parameters {
+				if !strings.Contains(test.suffix, "{"+parameter.Name+"}") || parameter.In != "path" || !parameter.Required || parameter.Schema.Format != "uuid" || parameter.Schema.Pattern == "" {
+					t.Errorf("incorrect path parameter: %+v", parameter)
 				}
-				parameter := endpoint.Parameters[0]
-				if parameter.Name != "operation_id" || parameter.In != "path" || !parameter.Required || parameter.Schema.Format != "uuid" || parameter.Schema.Pattern == "" {
-					t.Errorf("incorrect operation path parameter: %+v", parameter)
-				}
-				if !strings.Contains(endpoint.Responses["400"].Description, "invalid_operation_id") {
-					t.Error("missing invalid_operation_id response")
+				if code := "invalid_" + parameter.Name; !strings.Contains(endpoint.Responses["400"].Description, code) {
+					t.Errorf("missing %s response", code)
 				}
 			}
 			for status, codes := range map[string][]string{
 				"400": {"invalid_request", "invalid_request_origin"}, "401": {"authentication_required"},
-				"403": {"host_not_allowed", "cross_origin_request"}, "404": {test.missing}, "409": {"operation_conflict"},
+				"403": {"host_not_allowed", "cross_origin_request"}, "404": test.missing, "409": append([]string{"operation_conflict"}, test.conflicts...),
 				"413": {"request_too_large"}, "415": {"unsupported_media_type"}, "500": {"internal_error"},
 				"503": {"operation_write_uncertain", "command_outcome_unknown", "controller_unavailable", "request_canceled"},
 				"504": {"request_timeout"},
@@ -369,11 +437,8 @@ func TestSwaggerCommandContracts(t *testing.T) {
 					t.Errorf("%s response must use the JSON error schema", status)
 				}
 			}
-			if test.name != "cancel" && !strings.Contains(endpoint.Responses["422"].Description, "invalid_input") {
+			if test.invalidInput && !strings.Contains(endpoint.Responses["422"].Description, "invalid_input") {
 				t.Error("missing invalid_input response")
-			}
-			if test.name == "assign" && !strings.Contains(endpoint.Responses["409"].Description, "question_pending") {
-				t.Error("missing question_pending response")
 			}
 			if test.name != "start" && !strings.Contains(endpoint.Responses["409"].Description, "operation_finished") {
 				t.Error("missing operation_finished response")
@@ -396,7 +461,21 @@ func TestSwaggerCommandContracts(t *testing.T) {
 			if schema == nil {
 				t.Fatal("missing request schema")
 			}
-			resolved, err := schema.Resolve(nil)
+			if test.name == "ask" {
+				timeout := schema.Properties["timeout_seconds"]
+				if timeout == nil || string(timeout.Default) != "120" {
+					t.Error("question timeout must document the 120-second default")
+				}
+			}
+			schemaJSON, err := json.Marshal(map[string]any{"$defs": document.Components.Schemas, "$ref": requestRef})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var requestSchema jsonschema.Schema
+			if err := json.Unmarshal(bytes.ReplaceAll(schemaJSON, []byte("#/components/schemas/"), []byte("#/$defs/")), &requestSchema); err != nil {
+				t.Fatal(err)
+			}
+			resolved, err := requestSchema.Resolve(nil)
 			if err != nil {
 				t.Fatal(err)
 			}

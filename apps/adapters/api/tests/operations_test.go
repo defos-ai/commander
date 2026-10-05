@@ -76,7 +76,7 @@ func TestOperationQueriesAuthenticateAndRejectUnsupportedMethods(t *testing.T) {
 			assertAPIError(t, server.request(t, http.MethodGet, path), http.StatusUnauthorized, "authentication_required")
 			for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 				result := server.request(t, method, path, authenticate)
-				if method == http.MethodPost && (path == "/api/v1/operations" || path == base+"/tasks") {
+				if method == http.MethodPost && (path == "/api/v1/operations" || path == base+"/tasks" || path == base+"/questions") {
 					assertAPIError(t, result, http.StatusBadRequest, "invalid_request")
 					continue
 				}

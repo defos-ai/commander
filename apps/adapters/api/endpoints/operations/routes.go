@@ -11,6 +11,7 @@ func Register(mux *http.ServeMux, store operations.OperationStore, commands cont
 	registerOperations(mux, store)
 	registerTasks(mux, store)
 	registerEvents(mux, store)
-	registerQuestions(mux, store)
+	registerQuestions(mux, store, commands)
+	registerContinuations(mux, commands)
 	registerCommands(mux, commands)
 }

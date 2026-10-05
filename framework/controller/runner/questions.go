@@ -63,7 +63,7 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 		}
 		for _, question := range s.operation.Questions {
 			if question.ID == command.QuestionID && question.Status == operations.QuestionExpired {
-				return s.operation.Clone(), errors.New("question has expired")
+				return s.operation.Clone(), operations.ErrQuestionExpired
 			}
 		}
 		return s.operation.Clone(), nil

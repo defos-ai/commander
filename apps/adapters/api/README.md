@@ -74,6 +74,9 @@ Commands use the same authentication and origin checks as queries.
 | Start | `POST /api/v1/operations` | Required nonblank `mission_name` and `input` (any JSON value, including `null`); optional UUID `operation_id` | `201` full operation + `Location` |
 | Assign task | `POST /api/v1/operations/{operation_id}/tasks` | Required nonblank `action_name`; optional object `input` (not `null`) and string `step_id` | `201` full task + `Location` |
 | Cancel | `POST /api/v1/operations/{operation_id}/cancel` | Empty body or `{}` | `200` full operation |
+| Ask question | `POST /api/v1/operations/{operation_id}/questions` | Required nonblank `text`; optional `options`, `timeout_seconds`, `step_id`, and linked `task_id` + `version` | `201` full question + `Location` |
+| Answer question | `POST /api/v1/operations/{operation_id}/questions/{question_id}/answer` | Required nonblank `answer` | `200` full operation |
+| Resolve continuation | `POST /api/v1/operations/{operation_id}/tasks/{task_id}/continuation/resolve` | Required positive `version` and explicit `actions` array | `200` full operation |
 
 Nonempty bodies require `application/json` (charset parameters are accepted),
 with a 1 MiB limit; unknown fields are rejected. Task assignment takes the
@@ -81,6 +84,21 @@ operation ID from the URL and does not accept `operation_id` or `agent_id` in it
 body. The controller selects the agent; unknown actions may remain queued.
 Invalid mission input or an unknown step returns `422 invalid_input`.
 Cancellation stops queued work; already dispatched tasks may still finish.
+
+Questions support at most four nonblank options. `timeout_seconds` accepts
+1–86400; omission or `0` uses 120 seconds. To link a question to a pending task
+continuation, supply its UUID `task_id` and current positive `version` together.
+Answers may be free text; answered or expired questions return
+`409 question_answered` or `409 question_expired`. An answer records guidance
+and returns a linked continuation to model review; it does not queue selected
+actions. Expiry also returns the decision to review without inventing an answer.
+
+Continuation actions require nonblank `action_name`, with optional object
+`input` (not `null`) and string `reason`; the controller selects agents and
+`agent_id` is rejected. An explicit `actions: []` resolves without follow-up work.
+Question and continuation commands reject body fields duplicating URL IDs.
+A stale continuation version returns `409 continuation_conflict`; resolution can also return
+`409 question_pending` or `409 task_limit_exceeded`.
 
 Commands time out after 10 seconds without automatic retries. A timeout or
 uncertain result can follow accepted work: query saved state before resubmitting.

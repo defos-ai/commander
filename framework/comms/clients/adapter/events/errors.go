@@ -58,6 +58,12 @@ var errorCodes = []struct {
 	{"question_pending", operations.ErrQuestionPending},
 	{"task_not_running", operations.ErrNotRunning},
 	{"invalid_input", domain.ErrInvalidInput},
+	{"unknown_task", operations.ErrUnknownTask},
+	{"unknown_question", operations.ErrUnknownQuestion},
+	{"question_answered", operations.ErrQuestionAnswered},
+	{"question_expired", operations.ErrQuestionExpired},
+	{"continuation_conflict", operations.ErrContinuationConflict},
+	{"task_limit_exceeded", operations.ErrTaskLimitExceeded},
 }
 
 func EncodeError(err error) *ControllerError {
