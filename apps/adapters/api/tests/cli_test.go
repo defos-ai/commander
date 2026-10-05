@@ -24,10 +24,16 @@ func TestCLIFlagsOverrideEnvironment(t *testing.T) {
 	t.Setenv("PORT", "invalid-lower-priority-port")
 	t.Setenv("LOG_LEVEL", "invalid-environment-level")
 	t.Setenv("LOG_FORMAT", "invalid-environment-format")
+	t.Setenv("API_ALLOWED_HOSTS", "*.invalid")
+	t.Setenv("API_TRUSTED_PROXIES", "invalid-proxy")
+	t.Setenv("API_PROXY_HEADERS", "invalid-mode")
 
-	server := startAPI(t, fixture.localArgs())
+	server := startAPI(t, append(fixture.localArgs(), "--allowed-hosts=127.0.0.1", "--trusted-proxies=", "--proxy-headers=none"))
 
 	assertHealthy(t, server.request(t, http.MethodGet, "/readyz"))
+	if result := server.request(t, http.MethodGet, "/api/v1/nonexistent", authenticate); result.status != http.StatusNotFound {
+		t.Fatalf("security flags did not override environment: status=%d body=%s", result.status, result.body)
+	}
 }
 
 func TestCLIUsesEnvironmentConfiguration(t *testing.T) {
@@ -39,14 +45,59 @@ func TestCLIUsesEnvironmentConfiguration(t *testing.T) {
 	t.Setenv("PORT", "invalid-lower-priority-port")
 	t.Setenv("LOG_LEVEL", "error")
 	t.Setenv("LOG_FORMAT", "text")
+	t.Setenv("API_ALLOWED_HOSTS", "api.example")
+	t.Setenv("API_TRUSTED_PROXIES", "127.0.0.1")
+	t.Setenv("API_PROXY_HEADERS", "x-forwarded")
 
 	server := startAPI(t, nil)
 
 	assertHealthy(t, server.request(t, http.MethodGet, "/readyz"))
+	result := server.request(t, http.MethodGet, "/api/v1/nonexistent", authenticate, func(r *http.Request) {
+		r.Header.Set("X-Forwarded-Host", "api.example")
+		r.Header.Set("X-Forwarded-Proto", "https")
+	})
+	if result.status != http.StatusNotFound {
+		t.Fatalf("security environment was not applied: status=%d body=%s", result.status, result.body)
+	}
+	assertSecurityHeaders(t, result, true)
 	for _, directory := range []string{"bus", "database"} {
 		if _, err := os.Stat(filepath.Join(fixture.root, directory)); err != nil {
 			t.Errorf("configured %s directory was not opened: %v", directory, err)
 		}
+	}
+}
+
+func TestCLIRejectsInvalidSecurityConfiguration(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+	}{
+		{name: "empty allowed hosts", args: []string{"--allowed-hosts="}},
+		{name: "wildcard hostname", args: []string{"--allowed-hosts=*.example"}},
+		{name: "URL instead of hostname", args: []string{"--allowed-hosts=https://api.example"}},
+		{name: "hostname with port", args: []string{"--allowed-hosts=api.example:4274"}},
+		{name: "hostname instead of proxy IP", args: []string{"--trusted-proxies=proxy.example"}},
+		{name: "invalid proxy CIDR", args: []string{"--trusted-proxies=127.0.0.1/33"}},
+		{name: "unsupported header mode", args: []string{"--proxy-headers=all"}},
+		{name: "forwarded without trusted proxy", args: []string{"--proxy-headers=forwarded"}},
+		{name: "X forwarded without trusted proxy", args: []string{"--proxy-headers=x-forwarded"}},
+		{name: "X proto without trusted proxy", args: []string{"--proxy-headers=x-forwarded-proto"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newFixture(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+			var logs bytes.Buffer
+
+			err := cli.Run(ctx, append(fixture.localArgs(), test.args...), &logs)
+
+			if ctx.Err() != nil || err == nil {
+				t.Fatalf("invalid security configuration did not fail startup promptly: %v", err)
+			}
+			if strings.Contains(err.Error()+logs.String(), "api-fixture-password") {
+				t.Error("invalid configuration exposed API credentials")
+			}
+		})
 	}
 }
 

@@ -24,7 +24,7 @@ func TestHealthAndReadinessWithoutController(t *testing.T) {
 	}
 	for _, path := range []string{"/api/v1/missions", "/api/v1/operations", "/docs", "/openapi.json"} {
 		t.Run(path, func(t *testing.T) {
-			result := server.request(t, http.MethodGet, path)
+			result := server.request(t, http.MethodGet, path, authenticate)
 
 			if result.status != http.StatusNotFound {
 				t.Fatalf("deferred route returned %d, want 404: %s", result.status, result.body)
@@ -33,7 +33,7 @@ func TestHealthAndReadinessWithoutController(t *testing.T) {
 	}
 	for _, path := range []string{"/healthz", "/readyz"} {
 		t.Run("POST "+path, func(t *testing.T) {
-			result := server.request(t, http.MethodPost, path)
+			result := server.request(t, http.MethodPost, path, authenticate)
 
 			if result.status != http.StatusMethodNotAllowed {
 				t.Fatalf("POST returned %d, want 405: %s", result.status, result.body)

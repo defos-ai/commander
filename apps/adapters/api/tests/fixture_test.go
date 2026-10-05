@@ -19,7 +19,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	for _, name := range []string{"API_LISTEN_ADDRESS", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
+	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
 		t.Setenv(name, "")
 	}
 	t.Setenv("API_USERNAME", "api-fixture-user")
@@ -107,11 +107,14 @@ type response struct {
 	body   string
 }
 
-func (s *runningAPI) request(t *testing.T, method, path string) response {
+func (s *runningAPI) request(t *testing.T, method, path string, configure ...func(*http.Request)) response {
 	t.Helper()
 	request, err := http.NewRequestWithContext(t.Context(), method, s.url+path, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, change := range configure {
+		change(request)
 	}
 	result, err := s.client.Do(request)
 	if err != nil {

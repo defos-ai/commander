@@ -2,15 +2,13 @@
 
 ## Overview
 
-The API adapter will expose Commander through HTTP, sending commands to the
-controller over the bus and querying domain stores. This first increment adds
-the host and provider wiring. It serves only public `GET /healthz` (liveness)
-and `GET /readyz` (metadata database readability). Readiness does not yet check
-ongoing broker connectivity, file storage, or controller availability.
+The API adapter connects HTTP clients to Commander: commands go to the
+controller over the bus, and queries read domain stores. The host and HTTP
+security boundary are implemented; business endpoints and Swagger come next.
 
-Business endpoints, Basic authentication enforcement, host/proxy policies and
-Swagger are subsequent increments. Credentials are already required at startup;
-this increment exposes no operation or artifact data.
+`GET`/`HEAD /healthz` checks liveness; `/readyz` checks metadata database
+readability. These probes are public on every host for load balancers. Readiness
+does not check ongoing broker connectivity, file storage or controller availability.
 
 ## Quick start
 
@@ -31,6 +29,29 @@ Use `BUS_URL`, `DATABASE_URL`, and `STORAGE_URL` for providers; `LOG_LEVEL` and
 `LOG_FORMAT` for logging. Their corresponding CLI flags override environment
 values. Defaults use local `./state/` directories. Credentials are environment
 only and must both be nonblank. Run with `--help` for options.
+
+All other routes require HTTP Basic authentication, including unknown routes.
+Use HTTPS at the reverse proxy for hosted deployments. Responses carry
+no-cache, content-type, framing and referrer protections; HTTPS responses also
+set HSTS. Browser requests must come from the same origin. Native clients may
+omit `Origin`.
+
+| Environment variable | CLI flag | Default |
+| --- | --- | --- |
+| `API_ALLOWED_HOSTS` | `--allowed-hosts` | `localhost,127.0.0.1,::1` |
+| `API_TRUSTED_PROXIES` | `--trusted-proxies` | None |
+| `API_PROXY_HEADERS` | `--proxy-headers` | `none` |
+
+Allowed hosts are exact hostnames/IPs without ports or wildcards. Add your public
+hostname when deploying. Trusted proxies are comma-separated IPs or CIDRs,
+matched against the directly connected peer.
+
+Select `forwarded` for `Forwarded`, `x-forwarded` for `X-Forwarded-Host` and
+`X-Forwarded-Proto`, or `x-forwarded-proto` to preserve the original `Host`.
+Forwarding requires a trusted proxy; configure it to overwrite the selected
+headers. Each header must contain a single value; chains are rejected. Missing
+headers use the direct request's host and scheme. Other forwarding headers are
+ignored. The Dockerfile stays the same for each deployment.
 
 ## Development and testing
 

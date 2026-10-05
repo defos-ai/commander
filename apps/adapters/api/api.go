@@ -17,6 +17,7 @@ import (
 )
 
 type Config struct {
+	Security          SecurityConfig
 	Operations        controllercommands.Operations
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
@@ -28,6 +29,10 @@ type Config struct {
 }
 
 func NewHandler(config Config) (http.Handler, error) {
+	security, err := newSecurity(config.Security)
+	if err != nil {
+		return nil, err
+	}
 	if config.Operations == nil || config.MissionStore == nil || config.OperationStore == nil ||
 		config.AgentStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil {
@@ -48,7 +53,7 @@ func NewHandler(config Config) (http.Handler, error) {
 		}
 		writeHealth(w, http.StatusOK, "ok")
 	})
-	return mux, nil
+	return security.protect(mux), nil
 }
 
 func writeHealth(w http.ResponseWriter, status int, value string) {

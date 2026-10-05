@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode"
 
+	"commander/adapters/api"
 	"commander/framework/host"
 )
 
@@ -20,14 +21,14 @@ type config struct {
 	storageURL    string
 	databaseURL   string
 	listenAddress string
-	username      string
-	password      string
+	security      api.SecurityConfig
 	logLevel      string
 	logFormat     string
 }
 
 func parseConfig(args []string, output io.Writer) (config, error) {
 	var result config
+	var allowedHosts, trustedProxies, proxyHeaders string
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (API_LISTEN_ADDRESS, then 0.0.0.0:$PORT, then 127.0.0.1:4274)")
@@ -36,6 +37,9 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags.StringVar(&result.databaseURL, "database-url", "", "Database connection (DATABASE_URL; default ./state/database)")
 	flags.StringVar(&result.logLevel, "log-level", "", "Logging level: debug, info, warn, error (LOG_LEVEL; default info)")
 	flags.StringVar(&result.logFormat, "log-format", "", "Logging format: text or json (LOG_FORMAT; default json)")
+	flags.StringVar(&allowedHosts, "allowed-hosts", "", "Comma-separated HTTP hostnames/IPs without ports (API_ALLOWED_HOSTS; default localhost,127.0.0.1,::1)")
+	flags.StringVar(&trustedProxies, "trusted-proxies", "", "Comma-separated proxy IPs/CIDRs (API_TRUSTED_PROXIES; default none)")
+	flags.StringVar(&proxyHeaders, "proxy-headers", "", "Trusted proxy headers: none, forwarded, x-forwarded, x-forwarded-proto (API_PROXY_HEADERS; default none)")
 	flags.Usage = func() {
 		fmt.Fprintln(output, "Usage: commander-api [flags]")
 		fmt.Fprintln(output, "API host foundation: serves /healthz and /readyz. Business endpoints follow in later increments.")
@@ -68,17 +72,30 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	if err := validateListenAddress(result.listenAddress); err != nil {
 		return config{}, err
 	}
-	result.username, result.password = os.Getenv("API_USERNAME"), os.Getenv("API_PASSWORD")
-	if strings.TrimSpace(result.username) == "" || strings.TrimSpace(result.password) == "" {
-		return config{}, errors.New("API_USERNAME and API_PASSWORD must both be set and not blank")
+	result.security = api.SecurityConfig{
+		Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD"),
+		AllowedHosts:   splitList(host.Value(allowedHosts, provided["allowed-hosts"], "API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")),
+		TrustedProxies: splitList(host.Value(trustedProxies, provided["trusted-proxies"], "API_TRUSTED_PROXIES", "")),
+		ProxyHeaders:   host.Value(proxyHeaders, provided["proxy-headers"], "API_PROXY_HEADERS", "none"),
 	}
-	if strings.Contains(result.username, ":") || strings.ContainsFunc(result.username, unicode.IsControl) || strings.ContainsFunc(result.password, unicode.IsControl) {
-		return config{}, errors.New("API credentials must not contain control characters; API_USERNAME must not contain ':'")
+	if err := result.security.Validate(); err != nil {
+		return config{}, err
 	}
 	if _, err := host.NewLogger(output, result.logLevel, result.logFormat); err != nil {
 		return config{}, err
 	}
 	return result, nil
+}
+
+func splitList(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	values := strings.Split(value, ",")
+	for i := range values {
+		values[i] = strings.TrimSpace(values[i])
+	}
+	return values
 }
 
 func validateListenAddress(value string) error {

@@ -82,6 +82,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	}
 	defer func() { result = errors.Join(result, controller.Close()) }()
 	handler, err := api.NewHandler(api.Config{
+		Security:   configuration.security,
 		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
@@ -99,7 +100,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 func serve(ctx context.Context, listener net.Listener, handler http.Handler, logger *slog.Logger, options Options) (result error) {
 	server := &http.Server{
 		Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
-		WriteTimeout: 35 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20,
+		WriteTimeout: 35 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 1 << 20,
 		ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 	defer func() { result = errors.Join(result, server.Close()) }()
