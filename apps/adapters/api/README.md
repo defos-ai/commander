@@ -43,6 +43,7 @@ All operation routes require the same Basic authentication as the catalogs.
 | --- | --- |
 | Operations | `GET /api/v1/operations` |
 | Operation | `GET /api/v1/operations/{operation_id}` |
+| Execution graph | `GET /api/v1/operations/{operation_id}/graph` |
 | Tasks | `GET /api/v1/operations/{operation_id}/tasks?cursor=&limit=100` |
 | Task | `GET /api/v1/operations/{operation_id}/tasks/{task_id}` |
 | Events | `GET /api/v1/operations/{operation_id}/events?cursor=&limit=100` |
@@ -65,6 +66,25 @@ Question lists contain saved history in `items`, the newest pending question
 that is not overdue in `last_question`, and the count of other eligible questions
 in `remaining_questions`. The latter fields are `null` and `0` when none is
 eligible or the operation is terminal. Reads never expire saved questions.
+
+### Execution graph
+
+The graph returns `operation_id`, `status`, `updated_at`, `nodes`, and `edges`.
+Each node has a stable `id`, a `kind` (`task`, `artifact`, or `file`), and a matching
+payload. Edges use `source`, `target`, and `kind` (`parent_child`, `produced`, or
+`contains`). Task nodes include the action, status, assigned agent and timing;
+file nodes include `artifact_id` and `id` for the existing file download route.
+
+Poll every 2–5 seconds while work is active. Each request returns immediately.
+After cancellation or failure, dispatched tasks can still finish; keep polling
+until the operation is terminal and no task is queued, running or interrupted.
+Node IDs remain stable across polls: `task:<id>`, `artifact:<id>`, and
+`file:<artifact_id>:<file_id>`. Clients can key edges by kind/source/target.
+
+The graph includes saved tasks only, with artifacts and files appearing when
+their task result is saved. Proposed continuation actions are excluded. It reads
+one operation snapshot without fetching file bytes or contacting agents. Use task
+detail for full inputs/results and file download to retrieve and verify bytes.
 
 ## Report queries
 

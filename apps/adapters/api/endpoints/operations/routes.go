@@ -10,6 +10,7 @@ import (
 
 func Register(mux *http.ServeMux, store operations.OperationStore, reportStore reports.ReportStore, commands controllercommands.Operations) {
 	registerOperations(mux, store)
+	registerGraph(mux, store)
 	registerReports(mux, store, reportStore)
 	registerTasks(mux, store)
 	registerEvents(mux, store)

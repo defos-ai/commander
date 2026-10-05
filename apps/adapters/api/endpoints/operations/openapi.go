@@ -24,6 +24,12 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		{"Event", reflect.TypeFor[models.EventResponse]()},
 		{"Question", reflect.TypeFor[models.QuestionResponse]()},
 		{"Operation", reflect.TypeFor[models.OperationResponse]()},
+		{"GraphTask", reflect.TypeFor[models.GraphTaskResponse]()},
+		{"GraphArtifact", reflect.TypeFor[models.GraphArtifactResponse]()},
+		{"GraphFile", reflect.TypeFor[models.GraphFileResponse]()},
+		{"GraphNode", reflect.TypeFor[models.GraphNodeResponse]()},
+		{"GraphEdge", reflect.TypeFor[models.GraphEdgeResponse]()},
+		{"OperationGraph", reflect.TypeFor[models.OperationGraphResponse]()},
 	} {
 		schema, err := jsonschema.ForType(model.typeOf, options)
 		if err != nil {
@@ -33,12 +39,30 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		case "Continuation":
 			schema.Properties["status"].Enum = []any{"pending", "waiting", "resolved"}
 			schema.Properties["decision_by"].Enum = []any{"code", "model", "user"}
-		case "Task":
+		case "Task", "GraphTask":
 			schema.Properties["status"].Enum = []any{"queued", "running", "succeeded", "failed", "cancelled", "interrupted"}
 		case "Question":
 			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
-		case "Operation", "Event":
+		case "Operation", "Event", "OperationGraph":
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
+		case "GraphNode":
+			schema.Properties["kind"].Enum = []any{"task", "artifact", "file"}
+			for _, variant := range []struct{ kind, model string }{{"task", "GraphTask"}, {"artifact", "GraphArtifact"}, {"file", "GraphFile"}} {
+				properties := map[string]*jsonschema.Schema{
+					"kind": {Enum: []any{variant.kind}},
+					"task": {Not: &jsonschema.Schema{}}, "artifact": {Not: &jsonschema.Schema{}}, "file": {Not: &jsonschema.Schema{}},
+				}
+				properties[variant.kind] = components[variant.model].(*jsonschema.Schema)
+				schema.OneOf = append(schema.OneOf, &jsonschema.Schema{Required: []string{variant.kind}, Properties: properties})
+			}
+		case "GraphEdge":
+			schema.Properties["kind"].Enum = []any{"parent_child", "produced", "contains"}
+		}
+		if model.name == "OperationGraph" {
+			for _, field := range []string{"nodes", "edges"} {
+				schema.Properties[field].Type = "array"
+				schema.Properties[field].Types = nil
+			}
 		}
 		components[model.name] = schema
 		options.TypeSchemas[model.typeOf] = schema
@@ -68,6 +92,12 @@ func openAPIOperationPaths(paths map[string]any) {
 			path: operation, id: "getOperation", summary: "Get an operation",
 			description: "Returns the full saved operation, including its mission, preflight assessment, tasks, questions, output and events.",
 			schema:      endpoints.OpenAPIRef("Operation"), parameters: []any{openAPIUUIDParameter("operation_id")},
+			invalid: "invalid_operation_id", missing: "operation_not_found",
+		},
+		{
+			path: operation + "/graph", id: "getOperationGraph", summary: "Get an operation execution graph",
+			description: "Returns an immediate graph snapshot of saved tasks and their result artifact/file descriptors. Includes queued, running and finished tasks; proposed continuation actions are excluded. Clients may poll every 2–5 seconds. Keep polling terminal operations while tasks remain queued, running or interrupted, since dispatched work can finish later. Nodes have stable IDs: task:<task_id>, artifact:<artifact_id>, file:<artifact_id>:<file_id>. Each node has exactly one payload matching kind. Edges are unique by source, target and kind: parent_child, produced or contains. Parent edges require both distinct task nodes; parent_task_id retains the saved relationship even if its edge is omitted. Tasks appear in saved order, followed by artifact/file nodes in first-encounter order; arrays are empty rather than null. File descriptors appear after task results are saved and do not verify that bytes are downloadable. This endpoint reads only the operation store and never executes work.",
+			schema:      endpoints.OpenAPIRef("OperationGraph"), parameters: []any{openAPIUUIDParameter("operation_id")},
 			invalid: "invalid_operation_id", missing: "operation_not_found",
 		},
 		{
