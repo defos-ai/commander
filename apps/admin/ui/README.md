@@ -7,8 +7,13 @@ theme, Grunt typography, Lucide icons and typed i18next translations.
 
 Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
 page keeps a grid of saved connections. Inside a connection, the sidebar provides
-Overview, Missions, Agents, Actions and connection settings. Operation pages
-follow in the next increment.
+Overview, Operations, Missions, Agents, Actions and connection settings.
+
+Operations supports search, status filters and read-only details: task progress,
+agent readiness, decisions, questions, results, artifact files and event history.
+Snapshots refresh every 10 seconds while open. Task completion is shown separately
+from operation status. Artifact files show metadata; downloads, operation commands
+and the execution graph will follow in later increments.
 
 Missions supports search and read-only details: objectives, starting and required
 actions, automations, planning steps, and input/output schemas. Refresh loads the

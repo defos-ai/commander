@@ -15,6 +15,7 @@ import { OverviewPage } from './pages/OverviewPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { ActionsPage } from './pages/ActionsPage';
+import { OperationsPage } from './pages/OperationsPage';
 
 type Modal = { kind: 'connect'; connection?: Connection } | { kind: 'remove'; connection: Connection };
 
@@ -43,10 +44,11 @@ export function App() {
   const storageNotice = !state.storageAvailable && <p className="notice" role="alert">{t($ => $.connections.storageError)}</p>;
 
   return <>
-    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'missions', 'agents', 'actions', 'settings']} onNavigate={setSection} onBack={() => setActiveID(undefined)}>
+    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'agents', 'actions', 'settings']} onNavigate={setSection} onBack={() => setActiveID(undefined)}>
       {storageNotice}
       {section === 'settings' ? <ConnectionSettingsPage connection={active} signedIn={Boolean(state.credentials[active.id])}
         onEdit={() => edit(active.id)} onForget={() => state.forgetCredentials(active.id)} onRemove={() => remove(active.id)} />
+        : section === 'operations' ? <OperationsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
           : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
             : section === 'actions' ? <ActionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
@@ -71,7 +73,7 @@ export function App() {
         state.save({ id, name: values.name, url }, credentials, check);
         focusAfterTransition.current = true;
         setModal(undefined);
-        if (activeID !== id || !['missions', 'agents', 'actions'].includes(section)) open(id);
+        if (activeID !== id || !['operations', 'missions', 'agents', 'actions'].includes(section)) open(id);
       }} />}
     {modal?.kind === 'remove' && <Dialog open title={t($ => $.connections.removeTitle)} description={t($ => $.connections.removeDescription, { name: modal.connection.name })} onClose={() => setModal(undefined)}>
       <div className="dialog-actions">

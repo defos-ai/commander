@@ -29,7 +29,7 @@ function isMissionName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value !== '.' && value !== '..';
 }
 
-function isMission(value: unknown): value is Mission {
+export function isMission(value: unknown): value is Mission {
   return isObject(value) && isMissionName(value.name) && typeof value.objective === 'string' &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.input_schema === null || isObject(value.input_schema)) &&

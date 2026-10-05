@@ -1,0 +1,49 @@
+.operation-details { margin-top: 24px; }
+.operation-id { color: var(--muted); font: 400 12px/1.7 var(--font-mono); overflow-wrap: anywhere; }
+.operation-details code { font: 400 12px/1.7 var(--font-mono); overflow-wrap: anywhere; }
+.operation-details h3 { font-size: 16px; font-weight: 600; margin: 16px 0 10px; }
+.operation-details h4 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.operation-progress { font: 500 20px/1.6 var(--font-mono); }
+.operation-details .catalog-section > .detail-list { margin-top: 20px; }
+.operation-details .notice { margin: 0 0 18px; }
+.operation-items, .operation-files { display: grid; gap: 14px; list-style: none; margin: 16px 0 0; padding: 0; }
+.operation-card { min-width: 0; border: 1px solid var(--line); border-radius: 4px; padding: 20px; }
+.operation-card > summary { cursor: pointer; display: flex; align-items: center; flex-wrap: wrap; gap: 14px; font-size: 14px; }
+.operation-card > summary::after { content: '+'; color: var(--muted); margin-left: auto; }
+.operation-card[open] > summary::after { content: '−'; }
+.operation-card > summary::-webkit-details-marker { display: none; }
+.operation-card-name { display: grid; gap: 5px; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.operation-card-name > code { color: var(--muted); font-size: 11px; }
+.operation-card-body { padding-top: 20px; }
+.operation-card-body > .detail-list { margin-bottom: 16px; }
+.operation-nested { margin-top: 20px; }
+.operation-nested > ol { padding-left: 24px; line-height: 1.7; }
+.operation-nested li, .operation-nested p { overflow-wrap: anywhere; }
+.operation-identifiers { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; overflow-wrap: anywhere; }
+.operation-proposals { list-style: none; margin: 12px 0 0; padding: 0 0 0 16px; border-left: 2px solid var(--line); display: grid; gap: 20px; }
+.operation-data { margin-top: 16px; }
+.operation-data > summary { font-size: 14px; color: var(--muted); cursor: pointer; padding: 4px 0; }
+.operation-data > pre { max-height: 360px; overflow: auto; padding: 16px; margin-top: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); font: 400 12px/1.7 var(--font-mono); }
+.operation-error { border-left: 2px solid var(--red); padding-left: 16px; margin: 20px 0; }
+.operation-error h3 { margin-top: 0; }
+.operation-question { border: 1px solid var(--line); border-radius: 4px; padding: 24px; }
+.operation-question-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.operation-question-heading h3 { margin: 0; line-height: 1.7; overflow-wrap: anywhere; }
+.operation-question-heading > .catalog-status { flex-shrink: 0; }
+.operation-question > .detail-list { margin-top: 20px; }
+.operation-files > li { background: var(--panel); padding: 16px; min-width: 0; }
+.operation-files h4 { overflow-wrap: anywhere; }
+.operation-files .detail-list > div { grid-template-columns: 140px minmax(0, 1fr); gap: 12px; padding: 12px 0; }
+.operation-events { list-style: none; margin: 16px 0 0; padding: 0; max-height: 520px; overflow-y: auto; }
+.operation-events > li { padding: 16px 0; border-top: 1px solid var(--line); }
+.operation-event-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 8px; }
+.operation-event-heading time, .operation-event-meta { color: var(--muted); font: 400 11px/1.7 var(--font-mono); }
+.operation-event-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.operation-filters { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: 12px; }
+.operation-filters select { min-height: 44px; padding: 8px 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; font-size: 14px; }
+@media (max-width: 760px) {
+  .operation-card, .operation-question { padding: 16px; }
+  .operation-question-heading { flex-direction: column; gap: 8px; }
+  .operation-files .detail-list > div { grid-template-columns: 1fr; gap: 6px; }
+  .operation-filters, .operation-filters select { width: 100%; }
+}
