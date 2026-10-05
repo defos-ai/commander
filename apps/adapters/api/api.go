@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"commander/adapters/api/endpoints"
-	"commander/adapters/api/endpoints/operation"
+	operationendpoints "commander/adapters/api/endpoints/operations"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
@@ -45,7 +45,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
 	endpoints.RegisterAgents(mux, config.AgentStore)
-	operation.Register(mux, config.OperationStore)
+	operationendpoints.Register(mux, config.OperationStore)
 	if config.SwaggerEnabled {
 		if err := registerDocumentation(mux); err != nil {
 			return nil, err

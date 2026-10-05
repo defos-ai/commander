@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"commander/adapters/api/endpoints"
-	"commander/adapters/api/endpoints/operation"
+	operationendpoints "commander/adapters/api/endpoints/operations"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
@@ -99,7 +99,7 @@ func openAPIDocument() ([]byte, error) {
 		detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse(catalog.missingCode, endpoints.OpenAPIRef("Error"))
 		paths["/api/v1/"+catalog.path+"/{"+catalog.parameter+"}"] = map[string]any{"get": detail}
 	}
-	if err := operation.RegisterOpenAPI(paths, components, options); err != nil {
+	if err := operationendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
 	return json.Marshal(map[string]any{

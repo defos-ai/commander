@@ -114,8 +114,8 @@ go vet ./apps/adapters/api/...
 ```
 
 Keep concrete providers in `cli/factory.go` and inject their interfaces into
-the adapter. Keep resource routes in `endpoints/`. Operation routes, schemas
-and OpenAPI definitions live together in `endpoints/operation/`, with `routes.go`
-registering its handlers. Shared HTTP helpers stay in `endpoints/`; `api.go`
+the adapter. Use plural names for endpoint groups, such as `endpoints/actions.go`.
+Operation routes, schemas and OpenAPI definitions live in `endpoints/operations/`,
+with `routes.go` registering its handlers. Shared HTTP helpers stay in `endpoints/`; `api.go`
 wires routes and middleware, and root `openapi.go` assembles the document.
 Boundary tests live in `tests/` and use temporary filesystem state.
