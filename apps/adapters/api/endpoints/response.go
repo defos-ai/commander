@@ -9,20 +9,21 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
+	"commander/framework/domain/operations"
 )
 
-type catalogList[T any] struct {
+type List[T any] struct {
 	Items []T `json:"items"`
 }
 
-func listResponse[T any](items []T) catalogList[T] {
+func ListResponse[T any](items []T) List[T] {
 	if items == nil {
 		items = []T{}
 	}
-	return catalogList[T]{Items: items}
+	return List[T]{Items: items}
 }
 
-func writeQueryResult(w http.ResponseWriter, value any, err error) {
+func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 	switch {
 	case err == nil:
 		writeJSON(w, http.StatusOK, value)
@@ -32,6 +33,10 @@ func writeQueryResult(w http.ResponseWriter, value any, err error) {
 		WriteError(w, http.StatusNotFound, "action_not_found")
 	case errors.Is(err, agents.ErrUnknownAgent):
 		WriteError(w, http.StatusNotFound, "agent_not_found")
+	case errors.Is(err, operations.ErrUnknownOperation):
+		WriteError(w, http.StatusNotFound, "operation_not_found")
+	case errors.Is(err, operations.ErrUnknownTask):
+		WriteError(w, http.StatusNotFound, "task_not_found")
 	case errors.Is(err, context.DeadlineExceeded):
 		WriteError(w, http.StatusGatewayTimeout, "request_timeout")
 	default:

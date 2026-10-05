@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"commander/adapters/api/endpoints"
+	"commander/adapters/api/endpoints/operation"
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/missions"
@@ -65,14 +67,14 @@ func openAPIDocument() ([]byte, error) {
 	paths := map[string]any{
 		"/healthz": map[string]any{"get": map[string]any{
 			"operationId": "getHealth", "summary": "Process health", "tags": []string{"Health"}, "security": []any{},
-			"responses": map[string]any{"200": openAPIResponse("Process is running", openAPIRef("Health"))},
+			"responses": map[string]any{"200": endpoints.OpenAPIResponse("Process is running", endpoints.OpenAPIRef("Health"))},
 		}},
 		"/readyz": map[string]any{"get": map[string]any{
 			"operationId": "getReadiness", "summary": "Metadata database readiness", "tags": []string{"Health"}, "security": []any{},
 			"description": "Checks metadata database readability. Does not check the controller, broker or artifact file storage.",
 			"responses": map[string]any{
-				"200": openAPIResponse("Database is readable", openAPIRef("Health")),
-				"503": openAPIResponse("Database is unavailable", openAPIRef("Health")),
+				"200": endpoints.OpenAPIResponse("Database is readable", endpoints.OpenAPIRef("Health")),
+				"503": endpoints.OpenAPIResponse("Database is unavailable", endpoints.OpenAPIRef("Health")),
 			},
 		}},
 	}
@@ -85,23 +87,26 @@ func openAPIDocument() ([]byte, error) {
 	} {
 		listSchema := map[string]any{
 			"type": "object", "required": []string{"items"},
-			"properties": map[string]any{"items": map[string]any{"type": "array", "items": openAPIRef(catalog.model)}},
+			"properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef(catalog.model)}},
 		}
-		list := openAPICatalogOperation("list"+catalog.model+"s", "List "+catalog.path, catalog.model, listSchema)
+		list := endpoints.OpenAPIQueryOperation("list"+catalog.model+"s", "List "+catalog.path, catalog.model, listSchema)
 		list["description"] = "Returns all records, sorted by name (missions/actions) or ID (agents). Agent freshness reflects the current lease."
 		paths["/api/v1/"+catalog.path] = map[string]any{"get": list}
-		detail := openAPICatalogOperation("get"+catalog.model, "Get "+catalog.model, catalog.model, openAPIRef(catalog.model))
+		detail := endpoints.OpenAPIQueryOperation("get"+catalog.model, "Get "+catalog.model, catalog.model, endpoints.OpenAPIRef(catalog.model))
 		detail["parameters"] = []any{map[string]any{
 			"name": catalog.parameter, "in": "path", "required": true, "schema": map[string]any{"type": "string", "minLength": 1},
 		}}
-		detail["responses"].(map[string]any)["404"] = openAPIResponse(catalog.missingCode, openAPIRef("Error"))
+		detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse(catalog.missingCode, endpoints.OpenAPIRef("Error"))
 		paths["/api/v1/"+catalog.path+"/{"+catalog.parameter+"}"] = map[string]any{"get": detail}
+	}
+	if err := operation.RegisterOpenAPI(paths, components, options); err != nil {
+		return nil, err
 	}
 	return json.Marshal(map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.1.0",
-			"description": "Query Commander catalogs. Health probes are public; catalog requests require Basic authentication.",
+			"description": "Read Commander catalogs and saved operation state. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},
@@ -113,29 +118,4 @@ func openAPIDocument() ([]byte, error) {
 			}},
 		},
 	})
-}
-
-func openAPICatalogOperation(id, summary, tag string, schema any) map[string]any {
-	return map[string]any{
-		"operationId": id, "summary": summary, "tags": []string{tag},
-		"responses": map[string]any{
-			"200": openAPIResponse("Success", schema),
-			"400": openAPIResponse("invalid_request_origin", openAPIRef("Error")),
-			"401": openAPIResponse("authentication_required", openAPIRef("Error")),
-			"403": openAPIResponse("host_not_allowed or cross_origin_request", openAPIRef("Error")),
-			"500": openAPIResponse("internal_error", openAPIRef("Error")),
-			"504": openAPIResponse("request_timeout", openAPIRef("Error")),
-		},
-	}
-}
-
-func openAPIResponse(description string, schema any) map[string]any {
-	return map[string]any{
-		"description": description,
-		"content":     map[string]any{"application/json": map[string]any{"schema": schema}},
-	}
-}
-
-func openAPIRef(name string) map[string]any {
-	return map[string]any{"$ref": "#/components/schemas/" + name}
 }

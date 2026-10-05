@@ -22,7 +22,7 @@ func TestHealthAndReadinessWithoutController(t *testing.T) {
 			assertHealthy(t, result)
 		})
 	}
-	for _, path := range []string{"/api/v1/operations", "/docs", "/openapi.json"} {
+	for _, path := range []string{"/docs", "/openapi.json"} {
 		t.Run(path, func(t *testing.T) {
 			result := server.request(t, http.MethodGet, path, authenticate)
 

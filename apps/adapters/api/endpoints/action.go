@@ -9,13 +9,13 @@ import (
 )
 
 func RegisterActions(mux *http.ServeMux, store actions.ActionStore) {
-	mux.HandleFunc("GET /api/v1/actions", catalogQuery(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/actions", QueryHandler(func(w http.ResponseWriter, r *http.Request) {
 		items, err := store.List(r.Context())
 		slices.SortFunc(items, func(a, b actions.Action) int { return cmp.Compare(a.Name, b.Name) })
-		writeQueryResult(w, listResponse(items), err)
+		WriteQueryResult(w, ListResponse(items), err)
 	}))
-	mux.HandleFunc("GET /api/v1/actions/{action_name}", catalogQuery(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/actions/{action_name}", QueryHandler(func(w http.ResponseWriter, r *http.Request) {
 		item, err := store.Get(r.Context(), r.PathValue("action_name"))
-		writeQueryResult(w, item, err)
+		WriteQueryResult(w, item, err)
 	}))
 }

@@ -2,9 +2,9 @@
 
 ## Overview
 
-The API adapter lets HTTP clients inspect Commander missions, actions and
-agents through domain stores. Operation endpoints come next; commands will go
-to the controller over the bus.
+The API adapter lets HTTP clients inspect Commander missions, actions, agents
+and saved operation state through domain stores. Command endpoints are planned;
+commands will go to the controller over the bus.
 
 `GET`/`HEAD /healthz` checks liveness; `/readyz` checks metadata database
 readability. These probes are public on every host for load balancers. Readiness
@@ -34,6 +34,38 @@ Lists return `{"items":[...]}`, sorted by name or agent ID. Details return the
 full record. Agent reads include current work and calculated lease freshness;
 action readiness belongs to each agent, while the action catalog describes
 available definitions. These endpoints read saved state without executing work.
+
+## Operation queries
+
+All operation routes require the same Basic authentication as the catalogs.
+
+| Resource | Endpoint |
+| --- | --- |
+| Operations | `GET /api/v1/operations` |
+| Operation | `GET /api/v1/operations/{operation_id}` |
+| Tasks | `GET /api/v1/operations/{operation_id}/tasks?cursor=&limit=100` |
+| Task | `GET /api/v1/operations/{operation_id}/tasks/{task_id}` |
+| Events | `GET /api/v1/operations/{operation_id}/events?cursor=&limit=100` |
+| Questions | `GET /api/v1/operations/{operation_id}/questions` |
+| Question | `GET /api/v1/operations/{operation_id}/questions/{question_id}` |
+
+The operation list is unpaginated and returns `{"items":[...]}` with full saved
+records, newest first. Operation, task and question details return full records.
+Reads never execute work or mutate saved state. Store-side list optimization is
+deferred; Swagger documents exact ordering, validation and errors.
+
+Task and event pages return `{"items":[...],"next_cursor":"..."}`. Task cursors
+are exclusive task UUIDs in assignment order; event cursors are exclusive decimal
+sequence strings in ascending order. Omit the cursor or use `""` to start.
+`limit` defaults to 100, with a range of 1–1000. `next_cursor` identifies the last
+returned item; an empty page preserves the request cursor, including initial `""`.
+
+Question lists contain saved history in `items`, the newest pending question
+that is not overdue in `last_question`, and the count of other eligible questions
+in `remaining_questions`. The latter fields are `null` and `0` when none is
+eligible or the operation is terminal. Reads never expire saved questions.
+
+## Documentation and configuration
 
 Set `API_SWAGGER_ENABLED=true` or pass `--swagger` to enable Swagger UI at
 `/docs/` and the OpenAPI document at `/openapi.json`. Both require authentication.
@@ -82,6 +114,8 @@ go vet ./apps/adapters/api/...
 ```
 
 Keep concrete providers in `cli/factory.go` and inject their interfaces into
-the adapter. Register resource routes in `endpoints/`, one file per resource,
-with only their required store interfaces. `api.go` wires routes and middleware.
+the adapter. Keep resource routes in `endpoints/`. Operation routes, schemas
+and OpenAPI definitions live together in `endpoints/operation/`, with `routes.go`
+registering its handlers. Shared HTTP helpers stay in `endpoints/`; `api.go`
+wires routes and middleware, and root `openapi.go` assembles the document.
 Boundary tests live in `tests/` and use temporary filesystem state.
