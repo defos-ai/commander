@@ -74,6 +74,8 @@ Commands use the same authentication and origin checks as queries.
 | Start | `POST /api/v1/operations` | Required nonblank `mission_name` and `input` (any JSON value, including `null`); optional UUID `operation_id` | `201` full operation + `Location` |
 | Assign task | `POST /api/v1/operations/{operation_id}/tasks` | Required nonblank `action_name`; optional object `input` (not `null`) and string `step_id` | `201` full task + `Location` |
 | Cancel | `POST /api/v1/operations/{operation_id}/cancel` | Empty body or `{}` | `200` full operation |
+| Complete | `POST /api/v1/operations/{operation_id}/complete` | Required `output` (any JSON value allowed by the mission output schema, including `null`) | `200` full operation with `report_id` |
+| Fail | `POST /api/v1/operations/{operation_id}/fail` | Required nonblank string `reason` | `200` full operation |
 | Ask question | `POST /api/v1/operations/{operation_id}/questions` | Required nonblank `text`; optional `options`, `timeout_seconds`, `step_id`, and linked `task_id` + `version` | `201` full question + `Location` |
 | Answer question | `POST /api/v1/operations/{operation_id}/questions/{question_id}/answer` | Required nonblank `answer` | `200` full operation |
 | Resolve continuation | `POST /api/v1/operations/{operation_id}/tasks/{task_id}/continuation/resolve` | Required positive `version` and explicit `actions` array | `200` full operation |
@@ -84,6 +86,16 @@ operation ID from the URL and does not accept `operation_id` or `agent_id` in it
 body. The controller selects the agent; unknown actions may remain queued.
 Invalid mission input or an unknown step returns `422 invalid_input`.
 Cancellation stops queued work; already dispatched tasks may still finish.
+
+Completion requires no queued or running tasks, pending questions, or unresolved
+automatic/operator continuations; these return `409 operation_active_tasks`,
+`409 question_pending`, or `409 operation_unresolved_work`. Pending model
+continuations are resolved on completion. Invalid output returns
+`422 invalid_output`. The report is saved before the operation is marked completed.
+Failure cancels queued work, allows dispatched tasks to finish, and creates no
+report. Both commands take a canonical lowercase UUID from the URL and reject
+body `operation_id`; missing, finished, or conflicting operations return
+`404 operation_not_found`, `409 operation_finished`, or `409 operation_conflict`.
 
 Questions support at most four nonblank options. `timeout_seconds` accepts
 1–86400; omission or `0` uses 120 seconds. To link a question to a pending task

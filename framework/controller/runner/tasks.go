@@ -20,11 +20,8 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 	}
 	task := queuedTask(command.OperationID, command.StepID, "", actionmodel.NextAction{ActionName: command.ActionName, Input: command.Input})
 	return submit(ctx, r, func(ctx context.Context) (operations.Task, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Task{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Task{}, err
 		}
 		next, err := r.store.QueueTask(ctx, command.OperationID, task)

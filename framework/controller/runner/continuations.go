@@ -27,11 +27,8 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 	}
 	command.Actions = actionmodel.CloneNextActions(command.Actions)
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Operation{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Operation{}, err
 		}
 		next, err := r.store.ResolveContinuation(ctx, command.OperationID, command.TaskID, command.Version, command.Actions)

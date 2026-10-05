@@ -64,6 +64,9 @@ var errorCodes = []struct {
 	{"question_expired", operations.ErrQuestionExpired},
 	{"continuation_conflict", operations.ErrContinuationConflict},
 	{"task_limit_exceeded", operations.ErrTaskLimitExceeded},
+	{"operation_active_tasks", operations.ErrActiveTasks},
+	{"operation_unresolved_work", operations.ErrUnresolvedWork},
+	{"invalid_output", domain.ErrInvalidOutput},
 }
 
 func EncodeError(err error) *ControllerError {

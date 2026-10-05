@@ -45,6 +45,27 @@ func (r *Runner) state(operationID string) (*operationState, error) {
 	return s, nil
 }
 
+func (r *Runner) activeState(ctx context.Context, operationID string) (*operationState, error) {
+	s, err := r.state(operationID)
+	if errors.Is(err, operations.ErrUnknownOperation) {
+		// Recovery omits finished operations without outstanding work from memory.
+		stored, readErr := r.store.Get(ctx, operationID)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if stored.Status.Terminal() {
+			return nil, ErrFinished
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := active(s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 func active(s *operationState) error {
 	if s.err != nil {
 		return s.err

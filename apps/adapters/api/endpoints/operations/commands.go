@@ -20,6 +20,14 @@ type assignTaskRequest struct {
 	Input      json.RawMessage `json:"input,omitempty"`
 }
 
+type completeOperationRequest struct {
+	Output json.RawMessage `json:"output"`
+}
+
+type failOperationRequest struct {
+	Reason string `json:"reason"`
+}
+
 func registerCommands(mux *http.ServeMux, commands controllercommands.Operations) {
 	mux.HandleFunc("POST /api/v1/operations", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var command controllercommands.StartOperationCommand
@@ -57,6 +65,32 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		operation, err := commands.Cancel(r.Context(), controllercommands.CancelOperationCommand{OperationID: r.PathValue("operation_id")})
 		writeCommandResult(w, http.StatusOK, "", operation, err)
 	}))
+	mux.HandleFunc("POST /api/v1/operations/{operation_id}/complete", requestHandler(func(w http.ResponseWriter, r *http.Request) {
+		var request completeOperationRequest
+		if !endpoints.ReadJSON(w, r, &request, false) {
+			return
+		}
+		command := controllercommands.CompleteOperationCommand{OperationID: r.PathValue("operation_id"), Output: request.Output}
+		if err := command.Validate(); err != nil {
+			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		operation, err := commands.Complete(r.Context(), command)
+		writeCommandResult(w, http.StatusOK, "", operation, err)
+	}))
+	mux.HandleFunc("POST /api/v1/operations/{operation_id}/fail", requestHandler(func(w http.ResponseWriter, r *http.Request) {
+		var request failOperationRequest
+		if !endpoints.ReadJSON(w, r, &request, false) {
+			return
+		}
+		command := controllercommands.FailOperationCommand{OperationID: r.PathValue("operation_id"), Reason: request.Reason}
+		if err := command.Validate(); err != nil {
+			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		operation, err := commands.Fail(r.Context(), command)
+		writeCommandResult(w, http.StatusOK, "", operation, err)
+	}))
 }
 
 func writeCommandResult(w http.ResponseWriter, status int, location string, value any, err error) {
@@ -82,6 +116,10 @@ func writeCommandResult(w http.ResponseWriter, status int, location string, valu
 		endpoints.WriteError(w, http.StatusConflict, "operation_conflict")
 	case errors.Is(err, operations.ErrFinished):
 		endpoints.WriteError(w, http.StatusConflict, "operation_finished")
+	case errors.Is(err, operations.ErrActiveTasks):
+		endpoints.WriteError(w, http.StatusConflict, "operation_active_tasks")
+	case errors.Is(err, operations.ErrUnresolvedWork):
+		endpoints.WriteError(w, http.StatusConflict, "operation_unresolved_work")
 	case errors.Is(err, operations.ErrQuestionPending):
 		endpoints.WriteError(w, http.StatusConflict, "question_pending")
 	case errors.Is(err, operations.ErrQuestionAnswered):
@@ -96,6 +134,8 @@ func writeCommandResult(w http.ResponseWriter, status int, location string, valu
 		endpoints.WriteError(w, http.StatusNotFound, "question_not_found")
 	case errors.Is(err, domain.ErrInvalidInput):
 		endpoints.WriteError(w, http.StatusUnprocessableEntity, "invalid_input")
+	case errors.Is(err, domain.ErrInvalidOutput):
+		endpoints.WriteError(w, http.StatusUnprocessableEntity, "invalid_output")
 	default:
 		endpoints.WriteQueryResult(w, nil, err)
 	}

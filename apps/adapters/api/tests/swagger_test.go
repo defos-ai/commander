@@ -291,10 +291,10 @@ func TestSwaggerCommandContracts(t *testing.T) {
 		name, suffix, status, model string
 		missing, conflicts          []string
 		valid, invalid              []string
-		invalidInput                bool
+		validationError             string
 	}{
 		{
-			name: "start", status: "201", model: "Operation", missing: []string{"mission_not_found"}, invalidInput: true,
+			name: "start", status: "201", model: "Operation", missing: []string{"mission_not_found"}, validationError: "invalid_input",
 			valid: []string{
 				`{"mission_name":"inspect","input":null}`,
 				`{"mission_name":"inspect","input":[1,"two",null]}`,
@@ -311,7 +311,7 @@ func TestSwaggerCommandContracts(t *testing.T) {
 		},
 		{
 			name: "assign", suffix: "/{operation_id}/tasks", status: "201", model: "Task", missing: []string{"operation_not_found"},
-			conflicts: []string{"question_pending"}, invalidInput: true,
+			conflicts: []string{"question_pending"}, validationError: "invalid_input",
 			valid: []string{`{"action_name":"inspect"}`, `{"action_name":"inspect","input":{"any":[1,null]},"step_id":"step"}`},
 			invalid: []string{
 				`{}`, `{"action_name":""}`, `{"action_name":" \t"}`, `{"action_name":null}`,
@@ -326,8 +326,32 @@ func TestSwaggerCommandContracts(t *testing.T) {
 			valid: []string{`{}`}, invalid: []string{`null`, `[]`, `{"operation_id":"12345678-1234-1234-1234-123456789abc"}`},
 		},
 		{
+			name: "complete", suffix: "/{operation_id}/complete", status: "200", model: "Operation", missing: []string{"operation_not_found"},
+			conflicts: []string{"operation_active_tasks", "question_pending", "operation_unresolved_work"}, validationError: "invalid_output",
+			valid: []string{
+				`{"output":{}}`, `{"output":null}`, `{"output":[1,"two",null]}`,
+				`{"output":true}`, `{"output":42}`, `{"output":"text"}`,
+			},
+			invalid: []string{
+				`{}`, `null`, `[]`, `"text"`, `42`, `true`,
+				`{"output":{},"operation_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"output":{},"extra":true}`,
+			},
+		},
+		{
+			name: "fail", suffix: "/{operation_id}/fail", status: "200", model: "Operation", missing: []string{"operation_not_found"},
+			valid: []string{`{"reason":"Cannot continue"}`, `{"reason":"  Missing input  "}`},
+			invalid: []string{
+				`{}`, `null`, `[]`, `"text"`, `42`, `true`,
+				`{"reason":""}`, `{"reason":" \t\n"}`, `{"reason":null}`, `{"reason":1}`,
+				`{"reason":true}`, `{"reason":[]}`, `{"reason":{}}`,
+				`{"reason":"Cannot continue","operation_id":"12345678-1234-1234-1234-123456789abc"}`,
+				`{"reason":"Cannot continue","extra":true}`,
+			},
+		},
+		{
 			name: "ask", suffix: "/{operation_id}/questions", status: "201", model: "Question",
-			missing: []string{"operation_not_found", "task_not_found"}, conflicts: []string{"continuation_conflict"}, invalidInput: true,
+			missing: []string{"operation_not_found", "task_not_found"}, conflicts: []string{"continuation_conflict"}, validationError: "invalid_input",
 			valid: []string{
 				`{"text":"Continue?"}`, `{"text":"Continue?","options":[],"timeout_seconds":0}`,
 				`{"text":"Continue?","options":["One","Two","Three","Four"],"timeout_seconds":86400,"step_id":"step"}`,
@@ -437,8 +461,12 @@ func TestSwaggerCommandContracts(t *testing.T) {
 					t.Errorf("%s response must use the JSON error schema", status)
 				}
 			}
-			if test.invalidInput && !strings.Contains(endpoint.Responses["422"].Description, "invalid_input") {
-				t.Error("missing invalid_input response")
+			if response, ok := endpoint.Responses["422"]; test.validationError != "" {
+				if response.Description != test.validationError || response.Content["application/json"].Schema.Ref != "#/components/schemas/Error" {
+					t.Errorf("422 response must document %s with the JSON error schema", test.validationError)
+				}
+			} else if ok {
+				t.Error("unexpected validation error response")
 			}
 			if test.name != "start" && !strings.Contains(endpoint.Responses["409"].Description, "operation_finished") {
 				t.Error("missing operation_finished response")

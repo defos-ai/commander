@@ -15,7 +15,7 @@ func (o Operation) ValidateCompletion(output json.RawMessage) error {
 	}
 	for _, task := range o.Tasks {
 		if task.Status == TaskQueued || task.Status == TaskRunning {
-			return errors.New("operation still has active tasks")
+			return ErrActiveTasks
 		}
 	}
 	for _, question := range o.Questions {
@@ -28,7 +28,7 @@ func (o Operation) ValidateCompletion(output json.RawMessage) error {
 	}
 	for _, task := range o.Tasks {
 		if c := task.Continuation; c != nil && c.Status != ContinuationResolved && c.DecisionBy != DecisionModel {
-			return errors.New("operation still has unresolved automatic or operator work")
+			return ErrUnresolvedWork
 		}
 	}
 	return nil

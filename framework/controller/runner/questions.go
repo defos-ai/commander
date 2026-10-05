@@ -19,11 +19,8 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 	command.Options = append([]string(nil), command.Options...)
 	questionID := id.QuestionID()
 	return submit(ctx, r, func(ctx context.Context) (operations.Question, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Question{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Question{}, err
 		}
 		now := time.Now().UTC()
@@ -50,11 +47,8 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 		return operations.Operation{}, err
 	}
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Operation{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Operation{}, err
 		}
 		next, err := r.store.AnswerQuestion(ctx, command.OperationID, command.QuestionID, command.Answer)

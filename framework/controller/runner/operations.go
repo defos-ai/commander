@@ -107,11 +107,8 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 	}
 	output := append(json.RawMessage(nil), command.Output...)
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Operation{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Operation{}, err
 		}
 		next, err := r.store.Get(ctx, command.OperationID)
@@ -141,11 +138,8 @@ func (r *Runner) Fail(ctx context.Context, command commands.FailOperationCommand
 		return operations.Operation{}, err
 	}
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Operation{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Operation{}, err
 		}
 		next, err := r.store.Fail(ctx, command.OperationID, command.Reason)
@@ -163,11 +157,8 @@ func (r *Runner) Cancel(ctx context.Context, command commands.CancelOperationCom
 		return operations.Operation{}, err
 	}
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
-		s, err := r.state(command.OperationID)
+		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
-			return operations.Operation{}, err
-		}
-		if err := active(s); err != nil {
 			return operations.Operation{}, err
 		}
 		next, err := r.store.Cancel(ctx, command.OperationID)

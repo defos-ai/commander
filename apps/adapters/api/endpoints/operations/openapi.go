@@ -145,6 +145,18 @@ func openAPICommandPaths(paths, components map[string]any) {
 	components["CancelOperationRequest"] = map[string]any{
 		"type": "object", "additionalProperties": false,
 	}
+	components["CompleteOperationRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"output"},
+		"properties": map[string]any{
+			"output": map[string]any{
+				"description": "Required JSON value, including null, arrays and scalars. The controller validates it against the operation mission's output schema.",
+			},
+		},
+	}
+	components["FailOperationRequest"] = map[string]any{
+		"type": "object", "additionalProperties": false, "required": []string{"reason"},
+		"properties": map[string]any{"reason": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
+	}
 	version := map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}
 	components["AskOperationQuestionRequest"] = map[string]any{
 		"type": "object", "additionalProperties": false, "required": []string{"text"},
@@ -194,20 +206,20 @@ func openAPICommandPaths(paths, components map[string]any) {
 	const commandDescription = " Commands go to the controller over the bus with a 10-second request timeout and no automatic retry. A timeout, operation_write_uncertain or command_outcome_unknown can follow accepted work; query saved state before resubmitting."
 	for _, route := range []struct {
 		path, id, summary, description, request, response, status, missing, conflict, location string
-		bodyRequired, invalidInput                                                             bool
-		resourceID                                                                             string
+		bodyRequired                                                                           bool
+		resourceID, validationError                                                            string
 	}{
 		{
 			path: root, id: "startOperation", summary: "Start an operation",
 			description: "Starts the named mission and returns the full created operation. mission_name must be nonblank and input must be present. Repeating a supplied operation_id returns 409 operation_conflict.",
 			request:     "StartOperationRequest", response: "Operation", status: "201", missing: "mission_not_found", conflict: "operation_conflict",
-			location: "/api/v1/operations/{operation_id}", bodyRequired: true, invalidInput: true,
+			location: "/api/v1/operations/{operation_id}", bodyRequired: true, validationError: "invalid_input",
 		},
 		{
 			path: operation + "/tasks", id: "assignOperationTask", summary: "Assign an operation task",
 			description: "Returns the full assigned task. action_name must be nonblank. The path supplies operation_id; operation_id and agent_id are not accepted in the body. The controller selects the agent, and an unknown action can remain queued. Repeated assignment creates another task.",
 			request:     "AssignOperationTaskRequest", response: "Task", status: "201", missing: "operation_not_found", conflict: "operation_conflict, operation_finished or question_pending",
-			location: "/api/v1/operations/{operation_id}/tasks/{task_id}", bodyRequired: true, invalidInput: true,
+			location: "/api/v1/operations/{operation_id}/tasks/{task_id}", bodyRequired: true, validationError: "invalid_input",
 		},
 		{
 			path: operation + "/cancel", id: "cancelOperation", summary: "Cancel an operation",
@@ -215,10 +227,22 @@ func openAPICommandPaths(paths, components map[string]any) {
 			request:     "CancelOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict or operation_finished",
 		},
 		{
+			path: operation + "/complete", id: "completeOperation", summary: "Complete an operation",
+			description: "Completes an operation and returns the full updated operation with report_id. output must be present and match the mission's output schema; null is accepted when that schema allows it. Queued or running tasks, pending questions, and unresolved automatic or operator continuations block completion. Pending model continuations are resolved during completion. The report is saved before the operation is marked completed. The path supplies operation_id; it is not accepted in the body.",
+			request:     "CompleteOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict, operation_finished, operation_active_tasks, question_pending or operation_unresolved_work",
+			bodyRequired: true, validationError: "invalid_output",
+		},
+		{
+			path: operation + "/fail", id: "failOperation", summary: "Fail an operation",
+			description: "Fails an operation and returns the full updated operation. reason must be a nonblank string. Queued tasks are cancelled; already dispatched work may still finish. No report is created. The path supplies operation_id; it is not accepted in the body.",
+			request:     "FailOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict or operation_finished",
+			bodyRequired: true,
+		},
+		{
 			path: operation + "/questions", id: "askOperationQuestion", summary: "Ask an operation question",
 			description: "Creates a question and returns the full saved question. text and every option must be nonblank, with at most four options. Omitted or zero timeout_seconds means 120 seconds. Link a pending continuation by supplying both task_id and its current positive version. The path supplies operation_id.",
 			request:     "AskOperationQuestionRequest", response: "Question", status: "201", missing: "operation_not_found or task_not_found (linked question)", conflict: "operation_conflict, operation_finished or continuation_conflict",
-			location: "/api/v1/operations/{operation_id}/questions/{question_id}", bodyRequired: true, invalidInput: true,
+			location: "/api/v1/operations/{operation_id}/questions/{question_id}", bodyRequired: true, validationError: "invalid_input",
 		},
 		{
 			path: operation + "/questions/{question_id}/answer", id: "answerOperationQuestion", summary: "Answer an operation question",
@@ -264,8 +288,8 @@ func openAPICommandPaths(paths, components map[string]any) {
 		responses["409"] = endpoints.OpenAPIResponse(route.conflict, endpoints.OpenAPIRef("Error"))
 		responses["413"] = endpoints.OpenAPIResponse("request_too_large", endpoints.OpenAPIRef("Error"))
 		responses["415"] = endpoints.OpenAPIResponse("unsupported_media_type", endpoints.OpenAPIRef("Error"))
-		if route.invalidInput {
-			responses["422"] = endpoints.OpenAPIResponse("invalid_input", endpoints.OpenAPIRef("Error"))
+		if route.validationError != "" {
+			responses["422"] = endpoints.OpenAPIResponse(route.validationError, endpoints.OpenAPIRef("Error"))
 		}
 		responses["503"] = endpoints.OpenAPIResponse("operation_write_uncertain, command_outcome_unknown, controller_unavailable or request_canceled. An uncertain write takes precedence over a concurrent request timeout; query saved state before resubmitting.", endpoints.OpenAPIRef("Error"))
 		responses["504"] = endpoints.OpenAPIResponse("request_timeout. Work may already have been accepted; query saved state before resubmitting.", endpoints.OpenAPIRef("Error"))

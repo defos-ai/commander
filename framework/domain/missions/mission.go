@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"commander/framework/domain"
 	agentmodel "commander/framework/domain/agents"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -154,8 +155,12 @@ func (m Mission) ValidateOutput(input, output json.RawMessage) error {
 	if err := m.ValidateInput(input); err != nil {
 		return err
 	}
-	if err := validateValue(m.OutputSchema, output); err != nil {
-		return fmt.Errorf("invalid mission output: %w", err)
+	resolved, err := resolveSchema(m.OutputSchema)
+	if err != nil {
+		return fmt.Errorf("output schema: %w", err)
+	}
+	if err := validateResolvedValue(resolved, output); err != nil {
+		return fmt.Errorf("invalid mission output: %w: %w", domain.ErrInvalidOutput, err)
 	}
 	return nil
 }
@@ -184,6 +189,10 @@ func validateValue(schema, data json.RawMessage) error {
 	if err != nil {
 		return err
 	}
+	return validateResolvedValue(resolved, data)
+}
+
+func validateResolvedValue(resolved *jsonschema.Resolved, data json.RawMessage) error {
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&value); err != nil {
