@@ -7,7 +7,6 @@ import (
 
 	"commander/adapters/api/endpoints"
 	"commander/adapters/api/models"
-	"commander/framework/domain/operations"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -16,37 +15,30 @@ const openAPIUUIDPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 // The options must already contain the common API schemas, including Mission.
 func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOptions) error {
-	for typeOf, schema := range map[reflect.Type]*jsonschema.Schema{
-		reflect.TypeFor[operations.Status](): {Type: "string", Enum: []any{
-			operations.Planning, operations.Running, operations.Waiting, operations.Completed, operations.Failed, operations.Cancelled,
-		}},
-		reflect.TypeFor[operations.TaskStatus](): {Type: "string", Enum: []any{
-			operations.TaskQueued, operations.TaskRunning, operations.TaskSucceeded, operations.TaskFailed, operations.TaskCancelled, operations.TaskInterrupted,
-		}},
-		reflect.TypeFor[operations.QuestionStatus](): {Type: "string", Enum: []any{
-			operations.QuestionPending, operations.QuestionAnswered, operations.QuestionExpired,
-		}},
-		reflect.TypeFor[operations.ContinuationStatus](): {Type: "string", Enum: []any{
-			operations.ContinuationPending, operations.ContinuationWaiting, operations.ContinuationResolved,
-		}},
-		reflect.TypeFor[operations.DecisionBy](): {Type: "string", Enum: []any{
-			operations.DecisionCode, operations.DecisionModel, operations.DecisionUser,
-		}},
-	} {
-		options.TypeSchemas[typeOf] = schema
-	}
 	for _, model := range []struct {
 		name   string
 		typeOf reflect.Type
 	}{
-		{"Task", reflect.TypeFor[operations.Task]()},
-		{"Event", reflect.TypeFor[operations.Event]()},
-		{"Question", reflect.TypeFor[operations.Question]()},
-		{"Operation", reflect.TypeFor[operations.Operation]()},
+		{"Continuation", reflect.TypeFor[models.ContinuationResponse]()},
+		{"Task", reflect.TypeFor[models.TaskResponse]()},
+		{"Event", reflect.TypeFor[models.EventResponse]()},
+		{"Question", reflect.TypeFor[models.QuestionResponse]()},
+		{"Operation", reflect.TypeFor[models.OperationResponse]()},
 	} {
 		schema, err := jsonschema.ForType(model.typeOf, options)
 		if err != nil {
 			return fmt.Errorf("describe API %s: %w", model.name, err)
+		}
+		switch model.name {
+		case "Continuation":
+			schema.Properties["status"].Enum = []any{"pending", "waiting", "resolved"}
+			schema.Properties["decision_by"].Enum = []any{"code", "model", "user"}
+		case "Task":
+			schema.Properties["status"].Enum = []any{"queued", "running", "succeeded", "failed", "cancelled", "interrupted"}
+		case "Question":
+			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
+		case "Operation", "Event":
+			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
 		}
 		components[model.name] = schema
 		options.TypeSchemas[model.typeOf] = schema

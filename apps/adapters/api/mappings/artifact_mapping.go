@@ -29,3 +29,14 @@ func ToArtifactResponse(artifact artifacts.Artifact) models.ArtifactResponse {
 		Files:      files,
 	}
 }
+
+func ToArtifactResponses(artifacts []artifacts.Artifact) []models.ArtifactResponse {
+	if artifacts == nil {
+		return nil
+	}
+	responses := make([]models.ArtifactResponse, len(artifacts))
+	for i, artifact := range artifacts {
+		responses[i] = ToArtifactResponse(artifact)
+	}
+	return responses
+}

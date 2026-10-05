@@ -8,11 +8,6 @@ import (
 	"commander/adapters/api/endpoints"
 	operationendpoints "commander/adapters/api/endpoints/operations"
 	"commander/adapters/api/models"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/reports"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -30,30 +25,18 @@ func openAPIDocument() ([]byte, error) {
 	}
 	options := &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{
 		reflect.TypeFor[json.RawMessage](): {},
-		reflect.TypeFor[actions.Status](): {
-			Type: "string", Description: "Discovered readiness, normally unknown, ready or unavailable. Check the selected agent's action state before dispatch.",
-		},
-		reflect.TypeFor[actions.RequirementKind](): {
-			Type: "string", Enum: []any{actions.ExecutableRequirement, actions.ConfigurationRequirement, actions.PermissionRequirement},
-		},
-		reflect.TypeFor[agents.AgentStatus](): {
-			Type: "string", Description: "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped.",
-		},
-		reflect.TypeFor[missions.ContinueWhen](): {Type: "string", Enum: []any{missions.WhenEach, missions.WhenAll}},
-		reflect.TypeFor[missions.Decision]():     {Type: "string", Enum: []any{missions.Model}},
 	}}
 	for _, model := range []struct {
-		name       string
-		typeOf     reflect.Type
-		domainType reflect.Type
+		name   string
+		typeOf reflect.Type
 	}{
-		{"MissionAutomation", reflect.TypeFor[models.MissionAutomationResponse](), reflect.TypeFor[missions.Automation]()},
-		{"Mission", reflect.TypeFor[models.MissionResponse](), reflect.TypeFor[missions.Mission]()},
-		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse](), reflect.TypeFor[actions.Requirement]()},
-		{"Action", reflect.TypeFor[models.ActionResponse](), reflect.TypeFor[actions.Action]()},
-		{"Agent", reflect.TypeFor[models.AgentResponse](), reflect.TypeFor[agents.Agent]()},
-		{"Report", reflect.TypeFor[models.ReportResponse](), reflect.TypeFor[reports.Report]()},
-		{"Artifact", reflect.TypeFor[models.ArtifactResponse](), reflect.TypeFor[artifacts.Artifact]()},
+		{"MissionAutomation", reflect.TypeFor[models.MissionAutomationResponse]()},
+		{"Mission", reflect.TypeFor[models.MissionResponse]()},
+		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
+		{"Action", reflect.TypeFor[models.ActionResponse]()},
+		{"Agent", reflect.TypeFor[models.AgentResponse]()},
+		{"Report", reflect.TypeFor[models.ReportResponse]()},
+		{"Artifact", reflect.TypeFor[models.ArtifactResponse]()},
 	} {
 		schema, err := jsonschema.ForType(model.typeOf, options)
 		if err != nil {
@@ -82,8 +65,6 @@ func openAPIDocument() ([]byte, error) {
 		}
 		components[model.name] = schema
 		options.TypeSchemas[model.typeOf] = schema
-		// Operation schemas still contain domain types until their response models move.
-		options.TypeSchemas[model.domainType] = schema
 	}
 	paths := map[string]any{
 		"/healthz": map[string]any{"get": map[string]any{

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/mappings"
 	"commander/framework/domain/operations"
 )
 
@@ -27,6 +28,6 @@ func registerEvents(mux *http.ServeMux, store operations.OperationStore) {
 		if len(items) > 0 {
 			cursor = strconv.FormatUint(items[len(items)-1].Sequence, 10)
 		}
-		endpoints.WriteQueryResult(w, pageResponse(items, cursor), err)
+		endpoints.WriteQueryResult(w, pageResponse(mappings.ToEventResponses(items), cursor), err)
 	}))
 }

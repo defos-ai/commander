@@ -1,9 +1,30 @@
 package models
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type AssignTaskRequest struct {
 	StepID     string          `json:"step_id,omitempty"`
 	ActionName string          `json:"action_name"`
 	Input      json.RawMessage `json:"input,omitempty"`
+}
+
+type TaskResponse struct {
+	ID           string                `json:"id"`
+	OperationID  string                `json:"operation_id"`
+	ParentTaskID string                `json:"parent_task_id,omitempty"`
+	StepID       string                `json:"step_id,omitempty"`
+	AgentID      string                `json:"agent_id"`
+	ActionName   string                `json:"action_name"`
+	CommandID    string                `json:"command_id,omitempty"`
+	DeadlineAt   *time.Time            `json:"deadline_at,omitempty"`
+	Input        json.RawMessage       `json:"input,omitempty"`
+	Status       string                `json:"status"`
+	Result       *ActionOutputResponse `json:"result,omitempty"`
+	Continuation *ContinuationResponse `json:"continuation,omitempty"`
+	Error        string                `json:"error,omitempty"`
+	StartedAt    time.Time             `json:"started_at"`
+	FinishedAt   *time.Time            `json:"finished_at,omitempty"`
 }

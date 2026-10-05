@@ -9,26 +9,16 @@ import (
 )
 
 func ToActionResponse(action actions.Action) models.ActionResponse {
-	response := models.ActionResponse{
+	return models.ActionResponse{
 		Name:                action.Name,
 		Description:         action.Description,
 		StatusReason:        action.StatusReason,
 		Status:              string(action.Status),
 		RequiredPermissions: slices.Clone(action.RequiredPermissions),
+		MissingRequirements: ToActionRequirementResponses(action.MissingRequirements),
 		InputSchema:         bytes.Clone(action.InputSchema),
 		OutputSchema:        bytes.Clone(action.OutputSchema),
 	}
-	if action.MissingRequirements != nil {
-		response.MissingRequirements = make([]models.ActionRequirementResponse, len(action.MissingRequirements))
-		for i, requirement := range action.MissingRequirements {
-			response.MissingRequirements[i] = models.ActionRequirementResponse{
-				Kind:   string(requirement.Kind),
-				Name:   requirement.Name,
-				Secret: requirement.Secret,
-			}
-		}
-	}
-	return response
 }
 
 func ToActionResponses(actions []actions.Action) []models.ActionResponse {
@@ -40,4 +30,28 @@ func ToActionResponses(actions []actions.Action) []models.ActionResponse {
 		responses[i] = ToActionResponse(action)
 	}
 	return responses
+}
+
+func ToActionRequirementResponses(requirements []actions.Requirement) []models.ActionRequirementResponse {
+	if requirements == nil {
+		return nil
+	}
+	responses := make([]models.ActionRequirementResponse, len(requirements))
+	for i, requirement := range requirements {
+		responses[i] = models.ActionRequirementResponse{
+			Kind:   string(requirement.Kind),
+			Name:   requirement.Name,
+			Secret: requirement.Secret,
+		}
+	}
+	return responses
+}
+
+func ToActionOutputResponse(output actions.ActionOutput) models.ActionOutputResponse {
+	return models.ActionOutputResponse{
+		ActionName:  output.ActionName,
+		Output:      bytes.Clone(output.Output),
+		Artifacts:   ToArtifactResponses(output.Artifacts),
+		NextActions: ToNextActionResponses(output.NextActions),
+	}
 }

@@ -18,3 +18,10 @@ type ActionRequirementResponse struct {
 	Name   string `json:"name"`
 	Secret bool   `json:"secret,omitempty"`
 }
+
+type ActionOutputResponse struct {
+	ActionName  string               `json:"action_name"`
+	Output      json.RawMessage      `json:"output"`
+	Artifacts   []ArtifactResponse   `json:"artifacts,omitempty"`
+	NextActions []NextActionResponse `json:"next_actions,omitempty"`
+}

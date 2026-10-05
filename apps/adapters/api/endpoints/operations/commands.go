@@ -28,7 +28,7 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 			return
 		}
 		operation, err := commands.Start(r.Context(), command)
-		writeCommandResult(w, http.StatusCreated, "/api/v1/operations/"+operation.ID, operation, err)
+		writeCommandResult(w, http.StatusCreated, "/api/v1/operations/"+operation.ID, mappings.ToOperationResponse(operation), err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/tasks", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var request models.AssignTaskRequest
@@ -42,7 +42,7 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		}
 		task, err := commands.Assign(r.Context(), command)
 		location := "/api/v1/operations/" + command.OperationID + "/tasks/" + task.ID
-		writeCommandResult(w, http.StatusCreated, location, task, err)
+		writeCommandResult(w, http.StatusCreated, location, mappings.ToTaskResponse(task), err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/cancel", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var request models.CancelOperationRequest
@@ -51,7 +51,7 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		}
 		command := mappings.ToCancelOperationCommand(r.PathValue("operation_id"))
 		operation, err := commands.Cancel(r.Context(), command)
-		writeCommandResult(w, http.StatusOK, "", operation, err)
+		writeCommandResult(w, http.StatusOK, "", mappings.ToOperationResponse(operation), err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/complete", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var request models.CompleteOperationRequest
@@ -64,7 +64,7 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 			return
 		}
 		operation, err := commands.Complete(r.Context(), command)
-		writeCommandResult(w, http.StatusOK, "", operation, err)
+		writeCommandResult(w, http.StatusOK, "", mappings.ToOperationResponse(operation), err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/fail", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var request models.FailOperationRequest
@@ -77,7 +77,7 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 			return
 		}
 		operation, err := commands.Fail(r.Context(), command)
-		writeCommandResult(w, http.StatusOK, "", operation, err)
+		writeCommandResult(w, http.StatusOK, "", mappings.ToOperationResponse(operation), err)
 	}))
 }
 

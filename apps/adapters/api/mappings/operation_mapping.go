@@ -5,6 +5,7 @@ import (
 
 	"commander/adapters/api/models"
 	controllercommands "commander/framework/comms/clients/controller/commands"
+	"commander/framework/domain/operations"
 )
 
 func ToStartOperationCommand(request models.StartOperationRequest) controllercommands.StartOperationCommand {
@@ -31,4 +32,37 @@ func ToFailOperationCommand(operationID string, request models.FailOperationRequ
 		OperationID: operationID,
 		Reason:      request.Reason,
 	}
+}
+
+func ToOperationResponse(operation operations.Operation) models.OperationResponse {
+	response := models.OperationResponse{
+		ID:        operation.ID,
+		Mission:   ToMissionResponse(operation.Mission),
+		Input:     bytes.Clone(operation.Input),
+		Status:    string(operation.Status),
+		Tasks:     ToTaskResponses(operation.Tasks),
+		Questions: ToQuestionResponses(operation.Questions),
+		Output:    bytes.Clone(operation.Output),
+		ReportID:  operation.ReportID,
+		Error:     operation.Error,
+		Events:    ToEventResponses(operation.Events),
+		CreatedAt: operation.CreatedAt,
+		UpdatedAt: operation.UpdatedAt,
+	}
+	if operation.Preflight != nil {
+		preflight := ToPreflightResponse(*operation.Preflight)
+		response.Preflight = &preflight
+	}
+	return response
+}
+
+func ToOperationResponses(operations []operations.Operation) []models.OperationResponse {
+	if operations == nil {
+		return nil
+	}
+	responses := make([]models.OperationResponse, len(operations))
+	for i, operation := range operations {
+		responses[i] = ToOperationResponse(operation)
+	}
+	return responses
 }

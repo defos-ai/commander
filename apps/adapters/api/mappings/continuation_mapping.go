@@ -2,10 +2,12 @@ package mappings
 
 import (
 	"bytes"
+	"slices"
 
 	"commander/adapters/api/models"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain/actions"
+	"commander/framework/domain/operations"
 )
 
 func ToResolveContinuationCommand(operationID, taskID string, request models.ResolveContinuationRequest) controllercommands.ResolveContinuationCommand {
@@ -26,4 +28,34 @@ func ToResolveContinuationCommand(operationID, taskID string, request models.Res
 		Version:     request.Version,
 		Actions:     nextActions,
 	}
+}
+
+func ToContinuationResponse(continuation operations.Continuation) models.ContinuationResponse {
+	return models.ContinuationResponse{
+		Version:         continuation.Version,
+		DecisionBy:      string(continuation.DecisionBy),
+		Status:          string(continuation.Status),
+		ProposedActions: ToNextActionResponses(continuation.ProposedActions),
+		CreatedTaskIDs:  slices.Clone(continuation.CreatedTaskIDs),
+		QuestionID:      continuation.QuestionID,
+	}
+}
+
+func ToNextActionResponse(action actions.NextAction) models.NextActionResponse {
+	return models.NextActionResponse{
+		ActionName: action.ActionName,
+		Input:      bytes.Clone(action.Input),
+		Reason:     action.Reason,
+	}
+}
+
+func ToNextActionResponses(actions []actions.NextAction) []models.NextActionResponse {
+	if actions == nil {
+		return nil
+	}
+	responses := make([]models.NextActionResponse, len(actions))
+	for i, action := range actions {
+		responses[i] = ToNextActionResponse(action)
+	}
+	return responses
 }

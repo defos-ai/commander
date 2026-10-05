@@ -6,15 +6,11 @@ import (
 	"strconv"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/models"
 )
 
-type page[T any] struct {
-	Items      []T    `json:"items"`
-	NextCursor string `json:"next_cursor"`
-}
-
-func pageResponse[T any](items []T, cursor string) page[T] {
-	return page[T]{Items: endpoints.ListResponse(items).Items, NextCursor: cursor}
+func pageResponse[T any](items []T, cursor string) models.PageResponse[T] {
+	return models.PageResponse[T]{Items: endpoints.ListResponse(items).Items, NextCursor: cursor}
 }
 
 func readPage(w http.ResponseWriter, r *http.Request) (cursor string, limit int, ok bool) {

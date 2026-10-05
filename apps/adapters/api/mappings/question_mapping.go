@@ -5,6 +5,7 @@ import (
 
 	"commander/adapters/api/models"
 	controllercommands "commander/framework/comms/clients/controller/commands"
+	"commander/framework/domain/operations"
 )
 
 func ToAskQuestionCommand(operationID string, request models.AskQuestionRequest) controllercommands.AskQuestionCommand {
@@ -25,4 +26,30 @@ func ToAnswerQuestionCommand(operationID, questionID string, request models.Answ
 		QuestionID:  questionID,
 		Answer:      request.Answer,
 	}
+}
+
+func ToQuestionResponse(question operations.Question) models.QuestionResponse {
+	return models.QuestionResponse{
+		ID:         question.ID,
+		Status:     string(question.Status),
+		StepID:     question.StepID,
+		TaskID:     question.TaskID,
+		Text:       question.Text,
+		Options:    slices.Clone(question.Options),
+		Answer:     question.Answer,
+		AskedAt:    question.AskedAt,
+		AnsweredAt: cloneTime(question.AnsweredAt),
+		ExpiresAt:  question.ExpiresAt,
+	}
+}
+
+func ToQuestionResponses(questions []operations.Question) []models.QuestionResponse {
+	if questions == nil {
+		return nil
+	}
+	responses := make([]models.QuestionResponse, len(questions))
+	for i, question := range questions {
+		responses[i] = ToQuestionResponse(question)
+	}
+	return responses
 }

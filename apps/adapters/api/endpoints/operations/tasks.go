@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/mappings"
 	"commander/framework/domain/operations"
 	"commander/framework/id"
 )
@@ -22,10 +23,10 @@ func registerTasks(mux *http.ServeMux, store operations.OperationStore) {
 		if len(items) > 0 {
 			cursor = items[len(items)-1].ID
 		}
-		endpoints.WriteQueryResult(w, pageResponse(items, cursor), err)
+		endpoints.WriteQueryResult(w, pageResponse(mappings.ToTaskResponses(items), cursor), err)
 	}))
 	mux.HandleFunc("GET /api/v1/operations/{operation_id}/tasks/{task_id}", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		item, err := store.GetTask(r.Context(), r.PathValue("operation_id"), r.PathValue("task_id"))
-		endpoints.WriteQueryResult(w, item, err)
+		endpoints.WriteQueryResult(w, mappings.ToTaskResponse(item), err)
 	}))
 }

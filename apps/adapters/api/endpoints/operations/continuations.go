@@ -21,6 +21,6 @@ func registerContinuations(mux *http.ServeMux, commands controllercommands.Opera
 			return
 		}
 		operation, err := commands.Resolve(r.Context(), command)
-		writeCommandResult(w, http.StatusOK, "", operation, err)
+		writeCommandResult(w, http.StatusOK, "", mappings.ToOperationResponse(operation), err)
 	}))
 }

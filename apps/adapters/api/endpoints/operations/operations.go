@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/mappings"
 	"commander/framework/domain/operations"
 )
 
@@ -18,10 +19,10 @@ func registerOperations(mux *http.ServeMux, store operations.OperationStore) {
 			}
 			return cmp.Compare(a.ID, b.ID)
 		})
-		endpoints.WriteQueryResult(w, endpoints.ListResponse(items), err)
+		endpoints.WriteQueryResult(w, endpoints.ListResponse(mappings.ToOperationResponses(items)), err)
 	}))
 	mux.HandleFunc("GET /api/v1/operations/{operation_id}", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		item, err := store.Get(r.Context(), r.PathValue("operation_id"))
-		endpoints.WriteQueryResult(w, item, err)
+		endpoints.WriteQueryResult(w, mappings.ToOperationResponse(item), err)
 	}))
 }
