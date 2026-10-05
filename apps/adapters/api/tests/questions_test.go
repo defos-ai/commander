@@ -131,7 +131,13 @@ func TestOperationQuestionTimeoutDefaultsAndBounds(t *testing.T) {
 		name    string
 		field   string
 		seconds int
-	}{{"omitted", "", 120}, {"zero", `,"timeout_seconds":0`, 120}, {"minimum", `,"timeout_seconds":1`, 1}, {"maximum", `,"timeout_seconds":86400`, 86400}} {
+	}{
+		{"omitted", "", 120},
+		{"null optionals", `,"timeout_seconds":null,"options":null,"step_id":null,"task_id":null,"version":null`, 120},
+		{"zero", `,"timeout_seconds":0`, 120},
+		{"minimum", `,"timeout_seconds":1`, 1},
+		{"maximum", `,"timeout_seconds":86400`, 86400},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			question := decodeResponse[operations.Question](t, server.request(t, http.MethodPost, "/api/v1/operations/"+op.ID+"/questions", authenticate, commandBody(`{"text":"Continue?"`+tc.field+`}`, "application/json")), http.StatusCreated)
 

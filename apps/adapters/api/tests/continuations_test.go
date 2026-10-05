@@ -43,7 +43,7 @@ func TestOperationLinkedQuestionAnswerRequiresExplicitContinuationResolution(t *
 	if !reflect.DeepEqual(answered, stored) || len(answered.Tasks) != 1 || continuation.Version != 4 || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending || continuation.QuestionID != question.ID || len(continuation.CreatedTaskIDs) != 0 || !reflect.DeepEqual(continuation.ProposedActions, parent.Continuation.ProposedActions) {
 		t.Fatalf("answer must return a pending model decision without creating children: %+v", answered)
 	}
-	body := `{"version":4,"actions":[{"action_name":"review","input":{"url":"https://example.test/links"},"reason":"Check the selected links"},{"action_name":"summarize"}]}`
+	body := `{"version":4,"actions":[{"action_name":"review","input":{"url":"https://example.test/links"},"reason":"Check the selected links"},{"action_name":"summarize","reason":null}]}`
 	resolved := decodeResponse[operations.Operation](t, server.request(t, http.MethodPost, resolvePath, authenticate, commandBody(body, "application/json")))
 	stored = decodeResponse[operations.Operation](t, server.request(t, http.MethodGet, base, authenticate))
 

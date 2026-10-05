@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/mappings"
+	"commander/adapters/api/models"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain/operations"
 )
@@ -13,19 +15,6 @@ type questionList struct {
 	Items              []operations.Question `json:"items"`
 	LastQuestion       *operations.Question  `json:"last_question"`
 	RemainingQuestions int                   `json:"remaining_questions"`
-}
-
-type askQuestionRequest struct {
-	TaskID         string   `json:"task_id,omitempty"`
-	Version        uint64   `json:"version,omitempty"`
-	StepID         string   `json:"step_id,omitempty"`
-	Text           string   `json:"text"`
-	Options        []string `json:"options,omitempty"`
-	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
-}
-
-type answerQuestionRequest struct {
-	Answer string `json:"answer"`
 }
 
 func registerQuestions(mux *http.ServeMux, store operations.OperationStore, commands controllercommands.Operations) {
@@ -48,14 +37,11 @@ func registerQuestions(mux *http.ServeMux, store operations.OperationStore, comm
 		endpoints.WriteError(w, http.StatusNotFound, "question_not_found")
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/questions", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var request askQuestionRequest
+		var request models.AskQuestionRequest
 		if !endpoints.ReadJSON(w, r, &request, false) {
 			return
 		}
-		command := controllercommands.AskQuestionCommand{
-			OperationID: r.PathValue("operation_id"), TaskID: request.TaskID, Version: request.Version,
-			StepID: request.StepID, Text: request.Text, Options: request.Options, TimeoutSeconds: request.TimeoutSeconds,
-		}
+		command := mappings.ToAskQuestionCommand(r.PathValue("operation_id"), request)
 		if err := command.Validate(); err != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return
@@ -65,13 +51,11 @@ func registerQuestions(mux *http.ServeMux, store operations.OperationStore, comm
 		writeCommandResult(w, http.StatusCreated, location, question, err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/questions/{question_id}/answer", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var request answerQuestionRequest
+		var request models.AnswerQuestionRequest
 		if !endpoints.ReadJSON(w, r, &request, false) {
 			return
 		}
-		command := controllercommands.AnswerQuestionCommand{
-			OperationID: r.PathValue("operation_id"), QuestionID: r.PathValue("question_id"), Answer: request.Answer,
-		}
+		command := mappings.ToAnswerQuestionCommand(r.PathValue("operation_id"), r.PathValue("question_id"), request)
 		if err := command.Validate(); err != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return

@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/mappings"
+	"commander/adapters/api/models"
 	"commander/framework/comms"
 	controllercommands "commander/framework/comms/clients/controller/commands"
 	"commander/framework/domain"
@@ -14,27 +16,14 @@ import (
 	"commander/framework/domain/operations"
 )
 
-type assignTaskRequest struct {
-	StepID     string          `json:"step_id,omitempty"`
-	ActionName string          `json:"action_name"`
-	Input      json.RawMessage `json:"input,omitempty"`
-}
-
-type completeOperationRequest struct {
-	Output json.RawMessage `json:"output"`
-}
-
-type failOperationRequest struct {
-	Reason string `json:"reason"`
-}
-
 func registerCommands(mux *http.ServeMux, commands controllercommands.Operations) {
 	mux.HandleFunc("POST /api/v1/operations", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var command controllercommands.StartOperationCommand
-		if !endpoints.ReadJSON(w, r, &command, false) {
+		var request models.StartOperationRequest
+		if !endpoints.ReadJSON(w, r, &request, false) {
 			return
 		}
-		if !json.Valid(command.Input) {
+		command := mappings.ToStartOperationCommand(request)
+		if command.Validate() != nil || !json.Valid(command.Input) {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
@@ -42,14 +31,11 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		writeCommandResult(w, http.StatusCreated, "/api/v1/operations/"+operation.ID, operation, err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/tasks", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var request assignTaskRequest
+		var request models.AssignTaskRequest
 		if !endpoints.ReadJSON(w, r, &request, false) {
 			return
 		}
-		command := controllercommands.AssignTaskCommand{
-			OperationID: r.PathValue("operation_id"), StepID: request.StepID,
-			ActionName: request.ActionName, Input: request.Input,
-		}
+		command := mappings.ToAssignTaskCommand(r.PathValue("operation_id"), request)
 		if err := command.Validate(); err != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return
@@ -59,18 +45,20 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		writeCommandResult(w, http.StatusCreated, location, task, err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/cancel", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		if !endpoints.ReadJSON(w, r, &struct{}{}, true) {
+		var request models.CancelOperationRequest
+		if !endpoints.ReadJSON(w, r, &request, true) {
 			return
 		}
-		operation, err := commands.Cancel(r.Context(), controllercommands.CancelOperationCommand{OperationID: r.PathValue("operation_id")})
+		command := mappings.ToCancelOperationCommand(r.PathValue("operation_id"))
+		operation, err := commands.Cancel(r.Context(), command)
 		writeCommandResult(w, http.StatusOK, "", operation, err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/complete", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var request completeOperationRequest
+		var request models.CompleteOperationRequest
 		if !endpoints.ReadJSON(w, r, &request, false) {
 			return
 		}
-		command := controllercommands.CompleteOperationCommand{OperationID: r.PathValue("operation_id"), Output: request.Output}
+		command := mappings.ToCompleteOperationCommand(r.PathValue("operation_id"), request)
 		if err := command.Validate(); err != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return
@@ -79,11 +67,11 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		writeCommandResult(w, http.StatusOK, "", operation, err)
 	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/fail", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var request failOperationRequest
+		var request models.FailOperationRequest
 		if !endpoints.ReadJSON(w, r, &request, false) {
 			return
 		}
-		command := controllercommands.FailOperationCommand{OperationID: r.PathValue("operation_id"), Reason: request.Reason}
+		command := mappings.ToFailOperationCommand(r.PathValue("operation_id"), request)
 		if err := command.Validate(); err != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return

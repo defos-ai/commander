@@ -1,10 +1,12 @@
 package operations
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 
 	"commander/adapters/api/endpoints"
+	"commander/adapters/api/models"
 	"commander/framework/domain/operations"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -49,8 +51,11 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		components[model.name] = schema
 		options.TypeSchemas[model.typeOf] = schema
 	}
+	if err := openAPICommandSchemas(components); err != nil {
+		return err
+	}
 	openAPIOperationPaths(paths)
-	openAPICommandPaths(paths, components)
+	openAPICommandPaths(paths)
 	return nil
 }
 
@@ -126,87 +131,125 @@ func openAPIOperationPaths(paths map[string]any) {
 	}
 }
 
-func openAPICommandPaths(paths, components map[string]any) {
-	components["StartOperationRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"mission_name", "input"},
-		"properties": map[string]any{
-			"operation_id": map[string]any{
-				"type": "string", "format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
-				"description": "Optional canonical lowercase UUID. Omit to generate an ID. Reusing an existing ID returns operation_conflict; this is not an idempotency key.",
-			},
-			"mission_name": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
-			"input": map[string]any{
-				"description": "Required JSON value, including null, arrays and scalars. The controller validates it against the selected mission's input schema.",
-			},
-		},
-	}
-	components["AssignOperationTaskRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"action_name"},
-		"properties": map[string]any{
-			"action_name": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
-			"input":       map[string]any{"type": "object", "description": "Optional task input object. Explicit null is invalid."},
-			"step_id":     map[string]any{"type": "string", "description": "Optional mission step ID. An unknown step returns invalid_input."},
-		},
-	}
-	components["CancelOperationRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false,
-	}
-	components["CompleteOperationRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"output"},
-		"properties": map[string]any{
-			"output": map[string]any{
-				"description": "Required JSON value, including null, arrays and scalars. The controller validates it against the operation mission's output schema.",
+// Request fields and requiredness come from the HTTP models. Constraints describe
+// the accepted command values without narrowing arbitrary mission input/output.
+func openAPICommandSchemas(components map[string]any) error {
+	options := &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{
+		reflect.TypeFor[json.RawMessage](): {},
+	}}
+	nonblank := map[string]any{"minLength": 1, "pattern": `\S`}
+	version := map[string]any{"minimum": 1, "maximum": ^uint64(0)}
+	taskInput := map[string]any{"type": "object", "description": "Optional task input object. Explicit null is invalid."}
+	stepID := map[string]any{"description": "Optional mission step ID. An unknown step returns invalid_input."}
+	for _, model := range []struct {
+		name        string
+		typeOf      reflect.Type
+		constraints map[string]map[string]any
+	}{
+		{
+			name: "StartOperationRequest", typeOf: reflect.TypeFor[models.StartOperationRequest](),
+			constraints: map[string]map[string]any{
+				"operation_id": {
+					"format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
+					"description": "Optional canonical lowercase UUID. Omit to generate an ID. Reusing an existing ID returns operation_conflict; this is not an idempotency key.",
+				},
+				"mission_name": nonblank,
+				"input":        {"description": "Required JSON value, including null, arrays and scalars. The controller validates it against the selected mission's input schema."},
 			},
 		},
-	}
-	components["FailOperationRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"reason"},
-		"properties": map[string]any{"reason": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
-	}
-	version := map[string]any{"type": "integer", "minimum": 1, "maximum": ^uint64(0)}
-	components["AskOperationQuestionRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"text"},
-		"dependentRequired": map[string][]string{"task_id": {"version"}, "version": {"task_id"}},
-		"properties": map[string]any{
-			"text": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
-			"options": map[string]any{
-				"type": "array", "maxItems": 4,
-				"items": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
-			},
-			"timeout_seconds": map[string]any{
-				"type": "integer", "minimum": 0, "maximum": 86400, "default": 120,
-				"description": "Question lifetime in seconds. Omit or use 0 for the 120-second default; otherwise use 1 through 86400.",
-			},
-			"step_id": map[string]any{"type": "string", "description": "Optional mission step ID. An unknown step returns invalid_input."},
-			"task_id": map[string]any{
-				"type": "string", "format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
-				"description": "Optional task whose pending continuation requires this question. Must be supplied together with version.",
-			},
-			"version": version,
-		},
-	}
-	components["AnswerOperationQuestionRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"answer"},
-		"properties": map[string]any{"answer": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
-	}
-	components["NextAction"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"action_name"},
-		"properties": map[string]any{
-			"action_name": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
-			"input":       map[string]any{"type": "object", "description": "Optional task input object. Explicit null is invalid."},
-			"reason":      map[string]any{"type": "string"},
-		},
-	}
-	components["ResolveOperationContinuationRequest"] = map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"version", "actions"},
-		"properties": map[string]any{
-			"version": version,
-			"actions": map[string]any{
-				"type": "array", "items": endpoints.OpenAPIRef("NextAction"),
-				"description": "Required explicit follow-up actions. An empty array resolves the continuation without assigning tasks.",
+		{
+			name: "AssignOperationTaskRequest", typeOf: reflect.TypeFor[models.AssignTaskRequest](),
+			constraints: map[string]map[string]any{
+				"action_name": nonblank, "input": taskInput, "step_id": stepID,
 			},
 		},
+		{name: "CancelOperationRequest", typeOf: reflect.TypeFor[models.CancelOperationRequest]()},
+		{
+			name: "CompleteOperationRequest", typeOf: reflect.TypeFor[models.CompleteOperationRequest](),
+			constraints: map[string]map[string]any{
+				"output": {"description": "Required JSON value, including null, arrays and scalars. The controller validates it against the operation mission's output schema."},
+			},
+		},
+		{
+			name: "FailOperationRequest", typeOf: reflect.TypeFor[models.FailOperationRequest](),
+			constraints: map[string]map[string]any{"reason": nonblank},
+		},
+		{
+			name: "AskOperationQuestionRequest", typeOf: reflect.TypeFor[models.AskQuestionRequest](),
+			constraints: map[string]map[string]any{
+				"text": nonblank,
+				"options": {
+					"type": "array", "maxItems": 4,
+					"items": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`},
+				},
+				"timeout_seconds": {
+					"minimum": 0, "maximum": 86400, "default": 120,
+					"description": "Question lifetime in seconds. Omit or use 0 for the 120-second default; otherwise use 1 through 86400.",
+				},
+				"step_id": stepID,
+				"task_id": {
+					"format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
+					"description": "Optional task whose pending continuation requires this question. Must be supplied together with version.",
+				},
+				"version": version,
+			},
+		},
+		{
+			name: "AnswerOperationQuestionRequest", typeOf: reflect.TypeFor[models.AnswerQuestionRequest](),
+			constraints: map[string]map[string]any{"answer": nonblank},
+		},
+		{
+			name: "NextAction", typeOf: reflect.TypeFor[models.NextActionRequest](),
+			constraints: map[string]map[string]any{"action_name": nonblank, "input": taskInput},
+		},
+		{
+			name: "ResolveOperationContinuationRequest", typeOf: reflect.TypeFor[models.ResolveContinuationRequest](),
+			constraints: map[string]map[string]any{
+				"version": version,
+				"actions": {
+					"type": "array", "items": endpoints.OpenAPIRef("NextAction"),
+					"description": "Required explicit follow-up actions. An empty array resolves the continuation without assigning tasks.",
+				},
+			},
+		},
+	} {
+		inferred, err := jsonschema.ForType(model.typeOf, options)
+		if err != nil {
+			return fmt.Errorf("describe API %s: %w", model.name, err)
+		}
+		// Apply numeric bounds as JSON values so the uint64 maximum stays exact.
+		data, err := json.Marshal(inferred)
+		if err != nil {
+			return fmt.Errorf("encode API %s schema: %w", model.name, err)
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(data, &schema); err != nil {
+			return fmt.Errorf("decode API %s schema: %w", model.name, err)
+		}
+		properties, _ := schema["properties"].(map[string]any)
+		for name, constraints := range model.constraints {
+			property, ok := properties[name].(map[string]any)
+			if !ok && properties[name] == true {
+				property = make(map[string]any)
+				properties[name] = property
+				ok = true
+			}
+			if !ok {
+				return fmt.Errorf("describe API %s: missing property %s", model.name, name)
+			}
+			for keyword, value := range constraints {
+				property[keyword] = value
+			}
+		}
+		if model.name == "AskOperationQuestionRequest" {
+			schema["dependentRequired"] = map[string][]string{"task_id": {"version"}, "version": {"task_id"}}
+		}
+		components[model.name] = schema
 	}
+	return nil
+}
+
+func openAPICommandPaths(paths map[string]any) {
 	const root = "/api/v1/operations"
 	const operation = root + "/{operation_id}"
 	const commandDescription = " Commands go to the controller over the bus with a 10-second request timeout and no automatic retry. A timeout, operation_write_uncertain or command_outcome_unknown can follow accepted work; query saved state before resubmitting."

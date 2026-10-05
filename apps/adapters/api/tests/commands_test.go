@@ -110,7 +110,11 @@ func TestOperationCommandsAcceptJSONInputsAndEmptyCancellation(t *testing.T) {
 
 	for index, input := range inputs {
 		t.Run(input, func(t *testing.T) {
-			created := server.request(t, http.MethodPost, "/api/v1/operations", authenticate, commandBody(`{"mission_name":"any-input","input":`+input+`}`, "application/json"))
+			optionalID := ""
+			if index%2 != 0 {
+				optionalID = `,"operation_id":null`
+			}
+			created := server.request(t, http.MethodPost, "/api/v1/operations", authenticate, commandBody(`{"mission_name":"any-input","input":`+input+optionalID+`}`, "application/json"))
 			op := decodeResponse[operations.Operation](t, created, http.StatusCreated)
 
 			if !id.Valid(op.ID) || created.header.Get("Location") != "/api/v1/operations/"+op.ID || string(op.Input) != input {

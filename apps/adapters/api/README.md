@@ -208,3 +208,8 @@ Operation routes, schemas and OpenAPI definitions live in `endpoints/operations/
 with `routes.go` registering its handlers. Shared HTTP helpers stay in `endpoints/`; `api.go`
 wires routes and middleware, and root `openapi.go` assembles the document.
 Boundary tests live in `tests/` and use temporary filesystem state.
+
+HTTP request types live in flat `models/*_model.go` files grouped by entity.
+`mappings/*_mapping.go` explicitly maps their fields and URL IDs to controller
+commands; handlers validate the commands before sending them. Keep API models
+independent of framework types, and derive request schemas from those models.
