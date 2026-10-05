@@ -9,5 +9,6 @@ use (
 	./apps/agents/web-quality
 	./apps/controllers/default
 	./apps/adapters/mcp
+	./apps/adapters/api
 	./apps/playground
 )
