@@ -16,6 +16,8 @@ import (
 	"commander/framework/host"
 )
 
+const defaultAllowedOrigins = "http://localhost:4275,http://127.0.0.1:4275"
+
 type config struct {
 	busURL        string
 	storageURL    string
@@ -29,7 +31,7 @@ type config struct {
 
 func parseConfig(args []string, output io.Writer) (config, error) {
 	var result config
-	var allowedHosts, trustedProxies, proxyHeaders string
+	var allowedHosts, allowedOrigins, trustedProxies, proxyHeaders string
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (API_LISTEN_ADDRESS, then 0.0.0.0:$PORT, then 127.0.0.1:4274)")
@@ -39,6 +41,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags.StringVar(&result.logLevel, "log-level", "", "Logging level: debug, info, warn, error (LOG_LEVEL; default info)")
 	flags.StringVar(&result.logFormat, "log-format", "", "Logging format: text or json (LOG_FORMAT; default json)")
 	flags.StringVar(&allowedHosts, "allowed-hosts", "", "Comma-separated HTTP hostnames/IPs without ports (API_ALLOWED_HOSTS; default localhost,127.0.0.1,::1)")
+	flags.StringVar(&allowedOrigins, "allowed-origins", "", "Comma-separated browser origins (API_ALLOWED_ORIGINS; default "+defaultAllowedOrigins+")")
 	flags.StringVar(&trustedProxies, "trusted-proxies", "", "Comma-separated proxy IPs/CIDRs (API_TRUSTED_PROXIES; default none)")
 	flags.StringVar(&proxyHeaders, "proxy-headers", "", "Trusted proxy headers: none, forwarded, x-forwarded, x-forwarded-proto (API_PROXY_HEADERS; default none)")
 	flags.BoolVar(&result.swagger, "swagger", false, "Enable authenticated Swagger UI and OpenAPI document (API_SWAGGER_ENABLED; default false)")
@@ -84,6 +87,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	result.security = api.SecurityConfig{
 		Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD"),
 		AllowedHosts:   splitList(host.Value(allowedHosts, provided["allowed-hosts"], "API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")),
+		AllowedOrigins: splitList(host.Value(allowedOrigins, provided["allowed-origins"], "API_ALLOWED_ORIGINS", defaultAllowedOrigins)),
 		TrustedProxies: splitList(host.Value(trustedProxies, provided["trusted-proxies"], "API_TRUSTED_PROXIES", "")),
 		ProxyHeaders:   host.Value(proxyHeaders, provided["proxy-headers"], "API_PROXY_HEADERS", "none"),
 	}

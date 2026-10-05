@@ -192,21 +192,37 @@ Use `BUS_URL`, `DATABASE_URL`, and `STORAGE_URL` for providers; `LOG_LEVEL` and
 values. Defaults use local `./state/` directories. Credentials are environment
 only and must both be nonblank. Run with `--help` for options.
 
-All other routes require HTTP Basic authentication, including unknown routes.
+All other routes require HTTP Basic authentication, including unknown routes;
+approved CORS preflights are answered before authentication.
 Use HTTPS at the reverse proxy for hosted deployments. Responses carry
 no-cache, content-type, framing and referrer protections; HTTPS responses also
-set HSTS. Browser requests must come from the same origin. Native clients may
-omit `Origin`.
+set HSTS. Browser requests may use the same origin or the two default local UI
+origins listed below. Native clients may omit `Origin`.
 
 | Environment variable | CLI flag | Default |
 | --- | --- | --- |
 | `API_ALLOWED_HOSTS` | `--allowed-hosts` | `localhost,127.0.0.1,::1` |
+| `API_ALLOWED_ORIGINS` | `--allowed-origins` | `http://localhost:4275,http://127.0.0.1:4275` |
 | `API_TRUSTED_PROXIES` | `--trusted-proxies` | None |
 | `API_PROXY_HEADERS` | `--proxy-headers` | `none` |
 
 Allowed hosts are exact hostnames/IPs without ports or wildcards. Add your public
 hostname when deploying. Trusted proxies are comma-separated IPs or CIDRs,
 matched against the directly connected peer.
+
+The local UI is allowed by default. `API_ALLOWED_ORIGINS` or `--allowed-origins`
+replaces the default list; the flag takes precedence over the environment.
+Origins include the scheme and port, without a path or trailing slash. Wildcards,
+`null`, credentials, queries and fragments are rejected. `--allowed-origins=`
+overrides the environment and restores same-origin-only access. Allowed origins
+do not bypass allowed-host or trusted-proxy checks.
+
+Browser clients send an explicit Basic `Authorization` header with
+`credentials: 'omit'`; cross-origin cookies and browser-managed credentials are
+not enabled. CORS allows `GET`, `HEAD`, `POST` and the `Authorization`,
+`Content-Type`, `Accept` headers. Preflights return `204`; real requests still
+require authentication. Approved origins can read health and error responses,
+plus `Location`, `Content-Disposition` and `WWW-Authenticate` headers.
 
 Select `forwarded` for `Forwarded`, `x-forwarded` for `X-Forwarded-Host` and
 `X-Forwarded-Proto`, or `x-forwarded-proto` to preserve the original `Host`.

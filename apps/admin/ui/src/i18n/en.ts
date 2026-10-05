@@ -1,7 +1,7 @@
 export default {
   brand: 'COMMANDER',
   connections: {
-    introduction: 'Your Commander APIs, in one place',
+    introduction: 'Administration of yours Command Centers',
     title: 'Connections',
     count_one: '{{count}} connection',
     count_other: '{{count}} connections',

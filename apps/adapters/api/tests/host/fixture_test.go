@@ -20,7 +20,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "API_SWAGGER_ENABLED", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
+	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_ALLOWED_ORIGINS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "API_SWAGGER_ENABLED", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
 		t.Setenv(name, "")
 	}
 	t.Setenv("API_USERNAME", "api-fixture-user")

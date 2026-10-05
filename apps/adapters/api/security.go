@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"unicode"
 
@@ -16,6 +15,7 @@ type SecurityConfig struct {
 	Username       string
 	Password       string
 	AllowedHosts   []string
+	AllowedOrigins []string
 	TrustedProxies []string
 	ProxyHeaders   string
 }
@@ -30,6 +30,7 @@ type security struct {
 	password [sha256.Size]byte
 	hosts    map[string]struct{}
 	proxy    proxyPolicy
+	cors     corsPolicy
 }
 
 func newSecurity(config SecurityConfig) (*security, error) {
@@ -54,16 +55,21 @@ func newSecurity(config SecurityConfig) (*security, error) {
 	if err != nil {
 		return nil, err
 	}
+	cors, err := newCORSPolicy(config.AllowedOrigins)
+	if err != nil {
+		return nil, err
+	}
 	return &security{
 		username: sha256.Sum256([]byte(config.Username)),
 		password: sha256.Sum256([]byte(config.Password)),
-		hosts:    hosts, proxy: proxy,
+		hosts:    hosts, proxy: proxy, cors: cors,
 	}, nil
 }
 
 func (s *security) protect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		securityHeaders(w)
+		corsAllowed := s.cors.applyHeaders(w, r)
 		if publicHealth(r) {
 			if r.TLS != nil {
 				w.Header().Set("Strict-Transport-Security", "max-age=31536000")
@@ -83,8 +89,12 @@ func (s *security) protect(next http.Handler) http.Handler {
 			endpoints.WriteError(w, http.StatusForbidden, "host_not_allowed")
 			return
 		}
-		if !sameOrigin(r, origin) {
+		if !corsAllowed && !sameOrigin(r, origin) {
 			endpoints.WriteError(w, http.StatusForbidden, "cross_origin_request")
+			return
+		}
+		if corsAllowed && corsPreflight(r) {
+			writePreflight(w, r)
 			return
 		}
 		if !s.authenticated(r) {
@@ -108,24 +118,18 @@ func (s *security) authenticated(r *http.Request) bool {
 }
 
 func sameOrigin(r *http.Request, expected requestOrigin) bool {
-	if values := r.Header.Values("Sec-Fetch-Site"); len(values) > 0 {
-		if len(values) != 1 || (values[0] != "same-origin" && values[0] != "none") {
-			return false
-		}
+	if !validFetchSite(r, false) {
+		return false
 	}
 	values := r.Header.Values("Origin")
 	if len(values) == 0 {
 		return true
 	}
-	if len(values) != 1 || strings.ContainsAny(values[0], "?#") {
+	if len(values) != 1 {
 		return false
 	}
-	parsed, err := url.Parse(values[0])
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.Path != "" || parsed.Opaque != "" {
-		return false
-	}
-	host, port, err := parseAuthority(parsed.Host)
-	return err == nil && expected.same(requestOrigin{scheme: parsed.Scheme, host: host, port: port})
+	origin, err := parseOrigin(values[0])
+	return err == nil && expected.same(origin)
 }
 
 func publicHealth(r *http.Request) bool {

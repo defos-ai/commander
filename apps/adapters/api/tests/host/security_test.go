@@ -50,7 +50,7 @@ func TestHostAndOriginValidation(t *testing.T) {
 		{name: "host suffix is not allowed", host: "localhost.attacker.invalid", status: http.StatusForbidden},
 		{name: "different origin hostname", origin: "http://attacker.invalid", status: http.StatusForbidden},
 		{name: "different origin scheme", origin: strings.Replace(server.url, "http:", "https:", 1), status: http.StatusForbidden},
-		{name: "different origin port", host: "localhost:4274", origin: "http://localhost:4275", status: http.StatusForbidden},
+		{name: "unconfigured origin port", host: "localhost:4274", origin: "http://localhost:4276", status: http.StatusForbidden},
 		{name: "opaque origin", origin: "null", status: http.StatusForbidden},
 		{name: "cross site navigation", fetchSite: "cross-site", status: http.StatusForbidden},
 		{name: "same site is not same origin", fetchSite: "same-site", status: http.StatusForbidden},
