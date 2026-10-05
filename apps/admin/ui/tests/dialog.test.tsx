@@ -1,20 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterAll, beforeAll, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { Dialog } from '../src/components/Dialog';
-
-beforeAll(() => {
-  // jsdom does not implement the browser's native dialog lifecycle.
-  Object.defineProperties(HTMLDialogElement.prototype, {
-    showModal: { configurable: true, value(this: HTMLDialogElement) { this.open = true; } },
-    close: { configurable: true, value(this: HTMLDialogElement) { this.open = false; } },
-  });
-});
-
-afterAll(() => {
-  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-  Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
-});
 
 function Example() {
   const [open, setOpen] = useState(false);

@@ -10,12 +10,13 @@ export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'agents'
 type WorkspaceLayoutProps = {
   connection: { id: string; name: string; url: string };
   section: WorkspaceSection;
+  sections?: WorkspaceSection[];
   onNavigate: (section: WorkspaceSection) => void;
   onBack: () => void;
   children: ReactNode;
 };
 
-export function WorkspaceLayout({ connection, section, onNavigate, onBack, children }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ connection, section, sections, onNavigate, onBack, children }: WorkspaceLayoutProps) {
   const { t } = useTranslation();
   const sidebar = useSidebar();
   const identity = useId();
@@ -49,7 +50,7 @@ export function WorkspaceLayout({ connection, section, onNavigate, onBack, child
         </button>}
       </div>
       <nav aria-label={t($ => $.shell.navigation)}>
-        {navigation.map(({ section: destination, label, Icon }) => <button key={destination} type="button" className="sidebar-command"
+        {navigation.filter(item => !sections || sections.includes(item.section)).map(({ section: destination, label, Icon }) => <button key={destination} type="button" className="sidebar-command"
           aria-current={section === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
           <Icon size={17} strokeWidth={1.4} aria-hidden="true" />
           <span>{label}</span>

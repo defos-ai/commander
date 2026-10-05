@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Plus, Server } from 'lucide-react';
 import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
@@ -8,9 +9,12 @@ import { useTranslation } from '../i18n';
 type ConnectionsPageProps = {
   statuses?: Record<string, ConnectionStatus>;
   onAdd?: () => void;
+  onEdit?: (id: string) => void;
+  onRemove?: (id: string) => void;
+  children?: ReactNode;
 } & ({ connections?: never; onOpen?: never } | { connections: Connection[]; onOpen: (id: string) => void });
 
-export function ConnectionsPage({ connections = [], statuses = {}, onAdd, onOpen }: ConnectionsPageProps) {
+export function ConnectionsPage({ connections = [], statuses = {}, onAdd, onOpen, onEdit, onRemove, children }: ConnectionsPageProps) {
   const { t } = useTranslation();
   return (
     <div className="connections-page">
@@ -19,12 +23,13 @@ export function ConnectionsPage({ connections = [], statuses = {}, onAdd, onOpen
         <p className="connections-introduction">{t($ => $.connections.introduction)}</p>
       </header>
       <main className="connections-main" aria-labelledby="connections-heading">
+        {children}
         <div className="connections-toolbar">
-          <div><h2 id="connections-heading">{t($ => $.connections.title)}</h2><span className="connections-count">{t($ => $.connections.count, { count: connections.length })}</span></div>
+          <div><h2 id="connections-heading" tabIndex={-1}>{t($ => $.connections.title)}</h2><span className="connections-count">{t($ => $.connections.count, { count: connections.length })}</span></div>
           {onAdd && <Button onClick={onAdd}><Plus size={16} strokeWidth={1.6} aria-hidden="true" />{t($ => $.connections.add)}</Button>}
         </div>
         {connections.length > 0 && onOpen ? (
-          <ul className="connections-grid">{connections.map(connection => <ConnectionCard key={connection.id} connection={connection} status={statuses[connection.id] ?? 'unchecked'} onOpen={onOpen} />)}</ul>
+          <ul className="connections-grid">{connections.map(connection => <ConnectionCard key={connection.id} connection={connection} status={statuses[connection.id] ?? 'unchecked'} onOpen={onOpen} onEdit={onEdit} onRemove={onRemove} />)}</ul>
         ) : (
           <div className="connections-empty">
             <span className="empty-icon"><Server size={25} strokeWidth={1.2} aria-hidden="true" /></span>

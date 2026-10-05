@@ -5,10 +5,9 @@
 React, TypeScript and Vite frontend for Commander. It follows the platform's CSS
 theme, Grunt typography, Lucide icons and typed i18next translations.
 
-This first increment provides the empty connections page, connection-card and
-dialog components, and a responsive workspace shell. API calls, authentication,
-saved connections and workspace pages follow in later increments. No connection
-is simulated; the workspace shell is currently exercised by component tests.
+Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
+page keeps a grid of saved connections; each opens an overview and connection
+settings in the sidebar. Catalog and operation pages follow in later increments.
 
 ## Quick start
 
@@ -21,6 +20,21 @@ npm run dev
 
 Open `http://localhost:4275`. `npm run build` writes a standalone build to `dist/`;
 `npm run preview` serves that build locally on the same port.
+
+Start the [API adapter](../../adapters/api/README.md) with `API_USERNAME` and
+`API_PASSWORD`. The UI looks for `http://localhost:4274` automatically. Choose
+**Connect** when detected, or **Add connection** for another address. Enter a
+name, API URL and credentials; the UI checks the connection before saving it.
+For a UI hosted elsewhere, set the API's `API_ALLOWED_ORIGINS` to its origin.
+
+Names and URLs are saved in this browser. Credentials stay in memory for the
+current tab; reload requires signing in again. Connection settings let you edit
+the address, forget credentials or remove the saved connection.
+
+Saved connections refresh every 30 seconds. API liveness (`/healthz`), database
+readiness (`/readyz`) and authenticated catalog access are checked separately,
+with a five-second timeout. These checks do not assert controller, agent, broker
+or file-storage health. Base-path URLs are supported; redirects are rejected.
 
 ## Development and testing
 
