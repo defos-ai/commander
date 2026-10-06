@@ -3,8 +3,8 @@
 ## Overview
 
 `commander/providers/mongo` implements the database stores for missions, actions,
-agent inventory, executions, operations, and accepted artifact metadata.
-Controller and MCP factories select it for `mongodb://` or `mongodb+srv://`
+agent inventory, controller registrations, executions, operations, and accepted artifact metadata.
+Controller and adapter factories select it for `mongodb://` or `mongodb+srv://`
 `DATABASE_URL` values. Artifact bytes and reports use the separate `STORAGE_URL`.
 Operation storage requires a replica set or sharded cluster for transactions.
 
@@ -68,6 +68,10 @@ workflows exercise MongoDB with RabbitMQ and MinIO; see the
 [testing guide](../../framework/tests/README.md#mcp-api-tests).
 
 ### Persistence and recovery
+
+The `controllers` collection holds one registration per runtime ID. Conditional
+writes accept newer heartbeats, preserving sub-millisecond ordering. Queries
+derive liveness from the lease; expired and stopped registrations are retained.
 
 Mission and action names are unique document IDs. Agent records contain advertised
 action readiness and indexed heartbeat timestamps. Conditional writes reject equal

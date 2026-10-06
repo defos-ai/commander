@@ -54,13 +54,14 @@ Use `docker compose logs` to diagnose failures, and always run `down --volumes`.
 | --- | --- |
 | `missions_test.go` | Catalog, validation and caller-supplied operation IDs. |
 | `agents_test.go` | Agent/action visibility and dependency rediscovery. |
+| `controllers_test.go` (HTTP API) | Controller registration, readiness and list/detail queries. |
 | `operations_test.go` | Website workflow, continuations, artifacts, reports, isolation, capacity and cancellation. |
 | `questions_test.go` | Latest question, answering and expiration. |
 
 Before each test, fixtures settle previous work and call MCP `clean_up_state` or
 HTTP `POST /api/v1/testing/cleanup`. Both exist only with `ENV=tests` and reject
 cleanup while work is active. Cleanup clears operations, reports and artifacts;
-it preserves missions, agent/action catalogs, delivery records, bus and host memory.
+it preserves missions, controller registrations, agent/action catalogs, delivery records, bus and host memory.
 Retired artifact IDs prevent late result replays from restoring deleted metadata.
 
 Tests run sequentially; `-p 1` also keeps the two adapter suites from sharing the

@@ -1,4 +1,4 @@
-export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'agents' | 'actions' | 'settings';
+export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'controllers' | 'agents' | 'actions' | 'settings';
 export type OperationView = 'details' | 'graph';
 
 export type Route = { connectionID?: undefined } | {
@@ -8,7 +8,7 @@ export type Route = { connectionID?: undefined } | {
   view?: OperationView;
 };
 
-const sections: readonly string[] = ['overview', 'operations', 'missions', 'agents', 'actions', 'settings'];
+const sections: readonly string[] = ['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'settings'];
 
 export function parseRoute(hash: string): Route {
   try {

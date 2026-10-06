@@ -14,6 +14,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
+	"commander/framework/domain/controllers"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -27,6 +28,7 @@ type Config struct {
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
 	AgentStore        agents.AgentStore
+	ControllerStore   controllers.ControllerStore
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
 	ArtifactStore     artifacts.ArtifactStore
@@ -40,14 +42,15 @@ func NewHandler(config Config) (http.Handler, error) {
 		return nil, err
 	}
 	if config.Operations == nil || config.MissionStore == nil || config.OperationStore == nil ||
-		config.AgentStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
+		config.AgentStore == nil || config.ControllerStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil {
-		return nil, errors.New("API requires controller commands and mission, operation, agent, action, report, artifact metadata and artifact file stores")
+		return nil, errors.New("API requires controller commands and mission, operation, agent, controller, action, report, artifact metadata and artifact file stores")
 	}
 	mux := http.NewServeMux()
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
 	endpoints.RegisterAgents(mux, config.AgentStore)
+	endpoints.RegisterControllers(mux, config.ControllerStore)
 	endpoints.RegisterReports(mux, config.ReportStore)
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
 	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.Operations)

@@ -44,7 +44,7 @@ function mockAPI() {
     }
     if (!state.online && !url.startsWith(localURL)) throw new TypeError('Network unavailable');
     if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
-    if (['operations', 'missions', 'agents', 'actions'].some(resource => url.endsWith(`/api/v1/${resource}`))) {
+    if (['operations', 'missions', 'controllers', 'agents', 'actions'].some(resource => url.endsWith(`/api/v1/${resource}`))) {
       return state.authorize && state.sessions.has(address.searchParams.get('url') ?? '')
         ? Response.json({ items: [] })
         : Response.json({ error: 'authentication_required' }, { status: 401 });
@@ -246,7 +246,7 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByRole('alert').textContent).not.toContain(password);
   });
 
-  it.each(['Operations', 'Missions', 'Agents', 'Actions'])('opens %s from the sidebar and keeps that page selected after signing in', async page => {
+  it.each(['Operations', 'Missions', 'Controllers', 'Agents', 'Actions'])('opens %s from the sidebar and keeps that page selected after signing in', async page => {
     const resource = page.toLowerCase();
     persist([savedConnection]);
     const api = mockAPI();

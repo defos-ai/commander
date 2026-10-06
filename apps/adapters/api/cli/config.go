@@ -47,7 +47,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags.BoolVar(&result.swagger, "swagger", false, "Enable authenticated Swagger UI and OpenAPI document (API_SWAGGER_ENABLED; default false)")
 	flags.Usage = func() {
 		fmt.Fprintln(output, "Usage: commander-api [flags]")
-		fmt.Fprintln(output, "Read-only missions, actions and agents API; optional Swagger at /docs/.")
+		fmt.Fprintln(output, "Read-only missions, actions, agents and controllers API; optional Swagger at /docs/.")
 		fmt.Fprintln(output, "API_USERNAME and API_PASSWORD must be supplied through the environment.")
 		flags.PrintDefaults()
 	}

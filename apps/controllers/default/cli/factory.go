@@ -13,6 +13,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
+	"commander/framework/domain/controllers"
 	"commander/framework/domain/executions"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
@@ -22,6 +23,7 @@ import (
 	fsagents "commander/providers/fs/agents"
 	fsartifacts "commander/providers/fs/artifacts"
 	fscomms "commander/providers/fs/comms"
+	fscontrollers "commander/providers/fs/controllers"
 	fsexecutions "commander/providers/fs/executions"
 	fsmissions "commander/providers/fs/missions"
 	fsoperations "commander/providers/fs/operations"
@@ -29,6 +31,7 @@ import (
 	mongoactions "commander/providers/mongo/actions"
 	mongoagents "commander/providers/mongo/agents"
 	mongoartifacts "commander/providers/mongo/artifacts"
+	mongocontrollers "commander/providers/mongo/controllers"
 	mongoexecutions "commander/providers/mongo/executions"
 	mongomissions "commander/providers/mongo/missions"
 	mongooperations "commander/providers/mongo/operations"
@@ -39,17 +42,18 @@ import (
 )
 
 type dependencies struct {
-	Bus            comms.Bus
-	ArtifactStore  artifacts.ArtifactStore
-	ExecutionStore executions.ExecutionStore
-	AgentStore     agents.AgentStore
-	MissionStore   missions.MissionStore
-	OperationStore operations.OperationStore
-	ActionStore    actions.ActionStore
-	ReportStore    reports.ReportStore
-	mongo          *mongostore.MongoStore
-	s3             *s3store.S3Store
-	closers        []func() error
+	Bus             comms.Bus
+	ArtifactStore   artifacts.ArtifactStore
+	ExecutionStore  executions.ExecutionStore
+	AgentStore      agents.AgentStore
+	ControllerStore controllers.ControllerStore
+	MissionStore    missions.MissionStore
+	OperationStore  operations.OperationStore
+	ActionStore     actions.ActionStore
+	ReportStore     reports.ReportStore
+	mongo           *mongostore.MongoStore
+	s3              *s3store.S3Store
+	closers         []func() error
 }
 
 func (d *dependencies) Close() error {
@@ -73,6 +77,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("bus-url: %w", err)
 	}
 	deps.closers = append(deps.closers, deps.Bus.Close)
+	deps.ControllerStore, err = deps.createControllerStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("database-url: %w", err)
+	}
 	deps.ArtifactStore, err = deps.createArtifactStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
@@ -166,6 +174,27 @@ func (d *dependencies) createReportStore(ctx context.Context, rawURL string) (re
 		return s3reports.NewReportS3Store(d.s3)
 	default:
 		return nil, fmt.Errorf("unsupported report store scheme %q", scheme)
+	}
+}
+
+func (d *dependencies) createControllerStore(ctx context.Context, rawURL string) (controllers.ControllerStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fscontrollers.NewControllerFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongocontrollers.NewControllerMongoStore(ctx, d.mongo)
+	default:
+		return nil, fmt.Errorf("unsupported controller store scheme %q", scheme)
 	}
 }
 

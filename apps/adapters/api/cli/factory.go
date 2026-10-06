@@ -14,6 +14,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
+	"commander/framework/domain/controllers"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -23,6 +24,7 @@ import (
 	fsagents "commander/providers/fs/agents"
 	fsartifacts "commander/providers/fs/artifacts"
 	fscomms "commander/providers/fs/comms"
+	fscontrollers "commander/providers/fs/controllers"
 	fsmissions "commander/providers/fs/missions"
 	fsoperations "commander/providers/fs/operations"
 	fsreports "commander/providers/fs/reports"
@@ -30,6 +32,7 @@ import (
 	mongoactions "commander/providers/mongo/actions"
 	mongoagents "commander/providers/mongo/agents"
 	mongoartifacts "commander/providers/mongo/artifacts"
+	mongocontrollers "commander/providers/mongo/controllers"
 	mongomissions "commander/providers/mongo/missions"
 	mongooperations "commander/providers/mongo/operations"
 	mongostore "commander/providers/mongo/store"
@@ -46,6 +49,7 @@ type dependencies struct {
 	ArtifactStore     artifacts.ArtifactStore
 	ArtifactFileStore artifacts.ArtifactFileStore
 	AgentStore        agents.AgentStore
+	ControllerStore   controllers.ControllerStore
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
 	ActionStore       actions.ActionStore
@@ -94,6 +98,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
 	deps.AgentStore, err = deps.createAgentStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.ControllerStore, err = deps.createControllerStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
@@ -198,6 +206,27 @@ func (d *dependencies) createAgentStore(ctx context.Context, rawURL string) (age
 		return mongoagents.NewAgentMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported agent store scheme %q", scheme)
+	}
+}
+
+func (d *dependencies) createControllerStore(ctx context.Context, rawURL string) (controllers.ControllerStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fscontrollers.NewControllerFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongocontrollers.NewControllerMongoStore(ctx, d.mongo)
+	default:
+		return nil, fmt.Errorf("unsupported controller store scheme %q", scheme)
 	}
 }
 

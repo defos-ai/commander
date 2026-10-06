@@ -59,7 +59,7 @@ func TestReadOnlyQueriesValidateIDsAndEmptyCollections(t *testing.T) {
 func TestHTTPAuthenticationOriginMethodsAndPublicProbes(t *testing.T) {
 	a := connect(t)
 	op := a.start(website(t))
-	paths := []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", operationPath(op.ID), operationPath(op.ID) + "/graph", "/api/v1/reports/" + absentID, "/api/v1/artifacts/" + absentID, "/openapi.json", "/api/v1/unknown"}
+	paths := []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/unknown-controller", operationPath(op.ID), operationPath(op.ID) + "/graph", "/api/v1/reports/" + absentID, "/api/v1/artifacts/" + absentID, "/openapi.json", "/api/v1/unknown"}
 	for _, path := range paths {
 		unauthorized := a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
 		assertError(t, unauthorized, http.StatusUnauthorized, "authentication_required")
@@ -116,7 +116,7 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 	if _, ok := document.Security[0]["basicAuth"]; !ok {
 		t.Fatal("OpenAPI does not declare Basic authentication")
 	}
-	for _, path := range []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/graph", "/api/v1/operations/{operation_id}/report", "/api/v1/reports/{report_id}", "/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}"} {
+	for _, path := range []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/{controller_id}", "/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/graph", "/api/v1/operations/{operation_id}/report", "/api/v1/reports/{report_id}", "/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}"} {
 		if document.Paths[path].Get.Responses["200"] == nil {
 			t.Errorf("OpenAPI omitted GET %s", path)
 		}

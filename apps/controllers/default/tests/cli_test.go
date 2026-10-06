@@ -15,8 +15,45 @@ import (
 	"time"
 
 	"commander/apps/controllers/default/cli"
+	"commander/framework/domain/controllers"
+	fscontrollers "commander/providers/fs/controllers"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
+
+func TestCLIRegistersController(t *testing.T) {
+	t.Setenv("ENV", "")
+	root := t.TempDir()
+	store, err := fscontrollers.NewControllerFsStore(filepath.Join(root, "database"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	var ready controllers.Controller
+	err = cli.RunWithOptions(ctx, []string{
+		"--bus-url=" + filepath.Join(root, "bus"),
+		"--storage-url=" + filepath.Join(root, "storage"),
+		"--database-url=" + filepath.Join(root, "database"),
+	}, io.Discard, cli.Options{Ready: func() {
+		defer cancel()
+		records, readErr := store.List(ctx)
+		if readErr != nil || len(records) != 1 {
+			t.Errorf("controller registration unavailable at readiness: records=%v error=%v", records, readErr)
+			return
+		}
+		ready = records[0]
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ready.Status != controllers.Ready || ready.Type != "default" || ready.AgentSelector != "round-robin" || ready.Version == "" {
+		t.Fatalf("controller did not advertise readiness: %+v", ready)
+	}
+	record, err := store.Get(t.Context(), ready.ID)
+	if err != nil || record.Status != controllers.Stopped || !record.LastHeartbeat.After(ready.LastHeartbeat) {
+		t.Fatalf("controller shutdown was not recorded: record=%+v error=%v", record, err)
+	}
+}
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {
 	const secret = "provider-test-secret"

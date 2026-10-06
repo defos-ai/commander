@@ -35,6 +35,7 @@ func openAPIDocument() ([]byte, error) {
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
 		{"Action", reflect.TypeFor[models.ActionResponse]()},
 		{"Agent", reflect.TypeFor[models.AgentResponse]()},
+		{"Controller", reflect.TypeFor[models.ControllerResponse]()},
 		{"Report", reflect.TypeFor[models.ReportResponse]()},
 		{"Artifact", reflect.TypeFor[models.ArtifactResponse]()},
 	} {
@@ -60,6 +61,11 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
 			schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
 			schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
+		case "Controller":
+			schema.Properties["status"].Enum = []any{"starting", "ready", "degraded", "draining", "stopped", "unavailable"}
+			schema.Properties["status"].Description = "Observed controller state. A stale lease is reported as unavailable unless the controller has stopped."
+			schema.Properties["status_reason"].Description = "Reason for the observed state, when one is available."
+			schema.Properties["stale"].Description = "Whether a non-stopped controller's heartbeat lease has expired at query time."
 		case "Report":
 			schema.Properties["output"].Description = "Saved mission output; any JSON value, including null, arrays and scalars."
 		}
@@ -86,13 +92,14 @@ func openAPIDocument() ([]byte, error) {
 		{"missions", "Mission", "mission_name", "mission_not_found"},
 		{"actions", "Action", "action_name", "action_not_found"},
 		{"agents", "Agent", "agent_id", "agent_not_found"},
+		{"controllers", "Controller", "controller_id", "unknown_controller"},
 	} {
 		listSchema := map[string]any{
 			"type": "object", "required": []string{"items"},
 			"properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef(catalog.model)}},
 		}
 		list := endpoints.OpenAPIQueryOperation("list"+catalog.model+"s", "List "+catalog.path, catalog.model, listSchema)
-		list["description"] = "Returns all records, sorted by name (missions/actions) or ID (agents). Agent freshness reflects the current lease."
+		list["description"] = "Returns all records, sorted by name (missions/actions) or ID (agents/controllers). Agent and controller freshness reflect the current lease."
 		paths["/api/v1/"+catalog.path] = map[string]any{"get": list}
 		detail := endpoints.OpenAPIQueryOperation("get"+catalog.model, "Get "+catalog.model, catalog.model, endpoints.OpenAPIRef(catalog.model))
 		detail["parameters"] = []any{map[string]any{

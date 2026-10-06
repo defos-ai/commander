@@ -50,7 +50,7 @@ beforeEach(() => {
 describe('location navigation', () => {
   it('round-trips entity names and IDs without treating their punctuation as route segments', () => {
     const routes: Route[] = [{}, { connectionID: 'local', section: 'overview' }, { connectionID: 'local', section: 'settings' },
-      ...(['missions', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
+      ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
       { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' }];
 
     for (const route of routes) expect(parseRoute(routeHash(route))).toEqual(route);
@@ -101,7 +101,7 @@ describe('location navigation', () => {
     expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });
 
-  it.each(['missions', 'agents', 'actions'] as const)('opens a saved %s detail location behind the sign-in gate', async section => {
+  it.each(['missions', 'controllers', 'agents', 'actions'] as const)('opens a saved %s detail location behind the sign-in gate', async section => {
     mockAPI();
     visit({ connectionID: connection.id, section, itemID: 'saved-item' });
     render(<App />);

@@ -16,6 +16,7 @@ import (
 	"commander/framework/controller"
 	adapterconsumer "commander/framework/controller/consumers/adapter"
 	"commander/framework/controller/runner"
+	"commander/framework/domain/controllers"
 	"commander/framework/host"
 )
 
@@ -62,6 +63,17 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		return err
 	}
 	defer func() { result = errors.Join(result, deps.Close()) }()
+	registration, err := controller.Register(ctx, deps.ControllerStore, controller.RegistrationConfig{
+		ID: configuration.controllerID, Type: controllerType, AgentSelector: "round-robin", Logger: logger,
+	})
+	if err != nil {
+		return fmt.Errorf("controller registration: %w", err)
+	}
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		result = errors.Join(result, registration.Close(shutdown))
+	}()
 	if configuration.withMissions != "" {
 		if err := data.UpsertMissions(ctx, deps.MissionStore, configuration.withMissions); err != nil {
 			return fmt.Errorf("with-missions: %w", err)
@@ -112,6 +124,14 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		if commandErr != nil && !errors.Is(commandErr, context.Canceled) {
 			result = errors.Join(result, commandErr)
 		}
+	}()
+	if err := registration.SetStatus(ctx, controllers.Ready, ""); err != nil {
+		return fmt.Errorf("controller ready registration: %w", err)
+	}
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		result = errors.Join(result, registration.SetStatus(shutdown, controllers.Draining, ""))
 	}()
 	logger.Info("Controller ready", "transport", "bus")
 	if options.Ready != nil {

@@ -16,6 +16,7 @@ import { ConnectionSettingsPage } from './pages/ConnectionSettingsPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { AgentsPage } from './pages/AgentsPage';
+import { ControllersPage } from './pages/ControllersPage';
 import { ActionsPage } from './pages/ActionsPage';
 import { OperationsPage } from './pages/OperationsPage';
 
@@ -61,7 +62,7 @@ export function App() {
   const storageNotice = !state.storageAvailable && <p className="notice" role="alert">{t($ => $.connections.storageError)}</p>;
 
   return <>
-    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'agents', 'actions', 'settings']}
+    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'settings']}
       onNavigate={destination => navigate({ connectionID: active.id, section: destination })} onBack={() => navigate({})}>
       {storageNotice}
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
@@ -71,6 +72,7 @@ export function App() {
           selectedID={selectedID} onSelect={select} view={route.connectionID ? route.view ?? 'details' : 'details'}
           onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
+          : section === 'controllers' ? <ControllersPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
           : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
             : section === 'actions' ? <ActionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
               : <OverviewPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}

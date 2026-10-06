@@ -11,7 +11,7 @@ platform's CSS theme, Grunt typography, Lucide icons and typed i18next translati
 
 Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
 page keeps a grid of saved connections. Inside a connection, the sidebar provides
-Overview, Operations, Missions, Agents, Actions and connection settings.
+Overview, Operations, Missions, Controllers, Agents, Actions and connection settings.
 
 Operations supports search, status filters and details: task progress,
 agent readiness, decisions, questions, results, artifact files and event history.
@@ -41,6 +41,10 @@ actions, automations, planning steps, and input/output schemas. The automation
 graph connects allowed follow-ups and shows model review and continuation rules.
 Drag, zoom, or select a node to inspect its rule. Refresh loads the current
 definitions from the selected API.
+
+Controllers shows registered instances, status, host platform, version, agent
+selector and heartbeat lease timestamps. Search and read-only details refresh
+every 10 seconds; expired leases are marked stale by the API.
 
 Agents shows current work, host details, heartbeat freshness and each agent's
 action readiness and missing requirements. Actions shows catalog definitions,

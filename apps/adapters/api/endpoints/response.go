@@ -10,6 +10,7 @@ import (
 	"commander/framework/domain/actions"
 	"commander/framework/domain/agents"
 	"commander/framework/domain/artifacts"
+	"commander/framework/domain/controllers"
 	"commander/framework/domain/missions"
 	"commander/framework/domain/operations"
 	"commander/framework/domain/reports"
@@ -32,6 +33,8 @@ func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 		WriteError(w, http.StatusNotFound, "action_not_found")
 	case errors.Is(err, agents.ErrUnknownAgent):
 		WriteError(w, http.StatusNotFound, "agent_not_found")
+	case errors.Is(err, controllers.ErrUnknownController):
+		WriteError(w, http.StatusNotFound, "unknown_controller")
 	case errors.Is(err, operations.ErrUnknownOperation):
 		WriteError(w, http.StatusNotFound, "operation_not_found")
 	case errors.Is(err, operations.ErrUnknownTask):

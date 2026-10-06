@@ -2,7 +2,7 @@
 
 ## Overview
 
-The API adapter lets HTTP clients inspect Commander missions, actions, agents,
+The API adapter lets HTTP clients inspect Commander missions, actions, agents, controllers,
 saved operation state, reports and artifacts through domain stores, and send operation commands to
 the controller over the bus.
 
@@ -29,11 +29,18 @@ curl --user "$API_USERNAME" http://127.0.0.1:4274/api/v1/missions
 | Missions | `GET /api/v1/missions` | `GET /api/v1/missions/{mission_name}` |
 | Actions | `GET /api/v1/actions` | `GET /api/v1/actions/{action_name}` |
 | Agents | `GET /api/v1/agents` | `GET /api/v1/agents/{agent_id}` |
+| Controllers | `GET /api/v1/controllers` | `GET /api/v1/controllers/{controller_id}` |
 
-Lists return `{"items":[...]}`, sorted by name or agent ID. Details return the
+Lists return `{"items":[...]}`, sorted by name or agent/controller ID. Details return the
 full record. Agent reads include current work and calculated lease freshness;
 action readiness belongs to each agent, while the action catalog describes
 available definitions. These endpoints read saved state without executing work.
+
+Controller records include their type, status, optional status reason, server
+hostname/OS/architecture, version, agent selector, start time, last heartbeat and
+lease expiry. Expired leases return `stale: true` and `status: "unavailable"`;
+stopped controllers retain `status: "stopped"` and `stale: false`. This calculation
+does not change stored records. Missing controller IDs return `404 unknown_controller`.
 
 ## Operation queries
 

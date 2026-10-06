@@ -1,6 +1,7 @@
 import connectionForm from './connectionForm';
 import missions from './missions';
 import agents from './agents';
+import controllers from './controllers';
 import actions from './actions';
 import operations from './operations';
 import operationCommands from './operationCommands';
@@ -13,6 +14,7 @@ export default {
   connectionForm,
   missions,
   agents,
+  controllers,
   actions,
   operations,
   operationCommands,
@@ -97,6 +99,7 @@ export default {
       overview: 'Overview',
       operations: 'Operations',
       missions: 'Missions',
+      controllers: 'Controllers',
       agents: 'Agents',
       actions: 'Actions',
       settings: 'Connection settings',

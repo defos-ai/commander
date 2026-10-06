@@ -7,6 +7,13 @@ mission automation, selects exact agent instances, and saves tasks, execution
 results, questions and reports. The bundled [default host](default/) receives
 commands through the bus, restores operations after restart and opens no HTTP port.
 
+Each process registers its ID, type, host, version and agent-selection strategy in
+the database. It renews a 45-second lease every 10 seconds, reports `ready` after
+startup and `stopped` after shutdown. An expired lease appears as `unavailable`.
+The [admin UI](../admin/ui/README.md) lists these records under **Controllers**;
+registrations remain visible after a process stops. They describe controller
+health, not ownership of agents or operations.
+
 Scheduling requires a fresh, ready instance advertising the requested action,
 with its dependencies and permission grants satisfied and capacity available
 (one task per instance by default). Queued work waits for readiness or capacity;
@@ -41,6 +48,8 @@ Start the [MCP adapter](../adapters/README.md#quick-start) and
   Mission-specific rules belong in [mission automation](../../docs/abstractions.md#mission-automation).
 - Another controller host gets its own module, CLI, entrypoint and tests, and
   injects provider interfaces into the runtime.
+  Use `controller.Register` with a `controllers.ControllerStore`, mark the
+  registration ready after startup, and close it after consumers and the runner.
 
 ### Run tests
 

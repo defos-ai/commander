@@ -85,7 +85,8 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		Security: configuration.security, SwaggerEnabled: configuration.swagger,
 		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
-		ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
+		ControllerStore: deps.ControllerStore,
+		ArtifactStore:   deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
 		TestCleaner: deps.TestCleaner,
 	})
 	if err != nil {

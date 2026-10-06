@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowLeft, Bot, ClipboardList, Compass, LayoutDashboard, Menu, Settings2, Workflow, X } from 'lucide-react';
+import { ArrowLeft, Bot, ClipboardList, Compass, LayoutDashboard, Menu, Server, Settings2, Workflow, X } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { useSidebar } from '../hooks/useSidebar';
 import { Brand } from './Brand';
@@ -25,6 +25,7 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
     { section: 'overview' as const, label: t($ => $.shell.nav.overview), Icon: LayoutDashboard },
     { section: 'operations' as const, label: t($ => $.shell.nav.operations), Icon: Workflow },
     { section: 'missions' as const, label: t($ => $.shell.nav.missions), Icon: Compass },
+    { section: 'controllers' as const, label: t($ => $.shell.nav.controllers), Icon: Server },
     { section: 'agents' as const, label: t($ => $.shell.nav.agents), Icon: Bot },
     { section: 'actions' as const, label: t($ => $.shell.nav.actions), Icon: ClipboardList },
   ];

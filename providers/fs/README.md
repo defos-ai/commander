@@ -53,6 +53,7 @@ func ListMissions(ctx context.Context, databaseURL string) ([]missions.Mission, 
 | [`comms`](comms/) | `NewFsBus` | `BUS_URL` |
 | [`artifacts`](artifacts/) | `NewArtifactFsStore` for metadata; `NewArtifactFileFsStore` for bytes | `DATABASE_URL`; `STORAGE_URL` |
 | [`reports`](reports/) | `NewReportFsStore` | `STORAGE_URL` |
+| [`controllers`](controllers/) | `NewControllerFsStore` | `DATABASE_URL` |
 | Other domain packages | `NewActionFsStore`, `NewAgentFsStore`, `NewExecutionFsStore`, `NewMissionFsStore`, `NewOperationFsStore` | `DATABASE_URL` |
 
 Close the bus after consumers stop. Filesystem stores need no close.
@@ -95,6 +96,10 @@ queue. Reopening the bus does not replay old commands. See the
 [message-handling guide](../../framework/comms/README.md) for consumer settlement policy.
 
 ### Agent observations
+
+Controller registrations live at `DATABASE_URL/controllers/<controller-id>.json`.
+Each has an independent lock and accepts only newer heartbeats. Queries derive
+liveness from the lease; expired and stopped records remain available for inspection.
 
 `DATABASE_URL/agents/<agent-id>.json` stores the latest source observation.
 Inventory writes and expiry share a file lock: equal or older observations cannot

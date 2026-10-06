@@ -64,3 +64,17 @@ export interface AgentWork {
   action_name: string;
   command_id?: string;
 }
+
+export interface Controller {
+  id: string;
+  type: string;
+  status: string;
+  status_reason?: string;
+  server: { hostname: string; os: string; arch: string };
+  version: string;
+  agent_selector: string;
+  started_at: string;
+  last_heartbeat: string;
+  lease_expires_at: string;
+  stale: boolean;
+}

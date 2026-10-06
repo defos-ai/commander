@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Operation } from '../../src/api/operation-types';
-import type { Agent, Action, Mission } from '../../src/api/types';
+import type { Agent, Action, Controller, Mission } from '../../src/api/types';
 
 export const apiURL = process.env.COMMANDER_TEST_API_URL ?? 'http://127.0.0.1:14274';
 export const publicAPIURL = 'http://localhost:14274';
@@ -41,17 +41,19 @@ export class CommanderAPI {
 
   async ready() {
     await expect.poll(async () => {
-      const [agents, actions, missions] = await Promise.all([
+      const [agents, actions, missions, controllers] = await Promise.all([
         this.get<{ items: Agent[] }>('/agents'), this.get<{ items: Action[] }>('/actions'), this.get<{ items: Mission[] }>('/missions'),
+        this.get<{ items: Controller[] }>('/controllers'),
       ]);
       return {
         agents: agents.items.map(agent => ({ status: agent.status, stale: agent.stale, working: Boolean(agent.work),
           readyActions: agent.actions?.filter(action => action.status === 'ready').length })),
         actions: actions.items.length,
         mission: missions.items.some(mission => mission.name === 'review-website'),
+        controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin'),
       };
-    }, { timeout: 60_000, message: 'Wait for mission, action catalog and both browser-equipped agents' }).toEqual({
-      agents: Array(2).fill({ status: 'ready', stale: false, working: false, readyActions: 6 }), actions: 6, mission: true,
+    }, { timeout: 60_000, message: 'Wait for controller, mission, action catalog and both browser-equipped agents' }).toEqual({
+      agents: Array(2).fill({ status: 'ready', stale: false, working: false, readyActions: 6 }), actions: 6, mission: true, controller: true,
     });
   }
 

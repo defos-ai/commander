@@ -33,6 +33,16 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await connection.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
+  await navigation.getByRole('button', { name: 'Controllers', exact: true }).click();
+  const controller = page.getByRole('button', { name: /^View controller default-controller-/ }).first();
+  await expect(controller.getByText('Ready', { exact: true })).toBeVisible();
+  await controller.click();
+  await expect(page.getByRole('heading', { name: 'Controller snapshot', exact: true })).toBeVisible();
+  await expect(page.getByText('default', { exact: true })).toBeVisible();
+  await expect(page.getByText('round-robin', { exact: true })).toBeVisible();
+  await expect(page.getByText('Last heartbeat', { exact: true })).toBeVisible();
+  await expect(page.getByText('Lease expires at', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/controllers\/default-controller-[^/]+$/);
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
   await page.getByRole('button', { name: 'View mission review-website' }).click();
   await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
