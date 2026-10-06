@@ -6,6 +6,7 @@ export const LOCAL_API_URL = 'http://localhost:4274';
 export function useLocalDiscovery(savedURLs: string[]) {
   const [status, setStatus] = useState<'checking' | 'found' | 'absent'>('checking');
   const saved = savedURLs.includes(LOCAL_API_URL);
+
   useEffect(() => {
     if (saved) { setStatus('absent'); return; }
     const controller = new AbortController();
@@ -17,5 +18,5 @@ export function useLocalDiscovery(savedURLs: string[]) {
     });
     return () => controller.abort();
   }, [saved]);
-  return { status, url: LOCAL_API_URL };
+  return { status: saved ? 'absent' : status, url: LOCAL_API_URL };
 }

@@ -49,8 +49,11 @@ func TestBrowserSessionConnectionsAndProxy(t *testing.T) {
 	defer upstream.Close()
 	other := httptest.NewServer(upstream.Config.Handler)
 	defer other.Close()
-	firstURL, secondURL := upstream.URL+"/first", other.URL+"/second"
-	handler, err := connections.NewHandler(connections.Config{Now: func() time.Time { return time.Unix(0, now.Load()) }})
+	firstURL, secondURL := "http://localhost:4274/first", other.URL+"/second"
+	handler, err := connections.NewHandler(connections.Config{
+		APIUpstreams: "localhost:4274=" + strings.TrimPrefix(upstream.URL, "http://"),
+		Now:          func() time.Time { return time.Unix(0, now.Load()) },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +70,10 @@ func TestBrowserSessionConnectionsAndProxy(t *testing.T) {
 	}
 	assertConnections(t, handler, second, 2)
 	assertConnections(t, handler, first, 0)
+	listed := serveUI(handler, browserRequest(http.MethodGet, "/ui/connections", "", second)).Body.String()
+	if !strings.Contains(listed, firstURL) || !strings.Contains(listed, secondURL) || strings.Contains(listed, upstream.URL) {
+		t.Fatalf("connections must retain public URLs: %s", listed)
+	}
 	response := serveUI(handler, browserRequest(http.MethodGet, proxyPath(firstURL, "/api/v1/missions"), "", second))
 	if response.Code != http.StatusOK {
 		t.Fatal("adding another API replaced the first API's credentials")

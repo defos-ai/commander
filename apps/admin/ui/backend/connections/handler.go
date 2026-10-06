@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -15,11 +16,13 @@ const cookieName = "commander_ui_session"
 
 type Config struct {
 	PublicOrigin string
+	APIUpstreams string
 	Now          func() time.Time
 }
 
 type Handler struct {
 	publicOrigin string
+	apiUpstreams map[string]string
 	sessions     *sessions
 	client       *http.Client
 	now          func() time.Time
@@ -37,6 +40,11 @@ func NewHandler(config Config) (*Handler, error) {
 			return nil, err
 		}
 	}
+	upstreams, err := parseAPIUpstreams(config.APIUpstreams)
+	if err != nil {
+		return nil, fmt.Errorf("api-upstreams: %w", err)
+	}
+	h.apiUpstreams = upstreams
 	h.client = &http.Client{
 		Timeout:       30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
@@ -145,7 +153,7 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 	value := &credentials{username: input.Username, password: input.Password}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	address, _, _ := endpoint(target, "/api/v1/missions")
+	address, _, _ := endpoint(h.resolveTarget(target), "/api/v1/missions")
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
 	if err != nil {
 		fail(w, http.StatusBadGateway, "Could not connect to this API.")

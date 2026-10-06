@@ -3,10 +3,69 @@ package connections
 import (
 	"errors"
 	"net"
+	"net/netip"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 )
+
+func (h *Handler) resolveTarget(base *url.URL) *url.URL {
+	port := base.Port()
+	if port == "" {
+		port = "80"
+		if base.Scheme == "https" {
+			port = "443"
+		}
+	}
+	if upstream, ok := h.apiUpstreams[normalizedHostPort(base.Hostname(), port)]; ok {
+		result := *base
+		result.Host = upstream
+		return &result
+	}
+	return base
+}
+
+func parseAPIUpstreams(value string) (map[string]string, error) {
+	result := make(map[string]string)
+	if strings.TrimSpace(value) == "" {
+		return result, nil
+	}
+	for _, rule := range strings.Split(value, ",") {
+		key, target, ok := strings.Cut(rule, "=")
+		if !ok {
+			return nil, errors.New("expected comma-separated host:port=host:port pairs")
+		}
+		key, keyErr := normalizeUpstreamHost(strings.TrimSpace(key))
+		target, targetErr := normalizeUpstreamHost(strings.TrimSpace(target))
+		if keyErr != nil || targetErr != nil {
+			return nil, errors.New("each upstream key and value must be a host:port without scheme, credentials, path, query or fragment")
+		}
+		if _, exists := result[key]; exists {
+			return nil, errors.New("duplicate upstream host:port")
+		}
+		result[key] = target
+	}
+	return result, nil
+}
+
+func normalizeUpstreamHost(value string) (string, error) {
+	host, port, err := net.SplitHostPort(value)
+	number, portErr := strconv.Atoi(port)
+	base, baseErr := normalizeBase("http://" + value)
+	if err != nil || host == "" || portErr != nil || baseErr != nil || base.Path != "" ||
+		(strings.HasPrefix(value, "[") && net.ParseIP(host) == nil) {
+		return "", errors.New("invalid upstream host:port")
+	}
+	return normalizedHostPort(base.Hostname(), strconv.Itoa(number)), nil
+}
+
+func normalizedHostPort(host, port string) string {
+	if address, err := netip.ParseAddr(host); err == nil {
+		host = address.String()
+	}
+	return net.JoinHostPort(host, port)
+}
 
 func normalizeBase(value string) (*url.URL, error) {
 	u, err := url.Parse(value)
@@ -19,6 +78,13 @@ func normalizeBase(value string) (*url.URL, error) {
 		return nil, errors.New("API URL path must not contain traversal")
 	}
 	hostname, port := strings.ToLower(u.Hostname()), u.Port()
+	if port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 0 || number > 65535 {
+			return nil, errors.New("API URL port must be an integer between 0 and 65535")
+		}
+		port = strconv.Itoa(number)
+	}
 	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
 		port = ""
 	}

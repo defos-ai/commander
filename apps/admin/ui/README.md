@@ -51,12 +51,14 @@ From the repository root:
 docker compose --profile admin up --build -d
 ```
 
-Open `http://localhost:4275`, choose **Add connection**, and enter
-`http://api:4274` as the API URL. This is the address reachable from the UI container.
+Open `http://localhost:4275` and choose **Connect** under **Local Commander detected**.
+The form prefills `Local connection`, `http://localhost:4274` and username
+`commander`; enter your password to connect. All fields are editable.
 Local Compose credentials are `commander` / `commander-local-secret`; override
 them with `API_USERNAME` and `API_PASSWORD`. Use `-f compose.full.yaml` for
 MongoDB, RabbitMQ and MinIO. `COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change
-the published ports; the internal API address remains `http://api:4274`.
+the published ports. Discovery checks only `http://localhost:4274`; for another
+API port, use **Add connection** and enter its URL manually.
 
 For frontend development, with Node 24+, prepare the assets and start the Go
 backend from this directory:
@@ -93,16 +95,25 @@ The Vite development server forwards `/ui/` to the Go backend on port `4276`.
 
 ### Connections and sessions
 
-Add API URLs and credentials directly in the UI; no backend configuration or
-restart is needed. All browser API requests go through the UI backend on the
-same origin, so each address must be reachable from that backend:
+Add API URLs and credentials directly in the UI. All browser API requests go
+through the UI backend on the same origin. Both native and Compose setups show
+and save `http://localhost:4274`. Compose routes that address to `http://api:4274`
+inside the backend for discovery, sign-in and API requests.
 
-- Native local setup: `http://localhost:4274`.
-- Bundled Compose stack: `http://api:4274`.
-- Remote Commander: its HTTP(S) API URL.
+Optional `UI_API_UPSTREAMS` (`--api-upstreams`) maps public hosts and ports
+to internal ones:
 
-`localhost` refers to the UI server's host or container. Each API must allow its hostname in
-`API_ALLOWED_HOSTS`; browser CORS configuration is unnecessary for this proxy.
+```sh
+UI_API_UPSTREAMS=localhost:4274=api:4274,127.0.0.1:4274=api:4274
+```
+
+A matching host and port are replaced; the URL's scheme, path and query stay intact.
+Unmapped URLs connect directly. Compose sets the mappings automatically.
+Adding other APIs through the UI needs no routing configuration or restart.
+A remotely hosted UI cannot discover an API on the visitor's laptop through `localhost`.
+
+Each API must allow the upstream hostname in `API_ALLOWED_HOSTS`; browser CORS
+configuration is unnecessary for this proxy.
 
 Names and URLs are saved in the browser. API passwords stay in backend memory;
 the browser receives an HttpOnly, SameSite=Strict session cookie. Sign-in survives

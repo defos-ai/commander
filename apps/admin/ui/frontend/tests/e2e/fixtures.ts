@@ -4,6 +4,7 @@ import type { Operation } from '../../src/api/operation-types';
 import type { Agent, Action, Mission } from '../../src/api/types';
 
 export const apiURL = process.env.COMMANDER_TEST_API_URL ?? 'http://127.0.0.1:14274';
+export const publicAPIURL = 'http://localhost:14274';
 export const username = process.env.COMMANDER_TEST_API_USERNAME ?? 'api-fixture-user';
 export const password = process.env.COMMANDER_TEST_API_PASSWORD ?? 'api-fixture-password';
 const terminal = new Set(['completed', 'cancelled', 'failed']);
@@ -123,7 +124,7 @@ export const test = base.extend<{ api: CommanderAPI; website: string }>({
   },
 });
 
-export async function connect(page: Page, connection = { name: 'Compose test', url: 'http://api:4274' }) {
+export async function connect(page: Page, connection = { name: 'Compose test', url: publicAPIURL }) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Add connection', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true });

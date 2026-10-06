@@ -18,7 +18,7 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := target.String()
-	address, public, err := endpoint(target, r.URL.Query().Get("path"))
+	address, public, err := endpoint(h.resolveTarget(target), r.URL.Query().Get("path"))
 	if err != nil || (public && r.Method == http.MethodPost) {
 		fail(w, http.StatusBadRequest, "Invalid API endpoint.")
 		return

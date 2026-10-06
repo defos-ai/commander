@@ -3,13 +3,35 @@ import { readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
 import type { OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
-import { test, connect, startOperation, username, password } from './fixtures';
+import { test, connect, startOperation, publicAPIURL, username, password } from './fixtures';
 
-test('connection catalogs survive browser navigation and restore server sign-in across reload', async ({ page, api }) => {
+test('custom-port API catalogs survive navigation and restore server sign-in across reload', async ({ page, api }) => {
   await api.ready();
   const browserRequests: { url: string; authorization?: string }[] = [];
   page.on('request', request => browserRequests.push({ url: request.url(), authorization: request.headers().authorization }));
-  await connect(page);
+  const localAPIURL = 'http://localhost:4274';
+  const localHealthResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/ui/proxy' && url.searchParams.get('url') === localAPIURL
+      && url.searchParams.get('path') === '/healthz';
+  });
+  await page.goto('/');
+  expect((await localHealthResponse).status()).toBe(502);
+  await expect(page.getByText('Looking for a local API…', { exact: true })).not.toBeVisible();
+  await expect(page.getByText('Local Commander detected')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Add connection', exact: true }).click();
+  const connection = page.getByRole('dialog', { name: 'Add connection', exact: true });
+  await expect(connection.getByLabel('Connection name')).toHaveValue('Local connection');
+  await expect(connection.getByLabel('API URL')).toHaveValue(localAPIURL);
+  await expect(connection.getByLabel('Username', { exact: true })).toHaveValue('commander');
+  await expect(connection.getByLabel('Password', { exact: true })).toHaveValue('');
+  await expect(connection.getByLabel('Password', { exact: true })).toBeFocused();
+  await connection.getByLabel('Connection name').fill('Compose test');
+  await connection.getByLabel('API URL').fill(publicAPIURL);
+  await connection.getByLabel('Username', { exact: true }).fill(username);
+  await connection.getByLabel('Password', { exact: true }).fill(password);
+  await connection.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
   await page.getByRole('button', { name: 'View mission review-website' }).click();
@@ -32,8 +54,16 @@ test('connection catalogs survive browser navigation and restore server sign-in 
   const browserStorage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(JSON.stringify(browserStorage)).not.toContain(password);
   expect(JSON.stringify(browserStorage)).not.toContain(username);
+  expect(JSON.stringify(browserStorage)).toContain(publicAPIURL);
+  expect(JSON.stringify(browserStorage)).not.toContain('api:4274');
   expect(browserRequests.every(request => !request.authorization)).toBe(true);
+  expect(new Set(browserRequests.map(request => new URL(request.url).origin))).toEqual(new Set([new URL(page.url()).origin]));
   expect(browserRequests.filter(request => new URL(request.url).pathname.startsWith('/api/'))).toEqual([]);
+  const proxyTargets = browserRequests.map(request => new URL(request.url))
+    .filter(url => url.pathname === '/ui/proxy').map(url => url.searchParams.get('url'));
+  expect(proxyTargets.length).toBeGreaterThan(0);
+  expect(new Set(proxyTargets)).toEqual(new Set([localAPIURL, publicAPIURL]));
+  expect(browserRequests.some(request => decodeURIComponent(request.url).includes('api:4274'))).toBe(false);
 
   const secondURL = 'http://api-secondary:4274';
   await connect(page, { name: 'Second API', url: secondURL });

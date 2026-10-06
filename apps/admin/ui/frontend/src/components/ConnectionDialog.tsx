@@ -22,9 +22,9 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
   const hintID = `${identity}-credentials-hint`;
   const urlHintID = `${identity}-url-hint`;
   const [values, setValues] = useState<ConnectionValues>(() => ({
-    name: connection?.name ?? '',
+    name: connection?.name ?? t($ => $.connectionForm.defaultName),
     url: connection?.url ?? defaultURL,
-    username: credentials?.username ?? '',
+    username: credentials?.username ?? (connection ? '' : 'commander'),
     password: '',
   }));
   const [error, setError] = useState('');
@@ -33,6 +33,9 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
   const pending = useRef<AbortController | null>(null);
 
   useEffect(() => () => pending.current?.abort(), []);
+  useEffect(() => {
+    document.getElementById(`${identity}-${connection ? 'name' : 'password'}`)?.focus();
+  }, [identity, connection]);
 
   function close() {
     pending.current?.abort();
@@ -104,7 +107,7 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
     <form className="connection-form" noValidate autoComplete="off" onSubmit={submit}>
       <div className="form-field">
         <label htmlFor={`${identity}-name`}>{t($ => $.connectionForm.name)}</label>
-        <input id={`${identity}-name`} name="name" type="text" required maxLength={120} value={values.name} autoFocus
+        <input id={`${identity}-name`} name="name" type="text" required maxLength={120} value={values.name}
           disabled={submitting} aria-invalid={invalidField === 'name' || undefined} aria-describedby={description('name')}
           onChange={event => update('name', event.target.value)} />
       </div>

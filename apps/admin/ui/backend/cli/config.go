@@ -26,6 +26,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (UI_LISTEN_ADDRESS, then :$PORT, then :4275)")
 	flags.StringVar(&result.staticDir, "static-dir", "", "Built frontend directory (UI_STATIC_DIR; default ./frontend/dist)")
 	flags.StringVar(&result.connections.PublicOrigin, "public-origin", "", "Public UI origin behind an HTTPS reverse proxy (UI_PUBLIC_ORIGIN; otherwise use request origin)")
+	flags.StringVar(&result.connections.APIUpstreams, "api-upstreams", "", "Backend API routing as host:port=host:port pairs separated by commas (UI_API_UPSTREAMS; default direct)")
 	flags.Usage = func() {
 		fmt.Fprintln(output, "Usage: commander-ui [flags]")
 		fmt.Fprintln(output, "Serve the Commander admin frontend.")
@@ -67,6 +68,9 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	}
 	if !provided["public-origin"] {
 		result.connections.PublicOrigin = os.Getenv("UI_PUBLIC_ORIGIN")
+	}
+	if !provided["api-upstreams"] {
+		result.connections.APIUpstreams = os.Getenv("UI_API_UPSTREAMS")
 	}
 	return result, nil
 }

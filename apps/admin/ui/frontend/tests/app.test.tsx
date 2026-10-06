@@ -8,6 +8,7 @@ import type { Connection } from '../src/connections/types';
 import { HEALTH_INTERVAL_MS } from '../src/hooks/useConnections';
 
 const localURL = 'http://localhost:4274';
+const customLocalURL = 'http://localhost:14274';
 const remoteURL = 'https://api.example.test/commander';
 const username = ' operator ';
 const password = ' exact secret ';
@@ -95,14 +96,69 @@ describe('connection setup and saved metadata', () => {
     expect(api.fetch.mock.calls.map(([url]) => upstreamURL(url))).toEqual(expect.arrayContaining(['/ui/connections', `${localURL}/healthz`, `${localURL}/readyz`]));
     for (const [, options] of api.fetch.mock.calls) {
       expect(new Headers(options?.headers).has('Authorization')).toBe(false);
+      expect(new Headers(options?.headers).get('X-Commander-UI')).toBe('1');
       expect(options?.credentials).toBe('same-origin');
     }
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
     expect(screen.getByRole('dialog', { name: 'Add connection' })).toBeVisible();
     expect(screen.getByLabelText('API URL')).toHaveValue(localURL);
-    expect(screen.getByLabelText('API URL')).toHaveAccessibleDescription('Use an address reachable from the UI server.');
+    expect(screen.getByLabelText('API URL')).toHaveAccessibleDescription("Enter the API's public URL.");
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
+  });
+
+  it.each(['Connect', 'Add connection'])('connects after entering only a password through %s and suppresses saved local discovery', async trigger => {
+    const api = mockAPI();
+    const first = render(<App />);
+
+    await screen.findByText('Local Commander detected');
+    fireEvent.click(screen.getByRole('button', { name: trigger }));
+    expect(screen.getByLabelText('Connection name')).toHaveValue('Local connection');
+    expect(screen.getByLabelText('API URL')).toHaveValue(localURL);
+    expect(screen.getByLabelText('Username')).toHaveValue('commander');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+    expect(screen.getByLabelText('Password')).toHaveFocus();
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Connect' }));
+    await screen.findByRole('heading', { name: 'Overview', level: 1 });
+
+    expect(stored()).toEqual([{ id: expect.any(String), name: 'Local connection', url: localURL }]);
+    const create = api.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
+    expect(JSON.parse(create?.[1]?.body as string)).toEqual({ url: localURL, username: 'commander', password });
+    expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).not.toContain(password);
+    fireEvent.click(screen.getByRole('button', { name: 'All connections' }));
+    expect(screen.queryByText('Local Commander detected')).not.toBeInTheDocument();
+
+    first.unmount();
+    api.fetch.mockClear();
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Local connection' }))
+      .toHaveAccessibleDescription(`${localURL} Connected`));
+    expect(screen.queryByText('Local Commander detected')).not.toBeInTheDocument();
+    expect(api.fetch.mock.calls.filter(([input]) => upstreamURL(input) === `${localURL}/healthz`)).toHaveLength(1);
+  });
+
+  it('hides discovery when the default API is unavailable and allows a custom port to be entered manually', async () => {
+    const api = mockAPI();
+    api.state.intercept = url => url.startsWith(localURL)
+      ? Promise.resolve(Response.json({ status: 'unavailable' }, { status: 503 })) : undefined;
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByText('Looking for a local API…')).not.toBeInTheDocument());
+    expect(screen.queryByText('Local Commander detected')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+    expect(screen.getByLabelText('Connection name')).toHaveValue('Local connection');
+    expect(screen.getByLabelText('API URL')).toHaveValue(localURL);
+    expect(screen.getByLabelText('Username')).toHaveValue('commander');
+    fireEvent.change(screen.getByLabelText('API URL'), { target: { value: customLocalURL } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Connect' }));
+
+    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    expect(stored()).toEqual([{ id: expect.any(String), name: 'Local connection', url: customLocalURL }]);
+    const create = api.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
+    expect(JSON.parse(create?.[1]?.body as string)).toEqual({ url: customLocalURL, username: 'commander', password });
   });
 
   it('opens a checked connection, saves only metadata, and restores its server session after reload', async () => {
@@ -143,8 +199,11 @@ describe('connection setup and saved metadata', () => {
       .toHaveAccessibleDescription(`${remoteURL} Connected`));
     expect(api.fetch.mock.calls.every(([, options]) => !new Headers(options?.headers).has('Authorization'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Remote Commander' }));
+    expect(screen.getByLabelText('Connection name')).toHaveValue('Remote Commander');
+    expect(screen.getByLabelText('API URL')).toHaveValue(remoteURL);
     expect(screen.getByLabelText('Username')).toHaveValue(username);
     expect(screen.getByLabelText('Password')).toHaveValue('');
+    expect(screen.getByLabelText('Connection name')).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(stored()).toEqual([saved]);
   });
@@ -213,6 +272,10 @@ describe('connection setup and saved metadata', () => {
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Edit Remote Commander' }));
+    expect(screen.getByLabelText('Connection name')).toHaveValue(savedConnection.name);
+    expect(screen.getByLabelText('API URL')).toHaveValue(savedConnection.url);
+    expect(screen.getByLabelText('Username')).toHaveValue('');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
     const dialog = fillConnection({ name: 'Renamed Commander', url: 'https://new.example.test/api-root/' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));
 
