@@ -98,6 +98,60 @@ services:
       retries: 12
       start_period: 5s
 
+  api:
+    <<: *runtime
+    profiles: [admin]
+    image: commander-api:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/adapters/api/docker/Dockerfile
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+      - database:/state/database
+    environment:
+      <<: *environment
+      DATABASE_URL: ${DATABASE_URL:-file:///state/database}
+      API_USERNAME: ${API_USERNAME:-commander}
+      API_PASSWORD: ${API_PASSWORD:-commander-local-secret}
+      API_LISTEN_ADDRESS: 0.0.0.0:4274
+      API_ALLOWED_HOSTS: ${API_ALLOWED_HOSTS:-localhost,127.0.0.1,::1,api}
+      API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:${COMMANDER_UI_PORT:-4275},http://127.0.0.1:${COMMANDER_UI_PORT:-4275}}
+      API_SWAGGER_ENABLED: ${API_SWAGGER_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${COMMANDER_API_PORT:-4274}:4274"
+    depends_on:
+      controller:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4274/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  ui:
+    <<: *runtime
+    read_only: true
+    profiles: [admin]
+    image: commander-admin-ui:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/admin/ui/docker/Dockerfile
+    ports:
+      - "127.0.0.1:${COMMANDER_UI_PORT:-4275}:4275"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "--timeout=2", "http://127.0.0.1:4275/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
   web-1:
     <<: *agent
     # Build the shared image once; web-2 uses the same image.

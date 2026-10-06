@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+FROM node:24-alpine AS frontend
+WORKDIR /src
+COPY apps/admin/ui/frontend/package.json apps/admin/ui/frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY apps/admin/ui/frontend/ ./
+RUN npm run build
+
+FROM golang:1.26.7-bookworm AS backend
+WORKDIR /src
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOWORK=off
+COPY apps/admin/ui/backend/ ./
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -buildvcs=false -o /out/commander-ui ./cmd/commander-ui
+
+FROM alpine:3
+WORKDIR /app
+COPY --from=backend /out/commander-ui /usr/local/bin/commander-ui
+COPY --from=frontend /src/dist ./frontend/dist
+USER 1000:1000
+EXPOSE 4275
+ENTRYPOINT ["/usr/local/bin/commander-ui"]

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 import { initializeLocalization } from '../src/i18n';
 
 await initializeLocalization();
@@ -10,6 +10,8 @@ Object.defineProperties(HTMLDialogElement.prototype, {
   showModal: { configurable: true, value(this: HTMLDialogElement) { this.open = true; } },
   close: { configurable: true, value(this: HTMLDialogElement) { this.open = false; } },
 });
+
+beforeEach(() => { window.history.replaceState(null, '', '/'); });
 
 afterEach(() => {
   cleanup();

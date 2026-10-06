@@ -13,5 +13,7 @@ state
 **/coverage.html
 **/.DS_Store
 **/node_modules
-apps/admin/ui/dist
-apps/admin/ui/coverage
+apps/admin/ui/frontend/dist
+apps/admin/ui/frontend/coverage
+apps/admin/ui/frontend/playwright-report
+apps/admin/ui/frontend/test-results

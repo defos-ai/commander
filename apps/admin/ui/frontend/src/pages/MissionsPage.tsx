@@ -7,13 +7,16 @@ import { useMissionQuery } from '../hooks/useMissionQuery';
 import { useTranslation } from '../i18n';
 import '../styles/missions.css';
 
-export function MissionsPage({ connection, credentials, onSignIn }: {
+export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
   connection: Connection;
   credentials?: Credentials;
   onSignIn: () => void;
+  selectedID?: string;
+  onSelect?: (id?: string) => void;
 }) {
   const { t } = useTranslation();
-  const [name, setName] = useState<string>();
+  const [localID, setLocalID] = useState<string>();
+  const name = onSelect ? routeID : localID;
   const [search, setSearch] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
@@ -28,7 +31,7 @@ export function MissionsPage({ connection, credentials, onSignIn }: {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [name]);
 
-  function select(value?: string) { focusHeading.current = true; setName(value); }
+  function select(value?: string) { focusHeading.current = true; if (onSelect) onSelect(value); else setLocalID(value); }
 
   return <section className="missions-page">
     {name !== undefined && <button className="missions-back" type="button" onClick={() => select()}>

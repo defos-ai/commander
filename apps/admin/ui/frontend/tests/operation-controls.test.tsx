@@ -113,6 +113,22 @@ describe('operation controls', () => {
     expect(screen.queryByRole('button', { name: 'Answer question' })).not.toBeInTheDocument();
   });
 
+  it('keeps command notices on their operation when browser navigation changes the selection', async () => {
+    const api = fixture(() => { api.state.current = { ...operation, status: 'cancelled' }; return Response.json(api.state.current); });
+    const props = { connection, credentials, onSignIn: vi.fn(), onSelect: vi.fn() };
+    const rendered = render(<OperationsPage {...props} selectedID={operation.id} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel operation' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel operation' }));
+    expect(await screen.findByText('Operation cancelled. Already-dispatched work may still finish.')).toBeVisible();
+
+    rendered.rerender(<OperationsPage {...props} />);
+    expect(screen.queryByText('Operation cancelled. Already-dispatched work may still finish.')).not.toBeInTheDocument();
+    api.state.current = { ...operation, id: 'other-operation' };
+    rendered.rerender(<OperationsPage {...props} selectedID="other-operation" />);
+    await screen.findByRole('button', { name: 'Cancel operation' });
+    expect(screen.queryByText('Operation cancelled. Already-dispatched work may still finish.')).not.toBeInTheDocument();
+  });
+
   it.each(['option', 'custom'])('submits a question %s answer and refreshes the saved answer', async mode => {
     const api = fixture((_url, body) => {
       api.state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: body.answer as string, answered_at: now };

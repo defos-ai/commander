@@ -10,5 +10,6 @@ use (
 	./apps/controllers/default
 	./apps/adapters/mcp
 	./apps/adapters/api
+	./apps/admin/ui/backend
 	./apps/playground
 )

@@ -2,8 +2,12 @@
 
 ## Overview
 
-React, TypeScript and Vite frontend for Commander. It follows the platform's CSS
-theme, Grunt typography, Lucide icons and typed i18next translations.
+React, TypeScript and Vite frontend with a small Go HTTP server. It follows the
+platform's CSS theme, Grunt typography, Lucide icons and typed i18next translations.
+
+- `frontend/`: React application, browser tests and Vite build.
+- `backend/`: Go static server and health check; standard library only.
+- `docker/`: builds both into one reusable image.
 
 Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
 page keeps a grid of saved connections. Inside a connection, the sidebar provides
@@ -41,15 +45,36 @@ read-only; work is assigned through operations.
 
 ## Quick start
 
-With Node 24+, run from this directory:
+From the repository root:
 
 ```sh
+docker compose --profile admin up --build -d
+```
+
+Open `http://localhost:4275` and connect to `http://localhost:4274`.
+Local Compose credentials are `commander` / `commander-local-secret`; override
+them with `API_USERNAME` and `API_PASSWORD`. Use `-f compose.full.yaml` for
+MongoDB, RabbitMQ and MinIO. `COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change
+the published ports; enter the corresponding API URL when connecting.
+
+For frontend development, with Node 24+, run from this directory:
+
+```sh
+cd frontend
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:4275`. `npm run build` writes a standalone build to `dist/`;
-`npm run preview` serves that build locally on the same port.
+Open `http://localhost:4275`. To build and serve with Go, run from `apps/admin/ui`:
+
+```sh
+npm --prefix frontend run build
+go run ./backend/cmd/commander-ui
+```
+
+The server reads `frontend/dist/` and listens on `:4275`. Override with
+`--static-dir` (`UI_STATIC_DIR`) or `--listen-address` (`UI_LISTEN_ADDRESS`).
+Hosting platforms can set `PORT`; explicit flags take precedence.
 
 Start the [API adapter](../../adapters/api/README.md) with `API_USERNAME` and
 `API_PASSWORD`. The UI looks for `http://localhost:4274` automatically. Choose
@@ -59,7 +84,11 @@ For a UI hosted elsewhere, set the API's `API_ALLOWED_ORIGINS` to its origin.
 
 Names and URLs are saved in this browser. Credentials stay in memory for the
 current tab; reload requires signing in again. Connection settings let you edit
-the address, forget credentials or remove the saved connection.
+the address, forget credentials or remove the saved connection. URLs preserve
+the connection, selected page and record, including an operation's graph view.
+Back/forward and reload return to that location; a reloaded tab asks you to sign
+in before loading protected data. Links work in browsers with that connection
+saved and contain no API credentials.
 
 Saved connections refresh every 30 seconds. API liveness (`/healthz`), database
 readiness (`/readyz`) and authenticated catalog access are checked separately,
@@ -68,16 +97,48 @@ or file-storage health. Base-path URLs are supported; redirects are rejected.
 
 ## Development and testing
 
+From `apps/admin/ui/frontend`:
+
 ```sh
 npm run typecheck
 npm test
 npm run build
 ```
 
-Keep pages in `src/pages`, API reads and response types in `src/api`, shared
-controls in `src/components`, state hooks in `src/hooks`, and CSS in `src/styles`.
-English strings live in `src/i18n`; use typed translation selectors. Behavior tests
-live in `tests/`. No runtime imports from sibling repositories are needed.
+Test the Go server from the repository root:
+
+```sh
+go test -race ./apps/admin/ui/backend/...
+```
+
+Browser tests use the real API, controller and agents in the isolated test stack.
+From the repository root:
+
+```sh
+docker compose -f compose.test.yaml --profile ui up --build --wait
+cd apps/admin/ui/frontend
+npm ci
+npx playwright install chromium
+npm run test:e2e
+cd ../../../..
+docker compose -f compose.test.yaml --profile ui down --volumes
+```
+
+The two scenarios cover navigation/sign-in and operation questions, automation,
+graphs and evidence downloads. They clean test data through the test-only API;
+run them separately from API/MCP tests using the same stack. CI also installs
+browser system dependencies and retains traces/screenshots when tests fail.
+
+The [Dockerfile](docker/Dockerfile) builds the frontend and Go server, then runs
+as a non-root user on port `4275` (override with `PORT`). `/healthz` checks the
+server. API addresses and credentials are supplied through the UI, so the same
+image works with different Commander deployments.
+
+Within `frontend/`, keep pages in `src/pages`, API reads and response types in
+`src/api`, shared controls in `src/components`, state hooks in `src/hooks`, and CSS
+in `src/styles`. English strings live in `src/i18n`; use typed translation
+selectors. Tests live in `frontend/tests/` and `backend/tests/`. No runtime imports
+from sibling repositories are needed.
 
 The COMMANDER wordmark uses the supplied Grunt Grotesk SemiBold, without a star.
 Grunt Light and Geist Mono assets and theme colors match the platform frontend.

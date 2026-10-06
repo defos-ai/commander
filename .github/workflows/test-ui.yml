@@ -4,11 +4,33 @@ on:
   push:
     paths:
       - 'apps/admin/ui/**'
+      - 'apps/adapters/api/**'
+      - 'apps/controllers/default/**'
+      - 'apps/agents/web-quality/**'
+      - 'framework/**'
+      - 'providers/fs/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'compose*.yaml'
+      - '.dockerignore'
       - '.github/workflows/test-ui.yml'
       - '!**/*.md'
   pull_request:
     paths:
       - 'apps/admin/ui/**'
+      - 'apps/adapters/api/**'
+      - 'apps/controllers/default/**'
+      - 'apps/agents/web-quality/**'
+      - 'framework/**'
+      - 'providers/fs/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - '**/go.mod'
+      - '**/go.sum'
+      - 'compose*.yaml'
+      - '.dockerignore'
       - '.github/workflows/test-ui.yml'
       - '!**/*.md'
   workflow_dispatch:
@@ -26,14 +48,14 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: apps/admin/ui
+        working-directory: apps/admin/ui/frontend
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: apps/admin/ui/package-lock.json
+          cache-dependency-path: apps/admin/ui/frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
@@ -42,3 +64,65 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  backend:
+    name: UI Go server
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GOWORK: off
+    defaults:
+      run:
+        working-directory: apps/admin/ui/backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/admin/ui/backend/go.mod
+          cache: false
+      - name: Test server
+        run: go test -race -count=1 -timeout=1m ./...
+      - name: Vet server
+        run: go vet ./...
+
+  browser:
+    name: UI against Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_FILE: compose.test.yaml
+      COMPOSE_PROFILES: ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/admin/ui/frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: apps/admin/ui/frontend
+        run: npm ci
+      - name: Install Chromium
+        working-directory: apps/admin/ui/frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start test stack
+        run: docker compose up --build --wait --wait-timeout 180
+      - name: Run browser tests
+        working-directory: apps/admin/ui/frontend
+        run: npm run test:e2e
+      - name: Collect service logs
+        if: failure() || cancelled()
+        run: docker compose logs --no-color > "$RUNNER_TEMP/commander-ui-compose.log"
+      - name: Stop test stack
+        if: always()
+        run: docker compose down --volumes
+      - name: Upload browser results and service logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-browser-results
+          path: |
+            apps/admin/ui/frontend/test-results/
+            apps/admin/ui/frontend/playwright-report/
+            ${{ runner.temp }}/commander-ui-compose.log
+          if-no-files-found: ignore

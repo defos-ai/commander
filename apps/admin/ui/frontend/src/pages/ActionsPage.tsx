@@ -9,13 +9,16 @@ import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
 import '../styles/catalog.css';
 
-export function ActionsPage({ connection, credentials, onSignIn }: {
+export function ActionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
   connection: Connection;
   credentials?: Credentials;
   onSignIn: () => void;
+  selectedID?: string;
+  onSelect?: (id?: string) => void;
 }) {
   const { t } = useTranslation();
-  const [name, setName] = useState<string>();
+  const [localID, setLocalID] = useState<string>();
+  const name = onSelect ? routeID : localID;
   const [search, setSearch] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
@@ -29,7 +32,7 @@ export function ActionsPage({ connection, credentials, onSignIn }: {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [name]);
 
-  function select(value?: string) { focusHeading.current = true; setName(value); }
+  function select(value?: string) { focusHeading.current = true; if (onSelect) onSelect(value); else setLocalID(value); }
 
   return <section className="catalog-page">
     {name !== undefined && <button className="catalog-back" type="button" onClick={() => select()}>

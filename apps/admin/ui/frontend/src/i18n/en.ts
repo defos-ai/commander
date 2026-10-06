@@ -32,6 +32,7 @@ export default {
     localFound: 'Local Commander detected',
     localConnect: 'Connect',
     storageError: 'This browser could not save your connections. Changes will last only for this tab.',
+    missing: 'This connection is not saved in this browser. Choose or add a connection.',
     duplicate: 'A connection with this API URL already exists.',
     authenticationError: 'The API did not accept these credentials. Check the username and password.',
     degradedError: 'The API responded, but its database or catalog is unavailable. Check the service and API access settings.',

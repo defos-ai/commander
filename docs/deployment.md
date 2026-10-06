@@ -32,6 +32,10 @@ Connect another AI client to `http://localhost:4273/mcp` using the
 [adapter guide](../apps/adapters/README.md#quick-start). For a temporary session
 without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#go-one-executable).
 
+Add `--profile admin` to either stack's `up` command for the API (`4274`) and
+admin UI (`4275`). See the [UI quick start](../apps/admin/ui/README.md#quick-start)
+for local credentials and port overrides.
+
 ## Configuration
 
 | Environment variable | CLI flag | Purpose |
@@ -54,7 +58,7 @@ Run a host with `--help` for its flags. Action-specific dependencies belong in t
 
 Compose creates named Docker volumes; no host `state/` directory is needed.
 The FS stack shares `bus` and `storage` across hosts, and `database` between the
-controller and MCP. A startup helper sets volume ownership for non-root hosts.
+controller, MCP and optional API. A startup helper sets volume ownership for non-root hosts.
 Full Compose persists RabbitMQ, MongoDB, and MinIO data in their own volumes;
 application hosts need no shared filesystem volumes. Host inboxes remain
 transient: broker persistence does not preserve a replaced host's inbox.

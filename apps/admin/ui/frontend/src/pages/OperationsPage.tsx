@@ -12,6 +12,7 @@ import { Button } from '../components/Button';
 import type { Connection, Credentials } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
+import type { OperationView } from '../navigation/routes';
 import '../styles/catalog.css';
 import '../styles/operations.css';
 
@@ -23,19 +24,25 @@ type ResourceModal = { url: string; credentials: Credentials; operationID: strin
   { kind: 'artifact'; artifactID: string; fileID?: string } | { kind: 'report' }
 );
 
-export function OperationsPage({ connection, credentials, onSignIn }: {
+export function OperationsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, view: routeView, onViewChange }: {
   connection: Connection;
   credentials?: Credentials;
   onSignIn: () => void;
+  selectedID?: string;
+  onSelect?: (id?: string) => void;
+  view?: OperationView;
+  onViewChange?: (view: OperationView) => void;
 }) {
   const { t } = useTranslation();
-  const [selectedID, setSelectedID] = useState<string>();
+  const [localID, setLocalID] = useState<string>();
+  const selectedID = onSelect ? routeID : localID;
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
-  const [view, setView] = useState<'details' | 'graph'>('details');
+  const [localView, setLocalView] = useState<OperationView>('details');
+  const view = onViewChange ? routeView ?? 'details' : localView;
   const [modal, setModal] = useState<CommandModal>();
   const [resource, setResource] = useState<ResourceModal>();
-  const [notice, setNotice] = useState<'created' | 'cancelled' | 'answered'>();
+  const [notice, setNotice] = useState<{ kind: 'created' | 'cancelled' | 'answered'; operationID: string }>();
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
   const query = useCatalogQuery<Operation>({ url: connection.url, credentials, id: selectedID, list: listOperations, get: getOperation, pollInterval: 10_000 });
@@ -45,7 +52,8 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
   const visible = items.filter(item => (!status || item.status === status) &&
     `${item.id} ${item.mission.name}`.toLocaleLowerCase().includes(filter));
   const error = !credentials ? 'authentication' : query.error?.kind;
-  const currentModal = credentials && modal?.url === connection.url && modal.credentials === credentials ? modal : undefined;
+  const currentModal = credentials && modal?.url === connection.url && modal.credentials === credentials &&
+    (modal.kind === 'start' ? selectedID === undefined : modal.operation.id === selectedID) ? modal : undefined;
   const currentResource = credentials && resource?.url === connection.url && resource.credentials === credentials && resource.operationID === selectedID ? resource : undefined;
   const commandOperation = currentModal && currentModal.kind !== 'start' ? query.item ?? currentModal.operation : undefined;
   const commandQuestion = currentModal?.kind === 'answer' ? commandOperation?.questions?.find(question => question.id === currentModal.question.id) : undefined;
@@ -54,7 +62,14 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [selectedID]);
 
-  function select(id?: string) { focusHeading.current = true; setSelectedID(id); setNotice(undefined); setView('details'); setResource(undefined); }
+  useEffect(() => { setModal(undefined); setResource(undefined); }, [selectedID, view]);
+
+  function select(id?: string) {
+    focusHeading.current = true;
+    if (onSelect) onSelect(id); else setLocalID(id);
+    setNotice(undefined); setLocalView('details'); setResource(undefined);
+  }
+  function changeView(next: OperationView) { if (onViewChange) onViewChange(next); else setLocalView(next); }
   function clearFilters() { setSearch(''); setStatus(''); }
   function inspect(id: string) { setModal(undefined); select(id); query.refresh(); }
   function openArtifact(artifactID: string, fileID?: string) {
@@ -82,7 +97,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
           onClick={() => setModal({ kind: 'cancel', operation: query.item!, url: connection.url, credentials })}>{t($ => $.operationCommands.cancelTitle)}</Button>}
       </div>
     </div>
-    {notice && <p className="notice" role="status">{t($ => $.operationCommands.notices[notice])}</p>}
+    {notice && notice.operationID === selectedID && <p className="notice" role="status">{t($ => $.operationCommands.notices[notice.kind])}</p>}
     {error ? <div className="notice" role="alert">
       <p>{t($ => $.operations.errors[error])}</p>
       {error === 'authentication' ? <Button onClick={onSignIn}>{t($ => $.operations.signIn)}</Button>
@@ -92,8 +107,8 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
       {selectedID === undefined ? t($ => $.operations.loading) : t($ => $.operations.loadingDetail)}
     </p> : query.item ? <>
       <div className="operation-view-switch" role="group" aria-label={t($ => $.operationGraph.viewLabel)}>
-        <button type="button" aria-pressed={view === 'details'} onClick={() => setView('details')}>{t($ => $.operationGraph.details)}</button>
-        <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>{t($ => $.operationGraph.title)}</button>
+        <button type="button" aria-pressed={view === 'details'} onClick={() => changeView('details')}>{t($ => $.operationGraph.details)}</button>
+        <button type="button" aria-pressed={view === 'graph'} onClick={() => changeView('graph')}>{t($ => $.operationGraph.title)}</button>
       </div>
       {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} onSignIn={onSignIn} onOpenArtifact={openArtifact} />
         : <OperationDetails operation={query.item} onOpenArtifact={openArtifact} onOpenReport={openReport}
@@ -134,13 +149,16 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     {currentResource?.kind === 'report' && <ReportDialog key={`${currentResource.url}:${currentResource.operationID}`}
       url={currentResource.url} credentials={currentResource.credentials} operationID={currentResource.operationID} onClose={() => setResource(undefined)} />}
     {currentModal?.kind === 'start' && <StartOperationDialog connection={connection} credentials={currentModal.credentials}
-      onClose={() => setModal(undefined)} onInspect={inspect} onStarted={operation => { setModal(undefined); select(operation.id); setNotice('created'); }} />}
+      onClose={() => setModal(undefined)} onInspect={inspect} onStarted={operation => {
+        setModal(undefined); select(operation.id); setNotice({ kind: 'created', operationID: operation.id });
+      }} />}
     {currentModal && currentModal.kind !== 'start' && commandOperation && <OperationCommandDialog
       {...(currentModal.kind === 'answer' ? { command: 'answer' as const, question: commandQuestion ?? currentModal.question } : { command: 'cancel' as const })}
       operation={commandOperation} connection={connection} credentials={currentModal.credentials}
       available={!error && (currentModal.kind !== 'answer' || Boolean(commandQuestion))}
       onClose={() => setModal(undefined)} onInspect={inspect} onCompleted={() => {
-        setNotice(currentModal.kind === 'cancel' ? 'cancelled' : 'answered'); setModal(undefined); query.refresh();
+        setNotice({ kind: currentModal.kind === 'cancel' ? 'cancelled' : 'answered', operationID: currentModal.operation.id });
+        setModal(undefined); query.refresh();
       }} />}
   </section>;
 }

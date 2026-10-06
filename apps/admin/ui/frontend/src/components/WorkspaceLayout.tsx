@@ -4,8 +4,7 @@ import { ArrowLeft, Bot, ClipboardList, Compass, LayoutDashboard, Menu, Settings
 import { useTranslation } from '../i18n';
 import { useSidebar } from '../hooks/useSidebar';
 import { Brand } from './Brand';
-
-export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'agents' | 'actions' | 'settings';
+import type { WorkspaceSection } from '../navigation/routes';
 
 type WorkspaceLayoutProps = {
   connection: { id: string; name: string; url: string };
@@ -31,7 +30,10 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
   ];
 
   return <div className="platform-layout">
-    <a href={`#${contentId}`} className="skip-link" inert={sidebar.modal}>{t($ => $.shell.skipToContent)}</a>
+    <a href={`#${contentId}`} className="skip-link" inert={sidebar.modal} onClick={event => {
+      event.preventDefault();
+      document.getElementById(contentId)?.focus();
+    }}>{t($ => $.shell.skipToContent)}</a>
     {sidebar.mobile && <button type="button" ref={sidebar.triggerRef} className="mobile-sidebar-toggle"
       aria-controls={sidebarId} aria-expanded={sidebar.modal} aria-label={t($ => $.shell.openMenu)}
       hidden={sidebar.modal} onClick={() => sidebar.setOpen(true)}>
