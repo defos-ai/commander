@@ -123,12 +123,12 @@ export const test = base.extend<{ api: CommanderAPI; website: string }>({
   },
 });
 
-export async function connect(page: Page) {
+export async function connect(page: Page, connection = { name: 'Compose test', url: 'http://api:4274' }) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Add connection', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true });
-  await dialog.getByLabel('Connection name').fill('Compose test');
-  await dialog.getByLabel('API URL').fill(apiURL);
+  await dialog.getByLabel('Connection name').fill(connection.name);
+  await dialog.getByLabel('API URL').fill(connection.url);
   await dialog.getByLabel('Username', { exact: true }).fill(username);
   await dialog.getByLabel('Password', { exact: true }).fill(password);
   await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -140,7 +140,7 @@ export async function startOperation(page: Page, website: string): Promise<Opera
   const dialog = page.getByRole('dialog', { name: 'Start operation', exact: true });
   await dialog.getByLabel('Mission', { exact: true }).selectOption('review-website');
   await dialog.getByLabel('Mission input (JSON)').fill(JSON.stringify({ url: website, max_pages: 1 }));
-  const response = page.waitForResponse(reply => new URL(reply.url()).pathname === '/api/v1/operations' && reply.request().method() === 'POST');
+  const response = page.waitForResponse(reply => new URL(reply.url()).searchParams.get('path') === '/api/v1/operations' && reply.request().method() === 'POST');
   await dialog.getByRole('button', { name: 'Start operation', exact: true }).click();
   const result = await response;
   expect(result.status()).toBe(201);

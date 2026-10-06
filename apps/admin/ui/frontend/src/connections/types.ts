@@ -9,6 +9,11 @@ export interface Credentials {
   password: string;
 }
 
+export interface Session {
+  url: string;
+  username: string;
+}
+
 export type ConnectionStatus = 'unchecked' | 'checking' | 'ready' | 'authentication' | 'degraded' | 'unreachable';
 
 export type HealthState = 'unknown' | 'ok' | 'unavailable';

@@ -1,5 +1,5 @@
-import { basicAuthorization, normalizeURL } from '../connections/client';
-import type { Credentials } from '../connections/types';
+import { expireSession, proxyURL } from '../connections/client';
+import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
 import type { OperationArtifact } from './operation-types';
 import { isArtifact } from './operations';
@@ -14,7 +14,7 @@ export class FileTooLargeError extends Error {
   }
 }
 
-export async function getArtifact(url: string, credentials: Credentials, artifactID: string, signal?: AbortSignal): Promise<OperationArtifact> {
+export async function getArtifact(url: string, credentials: Session, artifactID: string, signal?: AbortSignal): Promise<OperationArtifact> {
   const body = await getJSON(url, `/api/v1/artifacts/${encodeIdentifier(artifactID)}`, credentials, signal);
   if (!isArtifact(body) || body.id !== artifactID || body.files && new Set(body.files.map(file => file.id)).size !== body.files.length) {
     throw new ApiError('invalid_response');
@@ -22,12 +22,12 @@ export async function getArtifact(url: string, credentials: Credentials, artifac
   return body;
 }
 
-export async function getArtifactFile(url: string, credentials: Credentials, artifactID: string, fileID: string, signal?: AbortSignal, maxBytes = MAX_FILE_BYTES): Promise<Blob> {
+export async function getArtifactFile(url: string, credentials: Session, artifactID: string, fileID: string, signal?: AbortSignal, maxBytes = MAX_FILE_BYTES): Promise<Blob> {
   if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new ApiError('invalid_response');
   const limit = Math.min(maxBytes, MAX_FILE_BYTES);
-  const endpoint = `${normalizeURL(url)}/api/v1/artifacts/${encodeIdentifier(artifactID)}/files/${encodeIdentifier(fileID)}`;
-  const authorization = basicAuthorization(credentials);
+  const endpoint = proxyURL(url, `/api/v1/artifacts/${encodeIdentifier(artifactID)}/files/${encodeIdentifier(fileID)}`, credentials);
+
   const controller = new AbortController();
   const abort = () => controller.abort();
   let timedOut = false;
@@ -40,10 +40,11 @@ export async function getArtifactFile(url: string, credentials: Credentials, art
 
   async function download() {
     const response = await fetch(endpoint, {
-      method: 'GET', headers: { Accept: '*/*', Authorization: authorization },
-      credentials: 'omit', redirect: 'error', cache: 'no-store', signal: controller.signal,
+      method: 'GET', headers: { Accept: '*/*', 'X-Commander-UI': '1' },
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: controller.signal,
     });
     controller.signal.throwIfAborted();
+    if (response.status === 401 && !controller.signal.aborted) expireSession(url);
     if (!response.ok) {
       const kind = response.status === 401 ? 'authentication'
         : response.status === 403 ? 'forbidden'

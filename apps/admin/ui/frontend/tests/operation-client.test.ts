@@ -3,7 +3,7 @@ import { getOperation, listOperations } from '../src/api/operations';
 import type { Operation } from '../src/api/operation-types';
 
 const url = 'https://commander.example/team';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { url, username: 'operator' };
 const timestamp = '2026-10-05T12:00:00.123456789Z';
 const operation: Operation = {
   id: 'operation-1',
@@ -44,6 +44,13 @@ const operation: Operation = {
   created_at: timestamp, updated_at: timestamp,
 };
 
+function proxyTarget(input: RequestInfo | URL) {
+  const endpoint = new URL(String(input), window.location.origin);
+  expect(endpoint.origin).toBe(window.location.origin);
+  expect(endpoint.pathname).toBe('/ui/proxy');
+  return Object.fromEntries(endpoint.searchParams);
+}
+
 function respond(...bodies: unknown[]) {
   const fetch = vi.fn<typeof globalThis.fetch>();
   for (const body of bodies) fetch.mockResolvedValueOnce(Response.json(body));
@@ -60,14 +67,15 @@ describe('operations client', () => {
 
     expect(items).toEqual([operation]);
     expect(detail).toEqual(operation);
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/operations`, `${url}/api/v1/operations/${operation.id}`,
+    expect(fetch.mock.calls.map(([path]) => proxyTarget(path))).toEqual([
+      { url, path: '/api/v1/operations' }, { url, path: `/api/v1/operations/${operation.id}` },
     ]);
     for (const [, options] of fetch.mock.calls) {
       expect(options).toMatchObject({
-        method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store',
-        headers: { Accept: 'application/json', Authorization: `Basic ${btoa('operator:secret')}` },
+        method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
+        headers: { Accept: 'application/json', 'X-Commander-UI': '1' },
       });
+      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     }
   });
 
@@ -106,7 +114,7 @@ describe('operations client', () => {
 
     await getOperation(`${url}/`, credentials, id);
 
-    expect(fetch.mock.calls[0][0]).toBe(`${url}/api/v1/operations/team%2Foperation%20%3F%23%C3%A9`);
+    expect(proxyTarget(fetch.mock.calls[0][0])).toEqual({ url, path: '/api/v1/operations/team%2Foperation%20%3F%23%C3%A9' });
   });
 
   it('rejects invalid IDs before contacting the server and rejects mismatched details', async () => {

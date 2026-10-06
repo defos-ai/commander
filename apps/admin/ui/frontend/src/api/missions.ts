@@ -1,4 +1,4 @@
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
 import type { Mission, MissionAutomation, MissionStep } from './types';
 
@@ -38,7 +38,7 @@ export function isMission(value: unknown): value is Mission {
     (value.automations === undefined || (isObject(value.automations) && Object.values(value.automations).every(isAutomation)));
 }
 
-export async function listMissions(url: string, credentials: Credentials, signal?: AbortSignal): Promise<Mission[]> {
+export async function listMissions(url: string, credentials: Session, signal?: AbortSignal): Promise<Mission[]> {
   const body = await getJSON(url, '/api/v1/missions', credentials, signal);
   if (!isObject(body) || !Array.isArray(body.items) || !body.items.every(isMission)) {
     throw new ApiError('invalid_response');
@@ -46,7 +46,7 @@ export async function listMissions(url: string, credentials: Credentials, signal
   return body.items;
 }
 
-export async function getMission(url: string, credentials: Credentials, name: string, signal?: AbortSignal): Promise<Mission> {
+export async function getMission(url: string, credentials: Session, name: string, signal?: AbortSignal): Promise<Mission> {
   if (!isMissionName(name)) throw new ApiError('invalid_response');
   const body = await getJSON(url, `/api/v1/missions/${encodeURIComponent(name)}`, credentials, signal);
   if (!isMission(body) || body.name !== name) throw new ApiError('invalid_response');

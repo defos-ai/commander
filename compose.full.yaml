@@ -216,6 +216,8 @@ services:
     build:
       context: .
       dockerfile: apps/admin/ui/docker/Dockerfile
+    environment:
+      UI_PUBLIC_ORIGIN: ${UI_PUBLIC_ORIGIN:-}
     ports:
       - "127.0.0.1:${COMMANDER_UI_PORT:-4275}:4275"
     depends_on:

@@ -217,7 +217,11 @@ Origins include the scheme and port, without a path or trailing slash. Wildcards
 overrides the environment and restores same-origin-only access. Allowed origins
 do not bypass allowed-host or trusted-proxy checks.
 
-Browser clients send an explicit Basic `Authorization` header with
+The admin UI keeps API credentials in its Go backend and proxies requests on the
+UI's origin; that backend sends Basic authentication to the API. It does not need
+API CORS permissions. The API's allowed-host rules still apply to its upstream URL.
+
+Other browser clients can send an explicit Basic `Authorization` header with
 `credentials: 'omit'`; cross-origin cookies and browser-managed credentials are
 not enabled. CORS allows `GET`, `HEAD`, `POST` and the `Authorization`,
 `Content-Type`, `Accept` headers. Preflights return `204`; real requests still

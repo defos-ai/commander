@@ -3,7 +3,7 @@ import { getOperationGraph } from '../src/api/operation-graph';
 import type { OperationGraph } from '../src/api/graph-types';
 
 const url = 'https://commander.example/team';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { url, username: 'operator' };
 const timestamp = '2026-10-05T12:00:00.123456789Z';
 const graph: OperationGraph = {
   operation_id: 'operation-1', status: 'running', updated_at: timestamp,
@@ -20,6 +20,13 @@ const graph: OperationGraph = {
   ],
 };
 
+function proxyTarget(input: RequestInfo | URL) {
+  const endpoint = new URL(String(input), window.location.origin);
+  expect(endpoint.origin).toBe(window.location.origin);
+  expect(endpoint.pathname).toBe('/ui/proxy');
+  return Object.fromEntries(endpoint.searchParams);
+}
+
 function respond(body: unknown, status = 200) {
   const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(body, { status }));
   vi.stubGlobal('fetch', fetch);
@@ -33,10 +40,13 @@ describe('operation graph client', () => {
     const result = await getOperationGraph(`${url}/`, credentials, graph.operation_id);
 
     expect(result).toEqual(graph);
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(`${url}/api/v1/operations/operation-1/graph`, expect.objectContaining({
-      method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store',
-      headers: { Accept: 'application/json', Authorization: `Basic ${btoa('operator:secret')}` },
-    }));
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(proxyTarget(fetch.mock.calls[0][0])).toEqual({ url, path: '/api/v1/operations/operation-1/graph' });
+    expect(fetch.mock.calls[0][1]).toMatchObject({
+      method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
+      headers: { Accept: 'application/json', 'X-Commander-UI': '1' },
+    });
+    expect(new Headers(fetch.mock.calls[0][1]?.headers).has('Authorization')).toBe(false);
   });
 
   it('accepts empty graphs and future operation status values', async () => {
@@ -62,7 +72,7 @@ describe('operation graph client', () => {
 
     await getOperationGraph(url, credentials, operationID);
 
-    expect(fetch.mock.calls[0][0]).toBe(`${url}/api/v1/operations/team%2Foperation%20%3F%23%C3%A9/graph`);
+    expect(proxyTarget(fetch.mock.calls[0][0])).toEqual({ url, path: '/api/v1/operations/team%2Foperation%20%3F%23%C3%A9/graph' });
   });
 
   it('rejects invalid IDs before sending and mismatched operation identity afterward', async () => {

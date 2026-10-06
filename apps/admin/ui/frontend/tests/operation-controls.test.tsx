@@ -1,10 +1,11 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Operation } from '../src/api/operation-types';
 import { OperationsPage } from '../src/pages/OperationsPage';
 
 const connection = { id: 'test', name: 'Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-05T10:00:00Z';
 const mission = { name: 'review-website', objective: 'Review website quality.', required_actions: [], starting_actions: [],
   input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } }, output_schema: {} };
@@ -15,7 +16,7 @@ const operation: Operation = { id: 'operation-review', mission, input: { url: 'h
 function fixture(post?: (url: string, body: Record<string, unknown>, signal?: AbortSignal | null) => Response | Promise<Response>) {
   const state = { items: [operation], current: structuredClone(operation) };
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const url = String(input);
+    const url = upstreamURL(input);
     if (init.method === 'POST') return post!(url, JSON.parse(init.body as string) as Record<string, unknown>, init.signal);
     if (url.endsWith('/missions')) return Response.json({ items: [mission] });
     if (url.endsWith('/operations')) return Response.json({ items: state.items });
@@ -69,7 +70,7 @@ describe('operation controls', () => {
     expect(await screen.findByRole('heading', { level: 1, name: first.operation_id })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Operation created. Commander can now plan its first task.')).toBeVisible();
-    expect(api.posts().every(([url]) => String(url).endsWith('/operations'))).toBe(true);
+    expect(api.posts().every(([url]) => upstreamURL(url).endsWith('/operations'))).toBe(true);
   });
 
   it('keeps an uncertain start from being resubmitted and offers to inspect its stable operation ID', async () => {
@@ -108,7 +109,7 @@ describe('operation controls', () => {
 
     expect(await screen.findByText('Cancelled', { selector: '.catalog-status' })).toBeVisible();
     expect(api.posts()).toHaveLength(1);
-    expect(api.posts()[0][0]).toBe(`${connection.url}/api/v1/operations/${operation.id}/cancel`);
+    expect(upstreamURL(api.posts()[0][0])).toBe(`${connection.url}/api/v1/operations/${operation.id}/cancel`);
     expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Answer question' })).not.toBeInTheDocument();
   });

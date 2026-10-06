@@ -1,10 +1,11 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Action, Agent } from '../src/api/types';
 import { AgentsPage } from '../src/pages/AgentsPage';
 
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', password: 'test-password' };
+const credentials = { username: 'operator', url: connection.url };
 const action: Action = {
   name: 'check-links', description: 'Check website links.', status: 'ready', required_permissions: ['network'],
   input_schema: {}, output_schema: {},
@@ -31,8 +32,8 @@ const staleAgent: Agent = { ...agent, id: 'web-quality-agent-b1234567', status: 
 
 function mockAPI(respond?: (url: string) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL) => {
-    if (respond) return respond(String(input));
-    return String(input).endsWith('/api/v1/agents') ? Response.json({ items: [agent, staleAgent] }) : Response.json(agent);
+    if (respond) return respond(upstreamURL(input));
+    return upstreamURL(input).endsWith('/api/v1/agents') ? Response.json({ items: [agent, staleAgent] }) : Response.json(agent);
   });
   vi.stubGlobal('fetch', fetch);
   return fetch;
@@ -151,7 +152,7 @@ describe('agents browser', () => {
       expect(fetch).toHaveBeenCalledOnce();
 
       fetch.mockResolvedValue(Response.json({ items: [agent] }));
-      await act(async () => { view.rerender(<AgentsPage connection={connection} credentials={{ ...credentials, password: 'new-password' }} onSignIn={onSignIn} />); });
+      await act(async () => { view.rerender(<AgentsPage connection={connection} credentials={{ ...credentials, username: 'second-operator' }} onSignIn={onSignIn} />); });
 
       expect(screen.getByRole('button', { name: `View agent ${agent.id}` })).toBeVisible();
       expect(fetch).toHaveBeenCalledTimes(2);

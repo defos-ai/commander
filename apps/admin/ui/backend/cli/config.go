@@ -9,11 +9,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"commander/admin/ui/connections"
 )
 
 type config struct {
 	listenAddress string
 	staticDir     string
+	connections   connections.Config
 }
 
 func parseConfig(args []string, output io.Writer) (config, error) {
@@ -22,6 +25,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags.SetOutput(output)
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (UI_LISTEN_ADDRESS, then :$PORT, then :4275)")
 	flags.StringVar(&result.staticDir, "static-dir", "", "Built frontend directory (UI_STATIC_DIR; default ./frontend/dist)")
+	flags.StringVar(&result.connections.PublicOrigin, "public-origin", "", "Public UI origin behind an HTTPS reverse proxy (UI_PUBLIC_ORIGIN; otherwise use request origin)")
 	flags.Usage = func() {
 		fmt.Fprintln(output, "Usage: commander-ui [flags]")
 		fmt.Fprintln(output, "Serve the Commander admin frontend.")
@@ -60,6 +64,9 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	}
 	if strings.TrimSpace(result.staticDir) == "" {
 		return config{}, errors.New("static-dir must not be blank")
+	}
+	if !provided["public-origin"] {
+		result.connections.PublicOrigin = os.Getenv("UI_PUBLIC_ORIGIN")
 	}
 	return result, nil
 }

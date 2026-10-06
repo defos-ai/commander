@@ -1,4 +1,4 @@
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
 import { isMission } from './missions';
 import type {
@@ -108,7 +108,7 @@ export function isOperation(value: unknown): value is Operation {
     isNullableArray(value.events, isEvent);
 }
 
-export async function listOperations(url: string, credentials: Credentials, signal?: AbortSignal): Promise<Operation[]> {
+export async function listOperations(url: string, credentials: Session, signal?: AbortSignal): Promise<Operation[]> {
   const body = await getJSON(url, '/api/v1/operations', credentials, signal);
   if (!isObject(body) || !Array.isArray(body.items) || !body.items.every(isOperation)) {
     throw new ApiError('invalid_response');
@@ -116,7 +116,7 @@ export async function listOperations(url: string, credentials: Credentials, sign
   return body.items;
 }
 
-export async function getOperation(url: string, credentials: Credentials, id: string, signal?: AbortSignal): Promise<Operation> {
+export async function getOperation(url: string, credentials: Session, id: string, signal?: AbortSignal): Promise<Operation> {
   const body = await getJSON(url, `/api/v1/operations/${encodeIdentifier(id)}`, credentials, signal);
   if (!isOperation(body) || body.id !== id) throw new ApiError('invalid_response');
   return body;

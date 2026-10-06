@@ -9,7 +9,7 @@ import { OperationGraphPanel } from '../components/OperationGraphPanel';
 import { ArtifactDialog } from '../components/ArtifactDialog';
 import { ReportDialog } from '../components/ReportDialog';
 import { Button } from '../components/Button';
-import type { Connection, Credentials } from '../connections/types';
+import type { Connection, Session } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
 import type { OperationView } from '../navigation/routes';
@@ -17,16 +17,16 @@ import '../styles/catalog.css';
 import '../styles/operations.css';
 
 const knownStatuses = ['planning', 'running', 'waiting', 'completed', 'failed', 'cancelled'] as const;
-type CommandModal = { url: string; credentials: Credentials } & (
+type CommandModal = { url: string; credentials: Session } & (
   { kind: 'start' } | { kind: 'cancel'; operation: Operation } | { kind: 'answer'; operation: Operation; question: OperationQuestion }
 );
-type ResourceModal = { url: string; credentials: Credentials; operationID: string } & (
+type ResourceModal = { url: string; credentials: Session; operationID: string } & (
   { kind: 'artifact'; artifactID: string; fileID?: string } | { kind: 'report' }
 );
 
 export function OperationsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, view: routeView, onViewChange }: {
   connection: Connection;
-  credentials?: Credentials;
+  credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;
@@ -79,7 +79,7 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
     if (credentials && selectedID) setResource({ kind: 'report', operationID: selectedID, url: connection.url, credentials });
   }
 
-  return <section className="catalog-page operations-page">
+  return <section className={`catalog-page operations-page${view === 'graph' ? ' graph-view' : ''}`}>
     {selectedID !== undefined && <button className="catalog-back" type="button" onClick={() => select()}>
       <ArrowLeft size={16} aria-hidden="true" />{t($ => $.operations.back)}
     </button>}

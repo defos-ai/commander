@@ -4,7 +4,7 @@ import { getAgent, listAgents } from '../src/api/agents';
 import type { Action, Agent } from '../src/api/types';
 
 const url = 'https://commander.example/team';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { url, username: 'operator' };
 const action: Action = {
   name: 'capture-page', description: 'Capture a page in the browser', status: 'unavailable',
   status_reason: 'Browser and API key are missing', required_permissions: ['network'],
@@ -24,6 +24,13 @@ const agent: Agent = {
   last_heartbeat: '2026-10-05T09:00:00Z', lease_expires_at: '2026-10-05T09:00:45Z',
 };
 
+function proxyTarget(input: RequestInfo | URL) {
+  const endpoint = new URL(String(input), window.location.origin);
+  expect(endpoint.origin).toBe(window.location.origin);
+  expect(endpoint.pathname).toBe('/ui/proxy');
+  return Object.fromEntries(endpoint.searchParams);
+}
+
 function respond(...bodies: unknown[]) {
   const fetch = vi.fn<typeof globalThis.fetch>();
   for (const body of bodies) fetch.mockResolvedValueOnce(Response.json(body));
@@ -39,10 +46,14 @@ describe('agent and action catalogs', () => {
     expect(await getAgent(url, credentials, agent.id)).toEqual(agent);
     expect(await listActions(url, credentials)).toEqual([action]);
     expect(await getAction(url, credentials, action.name)).toEqual(action);
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/agents`, `${url}/api/v1/agents/${agent.id}`,
-      `${url}/api/v1/actions`, `${url}/api/v1/actions/${action.name}`,
+    expect(fetch.mock.calls.map(([path]) => proxyTarget(path))).toEqual([
+      { url, path: '/api/v1/agents' }, { url, path: `/api/v1/agents/${agent.id}` },
+      { url, path: '/api/v1/actions' }, { url, path: `/api/v1/actions/${action.name}` },
     ]);
+    for (const [, options] of fetch.mock.calls) {
+      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', headers: { 'X-Commander-UI': '1' } });
+      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
+    }
   });
 
   it('accepts empty catalogs, nullable Go fields and unknown future status values', async () => {
@@ -81,9 +92,9 @@ describe('agent and action catalogs', () => {
     await getAgent(`${url}/`, credentials, id);
     await getAction(`${url}/`, credentials, name);
 
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/agents/team%2Fagent%20%3F%23%C3%A9`,
-      `${url}/api/v1/actions/review%2Flinks%20%3F%23%C3%A9`,
+    expect(fetch.mock.calls.map(([path]) => proxyTarget(path))).toEqual([
+      { url, path: '/api/v1/agents/team%2Fagent%20%3F%23%C3%A9' },
+      { url, path: '/api/v1/actions/review%2Flinks%20%3F%23%C3%A9' },
     ]);
   });
 

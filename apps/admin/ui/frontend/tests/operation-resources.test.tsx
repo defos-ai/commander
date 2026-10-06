@@ -1,10 +1,11 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Operation, OperationArtifact } from '../src/api/operation-types';
 import { OperationsPage } from '../src/pages/OperationsPage';
 
 const connection = { id: 'local', name: 'Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-06T10:00:00Z';
 const artifact: OperationArtifact = { id: 'artifact-page', name: 'Homepage evidence', agent_id: 'agent-one', action_name: 'capture-page', created_at: now,
   files: [{ id: 'file-page', name: 'desktop.png', media_type: 'image/png', size: 1024, sha256: 'a'.repeat(64) }] };
@@ -16,7 +17,7 @@ const report = { id: 'report-review', operation_id: operation.id, mission: opera
 
 function fixture(respond?: (url: string, options: RequestInit) => Response | Promise<Response> | undefined) {
   const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => {
-    const url = String(input);
+    const url = upstreamURL(input);
     const override = respond?.(url, options);
     if (override) return override;
     if (url.endsWith('/operations')) return Response.json({ items: [operation] });
@@ -40,7 +41,7 @@ describe('operation evidence', () => {
     const fetch = fixture();
     render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
     await openOperation();
-    expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/report') || String(url).includes('/artifacts/'))).toBe(false);
+    expect(fetch.mock.calls.some(([url]) => upstreamURL(url).endsWith('/report') || upstreamURL(url).includes('/artifacts/'))).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'View report' }));
     const reportDialog = screen.getByRole('dialog');
@@ -56,7 +57,7 @@ describe('operation evidence', () => {
     fireEvent.click(within(screen.getByRole('region', { name: 'Node details' })).getByRole('button', { name: 'View artifact' }));
     expect(await within(screen.getByRole('dialog')).findByText('desktop.png')).toBeVisible();
     expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
-    expect(fetch.mock.calls.some(([url]) => String(url).includes('/files/'))).toBe(false);
+    expect(fetch.mock.calls.some(([url]) => upstreamURL(url).includes('/files/'))).toBe(false);
   });
 
   it('closes evidence and aborts its pending request when credentials are forgotten', async () => {

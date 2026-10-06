@@ -4,7 +4,15 @@ import { getMission, listMissions } from '../src/api/missions';
 import type { Mission } from '../src/api/types';
 
 const url = 'https://commander.example/proxy';
-const credentials = { username: ' opérateur ', password: 'пароль:secret' };
+const credentials = { url: url, username: ' opérateur ' };
+
+function requestedPath(input: RequestInfo | URL): string {
+  const request = new URL(String(input), 'http://localhost');
+  expect(request.origin).toBe('http://localhost');
+  expect(request.pathname).toBe('/ui/proxy');
+  expect(request.searchParams.get('url')).toBe(url);
+  return request.searchParams.get('path')!;
+}
 const mission: Mission = {
   name: 'review-website',
   objective: 'Review a website',
@@ -19,7 +27,7 @@ const mission: Mission = {
 afterEach(() => vi.useRealTimers());
 
 describe('mission API', () => {
-  it('reads the catalog and a safely encoded detail URL with explicit UTF-8 Basic Auth', async () => {
+  it('reads the catalog and a safely encoded detail URL through the session proxy', async () => {
     const namedMission = { ...mission, name: 'review/website ?#é' };
     const fetch = vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(Response.json({ items: [mission] }))
@@ -29,14 +37,13 @@ describe('mission API', () => {
     expect(await listMissions(`${url}/`, credentials)).toEqual([mission]);
     expect(await getMission(url, credentials, namedMission.name)).toEqual(namedMission);
 
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/missions`, `${url}/api/v1/missions/review%2Fwebsite%20%3F%23%C3%A9`,
+    expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
+      `/api/v1/missions`, `/api/v1/missions/review%2Fwebsite%20%3F%23%C3%A9`,
     ]);
     for (const [, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({ method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store' });
-      expect(new Headers(options?.headers).get('Authorization')).toBe(
-        `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`, 'utf8').toString('base64')}`,
-      );
+      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store' });
+      expect(new Headers(options?.headers).get('Authorization')).toBeNull();
+      expect(new Headers(options?.headers).get('X-Commander-UI')).toBe('1');
       expect(new Headers(options?.headers).get('Accept')).toBe('application/json');
     }
   });
@@ -59,14 +66,14 @@ describe('mission API', () => {
     [503, 'unavailable'], [504, 'timeout'],
   ])('classifies HTTP %i without exposing error response bodies', async (status, kind) => {
     vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>().mockResolvedValue(
-      Response.json({ error: `Do not display ${credentials.password}` }, { status: Number(status) }),
+      Response.json({ error: `Do not display private-upstream-details` }, { status: Number(status) }),
     ));
 
     const error = await getMission(url, credentials, mission.name).catch(value => value);
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ kind, message: kind });
-    expect(String(error)).not.toContain(credentials.password);
+    expect(String(error)).not.toContain('private-upstream-details');
   });
 
   it('converts network and redirect failures into an unavailable error', async () => {

@@ -4,14 +4,14 @@ import { getAgent, listAgents } from '../api/agents';
 import type { Agent } from '../api/types';
 import { AgentDetails, AgentStatus } from '../components/AgentDetails';
 import { Button } from '../components/Button';
-import type { Connection, Credentials } from '../connections/types';
+import type { Connection, Session } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
 import '../styles/catalog.css';
 
 export function AgentsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
   connection: Connection;
-  credentials?: Credentials;
+  credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;

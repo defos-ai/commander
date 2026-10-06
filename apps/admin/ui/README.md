@@ -6,7 +6,7 @@ React, TypeScript and Vite frontend with a small Go HTTP server. It follows the
 platform's CSS theme, Grunt typography, Lucide icons and typed i18next translations.
 
 - `frontend/`: React application, browser tests and Vite build.
-- `backend/`: Go static server and health check; standard library only.
+- `backend/`: Go server, API proxy and browser sessions; standard library only.
 - `docker/`: builds both into one reusable image.
 
 Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
@@ -25,13 +25,13 @@ already-dispatched work may finish. A timeout leaves the outcome uncertain, so
 the UI offers to inspect the operation and never retries a command automatically.
 
 Switch operation details to **Execution graph** to follow recorded tasks and their
-artifacts and files. Select a node to inspect its status and related work; zoom
+artifacts and files. Select a node to inspect its status and related work in a popup; zoom
 and scroll to explore larger graphs. It refreshes every 10 seconds and shows
 recorded work, including queued tasks, rather than a plan of future work.
 Open artifacts from details or graph nodes to inspect metadata, preview images
 and text, or download files. Previews are limited to 2 MiB and downloads to
 100 MiB. Reports open from operation details and can be downloaded as JSON.
-File content is fetched on demand using the connection's credentials.
+File content is fetched on demand through the UI backend.
 
 Missions supports search and read-only details: objectives, starting and required
 actions, automations, planning steps, and input/output schemas. Refresh loads the
@@ -51,17 +51,26 @@ From the repository root:
 docker compose --profile admin up --build -d
 ```
 
-Open `http://localhost:4275` and connect to `http://localhost:4274`.
+Open `http://localhost:4275`, choose **Add connection**, and enter
+`http://api:4274` as the API URL. This is the address reachable from the UI container.
 Local Compose credentials are `commander` / `commander-local-secret`; override
 them with `API_USERNAME` and `API_PASSWORD`. Use `-f compose.full.yaml` for
 MongoDB, RabbitMQ and MinIO. `COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change
-the published ports; enter the corresponding API URL when connecting.
+the published ports; the internal API address remains `http://api:4274`.
 
-For frontend development, with Node 24+, run from this directory:
+For frontend development, with Node 24+, prepare the assets and start the Go
+backend from this directory:
+
+```sh
+npm --prefix frontend ci
+npm --prefix frontend run build
+go run ./backend/cmd/commander-ui --listen-address 127.0.0.1:4276
+```
+
+In another terminal, run from this directory:
 
 ```sh
 cd frontend
-npm ci
 npm run dev
 ```
 
@@ -80,15 +89,36 @@ Start the [API adapter](../../adapters/api/README.md) with `API_USERNAME` and
 `API_PASSWORD`. The UI looks for `http://localhost:4274` automatically. Choose
 **Connect** when detected, or **Add connection** for another address. Enter a
 name, API URL and credentials; the UI checks the connection before saving it.
-For a UI hosted elsewhere, set the API's `API_ALLOWED_ORIGINS` to its origin.
+The Vite development server forwards `/ui/` to the Go backend on port `4276`.
 
-Names and URLs are saved in this browser. Credentials stay in memory for the
-current tab; reload requires signing in again. Connection settings let you edit
-the address, forget credentials or remove the saved connection. URLs preserve
-the connection, selected page and record, including an operation's graph view.
-Back/forward and reload return to that location; a reloaded tab asks you to sign
-in before loading protected data. Links work in browsers with that connection
-saved and contain no API credentials.
+### Connections and sessions
+
+Add API URLs and credentials directly in the UI; no backend configuration or
+restart is needed. All browser API requests go through the UI backend on the
+same origin, so each address must be reachable from that backend:
+
+- Native local setup: `http://localhost:4274`.
+- Bundled Compose stack: `http://api:4274`.
+- Remote Commander: its HTTP(S) API URL.
+
+`localhost` refers to the UI server's host or container. Each API must allow its hostname in
+`API_ALLOWED_HOSTS`; browser CORS configuration is unnecessary for this proxy.
+
+Names and URLs are saved in the browser. API passwords stay in backend memory;
+the browser receives an HttpOnly, SameSite=Strict session cookie. Sign-in survives
+page reloads for up to eight hours. Each connection has separate credentials;
+forgetting credentials or removing a connection signs out only that API.
+Restarting the UI backend signs out every session. This initial implementation
+uses one UI backend replica.
+
+For hosting, serve the UI over HTTPS and set `UI_PUBLIC_ORIGIN`
+(`--public-origin`), for example `https://admin.example.com`. HTTPS sessions use
+Secure cookies. Plain HTTP is supported only for localhost development. Set this
+origin when TLS terminates at a reverse proxy; forwarded headers are not trusted.
+
+URLs preserve the connection, page and selected record, including graph views.
+Back/forward and reload return to that location. Links require the connection to
+be saved in the browser and contain no API credentials.
 
 Saved connections refresh every 30 seconds. API liveness (`/healthz`), database
 readiness (`/readyz`) and authenticated catalog access are checked separately,
@@ -124,15 +154,15 @@ cd ../../../..
 docker compose -f compose.test.yaml --profile ui down --volumes
 ```
 
-The two scenarios cover navigation/sign-in and operation questions, automation,
+The browser scenarios cover navigation, session persistence and operation questions, automation,
 graphs and evidence downloads. They clean test data through the test-only API;
 run them separately from API/MCP tests using the same stack. CI also installs
 browser system dependencies and retains traces/screenshots when tests fail.
 
 The [Dockerfile](docker/Dockerfile) builds the frontend and Go server, then runs
 as a non-root user on port `4275` (override with `PORT`). `/healthz` checks the
-server. API addresses and credentials are supplied through the UI, so the same
-image works with different Commander deployments.
+server. Enter API addresses and credentials through the UI, so the same image
+works with different Commander deployments.
 
 Within `frontend/`, keep pages in `src/pages`, API reads and response types in
 `src/api`, shared controls in `src/components`, state hooks in `src/hooks`, and CSS

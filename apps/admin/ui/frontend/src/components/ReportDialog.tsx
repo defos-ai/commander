@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react';
 import { Download, LoaderCircle } from 'lucide-react';
 import { ApiError } from '../api/client';
 import { getOperationReport, type Report } from '../api/reports';
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
 import { useBlobDownload } from './artifact-download';
 import '../styles/artifacts.css';
 
-type Source = { url: string; credentials: Credentials; id: string; revision: number; report?: Report; error?: ApiError };
+type Source = { url: string; credentials: Session; id: string; revision: number; report?: Report; error?: ApiError };
 
 export function ReportDialog({ url, credentials, operationID, onClose }: {
-  url: string; credentials: Credentials; operationID: string; onClose: () => void;
+  url: string; credentials: Session; operationID: string; onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [source, setSource] = useState<Source>();

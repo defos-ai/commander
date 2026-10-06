@@ -3,7 +3,7 @@ import { Download, LoaderCircle } from 'lucide-react';
 import { FileTooLargeError, getArtifact, getArtifactFile, MAX_FILE_BYTES } from '../api/artifacts';
 import { ApiError } from '../api/client';
 import type { OperationArtifact, OperationArtifactFile } from '../api/operation-types';
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
@@ -31,10 +31,10 @@ function matchesRaster(bytes: Uint8Array, type: string) {
 
 type FileMode = 'preview' | 'download';
 type Preview = { file: OperationArtifactFile; kind: 'text'; text: string } | { file: OperationArtifactFile; kind: 'image'; url: string };
-type Source = { url: string; credentials: Credentials; id: string; revision: number; artifact?: OperationArtifact; error?: ApiError };
+type Source = { url: string; credentials: Session; id: string; revision: number; artifact?: OperationArtifact; error?: ApiError };
 
 export function ArtifactDialog({ url, credentials, artifactID, initialFileID, onClose }: {
-  url: string; credentials: Credentials; artifactID: string; initialFileID?: string; onClose: () => void;
+  url: string; credentials: Session; artifactID: string; initialFileID?: string; onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [source, setSource] = useState<Source>();

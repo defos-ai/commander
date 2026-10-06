@@ -14,6 +14,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -buildvcs=false -o /out/commander-ui ./cmd/commander-ui
 
 FROM alpine:3
+RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=backend /out/commander-ui /usr/local/bin/commander-ui
 COPY --from=frontend /src/dist ./frontend/dist

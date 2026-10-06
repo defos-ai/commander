@@ -1,4 +1,4 @@
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
 import type { Action, ActionRequirement } from './types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
@@ -18,7 +18,7 @@ export function isAction(value: unknown): value is Action {
     (value.output_schema === null || isObject(value.output_schema));
 }
 
-export async function listActions(url: string, credentials: Credentials, signal?: AbortSignal): Promise<Action[]> {
+export async function listActions(url: string, credentials: Session, signal?: AbortSignal): Promise<Action[]> {
   const body = await getJSON(url, '/api/v1/actions', credentials, signal);
   if (!isObject(body) || !Array.isArray(body.items) || !body.items.every(isAction)) {
     throw new ApiError('invalid_response');
@@ -26,7 +26,7 @@ export async function listActions(url: string, credentials: Credentials, signal?
   return body.items;
 }
 
-export async function getAction(url: string, credentials: Credentials, name: string, signal?: AbortSignal): Promise<Action> {
+export async function getAction(url: string, credentials: Session, name: string, signal?: AbortSignal): Promise<Action> {
   const body = await getJSON(url, `/api/v1/actions/${encodeIdentifier(name)}`, credentials, signal);
   if (!isAction(body) || body.name !== name) throw new ApiError('invalid_response');
   return body;

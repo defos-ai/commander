@@ -1,5 +1,5 @@
 import { LoaderCircle, RefreshCw } from 'lucide-react';
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { useOperationGraph } from '../hooks/useOperationGraph';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
@@ -8,7 +8,7 @@ import { OperationStatus } from './OperationDetails';
 
 export function OperationGraphPanel({ url, credentials, operationID, onSignIn, onOpenArtifact }: {
   url: string;
-  credentials?: Credentials;
+  credentials?: Session;
   operationID: string;
   onSignIn: () => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;

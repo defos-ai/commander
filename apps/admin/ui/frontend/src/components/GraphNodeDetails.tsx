@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import type { GraphNode, OperationGraph } from '../api/graph-types';
 import { useTranslation } from '../i18n';
 import { TaskStatus } from './OperationDetails';
@@ -16,27 +16,24 @@ function Timestamp({ value }: { value?: string | null }) {
     : <span className="catalog-muted">{t($ => $.operations.notReported)}</span>;
 }
 
-export function GraphNodeDetails({ graph, node, onSelect, onClear, onOpenArtifact }: {
+export function GraphNodeDetails({ graph, node, onSelect, onOpenArtifact }: {
   graph: OperationGraph;
-  node?: GraphNode;
+  node: GraphNode;
   onSelect: (id: string) => void;
-  onClear: () => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
 }) {
   const { t } = useTranslation();
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, [node.id]);
   const nodes = new Map(graph.nodes.map(item => [item.id, item]));
-  const related = node ? graph.edges.flatMap(edge => {
+  const related = graph.edges.flatMap(edge => {
     const direction = edge.target === node.id ? 'incoming' : edge.source === node.id ? 'outgoing' : undefined;
     if (!direction) return [];
     const other = nodes.get(direction === 'incoming' ? edge.source : edge.target);
     return other ? [{ edge, direction, node: other } as const] : [];
-  }) : [];
+  });
   return <section className="graph-node-details" aria-label={t($ => $.operationGraph.nodeDetails)}>
-    <div className="graph-inspector-heading"><h2>{t($ => $.operationGraph.nodeDetails)}</h2>
-      {node && <button type="button" className="icon-button" onClick={onClear} aria-label={t($ => $.operationGraph.clearSelection)}><X size={17} aria-hidden="true" /></button>}
-    </div>
-    {!node ? <p className="catalog-muted">{t($ => $.operationGraph.noSelection)}</p> : <>
-      <p className="eyebrow">{t($ => $.operationGraph.categories[node.kind])}</p><h3>{graphNodeName(node)}</h3>
+      <p className="eyebrow">{t($ => $.operationGraph.categories[node.kind])}</p><h3 ref={heading} tabIndex={-1}>{graphNodeName(node)}</h3>
       {node.kind === 'task' ? <>
         <dl className="detail-list">
           <div><dt>{t($ => $.operations.taskId)}</dt><dd><code>{node.task.id}</code></dd></div>
@@ -71,6 +68,5 @@ export function GraphNodeDetails({ graph, node, onSelect, onClear, onOpenArtifac
           <span>{t($ => $.operationGraph.relationships[edge.kind][direction])}</span>{' '}<strong>{graphNodeName(other)}</strong>
         </button>
       </li>)}</ul> : <p className="catalog-muted">{t($ => $.operationGraph.noConnections)}</p>}
-    </>}
   </section>;
 }

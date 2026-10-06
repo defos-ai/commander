@@ -3,6 +3,7 @@
 .operation-view-switch button[aria-pressed='true'] { background: var(--stealth); color: var(--smoke); }
 .operation-view-switch button:hover:not([aria-pressed='true']) { color: var(--ink); }
 .operation-graph-panel { min-width: 0; }
+.operations-page.graph-view { max-width: none; }
 .operation-graph-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 .operation-graph-heading h2 { font-size: 20px; margin-bottom: 12px; }
 .operation-graph-heading p { font-size: 15px; line-height: 1.7; }
@@ -16,7 +17,6 @@
 .graph-zoom-controls output { color: var(--muted); min-width: 42px; text-align: center; font: 400 12px/1.6 var(--font-mono); }
 .graph-zoom-controls .button { padding: 8px 12px; }
 .graph-navigation-hint { color: var(--muted); font-size: 13px; line-height: 1.6; }
-.graph-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
 .graph-viewport { min-width: 0; height: 540px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background-color: var(--panel); background-image: radial-gradient(var(--line) .7px, transparent .7px); background-size: 20px 20px; }
 .graph-scale-frame { position: relative; overflow: hidden; }
 .graph-canvas { position: relative; transform-origin: top left; }
@@ -34,9 +34,8 @@
 .graph-node-meta code { font: inherit; }
 .graph-node[data-kind='artifact'] { border-style: dashed; }
 .graph-node[data-kind='file'] { background: var(--panel); }
-.graph-node-details { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 4px; }
-.graph-inspector-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
-.graph-inspector-heading h2 { font-size: 18px; }
+.dialog.graph-node-dialog { width: min(620px, calc(100vw - 40px)); }
+.graph-node-details { min-width: 0; }
 .graph-node-details h3 { font-size: 20px; line-height: 1.4; margin: 8px 0 20px; overflow-wrap: anywhere; }
 .graph-node-details h4 { margin: 22px 0 12px; font-size: 14px; }
 .graph-node-details p { font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
@@ -49,12 +48,8 @@
 .graph-relations button:hover { border-color: var(--muted); }
 .graph-relations span { font: 400 10px/1.7 var(--font-mono); color: var(--muted); }
 .graph-relations strong { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
-@media (max-width: 1100px) {
-  .graph-workspace { grid-template-columns: 1fr; }
-}
 @media (max-width: 760px) {
   .operation-graph-heading { flex-direction: column; gap: 16px; }
   .graph-viewport { height: 420px; }
-  .graph-node-details { padding: 16px; }
   .graph-legend { gap: 14px; }
 }

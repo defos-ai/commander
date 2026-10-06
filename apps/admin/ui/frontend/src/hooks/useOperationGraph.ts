@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import type { OperationGraph } from '../api/graph-types';
 import { getOperationGraph } from '../api/operation-graph';
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 
 type Result = {
   url: string;
-  credentials: Credentials;
+  credentials: Session;
   operationID: string;
   graph?: OperationGraph;
   error?: ApiError;
   refreshing: boolean;
 };
 
-export function useOperationGraph(url: string, credentials: Credentials | undefined, operationID: string) {
+export function useOperationGraph(url: string, credentials: Session | undefined, operationID: string) {
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<Result>();
 

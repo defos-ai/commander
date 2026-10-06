@@ -5,7 +5,7 @@ import { listMissions } from '../api/missions';
 import { CommandError, startOperation } from '../api/operation-commands';
 import type { Operation } from '../api/operation-types';
 import type { Mission } from '../api/types';
-import type { Connection, Credentials } from '../connections/types';
+import type { Connection, Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
@@ -15,7 +15,7 @@ import '../styles/operation-commands.css';
 
 export function StartOperationDialog({ connection, credentials, onClose, onStarted, onInspect }: {
   connection: Connection;
-  credentials: Credentials;
+  credentials: Session;
   onClose: () => void;
   onStarted: (operation: Operation) => void;
   onInspect: (id: string) => void;

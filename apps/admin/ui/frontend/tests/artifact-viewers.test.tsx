@@ -1,3 +1,4 @@
+import { upstreamURL } from './proxy';
 import { Blob as NodeBlob } from 'node:buffer';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,7 @@ import { ArtifactDialog } from '../src/components/ArtifactDialog';
 import { ReportDialog } from '../src/components/ReportDialog';
 
 const url = 'https://commander.example.test';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { username: 'operator', url };
 const artifact: OperationArtifact = { id: 'artifact-1', name: 'Page evidence', agent_id: 'agent-one', action_name: 'capture-page', created_at: '2026-10-06T10:00:00Z', files: [
   { id: 'text', name: 'page.html', media_type: 'text/html', size: 100, sha256: 'a'.repeat(64) },
   { id: 'image', name: 'page.png', media_type: 'image/png', size: 50, sha256: 'b'.repeat(64) },
@@ -28,7 +29,7 @@ function browserFiles() {
 
 function artifactAPI(fileReply?: (fileID: string, options: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => {
-    const address = String(input);
+    const address = upstreamURL(input);
     if (address.includes('/files/')) return fileReply!(address.split('/').at(-1)!, options);
     return Response.json(artifact);
   });
@@ -51,7 +52,7 @@ describe('artifact and report viewers', () => {
 
     expect(files.downloads[0]).toEqual({ href: expect.stringMatching(/^blob:/), name: 'page.html' });
     expect(await files.blobs.at(-1)!.text()).toBe(html);
-    expect(fetch.mock.calls.every(([address, options]) => String(address).startsWith(url) && options?.method === 'GET')).toBe(true);
+    expect(fetch.mock.calls.every(([address, options]) => String(address).startsWith('/ui/proxy?') && options?.method === 'GET')).toBe(true);
     view.unmount();
     expect(files.revokeObjectURL).toHaveBeenCalled();
   });

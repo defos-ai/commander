@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { answerQuestion, cancelOperation, CommandError } from '../api/operation-commands';
 import type { Operation, OperationQuestion } from '../api/operation-types';
-import type { Connection, Credentials } from '../connections/types';
+import type { Connection, Session } from '../connections/types';
 import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
@@ -13,7 +13,7 @@ import '../styles/operation-commands.css';
 
 type Props = {
   connection: Connection;
-  credentials: Credentials;
+  credentials: Session;
   operation: Operation;
   available: boolean;
   onClose: () => void;

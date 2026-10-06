@@ -1,4 +1,4 @@
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { isAction } from './actions';
 import { ApiError, getJSON } from './client';
 import type { Agent, AgentWork } from './types';
@@ -28,7 +28,7 @@ function isAgent(value: unknown): value is Agent {
     (value.lease_expires_at === undefined || isTimestamp(value.lease_expires_at));
 }
 
-export async function listAgents(url: string, credentials: Credentials, signal?: AbortSignal): Promise<Agent[]> {
+export async function listAgents(url: string, credentials: Session, signal?: AbortSignal): Promise<Agent[]> {
   const body = await getJSON(url, '/api/v1/agents', credentials, signal);
   if (!isObject(body) || !Array.isArray(body.items) || !body.items.every(isAgent)) {
     throw new ApiError('invalid_response');
@@ -36,7 +36,7 @@ export async function listAgents(url: string, credentials: Credentials, signal?:
   return body.items;
 }
 
-export async function getAgent(url: string, credentials: Credentials, id: string, signal?: AbortSignal): Promise<Agent> {
+export async function getAgent(url: string, credentials: Session, id: string, signal?: AbortSignal): Promise<Agent> {
   const body = await getJSON(url, `/api/v1/agents/${encodeIdentifier(id)}`, credentials, signal);
   if (!isAgent(body) || body.id !== id) throw new ApiError('invalid_response');
   return body;

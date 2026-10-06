@@ -16,8 +16,6 @@ export default {
   selectNode: 'Inspect {{kind}} {{name}} · {{id}}',
   selected: 'Selected {{kind}}: {{name}}',
   nodeDetails: 'Node details',
-  noSelection: 'Select a task, artifact or file to inspect it.',
-  clearSelection: 'Clear selection',
   connections: 'Connections',
   noConnections: 'No connections recorded for this node.',
   relationships: {

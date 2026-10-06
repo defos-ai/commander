@@ -5,8 +5,10 @@ import type { OperationQuestion, OperationTask } from '../../src/api/operation-t
 import type { Report } from '../../src/api/reports';
 import { test, connect, startOperation, username, password } from './fixtures';
 
-test('connection catalogs survive browser navigation and require sign-in after reload', async ({ page, api }) => {
+test('connection catalogs survive browser navigation and restore server sign-in across reload', async ({ page, api }) => {
   await api.ready();
+  const browserRequests: { url: string; authorization?: string }[] = [];
+  page.on('request', request => browserRequests.push({ url: request.url(), authorization: request.headers().authorization }));
   await connect(page);
   const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
@@ -25,17 +27,38 @@ test('connection catalogs survive browser navigation and require sign-in after r
   await page.goBack();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  const signIn = page.getByRole('dialog', { name: 'Edit connection' });
-  await expect(signIn.getByLabel('Password', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
   const browserStorage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(JSON.stringify(browserStorage)).not.toContain(password);
   expect(JSON.stringify(browserStorage)).not.toContain(username);
+  expect(browserRequests.every(request => !request.authorization)).toBe(true);
+  expect(browserRequests.filter(request => new URL(request.url).pathname.startsWith('/api/'))).toEqual([]);
+
+  const secondURL = 'http://api-secondary:4274';
+  await connect(page, { name: 'Second API', url: secondURL });
+  await navigation.getByRole('button', { name: 'All connections', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Compose test', exact: true }).click();
+  await navigation.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByText('Not signed in', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Not signed in', { exact: true })).toBeVisible();
+  await navigation.getByRole('button', { name: 'All connections', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open Second API', exact: true })).toHaveAccessibleDescription(`${secondURL} Connected`);
+  await page.getByRole('button', { name: 'Open Second API', exact: true }).click();
+  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await navigation.getByRole('button', { name: 'All connections', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Compose test', exact: true }).click();
+  await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const signIn = page.getByRole('dialog', { name: 'Edit connection' });
+  await expect(signIn.getByLabel('Password', { exact: true })).toHaveValue('');
   await signIn.getByLabel('Username', { exact: true }).fill(username);
   await signIn.getByLabel('Password', { exact: true }).fill(password);
   await signIn.getByRole('button', { name: 'Save connection' }).click();
+  await page.getByRole('button', { name: 'View mission review-website' }).click();
   await expect(page).toHaveURL(missionURL);
-  await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -44,6 +67,8 @@ test('connection catalogs survive browser navigation and require sign-in after r
   await page.getByRole('button', { name: 'View action capture-page', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(browserRequests.every(request => !request.authorization)).toBe(true);
+  expect(browserRequests.filter(request => new URL(request.url).pathname.startsWith('/api/'))).toEqual([]);
 });
 
 test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api, website }) => {
@@ -81,6 +106,7 @@ test('operation questions, automatic work, graph and downloads use the real stac
   const node = page.getByRole('region', { name: 'Node details' });
   await expect(node.getByRole('button', { name: 'Parent task discover-pages', exact: true })).toBeVisible();
   await expect(node.getByRole('button', { name: 'Produced artifact Page screenshots', exact: true })).toBeVisible();
+  await page.getByRole('dialog', { name: 'Node details', exact: true }).getByRole('button', { name: 'Close dialog' }).click();
   await graph.getByRole('button', { name: new RegExp(`^Inspect File desktop\\.png · file:${artifact!.id}:${file.id}$`) }).click();
   await expect(node.getByText(file.sha256, { exact: true })).toBeVisible();
   await node.getByRole('button', { name: 'View file', exact: true }).click();

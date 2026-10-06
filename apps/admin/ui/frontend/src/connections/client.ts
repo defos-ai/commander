@@ -1,4 +1,4 @@
-import type { ConnectionCheck, Credentials } from './types';
+import type { ConnectionCheck, Session } from './types';
 
 const REQUEST_TIMEOUT_MS = 5_000;
 
@@ -26,12 +26,12 @@ interface CheckResponse {
   body: unknown;
 }
 
-async function request(url: string, signal: AbortSignal, authorization?: string): Promise<CheckResponse | null> {
+async function request(url: string, signal: AbortSignal): Promise<CheckResponse | null> {
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json', ...(authorization ? { Authorization: authorization } : {}) },
-      credentials: 'omit',
+      headers: { Accept: 'application/json', 'X-Commander-UI': '1' },
+      credentials: 'same-origin',
       redirect: 'error',
       cache: 'no-store',
       signal,
@@ -57,22 +57,23 @@ function isAuthenticated(response: CheckResponse | null): boolean {
     'items' in response.body && Array.isArray(response.body.items);
 }
 
-export function basicAuthorization(credentials: Credentials): string {
-  if (credentials.username.includes(':')) throw new Error('Invalid username');
-  const bytes = new TextEncoder().encode(`${credentials.username}:${credentials.password}`);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return `Basic ${btoa(binary)}`;
+export function proxyURL(url: string, path: string, session?: Session): string {
+  const target = normalizeURL(url);
+  if (session && normalizeURL(session.url) !== target) throw new Error('Session does not match connection');
+  return `/ui/proxy?${new URLSearchParams({ url: target, path })}`;
+}
+
+export function expireSession(url: string) {
+  window.dispatchEvent(new CustomEvent('commander:session-expired', { detail: normalizeURL(url) }));
 }
 
 export async function checkConnection(
   url: string,
-  credentials?: Credentials,
+  credentials?: Session,
   signal?: AbortSignal,
 ): Promise<ConnectionCheck> {
   if (signal?.aborted) throw new DOMException('Connection check aborted', 'AbortError');
   const baseURL = normalizeURL(url);
-  const authorization = credentials ? basicAuthorization(credentials) : undefined;
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
@@ -80,12 +81,13 @@ export async function checkConnection(
 
   try {
     const [health, readiness, authentication] = await Promise.all([
-      request(`${baseURL}/healthz`, controller.signal),
-      request(`${baseURL}/readyz`, controller.signal),
-      authorization ? request(`${baseURL}/api/v1/missions`, controller.signal, authorization) : null,
+      request(proxyURL(baseURL, '/healthz'), controller.signal),
+      request(proxyURL(baseURL, '/readyz'), controller.signal),
+      credentials ? request(proxyURL(baseURL, '/api/v1/missions', credentials), controller.signal) : null,
     ]);
     if (signal?.aborted) throw new DOMException('Connection check aborted', 'AbortError');
 
+    if (authentication?.status === 401) expireSession(baseURL);
     const api = isHealthy(health) ? 'ok' : 'unavailable';
     const database = isHealthy(readiness) ? 'ok' : 'unavailable';
     const status = api !== 'ok' ? 'unreachable'

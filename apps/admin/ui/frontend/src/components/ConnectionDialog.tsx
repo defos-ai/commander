@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { normalizeURL } from '../connections/client';
-import type { Connection, Credentials } from '../connections/types';
+import type { Connection, Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
@@ -11,7 +11,7 @@ type Field = keyof ConnectionValues;
 
 export function ConnectionDialog({ connection, credentials, defaultURL = 'http://localhost:4274', onClose, onConnect }: {
   connection?: Connection;
-  credentials?: Credentials;
+  credentials?: Session;
   defaultURL?: string;
   onClose: () => void;
   onConnect: (value: ConnectionValues, signal: AbortSignal) => Promise<string | void>;
@@ -20,11 +20,12 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
   const identity = useId();
   const errorID = `${identity}-error`;
   const hintID = `${identity}-credentials-hint`;
+  const urlHintID = `${identity}-url-hint`;
   const [values, setValues] = useState<ConnectionValues>(() => ({
     name: connection?.name ?? '',
     url: connection?.url ?? defaultURL,
     username: credentials?.username ?? '',
-    password: credentials?.password ?? '',
+    password: '',
   }));
   const [error, setError] = useState('');
   const [invalidField, setInvalidField] = useState<Field>();
@@ -96,7 +97,7 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
   }
 
   function description(field: Field) {
-    return [field === 'password' ? hintID : '', invalidField === field ? errorID : ''].filter(Boolean).join(' ') || undefined;
+    return [field === 'password' ? hintID : field === 'url' ? urlHintID : '', invalidField === field ? errorID : ''].filter(Boolean).join(' ') || undefined;
   }
 
   return <Dialog open title={connection ? t($ => $.connectionForm.editTitle) : t($ => $.connectionForm.addTitle)} onClose={close}>
@@ -112,6 +113,7 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
         <input id={`${identity}-url`} name="url" type="url" required maxLength={2048} value={values.url} spellCheck={false} autoCapitalize="none"
           disabled={submitting} aria-invalid={invalidField === 'url' || undefined} aria-describedby={description('url')}
           onChange={event => update('url', event.target.value)} />
+        <p className="form-hint" id={urlHintID}>{t($ => $.connectionForm.urlHint)}</p>
       </div>
       <div className="form-field">
         <label htmlFor={`${identity}-username`}>{t($ => $.connectionForm.username)}</label>

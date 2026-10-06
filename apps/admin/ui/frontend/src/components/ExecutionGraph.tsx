@@ -3,6 +3,7 @@ import { File, Package, RotateCcw, Workflow, ZoomIn, ZoomOut } from 'lucide-reac
 import type { GraphNode, OperationGraph } from '../api/graph-types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
+import { Dialog } from './Dialog';
 import { GraphNodeDetails, graphNodeName } from './GraphNodeDetails';
 import { GRAPH_NODE_HEIGHT, GRAPH_NODE_WIDTH, layoutGraph } from './graph-layout';
 import { TaskStatus } from './OperationDetails';
@@ -29,21 +30,32 @@ export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGrap
   const [zoom, setZoom] = useState(1);
   const viewport = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
+  const returnFocusID = useRef<string | undefined>(undefined);
+  const pendingArtifact = useRef<{ artifactID: string; fileID?: string } | undefined>(undefined);
   const layout = useMemo(() => {
     try { return layoutGraph(graph); } catch { return null; }
   }, [graph]);
   const selected = graph.nodes.find(node => node.id === selectedID);
 
   useEffect(() => {
-    setSelectedID(previous => graph.nodes.some(node => node.id === previous) ? previous : undefined);
-  }, [graph.nodes]);
+    if (selectedID && !selected) {
+      returnFocusID.current = selectedID;
+      setSelectedID(undefined);
+    }
+  }, [selectedID, selected]);
 
-  function selectRelated(id: string) {
-    setSelectedID(id);
-    const button = buttons.current.get(id);
-    button?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-    button?.focus({ preventScroll: true });
-  }
+  useEffect(() => {
+    if (selected) return;
+    if (returnFocusID.current) {
+      (buttons.current.get(returnFocusID.current) ?? viewport.current)?.focus();
+      returnFocusID.current = undefined;
+    }
+    if (pendingArtifact.current) {
+      const artifact = pendingArtifact.current;
+      pendingArtifact.current = undefined;
+      onOpenArtifact?.(artifact.artifactID, artifact.fileID);
+    }
+  }, [selected, onOpenArtifact]);
 
   function reset() {
     setZoom(1);
@@ -51,8 +63,13 @@ export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGrap
   }
 
   function clearSelection() {
-    if (selectedID) buttons.current.get(selectedID)?.focus();
+    returnFocusID.current = selectedID;
     setSelectedID(undefined);
+  }
+
+  function openArtifact(artifactID: string, fileID?: string) {
+    pendingArtifact.current = { artifactID, fileID };
+    clearSelection();
   }
 
   if (!layout) return <p className="notice" role="alert">{t($ => $.operationGraph.errors.invalid_response)}</p>;
@@ -74,26 +91,26 @@ export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGrap
       </div>
     </div>
     <p className="graph-navigation-hint" id={`${identity}-hint`}>{t($ => $.operationGraph.navigationHint)}</p>
-    <div className="graph-workspace">
-      <div className="graph-viewport" ref={viewport} tabIndex={0} role="region" aria-label={t($ => $.operationGraph.renderLabel)} aria-describedby={`${identity}-hint`}>
-        <div className="graph-scale-frame" style={{ width: layout.width * zoom, height: layout.height * zoom }}>
-          <div className="graph-canvas" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})` }}>
-            <svg className="graph-edges" width={layout.width} height={layout.height} aria-hidden="true">
-              <defs><marker id={`${identity}-arrow`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 z" fill="context-stroke" /></marker></defs>
-              {layout.edges.map(({ edge, path }) => <path key={`${edge.kind}:${edge.source}:${edge.target}`} d={path} className="graph-edge"
-                data-selected={edge.source === selectedID || edge.target === selectedID ? 'true' : undefined} markerEnd={`url(#${identity}-arrow)`} />)}
-            </svg>
-            {layout.nodes.map(({ node, x, y }) => <button type="button" className="graph-node" key={node.id}
-              ref={element => { if (element) buttons.current.set(node.id, element); else buttons.current.delete(node.id); }}
-              style={{ left: x, top: y, width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT }} data-kind={node.kind}
-              aria-label={t($ => $.operationGraph.selectNode, { kind: t($ => $.operationGraph.categories[node.kind]), name: graphNodeName(node), id: node.id })}
-              aria-pressed={node.id === selectedID} aria-controls={`${identity}-inspector`} onClick={() => setSelectedID(node.id)}>
-              <NodeContents node={node} />
-            </button>)}
-          </div>
+    <div className="graph-viewport" ref={viewport} tabIndex={0} role="region" aria-label={t($ => $.operationGraph.renderLabel)} aria-describedby={`${identity}-hint`}>
+      <div className="graph-scale-frame" style={{ width: layout.width * zoom, height: layout.height * zoom }}>
+        <div className="graph-canvas" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})` }}>
+          <svg className="graph-edges" width={layout.width} height={layout.height} aria-hidden="true">
+            <defs><marker id={`${identity}-arrow`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 z" fill="context-stroke" /></marker></defs>
+            {layout.edges.map(({ edge, path }) => <path key={`${edge.kind}:${edge.source}:${edge.target}`} d={path} className="graph-edge"
+              data-selected={edge.source === selectedID || edge.target === selectedID ? 'true' : undefined} markerEnd={`url(#${identity}-arrow)`} />)}
+          </svg>
+          {layout.nodes.map(({ node, x, y }) => <button type="button" className="graph-node" key={node.id}
+            ref={element => { if (element) buttons.current.set(node.id, element); else buttons.current.delete(node.id); }}
+            style={{ left: x, top: y, width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT }} data-kind={node.kind}
+            aria-label={t($ => $.operationGraph.selectNode, { kind: t($ => $.operationGraph.categories[node.kind]), name: graphNodeName(node), id: node.id })}
+            aria-pressed={node.id === selectedID} aria-haspopup="dialog" onClick={() => setSelectedID(node.id)}>
+            <NodeContents node={node} />
+          </button>)}
         </div>
       </div>
-      <div id={`${identity}-inspector`}><GraphNodeDetails graph={graph} node={selected} onSelect={selectRelated} onClear={clearSelection} onOpenArtifact={onOpenArtifact} /></div>
     </div>
+    {selected && <Dialog open title={t($ => $.operationGraph.nodeDetails)} onClose={clearSelection} className="graph-node-dialog">
+      <GraphNodeDetails graph={graph} node={selected} onSelect={setSelectedID} onOpenArtifact={onOpenArtifact ? openArtifact : undefined} />
+    </Dialog>}
   </div>;
 }

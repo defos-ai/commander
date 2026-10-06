@@ -117,9 +117,12 @@ services:
       API_USERNAME: api-fixture-user
       API_PASSWORD: api-fixture-password
       API_LISTEN_ADDRESS: 0.0.0.0:4274
-      API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api
+      API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api,api-secondary
       API_ALLOWED_ORIGINS: http://localhost:14275,http://127.0.0.1:14275
       API_SWAGGER_ENABLED: "true"
+    networks:
+      default:
+        aliases: [api-secondary]
     ports:
       - "127.0.0.1:14274:4274"
     depends_on:

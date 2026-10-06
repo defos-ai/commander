@@ -1,5 +1,5 @@
-import { basicAuthorization, normalizeURL } from '../connections/client';
-import type { Credentials } from '../connections/types';
+import { expireSession, proxyURL } from '../connections/client';
+import type { Session } from '../connections/types';
 import type { Operation } from './operation-types';
 import { isOperation } from './operations';
 import { encodeIdentifier, isIdentifier, isObject } from './validation';
@@ -41,14 +41,12 @@ function responseError(status: number, body: unknown): CommandError {
   return new CommandError(kind, kind === 'unknown' ? undefined : code);
 }
 
-async function postOperation(url: string, path: string, credentials: Credentials, operationID: string, body: unknown, signal?: AbortSignal): Promise<Operation> {
+async function postOperation(url: string, path: string, credentials: Session, operationID: string, body: unknown, signal?: AbortSignal): Promise<Operation> {
   if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
   let endpoint: string;
-  let authorization: string;
   let encodedBody: string;
   try {
-    endpoint = `${normalizeURL(url)}${path}`;
-    authorization = basicAuthorization(credentials);
+    endpoint = proxyURL(url, path, credentials);
     encodedBody = JSON.stringify(body);
   } catch {
     throw new CommandError('invalid_input');
@@ -66,9 +64,10 @@ async function postOperation(url: string, path: string, credentials: Credentials
 
   async function send() {
     const response = await fetch(endpoint, {
-      method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: authorization },
-      credentials: 'omit', redirect: 'error', cache: 'no-store', body: encodedBody, signal: controller.signal,
+      method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Commander-UI': '1' },
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', body: encodedBody, signal: controller.signal,
     });
+    if (response.status === 401 && !controller.signal.aborted) expireSession(url);
     let result: unknown;
     try { result = await response.json(); }
     catch { if (response.ok) throw new CommandError('unknown'); }
@@ -89,16 +88,16 @@ async function postOperation(url: string, path: string, credentials: Credentials
   }
 }
 
-export async function startOperation(url: string, credentials: Credentials, input: StartOperationInput, signal?: AbortSignal): Promise<Operation> {
+export async function startOperation(url: string, credentials: Session, input: StartOperationInput, signal?: AbortSignal): Promise<Operation> {
   if (!isIdentifier(input.operation_id) || !input.mission_name.trim() || input.input === undefined) throw new CommandError('invalid_input');
   return postOperation(url, '/api/v1/operations', credentials, input.operation_id, input, signal);
 }
 
-export async function cancelOperation(url: string, credentials: Credentials, id: string, signal?: AbortSignal): Promise<Operation> {
+export async function cancelOperation(url: string, credentials: Session, id: string, signal?: AbortSignal): Promise<Operation> {
   return postOperation(url, `/api/v1/operations/${commandIdentifier(id)}/cancel`, credentials, id, {}, signal);
 }
 
-export async function answerQuestion(url: string, credentials: Credentials, operationID: string, questionID: string, answer: string, signal?: AbortSignal): Promise<Operation> {
+export async function answerQuestion(url: string, credentials: Session, operationID: string, questionID: string, answer: string, signal?: AbortSignal): Promise<Operation> {
   if (!answer.trim()) throw new CommandError('invalid_input');
   return postOperation(url, `/api/v1/operations/${commandIdentifier(operationID)}/questions/${commandIdentifier(questionID)}/answer`, credentials, operationID, { answer }, signal);
 }

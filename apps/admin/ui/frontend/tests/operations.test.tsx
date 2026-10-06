@@ -1,10 +1,11 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Operation, OperationTask } from '../src/api/operation-types';
 import { OperationsPage } from '../src/pages/OperationsPage';
 
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', password: 'test-password' };
+const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-05T10:00:00Z';
 const task: OperationTask = {
   id: 'task-discovery', operation_id: 'operation-review', agent_id: 'web-quality-agent-1234abcd',
@@ -18,8 +19,8 @@ const operation: Operation = {
 };
 
 function mockAPI(respond?: (url: string, options: RequestInit) => Response | Promise<Response>) {
-  const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => respond ? respond(String(input), options)
-    : Response.json(String(input).endsWith('/operations') ? { items: [operation] } : operation));
+  const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => respond ? respond(upstreamURL(input), options)
+    : Response.json(upstreamURL(input).endsWith('/operations') ? { items: [operation] } : operation));
   vi.stubGlobal('fetch', fetch);
   return fetch;
 }
@@ -141,7 +142,7 @@ describe('operations browser', () => {
       await act(async () => { render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); });
       fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
       await act(async () => {});
-      const graphCalls = () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/graph')).length;
+      const graphCalls = () => fetch.mock.calls.filter(([url]) => upstreamURL(url).endsWith('/graph')).length;
       expect(graphCalls()).toBe(0);
 
       fireEvent.click(screen.getByRole('button', { name: 'Execution graph' }));
@@ -171,7 +172,7 @@ describe('operations browser', () => {
     const view = render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
     const other = { ...connection, id: 'other', url: 'https://other.example.test' };
 
-    view.rerender(<OperationsPage connection={other} credentials={credentials} onSignIn={vi.fn()} />);
+    view.rerender(<OperationsPage connection={other} credentials={{ ...credentials, url: other.url }} onSignIn={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: 'No operations yet' })).toBeVisible();
     expect(oldSignal?.aborted).toBe(true);
     await act(async () => finish(Response.json({ items: [operation] })));

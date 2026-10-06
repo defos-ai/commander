@@ -1,10 +1,11 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Action } from '../src/api/types';
 import { ActionsPage } from '../src/pages/ActionsPage';
 
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', password: 'test-password' };
+const credentials = { username: 'operator', url: connection.url };
 const action: Action = {
   name: 'capture-page', description: 'Capture a screenshot of a page.', status: 'unavailable',
   status_reason: 'Chromium and configuration are missing.', required_permissions: ['network-access'],
@@ -16,9 +17,9 @@ const otherAction: Action = { ...action, name: 'check-links', description: 'Chec
 
 function mockAPI(respond?: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    if (respond) return respond(String(input), init);
-    return String(input).endsWith('/api/v1/actions') ? Response.json({ items: [action, otherAction] })
-      : Response.json(String(input).endsWith(otherAction.name) ? otherAction : action);
+    if (respond) return respond(upstreamURL(input), init);
+    return upstreamURL(input).endsWith('/api/v1/actions') ? Response.json({ items: [action, otherAction] })
+      : Response.json(upstreamURL(input).endsWith(otherAction.name) ? otherAction : action);
   });
   vi.stubGlobal('fetch', fetch);
   return fetch;

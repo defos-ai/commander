@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"commander/admin/ui/connections"
 	"commander/admin/ui/static"
 )
 
@@ -44,6 +45,15 @@ func RunWithOptions(ctx context.Context, args []string, output io.Writer, option
 		return err
 	}
 	defer handler.Close()
+	connectionHandler, err := connections.NewHandler(configuration.connections)
+	if err != nil {
+		return err
+	}
+	defer connectionHandler.Close()
+	routes := http.NewServeMux()
+	routes.Handle("/ui", connectionHandler)
+	routes.Handle("/ui/", connectionHandler)
+	routes.Handle("/", handler)
 	listener, err := net.Listen("tcp", configuration.listenAddress)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -51,8 +61,8 @@ func RunWithOptions(ctx context.Context, args []string, output io.Writer, option
 	defer listener.Close()
 	logger := slog.New(slog.NewJSONHandler(output, nil)).With("service", "commander-ui")
 	server := &http.Server{
-		Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second,
+		Handler: routes, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
+		WriteTimeout: 35 * time.Second, IdleTimeout: 90 * time.Second,
 		ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 	defer server.Close()

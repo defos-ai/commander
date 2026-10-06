@@ -1,10 +1,11 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Mission } from '../src/api/types';
 import { MissionsPage } from '../src/pages/MissionsPage';
 
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', password: 'test-password' };
+const credentials = { username: 'operator', url: connection.url };
 const mission: Mission = {
   name: 'review-website',
   objective: 'Review links and page quality.',
@@ -24,8 +25,8 @@ const otherMission: Mission = { ...mission, name: 'review-service', objective: '
 
 function mockAPI(respond?: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    if (respond) return respond(String(input), init);
-    return String(input).endsWith('/api/v1/missions')
+    if (respond) return respond(upstreamURL(input), init);
+    return upstreamURL(input).endsWith('/api/v1/missions')
       ? Response.json({ items: [mission, otherMission] }) : Response.json(mission);
   });
   vi.stubGlobal('fetch', fetch);
@@ -55,7 +56,7 @@ describe('missions browser', () => {
     expect(screen.getByText('Website to review')).toBeVisible();
     expect(screen.getByText('Continue after all generated tasks finish.')).toBeVisible();
     expect(screen.getByText('Model review')).toBeVisible();
-    expect(fetch.mock.calls.some(([url]) => String(url) === `${connection.url}/api/v1/missions/review-website`)).toBe(true);
+    expect(fetch.mock.calls.some(([url]) => upstreamURL(url) === `${connection.url}/api/v1/missions/review-website`)).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
 
     expect(await screen.findByRole('searchbox', { name: 'Search missions' })).toHaveValue('PAGE QUALITY');
@@ -171,7 +172,7 @@ describe('missions browser', () => {
     });
     const view = render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
 
-    view.rerender(<MissionsPage connection={nextConnection} credentials={credentials} onSignIn={vi.fn()} />);
+    view.rerender(<MissionsPage connection={nextConnection} credentials={{ ...credentials, url: nextConnection.url }} onSignIn={vi.fn()} />);
     expect(signal?.aborted).toBe(true);
     expect(await screen.findByRole('button', { name: 'View mission review-service' })).toBeVisible();
     await act(async () => first.resolve(Response.json({ items: [mission] })));

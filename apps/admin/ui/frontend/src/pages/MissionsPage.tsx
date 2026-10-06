@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../components/Button';
 import { MissionDetails } from '../components/MissionDetails';
-import type { Connection, Credentials } from '../connections/types';
+import type { Connection, Session } from '../connections/types';
 import { useMissionQuery } from '../hooks/useMissionQuery';
 import { useTranslation } from '../i18n';
 import '../styles/missions.css';
 
 export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
   connection: Connection;
-  credentials?: Credentials;
+  credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;

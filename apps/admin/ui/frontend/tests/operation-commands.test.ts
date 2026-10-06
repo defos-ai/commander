@@ -3,7 +3,15 @@ import { answerQuestion, cancelOperation, CommandError, startOperation } from '.
 import type { Operation } from '../src/api/operation-types';
 
 const url = 'https://commander.example/team';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { url: url, username: 'operator' };
+
+function requestedPath(input: RequestInfo | URL): string {
+  const request = new URL(String(input), 'http://localhost');
+  expect(request.origin).toBe('http://localhost');
+  expect(request.pathname).toBe('/ui/proxy');
+  expect(request.searchParams.get('url')).toBe(url);
+  return request.searchParams.get('path')!;
+}
 const id = '5cde98e0-23d3-447d-ad59-2238b244f689';
 const input = { operation_id: id, mission_name: 'review-website', input: { url: 'https://example.com' } };
 const operation: Operation = {
@@ -21,7 +29,7 @@ function respond(body: unknown, status = 200) {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('operation commands', () => {
-  it('posts start, cancel and answer as authenticated JSON without cookies or redirects', async () => {
+  it('posts start, cancel and answer as JSON through the session proxy without API credentials or redirects', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(Response.json(operation, { status: 201 }))
       .mockResolvedValueOnce(Response.json({ ...operation, status: 'cancelled' }))
@@ -32,18 +40,19 @@ describe('operation commands', () => {
     expect(await cancelOperation(url, credentials, id)).toEqual({ ...operation, status: 'cancelled' });
     expect(await answerQuestion(url, credentials, id, 'question-1', 'Continue with HTTP checks')).toEqual(operation);
 
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/operations`, `${url}/api/v1/operations/${id}/cancel`,
-      `${url}/api/v1/operations/${id}/questions/question-1/answer`,
+    expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
+      `/api/v1/operations`, `/api/v1/operations/${id}/cancel`,
+      `/api/v1/operations/${id}/questions/question-1/answer`,
     ]);
     expect(fetch.mock.calls.map(([, options]) => JSON.parse(String(options?.body)))).toEqual([
       input, {}, { answer: 'Continue with HTTP checks' },
     ]);
     for (const [, options] of fetch.mock.calls) {
       expect(options).toMatchObject({
-        method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Basic ${btoa('operator:secret')}` },
+        method: 'POST', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Commander-UI': '1' },
       });
+      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     }
   });
 
@@ -57,9 +66,9 @@ describe('operation commands', () => {
     await cancelOperation(url, credentials, operationID);
     await answerQuestion(url, credentials, operationID, 'question/team ?#é', 'Continue');
 
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/operations/operation%2Fteam%20%3F%23%C3%A9/cancel`,
-      `${url}/api/v1/operations/operation%2Fteam%20%3F%23%C3%A9/questions/question%2Fteam%20%3F%23%C3%A9/answer`,
+    expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
+      `/api/v1/operations/operation%2Fteam%20%3F%23%C3%A9/cancel`,
+      `/api/v1/operations/operation%2Fteam%20%3F%23%C3%A9/questions/question%2Fteam%20%3F%23%C3%A9/answer`,
     ]);
   });
 

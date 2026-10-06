@@ -1,4 +1,4 @@
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
 import type { GraphArtifact, GraphEdge, GraphFile, GraphNode, GraphTask, OperationGraph } from './graph-types';
 import { encodeIdentifier, isIdentifier, isObject, isOptionalString } from './validation';
@@ -69,7 +69,7 @@ function isGraph(value: unknown): value is OperationGraph {
     Array.isArray(value.edges) && value.edges.every(isEdge) && validConnections(value.nodes, value.edges);
 }
 
-export async function getOperationGraph(url: string, credentials: Credentials, operationID: string, signal?: AbortSignal): Promise<OperationGraph> {
+export async function getOperationGraph(url: string, credentials: Session, operationID: string, signal?: AbortSignal): Promise<OperationGraph> {
   const body = await getJSON(url, `/api/v1/operations/${encodeIdentifier(operationID)}/graph`, credentials, signal);
   if (!isGraph(body) || body.operation_id !== operationID) throw new ApiError('invalid_response');
   return body;

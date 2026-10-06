@@ -5,7 +5,7 @@ import type { Report } from '../src/api/reports';
 import type { OperationArtifact } from '../src/api/operation-types';
 
 const url = 'https://commander.example/team';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { url, username: 'operator' };
 const artifact: OperationArtifact = {
   id: 'artifact-1', name: 'Website screenshot', agent_id: 'agent-1', action_name: 'capture-page',
   created_at: '2026-10-05T12:00:00Z',
@@ -15,6 +15,13 @@ const report: Report = {
   id: 'report-1', operation_id: 'operation-1', mission: 'review-website',
   output: { summary: 'Review complete' }, created_at: '2026-10-05T12:00:00Z',
 };
+
+function proxyTarget(input: RequestInfo | URL) {
+  const endpoint = new URL(String(input), window.location.origin);
+  expect(endpoint.origin).toBe(window.location.origin);
+  expect(endpoint.pathname).toBe('/ui/proxy');
+  return Object.fromEntries(endpoint.searchParams);
+}
 
 function respond(body: unknown, status = 200) {
   const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(body, { status }));
@@ -43,8 +50,8 @@ describe('artifact and report clients', () => {
     expect(await getArtifact(`${url}/`, credentials, artifact.id)).toEqual(artifact);
     expect(await getOperationReport(url, credentials, report.operation_id)).toEqual(report);
 
-    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
-      `${url}/api/v1/artifacts/artifact-1`, `${url}/api/v1/operations/operation-1/report`,
+    expect(fetch.mock.calls.map(([path]) => proxyTarget(path))).toEqual([
+      { url, path: '/api/v1/artifacts/artifact-1' }, { url, path: '/api/v1/operations/operation-1/report' },
     ]);
   });
 
@@ -90,11 +97,11 @@ describe('artifact and report clients', () => {
 
     expect(await blobText(blob)).toBe('data');
     expect(blob.type).toBe('text/plain');
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(
-      `${url}/api/v1/artifacts/artifact%2Fteam%20%3F%23%C3%A9/files/file%2Fteam%20%3F%23%C3%A9`,
-      expect.objectContaining({ method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store',
-        headers: { Accept: '*/*', Authorization: `Basic ${btoa('operator:secret')}` } }),
-    );
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(proxyTarget(fetch.mock.calls[0][0])).toEqual({ url, path: '/api/v1/artifacts/artifact%2Fteam%20%3F%23%C3%A9/files/file%2Fteam%20%3F%23%C3%A9' });
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
+      headers: { Accept: '*/*', 'X-Commander-UI': '1' } });
+    expect(new Headers(fetch.mock.calls[0][1]?.headers).has('Authorization')).toBe(false);
   });
 
   it('rejects an oversized Content-Length before reading the body and caps caller limits at 100 MiB', async () => {

@@ -2,10 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { checkConnection, normalizeURL } from '../src/connections/client';
 
 const baseURL = 'https://commander.example/prefix';
-const credentials = { username: 'üser', password: 'пароль:secret' };
+const credentials = { url: baseURL, username: 'üser' };
+
+function requestedPath(input: RequestInfo | URL): string {
+  const request = new URL(String(input), 'http://localhost');
+  expect(request.origin).toBe('http://localhost');
+  expect(request.pathname).toBe('/ui/proxy');
+  expect(request.searchParams.get('url')).toBe(baseURL);
+  return request.searchParams.get('path')!;
+}
 
 function healthyResponse(url: string) {
-  return Response.json(url.endsWith('/missions') ? { items: [] } : { status: 'ok' });
+  return Response.json(requestedPath(url).endsWith('/missions') ? { items: [] } : { status: 'ok' });
 }
 
 function pendingFetch() {
@@ -39,24 +47,20 @@ describe('connection URLs', () => {
 });
 
 describe('connection checks', () => {
-  it('sends UTF-8 Basic credentials only to the protected catalog and disables ambient credentials and redirects', async () => {
+  it('uses the same-origin proxy and never sends API credentials from the browser', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async url => healthyResponse(String(url)));
     vi.stubGlobal('fetch', fetch);
 
     const check = await checkConnection(`${baseURL}/`, credentials);
 
     expect(check).toMatchObject({ status: 'ready', api: 'ok', database: 'ok', checkedAt: expect.any(Number) });
-    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      `${baseURL}/healthz`, `${baseURL}/readyz`, `${baseURL}/api/v1/missions`,
+    expect(fetch.mock.calls.map(([url]) => requestedPath(url))).toEqual([
+      '/healthz', '/readyz', `/api/v1/missions`,
     ]);
-    for (const [url, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({ method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store' });
-      const authorization = new Headers(options?.headers).get('Authorization');
-      if (String(url).endsWith('/missions')) {
-        expect(authorization).toBe(`Basic ${Buffer.from(`${credentials.username}:${credentials.password}`, 'utf8').toString('base64')}`);
-      } else {
-        expect(authorization).toBeNull();
-      }
+    for (const [, options] of fetch.mock.calls) {
+      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store' });
+      expect(new Headers(options?.headers).get('Authorization')).toBeNull();
+      expect(new Headers(options?.headers).get('X-Commander-UI')).toBe('1');
     }
   });
 
@@ -65,7 +69,7 @@ describe('connection checks', () => {
     vi.stubGlobal('fetch', fetch);
 
     expect(await checkConnection(baseURL)).toMatchObject({ status: 'authentication', api: 'ok', database: 'ok' });
-    expect(fetch.mock.calls.map(([url]) => url)).toEqual([`${baseURL}/healthz`, `${baseURL}/readyz`]);
+    expect(fetch.mock.calls.map(([url]) => requestedPath(url))).toEqual(['/healthz', '/readyz']);
   });
 
   it.each([
@@ -77,7 +81,7 @@ describe('connection checks', () => {
     { failure: 'invalid catalog JSON', path: '/api/v1/missions', response: () => new Response('not JSON'), status: 'degraded', api: 'ok', database: 'ok' },
     { failure: 'unexpected catalog shape', path: '/api/v1/missions', response: () => Response.json({ items: {} }), status: 'degraded', api: 'ok', database: 'ok' },
   ])('does not report ready for $failure', async ({ path, response, status, api, database }) => {
-    vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>(async url => String(url).endsWith(path) ? response() : healthyResponse(String(url))));
+    vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>(async url => requestedPath(url) === path ? response() : healthyResponse(String(url))));
 
     expect(await checkConnection(baseURL, credentials)).toMatchObject({ status, api, database });
   });
@@ -86,14 +90,6 @@ describe('connection checks', () => {
     vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>().mockRejectedValue(new TypeError('Failed to fetch')));
 
     expect(await checkConnection(baseURL, credentials)).toMatchObject({ status: 'unreachable', api: 'unavailable', database: 'unavailable' });
-  });
-
-  it('rejects a colon in the username before sending any requests', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>();
-    vi.stubGlobal('fetch', fetch);
-
-    await expect(checkConnection(baseURL, { username: 'user:extra', password: 'secret' })).rejects.toThrow('Invalid username');
-    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('bounds stalled requests to five seconds and reports ordinary timeouts as unavailable', async () => {

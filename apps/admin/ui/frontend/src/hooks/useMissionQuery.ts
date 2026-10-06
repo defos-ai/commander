@@ -2,19 +2,19 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { getMission, listMissions } from '../api/missions';
 import type { Mission } from '../api/types';
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 
 type Content = { items: Mission[] } | { mission: Mission };
 type Result = {
   url: string;
-  credentials: Credentials;
+  credentials: Session;
   name?: string;
   revision: number;
   content?: Content;
   error?: ApiError;
 };
 
-export function useMissionQuery(url: string, credentials: Credentials | undefined, name?: string) {
+export function useMissionQuery(url: string, credentials: Session | undefined, name?: string) {
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<Result>();
 

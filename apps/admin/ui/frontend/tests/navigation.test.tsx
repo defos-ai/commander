@@ -1,3 +1,4 @@
+import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
@@ -11,10 +12,15 @@ const operation = { id: 'operation-review', mission, input: { url: 'https://defo
   tasks: [], questions: [], events: [], created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
 
 function mockAPI() {
+  let session: { url: string; username: string } | undefined;
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const url = String(input);
+    const url = upstreamURL(input);
+    if (url === '/ui/connections') {
+      if (init.method === 'POST') { const data = JSON.parse(init.body as string); session = { url: data.url, username: data.username }; return Response.json(session); }
+      return Response.json({ items: session ? [session] : [] });
+    }
     if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
-    if (!new Headers(init?.headers).has('Authorization')) return new Response(null, { status: 401 });
+    if (!session) return new Response(null, { status: 401 });
     if (url.endsWith('/missions')) return Response.json({ items: [mission] });
     if (url.endsWith('/operations')) return Response.json({ items: [operation] });
     if (url.endsWith(`/operations/${operation.id}`)) return Response.json(operation);
@@ -56,7 +62,7 @@ describe('location navigation', () => {
     }
   });
 
-  it('restores operation details and graph through browser history and requires sign-in after reload', async () => {
+  it('restores operation details and graph through browser history and restores the server session after reload', async () => {
     const fetch = mockAPI();
     visit({ connectionID: connection.id, section: 'overview' });
     const first = render(<App />);
@@ -84,24 +90,23 @@ describe('location navigation', () => {
     first.unmount();
     fetch.mockClear();
     render(<App />);
-    expect(screen.getByRole('heading', { name: operation.id, level: 1 })).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent('Sign in to view operations');
+    expect(await screen.findByRole('heading', { name: operation.id, level: 1 })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
     expect(fetch.mock.calls.every(([, init]) => !new Headers(init?.headers).has('Authorization'))).toBe(true);
-    await signIn();
     expect(await screen.findByText('No work recorded yet')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Execution graph' })).toHaveAttribute('aria-pressed', 'true');
     expect(window.location.href).not.toContain('private-password');
     expect(window.location.hash).not.toContain(connection.url);
     expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).not.toContain('private-password');
-    expect(fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+    expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });
 
-  it.each(['missions', 'agents', 'actions'] as const)('opens a saved %s detail location behind the sign-in gate', section => {
+  it.each(['missions', 'agents', 'actions'] as const)('opens a saved %s detail location behind the sign-in gate', async section => {
     mockAPI();
     visit({ connectionID: connection.id, section, itemID: 'saved-item' });
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'saved-item', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'saved-item', level: 1 })).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent(`Sign in to view ${section}`);
     const hash = window.location.hash;
     fireEvent.click(screen.getByRole('link', { name: 'Skip to content' }));
@@ -117,7 +122,7 @@ describe('location navigation', () => {
     expect(screen.getByRole('heading', { name: 'Connections' })).toBeVisible();
     expect(screen.getByText('This connection is not saved in this browser. Choose or add a connection.')).toBeVisible();
     await act(async () => {});
-    expect(fetch.mock.calls.every(([url]) => String(url).startsWith(connection.url))).toBe(true);
+    expect(fetch.mock.calls.every(([url]) => String(url).startsWith('/ui/'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Open Local Commander' }));
     expect(screen.getByRole('heading', { name: 'Overview' })).toBeVisible();
     expect(window.location.hash).toBe(`#/connections/${connection.id}/overview`);

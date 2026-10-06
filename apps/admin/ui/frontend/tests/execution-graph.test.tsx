@@ -1,11 +1,13 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import type { OperationGraph } from '../src/api/graph-types';
 import { ExecutionGraph } from '../src/components/ExecutionGraph';
 import { OperationGraphPanel } from '../src/components/OperationGraphPanel';
+import { Dialog } from '../src/components/Dialog';
 
 const url = 'https://commander.example.test';
-const credentials = { username: 'operator', password: 'secret' };
+const credentials = { url, username: 'operator' };
 const graph: OperationGraph = { operation_id: 'operation-1', status: 'running', updated_at: '2026-10-05T10:00:00Z', nodes: [
   { id: 'task:root', kind: 'task', task: { id: 'root', action_name: 'discover-pages', status: 'succeeded', agent_id: 'agent-one' } },
   { id: 'task:child', kind: 'task', task: { id: 'child', parent_task_id: 'root', action_name: 'capture-page', status: 'running', agent_id: 'agent-two' } },
@@ -20,23 +22,27 @@ const graph: OperationGraph = { operation_id: 'operation-1', status: 'running', 
 describe('execution graph', () => {
   it('lets operators inspect task, artifact and file relationships and zoom the canvas', () => {
     render(<ExecutionGraph graph={graph} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' }));
+    expect(screen.queryByRole('region', { name: 'Node details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const taskNode = screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' });
+    taskNode.focus();
+    fireEvent.click(taskNode);
+    expect(screen.getByRole('dialog', { name: 'Node details' })).toBeVisible();
     const inspector = screen.getByRole('region', { name: 'Node details' });
     expect(within(inspector).getByText('agent-two')).toBeVisible();
     expect(within(inspector).getByText('Running')).toBeVisible();
     expect(within(inspector).getByRole('button', { name: 'Parent task discover-pages' })).toBeVisible();
     fireEvent.click(within(inspector).getByRole('button', { name: 'Produced artifact Homepage evidence' }));
 
-    expect(screen.getByRole('button', { name: 'Inspect Artifact Homepage evidence · artifact:page' })).toHaveFocus();
-    expect(within(inspector).getByRole('heading', { name: 'Homepage evidence' })).toBeVisible();
+    expect(within(inspector).getByRole('heading', { name: 'Homepage evidence' })).toHaveFocus();
     fireEvent.click(within(inspector).getByRole('button', { name: 'File desktop.png' }));
     expect(within(inspector).getByText('image/png')).toBeVisible();
     expect(within(inspector).getByText('1,024 bytes')).toBeVisible();
     expect(within(inspector).getByText('a'.repeat(64))).toBeVisible();
-    screen.getByRole('button', { name: 'Clear selection' }).focus();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
     expect(screen.getByRole('button', { name: 'Inspect File desktop.png · file:page:desktop' })).toHaveFocus();
-    expect(within(inspector).getByText('Select a task, artifact or file to inspect it.')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Node details' })).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe('hidden');
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     expect(screen.getByLabelText('Graph zoom')).toHaveTextContent('75%');
     fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
@@ -45,8 +51,8 @@ describe('execution graph', () => {
 
   it('retains selection and zoom as work changes and clears a removed selection', () => {
     const view = render(<ExecutionGraph graph={graph} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' }));
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' }));
     const changed: OperationGraph = { ...graph, nodes: graph.nodes.map(node => node.kind === 'task' && node.task.id === 'child'
       ? { ...node, task: { ...node.task, status: 'failed', error: 'Browser exited before capture' } } : node) };
 
@@ -56,7 +62,47 @@ describe('execution graph', () => {
     expect(screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(screen.getByRole('region', { name: 'Node details' })).getByText('Browser exited before capture')).toBeVisible();
     view.rerender(<ExecutionGraph graph={{ ...graph, nodes: [graph.nodes[0]], edges: [] }} />);
-    expect(screen.getByText('Select a task, artifact or file to inspect it.')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe('hidden');
+    expect(screen.getByRole('region', { name: 'Operation execution graph' })).toHaveFocus();
+  });
+
+  it('closes with Escape and returns focus to the graph node', () => {
+    render(<ExecutionGraph graph={graph} />);
+    const node = screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' });
+    node.focus();
+    fireEvent.click(node);
+
+    fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(node).toHaveFocus();
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('closes node details before opening evidence and restores scrolling and focus afterward', () => {
+    const opened = vi.fn();
+    function Evidence() {
+      const [open, setOpen] = useState(false);
+      return <><ExecutionGraph graph={graph} onOpenArtifact={(artifactID, fileID) => {
+        opened(artifactID, fileID, document.querySelectorAll('dialog[open]').length);
+        setOpen(true);
+      }} />{open && <Dialog open title="Artifact" onClose={() => setOpen(false)}>Evidence</Dialog>}</>;
+    }
+    render(<Evidence />);
+    const node = screen.getByRole('button', { name: 'Inspect File desktop.png · file:page:desktop' });
+    node.focus();
+    fireEvent.click(node);
+    fireEvent.click(screen.getByRole('button', { name: 'View file' }));
+
+    expect(opened).toHaveBeenCalledWith('page', 'desktop', 0);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: 'Artifact' })).toBeVisible();
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).not.toBe('hidden');
+    expect(node).toHaveFocus();
   });
 
   it('shows empty work and rejects cyclic graphs without crashing the page', () => {
@@ -116,12 +162,14 @@ describe('operation graph queries', () => {
     let finish!: (response: Response) => void;
     let signal: AbortSignal | null | undefined;
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, options: RequestInit = {}) => {
-      if (String(input).startsWith(url)) { signal = options.signal; return new Promise<Response>(resolve => { finish = resolve; }); }
+      if (new URL(String(input), window.location.origin).searchParams.get('url') === url) {
+        signal = options.signal; return new Promise<Response>(resolve => { finish = resolve; });
+      }
       return Promise.resolve(Response.json({ ...graph, nodes: [], edges: [] }));
     }));
     const view = render(<OperationGraphPanel url={url} credentials={credentials} operationID={graph.operation_id} onSignIn={vi.fn()} />);
 
-    view.rerender(<OperationGraphPanel url="https://other.example.test" credentials={credentials} operationID={graph.operation_id} onSignIn={vi.fn()} />);
+    view.rerender(<OperationGraphPanel url="https://other.example.test" credentials={{ url: 'https://other.example.test', username: 'operator' }} operationID={graph.operation_id} onSignIn={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: 'No work recorded yet' })).toBeVisible();
     expect(signal?.aborted).toBe(true);
     await act(async () => finish(Response.json(graph)));

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
-import type { Credentials } from '../connections/types';
+import type { Session } from '../connections/types';
 
 type CatalogSource<T> = {
   url: string;
-  credentials?: Credentials;
+  credentials?: Session;
   id?: string;
-  list: (url: string, credentials: Credentials, signal?: AbortSignal) => Promise<T[]>;
-  get: (url: string, credentials: Credentials, id: string, signal?: AbortSignal) => Promise<T>;
+  list: (url: string, credentials: Session, signal?: AbortSignal) => Promise<T[]>;
+  get: (url: string, credentials: Session, id: string, signal?: AbortSignal) => Promise<T>;
   pollInterval?: number;
 };
 type Result<T> = CatalogSource<T> & {
