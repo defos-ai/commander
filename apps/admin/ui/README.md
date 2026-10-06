@@ -24,8 +24,10 @@ Switch operation details to **Execution graph** to follow recorded tasks and the
 artifacts and files. Select a node to inspect its status and related work; zoom
 and scroll to explore larger graphs. It refreshes every 10 seconds and shows
 recorded work, including queued tasks, rather than a plan of future work.
-Artifact files currently show metadata; viewing reports and downloading files
-follow in later increments.
+Open artifacts from details or graph nodes to inspect metadata, preview images
+and text, or download files. Previews are limited to 2 MiB and downloads to
+100 MiB. Reports open from operation details and can be downloaded as JSON.
+File content is fetched on demand using the connection's credentials.
 
 Missions supports search and read-only details: objectives, starting and required
 actions, automations, planning steps, and input/output schemas. Refresh loads the

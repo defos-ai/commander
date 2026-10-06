@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import type { GraphNode, OperationGraph } from '../api/graph-types';
 import { useTranslation } from '../i18n';
 import { TaskStatus } from './OperationDetails';
+import { Button } from './Button';
 
 export function graphNodeName(node: GraphNode) {
   return node.kind === 'task' ? node.task.action_name : node.kind === 'artifact' ? node.artifact.name || node.artifact.id : node.file.name || node.file.id;
@@ -15,11 +16,12 @@ function Timestamp({ value }: { value?: string | null }) {
     : <span className="catalog-muted">{t($ => $.operations.notReported)}</span>;
 }
 
-export function GraphNodeDetails({ graph, node, onSelect, onClear }: {
+export function GraphNodeDetails({ graph, node, onSelect, onClear, onOpenArtifact }: {
   graph: OperationGraph;
   node?: GraphNode;
   onSelect: (id: string) => void;
   onClear: () => void;
+  onOpenArtifact?: (artifactID: string, fileID?: string) => void;
 }) {
   const { t } = useTranslation();
   const nodes = new Map(graph.nodes.map(item => [item.id, item]));
@@ -61,6 +63,8 @@ export function GraphNodeDetails({ graph, node, onSelect, onClear }: {
         <div><dt>{t($ => $.operations.size)}</dt><dd>{t($ => $.operations.bytes, { size: node.file.size.toLocaleString() })}</dd></div>
         <div><dt>{t($ => $.operations.sha256)}</dt><dd><code>{node.file.sha256}</code></dd></div>
       </dl>}
+      {onOpenArtifact && node.kind === 'artifact' && <Button variant="secondary" onClick={() => onOpenArtifact(node.artifact.id)}>{t($ => $.artifacts.viewArtifact)}</Button>}
+      {onOpenArtifact && node.kind === 'file' && <Button variant="secondary" onClick={() => onOpenArtifact(node.file.artifact_id, node.file.id)}>{t($ => $.artifacts.viewFile)}</Button>}
       <h4>{t($ => $.operationGraph.connections)}</h4>
       {related.length ? <ul className="graph-relations">{related.map(({ edge, direction, node: other }) => <li key={`${edge.kind}:${edge.source}:${edge.target}`}>
         <button type="button" onClick={() => onSelect(other.id)}>

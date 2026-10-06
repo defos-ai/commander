@@ -6,11 +6,12 @@ import { Button } from './Button';
 import { ExecutionGraph } from './ExecutionGraph';
 import { OperationStatus } from './OperationDetails';
 
-export function OperationGraphPanel({ url, credentials, operationID, onSignIn }: {
+export function OperationGraphPanel({ url, credentials, operationID, onSignIn, onOpenArtifact }: {
   url: string;
   credentials?: Credentials;
   operationID: string;
   onSignIn: () => void;
+  onOpenArtifact?: (artifactID: string, fileID?: string) => void;
 }) {
   const { t } = useTranslation();
   const query = useOperationGraph(url, credentials, operationID);
@@ -29,7 +30,7 @@ export function OperationGraphPanel({ url, credentials, operationID, onSignIn }:
       <p className="operation-graph-snapshot"><OperationStatus status={query.graph.status} />
         <time dateTime={query.graph.updated_at}>{t($ => $.operationGraph.updated, { time: new Date(query.graph.updated_at).toLocaleString() })}</time>
       </p>
-      <ExecutionGraph key={`${url}:${operationID}`} graph={query.graph} />
+      <ExecutionGraph key={`${url}:${operationID}`} graph={query.graph} onOpenArtifact={onOpenArtifact} />
       <p className="catalog-updated">{t($ => $.operationGraph.polling)}</p>
     </> : <p className="catalog-loading" role="status"><LoaderCircle className="connection-form-spinner" size={17} aria-hidden="true" />{t($ => $.operationGraph.loading)}</p>}
   </section>;

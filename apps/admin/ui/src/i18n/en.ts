@@ -5,6 +5,7 @@ import actions from './actions';
 import operations from './operations';
 import operationCommands from './operationCommands';
 import operationGraph from './operationGraph';
+import artifacts from './artifacts';
 
 export default {
   brand: 'COMMANDER',
@@ -15,6 +16,7 @@ export default {
   operations,
   operationCommands,
   operationGraph,
+  artifacts,
   connections: {
     introduction: 'Administration of yours Command Centers',
     title: 'Connections',

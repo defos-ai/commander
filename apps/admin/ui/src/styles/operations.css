@@ -47,3 +47,4 @@
   .operation-files .detail-list > div { grid-template-columns: 1fr; gap: 6px; }
   .operation-filters, .operation-filters select { width: 100%; }
 }
+.operation-report-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }

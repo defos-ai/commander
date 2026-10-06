@@ -22,7 +22,7 @@ function NodeContents({ node }: { node: GraphNode }) {
   </>;
 }
 
-export function ExecutionGraph({ graph }: { graph: OperationGraph }) {
+export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGraph; onOpenArtifact?: (artifactID: string, fileID?: string) => void }) {
   const { t } = useTranslation();
   const identity = useId();
   const [selectedID, setSelectedID] = useState<string>();
@@ -93,7 +93,7 @@ export function ExecutionGraph({ graph }: { graph: OperationGraph }) {
           </div>
         </div>
       </div>
-      <div id={`${identity}-inspector`}><GraphNodeDetails graph={graph} node={selected} onSelect={selectRelated} onClear={clearSelection} /></div>
+      <div id={`${identity}-inspector`}><GraphNodeDetails graph={graph} node={selected} onSelect={selectRelated} onClear={clearSelection} onOpenArtifact={onOpenArtifact} /></div>
     </div>
   </div>;
 }

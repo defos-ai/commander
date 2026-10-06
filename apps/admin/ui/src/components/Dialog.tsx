@@ -2,12 +2,13 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
-export function Dialog({ open, title, description, onClose, children }: {
+export function Dialog({ open, title, description, onClose, children, className = '' }: {
   open: boolean;
   title: string;
   description?: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleID = useId();
@@ -29,7 +30,7 @@ export function Dialog({ open, title, description, onClose, children }: {
   }, [open]);
 
   return (
-    <dialog ref={ref} className="dialog" aria-labelledby={titleID} aria-describedby={description ? descriptionID : undefined}
+    <dialog ref={ref} className={`dialog ${className}`} aria-labelledby={titleID} aria-describedby={description ? descriptionID : undefined}
       onCancel={event => { event.preventDefault(); onClose(); }}>
       <div className="dialog-header">
         <h2 id={titleID}>{title}</h2>

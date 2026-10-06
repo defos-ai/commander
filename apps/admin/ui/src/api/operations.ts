@@ -34,7 +34,7 @@ function isArtifactFile(value: unknown): value is OperationArtifactFile {
     typeof value.media_type === 'string' && isUnsignedInteger(value.size) && typeof value.sha256 === 'string';
 }
 
-function isArtifact(value: unknown): value is OperationArtifact {
+export function isArtifact(value: unknown): value is OperationArtifact {
   return isObject(value) && isIdentifier(value.id) && typeof value.name === 'string' &&
     typeof value.agent_id === 'string' && typeof value.action_name === 'string' &&
     isOptionalString(value.command_id) && isDate(value.created_at) && isNullableArray(value.files, isArtifactFile);

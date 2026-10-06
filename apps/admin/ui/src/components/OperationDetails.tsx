@@ -143,7 +143,7 @@ function Preflight({ preflight }: { preflight: OperationPreflight }) {
   </section>;
 }
 
-function Artifact({ artifact }: { artifact: OperationArtifact }) {
+function Artifact({ artifact, onOpen }: { artifact: OperationArtifact; onOpen?: (fileID?: string) => void }) {
   const { t } = useTranslation();
   return <details className="operation-card"><summary><span className="operation-card-name"><span>{artifact.name}</span><code>{artifact.id}</code></span></summary>
     <div className="operation-card-body"><dl className="detail-list">
@@ -151,7 +151,9 @@ function Artifact({ artifact }: { artifact: OperationArtifact }) {
       <div><dt>{t($ => $.operations.agentId)}</dt><dd><code>{artifact.agent_id}</code></dd></div>
       {artifact.command_id && <div><dt>{t($ => $.operations.commandId)}</dt><dd><code>{artifact.command_id}</code></dd></div>}
       <div><dt>{t($ => $.operations.createdAt)}</dt><dd><Timestamp value={artifact.created_at} /></dd></div>
-    </dl><h3>{t($ => $.operations.files)}</h3>
+    </dl>
+      {onOpen && <Button variant="secondary" onClick={() => onOpen()}>{t($ => $.artifacts.viewArtifact)}</Button>}
+      <h3>{t($ => $.operations.files)}</h3>
       {artifact.files?.length ? <ul className="operation-files">{artifact.files.map(file => <li key={file.id}>
         <h4>{file.name}</h4><dl className="detail-list">
           <div><dt>{t($ => $.operations.fileId)}</dt><dd><code>{file.id}</code></dd></div>
@@ -159,12 +161,18 @@ function Artifact({ artifact }: { artifact: OperationArtifact }) {
           <div><dt>{t($ => $.operations.size)}</dt><dd>{t($ => $.operations.bytes, { size: file.size.toLocaleString() })}</dd></div>
           <div><dt>{t($ => $.operations.sha256)}</dt><dd><code>{file.sha256}</code></dd></div>
         </dl>
+        {onOpen && <Button variant="secondary" onClick={() => onOpen(file.id)}>{t($ => $.artifacts.viewFile)}</Button>}
       </li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noFiles)}</p>}
     </div>
   </details>;
 }
 
-export function OperationDetails({ operation, onAnswer }: { operation: Operation; onAnswer?: (question: OperationQuestion) => void }) {
+export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenReport }: {
+  operation: Operation;
+  onAnswer?: (question: OperationQuestion) => void;
+  onOpenArtifact?: (artifactID: string, fileID?: string) => void;
+  onOpenReport?: () => void;
+}) {
   const { t } = useTranslation();
   const progress = operationProgress(operation.tasks);
   const artifacts = [...new Map(operation.tasks?.flatMap(task => task.result?.artifacts ?? []).map(artifact => [artifact.id, artifact])).values()];
@@ -179,7 +187,9 @@ export function OperationDetails({ operation, onAnswer }: { operation: Operation
         <div><dt>{t($ => $.operations.objective)}</dt><dd>{operation.mission.objective}</dd></div>
         <div><dt>{t($ => $.operations.createdAt)}</dt><dd><Timestamp value={operation.created_at} /></dd></div>
         <div><dt>{t($ => $.operations.updatedAt)}</dt><dd><Timestamp value={operation.updated_at} /></dd></div>
-        {operation.report_id && <div><dt>{t($ => $.operations.reportId)}</dt><dd><code>{operation.report_id}</code></dd></div>}
+        {operation.report_id && <div><dt>{t($ => $.operations.reportId)}</dt><dd className="operation-report-reference"><code>{operation.report_id}</code>
+          {onOpenReport && <Button variant="secondary" onClick={onOpenReport}>{t($ => $.artifacts.viewReport)}</Button>}
+        </dd></div>}
       </dl>
       {operation.error && <div className="operation-error"><h3>{t($ => $.operations.error)}</h3><p>{operation.error}</p></div>}
       <Data label={t($ => $.operations.input)} value={operation.input} /><Data label={t($ => $.operations.output)} value={operation.output} />
@@ -193,7 +203,8 @@ export function OperationDetails({ operation, onAnswer }: { operation: Operation
         onAnswer={onAnswer && isActiveOperation(operation.status) ? () => onAnswer(question) : undefined} /></li>)}</ul></> : <p className="catalog-muted">{t($ => $.operations.noQuestions)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.artifacts)}</h2>
-      {artifacts.length ? <ul className="operation-items">{artifacts.map(artifact => <li key={artifact.id}><Artifact artifact={artifact} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noArtifacts)}</p>}
+      {artifacts.length ? <ul className="operation-items">{artifacts.map(artifact => <li key={artifact.id}><Artifact artifact={artifact}
+        onOpen={onOpenArtifact ? fileID => onOpenArtifact(artifact.id, fileID) : undefined} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noArtifacts)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.events)}</h2>
       {events.length ? <details className="operation-card"><summary>{t($ => $.operations.eventHistory, { count: events.length })}</summary><div className="operation-card-body">

@@ -6,6 +6,8 @@ import { isActiveOperation, OperationDetails, OperationStatus, operationProgress
 import { StartOperationDialog } from '../components/StartOperationDialog';
 import { OperationCommandDialog } from '../components/OperationCommandDialog';
 import { OperationGraphPanel } from '../components/OperationGraphPanel';
+import { ArtifactDialog } from '../components/ArtifactDialog';
+import { ReportDialog } from '../components/ReportDialog';
 import { Button } from '../components/Button';
 import type { Connection, Credentials } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
@@ -16,6 +18,9 @@ import '../styles/operations.css';
 const knownStatuses = ['planning', 'running', 'waiting', 'completed', 'failed', 'cancelled'] as const;
 type CommandModal = { url: string; credentials: Credentials } & (
   { kind: 'start' } | { kind: 'cancel'; operation: Operation } | { kind: 'answer'; operation: Operation; question: OperationQuestion }
+);
+type ResourceModal = { url: string; credentials: Credentials; operationID: string } & (
+  { kind: 'artifact'; artifactID: string; fileID?: string } | { kind: 'report' }
 );
 
 export function OperationsPage({ connection, credentials, onSignIn }: {
@@ -29,6 +34,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
   const [status, setStatus] = useState('');
   const [view, setView] = useState<'details' | 'graph'>('details');
   const [modal, setModal] = useState<CommandModal>();
+  const [resource, setResource] = useState<ResourceModal>();
   const [notice, setNotice] = useState<'created' | 'cancelled' | 'answered'>();
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
@@ -40,6 +46,7 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     `${item.id} ${item.mission.name}`.toLocaleLowerCase().includes(filter));
   const error = !credentials ? 'authentication' : query.error?.kind;
   const currentModal = credentials && modal?.url === connection.url && modal.credentials === credentials ? modal : undefined;
+  const currentResource = credentials && resource?.url === connection.url && resource.credentials === credentials && resource.operationID === selectedID ? resource : undefined;
   const commandOperation = currentModal && currentModal.kind !== 'start' ? query.item ?? currentModal.operation : undefined;
   const commandQuestion = currentModal?.kind === 'answer' ? commandOperation?.questions?.find(question => question.id === currentModal.question.id) : undefined;
 
@@ -47,9 +54,15 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [selectedID]);
 
-  function select(id?: string) { focusHeading.current = true; setSelectedID(id); setNotice(undefined); setView('details'); }
+  function select(id?: string) { focusHeading.current = true; setSelectedID(id); setNotice(undefined); setView('details'); setResource(undefined); }
   function clearFilters() { setSearch(''); setStatus(''); }
   function inspect(id: string) { setModal(undefined); select(id); query.refresh(); }
+  function openArtifact(artifactID: string, fileID?: string) {
+    if (credentials && selectedID) setResource({ kind: 'artifact', artifactID, fileID, operationID: selectedID, url: connection.url, credentials });
+  }
+  function openReport() {
+    if (credentials && selectedID) setResource({ kind: 'report', operationID: selectedID, url: connection.url, credentials });
+  }
 
   return <section className="catalog-page operations-page">
     {selectedID !== undefined && <button className="catalog-back" type="button" onClick={() => select()}>
@@ -82,8 +95,9 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
         <button type="button" aria-pressed={view === 'details'} onClick={() => setView('details')}>{t($ => $.operationGraph.details)}</button>
         <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>{t($ => $.operationGraph.title)}</button>
       </div>
-      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} onSignIn={onSignIn} />
-        : <OperationDetails operation={query.item} onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} />}
+      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} onSignIn={onSignIn} onOpenArtifact={openArtifact} />
+        : <OperationDetails operation={query.item} onOpenArtifact={openArtifact} onOpenReport={openReport}
+          onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} />}
     </> : <>
       {(items.length > 0 || filter || status) && <div className="catalog-toolbar">
         <div className="operation-filters">
@@ -115,6 +129,10 @@ export function OperationsPage({ connection, credentials, onSignIn }: {
       </div>}
     </>}
     {credentials && !query.loading && !error && view !== 'graph' && <p className="catalog-updated">{t($ => $.operations.polling)} {query.checkedAt !== undefined && t($ => $.operations.checked, { time: new Date(query.checkedAt).toLocaleTimeString() })}</p>}
+    {currentResource?.kind === 'artifact' && <ArtifactDialog key={`${currentResource.url}:${currentResource.artifactID}:${currentResource.fileID ?? ''}`}
+      url={currentResource.url} credentials={currentResource.credentials} artifactID={currentResource.artifactID} initialFileID={currentResource.fileID} onClose={() => setResource(undefined)} />}
+    {currentResource?.kind === 'report' && <ReportDialog key={`${currentResource.url}:${currentResource.operationID}`}
+      url={currentResource.url} credentials={currentResource.credentials} operationID={currentResource.operationID} onClose={() => setResource(undefined)} />}
     {currentModal?.kind === 'start' && <StartOperationDialog connection={connection} credentials={currentModal.credentials}
       onClose={() => setModal(undefined)} onInspect={inspect} onStarted={operation => { setModal(undefined); select(operation.id); setNotice('created'); }} />}
     {currentModal && currentModal.kind !== 'start' && commandOperation && <OperationCommandDialog
