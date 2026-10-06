@@ -29,6 +29,7 @@ describe('execution graph layout', () => {
     }
     expect(layout.edges.find(item => item.edge.source === 'root' && item.edge.target === 'shared')!.path).toContain(' L ');
     expect(layoutGraph(graph)).toEqual(layout);
+    expect(layoutGraph(graph, { allowCycles: true })).toEqual(layout);
   });
 
   it('handles empty work and a long chain without recursion', () => {
@@ -49,5 +50,45 @@ describe('execution graph layout', () => {
       { source: 'one', target: 'two', kind: 'parent_child' }, { source: 'two', target: 'one', kind: 'parent_child' },
     ] })).toThrow('cycle');
     expect(() => layoutGraph({ ...base, nodes, edges: [{ source: 'one', target: 'missing', kind: 'parent_child' }] })).toThrow('endpoint');
+  });
+
+  it.each([
+    { name: 'self-loop', ids: ['self'], links: [['self', 'self']] },
+    { name: 'connected and disconnected cycles', ids: ['root', 'one', 'two', 'tail', 'self', 'isolated'], links: [
+      ['root', 'one'], ['one', 'two'], ['two', 'one'], ['two', 'tail'], ['self', 'self'],
+    ] },
+  ])('preserves every node and edge for $name when cycles are allowed', ({ ids, links }) => {
+    const graph = {
+      nodes: ids.map(id => ({ id, name: `Action ${id}` })),
+      edges: links.map(([source, target]) => ({ source, target, rule: 'allowed' })),
+    };
+
+    const layout = layoutGraph(graph, { allowCycles: true });
+
+    expect(layout.nodes.map(item => item.node.id).sort()).toEqual([...ids].sort());
+    expect(layout.nodes.map(item => item.node)).toEqual(expect.arrayContaining(graph.nodes));
+    expect(layout.edges.map(item => item.edge)).toEqual(graph.edges);
+    for (const [index, a] of layout.nodes.entries()) for (const b of layout.nodes.slice(index + 1)) {
+      expect(a.x + GRAPH_NODE_WIDTH <= b.x || b.x + GRAPH_NODE_WIDTH <= a.x ||
+        a.y + GRAPH_NODE_HEIGHT <= b.y || b.y + GRAPH_NODE_HEIGHT <= a.y).toBe(true);
+    }
+    for (const { x, y } of layout.nodes) {
+      expect(x).toBeGreaterThanOrEqual(0); expect(y).toBeGreaterThanOrEqual(0);
+      expect(x + GRAPH_NODE_WIDTH).toBeLessThanOrEqual(layout.width);
+      expect(y + GRAPH_NODE_HEIGHT).toBeLessThanOrEqual(layout.height);
+    }
+    for (const { edge, path } of layout.edges) {
+      const coordinates = path.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+      for (const [index, coordinate] of coordinates.entries()) {
+        expect(coordinate).toBeGreaterThanOrEqual(0);
+        expect(coordinate).toBeLessThanOrEqual(index % 2 ? layout.height : layout.width);
+      }
+      const source = layout.nodes.find(item => item.node.id === edge.source)!;
+      const target = layout.nodes.find(item => item.node.id === edge.target)!;
+      if (target.x <= source.x) {
+        expect(Math.min(...coordinates.filter((_, index) => index % 2))).toBeLessThan(Math.min(...layout.nodes.map(item => item.y)));
+      }
+    }
+    expect(layoutGraph(graph, { allowCycles: true })).toEqual(layout);
   });
 });

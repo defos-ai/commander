@@ -26,7 +26,9 @@ the UI offers to inspect the operation and never retries a command automatically
 
 Switch operation details to **Execution graph** to follow recorded tasks and their
 artifacts and files. Select a node to inspect its status and related work in a popup; zoom
-and scroll to explore larger graphs. It refreshes every 10 seconds and shows
+and drag to explore larger graphs. Mouse dragging pans the graph without opening
+node details; clicking a node opens them. Touch scrolling and keyboard navigation
+remain available. It refreshes every 10 seconds and shows
 recorded work, including queued tasks, rather than a plan of future work.
 Open artifacts from details or graph nodes to inspect metadata, preview images
 and text, or download files. Previews are limited to 2 MiB and downloads to
@@ -34,8 +36,10 @@ and text, or download files. Previews are limited to 2 MiB and downloads to
 File content is fetched on demand through the UI backend.
 
 Missions supports search and read-only details: objectives, starting and required
-actions, automations, planning steps, and input/output schemas. Refresh loads the
-current definitions from the selected API.
+actions, automations, planning steps, and input/output schemas. The automation
+graph connects allowed follow-ups and shows model review and continuation rules.
+Drag, zoom, or select a node to inspect its rule. Refresh loads the current
+definitions from the selected API.
 
 Agents shows current work, host details, heartbeat freshness and each agent's
 action readiness and missing requirements. Actions shows catalog definitions,
@@ -58,7 +62,8 @@ Local Compose credentials are `commander` / `commander-local-secret`; override
 them with `API_USERNAME` and `API_PASSWORD`. Use `-f compose.full.yaml` for
 MongoDB, RabbitMQ and MinIO. `COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change
 the published ports. Discovery checks only `http://localhost:4274`; for another
-API port, use **Add connection** and enter its URL manually.
+API port, choose **Add connection**. This opens an empty form for the connection
+name, API URL, username and password.
 
 For frontend development, with Node 24+, prepare the assets and start the Go
 backend from this directory:

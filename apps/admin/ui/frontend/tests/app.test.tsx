@@ -107,12 +107,12 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
   });
 
-  it.each(['Connect', 'Add connection'])('connects after entering only a password through %s and suppresses saved local discovery', async trigger => {
+  it('connects to the detected local API after entering only a password and suppresses saved local discovery', async () => {
     const api = mockAPI();
     const first = render(<App />);
 
     await screen.findByText('Local Commander detected');
-    fireEvent.click(screen.getByRole('button', { name: trigger }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
     expect(screen.getByLabelText('Connection name')).toHaveValue('Local connection');
     expect(screen.getByLabelText('API URL')).toHaveValue(localURL);
     expect(screen.getByLabelText('Username')).toHaveValue('commander');
@@ -138,6 +138,30 @@ describe('connection setup and saved metadata', () => {
     expect(api.fetch.mock.calls.filter(([input]) => upstreamURL(input) === `${localURL}/healthz`)).toHaveLength(1);
   });
 
+  it('opens manual Add with empty fields, including after cancelling detected local setup', async () => {
+    mockAPI();
+    render(<App />);
+    await screen.findByText('Local Commander detected');
+
+    for (const localFirst of [false, true]) {
+      if (localFirst) {
+        fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+        expect(screen.getByLabelText('Connection name')).toHaveValue('Local connection');
+        expect(screen.getByLabelText('API URL')).toHaveValue(localURL);
+        expect(screen.getByLabelText('Username')).toHaveValue('commander');
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+      for (const label of ['Connection name', 'API URL', 'Username', 'Password']) {
+        expect(screen.getByLabelText(label)).toHaveValue('');
+      }
+      expect(screen.getByLabelText('Connection name')).toHaveFocus();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    }
+    expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).toBeNull();
+  });
+
   it('hides discovery when the default API is unavailable and allows a custom port to be entered manually', async () => {
     const api = mockAPI();
     api.state.intercept = url => url.startsWith(localURL)
@@ -148,17 +172,14 @@ describe('connection setup and saved metadata', () => {
     expect(screen.queryByText('Local Commander detected')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
-    expect(screen.getByLabelText('Connection name')).toHaveValue('Local connection');
-    expect(screen.getByLabelText('API URL')).toHaveValue(localURL);
-    expect(screen.getByLabelText('Username')).toHaveValue('commander');
-    fireEvent.change(screen.getByLabelText('API URL'), { target: { value: customLocalURL } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+    expect(screen.getByLabelText('API URL')).toHaveValue('');
+    fillConnection({ name: 'Custom local connection', url: customLocalURL });
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Connect' }));
 
     expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-    expect(stored()).toEqual([{ id: expect.any(String), name: 'Local connection', url: customLocalURL }]);
+    expect(stored()).toEqual([{ id: expect.any(String), name: 'Custom local connection', url: customLocalURL }]);
     const create = api.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
-    expect(JSON.parse(create?.[1]?.body as string)).toEqual({ url: customLocalURL, username: 'commander', password });
+    expect(JSON.parse(create?.[1]?.body as string)).toEqual({ url: customLocalURL, username, password });
   });
 
   it('opens a checked connection, saves only metadata, and restores its server session after reload', async () => {

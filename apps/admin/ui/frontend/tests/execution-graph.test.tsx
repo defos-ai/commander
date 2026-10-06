@@ -19,6 +19,32 @@ const graph: OperationGraph = { operation_id: 'operation-1', status: 'running', 
   { source: 'artifact:page', target: 'file:page:desktop', kind: 'contains' },
 ] };
 
+// jsdom lacks PointerEvent and pointer capture; keep their stand-ins local to pan tests.
+function pointer(target: Element, type: string, options: PointerEventInit = {}) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, ...options });
+  Object.defineProperties(event, {
+    pointerId: { value: options.pointerId ?? 1 },
+    pointerType: { value: options.pointerType ?? 'mouse' },
+    isPrimary: { value: options.isPrimary ?? true },
+  });
+  fireEvent(target, event);
+}
+
+function renderPannableGraph() {
+  render(<ExecutionGraph graph={graph} />);
+  const viewport = screen.getByRole('region', { name: 'Operation execution graph' });
+  const node = screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' });
+  for (const element of [viewport, ...within(viewport).getAllByRole('button')]) {
+    let captured: number | undefined;
+    Object.defineProperties(element, {
+      setPointerCapture: { value: (id: number) => { captured = id; } },
+      hasPointerCapture: { value: (id: number) => captured === id },
+      releasePointerCapture: { value: () => { captured = undefined; } },
+    });
+  }
+  return { viewport, node };
+}
+
 describe('execution graph', () => {
   it('lets operators inspect task, artifact and file relationships and zoom the canvas', () => {
     render(<ExecutionGraph graph={graph} />);
@@ -47,6 +73,80 @@ describe('execution graph', () => {
     expect(screen.getByLabelText('Graph zoom')).toHaveTextContent('75%');
     fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
     expect(screen.getByLabelText('Graph zoom')).toHaveTextContent('100%');
+  });
+
+  it.each(['mouse', 'pen'])('pans both axes from a node with %s and keeps the next click usable', pointerType => {
+    const { viewport, node } = renderPannableGraph();
+    viewport.scrollLeft = 100;
+    viewport.scrollTop = 80;
+    pointer(node, 'pointerdown', { pointerType, clientX: 200, clientY: 160 });
+    pointer(node, 'pointermove', { pointerType, clientX: 170, clientY: 140 });
+
+    expect(viewport.scrollLeft).toBe(130);
+    expect(viewport.scrollTop).toBe(100);
+    pointer(node, 'pointerup', { pointerType, clientX: 170, clientY: 140 });
+    fireEvent.click(node, { detail: 1 });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    pointer(node, 'pointermove', { pointerType, clientX: 140, clientY: 110 });
+    expect(viewport.scrollLeft).toBe(130);
+    expect(viewport.scrollTop).toBe(100);
+
+    pointer(node, 'pointerdown', { pointerType, clientX: 170, clientY: 140 });
+    pointer(node, 'pointerup', { pointerType, clientX: 170, clientY: 140 });
+    fireEvent.click(node, { detail: 1 });
+    expect(screen.getByRole('dialog', { name: 'Node details' })).toBeVisible();
+  });
+
+  it('opens a node when a click moves less than the drag threshold', () => {
+    const { viewport, node } = renderPannableGraph();
+    pointer(node, 'pointerdown', { clientX: 200, clientY: 160 });
+    pointer(node, 'pointermove', { clientX: 198, clientY: 159 });
+    pointer(node, 'pointerup', { clientX: 198, clientY: 159 });
+    fireEvent.click(node, { detail: 1 });
+
+    expect(viewport.scrollLeft).toBe(0);
+    expect(viewport.scrollTop).toBe(0);
+    expect(screen.getByRole('dialog', { name: 'Node details' })).toBeVisible();
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])('ends background panning on %s and preserves keyboard activation', event => {
+    const { viewport, node } = renderPannableGraph();
+    pointer(viewport, 'pointerdown', { clientX: 200, clientY: 160 });
+    pointer(viewport, 'pointermove', { clientX: 160, clientY: 130 });
+    pointer(viewport, event);
+    pointer(viewport, 'pointermove', { clientX: 120, clientY: 100 });
+
+    expect(viewport.scrollLeft).toBe(40);
+    expect(viewport.scrollTop).toBe(30);
+    fireEvent.click(node, { detail: 0 });
+    expect(screen.getByRole('dialog', { name: 'Node details' })).toBeVisible();
+  });
+
+  it('allows a touch tap after a cancelled mouse drag', () => {
+    const { viewport, node } = renderPannableGraph();
+    pointer(viewport, 'pointerdown', { clientX: 200, clientY: 160 });
+    pointer(viewport, 'pointermove', { clientX: 160, clientY: 130 });
+    pointer(viewport, 'pointercancel');
+
+    pointer(node, 'pointerdown', { pointerType: 'touch', pointerId: 2, clientX: 160, clientY: 130 });
+    pointer(node, 'pointerup', { pointerType: 'touch', pointerId: 2, clientX: 160, clientY: 130 });
+    fireEvent.click(node, { detail: 1 });
+
+    expect(screen.getByRole('dialog', { name: 'Node details' })).toBeVisible();
+  });
+
+  it.each([
+    { pointerType: 'touch', button: 0 },
+    { pointerType: 'mouse', button: 2 },
+  ])('leaves $pointerType button $button gestures alone', options => {
+    const { viewport } = renderPannableGraph();
+    pointer(viewport, 'pointerdown', { ...options, clientX: 200, clientY: 160 });
+    pointer(viewport, 'pointermove', { ...options, clientX: 160, clientY: 130 });
+    pointer(viewport, 'pointerup', { ...options, clientX: 160, clientY: 130 });
+
+    expect(viewport.scrollLeft).toBe(0);
+    expect(viewport.scrollTop).toBe(0);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('retains selection and zoom as work changes and clears a removed selection', () => {
@@ -135,7 +235,7 @@ describe('operation graph queries', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Could not load the execution graph');
       expect(screen.queryByRole('region', { name: 'Operation execution graph' })).not.toBeInTheDocument();
       failed = false;
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh graph' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
       await act(async () => {});
       expect(screen.getByRole('region', { name: 'Operation execution graph' })).toBeVisible();
     } finally { vi.useRealTimers(); }

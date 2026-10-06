@@ -1,5 +1,5 @@
 import { upstreamURL } from './proxy';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Mission } from '../src/api/types';
 import { MissionsPage } from '../src/pages/MissionsPage';
@@ -54,8 +54,12 @@ describe('missions browser', () => {
     expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
     expect(screen.getByRole('heading', { name: mission.name, level: 1 })).toHaveFocus();
     expect(screen.getByText('Website to review')).toBeVisible();
-    expect(screen.getByText('Continue after all generated tasks finish.')).toBeVisible();
-    expect(screen.getByText('Model review')).toBeVisible();
+    const graph = screen.getByRole('region', { name: 'Mission automation graph' });
+    expect(within(graph).getAllByRole('button')).toHaveLength(2);
+    expect(within(within(graph).getByRole('button', { name: 'Inspect automation check-links' })).getByText('Model review')).toBeVisible();
+    fireEvent.click(within(graph).getByRole('button', { name: 'Inspect automation discover-pages' }));
+    expect(within(screen.getByRole('dialog', { name: 'Automation details' })).getByText('Continue after all generated tasks finish.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
     expect(fetch.mock.calls.some(([url]) => upstreamURL(url) === `${connection.url}/api/v1/missions/review-website`)).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
 

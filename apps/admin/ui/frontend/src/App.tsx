@@ -19,7 +19,7 @@ import { AgentsPage } from './pages/AgentsPage';
 import { ActionsPage } from './pages/ActionsPage';
 import { OperationsPage } from './pages/OperationsPage';
 
-type Modal = { kind: 'connect'; connection?: Connection } | { kind: 'remove'; connection: Connection };
+type Modal = { kind: 'connect'; connection?: Connection; localURL?: string } | { kind: 'remove'; connection: Connection };
 
 export function App() {
   const { t } = useTranslation();
@@ -80,9 +80,9 @@ export function App() {
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
       {activeID && <p className="notice" role="status">{t($ => $.connections.missing)}</p>}
       {local.status === 'checking' && <p className="local-discovery" role="status"><LoaderCircle className="connection-form-spinner" size={14} aria-hidden="true" />{t($ => $.connections.localChecking)}</p>}
-      {local.status === 'found' && <div className="local-discovery"><div><span className="status-dot" aria-hidden="true" />{t($ => $.connections.localFound)}<span className="local-url">{local.url}</span></div><Button variant="secondary" onClick={() => setModal({ kind: 'connect' })}>{t($ => $.connections.localConnect)}</Button></div>}
+      {local.status === 'found' && <div className="local-discovery"><div><span className="status-dot" aria-hidden="true" />{t($ => $.connections.localFound)}<span className="local-url">{local.url}</span></div><Button variant="secondary" onClick={() => setModal({ kind: 'connect', localURL: local.url })}>{t($ => $.connections.localConnect)}</Button></div>}
     </ConnectionsPage>}
-    {modal?.kind === 'connect' && <ConnectionDialog connection={modal.connection} credentials={modal.connection ? state.credentials[modal.connection.id] : undefined} defaultURL={local.url}
+    {modal?.kind === 'connect' && <ConnectionDialog connection={modal.connection} credentials={modal.connection ? state.credentials[modal.connection.id] : undefined} localURL={modal.localURL}
       onClose={() => setModal(undefined)} onConnect={async (values, signal) => {
         const url = normalizeURL(values.url);
         if (state.connections.some(connection => connection.url === url && connection.id !== modal.connection?.id)) return t($ => $.connections.duplicate);

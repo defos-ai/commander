@@ -17,7 +17,9 @@
 .graph-zoom-controls output { color: var(--muted); min-width: 42px; text-align: center; font: 400 12px/1.6 var(--font-mono); }
 .graph-zoom-controls .button { padding: 8px 12px; }
 .graph-navigation-hint { color: var(--muted); font-size: 13px; line-height: 1.6; }
-.graph-viewport { min-width: 0; height: 540px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background-color: var(--panel); background-image: radial-gradient(var(--line) .7px, transparent .7px); background-size: 20px 20px; }
+.graph-viewport { min-width: 0; height: 540px; overflow: auto; scrollbar-width: none; cursor: grab; user-select: none; border: 1px solid var(--line); border-radius: 4px; background-color: var(--panel); background-image: radial-gradient(var(--line) .7px, transparent .7px); background-size: 20px 20px; }
+.graph-viewport::-webkit-scrollbar { display: none; }
+.graph-viewport[data-panning='true'], .graph-viewport[data-panning='true'] * { cursor: grabbing; }
 .graph-scale-frame { position: relative; overflow: hidden; }
 .graph-canvas { position: relative; transform-origin: top left; }
 .graph-edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }

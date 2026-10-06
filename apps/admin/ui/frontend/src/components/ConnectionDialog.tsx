@@ -9,10 +9,10 @@ import { Dialog } from './Dialog';
 type ConnectionValues = { name: string; url: string; username: string; password: string };
 type Field = keyof ConnectionValues;
 
-export function ConnectionDialog({ connection, credentials, defaultURL = 'http://localhost:4274', onClose, onConnect }: {
+export function ConnectionDialog({ connection, credentials, localURL, onClose, onConnect }: {
   connection?: Connection;
   credentials?: Session;
-  defaultURL?: string;
+  localURL?: string;
   onClose: () => void;
   onConnect: (value: ConnectionValues, signal: AbortSignal) => Promise<string | void>;
 }) {
@@ -22,9 +22,9 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
   const hintID = `${identity}-credentials-hint`;
   const urlHintID = `${identity}-url-hint`;
   const [values, setValues] = useState<ConnectionValues>(() => ({
-    name: connection?.name ?? t($ => $.connectionForm.defaultName),
-    url: connection?.url ?? defaultURL,
-    username: credentials?.username ?? (connection ? '' : 'commander'),
+    name: connection?.name ?? (localURL ? t($ => $.connectionForm.defaultName) : ''),
+    url: connection?.url ?? localURL ?? '',
+    username: credentials?.username ?? (!connection && localURL ? 'commander' : ''),
     password: '',
   }));
   const [error, setError] = useState('');
@@ -34,8 +34,8 @@ export function ConnectionDialog({ connection, credentials, defaultURL = 'http:/
 
   useEffect(() => () => pending.current?.abort(), []);
   useEffect(() => {
-    document.getElementById(`${identity}-${connection ? 'name' : 'password'}`)?.focus();
-  }, [identity, connection]);
+    document.getElementById(`${identity}-${!connection && localURL ? 'password' : 'name'}`)?.focus();
+  }, [identity, connection, localURL]);
 
   function close() {
     pending.current?.abort();

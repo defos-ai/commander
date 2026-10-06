@@ -7,7 +7,7 @@ const connectionForm = {
   urlHint: "Enter the API's public URL.",
   username: 'Username',
   password: 'Password',
-  credentialsHint: 'Sign-in survives reload. API passwords are kept on the UI server, not in this browser.',
+  credentialsHint: 'API passwords are kept on the UI server, not in this browser.',
   connect: 'Connect',
   save: 'Save connection',
   testing: 'Testing connection',

@@ -21,11 +21,11 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByText('Local Commander detected')).not.toBeVisible();
   await page.getByRole('button', { name: 'Add connection', exact: true }).click();
   const connection = page.getByRole('dialog', { name: 'Add connection', exact: true });
-  await expect(connection.getByLabel('Connection name')).toHaveValue('Local connection');
-  await expect(connection.getByLabel('API URL')).toHaveValue(localAPIURL);
-  await expect(connection.getByLabel('Username', { exact: true })).toHaveValue('commander');
+  await expect(connection.getByLabel('Connection name')).toHaveValue('');
+  await expect(connection.getByLabel('API URL')).toHaveValue('');
+  await expect(connection.getByLabel('Username', { exact: true })).toHaveValue('');
   await expect(connection.getByLabel('Password', { exact: true })).toHaveValue('');
-  await expect(connection.getByLabel('Password', { exact: true })).toBeFocused();
+  await expect(connection.getByLabel('Connection name')).toBeFocused();
   await connection.getByLabel('Connection name').fill('Compose test');
   await connection.getByLabel('API URL').fill(publicAPIURL);
   await connection.getByLabel('Username', { exact: true }).fill(username);
@@ -38,6 +38,21 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
   const missionURL = page.url();
   await expect(page).toHaveURL(/\/missions\/review-website$/);
+
+  const automationGraph = page.getByRole('region', { name: 'Mission automation graph' });
+  await expect(automationGraph.getByRole('button', { name: /^Inspect automation / })).toHaveCount(6);
+  await automationGraph.getByRole('button', { name: 'Inspect automation discover-pages', exact: true }).click();
+  const automation = page.getByRole('dialog', { name: 'Automation details', exact: true });
+  await expect(automation.getByRole('heading', { name: 'Automatically run proposed actions', exact: true })).toBeVisible();
+  await expect(automation.getByText('Run proposals automatically only when all are allowed below. These are possible follow-ups, not mandatory steps. Failed work or no proposals also require model review.', { exact: true })).toBeVisible();
+  await expect(automation.getByRole('list').getByRole('button')).toHaveCount(5);
+  await expect(automation.getByText('Continue after all generated tasks finish.', { exact: true })).toBeVisible();
+  await automation.getByRole('button', { name: 'capture-page', exact: true }).click();
+  await expect(automation.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
+  await expect(automation.getByRole('heading', { name: 'Model review', exact: true })).toBeVisible();
+  await expect(automation.getByText('The model decides how to continue. If this action belongs to a wait-for-all group, its results are reviewed with the group.', { exact: true })).toBeVisible();
+  await automation.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(automationGraph.getByRole('button', { name: 'Inspect automation capture-page', exact: true })).toBeFocused();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(2);
@@ -132,11 +147,38 @@ test('operation questions, automatic work, graph and downloads use the real stac
   await expect(graph.getByRole('button', { name: /^Inspect Task / })).toHaveCount(6);
   await expect(graph.getByRole('button', { name: /^Inspect Artifact / })).toHaveCount(1);
   await expect(graph.getByRole('button', { name: /^Inspect File / })).toHaveCount(2);
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click({ clickCount: 2 });
+  await expect(page.getByLabel('Graph zoom')).toHaveText('150%');
+  const drag = async (x: number, y: number) => {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x - 80, y - 60, { steps: 8 });
+    await page.mouse.up();
+  };
+  const rootNode = graph.getByRole('button', { name: /^Inspect Task discover-pages / });
+  await rootNode.scrollIntoViewIfNeeded();
+  const rootBox = (await rootNode.boundingBox())!;
+  const beforePan = await graph.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }));
+  await drag(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2);
+  await expect.poll(() => graph.evaluate(element => element.scrollLeft)).toBeGreaterThan(beforePan.left);
+  await expect.poll(() => graph.evaluate(element => element.scrollTop)).toBeGreaterThan(beforePan.top);
+  await expect(page.getByRole('dialog', { name: 'Node details', exact: true })).not.toBeVisible();
   await graph.getByRole('button', { name: /^Inspect Task capture-page / }).click();
   const node = page.getByRole('region', { name: 'Node details' });
   await expect(node.getByRole('button', { name: 'Parent task discover-pages', exact: true })).toBeVisible();
   await expect(node.getByRole('button', { name: 'Produced artifact Page screenshots', exact: true })).toBeVisible();
   await page.getByRole('dialog', { name: 'Node details', exact: true }).getByRole('button', { name: 'Close dialog' }).click();
+  await page.getByRole('button', { name: 'Reset view', exact: true }).click();
+  await graph.scrollIntoViewIfNeeded();
+  const graphBox = (await graph.boundingBox())!;
+  // Start in the canvas padding and continue outside the viewport while captured.
+  await drag(graphBox.x + graphBox.width - 20, graphBox.y + 12);
+  await expect.poll(() => graph.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  await expect.poll(() => graph.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await expect(page.getByRole('dialog', { name: 'Node details', exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Reset view', exact: true }).click();
+  await expect(page.getByLabel('Graph zoom')).toHaveText('100%');
+  await expect.poll(() => graph.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 0, top: 0 });
   await graph.getByRole('button', { name: new RegExp(`^Inspect File desktop\\.png · file:${artifact!.id}:${file.id}$`) }).click();
   await expect(node.getByText(file.sha256, { exact: true })).toBeVisible();
   await node.getByRole('button', { name: 'View file', exact: true }).click();
