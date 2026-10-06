@@ -51,6 +51,23 @@ Start the [MCP adapter](../adapters/README.md#quick-start) and
   Use `controller.Register` with a `controllers.ControllerStore`, mark the
   registration ready after startup, and close it after consumers and the runner.
 
+### Agent selection
+
+Provide a [`runner.AgentSelector`](../../framework/controller/runner/agent_selector.go)
+through `runner.Config.AgentSelector`. Its `Select(ctx, selection)` method receives
+a task snapshot, eligible agent snapshots, runner-local load/capacity and the last
+successfully dispatched agent ID. Return one candidate's ID. An empty ID defers
+work; an error or invalid ID is logged and leaves the task queued for retry.
+Pass a logger through `runner.Config.Logger` to receive these diagnostics.
+
+The default is `runner.RoundRobinSelector{}`. The runner retains readiness,
+permission, capacity, persistence and recovery checks. Report the selector's
+`Name()` in `controller.RegistrationConfig.AgentSelector`.
+
+Selection runs serially in the scheduler's owner loop, within its five-second
+deadline. Implementations must return promptly and respect cancellation. Slow
+remote model decisions need asynchronous scheduling before they can be integrated.
+
 ### Run tests
 
 From the repository root:

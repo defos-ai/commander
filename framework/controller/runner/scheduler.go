@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -55,8 +56,14 @@ func (r *Runner) dispatchQueued() {
 			if task.Status != operations.TaskQueued || s.operation.BlockedByQuestion(task) {
 				continue
 			}
-			agentID := r.selectAgent(task, records, used)
-			if agentID == "" {
+			agentID, err := r.selectAgent(ctx, task, records, used)
+			if err != nil && r.ctx.Err() == nil {
+				r.logger.Warn("Agent selection failed", "operation_id", s.operation.ID, "task_id", task.ID, "selector", r.selector.Name(), "error", err)
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil || agentID == "" {
 				continue
 			}
 			startedAt := time.Now().UTC()
@@ -76,8 +83,9 @@ func (r *Runner) dispatchQueued() {
 	}
 }
 
-func (r *Runner) selectAgent(task operations.Task, records []agentmodel.Agent, used map[string]int) string {
-	eligible := make([]string, 0, len(records))
+func (r *Runner) selectAgent(ctx context.Context, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
+	selection := AgentSelection{PreviousAgentID: r.lastAgent}
+	eligible := make(map[string]bool)
 	for _, record := range records {
 		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity {
 			continue
@@ -87,18 +95,30 @@ func (r *Runner) selectAgent(task operations.Task, records []agentmodel.Agent, u
 				continue
 			}
 			if operations.AssessAgentAction(record, action).Reason == "" {
-				eligible = append(eligible, record.ID)
+				eligible[record.ID] = true
+				selection.Candidates = append(selection.Candidates, AgentCandidate{
+					Agent: record.Clone(), RunningTasks: used[record.ID], Capacity: r.capacity,
+				})
 			}
 			break
 		}
 	}
-	for _, id := range eligible {
-		if id > r.lastAgent {
-			return id
-		}
+	if len(selection.Candidates) == 0 {
+		return "", nil
 	}
-	if len(eligible) > 0 {
-		return eligible[0]
+	selection.Task = task.Clone()
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
-	return ""
+	agentID, err := r.selector.Select(ctx, selection)
+	if err != nil {
+		return "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if agentID != "" && !eligible[agentID] {
+		return "", errors.New("agent selector returned an ineligible agent")
+	}
+	return agentID, nil
 }

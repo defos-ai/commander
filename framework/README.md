@@ -35,6 +35,9 @@ Keep providers and apps outside framework dependencies. Use singular entities an
 matching stores in plural packages: `agents.Agent`, `agents.AgentStore`. Update
 persistence, consumers and recovery together when changing a lifecycle.
 
+Controller hosts can supply an `AgentSelector` to customize which eligible agent
+receives a task. See [agent selection](../apps/controllers/README.md#agent-selection).
+
 From the repository root:
 
 ```sh
