@@ -167,6 +167,17 @@ test('operation questions, automatic work, graph and downloads use the real stac
   const node = page.getByRole('region', { name: 'Node details' });
   await expect(node.getByRole('button', { name: 'Parent task discover-pages', exact: true })).toBeVisible();
   await expect(node.getByRole('button', { name: 'Produced artifact Page screenshots', exact: true })).toBeVisible();
+  const captureTask = finished.tasks!.find(task => task.action_name === 'capture-page')!;
+  for (const [label, value] of [['Input', captureTask.input], ['Output', captureTask.result!.output]] as const) {
+    const details = node.locator('details').filter({ has: page.locator('summary').filter({ hasText: new RegExp(`^${label}$`) }) });
+    const summary = details.locator('summary');
+    await expect(summary).toBeVisible();
+    const payload = details.locator('pre');
+    await expect(payload).not.toBeVisible();
+    await summary.click();
+    await expect(payload).toBeVisible();
+    await expect(payload).toHaveText(JSON.stringify(value, null, 2));
+  }
   await page.getByRole('dialog', { name: 'Node details', exact: true }).getByRole('button', { name: 'Close dialog' }).click();
   await page.getByRole('button', { name: 'Reset view', exact: true }).click();
   await graph.scrollIntoViewIfNeeded();

@@ -1,15 +1,17 @@
 import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { Session } from '../connections/types';
+import type { OperationTask } from '../api/operation-types';
 import { useOperationGraph } from '../hooks/useOperationGraph';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { ExecutionGraph } from './ExecutionGraph';
 import { OperationStatus } from './OperationDetails';
 
-export function OperationGraphPanel({ url, credentials, operationID, onSignIn, onOpenArtifact }: {
+export function OperationGraphPanel({ url, credentials, operationID, tasks, onSignIn, onOpenArtifact }: {
   url: string;
   credentials?: Session;
   operationID: string;
+  tasks?: OperationTask[] | null;
   onSignIn: () => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
 }) {
@@ -30,7 +32,7 @@ export function OperationGraphPanel({ url, credentials, operationID, onSignIn, o
       <p className="operation-graph-snapshot"><OperationStatus status={query.graph.status} />
         <time dateTime={query.graph.updated_at}>{t($ => $.operationGraph.updated, { time: new Date(query.graph.updated_at).toLocaleString() })}</time>
       </p>
-      <ExecutionGraph key={`${url}:${operationID}`} graph={query.graph} onOpenArtifact={onOpenArtifact} />
+      <ExecutionGraph key={`${url}:${operationID}`} graph={query.graph} tasks={tasks} onOpenArtifact={onOpenArtifact} />
       <p className="catalog-updated">{t($ => $.operationGraph.polling)}</p>
     </> : <p className="catalog-loading" role="status"><LoaderCircle className="connection-form-spinner" size={17} aria-hidden="true" />{t($ => $.operationGraph.loading)}</p>}
   </section>;

@@ -110,7 +110,7 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
         <button type="button" aria-pressed={view === 'details'} onClick={() => changeView('details')}>{t($ => $.operationGraph.details)}</button>
         <button type="button" aria-pressed={view === 'graph'} onClick={() => changeView('graph')}>{t($ => $.operationGraph.title)}</button>
       </div>
-      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} onSignIn={onSignIn} onOpenArtifact={openArtifact} />
+      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} tasks={query.item.tasks} onSignIn={onSignIn} onOpenArtifact={openArtifact} />
         : <OperationDetails operation={query.item} onOpenArtifact={openArtifact} onOpenReport={openReport}
           onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} />}
     </> : <>

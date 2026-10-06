@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { GraphNode, OperationGraph } from '../api/graph-types';
+import type { OperationTask } from '../api/operation-types';
 import { useTranslation } from '../i18n';
-import { TaskStatus } from './OperationDetails';
+import { OperationData, TaskStatus } from './OperationDetails';
 import { Button } from './Button';
 
 export function graphNodeName(node: GraphNode) {
@@ -16,9 +17,10 @@ function Timestamp({ value }: { value?: string | null }) {
     : <span className="catalog-muted">{t($ => $.operations.notReported)}</span>;
 }
 
-export function GraphNodeDetails({ graph, node, onSelect, onOpenArtifact }: {
+export function GraphNodeDetails({ graph, node, taskData, onSelect, onOpenArtifact }: {
   graph: OperationGraph;
   node: GraphNode;
+  taskData?: OperationTask;
   onSelect: (id: string) => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
 }) {
@@ -47,6 +49,10 @@ export function GraphNodeDetails({ graph, node, onSelect, onOpenArtifact }: {
         </dl>
         {node.task.status === 'interrupted' && <p className="notice">{t($ => $.operations.interruptedNote)}</p>}
         {node.task.error && <div className="operation-error"><h4>{t($ => $.operations.error)}</h4><p>{node.task.error}</p></div>}
+        {taskData && <div key={node.id}>
+          <OperationData label={t($ => $.operations.input)} value={taskData.input} />
+          <OperationData label={t($ => $.operations.output)} value={taskData.result?.output} />
+        </div>}
       </> : node.kind === 'artifact' ? <dl className="detail-list">
         <div><dt>{t($ => $.operations.artifactId)}</dt><dd><code>{node.artifact.id}</code></dd></div>
         <div><dt>{t($ => $.operations.action)}</dt><dd>{node.artifact.action_name}</dd></div>

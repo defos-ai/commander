@@ -136,7 +136,7 @@ describe('operations browser', () => {
     vi.useFakeTimers();
     try {
       const graph = { operation_id: operation.id, status: operation.status, updated_at: now,
-        nodes: [{ id: `task:${task.id}`, kind: 'task', task }], edges: [] };
+        nodes: [{ id: `task:${task.id}`, kind: 'task', task: { id: task.id, action_name: task.action_name, status: task.status, agent_id: task.agent_id } }], edges: [] };
       const fetch = mockAPI(url => Response.json(url.endsWith('/graph') ? graph
         : url.endsWith('/operations') ? { items: [operation] } : operation));
       await act(async () => { render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); });
@@ -150,7 +150,18 @@ describe('operations browser', () => {
 
       expect(screen.getByRole('button', { name: `Inspect Task ${task.action_name} · task:${task.id}` })).toBeVisible();
       expect(graphCalls()).toBe(1);
-      expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Refresh' })).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeVisible();
+      const beforeInspect = fetch.mock.calls.length;
+      fireEvent.click(screen.getByRole('button', { name: `Inspect Task ${task.action_name} · task:${task.id}` }));
+      const inspector = within(screen.getByRole('region', { name: 'Node details' }));
+      for (const [label, value] of [['Input', task.input], ['Output', task.result!.output]] as const) {
+        const summary = inspector.getByText(label, { selector: 'summary' });
+        fireEvent.click(summary);
+        expect(summary.closest('details')?.querySelector('pre')?.textContent).toBe(JSON.stringify(value, null, 2));
+      }
+      expect(fetch).toHaveBeenCalledTimes(beforeInspect);
+      fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
       expect(graphCalls()).toBe(2);
       fireEvent.click(screen.getByRole('button', { name: 'Details' }));

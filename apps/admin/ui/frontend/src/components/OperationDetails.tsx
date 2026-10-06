@@ -38,7 +38,7 @@ function Timestamp({ value }: { value?: string | null }) {
     : <span className="catalog-muted">{t($ => $.operations.notReported)}</span>;
 }
 
-function Data({ label, value }: { label: string; value: unknown }) {
+export function OperationData({ label, value }: { label: string; value: unknown }) {
   if (value === undefined) return null;
   return <details className="operation-data"><summary>{label}</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>;
 }
@@ -48,7 +48,7 @@ function ProposedActions({ actions }: { actions: OperationNextAction[] | null | 
   return <div className="operation-nested"><h4>{t($ => $.operations.proposedActions)}</h4>
     {actions?.length ? <><p className="catalog-muted">{t($ => $.operations.proposedNote)}</p><ul className="operation-proposals">{actions.map((action, index) => <li key={index}>
       <code>{action.action_name}</code>{action.reason && <p>{action.reason}</p>}
-      <Data label={t($ => $.operations.input)} value={action.input} />
+      <OperationData label={t($ => $.operations.input)} value={action.input} />
     </li>)}</ul></> : <p className="catalog-muted">{t($ => $.operations.noProposedActions)}</p>}
   </div>;
 }
@@ -84,9 +84,9 @@ function Task({ task }: { task: OperationTask }) {
       {task.finished_at && <div><dt>{t($ => $.operations.finishedAt)}</dt><dd><Timestamp value={task.finished_at} /></dd></div>}
       {task.deadline_at && <div><dt>{t($ => $.operations.deadlineAt)}</dt><dd><Timestamp value={task.deadline_at} /></dd></div>}
     </dl>
-    <Data label={t($ => $.operations.input)} value={task.input} />
+    <OperationData label={t($ => $.operations.input)} value={task.input} />
     {task.result ? <>
-      <Data label={t($ => $.operations.result)} value={task.result.output} />
+      <OperationData label={t($ => $.operations.result)} value={task.result.output} />
       {Boolean(task.result.artifacts?.length) && <div className="operation-nested"><h3>{t($ => $.operations.artifacts)}</h3>
         <ul className="operation-identifiers">{task.result.artifacts?.map(artifact => <li key={artifact.id}>{artifact.name} · <code>{artifact.id}</code></li>)}</ul>
       </div>}
@@ -192,7 +192,7 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
         </dd></div>}
       </dl>
       {operation.error && <div className="operation-error"><h3>{t($ => $.operations.error)}</h3><p>{operation.error}</p></div>}
-      <Data label={t($ => $.operations.input)} value={operation.input} /><Data label={t($ => $.operations.output)} value={operation.output} />
+      <OperationData label={t($ => $.operations.input)} value={operation.input} /><OperationData label={t($ => $.operations.output)} value={operation.output} />
     </section>
     {operation.preflight && <Preflight preflight={operation.preflight} />}
     <section className="catalog-section"><h2>{t($ => $.operations.tasks)}</h2>

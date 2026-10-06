@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import type { OperationGraph } from '../src/api/graph-types';
+import type { OperationTask } from '../src/api/operation-types';
 import { ExecutionGraph } from '../src/components/ExecutionGraph';
 import { OperationGraphPanel } from '../src/components/OperationGraphPanel';
 import { Dialog } from '../src/components/Dialog';
@@ -18,6 +19,14 @@ const graph: OperationGraph = { operation_id: 'operation-1', status: 'running', 
   { source: 'task:child', target: 'artifact:page', kind: 'produced' },
   { source: 'artifact:page', target: 'file:page:desktop', kind: 'contains' },
 ] };
+const taskData: OperationTask[] = [
+  { id: 'root', operation_id: graph.operation_id, action_name: 'discover-pages', agent_id: 'agent-one', status: 'succeeded',
+    started_at: graph.updated_at, input: { url: 'https://example.test', max_pages: 1 },
+    result: { action_name: 'discover-pages', output: { pages: ['https://example.test'] } } },
+  { id: 'child', operation_id: graph.operation_id, action_name: 'capture-page', agent_id: 'agent-two', status: 'running',
+    started_at: graph.updated_at, input: { url: 'https://example.test', sizes: ['desktop'] },
+    result: { action_name: 'capture-page', output: { captures: [{ name: 'desktop.png', width: 1280 }] } } },
+];
 
 // jsdom lacks PointerEvent and pointer capture; keep their stand-ins local to pan tests.
 function pointer(target: Element, type: string, options: PointerEventInit = {}) {
@@ -46,6 +55,60 @@ function renderPannableGraph() {
 }
 
 describe('execution graph', () => {
+  it('expands task input and output as JSON and collapses them when navigating to another task', () => {
+    render(<ExecutionGraph graph={graph} tasks={taskData} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' }));
+    const inspector = within(screen.getByRole('region', { name: 'Node details' }));
+    for (const [label, value] of [['Input', taskData[1].input], ['Output', taskData[1].result!.output]] as const) {
+      const summary = inspector.getByText(label, { selector: 'summary' });
+      const details = summary.closest('details')!;
+      expect(details).not.toHaveAttribute('open');
+      expect(details.querySelector('pre')).not.toBeVisible();
+      fireEvent.click(summary);
+      expect(details.querySelector('pre')).toBeVisible();
+      expect(details.querySelector('pre')?.textContent).toBe(JSON.stringify(value, null, 2));
+    }
+
+    fireEvent.click(inspector.getByRole('button', { name: 'Parent task discover-pages' }));
+    expect(inspector.getByRole('heading', { name: 'discover-pages' })).toHaveFocus();
+    for (const [label, value] of [['Input', taskData[0].input], ['Output', taskData[0].result!.output]] as const) {
+      const details = inspector.getByText(label, { selector: 'summary' }).closest('details')!;
+      expect(details).not.toHaveAttribute('open');
+      expect(details.querySelector('pre')?.textContent).toBe(JSON.stringify(value, null, 2));
+    }
+  });
+
+  it('omits unavailable or unrelated payloads and updates matching null and falsy payloads', () => {
+    const view = render(<ExecutionGraph graph={graph} tasks={[
+      { ...taskData[1], id: 'other-task' }, { ...taskData[1], operation_id: 'other-operation' },
+    ]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect Task capture-page · task:child' }));
+    const inspector = within(screen.getByRole('region', { name: 'Node details' }));
+    expect(inspector.queryByText('Input', { selector: 'summary' })).not.toBeInTheDocument();
+    expect(inspector.queryByText('Output', { selector: 'summary' })).not.toBeInTheDocument();
+    view.rerender(<ExecutionGraph graph={graph} tasks={[{ ...taskData[1], input: undefined, result: null }]} />);
+    expect(inspector.queryByText('Input', { selector: 'summary' })).not.toBeInTheDocument();
+    expect(inspector.queryByText('Output', { selector: 'summary' })).not.toBeInTheDocument();
+
+    view.rerender(<ExecutionGraph graph={graph} tasks={[{ ...taskData[1], input: null,
+      result: { action_name: 'capture-page', output: false },
+    }]} />);
+    const input = inspector.getByText('Input', { selector: 'summary' });
+    const output = inspector.getByText('Output', { selector: 'summary' });
+    fireEvent.click(input);
+    fireEvent.click(output);
+    expect(input.closest('details')?.querySelector('pre')).toHaveTextContent('null');
+    expect(output.closest('details')?.querySelector('pre')).toHaveTextContent('false');
+
+    view.rerender(<ExecutionGraph graph={graph} tasks={[{ ...taskData[1], input: 0,
+      result: { action_name: 'capture-page', output: null },
+    }]} />);
+    expect(input.closest('details')).toHaveAttribute('open');
+    expect(input.closest('details')?.querySelector('pre')).toHaveTextContent('0');
+    expect(output.closest('details')).toHaveAttribute('open');
+    expect(output.closest('details')?.querySelector('pre')).toHaveTextContent('null');
+  });
+
   it('lets operators inspect task, artifact and file relationships and zoom the canvas', () => {
     render(<ExecutionGraph graph={graph} />);
     expect(screen.queryByRole('region', { name: 'Node details' })).not.toBeInTheDocument();

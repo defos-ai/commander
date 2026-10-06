@@ -30,6 +30,7 @@ and drag to explore larger graphs. Mouse dragging pans the graph without opening
 node details; clicking a node opens them. Touch scrolling and keyboard navigation
 remain available. It refreshes every 10 seconds and shows
 recorded work, including queued tasks, rather than a plan of future work.
+Task node details include collapsible input and output, updated with the operation.
 Open artifacts from details or graph nodes to inspect metadata, preview images
 and text, or download files. Previews are limited to 2 MiB and downloads to
 100 MiB. Reports open from operation details and can be downloaded as JSON.

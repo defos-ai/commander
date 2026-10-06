@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { File, Package, Workflow } from 'lucide-react';
 import type { GraphNode, OperationGraph } from '../api/graph-types';
+import type { OperationTask } from '../api/operation-types';
 import { useTranslation } from '../i18n';
 import { Dialog } from './Dialog';
 import { GraphCanvas } from './GraphCanvas';
@@ -22,7 +23,11 @@ function NodeContents({ node }: { node: GraphNode }) {
   </>;
 }
 
-export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGraph; onOpenArtifact?: (artifactID: string, fileID?: string) => void }) {
+export function ExecutionGraph({ graph, tasks, onOpenArtifact }: {
+  graph: OperationGraph;
+  tasks?: OperationTask[] | null;
+  onOpenArtifact?: (artifactID: string, fileID?: string) => void;
+}) {
   const { t } = useTranslation();
   const [selectedID, setSelectedID] = useState<string>();
   const viewport = useRef<HTMLDivElement>(null);
@@ -33,6 +38,7 @@ export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGrap
     try { return layoutGraph(graph); } catch { return null; }
   }, [graph]);
   const selected = graph.nodes.find(node => node.id === selectedID);
+  const taskData = selected?.kind === 'task' ? tasks?.find(task => task.id === selected.task.id && task.operation_id === graph.operation_id) : undefined;
 
   useEffect(() => {
     if (selectedID && !selected) {
@@ -85,7 +91,7 @@ export function ExecutionGraph({ graph, onOpenArtifact }: { graph: OperationGrap
       </button>)}
     </GraphCanvas>
     {selected && <Dialog open title={t($ => $.operationGraph.nodeDetails)} onClose={clearSelection} className="graph-node-dialog">
-      <GraphNodeDetails graph={graph} node={selected} onSelect={setSelectedID} onOpenArtifact={onOpenArtifact ? openArtifact : undefined} />
+      <GraphNodeDetails graph={graph} node={selected} taskData={taskData} onSelect={setSelectedID} onOpenArtifact={onOpenArtifact ? openArtifact : undefined} />
     </Dialog>}
   </>;
 }
