@@ -1,0 +1,40 @@
+name: Release readiness tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Shared stable v0 or v1 version to validate
+        type: string
+        required: true
+        default: v0.1.0
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Check all modules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+      - name: Run release readiness tests
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          GOTOOLCHAIN: local
+        run: go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go

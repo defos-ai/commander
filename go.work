@@ -14,7 +14,7 @@ use (
 	./providers/s3
 )
 
-// Resolve unreleased requirements locally while Go loads the dependency graph.
+// Resolve workspace requirements locally while Go loads the dependency graph.
 replace (
 	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0 => ./apps/adapters/mcp
 	github.com/defos-ai/commander/apps/agents/web-quality v0.0.0 => ./apps/agents/web-quality
