@@ -44,13 +44,36 @@ Regular development workflows keep their path filters; release checks run all su
 In GitHub Actions, open [Make release](../.github/workflows/make-release.yml),
 choose the default branch, enter the version and select **Run workflow**.
 This runs the full release-test workflow first. Only after every suite succeeds,
-it pushes the root and all module tags atomically at that run's exact commit SHA,
-then publishes the Docker images below from that same commit. Publishing is allowed
-only from the default branch. If any Git tag exists, tagging fails without
-overwriting tags or publishing a partial tag set.
+it builds and tests the native binaries, pushes the root and all module tags
+atomically, then publishes Docker images and the GitHub Release. Every artifact
+uses that run's exact commit SHA. Publishing is allowed only from the default
+branch. If any Git tag exists, tagging fails without overwriting tags or
+publishing a partial tag set.
 
 Use the separate release-test workflow for validation without publication.
-Native binaries are not published yet.
+
+## Native binaries
+
+[build-binaries.yml](../.github/workflows/build-binaries.yml) builds `commander`
+for Linux, macOS and Windows on amd64 and arm64 runners. Each runner checks
+environment discovery, runs the all-in-one smoke test and checks the executable's
+`--help` before packaging it with `LICENSE`.
+
+After every image publishes, [push-binaries.yml](../.github/workflows/push-binaries.yml)
+attaches all six archives and `checksums.txt` to the root-version GitHub Release.
+Archive names are `commander_<version>_<os>_<arch>.tar.gz` (`.zip` for Windows);
+OS names are `linux`, `darwin` and `windows`. The SHA-256 checksums cover the archives.
+Binaries are unsigned; macOS builds are not notarized.
+
+Extract the archive and run `./commander --all-in-one`, or
+`.\commander.exe --all-in-one` on Windows. See [Playground](../apps/playground/README.md#native-one-executable)
+for model setup, browser dependencies and temporary-state behavior.
+
+Uploads stay in a draft until all assets are attached. For a failed build or
+publication, rerun failed jobs in the same workflow run; partial draft uploads
+can be replaced, but published release assets cannot. Tag and image publication
+cannot be rolled back by a later release-upload failure. Release creation uses
+the repository's `GITHUB_TOKEN` with `contents: write`.
 
 ## Docker images
 

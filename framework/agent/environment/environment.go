@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -66,8 +67,14 @@ func (local *Local) FindExecutable(ctx context.Context, name string, scope *Disc
 			return "", err
 		}
 		candidate := filepath.Join(directory, name)
+		if runtime.GOOS == "windows" {
+			candidate, err = exec.LookPath(candidate)
+			if err != nil {
+				continue
+			}
+		}
 		info, err := os.Stat(candidate)
-		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
+		if err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0111 == 0) {
 			continue
 		}
 		if scope != nil && scope.Paths != nil {

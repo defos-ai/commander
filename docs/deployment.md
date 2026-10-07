@@ -30,7 +30,7 @@ connection details. Bundled credentials are for local development.
 
 Connect another AI client to `http://localhost:4273/mcp` using the
 [adapter guide](../apps/adapters/README.md#quick-start). For a temporary session
-without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#go-one-executable).
+without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#native-one-executable).
 
 Add `--profile admin` to either stack's `up` command for the API (`4274`) and
 admin UI (`4275`). See the [UI quick start](../apps/admin/ui/README.md#quick-start)

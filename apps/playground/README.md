@@ -20,9 +20,14 @@ Export your model provider's key first, or enter it during setup. `/exit` closes
 chat; hosts and saved work remain. `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
 
-### Go: one executable
+### Native: one executable
 
-With Go 1.26.7+, build and run from the repository root:
+The first release is not published yet. [Native release archives](../../docs/releases.md#native-binaries)
+will provide `commander` for Linux, macOS and Windows (amd64/arm64), without Go.
+Extract your archive and run `./commander --all-in-one`, or
+`.\commander.exe --all-in-one` on Windows.
+
+To build from source with Go 1.26.7+, run from the repository root:
 
 ```sh
 go build -o commander ./apps/playground/cmd/commander

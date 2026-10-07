@@ -50,3 +50,8 @@ Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
 behavior changes. The suite includes all-in-one coverage without a paid model
 or host browser. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
+
+[Native release builds](../../.github/workflows/build-binaries.yml) run environment
+discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.
+Keep the embedded mission, local host lifecycle and test fixtures portable; native
+archives must run without a checkout or Go installation.

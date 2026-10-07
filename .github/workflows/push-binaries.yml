@@ -1,0 +1,81 @@
+name: Push native binaries
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Released Commander version
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: ${{ github.repository == 'defos-ai/commander' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the release tag
+        shell: bash
+        run: |
+          [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
+          test "$(git rev-parse "refs/tags/$VERSION^{commit}")" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: commander-native-*
+          merge-multiple: true
+          path: artifacts
+      - name: Publish native archives and checksums
+        working-directory: artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          shopt -s nullglob dotglob
+          downloaded=(*)
+          if (( ${#downloaded[@]} != 6 )); then
+            echo "Expected exactly six native archives; refusing an incomplete release." >&2
+            exit 1
+          fi
+
+          archives=()
+          for os in linux darwin windows; do
+            extension=tar.gz
+            if [[ "$os" == windows ]]; then extension=zip; fi
+            for arch in amd64 arm64; do
+              archive="commander_${VERSION}_${os}_${arch}.${extension}"
+              if [[ ! -s "$archive" || ! -f "$archive" || -L "$archive" ]]; then
+                echo "Missing native archive: $archive" >&2
+                exit 1
+              fi
+              archives+=("$archive")
+            done
+          done
+          sha256sum "${archives[@]}" > checksums.txt
+
+          draft=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[]' |
+            jq -sr --arg version "$VERSION" 'map(select(.tag_name == $version)) | if length == 0 then "missing" else .[0].draft end')
+          case "$draft" in
+            missing)
+              gh release create "$VERSION" --verify-tag --draft --title "Commander $VERSION" --generate-notes
+              ;;
+            true) ;;
+            *)
+              echo "Release $VERSION is already published; its assets will not be overwritten." >&2
+              exit 1
+              ;;
+          esac
+          gh release upload "$VERSION" "${archives[@]}" checksums.txt --clobber
+          gh release edit "$VERSION" --draft=false

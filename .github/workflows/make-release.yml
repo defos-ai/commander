@@ -23,9 +23,15 @@ jobs:
     with:
       version: ${{ inputs.version }}
 
+  binaries:
+    needs: test
+    uses: ./.github/workflows/build-binaries.yml
+    with:
+      version: ${{ inputs.version }}
+
   publish:
     name: Tag all modules
-    needs: test
+    needs: [test, binaries]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -104,5 +110,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+    with:
+      version: ${{ inputs.version }}
+
+  release:
+    needs: [publish, api, admin, mcp, controllers, agents]
+    uses: ./.github/workflows/push-binaries.yml
+    permissions:
+      contents: write
     with:
       version: ${{ inputs.version }}

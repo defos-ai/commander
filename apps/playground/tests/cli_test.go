@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,12 +33,17 @@ func TestAllInOne(t *testing.T) {
 	// Real browser execution is covered by the MCP suite against Compose.
 	temporary := t.TempDir()
 	browser := filepath.Join(t.TempDir(), "browser-fixture")
+	if runtime.GOOS == "windows" {
+		browser += ".exe"
+	}
 	if err := os.WriteFile(browser, []byte("fixture executable, never launched"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("CHROMIUM_PATH", browser)
 	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
 	t.Setenv("TMPDIR", temporary)
+	t.Setenv("TMP", temporary)
+	t.Setenv("TEMP", temporary)
 	t.Setenv("ENV", "")
 	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.

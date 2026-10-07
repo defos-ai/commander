@@ -41,7 +41,7 @@ With Go 1.26.7+:
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-All-in-one state is removed on exit. See [native setup](apps/playground/README.md#go-one-executable)
+All-in-one state is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
 for agent dependencies.
 
 Choose a model, provide its API key, and try:

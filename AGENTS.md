@@ -35,9 +35,12 @@ The user's current instructions take precedence over repository guidance.
   External consumers use the [local setup](apps/agents/README.md#develop-an-agent-in-a-private-repository).
 - Follow [releases](docs/releases.md) to prepare one version across all modules,
   update requirements, run validation and publish all tags together.
-- Image publishing runs through `make-release.yml` after all suites in
-  `test-release.yml` succeed for the same commit. Keep `push-*.yml` reusable-only;
-  preserve each test workflow's distinct concurrency group when adding suites.
+- Release publishing runs through `make-release.yml` after all suites in
+  `test-release.yml` and native build checks succeed for the same commit.
+  Keep `build-binaries.yml` and `push-*.yml` reusable-only; native assets must come
+  from that run. Preserve each test workflow's distinct concurrency group when
+  adding suites. Retry failed publication jobs in the same run; never overwrite
+  published release assets.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.

@@ -1,0 +1,75 @@
+name: Build native binaries
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Commander release version
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.goos }} / ${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goos: linux, goarch: amd64, runner: ubuntu-24.04}
+          - {goos: linux, goarch: arm64, runner: ubuntu-24.04-arm}
+          - {goos: darwin, goarch: amd64, runner: macos-15-intel}
+          - {goos: darwin, goarch: arm64, runner: macos-15}
+          - {goos: windows, goarch: amd64, runner: windows-2025}
+          - {goos: windows, goarch: arm64, runner: windows-11-arm}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ inputs.version }}
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
+      - name: Test native environment and all-in-one hosts
+        run: |
+          go test -count=1 -timeout=3m ./framework/tests/agent/environment
+          go test -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne$'
+      - name: Build Commander
+        run: |
+          binary=commander
+          if [[ "$GOOS" == windows ]]; then binary+=.exe; fi
+          mkdir -p bin dist
+          go build -trimpath -buildvcs=false -ldflags='-s -w' -o "bin/$binary" ./apps/playground/cmd/commander
+          cp LICENSE bin/LICENSE
+          "./bin/$binary" --help
+      - name: Package Unix binary
+        if: runner.os != 'Windows'
+        run: tar -czf "dist/commander_${VERSION}_${GOOS}_${GOARCH}.tar.gz" -C bin commander LICENSE
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path bin/commander.exe, bin/LICENSE -DestinationPath "dist/commander_$($env:VERSION)_$($env:GOOS)_$($env:GOARCH).zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commander-native-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
