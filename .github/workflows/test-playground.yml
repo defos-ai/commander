@@ -36,12 +36,13 @@ on:
       - '.github/workflows/test-playground.yml'
       - '!**/*.md'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: test-playground-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

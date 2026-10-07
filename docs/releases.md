@@ -29,25 +29,48 @@ version, or run their Go test from the repository root:
 RELEASE_VERSION=v0.1.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
 ```
 
-The check validates module paths, rejects `go.mod` replacements/exclusions,
+The readiness check validates module paths, rejects `go.mod` replacements/exclusions,
 requires known internal dependencies at the release version, checks workspace
 mappings, and builds, vets and compiles tests for every workspace module.
-It validates the workspace; it does not validate standalone module archives or
-remote availability, run runtime tests, or start service/browser suites.
+It validates the workspace, not standalone module archives or remote availability.
 
-Run the relevant normal [test workflows](../.github/workflows/), including
-service suites, and land the tested commit on the default branch.
+The release-test workflow then runs **every test suite** for the same commit:
+framework, all providers, controller, agent, Playground, API, MCP and Admin UI.
+This includes both FS and full-infrastructure API/MCP tests and browser tests.
+Regular development workflows keep their path filters; release checks run all suites.
 
 ## Publish
 
 In GitHub Actions, open [Make release](../.github/workflows/make-release.yml),
 choose the default branch, enter the version and select **Run workflow**.
-This runs the reusable release tests first, then pushes the root and all module
-tags atomically at that run's exact commit SHA. Publishing is allowed only from
-the default branch. If any tag exists, publication fails without overwriting
-tags or publishing a partial set.
+This runs the full release-test workflow first. Only after every suite succeeds,
+it pushes the root and all module tags atomically at that run's exact commit SHA,
+then publishes the Docker images below from that same commit. Publishing is allowed
+only from the default branch. If any Git tag exists, tagging fails without
+overwriting tags or publishing a partial tag set.
 
 Use the separate release-test workflow for validation without publication.
-Normal CI must pass for the release commit. Publishing creates tags; it does
-not publish binaries, deployment images or
-[frontend assets](../apps/admin/ui/README.md#native-server).
+Native binaries are not published yet.
+
+## Docker images
+
+Images use the exact release version as their tag, for example `v0.1.0`:
+
+| Image | Workflow |
+| --- | --- |
+| `ghcr.io/defos-ai/commander-api` | [push-api.yml](../.github/workflows/push-api.yml) |
+| `ghcr.io/defos-ai/commander-admin` | [push-admin.yml](../.github/workflows/push-admin.yml) |
+| `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
+| `ghcr.io/defos-ai/commander-controller` | [push-controllers.yml](../.github/workflows/push-controllers.yml) |
+| `ghcr.io/defos-ai/commander-web-quality-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
+
+These reusable workflows run only through **Make release**, after its tests and
+tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
+There are no automatic pushes from pull requests or ordinary branch updates.
+If an image fails to publish, rerun failed jobs in the same release run.
+Git tags and images are separate publication steps; image failures do not undo tags.
+
+Authentication uses the repository's `GITHUB_TOKEN` with `packages: write`.
+The organization must allow package creation; existing packages must grant this
+repository Actions access. New GHCR packages default to private; make them public
+in package settings when opening the project. See [GitHub's container registry guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).

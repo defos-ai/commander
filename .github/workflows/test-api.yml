@@ -42,12 +42,13 @@ on:
       - '.github/workflows/test-api.yml'
       - '!**/*.md'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: test-api-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

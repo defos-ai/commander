@@ -61,3 +61,48 @@ jobs:
             refs+=("refs/tags/$tag:refs/tags/$tag")
           done
           git push --atomic origin "${refs[@]}"
+
+  api:
+    needs: publish
+    uses: ./.github/workflows/push-api.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+
+  admin:
+    needs: publish
+    uses: ./.github/workflows/push-admin.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+
+  mcp:
+    needs: publish
+    uses: ./.github/workflows/push-mcp.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+
+  controllers:
+    needs: publish
+    uses: ./.github/workflows/push-controllers.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+
+  agents:
+    needs: publish
+    uses: ./.github/workflows/push-agents.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
