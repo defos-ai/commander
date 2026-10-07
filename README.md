@@ -4,6 +4,17 @@
 
 DEFOS Commander orchestrates missions across distributed agents. Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
+## Where to use it
+
+Use Commander for complex workflows that a single AI cannot reliably coordinate alone:
+
+- **Cybersecurity:** asset discovery and security assessments.
+- **Investigations:** evidence collection and analysis.
+- **Development:** code changes, testing, and review.
+- **IT operations:** diagnostics and approved recovery.
+- **Data processing:** validation and enrichment.
+- **Website quality:** links, accessibility, and SEO checks.
+
 ## How it works
 
 **Commander -> Controller -> Agent**
