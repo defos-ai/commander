@@ -2,14 +2,11 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: mission execution for agents" width="100%">
 </p>
 
-DEFOS Commander runs missions across agents and external systems. Give it an
-objective through your AI chat, then follow, guide, and review the work.
-
-Kubernetes runs workloads. **Commander runs missions.**
+DEFOS Commander orchestrates missions across distributed agents. Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
 ## How it works
 
-**Commander → Controller → Agent**
+**Commander -> Controller -> Agent**
 
 - **Commander** — your AI client chooses the mission and what work is needed.
 - **Controller** — automates the workflow and assigns tasks to available agents.
