@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/framework/id"
-	rabbitcomms "commander/providers/rabbitmq/comms"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/id"
+	rabbitcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

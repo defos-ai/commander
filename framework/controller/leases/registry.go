@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	agentmodel "commander/framework/domain/agents"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 )
 
 const (

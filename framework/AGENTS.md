@@ -52,11 +52,11 @@
 
 ## Validation
 
-Run from the repository root:
+Run from `framework/` with the workspace disabled to check module isolation:
 
 ```sh
-go test -race -count=1 -timeout=3m ./framework/...
-go vet ./framework/...
+GOWORK=off go test -race -count=1 -timeout=3m ./...
+GOWORK=off go vet ./...
 ```
 
 Shared contract changes also need affected provider and app checks. Use the

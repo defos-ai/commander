@@ -19,7 +19,8 @@ Use the repository's Go workspace and start from a concrete implementation:
 
 Import the framework packages you need and inject their interfaces. The bundled
 [providers](../providers/README.md) are optional, separate modules.
-Current module paths use `commander/...`; private projects use the
+The module path is `github.com/defos-ai/commander/framework`. Releases are not
+published yet; private projects use the
 [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository).
 
 Controller hosts can supply an `AgentSelector` to customize which eligible agent

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"commander/framework/comms"
-	rabbitcomms "commander/providers/rabbitmq/comms"
+	"github.com/defos-ai/commander/framework/comms"
+	rabbitcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
 )
 
 func TestRabbitMQFansOutToNamedInboxesOnExactTopics(t *testing.T) {

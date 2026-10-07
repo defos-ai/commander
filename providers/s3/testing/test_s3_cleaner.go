@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	frameworktesting "commander/framework/testing"
-	"commander/providers/s3/store"
+	frameworktesting "github.com/defos-ai/commander/framework/testing"
+	"github.com/defos-ai/commander/providers/s3/store"
 )
 
 // TestS3Cleaner removes only artifact/report objects under the configured test

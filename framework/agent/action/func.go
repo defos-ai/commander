@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"strings"
 
-	"commander/framework/agent/environment"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )

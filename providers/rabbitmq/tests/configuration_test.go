@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	rabbitcomms "commander/providers/rabbitmq/comms"
+	rabbitcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
 )
 
 func TestRabbitMQRejectsInvalidConfigurationWithoutLeakingCredentials(t *testing.T) {

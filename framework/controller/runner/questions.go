@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	commands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
+	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const DefaultQuestionTimeout = 2 * time.Minute

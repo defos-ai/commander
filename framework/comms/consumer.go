@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 // Handler returns nil when processing is complete and the delivery can be

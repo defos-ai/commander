@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/agent/consumers"
-	"commander/framework/agent/environment"
-	"commander/framework/comms"
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	agentevents "commander/framework/comms/clients/agent/events"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain/actions"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/agent/consumers"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/comms"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {

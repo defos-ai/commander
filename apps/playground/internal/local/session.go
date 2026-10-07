@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	mcpcli "commander/adapters/mcp/cli"
-	agentcli "commander/apps/agents/web-quality/cli"
-	controllercli "commander/apps/controllers/default/cli"
-	"commander/apps/controllers/default/data"
-	bridge "commander/apps/playground/internal/mcp"
+	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	agentcli "github.com/defos-ai/commander/apps/agents/web-quality/cli"
+	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
+	"github.com/defos-ai/commander/apps/controllers/default/data"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 type runningHost struct {

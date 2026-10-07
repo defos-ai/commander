@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"commander/framework/agent/action"
-	"commander/framework/agent/consumers"
-	"commander/framework/agent/environment"
-	"commander/framework/domain"
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/agent/consumers"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/domain"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type AgentConfig struct {

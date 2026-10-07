@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"commander/admin/ui/connections"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
 )
 
 func TestAPIUpstreamRouting(t *testing.T) {

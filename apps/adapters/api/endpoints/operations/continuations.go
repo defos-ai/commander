@@ -3,10 +3,10 @@ package operations
 import (
 	"net/http"
 
-	"commander/adapters/api/endpoints"
-	"commander/adapters/api/mappings"
-	"commander/adapters/api/models"
-	controllercommands "commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 )
 
 func registerContinuations(mux *http.ServeMux, commands controllercommands.Operations) {

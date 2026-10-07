@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 )
 
 func TestControllersExposeRegisteredStateAndLeaseFreshness(t *testing.T) {

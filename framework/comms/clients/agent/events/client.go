@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // Client sends receipts through a separate inbox, allowing agents to process

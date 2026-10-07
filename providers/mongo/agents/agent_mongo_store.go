@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/id"
-	"commander/providers/mongo/internal/bsonvalue"
-	"commander/providers/mongo/store"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/mongo/internal/bsonvalue"
+	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"

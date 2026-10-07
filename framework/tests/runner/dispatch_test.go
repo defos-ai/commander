@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func TestDispatchWriteFailureKeepsTaskQueuedUntilRetry(t *testing.T) {

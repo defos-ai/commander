@@ -10,9 +10,9 @@ import (
 	"strings"
 	"unicode"
 
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func RegisterArtifacts(mux *http.ServeMux, store artifacts.ArtifactStore, files artifacts.ArtifactFileStore) {

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 // OperationFsStore atomically publishes metadata, tasks, questions, and events through

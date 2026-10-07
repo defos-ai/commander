@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"commander/apps/playground/internal/llm"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	protocol "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

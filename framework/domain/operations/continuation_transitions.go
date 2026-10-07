@@ -5,8 +5,8 @@ import (
 	"slices"
 	"time"
 
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/missions"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 // continueTask is part of the same operation update as the result. No publication

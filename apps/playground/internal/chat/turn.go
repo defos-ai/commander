@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"commander/apps/playground/internal/llm"
-	bridge "commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 const instructions = `You are Commander. Help users run missions and explain results briefly.

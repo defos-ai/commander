@@ -10,11 +10,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	webquality "commander/apps/agents/web-quality"
-	agents "commander/framework/agent"
-	"commander/framework/agent/action"
-	"commander/framework/host"
-	"commander/framework/id"
+	webquality "github.com/defos-ai/commander/apps/agents/web-quality"
+	agents "github.com/defos-ai/commander/framework/agent"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const serviceName = "commander-" + string(webquality.WebQualityAgentType) + "-agent"

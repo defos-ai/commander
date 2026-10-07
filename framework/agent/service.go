@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"commander/framework/agent/consumers"
-	"commander/framework/agent/environment"
-	"commander/framework/comms"
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/agent/consumers"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/comms"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 // Serve discovers dependencies, announces the agent, and consumes its own inbox.

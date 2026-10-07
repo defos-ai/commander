@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
-	"commander/providers/mongo/internal/bsonvalue"
-	"commander/providers/mongo/store"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/mongo/internal/bsonvalue"
+	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"

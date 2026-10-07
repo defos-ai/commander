@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	"commander/framework/comms/messages"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 type CommandConsumer struct {

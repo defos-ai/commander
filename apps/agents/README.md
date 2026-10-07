@@ -26,7 +26,8 @@ and [deployment](../../docs/deployment.md) for configuration.
 
 ### Add an agent
 
-Create `apps/agents/<agent-type>` as a Go module, using the web quality agent's
+Create `apps/agents/<agent-type>` with the module path
+`github.com/defos-ai/commander/apps/agents/<agent-type>`, using the web quality agent's
 [go.mod](web-quality/go.mod), [constructor](web-quality/web_quality_agent.go) and
 [CLI](web-quality/cli/cli.go) as a starting point. Register it in the workspace:
 
@@ -74,32 +75,38 @@ other proposals wait for Commander. See
 
 ### Develop an agent in a private repository
 
-Commander modules are not published yet: imports use local names such as
-`commander/framework`. Keep your agent in its own module, pin a Commander checkout
-to a tested revision, and add local replacements from your private project:
+Imports use repository paths such as `github.com/defos-ai/commander/framework`.
+No releases are published yet, so keep your agent in its own module and pin a
+Commander checkout to a tested revision. From your private project, add the
+framework and only the providers your host uses, with replacements in your own
+`go.mod`. For an FS-backed host:
 
 ```sh
 go mod init private.example/my-agent
-go mod edit -require=commander/framework@v0.0.0
-go mod edit -replace=commander/framework=/absolute/path/to/commander/framework
-go mod edit -require=commander/providers/fs@v0.0.0
-go mod edit -replace=commander/providers/fs=/absolute/path/to/commander/providers/fs
+go mod edit -require=github.com/defos-ai/commander/framework@v0.0.0
+go mod edit -replace=github.com/defos-ai/commander/framework=/absolute/path/to/commander/framework
+go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.0.0
+go mod edit -replace=github.com/defos-ai/commander/providers/fs=/absolute/path/to/commander/providers/fs
 ```
 
-`v0.0.0` is a local placeholder, not a release. Add replacements for any other
-providers you use. Follow the [constructor](web-quality/web_quality_agent.go),
+`v0.0.0` is an unreleased placeholder resolved by those local replacements.
+Add replacements for each additional Commander module you use, including its
+Commander dependencies; a dependency's own replacements do not apply to your
+project. The repository's `go.work` supplies local modules when developing inside
+the Commander checkout. Follow the [constructor](web-quality/web_quality_agent.go),
 [provider factory](web-quality/cli/factory.go) and [host lifecycle](web-quality/cli/cli.go)
 to add your actions and entrypoint, then run:
 
 ```sh
-go mod tidy
-go build ./...
-go test -race ./...
+GOWORK=off go mod tidy
+GOWORK=off go build ./...
+GOWORK=off go test -race ./...
 ```
 
 Connect to the controller's bus and artifact storage. Your source stays private;
 Commander receives action metadata, work and results. CI needs the pinned checkout
-and matching replacement paths.
+and matching replacement paths. These commands use your project's `go.mod`
+independently of any surrounding workspace.
 
 ### Run tests
 

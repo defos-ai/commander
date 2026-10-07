@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"time"
 
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 // ActionExecutor dispatches new work and observes previously dispatched work.

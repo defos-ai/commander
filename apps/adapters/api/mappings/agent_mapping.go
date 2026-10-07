@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"slices"
 
-	"commander/adapters/api/models"
-	"commander/framework/domain/agents"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
 func ToAgentResponse(agent agents.Agent) models.AgentResponse {

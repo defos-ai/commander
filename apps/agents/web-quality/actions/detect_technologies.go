@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"commander/framework/agent/action"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/action"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 
 	"golang.org/x/net/html"
 )

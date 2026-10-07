@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/admin/ui/connections"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
 )
 
 func TestBrowserSessionConnectionsAndProxy(t *testing.T) {

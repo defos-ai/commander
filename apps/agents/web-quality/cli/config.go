@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	webquality "commander/apps/agents/web-quality"
-	agents "commander/framework/agent"
-	"commander/framework/agent/environment"
-	"commander/framework/host"
+	webquality "github.com/defos-ai/commander/apps/agents/web-quality"
+	agents "github.com/defos-ai/commander/framework/agent"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 type config struct {

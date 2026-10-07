@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"slices"
 
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/missions"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 func RegisterMissions(mux *http.ServeMux, store missions.MissionStore) {

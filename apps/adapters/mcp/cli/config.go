@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"commander/framework/host"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 type config struct {

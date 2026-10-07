@@ -3,10 +3,10 @@ package operations
 import (
 	"net/http"
 
-	"commander/adapters/api/endpoints"
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 func registerReports(mux *http.ServeMux, store operations.OperationStore, reportStore reports.ReportStore) {

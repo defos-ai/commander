@@ -3,7 +3,7 @@ package messages
 import (
 	"errors"
 
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const DefaultControllerType = "default"

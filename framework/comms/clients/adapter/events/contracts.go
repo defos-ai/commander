@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 const ControllerResponse = messages.ControllerResponse

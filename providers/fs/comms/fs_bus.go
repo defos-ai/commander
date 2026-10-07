@@ -19,10 +19,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/framework/id"
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 const (

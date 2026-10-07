@@ -6,8 +6,9 @@ backend adds its own `AGENTS.md`. Human setup and backend selection belong in
 
 ## Boundaries and contracts
 
-- Each backend is an independent Go module. There is no `commander/providers`
-  module; keep imports and dependencies within the chosen implementation.
+- Each backend is an independent Go module under
+  `github.com/defos-ai/commander/providers/`. There is no shared providers module;
+  keep imports and dependencies within the chosen implementation.
 - Implement framework interfaces in domain packages. Keep concrete drivers,
   storage formats, locks, transactions and storage revisions inside providers;
   hosts construct them in their factories. Do not move concrete dependencies

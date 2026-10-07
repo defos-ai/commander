@@ -6,8 +6,8 @@ import (
 	"slices"
 	"time"
 
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/controllers"
 )
 
 func RegisterControllers(mux *http.ServeMux, store controllers.ControllerStore) {

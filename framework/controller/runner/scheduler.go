@@ -6,10 +6,10 @@ import (
 	"sort"
 	"time"
 
-	"commander/framework/comms/messages"
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func (r *Runner) signalScheduler() {

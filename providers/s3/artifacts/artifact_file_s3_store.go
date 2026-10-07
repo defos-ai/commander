@@ -9,9 +9,9 @@ import (
 	"io"
 	"os"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
-	"commander/providers/s3/store"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/s3/store"
 )
 
 type ArtifactFileS3Store struct{ store *store.S3Store }

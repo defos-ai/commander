@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/api/cli"
+	"github.com/defos-ai/commander/apps/adapters/api/cli"
 )
 
 func TestCLIFlagsOverrideEnvironment(t *testing.T) {

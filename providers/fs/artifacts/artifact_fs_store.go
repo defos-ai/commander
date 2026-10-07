@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 type ArtifactFsStore struct{ root string }

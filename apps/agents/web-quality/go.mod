@@ -1,14 +1,14 @@
-module commander/apps/agents/web-quality
+module github.com/defos-ai/commander/apps/agents/web-quality
 
 go 1.26.7
 
 require (
-	commander/framework v0.0.0
-	commander/providers/fs v0.0.0
-	commander/providers/rabbitmq v0.0.0
-	commander/providers/s3 v0.0.0
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
+	github.com/defos-ai/commander/framework v0.0.0
+	github.com/defos-ai/commander/providers/fs v0.0.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.0.0
+	github.com/defos-ai/commander/providers/s3 v0.0.0
 	golang.org/x/net v0.59.0
 )
 
@@ -40,11 +40,3 @@ require (
 	github.com/rabbitmq/amqp091-go v1.15.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
-
-replace commander/framework => ../../../framework
-
-replace commander/providers/fs => ../../../providers/fs
-
-replace commander/providers/rabbitmq => ../../../providers/rabbitmq
-
-replace commander/providers/s3 => ../../../providers/s3

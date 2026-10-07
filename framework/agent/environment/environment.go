@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	agentmodel "commander/framework/domain/agents"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 )
 
 type DiscoveryScope = agentmodel.DiscoveryScope

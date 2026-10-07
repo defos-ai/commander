@@ -1,8 +1,8 @@
 package mappings
 
 import (
-	"commander/adapters/api/models"
-	"commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/controllers"
 )
 
 func ToControllerResponse(controller controllers.Controller) models.ControllerResponse {

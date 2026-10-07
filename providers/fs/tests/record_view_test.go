@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 func TestRecordViewRetriesWholeQueryAfterCollection(t *testing.T) {

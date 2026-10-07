@@ -1,13 +1,13 @@
-module commander/adapters/api
+module github.com/defos-ai/commander/apps/adapters/api
 
 go 1.26.7
 
 require (
-	commander/framework v0.0.0
-	commander/providers/fs v0.0.0
-	commander/providers/mongo v0.0.0
-	commander/providers/rabbitmq v0.0.0
-	commander/providers/s3 v0.0.0
+	github.com/defos-ai/commander/framework v0.0.0
+	github.com/defos-ai/commander/providers/fs v0.0.0
+	github.com/defos-ai/commander/providers/mongo v0.0.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.0.0
+	github.com/defos-ai/commander/providers/s3 v0.0.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/swaggo/files/v2 v2.0.2
 )
@@ -43,13 +43,3 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
 )
-
-replace commander/framework => ../../../framework
-
-replace commander/providers/fs => ../../../providers/fs
-
-replace commander/providers/mongo => ../../../providers/mongo
-
-replace commander/providers/s3 => ../../../providers/s3
-
-replace commander/providers/rabbitmq => ../../../providers/rabbitmq

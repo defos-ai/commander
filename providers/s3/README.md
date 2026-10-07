@@ -2,8 +2,8 @@
 
 ## Overview
 
-`commander/providers/s3` stores artifact files and immutable reports in Amazon S3
-or a compatible service such as MinIO. App factories select it for `s3://`
+`github.com/defos-ai/commander/providers/s3` stores artifact files and immutable
+reports in Amazon S3 or a compatible service such as MinIO. App factories select it for `s3://`
 `STORAGE_URL` values. Accepted artifact metadata stays in the database.
 
 ## Quick start
@@ -32,8 +32,8 @@ the configured prefix.
 
 ```go
 import (
-    s3artifacts "commander/providers/s3/artifacts"
-    "commander/providers/s3/store"
+    s3artifacts "github.com/defos-ai/commander/providers/s3/artifacts"
+    "github.com/defos-ai/commander/providers/s3/store"
 )
 
 storage, err := store.Open(ctx, "s3://your-bucket/commander")
@@ -45,7 +45,7 @@ files, err := s3artifacts.NewArtifactFileS3Store(storage)
 
 The repository workspace includes this module. Private projects use
 [local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
-for `commander/framework` and `commander/providers/s3`.
+for the framework and this provider.
 
 ## Development and testing
 

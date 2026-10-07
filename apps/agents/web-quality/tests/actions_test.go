@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"commander/apps/agents/web-quality/actions"
-	"commander/framework/agent/action"
-	"commander/framework/agent/environment"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/apps/agents/web-quality/actions"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T) {

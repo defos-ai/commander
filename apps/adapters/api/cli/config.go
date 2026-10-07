@@ -12,8 +12,8 @@ import (
 	"strings"
 	"unicode"
 
-	"commander/adapters/api"
-	"commander/framework/host"
+	"github.com/defos-ai/commander/apps/adapters/api"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 const defaultAllowedOrigins = "http://localhost:4275,http://127.0.0.1:4275"

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	bridge "commander/apps/playground/internal/mcp"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 type questionKey struct{ operationID, questionID string }

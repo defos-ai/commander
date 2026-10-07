@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"commander/framework/agent/action"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/action"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 type DiscoverPagesInput struct {

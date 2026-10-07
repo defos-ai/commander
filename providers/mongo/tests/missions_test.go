@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"commander/framework/domain/missions"
-	mongomissions "commander/providers/mongo/missions"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

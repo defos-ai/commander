@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"commander/apps/playground/internal/llm"
-	bridge "commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 type Model interface {

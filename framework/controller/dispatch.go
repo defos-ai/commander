@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/executions"
-	"commander/framework/internal/state"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/internal/state"
 )
 
 // DispatchAction is for durable queued tasks. Redelivery uses the exact stored

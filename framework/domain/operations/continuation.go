@@ -1,6 +1,6 @@
 package operations
 
-import actionmodel "commander/framework/domain/actions"
+import actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 
 type DecisionBy string
 

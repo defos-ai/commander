@@ -3,9 +3,9 @@ package operations
 import (
 	"net/http"
 
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 func Register(mux *http.ServeMux, store operations.OperationStore, reportStore reports.ReportStore, commands controllercommands.Operations) {

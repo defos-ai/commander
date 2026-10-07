@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	fscomms "commander/providers/fs/comms"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 )
 
 func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) {

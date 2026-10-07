@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
 )
 
 func DecodeActionResult(message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {

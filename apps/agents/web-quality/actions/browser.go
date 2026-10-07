@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"commander/framework/agent/action"
-	"commander/framework/agent/environment"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/fetch"

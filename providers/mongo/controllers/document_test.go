@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	controllermodel "commander/framework/domain/controllers"
+	controllermodel "github.com/defos-ai/commander/framework/domain/controllers"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 

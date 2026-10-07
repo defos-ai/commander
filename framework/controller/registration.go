@@ -10,7 +10,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/domain/controllers"
 )
 
 type RegistrationConfig struct {

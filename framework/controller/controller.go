@@ -9,15 +9,15 @@ import (
 	"sync"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/framework/controller/leases"
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
-	"commander/framework/id"
-	"commander/framework/internal/state"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller/leases"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/framework/internal/state"
 )
 
 const DefaultHeartbeatTimeout = leases.DefaultTimeout

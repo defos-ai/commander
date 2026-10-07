@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/apps/controllers/default/cli"
-	"commander/framework/domain/controllers"
-	fscontrollers "commander/providers/fs/controllers"
+	"github.com/defos-ai/commander/apps/controllers/default/cli"
+	"github.com/defos-ai/commander/framework/domain/controllers"
+	fscontrollers "github.com/defos-ai/commander/providers/fs/controllers"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 

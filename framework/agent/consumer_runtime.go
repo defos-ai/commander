@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"commander/framework/agent/environment"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 type agentRuntime struct {

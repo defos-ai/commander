@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

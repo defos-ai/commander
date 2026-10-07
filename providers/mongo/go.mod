@@ -1,9 +1,9 @@
-module commander/providers/mongo
+module github.com/defos-ai/commander/providers/mongo
 
 go 1.26.7
 
 require (
-	commander/framework v0.0.0
+	github.com/defos-ai/commander/framework v0.0.0
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 )
 
@@ -18,5 +18,3 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
 )
-
-replace commander/framework => ../../framework

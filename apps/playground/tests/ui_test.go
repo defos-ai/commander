@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	bridge "commander/apps/playground/internal/mcp"
-	"commander/apps/playground/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/apps/playground/internal/ui"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

@@ -3,9 +3,9 @@ package mappings
 import (
 	"slices"
 
-	"commander/adapters/api/models"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func ToAskQuestionCommand(operationID string, request models.AskQuestionRequest) controllercommands.AskQuestionCommand {

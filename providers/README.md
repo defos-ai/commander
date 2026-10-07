@@ -12,10 +12,9 @@ Hosts choose each backend independently through their settings.
 | [S3](s3/README.md) | Artifact files and reports | `s3://bucket/optional-prefix` |
 | [RabbitMQ](rabbitmq/README.md) | Message bus | `amqp://`, `amqps://` |
 
-Each backend is a separate Go module: `commander/providers/fs`,
-`commander/providers/mongo`, `commander/providers/s3`, or
-`commander/providers/rabbitmq`. Import only the modules your host needs; there is
-no shared `commander/providers` module.
+Each backend is a separate Go module under
+`github.com/defos-ai/commander/providers/`: `fs`, `mongo`, `s3`, or `rabbitmq`.
+Import only the modules your host needs; there is no shared providers module.
 
 ## Quick start
 

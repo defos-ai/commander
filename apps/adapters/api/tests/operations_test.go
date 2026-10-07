@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 )
 
 func TestOperationWebsiteWorkflow(t *testing.T) {

@@ -3,8 +3,8 @@ package events
 import (
 	"fmt"
 
-	"commander/framework/comms/messages"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const ActionResultAccepted = messages.ActionResultAccepted

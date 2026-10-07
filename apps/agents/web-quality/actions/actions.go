@@ -3,7 +3,7 @@ package actions
 import (
 	"encoding/json"
 
-	"commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/agent/action"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/admin/ui/cli"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/cli"
 )
 
 func TestCLI(t *testing.T) {

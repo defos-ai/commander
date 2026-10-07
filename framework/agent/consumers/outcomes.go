@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 
-	"commander/framework/comms"
-	agentevents "commander/framework/comms/clients/agent/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
+	"github.com/defos-ai/commander/framework/comms"
+	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
 )
 
 // One loop owns command outcomes. Execution, publication, and receipt waits run

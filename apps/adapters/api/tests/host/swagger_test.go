@@ -2,7 +2,7 @@ package api_test
 
 import (
 	"bytes"
-	"commander/adapters/api/cli"
+	"github.com/defos-ai/commander/apps/adapters/api/cli"
 	"net/http"
 	"strings"
 	"testing"

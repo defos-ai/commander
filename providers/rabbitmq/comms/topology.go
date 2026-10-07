@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

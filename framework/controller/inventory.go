@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	agentmodel "commander/framework/domain/agents"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 )
 
 // Agents returns independent snapshots sorted by ID. Expired records are removed

@@ -4,8 +4,8 @@ import (
 	"context"
 	"reflect"
 
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func (r *Runner) refreshPreflight(ctx context.Context, state *operationState, records []agents.Agent) error {

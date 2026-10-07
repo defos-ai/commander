@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // QueueTask returns false for an existing assignment, preserving any progress

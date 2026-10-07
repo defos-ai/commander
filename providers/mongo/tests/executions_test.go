@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
-	mongoexecutions "commander/providers/mongo/executions"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	mongoexecutions "github.com/defos-ai/commander/providers/mongo/executions"
 )
 
 func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {

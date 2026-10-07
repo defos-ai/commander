@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	controllermodel "commander/framework/domain/controllers"
-	"commander/framework/id"
-	"commander/providers/fs/internal/jsonfile"
+	controllermodel "github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 // ControllerFsStore stores one single-record JSON collection per runtime in

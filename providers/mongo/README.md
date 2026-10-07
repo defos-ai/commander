@@ -2,8 +2,9 @@
 
 ## Overview
 
-`commander/providers/mongo` implements the database stores for missions, actions,
-agent inventory, controller registrations, executions, operations, and accepted artifact metadata.
+`github.com/defos-ai/commander/providers/mongo` implements database stores for
+missions, actions, agent inventory, controller registrations, executions,
+operations, and accepted artifact metadata.
 Controller and adapter factories select it for `mongodb://` or `mongodb+srv://`
 `DATABASE_URL` values. Artifact bytes and reports use the separate `STORAGE_URL`.
 Operation storage requires a replica set or sharded cluster for transactions.
@@ -31,8 +32,8 @@ Apps share one [`MongoStore`](store/mongo_store.go) client across domain stores:
 
 ```go
 import (
-    mongomissions "commander/providers/mongo/missions"
-    "commander/providers/mongo/store"
+    mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
+    "github.com/defos-ai/commander/providers/mongo/store"
 )
 
 // ctx is the caller's context with a deadline.
@@ -48,7 +49,7 @@ err = missionStore.Upsert(ctx, mission)
 
 The repository workspace includes this module. Private projects use
 [local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
-for `commander/framework` and `commander/providers/mongo`.
+for the framework and this provider.
 
 ## Development and testing
 

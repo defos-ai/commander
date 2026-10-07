@@ -10,8 +10,8 @@ import (
 	"slices"
 	"sync/atomic"
 
-	"commander/framework/agent/environment"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 type Status = actionmodel.Status

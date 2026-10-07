@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"commander/apps/playground/internal/llm"
-	bridge "commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 func (e *Engine) control(name string, args map[string]any) {

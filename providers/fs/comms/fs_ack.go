@@ -9,9 +9,9 @@ import (
 	"slices"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 type fsSettlement uint8

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	agentmodel "commander/framework/domain/agents"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 )
 
 type HostInfo = agentmodel.ServerInfo

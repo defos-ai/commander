@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"slices"
 
-	"commander/adapters/api/models"
-	"commander/framework/domain/actions"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func ToActionResponse(action actions.Action) models.ActionResponse {

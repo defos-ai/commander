@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/executions"
-	"commander/framework/id"
-	"commander/framework/internal/state"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/framework/internal/state"
 )
 
 type AgentEventConsumer struct {

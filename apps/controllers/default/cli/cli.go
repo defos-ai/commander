@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"time"
 
-	"commander/apps/controllers/default/data"
-	"commander/framework/controller"
-	adapterconsumer "commander/framework/controller/consumers/adapter"
-	"commander/framework/controller/runner"
-	"commander/framework/domain/controllers"
-	"commander/framework/host"
+	"github.com/defos-ai/commander/apps/controllers/default/data"
+	"github.com/defos-ai/commander/framework/controller"
+	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
+	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 type Options struct {

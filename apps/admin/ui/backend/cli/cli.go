@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"commander/admin/ui/connections"
-	"commander/admin/ui/static"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/static"
 )
 
 type Options struct {

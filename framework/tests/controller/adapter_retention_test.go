@@ -9,10 +9,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	adapterevents "commander/framework/comms/clients/adapter/events"
-	commands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/comms/messages"
-	"commander/framework/domain/agents"
+	adapterevents "github.com/defos-ai/commander/framework/comms/clients/adapter/events"
+	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
 func TestAdapterRetainsRepliesAndBackpressuresAtCapacity(t *testing.T) {

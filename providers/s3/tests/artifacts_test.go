@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
-	files3 "commander/providers/s3/artifacts"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
+	files3 "github.com/defos-ai/commander/providers/s3/artifacts"
 )
 
 func TestArtifactFileSourcesAndIntegrity(t *testing.T) {

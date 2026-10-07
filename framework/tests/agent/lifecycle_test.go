@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/agent"
-	"commander/framework/agent/action"
-	"commander/framework/agent/environment"
-	"commander/framework/comms"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/agent"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/comms"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestAgentSnapshotsRemainReadableDuringAnnouncementsAndRestart(t *testing.T) {

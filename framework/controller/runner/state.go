@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 // requestContext lets shutdown interrupt request-owned store operations, even

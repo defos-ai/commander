@@ -12,15 +12,15 @@ import (
 	"testing"
 	"time"
 
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	"commander/framework/comms/messages"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/executions"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
-	executionfs "commander/providers/fs/executions"
-	operationfs "commander/providers/fs/operations"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
+	executionfs "github.com/defos-ai/commander/providers/fs/executions"
+	operationfs "github.com/defos-ai/commander/providers/fs/operations"
 )
 
 func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {

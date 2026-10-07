@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/providers/mongo/store"
+	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"

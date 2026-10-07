@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	controllermodel "commander/framework/domain/controllers"
-	"commander/providers/mongo/internal/bsonvalue"
+	controllermodel "github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/providers/mongo/internal/bsonvalue"
 )
 
 type controllerDocument struct {

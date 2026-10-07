@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain/executions"
-	"commander/providers/mongo/internal/bsonvalue"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/providers/mongo/internal/bsonvalue"
 )
 
 type executionDocument struct {

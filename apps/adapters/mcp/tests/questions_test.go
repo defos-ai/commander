@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/api/cli"
+	"github.com/defos-ai/commander/apps/adapters/api/cli"
 )
 
 const adminOrigin = "https://admin.example"

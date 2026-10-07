@@ -11,13 +11,13 @@ import (
 	"time"
 	"unicode"
 
-	"commander/adapters/api/endpoints"
-	operationendpoints "commander/adapters/api/endpoints/operations"
-	"commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 // Transport failures and damaged metadata cannot be requested through the public

@@ -3,7 +3,7 @@ package operations
 import (
 	"fmt"
 
-	"commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain"
 )
 
 func (operation Operation) ValidateStep(stepID string) error {

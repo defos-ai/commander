@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

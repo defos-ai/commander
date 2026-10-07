@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"commander/adapters/api"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/host"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/apps/adapters/api"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const adapterType = "api"

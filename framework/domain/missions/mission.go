@@ -11,8 +11,8 @@ import (
 	"slices"
 	"strings"
 
-	"commander/framework/domain"
-	agentmodel "commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )

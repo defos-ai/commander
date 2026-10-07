@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	frameworktesting "commander/framework/testing"
-	"commander/providers/mongo/store"
+	frameworktesting "github.com/defos-ai/commander/framework/testing"
+	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

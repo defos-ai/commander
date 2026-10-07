@@ -9,8 +9,8 @@ import (
 	"slices"
 	"testing"
 
-	"commander/apps/controllers/default/data"
-	"commander/framework/domain/missions"
+	"github.com/defos-ai/commander/apps/controllers/default/data"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testing.T) {

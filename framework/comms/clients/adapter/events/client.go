@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // Client publishes prepared replies without changing their delivery identities.

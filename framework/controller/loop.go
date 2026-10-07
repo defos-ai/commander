@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	"commander/framework/controller/consumers"
-	"commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 // Only this loop mutates coordination state. Remote action waits run in callers;

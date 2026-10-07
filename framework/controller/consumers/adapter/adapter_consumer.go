@@ -9,13 +9,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"commander/framework/comms"
-	adapterevents "commander/framework/comms/clients/adapter/events"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/comms/messages"
-	controllerconsumers "commander/framework/controller/consumers"
-	"commander/framework/domain"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/comms"
+	adapterevents "github.com/defos-ai/commander/framework/comms/clients/adapter/events"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	controllerconsumers "github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // Consumer processes adapter commands independently of agent events. A bounded

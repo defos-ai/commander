@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"commander/admin/ui/static"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/static"
 )
 
 func TestStaticFrontend(t *testing.T) {

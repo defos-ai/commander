@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/agent"
-	"commander/framework/agent/action"
-	"commander/framework/comms"
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/agent"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/comms"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {

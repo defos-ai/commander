@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 var (

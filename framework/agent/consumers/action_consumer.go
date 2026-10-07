@@ -7,12 +7,12 @@ import (
 	"log/slog"
 	"time"
 
-	"commander/framework/comms"
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/comms"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 // ActionConsumer validates action commands, executes each command once, and retains

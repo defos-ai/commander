@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/id"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type DiscoverActionsCommand struct {

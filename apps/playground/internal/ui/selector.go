@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"commander/apps/playground/internal/llm"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
 )
 
 func (m *Model) selecting() bool {

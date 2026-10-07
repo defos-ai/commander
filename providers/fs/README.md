@@ -2,8 +2,8 @@
 
 ## Overview
 
-`commander/providers/fs` implements the message bus, all database stores,
-artifact files, and reports using local or shared directories. It powers the
+`github.com/defos-ai/commander/providers/fs` implements the message bus, all
+database stores, artifact files, and reports using local or shared directories. It powers the
 [default local stack](../../README.md#quick-start).
 
 Hosts accept local paths, `~/path`, `file:///path`, and `fs:///path`.
@@ -26,8 +26,8 @@ For example, open a mission store:
 
 ```go
 import (
-    "commander/providers/fs"
-    fsmissions "commander/providers/fs/missions"
+    "github.com/defos-ai/commander/providers/fs"
+    fsmissions "github.com/defos-ai/commander/providers/fs/missions"
 )
 
 root, err := fs.FilesystemPath(databaseURL)

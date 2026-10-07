@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms/clients/controller/commands"
-	"commander/framework/controller/runner"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 func TestCompletionWriteFailurePreservesReportOrderingAndRetry(t *testing.T) {

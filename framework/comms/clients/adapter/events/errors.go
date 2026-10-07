@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 
-	"commander/framework/domain"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 type remoteError struct {

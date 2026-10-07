@@ -3,9 +3,9 @@ package runner
 import (
 	"context"
 
-	commands "commander/framework/comms/clients/controller/commands"
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/operations"
+	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func queuedTask(operationID, stepID, parentID string, action actionmodel.NextAction) operations.Task {

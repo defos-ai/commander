@@ -3,8 +3,8 @@ package operations
 import (
 	"net/http"
 
-	"commander/adapters/api/endpoints"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func requestHandler(query http.HandlerFunc) http.HandlerFunc {

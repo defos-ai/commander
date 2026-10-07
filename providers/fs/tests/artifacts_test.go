@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
-	artifactfs "commander/providers/fs/artifacts"
-	fstesting "commander/providers/fs/testing"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
+	artifactfs "github.com/defos-ai/commander/providers/fs/artifacts"
+	fstesting "github.com/defos-ai/commander/providers/fs/testing"
 )
 
 func TestArtifactFsStore(t *testing.T) {

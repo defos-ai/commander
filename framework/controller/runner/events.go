@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 type operationView struct {

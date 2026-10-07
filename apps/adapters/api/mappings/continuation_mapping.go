@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"slices"
 
-	"commander/adapters/api/models"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func ToResolveContinuationCommand(operationID, taskID string, request models.ResolveContinuationRequest) controllercommands.ResolveContinuationCommand {

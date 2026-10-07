@@ -2,9 +2,10 @@
 
 ## Overview
 
-`commander/providers/rabbitmq` implements `comms.Bus` over AMQP 0-9-1 with
-[`amqp091-go`](https://github.com/rabbitmq/amqp091-go). It supports `amqp://` and `amqps://` URLs and both
-framework inbox modes. Controller, MCP, and web-quality agent factories select
+`github.com/defos-ai/commander/providers/rabbitmq` implements `comms.Bus` over
+AMQP 0-9-1 with [`amqp091-go`](https://github.com/rabbitmq/amqp091-go). It supports
+`amqp://` and `amqps://` URLs and both framework inbox modes. Controller, MCP, and
+web-quality agent factories select
 this provider when `BUS_URL` or `--bus-url` uses either scheme.
 [`compose.full.yaml`](../../compose.full.yaml) selects RabbitMQ; the default
 Compose stack uses FS.
@@ -31,12 +32,13 @@ See [local setup](../../docs/deployment.md#local-compose) for MCP and Playground
 
 ## Public API
 
-Import `commander/providers/rabbitmq/comms` and construct one bus per host:
+Import `github.com/defos-ai/commander/providers/rabbitmq/comms` and construct one
+bus per host:
 
 ```go
 import (
-    "commander/framework/comms"
-    rabbitcomms "commander/providers/rabbitmq/comms"
+    "github.com/defos-ai/commander/framework/comms"
+    rabbitcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
 )
 
 // ctx bounds connection and subscription creation.
@@ -67,7 +69,7 @@ defer subscription.Close()
 
 The workspace includes this module. Private projects use
 [local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
-for `commander/framework` and `commander/providers/rabbitmq`.
+for the framework and this provider.
 
 ## Delivery and recovery
 

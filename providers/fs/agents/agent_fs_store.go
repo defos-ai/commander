@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/id"
-	"commander/providers/fs/internal/jsonfile"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 // AgentFsStore keeps one JSON observation per agent in

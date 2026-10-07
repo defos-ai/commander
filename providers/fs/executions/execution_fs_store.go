@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain/executions"
-	"commander/framework/id"
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 // ExecutionFsStore keeps one execution per locked JSON collection at

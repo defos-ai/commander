@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms/messages"
-	"commander/framework/controller"
-	"commander/framework/controller/consumers"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
-	"commander/framework/id"
-	"commander/framework/internal/state"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller"
+	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/framework/internal/state"
 )
 
 func TestArtifactsRecoveredBeforeResultAcceptance(t *testing.T) {

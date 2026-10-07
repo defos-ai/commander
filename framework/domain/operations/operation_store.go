@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
 // Implementations retain and return independent copies. Mutations apply atomically

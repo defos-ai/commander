@@ -3,9 +3,9 @@ package mappings
 import (
 	"bytes"
 
-	"commander/adapters/api/models"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func ToStartOperationCommand(request models.StartOperationRequest) controllercommands.StartOperationCommand {

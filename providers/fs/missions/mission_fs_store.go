@@ -1,8 +1,8 @@
 package missions
 
 import (
-	"commander/framework/domain/missions"
-	"commander/providers/fs/internal/catalog"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/providers/fs/internal/catalog"
 )
 
 // MissionFsStore stores mission records in root/missions.json.

@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"commander/framework/comms/clients/controller/commands"
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/executions"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 // Assign returns immediately after recording the task. Work belongs to the

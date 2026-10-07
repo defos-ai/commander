@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"slices"
 
-	"commander/adapters/api/models"
-	"commander/framework/domain/missions"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 func ToMissionResponse(mission missions.Mission) models.MissionResponse {

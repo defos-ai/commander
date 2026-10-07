@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/controller"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/comms"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
 )
 
 func TestControllerWaitsForCommandsIndependently(t *testing.T) {

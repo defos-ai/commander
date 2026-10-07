@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"testing"
 
-	"commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func TestAssignmentWriteFailurePreservesRetryableState(t *testing.T) {

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/reports"
-	"commander/framework/id"
-	reports3 "commander/providers/s3/reports"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
+	reports3 "github.com/defos-ai/commander/providers/s3/reports"
 )
 
 func TestReportS3StoreReplayAndImmutability(t *testing.T) {

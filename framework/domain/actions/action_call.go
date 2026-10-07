@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
 )
 
 type ActionCall struct {

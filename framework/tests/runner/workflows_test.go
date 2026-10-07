@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func TestAutomationWaitsForAllChildrenBeforeModelReview(t *testing.T) {

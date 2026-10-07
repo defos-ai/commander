@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func (o Operation) ValidateCompletion(output json.RawMessage) error {

@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/controller"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/executions"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/executions"
 )
 
 func TestControllerSetsAgentCommandExpiry(t *testing.T) {

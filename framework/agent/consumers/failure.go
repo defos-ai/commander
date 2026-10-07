@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 // A command failure is consumed once its response is published successfully.

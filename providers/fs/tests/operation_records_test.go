@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {

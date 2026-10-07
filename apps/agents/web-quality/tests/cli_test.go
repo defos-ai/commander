@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/apps/agents/web-quality/cli"
+	"github.com/defos-ai/commander/apps/agents/web-quality/cli"
 )
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {

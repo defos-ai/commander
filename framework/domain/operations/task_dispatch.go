@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type TaskDispatch struct {

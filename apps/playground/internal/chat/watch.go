@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	bridge "commander/apps/playground/internal/mcp"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 func (e *Engine) watch(id string) {

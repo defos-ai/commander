@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/agents"
-	agentfs "commander/providers/fs/agents"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	agentfs "github.com/defos-ai/commander/providers/fs/agents"
 )
 
 func TestAgentFsStoreObservationOrdering(t *testing.T) {

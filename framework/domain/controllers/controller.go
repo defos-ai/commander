@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type Status string

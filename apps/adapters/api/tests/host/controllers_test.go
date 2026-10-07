@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/api/models"
-	"commander/framework/domain/controllers"
-	"commander/framework/id"
-	fscontrollers "commander/providers/fs/controllers"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/id"
+	fscontrollers "github.com/defos-ai/commander/providers/fs/controllers"
 )
 
 // The running controller renews its lease in Compose. Expired registrations

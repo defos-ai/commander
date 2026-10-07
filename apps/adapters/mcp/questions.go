@@ -3,7 +3,7 @@ package missionsmcp
 import (
 	"time"
 
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 type operationDetail struct {

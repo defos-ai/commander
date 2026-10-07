@@ -6,14 +6,14 @@ import (
 	"errors"
 	"net/http"
 
-	"commander/adapters/api/endpoints"
-	"commander/adapters/api/mappings"
-	"commander/adapters/api/models"
-	"commander/framework/comms"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain"
-	"commander/framework/domain/executions"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/comms"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func registerCommands(mux *http.ServeMux, commands controllercommands.Operations) {

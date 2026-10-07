@@ -1,15 +1,27 @@
 go 1.26.7
 
 use (
+	./apps/adapters/api
+	./apps/adapters/mcp
+	./apps/admin/ui/backend
+	./apps/agents/web-quality
+	./apps/controllers/default
+	./apps/playground
 	./framework
 	./providers/fs
 	./providers/mongo
-	./providers/s3
 	./providers/rabbitmq
-	./apps/agents/web-quality
-	./apps/controllers/default
-	./apps/adapters/mcp
-	./apps/adapters/api
-	./apps/admin/ui/backend
-	./apps/playground
+	./providers/s3
+)
+
+// Resolve unreleased requirements locally while Go loads the dependency graph.
+replace (
+	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0 => ./apps/adapters/mcp
+	github.com/defos-ai/commander/apps/agents/web-quality v0.0.0 => ./apps/agents/web-quality
+	github.com/defos-ai/commander/apps/controllers/default v0.0.0 => ./apps/controllers/default
+	github.com/defos-ai/commander/framework v0.0.0 => ./framework
+	github.com/defos-ai/commander/providers/fs v0.0.0 => ./providers/fs
+	github.com/defos-ai/commander/providers/mongo v0.0.0 => ./providers/mongo
+	github.com/defos-ai/commander/providers/rabbitmq v0.0.0 => ./providers/rabbitmq
+	github.com/defos-ai/commander/providers/s3 v0.0.0 => ./providers/s3
 )

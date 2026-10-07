@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type operationMetadata struct {

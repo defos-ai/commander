@@ -3,8 +3,8 @@ package runner
 import (
 	"context"
 
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 // AgentSelector chooses from eligible candidates without dispatching work.

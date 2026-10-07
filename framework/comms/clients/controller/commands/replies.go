@@ -6,10 +6,10 @@ import (
 	"errors"
 	"log/slog"
 
-	"commander/framework/comms"
-	adapterevents "commander/framework/comms/clients/adapter/events"
-	"commander/framework/comms/messages"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/comms"
+	adapterevents "github.com/defos-ai/commander/framework/comms/clients/adapter/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type pendingCall struct {

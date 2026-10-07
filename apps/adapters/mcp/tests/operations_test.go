@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

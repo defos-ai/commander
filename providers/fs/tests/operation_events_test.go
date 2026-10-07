@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"commander/framework/domain/operations"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestOperationEventRecordsMaximumSequence(t *testing.T) {

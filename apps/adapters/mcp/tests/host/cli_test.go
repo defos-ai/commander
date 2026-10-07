@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/mcp/cli"
+	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 

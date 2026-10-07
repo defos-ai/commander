@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"commander/framework/domain/actions"
-	mongoactions "commander/providers/mongo/actions"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	mongoactions "github.com/defos-ai/commander/providers/mongo/actions"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

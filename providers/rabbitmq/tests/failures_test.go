@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
-	rabbitcomms "commander/providers/rabbitmq/comms"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	rabbitcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

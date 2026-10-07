@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
 )
 
 // ArtifactConsumer indexes artifacts from an already accepted, durable action result.

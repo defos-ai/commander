@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
-	mongoartifacts "commander/providers/mongo/artifacts"
-	mongotesting "commander/providers/mongo/testing"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
+	mongoartifacts "github.com/defos-ai/commander/providers/mongo/artifacts"
+	mongotesting "github.com/defos-ai/commander/providers/mongo/testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

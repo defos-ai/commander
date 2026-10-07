@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 type Store[T any] struct {

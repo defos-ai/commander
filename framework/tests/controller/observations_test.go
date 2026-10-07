@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/controller/consumers"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/internal/state"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/internal/state"
 )
 
 func TestDelayedAgentEventsKeepLatestSnapshot(t *testing.T) {

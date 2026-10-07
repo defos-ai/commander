@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/controller"
-	"commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/controller"
+	"github.com/defos-ai/commander/framework/domain/controllers"
 )
 
 func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {

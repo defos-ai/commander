@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"commander/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/google/jsonschema-go/jsonschema"
 )
 

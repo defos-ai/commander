@@ -3,8 +3,8 @@ package webquality
 import (
 	"sort"
 
-	webactions "commander/apps/agents/web-quality/actions"
-	"commander/framework/agent/action"
+	webactions "github.com/defos-ai/commander/apps/agents/web-quality/actions"
+	"github.com/defos-ai/commander/framework/agent/action"
 )
 
 // NewActions creates the default catalog. Each call returns fresh instances so

@@ -4,10 +4,10 @@ import (
 	"context"
 	"log/slog"
 
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	controllerevents "commander/framework/comms/clients/controller/events"
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
 )
 
 type DiscoveryConsumer struct {

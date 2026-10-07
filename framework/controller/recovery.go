@@ -9,13 +9,13 @@ import (
 	"reflect"
 	"time"
 
-	agentcommands "commander/framework/comms/clients/agent/commands"
-	"commander/framework/comms/messages"
-	"commander/framework/controller/consumers"
-	"commander/framework/domain"
-	actionmodel "commander/framework/domain/actions"
-	agentmodel "commander/framework/domain/agents"
-	"commander/framework/domain/executions"
+	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/domain"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/executions"
 )
 
 // RecoverAction waits for an already-dispatched task's durable outcome. It never

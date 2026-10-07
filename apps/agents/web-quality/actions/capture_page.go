@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"commander/framework/agent/action"
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/agent/action"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
 
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"

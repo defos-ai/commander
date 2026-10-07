@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms"
 )
 
 // Done closes when coordination stops, including event or lease processing failures.

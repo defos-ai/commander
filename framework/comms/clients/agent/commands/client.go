@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 type Client struct {

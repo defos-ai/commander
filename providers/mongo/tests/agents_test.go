@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	mongoagents "commander/providers/mongo/agents"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	mongoagents "github.com/defos-ai/commander/providers/mongo/agents"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"

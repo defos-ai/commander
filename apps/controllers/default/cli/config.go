@@ -7,9 +7,9 @@ import (
 	"io"
 	"time"
 
-	"commander/framework/controller"
-	"commander/framework/host"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/controller"
+	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const controllerType = "default"

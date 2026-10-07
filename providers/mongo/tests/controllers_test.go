@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/controllers"
-	mongocontrollers "commander/providers/mongo/controllers"
+	"github.com/defos-ai/commander/framework/domain/controllers"
+	mongocontrollers "github.com/defos-ai/commander/providers/mongo/controllers"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

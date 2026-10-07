@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

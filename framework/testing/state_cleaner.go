@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 var ErrBusy = errors.New("test work has not settled")

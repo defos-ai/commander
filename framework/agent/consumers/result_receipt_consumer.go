@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	agentevents "commander/framework/comms/clients/agent/events"
-	"commander/framework/comms/messages"
+	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 // ResultReceiptConsumer processes confirmations independently of action commands.

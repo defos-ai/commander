@@ -1,7 +1,7 @@
 package main
 
 import (
-	"commander/apps/playground/cli"
+	"github.com/defos-ai/commander/apps/playground/cli"
 	"os"
 )
 

@@ -3,8 +3,8 @@ package mappings
 import (
 	"bytes"
 
-	"commander/adapters/api/models"
-	"commander/framework/domain/reports"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 func ToReportResponse(report reports.Report) models.ReportResponse {

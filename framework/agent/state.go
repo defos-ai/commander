@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/agent/environment"
 )
 
 type agentState struct {

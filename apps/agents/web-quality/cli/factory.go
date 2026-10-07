@@ -8,14 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"commander/framework/comms"
-	"commander/framework/domain/artifacts"
-	"commander/providers/fs"
-	fsartifacts "commander/providers/fs/artifacts"
-	fscomms "commander/providers/fs/comms"
-	rabbitmqcomms "commander/providers/rabbitmq/comms"
-	s3artifacts "commander/providers/s3/artifacts"
-	s3store "commander/providers/s3/store"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/providers/fs"
+	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
+	fscomms "github.com/defos-ai/commander/providers/fs/comms"
+	rabbitmqcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
+	s3artifacts "github.com/defos-ai/commander/providers/s3/artifacts"
+	s3store "github.com/defos-ai/commander/providers/s3/store"
 )
 
 type dependencies struct {

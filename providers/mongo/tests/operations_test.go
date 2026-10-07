@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
-	mongooperations "commander/providers/mongo/operations"
-	"commander/providers/mongo/store"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
+	mongooperations "github.com/defos-ai/commander/providers/mongo/operations"
+	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

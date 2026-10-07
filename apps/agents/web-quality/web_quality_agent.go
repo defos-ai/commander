@@ -1,6 +1,6 @@
 package webquality
 
-import agents "commander/framework/agent"
+import agents "github.com/defos-ai/commander/framework/agent"
 
 const WebQualityAgentType agents.AgentType = "web-quality"
 

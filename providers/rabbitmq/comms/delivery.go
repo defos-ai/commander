@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

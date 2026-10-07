@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"commander/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 )
 
 type corsPolicy struct {

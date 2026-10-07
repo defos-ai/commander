@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"commander/framework/comms/messages"
-	"commander/framework/domain"
-	agentmodel "commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 )
 
 var (

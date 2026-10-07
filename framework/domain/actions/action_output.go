@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"commander/framework/domain"
-	"commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
 )
 
 type ActionOutput struct {

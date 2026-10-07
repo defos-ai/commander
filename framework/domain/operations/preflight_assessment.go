@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 func AssessPreflight(mission missions.Mission, records []agents.Agent) *Preflight {

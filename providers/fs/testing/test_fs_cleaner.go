@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/id"
-	frameworktesting "commander/framework/testing"
-	"commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/framework/id"
+	frameworktesting "github.com/defos-ai/commander/framework/testing"
+	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
 // TestFsCleaner clears only public operation/artifact records and report/artifact

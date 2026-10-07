@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 // Missions not present in the file are preserved.

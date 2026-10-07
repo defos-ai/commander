@@ -3,9 +3,9 @@ package endpoints
 import (
 	"net/http"
 
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/reports"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func RegisterReports(mux *http.ServeMux, store reports.ReportStore) {

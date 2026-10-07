@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"commander/adapters/api/endpoints"
-	operationendpoints "commander/adapters/api/endpoints/operations"
-	"commander/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )

@@ -10,9 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"commander/apps/playground/internal/local"
-	"commander/apps/playground/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/defos-ai/commander/apps/playground/internal/local"
+	"github.com/defos-ai/commander/apps/playground/internal/ui"
 	"github.com/mattn/go-isatty"
 )
 

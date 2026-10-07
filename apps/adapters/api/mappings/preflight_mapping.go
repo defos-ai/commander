@@ -3,8 +3,8 @@ package mappings
 import (
 	"slices"
 
-	"commander/adapters/api/models"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func ToPreflightResponse(preflight operations.Preflight) models.PreflightResponse {

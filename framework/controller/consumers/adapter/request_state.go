@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 const requestLedgerCapacity = 4096

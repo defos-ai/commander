@@ -19,11 +19,11 @@ import (
 	"testing"
 	"time"
 
-	"commander/apps/playground/cli"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
-	"commander/framework/id"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/defos-ai/commander/apps/playground/cli"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

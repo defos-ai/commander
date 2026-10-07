@@ -1,4 +1,4 @@
-module commander/framework
+module github.com/defos-ai/commander/framework
 
 go 1.26.7
 

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms"
-	"commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/comms"
+	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
 func TestConsumerSettlesDuplicateMessagesIndependently(t *testing.T) {

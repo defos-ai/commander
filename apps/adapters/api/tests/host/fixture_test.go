@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"commander/adapters/api/cli"
+	"github.com/defos-ai/commander/apps/adapters/api/cli"
 )
 
 type fixture struct {

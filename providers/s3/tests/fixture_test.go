@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/id"
-	"commander/providers/s3/store"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/s3/store"
 )
 
 type fixture struct {

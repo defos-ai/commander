@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"commander/apps/playground/internal/llm"
-	"commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	"github.com/defos-ai/commander/apps/playground/internal/ui"
 )
 
 type config struct {

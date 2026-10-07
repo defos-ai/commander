@@ -3,8 +3,8 @@ package operations
 import (
 	"slices"
 
-	actionmodel "commander/framework/domain/actions"
-	"commander/framework/domain/missions"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 func automaticRule(mission missions.Mission, task Task) (missions.Automation, bool) {

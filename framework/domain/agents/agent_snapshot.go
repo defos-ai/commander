@@ -3,7 +3,7 @@ package agents
 import (
 	"encoding/json"
 
-	actionmodel "commander/framework/domain/actions"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 type AgentStatus string

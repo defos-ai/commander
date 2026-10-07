@@ -41,7 +41,13 @@ jobs:
           cache-dependency-path: |
             go.work.sum
             **/go.sum
-      - name: Run framework tests with race detector
-        run: go test -race -count=1 -timeout=3m ./framework/...
+      - name: Run framework tests outside the workspace
+        working-directory: framework
+        env:
+          GOWORK: 'off'
+        run: go test -race -count=1 -timeout=3m ./...
       - name: Vet framework
-        run: go vet ./framework/...
+        working-directory: framework
+        env:
+          GOWORK: 'off'
+        run: go vet ./...

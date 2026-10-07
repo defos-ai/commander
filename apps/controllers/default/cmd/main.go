@@ -1,7 +1,7 @@
 package main
 
 import (
-	"commander/apps/controllers/default/cli"
+	"github.com/defos-ai/commander/apps/controllers/default/cli"
 	"os"
 )
 

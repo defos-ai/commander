@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type Report struct {

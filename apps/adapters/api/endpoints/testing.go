@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	frameworktesting "commander/framework/testing"
+	frameworktesting "github.com/defos-ai/commander/framework/testing"
 )
 
 func RegisterTestCleanup(mux *http.ServeMux, cleaner frameworktesting.TestCleaner) {

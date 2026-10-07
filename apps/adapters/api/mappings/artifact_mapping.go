@@ -1,8 +1,8 @@
 package mappings
 
 import (
-	"commander/adapters/api/models"
-	"commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
 )
 
 func ToArtifactResponse(artifact artifacts.Artifact) models.ArtifactResponse {

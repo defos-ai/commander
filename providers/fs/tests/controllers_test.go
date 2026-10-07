@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/controllers"
-	controllerfs "commander/providers/fs/controllers"
+	"github.com/defos-ai/commander/framework/domain/controllers"
+	controllerfs "github.com/defos-ai/commander/providers/fs/controllers"
 )
 
 func TestControllerFsStoreRoundTripAndOrdering(t *testing.T) {

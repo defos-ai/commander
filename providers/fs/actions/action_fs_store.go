@@ -3,8 +3,8 @@ package actions
 import (
 	"errors"
 
-	actionmodel "commander/framework/domain/actions"
-	"commander/providers/fs/internal/catalog"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/providers/fs/internal/catalog"
 )
 
 // ActionFsStore persists catalog metadata learned from agents in root/actions.json.

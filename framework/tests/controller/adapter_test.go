@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/comms"
-	adapterevents "commander/framework/comms/clients/adapter/events"
-	commands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/comms/messages"
-	adapter "commander/framework/controller/consumers/adapter"
-	"commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/comms"
+	adapterevents "github.com/defos-ai/commander/framework/comms/clients/adapter/events"
+	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	adapter "github.com/defos-ai/commander/framework/controller/consumers/adapter"
+	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
 const adapterID = "fixture-adapter-00000001"

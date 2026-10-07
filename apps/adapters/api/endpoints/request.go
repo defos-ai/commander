@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain"
 )
 
 func RequestHandler(query http.HandlerFunc) http.HandlerFunc {

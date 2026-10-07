@@ -26,8 +26,12 @@ The user's current instructions take precedence over repository guidance.
 - Go modules are listed in [go.work](go.work); there is no root `go.mod`.
   Use its Go version and explicit module paths from the repository root:
   `go test ./framework/...`, not root `go test ./...`.
-- Modules currently use `commander/...` with local replacements. Do not invent
-  published versions or public `go get` instructions before the release work.
+- Module paths match `github.com/defos-ai/commander/<module-directory>`. Keep
+  checkout-local wiring in `go.work`, not sibling-directory `replace` directives
+  in `go.mod`. The workspace temporarily maps unreleased `v0.0.0` requirements
+  to local directories until releases exist. Do not invent
+  published versions or public `go get` instructions before releases exist.
+  External consumers use the [local setup](apps/agents/README.md#develop-an-agent-in-a-private-repository).
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.

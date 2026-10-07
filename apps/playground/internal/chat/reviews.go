@@ -1,6 +1,6 @@
 package chat
 
-import bridge "commander/apps/playground/internal/mcp"
+import bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 
 // Each continuation version or settled operation status is reviewed once.
 type reviewKey struct {

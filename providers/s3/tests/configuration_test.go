@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"commander/providers/s3/store"
+	"github.com/defos-ai/commander/providers/s3/store"
 )
 
 func TestS3Configuration(t *testing.T) {

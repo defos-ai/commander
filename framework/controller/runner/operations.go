@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"time"
 
-	commands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
-	"commander/framework/id"
+	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func (r *Runner) Missions(ctx context.Context) ([]missions.Mission, error) {

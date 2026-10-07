@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 type Status string

@@ -1,13 +1,13 @@
-module commander/providers/s3
+module github.com/defos-ai/commander/providers/s3
 
 go 1.26.7
 
 require (
-	commander/framework v0.0.0
 	github.com/aws/aws-sdk-go-v2 v1.47.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
 	github.com/aws/smithy-go v1.28.1
+	github.com/defos-ai/commander/framework v0.0.0
 )
 
 require (
@@ -27,5 +27,3 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.1 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 )
-
-replace commander/framework => ../../framework

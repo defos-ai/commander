@@ -1,13 +1,13 @@
-module commander/adapters/mcp
+module github.com/defos-ai/commander/apps/adapters/mcp
 
 go 1.26.7
 
 require (
-	commander/framework v0.0.0
-	commander/providers/fs v0.0.0
-	commander/providers/mongo v0.0.0
-	commander/providers/rabbitmq v0.0.0
-	commander/providers/s3 v0.0.0
+	github.com/defos-ai/commander/framework v0.0.0
+	github.com/defos-ai/commander/providers/fs v0.0.0
+	github.com/defos-ai/commander/providers/mongo v0.0.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.0.0
+	github.com/defos-ai/commander/providers/s3 v0.0.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 )
@@ -49,13 +49,3 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 )
-
-replace commander/framework => ../../../framework
-
-replace commander/providers/fs => ../../../providers/fs
-
-replace commander/providers/mongo => ../../../providers/mongo
-
-replace commander/providers/rabbitmq => ../../../providers/rabbitmq
-
-replace commander/providers/s3 => ../../../providers/s3

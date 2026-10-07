@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	commands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
+	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

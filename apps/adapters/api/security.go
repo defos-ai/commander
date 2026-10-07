@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"commander/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 )
 
 type SecurityConfig struct {

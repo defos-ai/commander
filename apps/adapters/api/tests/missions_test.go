@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"commander/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 )
 
 func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {

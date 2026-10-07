@@ -3,9 +3,9 @@ package consumers
 import (
 	"context"
 
-	"commander/framework/agent/environment"
-	"commander/framework/comms/messages"
-	actionmodel "commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/comms/messages"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 // Runtime provides agent operations without interpreting incoming messages.

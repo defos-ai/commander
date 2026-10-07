@@ -3,9 +3,9 @@ package operations
 import (
 	"net/http"
 
-	"commander/adapters/api/endpoints"
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func registerGraph(mux *http.ServeMux, store operations.OperationStore) {

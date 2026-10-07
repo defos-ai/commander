@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"commander/framework/domain/actions"
-	"commander/providers/mongo/store"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"

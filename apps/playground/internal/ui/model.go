@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"commander/apps/playground/internal/chat"
-	bridge "commander/apps/playground/internal/mcp"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/defos-ai/commander/apps/playground/internal/chat"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/muesli/termenv"
 )
 

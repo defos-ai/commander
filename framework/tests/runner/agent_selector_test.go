@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/controller/runner"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 type agentSelectorFunc func(context.Context, runner.AgentSelection) (string, error)

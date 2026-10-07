@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/id"
-	operationfs "commander/providers/fs/operations"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
+	operationfs "github.com/defos-ai/commander/providers/fs/operations"
 )
 
 func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) {

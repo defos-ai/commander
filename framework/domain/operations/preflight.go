@@ -3,7 +3,7 @@ package operations
 import (
 	"slices"
 
-	"commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 type Preflight struct {

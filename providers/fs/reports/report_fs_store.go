@@ -13,8 +13,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"commander/framework/domain/reports"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // ReportFsStore saves each report at <storage root>/reports/<report ID>.json.

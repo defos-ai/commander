@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
-	"commander/apps/playground/internal/chat"
-	"commander/apps/playground/internal/llm"
-	bridge "commander/apps/playground/internal/mcp"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/defos-ai/commander/apps/playground/internal/chat"
+	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 )
 
 type setupStage string

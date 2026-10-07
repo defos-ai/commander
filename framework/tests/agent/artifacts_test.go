@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"commander/framework/agent"
-	"commander/framework/agent/action"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/artifacts"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/agent"
+	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestAgentPublishesArtifactFiles(t *testing.T) {

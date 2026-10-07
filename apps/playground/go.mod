@@ -1,16 +1,16 @@
-module commander/apps/playground
+module github.com/defos-ai/commander/apps/playground
 
 go 1.26.7
 
 require (
-	commander/adapters/mcp v0.0.0
-	commander/apps/agents/web-quality v0.0.0
-	commander/apps/controllers/default v0.0.0
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.10.1
+	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0
+	github.com/defos-ai/commander/apps/agents/web-quality v0.0.0
+	github.com/defos-ai/commander/apps/controllers/default v0.0.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/muesli/termenv v0.16.0
@@ -18,11 +18,6 @@ require (
 )
 
 require (
-	commander/framework v0.0.0
-	commander/providers/fs v0.0.0 // indirect
-	commander/providers/mongo v0.0.0 // indirect
-	commander/providers/rabbitmq v0.0.0 // indirect
-	commander/providers/s3 v0.0.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -34,6 +29,11 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f // indirect
 	github.com/chromedp/chromedp v0.16.0 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
+	github.com/defos-ai/commander/framework v0.0.0
+	github.com/defos-ai/commander/providers/fs v0.0.0 // indirect
+	github.com/defos-ai/commander/providers/mongo v0.0.0 // indirect
+	github.com/defos-ai/commander/providers/rabbitmq v0.0.0 // indirect
+	github.com/defos-ai/commander/providers/s3 v0.0.0 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
@@ -92,19 +92,3 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.9.1 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 )
-
-replace commander/adapters/mcp => ../adapters/mcp
-
-replace commander/apps/controllers/default => ../controllers/default
-
-replace commander/apps/agents/web-quality => ../agents/web-quality
-
-replace commander/framework => ../../framework
-
-replace commander/providers/fs => ../../providers/fs
-
-replace commander/providers/mongo => ../../providers/mongo
-
-replace commander/providers/s3 => ../../providers/s3
-
-replace commander/providers/rabbitmq => ../../providers/rabbitmq

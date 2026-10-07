@@ -11,9 +11,9 @@ import (
 	"io"
 	"unicode/utf8"
 
-	"commander/framework/domain/reports"
-	"commander/framework/id"
-	"commander/providers/s3/store"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/s3/store"
 )
 
 type ReportS3Store struct{ storage *store.S3Store }

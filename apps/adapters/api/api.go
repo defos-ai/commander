@@ -8,17 +8,17 @@ import (
 	"os"
 	"time"
 
-	"commander/adapters/api/endpoints"
-	operationendpoints "commander/adapters/api/endpoints/operations"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/domain/actions"
-	"commander/framework/domain/agents"
-	"commander/framework/domain/artifacts"
-	"commander/framework/domain/controllers"
-	"commander/framework/domain/missions"
-	"commander/framework/domain/operations"
-	"commander/framework/domain/reports"
-	frameworktesting "commander/framework/testing"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	frameworktesting "github.com/defos-ai/commander/framework/testing"
 )
 
 type Config struct {

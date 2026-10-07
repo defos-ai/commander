@@ -6,8 +6,8 @@ import (
 	"slices"
 	"time"
 
-	"commander/adapters/api/mappings"
-	"commander/framework/domain/agents"
+	"github.com/defos-ai/commander/apps/adapters/api/mappings"
+	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
 func RegisterAgents(mux *http.ServeMux, store agents.AgentStore) {

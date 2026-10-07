@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"commander/framework/domain/actions"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type TaskResult struct {

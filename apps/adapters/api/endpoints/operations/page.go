@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"commander/adapters/api/endpoints"
-	"commander/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 )
 
 func pageResponse[T any](items []T, cursor string) models.PageResponse[T] {

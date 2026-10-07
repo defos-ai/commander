@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	missionsmcp "commander/adapters/mcp"
-	controllercommands "commander/framework/comms/clients/controller/commands"
-	"commander/framework/host"
-	"commander/framework/id"
+	missionsmcp "github.com/defos-ai/commander/apps/adapters/mcp"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const adapterType = "mcp"

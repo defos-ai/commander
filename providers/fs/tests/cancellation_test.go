@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"commander/framework/domain/operations"
-	"commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestOperationCancellationUsesLatestSnapshotAndPreservesEvidence(t *testing.T) {
