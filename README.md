@@ -2,26 +2,24 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: mission execution for agents" width="100%">
 </p>
 
-DEFOS Commander runs missions across agents and external systems.
-Give it an objective through your AI chat, then follow, guide, and review the work.
+DEFOS Commander runs missions across agents and external systems. Give it an
+objective through your AI chat, then follow, guide, and review the work.
+
 Kubernetes runs workloads. **Commander runs missions.**
 
 ## How it works
 
 **Commander → Controller → Agent**
 
-- **Commander** is the decision maker: your LLM through MCP, guided by you. It chooses the mission and what work is needed.
-- **Controller** coordinates the operation, applies mission automation, and decides which agent executes each task.
-- **Agent** executes actions and reports its status, current work, results, and evidence.
-
-Your AI can inspect work and ask you for decisions; the controller owns agent assignment.
+- **Commander** — your AI client chooses the mission and what work is needed.
+- **Controller** — automates the workflow and assigns tasks to available agents.
+- **Agent** — executes actions and returns results and evidence.
 
 ## Quick start
 
-From a checkout, launch Playground: a terminal chat connected to Commander.
-Docker is recommended because it includes the agent's dependencies.
+From a checkout, launch Playground, the Commander terminal chat.
 
-### Docker (recommended)
+### Docker (recommended; includes agent dependencies)
 
 ```sh
 docker compose up --build -d && docker compose run --build --rm playground
@@ -29,35 +27,35 @@ docker compose up --build -d && docker compose run --build --rm playground
 
 ### Go
 
-With Go 1.26.7 or newer:
+With Go 1.26.7+:
 
 ```sh
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-Choose a model and provide its API key. The Go option starts temporary local hosts
-for the session. See [Playground](apps/playground/README.md) for configuration.
+All-in-one state is removed on exit. See [native setup](apps/playground/README.md#go-one-executable)
+for agent dependencies.
 
-Then try:
+Choose a model, provide its API key, and try:
 
 > Review defos.ai and summarize what should be fixed before release.
 
-The included mission automatically checks pages, links, accessibility, SEO and
-technology indicators, with screenshots as evidence. Your AI reviews the results
-and produces a report. See the [website workflow](apps/agents/web-quality/README.md#workflow).
+The included [website review](apps/agents/web-quality/README.md#workflow) checks
+links, accessibility, SEO, and technology indicators, and captures screenshots.
+Your AI reviews the evidence and produces a report.
 
-Already using an AI client? Start Compose and connect it to
-**`http://localhost:4273/mcp`** using the [adapter guide](apps/adapters/README.md#quick-start).
+Already using an AI client? Connect it to **`http://localhost:4273/mcp`** after
+starting Compose. See [MCP setup](apps/adapters/README.md#quick-start).
 
 ## Explore the project
 
 | You want to… | Read |
 | --- | --- |
-| Understand the design and current limits | [Architecture](docs/overview.md) · [Core concepts](docs/abstractions.md) |
-| Configure a local stack | [Setup](docs/deployment.md) · [Playground](apps/playground/README.md) |
-| Add an agent or action | [Agents](apps/agents/README.md) |
-| Extend coordination or client access | [Controllers](apps/controllers/README.md) · [Adapters](apps/adapters/README.md) |
-| Reuse the framework or add a backend | [Framework](framework/README.md) · [Providers](providers/README.md) |
-| Verify a change | [Testing](framework/tests/README.md) |
+| Run and configure Commander | [Setup](docs/deployment.md) · [Playground](apps/playground/README.md) |
+| Inspect operations in a browser | [Admin UI](apps/admin/ui/README.md) |
+| Build an agent or workflow | [Agents](apps/agents/README.md) · [Missions and automation](docs/abstractions.md) |
+| Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
+| Understand the architecture and limits | [Overview](docs/overview.md) |
+| Contribute | [Testing](framework/tests/README.md) · [Coding-agent guide](AGENTS.md) |
 
 [AGPL-3.0-only](LICENSE) · [Report a vulnerability](SECURITY.md)

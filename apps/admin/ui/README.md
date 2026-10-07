@@ -1,56 +1,18 @@
 # Commander UI
 
-## Overview
+Connect to Commander APIs, run operations and review their results in a browser.
+The UI shows missions, controllers, agents and actions, including readiness and
+health. Operations support search, status filters, questions, event history and
+an execution graph of recorded tasks, artifacts and files.
 
-React, TypeScript and Vite frontend with a small Go HTTP server. It follows the
-platform's CSS theme, Grunt typography, Lucide icons and typed i18next translations.
+Start an operation with a mission and JSON input; Commander plans the first task.
+Answer pending questions with an option or your own text. Cancelling stops new
+work, but dispatched tasks may finish. After a command timeout, inspect the
+operation before retrying; the UI never retries commands automatically.
 
-- `frontend/`: React application, browser tests and Vite build.
-- `backend/`: Go server, API proxy and browser sessions; standard library only.
-- `docker/`: builds both into one reusable image.
-
-Add Commander APIs, sign in with Basic Auth, and monitor their health. The home
-page keeps a grid of saved connections. Inside a connection, the sidebar provides
-Overview, Operations, Missions, Controllers, Agents, Actions and connection settings.
-
-Operations supports search, status filters and details: task progress,
-agent readiness, decisions, questions, results, artifact files and event history.
-Snapshots refresh every 10 seconds while open. Task completion is shown separately
-from operation status. Start an operation by selecting a mission and supplying
-its JSON input; Commander then plans the first task. You can cancel active
-operations and answer pending questions using an option or your own text.
-
-Commands go through the API to the controller. Cancellation stops new work;
-already-dispatched work may finish. A timeout leaves the outcome uncertain, so
-the UI offers to inspect the operation and never retries a command automatically.
-
-Switch operation details to **Execution graph** to follow recorded tasks and their
-artifacts and files. Select a node to inspect its status and related work in a popup; zoom
-and drag to explore larger graphs. Mouse dragging pans the graph without opening
-node details; clicking a node opens them. Touch scrolling and keyboard navigation
-remain available. It refreshes every 10 seconds and shows
-recorded work, including queued tasks, rather than a plan of future work.
-Task node details include collapsible input and output, updated with the operation.
-Open artifacts from details or graph nodes to inspect metadata, preview images
-and text, or download files. Previews are limited to 2 MiB and downloads to
-100 MiB. Reports open from operation details and can be downloaded as JSON.
-File content is fetched on demand through the UI backend.
-
-Missions supports search and read-only details: objectives, starting and required
-actions, automations, planning steps, and input/output schemas. The automation
-graph connects allowed follow-ups and shows model review and continuation rules.
-Drag, zoom, or select a node to inspect its rule. Refresh loads the current
-definitions from the selected API.
-
-Controllers shows registered instances, status, host platform, version, agent
-selector and heartbeat lease timestamps. Search and read-only details refresh
-every 10 seconds; expired leases are marked stale by the API.
-
-Agents shows current work, host details, heartbeat freshness and each agent's
-action readiness and missing requirements. Actions shows catalog definitions,
-permissions and schemas; readiness belongs to individual agents. Both pages
-support search, details and a 30-second refresh while open. These pages are
-read-only; work is assigned through operations.
+Operation details refresh every 10 seconds. Select graph nodes to inspect work,
+or drag and zoom to explore. Artifact details offer image/text previews (up to
+2 MiB) and downloads (up to 100 MiB); completed reports download as JSON.
 
 ## Quick start
 
@@ -61,135 +23,69 @@ docker compose --profile admin up --build -d
 ```
 
 Open `http://localhost:4275` and choose **Connect** under **Local Commander detected**.
-The form prefills `Local connection`, `http://localhost:4274` and username
-`commander`; enter your password to connect. All fields are editable.
-Local Compose credentials are `commander` / `commander-local-secret`; override
-them with `API_USERNAME` and `API_PASSWORD`. Use `-f compose.full.yaml` for
-MongoDB, RabbitMQ and MinIO. `COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change
-the published ports. Discovery checks only `http://localhost:4274`; for another
-API port, choose **Add connection**. This opens an empty form for the connection
-name, API URL, username and password.
+Compose defaults are `http://localhost:4274`, username `commander` and password
+`commander-local-secret`; override credentials with `API_USERNAME` and
+`API_PASSWORD`. Use `docker compose -f compose.full.yaml --profile admin up --build -d`
+for MongoDB, RabbitMQ and MinIO.
 
-For frontend development, with Node 24+, prepare the assets and start the Go
-backend from this directory:
+`COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change the published ports. Discovery
+checks only `http://localhost:4274`; use **Add connection** for another port or
+API, then enter a name, URL and credentials. The UI checks before saving.
+
+### Native server
+
+With Node 24+ and Go 1.26.7+, run from `apps/admin/ui`:
 
 ```sh
 npm --prefix frontend ci
 npm --prefix frontend run build
-go run ./backend/cmd/commander-ui --listen-address 127.0.0.1:4276
-```
-
-In another terminal, run from this directory:
-
-```sh
-cd frontend
-npm run dev
-```
-
-Open `http://localhost:4275`. To build and serve with Go, run from `apps/admin/ui`:
-
-```sh
-npm --prefix frontend run build
 go run ./backend/cmd/commander-ui
 ```
 
-The server reads `frontend/dist/` and listens on `:4275`. Override with
-`--static-dir` (`UI_STATIC_DIR`) or `--listen-address` (`UI_LISTEN_ADDRESS`).
-Hosting platforms can set `PORT`; explicit flags take precedence.
-
-Start the [API adapter](../../adapters/api/README.md) with `API_USERNAME` and
-`API_PASSWORD`. The UI looks for `http://localhost:4274` automatically. Choose
-**Connect** when detected, or **Add connection** for another address. Enter a
-name, API URL and credentials; the UI checks the connection before saving it.
-The Vite development server forwards `/ui/` to the Go backend on port `4276`.
+Start the [API adapter](../../adapters/api/README.md) separately. The UI serves
+`frontend/dist/` on `:4275`; override with `--static-dir` (`UI_STATIC_DIR`) or
+`--listen-address` (`UI_LISTEN_ADDRESS`). Listener precedence is flag, environment,
+`PORT`, then `4275`. `/healthz` checks the UI server. The
+[Dockerfile](docker/Dockerfile) packages the frontend and server in one image.
 
 ### Connections and sessions
 
-Add API URLs and credentials directly in the UI. All browser API requests go
-through the UI backend on the same origin. Both native and Compose setups show
-and save `http://localhost:4274`. Compose routes that address to `http://api:4274`
-inside the backend for discovery, sign-in and API requests.
-
-Optional `UI_API_UPSTREAMS` (`--api-upstreams`) maps public hosts and ports
-to internal ones:
+Browser API requests use the UI backend on the same origin. Compose displays and
+saves `http://localhost:4274` while routing it internally to `http://api:4274`.
+Optional `UI_API_UPSTREAMS` (`--api-upstreams`) maps public hosts and ports:
 
 ```sh
 UI_API_UPSTREAMS=localhost:4274=api:4274,127.0.0.1:4274=api:4274
 ```
 
-A matching host and port are replaced; the URL's scheme, path and query stay intact.
-Unmapped URLs connect directly. Compose sets the mappings automatically.
-Adding other APIs through the UI needs no routing configuration or restart.
-A remotely hosted UI cannot discover an API on the visitor's laptop through `localhost`.
+Only the matching host and port change; scheme, path and query remain intact.
+Unmapped URLs connect directly. Compose supplies mappings automatically; adding
+other APIs needs no routing changes or restart. A hosted UI cannot discover an
+API on a visitor's laptop through `localhost`. Base paths are supported;
+redirects are rejected.
 
-Each API must allow the upstream hostname in `API_ALLOWED_HOSTS`; browser CORS
-configuration is unnecessary for this proxy.
+Each API must allow its upstream hostname in `API_ALLOWED_HOSTS`. Browser CORS
+configuration is unnecessary because the backend sends Basic authentication.
 
-Names and URLs are saved in the browser. API passwords stay in backend memory;
-the browser receives an HttpOnly, SameSite=Strict session cookie. Sign-in survives
-page reloads for up to eight hours. Each connection has separate credentials;
-forgetting credentials or removing a connection signs out only that API.
-Restarting the UI backend signs out every session. This initial implementation
-uses one UI backend replica.
+Names and URLs are saved in the browser; API passwords stay in backend memory.
+The browser receives an HttpOnly, SameSite=Strict cookie. Sessions survive reloads
+for up to eight hours. Forgetting credentials or removing a connection signs out
+only that API; restarting the backend signs out all sessions. Use one UI backend
+replica. Record URLs support reload and back/forward navigation, contain no
+credentials, and require the connection to be saved in that browser.
 
-For hosting, serve the UI over HTTPS and set `UI_PUBLIC_ORIGIN`
-(`--public-origin`), for example `https://admin.example.com`. HTTPS sessions use
-Secure cookies. Plain HTTP is supported only for localhost development. Set this
-origin when TLS terminates at a reverse proxy; forwarded headers are not trusted.
+For hosting, use HTTPS and set `UI_PUBLIC_ORIGIN` (`--public-origin`), for example
+`https://admin.example.com`, including when TLS terminates at a reverse proxy.
+Forwarded headers are not trusted. HTTPS sessions use Secure cookies; plain HTTP
+is supported only for localhost development.
 
-URLs preserve the connection, page and selected record, including graph views.
-Back/forward and reload return to that location. Links require the connection to
-be saved in the browser and contain no API credentials.
-
-Saved connections refresh every 30 seconds. API liveness (`/healthz`), database
-readiness (`/readyz`) and authenticated catalog access are checked separately,
-with a five-second timeout. These checks do not assert controller, agent, broker
-or file-storage health. Base-path URLs are supported; redirects are rejected.
+Saved connections refresh every 30 seconds. Liveness (`/healthz`), database
+readiness (`/readyz`) and authenticated catalog access are checked separately with
+a five-second timeout. They do not establish controller, agent, broker or file
+storage health.
 
 ## Development and testing
 
-From `apps/admin/ui/frontend`:
-
-```sh
-npm run typecheck
-npm test
-npm run build
-```
-
-Test the Go server from the repository root:
-
-```sh
-go test -race ./apps/admin/ui/backend/...
-```
-
-Browser tests use the real API, controller and agents in the isolated test stack.
-From the repository root:
-
-```sh
-docker compose -f compose.test.yaml --profile ui up --build --wait
-cd apps/admin/ui/frontend
-npm ci
-npx playwright install chromium
-npm run test:e2e
-cd ../../../..
-docker compose -f compose.test.yaml --profile ui down --volumes
-```
-
-The browser scenarios cover navigation, session persistence and operation questions, automation,
-graphs and evidence downloads. They clean test data through the test-only API;
-run them separately from API/MCP tests using the same stack. CI also installs
-browser system dependencies and retains traces/screenshots when tests fail.
-
-The [Dockerfile](docker/Dockerfile) builds the frontend and Go server, then runs
-as a non-root user on port `4275` (override with `PORT`). `/healthz` checks the
-server. Enter API addresses and credentials through the UI, so the same image
-works with different Commander deployments.
-
-Within `frontend/`, keep pages in `src/pages`, API reads and response types in
-`src/api`, shared controls in `src/components`, state hooks in `src/hooks`, and CSS
-in `src/styles`. English strings live in `src/i18n`; use typed translation
-selectors. Tests live in `frontend/tests/` and `backend/tests/`. No runtime imports
-from sibling repositories are needed.
-
-The COMMANDER wordmark uses the supplied Grunt Grotesk SemiBold, without a star.
-Grunt Light and Geist Mono assets and theme colors match the platform frontend.
+[Contributor guidance](AGENTS.md) ·
+[Frontend scripts](frontend/package.json) ·
+[Test setup](../../../framework/tests/README.md)

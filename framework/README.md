@@ -22,29 +22,13 @@ Import the framework packages you need and inject their interfaces. The bundled
 Current module paths use `commander/...`; private projects use the
 [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository).
 
-## Development and testing
-
-| Package | Put changes here when… |
-| --- | --- |
-| `agent` | Changing action execution, discovery or result delivery. |
-| `controller` | Changing coordination, scheduling or recovery. |
-| `domain` | Defining shared entities, state transitions and store interfaces. |
-| `comms` | Changing transport contracts, typed commands/events or consumers. |
-
-Keep providers and apps outside framework dependencies. Use singular entities and
-matching stores in plural packages: `agents.Agent`, `agents.AgentStore`. Update
-persistence, consumers and recovery together when changing a lifecycle.
-
 Controller hosts can supply an `AgentSelector` to customize which eligible agent
 receives a task. See [agent selection](../apps/controllers/README.md#agent-selection).
 
-From the repository root:
+## Reference
 
-```sh
-go test -race -count=1 -timeout=3m ./framework/...
-go vet ./framework/...
-```
-
-Add tests for observable behavior and complex invariants under `framework/tests/`.
-See [testing](tests/README.md), [message handling](comms/README.md) and
-[wire contracts](comms/messages/README.md) for details.
+- [Messaging](comms/README.md): consumers, inbox lifetimes and delivery limits.
+- [Wire contracts](comms/messages/README.md): routes, payloads and result acceptance.
+- [Domain interfaces](domain/): entities and storage contracts.
+- [Testing](tests/README.md): unit and integration commands.
+- [Coding guidance](AGENTS.md): framework boundaries and invariants.

@@ -1,11 +1,9 @@
 # Playground
 
-## Overview
-
 Playground is a terminal chat with one model per session. The model acts as
-Commander through MCP: choose missions, assign work, review evidence and resolve
-open decisions while the controller runs automation and agents execute actions.
-Playground can connect to running hosts or launch a temporary local demo.
+Commander through MCP: choose missions, assign work and review evidence while
+the controller runs automation and agents execute actions. Connect to running
+hosts or launch a temporary local demo.
 
 ## Quick start
 
@@ -18,9 +16,9 @@ docker compose up --build -d
 docker compose run --build --rm playground
 ```
 
-Export your model provider's key first, or enter it during setup. No Go installation
-is needed. `/exit` closes chat; hosts and saved work remain. `docker compose down`
-stops the hosts. See [deployment](../../docs/deployment.md) for connections and state.
+Export your model provider's key first, or enter it during setup. `/exit` closes
+chat; hosts and saved work remain. `docker compose down` stops the hosts. See
+[deployment](../../docs/deployment.md) for connections and state.
 
 ### Go: one executable
 
@@ -31,11 +29,9 @@ go build -o commander ./apps/playground/cmd/commander
 ./commander --all-in-one
 ```
 
-Or use `go run ./apps/playground/cmd/commander --all-in-one`.
-
 This starts one MCP host, one controller and one web quality agent using temporary
-state and an available loopback port. The mission is embedded; the built executable
-needs no checkout or Go installation. Browser actions still need
+state and an available loopback port. The executable embeds the mission and needs
+no checkout or Go installation. Browser actions still need
 [Chromium](../agents/web-quality/README.md#native-agent).
 **Exiting stops these hosts and deletes the session's operations, reports and artifacts.**
 Use Compose to retain work.
@@ -46,10 +42,10 @@ shows the temporary host log location, which is also deleted on exit.
 
 ### Model setup
 
-Choose a provider and model with **↑/↓** and **Enter**; use **PgUp/PgDown** for long
-lists. Select **Enter model name…** when needed. Missing keys are entered privately.
-**Other** accepts an OpenAI-compatible base URL, model name and optional key. Model
-discovery failures offer manual setup. Select a model supporting tool calls.
+Choose a provider and model with **↑/↓** and **Enter**; **PgUp/PgDown** scroll long
+lists. Select a model supporting tool calls, using **Enter model name…** if needed.
+Missing keys are entered privately. **Other** accepts an OpenAI-compatible base
+URL, model name and optional key. Discovery failures offer manual setup.
 
 To connect to an existing MCP server:
 
@@ -73,10 +69,9 @@ for **Other**. Keys and chat history stay in memory; hosts save operation state.
 Messages and requested tool results go to the selected model provider, which bills
 API usage.
 
-For model failures, rerun with `--debug` and your usual flags to see bounded,
-redacted provider errors. A failed request ends the turn without automatic retry;
-saved work and queued messages remain. Send guidance or `/watch <operation-id>`
-to resume review.
+For model failures, rerun with `--debug` to see redacted provider errors. Requests
+are not retried automatically; saved work and queued messages remain. Send
+guidance or `/watch <operation-id>` to resume review.
 
 ### Chat
 
@@ -95,34 +90,18 @@ Try “List missions and available agents,” then:
 | `/clear` | Clear conversation after stopping the reply. |
 | `/exit` or **Ctrl+D** | Exit chat; all-in-one hosts also stop. |
 
-Replies stream as Markdown. Messages queue during model/tool turns; slash commands
-and operation updates remain responsive. **PgUp/PgDown** scrolls chat.
+Messages queue during replies; slash commands and operation updates remain
+responsive. **PgUp/PgDown** scrolls chat.
 
 Questions appear in a selector: use **↑/↓** and **Enter**, type a custom answer,
 or press **Tab** to return to chat. The panel shows the latest question, deadline
-and count of others waiting. Only operator input records an answer. Expiry returns
-the decision to the model; it does not approve work. Watchers resume pending
-continuations and expired questions. With separate hosts, exiting leaves operations
-running, but further model decisions wait for a session to follow them.
+and count of others waiting. Only operator input records an answer; expiry returns
+the decision to model review without approving work. With separate hosts, exiting
+leaves operations running, but model decisions wait for a session to follow them.
 
 See [website scenarios](../agents/web-quality/README.md#try-these-in-playground)
 and the [MCP workflow](../adapters/README.md#operation-workflow).
 
 ## Development and testing
 
-`cli/` starts the app; `internal/local/` launches optional hosts; `internal/ui/`
-renders setup/chat; `internal/chat/` handles model turns, commands and watchers.
-`internal/mcp/` owns the MCP client and `internal/llm/` owns model integrations.
-The local launcher reuses host applications; chat always accesses Commander via MCP.
-
-From the repository root:
-
-```sh
-go test -race -count=1 ./apps/playground/...
-go vet ./apps/playground/...
-```
-
-Tests cover rendering, questions and an all-in-one session with real local hosts.
-Model fixtures avoid paid calls and API keys; Chromium is not needed. See
-[MCP integration tests](../adapters/README.md#development-and-testing) and the
-[testing guide](../../framework/tests/README.md).
+[Contributor guidance](AGENTS.md) · [Test setup](../../framework/tests/README.md)

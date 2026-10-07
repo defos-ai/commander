@@ -21,51 +21,29 @@ err := consumer.Consume(ctx, domainConsumer.Consume)
 | Error | Call `Reject(ctx)` on that delivery, then stop unless `ContinueOnError` permits continuing. |
 | Receive, ACK, rejection error or cancellation | Stop consumption. |
 
-A business failure can be handled successfully: persist or publish its failure
-outcome, then return nil. Returning an error means processing itself is incomplete.
-`AfterAck` runs local bookkeeping only after acknowledgement succeeds.
-`ContinueOnError` runs only after rejection succeeds.
-
-The consumer does not rerun handlers, deduplicate business work or schedule retries.
-`ContinueOnError` does not requeue the failed message. Retention and redelivery
-belong to the provider.
-
-## Domain consumers
-
-| Location | Responsibility |
-| --- | --- |
-| [Agent consumers](../agent/consumers) | Run actions, discover readiness, stop gracefully, accept result receipts. |
-| [Controller event consumers](../controller/consumers) | Persist agent observations and command outcomes. |
-| [Controller adapter consumer](../controller/consumers/adapter) | Execute operation commands and respond to the adapter. |
-
-Commands, results, receipts and cancellation use separate subscriptions where
-needed, so waiting for a long action does not block receipt of its result.
-
-Processing is sequential by default. `Concurrency > 1` bounds simultaneous
-handlers and requires concurrency-safe handlers; callbacks stay serialized.
-Each `Delivery` exposes `Message()` and owns its `Ack(ctx)` / `Reject(ctx)` outcome.
-Copies with the same message ID settle independently. Repeating the same successful
-settlement on a handle is harmless; choosing the opposite outcome returns
-`ErrDeliverySettled`. Settlement state belongs to the delivery handle.
+A handled business failure can return nil after saving or publishing its outcome.
+Returning an error means processing is incomplete. The consumer does not retry
+handlers or deduplicate work; `ContinueOnError` does not requeue a failed message.
+Processing is sequential unless `Concurrency` is set above one.
+See [`Consumer`](consumer.go) for callback and concurrency options, and
+[`Delivery`](bus.go) for settlement semantics.
 
 ## Delivery guarantees
 
 `Subscribe(ctx, comms.Inbox{Topic: topic, Name: name, Mode: mode})` opens an inbox.
 Identity is `(Topic, Name)`; different names on the same exact topic receive
-independent copies. All production hosts use their process ID as the name and
-`TransientExclusive` mode.
+independent copies. Hosts use their process ID as the name and `TransientExclusive` mode.
 
 | Mode | Contract |
 | --- | --- |
 | `TransientExclusive` | One active consumer; closing or losing it ends the inbox. Reopening receives new publications only. |
 | `DurableShared` | Retains work from first declaration through downtime; consumers sharing the inbox compete. Unsettled work can be redelivered and processing order is not guaranteed. |
 
-Only `TransientExclusive` is implemented by FS. `DurableShared` returns
-`ErrUnsupportedInbox`. The [RabbitMQ provider](../../providers/rabbitmq/README.md)
-implements both modes. Hosts currently select `TransientExclusive` with either
-provider; shared durable controller inboxes are not activated.
-FS retains unsettled and rejected evidence without replaying it into a new
-subscription; see [FS behavior](../../providers/fs/README.md).
+The [FS provider](../../providers/fs/README.md#delivery-and-recovery) supports only
+transient inboxes and retains rejected files without replaying them. The
+[RabbitMQ provider](../../providers/rabbitmq/README.md#delivery-and-recovery)
+supports both modes. Shared durable controller inboxes are not activated;
+one active controller per database is supported.
 
 Broker acknowledgement and business acceptance are different. The controller
 sends an agent a result receipt only after durable persistence. The agent retries
@@ -74,18 +52,11 @@ unconfirmed outcomes from its process cache. See the
 
 ## Adapter command replay
 
-The controller retains up to 4,096 running or completed adapter requests in
-memory. Duplicate requests share the original execution and reply. Completed
-replies remain protected until their original deadlines expire; running handlers
-stay tracked until completion even if their contexts have been canceled.
-
-When the ledger is full, new requests wait for space, bounded by their own
-deadlines and consumer shutdown. An expired request with no retained reply gets
-a timeout response without executing. Only completed, expired entries can be
-removed to admit more work. Cancellation messages have a separate consumer.
-
-This protects redelivery within the same controller process. Durable deduplication
-is still required before enabling shared command queues across controller restarts.
+Duplicate adapter requests share their execution and reply while retained by the
+controller's bounded in-memory ledger. New requests may wait for space until
+their deadline. An expired request without a retained reply times out without
+executing. Replay protection does not survive controller restarts; see the
+[`adapter` consumer](../controller/consumers/adapter/).
 
 ## Command admission deadlines
 
@@ -94,10 +65,9 @@ with a five-minute start window when no deadline is supplied. An agent reports a
 failure if new action, discovery, or stop work arrives too late. Expiry does not
 cancel work already started.
 
-Action deduplication runs before this check: a completed action replays its saved
-result even after expiry. Recovery preserves the original command and deadline;
-retrying cannot extend them. Hand-built commands with no expiry have no admission
-limit. Host clocks must be synchronized.
+Completed actions can replay cached results after expiry. Recovery preserves the
+original deadline. Hand-built commands with no expiry have no admission limit.
+Host clocks must be synchronized.
 
 ## Delayed agent events
 
@@ -107,17 +77,8 @@ source time, not arrival time. Lifecycle events older than the heartbeat timeout
 are ignored. Agent and controller clocks must stay synchronized; timestamps more
 than five seconds ahead of the controller are rejected.
 
-Stores briefly retain a hidden ordering marker after lease expiry so delayed
-snapshots cannot recreate older state. A fresh heartbeat can restore the agent.
 Late action results still persist against their execution record and receive
-acceptance, without changing newer inventory.
+acceptance, without changing newer inventory. See
+[restart recovery](../../docs/overview.md#state-and-restart-recovery) for limits.
 
-## RabbitMQ provider
-
-The [RabbitMQ provider](../../providers/rabbitmq/README.md) implements the bus
-contract, including both inbox modes and publish confirmations. Host factories
-select it for `amqp://` and `amqps://` bus URLs. Full Compose uses RabbitMQ;
-the default Compose stack uses FS. Hosts use transient inboxes in both stacks.
-Controller-owned assignment and result acceptance remain framework responsibilities.
-Connecting a broker alone does not make multiple controllers safe;
-see [current scope](../../docs/overview.md#current-scope).
+For changes to this package, see [coding guidance](AGENTS.md).

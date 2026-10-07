@@ -71,25 +71,22 @@ containers. Native runs use the browser sandbox by default. See
 
 ## Development and testing
 
+See [AGENTS.md](AGENTS.md) for action and browser implementation guidance.
+
 ```sh
 go test -race -count=1 ./apps/agents/web-quality/...
 ```
 
-Agent tests cover action behavior and dependency discovery. The
-[MCP suite](../../../framework/tests/README.md#mcp-api-tests) runs the full review
-with Compose, including real browsers, screenshots, questions and reports; it
-needs no model key or host browser.
+Use the [agent guide](../README.md) to add actions. The
+[MCP suite](../../../framework/tests/README.md#mcp-api-tests) tests the full review
+with Compose, including browsers and reports; it needs no model key or host browser.
 
 ### Try these in Playground
 
-| Scenario | Action | Expected behavior |
-| --- | --- | --- |
-| Automatic review | Use the prompt above. | Checks run before grouped model review. |
-| Operator input | Add “Ask whether I want a brief or detailed report.” | Answer with ↑/↓ and Enter. |
-| Concurrent work | Start another review. | `/operations` lists both. |
-| Restart | Restart the controller; use `/watch <operation-id>` in a new chat. | Saved tasks and questions remain available. |
-| Cancellation | `/cancel <operation-id>` | New dispatch stops; dispatched checks may finish. |
-| Failure | Review a URL returning an HTTP error. | Failed discovery and a pending model decision. |
+Add “Ask whether I want a brief or detailed report” to try operator questions.
+Use `/operations` to list reviews, `/watch <operation-id>` to resume watching after
+a restart, and `/cancel <operation-id>` to stop new dispatches. Already dispatched
+checks may finish. See the [Playground guide](../../playground/README.md) for commands.
 
 ### Scope
 
@@ -106,5 +103,5 @@ These are bounded quality checks. They do not provide a complete accessibility
 audit or prove vulnerabilities. A redirect to another hostname requires an
 operator scope decision under the bundled mission.
 
-Use the [agent contribution guide](../README.md) to add actions, and update the
-mission when another automatic transition is needed.
+Edit the [mission definition](../../controllers/default/data/default-missions.json)
+to change automatic transitions.

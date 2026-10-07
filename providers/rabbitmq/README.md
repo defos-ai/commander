@@ -62,10 +62,8 @@ defer subscription.Close()
 ```
 
 `Options.Prefetch` bounds unacknowledged deliveries per subscription; zero uses
-16. Publication uses a separate connection; each subscription owns its consuming
-connection. Close subscriptions after consumers stop, then close the bus. Canceling a
-`Next` call ends that receive without closing the subscription or invalidating
-previously returned deliveries. See the [consumer contract](../../framework/comms/README.md).
+16. Close subscriptions after consumers stop, then close the bus. See the
+[consumer contract](../../framework/comms/README.md) for receiving and settlement.
 
 The workspace includes this module. Private projects use
 [local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
@@ -73,10 +71,10 @@ for `commander/framework` and `commander/providers/rabbitmq`.
 
 ## Delivery and recovery
 
-The provider declares the durable direct exchange `commander` (`Exchange`).
+The provider declares the durable direct exchange `commander`.
 Topics match exactly. Inbox identity is `(Topic, Name)`; different names on the
-same topic receive independent copies. `QueueName(inbox)` returns the stable
-broker queue name, containing a readable topic prefix and an identity hash.
+same topic receive independent copies. [`QueueName(inbox)`](comms/topology.go)
+returns the stable broker queue name.
 
 | Inbox mode | RabbitMQ behavior |
 | --- | --- |
@@ -89,29 +87,20 @@ inbox accepts the route. A publish error can leave the outcome uncertain, so
 application retries must tolerate duplicate delivery. Broker confirmation does
 not mean a consumer has processed or accepted the message.
 
-`Ack` acknowledges processing. `Reject` publishes the original raw body to the
-durable fanout exchange `commander.failed` (`FailedExchange`) and its durable
-queue `commander.failed` (`FailedQueue`), with source topic and inbox headers.
-Only after that publication is confirmed does it acknowledge the original.
-Failed deliveries remain available for inspection; there is no automatic retry
-loop. A malformed incoming message follows the same quarantine path, and
-`Next` returns `comms.ErrInvalidMessage` after successful quarantine.
+Rejected and malformed messages go to the durable `commander.failed` queue for
+inspection, with source topic and inbox headers. There is no automatic retry loop.
+Connection loss can leave settlement uncertain and create duplicate failure records.
+There is no automatic reconnect: the host must recreate the bus and subscriptions.
+Setup, publication and settlement have a 30-second upper bound, shortened by caller
+deadlines; a publication timeout closes the publisher connection. Delivery is not
+exactly once. See [delivery handling](comms/delivery.go) for details.
 
-Repeating the same successful settlement on a delivery is harmless; selecting
-the opposite outcome returns `comms.ErrDeliverySettled`. Connection loss can
-make settlement uncertain and can produce duplicate failed-delivery records.
-There is no automatic reconnect: connection failures surface to callers, and
-the host must recreate the bus and subscriptions. Setup, publication and settlement
-use a 30-second upper bound, shortened by caller deadlines. A publication timeout
-closes the publisher connection because its outcome is uncertain. Delivery is
-not exactly once.
-
-The provider does not convert `expires_at` into a broker TTL; agents enforce
-command admission deadlines. Controller assignment and result acceptance stay
-in the framework. Durable queues alone do not make multiple controllers safe:
-durable business deduplication across controller restarts remains future work.
+Agents enforce `expires_at`; it is not a broker TTL. Durable queues do not add
+business deduplication across controller restarts or multi-controller support.
 
 ## Development and testing
+
+See [AGENTS.md](AGENTS.md) for topology and delivery-settlement guidance.
 
 Start a dedicated test broker from the repository root. Port `5673` keeps it
 separate from full Compose:
@@ -136,10 +125,5 @@ go vet ./providers/rabbitmq/...
 docker stop commander-rabbitmq-test
 ```
 
-Integration tests skip without `COMMANDER_TEST_RABBITMQ_URL`. Tests connect to
-an existing broker; they do not start Docker. Use a dedicated broker or virtual
-host because tests inspect the shared failed-delivery queue and temporarily unbind it
-to exercise failure handling. Test inboxes use
-unique identities and durable test queues are cleaned up after each case.
-CI starts a RabbitMQ service and runs the suite in
-[test-provider-rabbitmq.yml](../../.github/workflows/test-provider-rabbitmq.yml).
+Integration tests skip without `COMMANDER_TEST_RABBITMQ_URL`. Use a dedicated
+broker or virtual host: tests modify the shared failed-delivery queue's bindings.

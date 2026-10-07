@@ -1,6 +1,23 @@
+# Environment files at any depth
+.env
+.env.*
+*.env
+*.env.*
+
+# Runtime state and Go build output
 /artifacts/
+/state/
+/commander
+/commander.exe
 bin/
 coverage.out
 *.test
-/state
-/commander
+*.test.exe
+
+# Frontend dependencies and generated output
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo

@@ -33,8 +33,8 @@ For the included website review:
    and explicitly completes the operation with a report.
 
 MCP exposes operation commands and queries, including agent readiness and current
-`work`. The controller owns instance selection and agent administration. Only MCP
-opens an HTTP port; controllers and agents consume messages. See
+`work`. The controller owns instance selection and agent administration. Adapters
+expose client APIs; controllers and agents consume messages. See
 [core concepts](abstractions.md) for tasks, automation, questions and evidence.
 
 ## Dependencies

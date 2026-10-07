@@ -6,9 +6,6 @@
 or a compatible service such as MinIO. App factories select it for `s3://`
 `STORAGE_URL` values. Accepted artifact metadata stays in the database.
 
-[`S3Store`](store/s3_store.go) holds the bucket client and optional key prefix.
-Apps share it between `ArtifactFileS3Store` and `ReportS3Store`.
-
 ## Quick start
 
 Start the complete local stack with RabbitMQ, MongoDB, and MinIO:
@@ -52,6 +49,8 @@ for `commander/framework` and `commander/providers/s3`.
 
 ## Development and testing
 
+See [AGENTS.md](AGENTS.md) for object-storage implementation guidance.
+
 From the repository root, start MinIO and run integration tests with the default
 local credentials and port:
 
@@ -67,11 +66,10 @@ go vet ./providers/s3/...
 
 Use a dedicated test bucket or prefix. Integration tests skip without
 `COMMANDER_TEST_S3_URL` and remove their own objects afterward; cleanup also needs
-object listing and deletion permissions. CI runs them in
-[test-provider-s3.yml](../../.github/workflows/test-provider-s3.yml). See the
-[testing guide](../../framework/tests/README.md) for shared conventions.
+object listing and deletion permissions. See the
+[testing guide](../../framework/tests/README.md) for full-stack checks.
 
-### Object layout and writes
+## Object layout and writes
 
 Object keys are `<prefix>/artifacts/<artifact-id>/<file-id>` and
 `<prefix>/reports/<report-id>.json`; omit `<prefix>/` when no prefix is configured.

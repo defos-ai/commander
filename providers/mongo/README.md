@@ -52,6 +52,8 @@ for `commander/framework` and `commander/providers/mongo`.
 
 ## Development and testing
 
+See [AGENTS.md](AGENTS.md) for transaction and persistence guidance.
+
 With MongoDB running, run from the repository root:
 
 ```sh
@@ -61,39 +63,14 @@ go vet ./providers/mongo/...
 ```
 
 Integration tests skip without `COMMANDER_TEST_MONGO_URL`. Use a dedicated test
-database: tests clean their collections before and after each case. CI runs the
-suite in [test-provider-mongo.yml](../../.github/workflows/test-provider-mongo.yml).
-The same variable enables the optional controller startup test. HTTP API and MCP
-workflows exercise MongoDB with RabbitMQ and MinIO; see the
-[testing guide](../../framework/tests/README.md#mcp-api-tests).
+database: tests clean their collections before and after each case. The same
+variable enables the optional controller startup test. See the
+[testing guide](../../framework/tests/README.md#mcp-api-tests) for full-stack tests.
 
-### Persistence and recovery
+## Persistence and recovery
 
-The `controllers` collection holds one registration per runtime ID. Conditional
-writes accept newer heartbeats, preserving sub-millisecond ordering. Queries
-derive liveness from the lease; expired and stopped registrations are retained.
-
-Mission and action names are unique document IDs. Agent records contain advertised
-action readiness and indexed heartbeat timestamps. Conditional writes reject equal
-or older source observations. Expiry hides recent observations with a private
-marker until they leave the heartbeat window; fresh observations reactivate the
-record atomically. JSON schemas and operation
-bodies preserve numeric precision; observation times retain sub-millisecond
-precision alongside BSON dates. Executions atomically claim commands and keep
-terminal outcomes immutable. The controller indexes immutable artifact metadata
-after saving a successful result and before acknowledging acceptance. Result
-replay and recovery repair incomplete metadata writes.
-
-Operations use `operations`, `operation_tasks`, `operation_questions`, and
-`operation_events` collections. A transaction commits metadata and changed
-children together; unchanged children are not rewritten. A private parent
-revision serializes changes to the same operation. Task order and event sequence
-have indexed cursors. Transitions still read the full operation to apply shared
-domain rules.
-
-Keep collection names, document mapping, and domain errors in domain stores.
-The shared `MongoStore` handles BSON queries, indexes, and transactions.
-Transaction callbacks can retry: use the supplied context and keep external
-effects outside the callback. Follow the
+Operations span metadata, task, question and event collections; transactions commit
+related changes together. A standalone MongoDB server cannot support these writes.
+See the [operation store](operations/) and
 [`OperationStore` contract](../../framework/domain/operations/operation_store.go)
-for reconciling uncertain writes before dispatching further work.
+for persistence and uncertain-write recovery behavior.
