@@ -40,9 +40,6 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-commander}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-commander-local-secret}
-    ports:
-      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
-      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq:/var/lib/rabbitmq
     healthcheck:
@@ -58,8 +55,6 @@ services:
     environment:
       # Avoid MongoDB TCMalloc crashes on newer kernels: SERVER-121912.
       GLIBC_TUNABLES: glibc.pthread.rseq=1
-    ports:
-      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
     volumes:
       - mongo:/data/db
     healthcheck:
@@ -90,8 +85,6 @@ services:
       # Local development credentials; hosting supplies its own credentials.
       MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-commander}
       MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
-    ports:
-      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
     volumes:
       - minio:/data
     healthcheck:
