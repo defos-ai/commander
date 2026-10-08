@@ -12,6 +12,10 @@
 - [`internal/chat/`](internal/chat/) owns conversation turns, queued input,
   watched operations, continuation review and operator commands.
 - [`internal/ui/`](internal/ui/) owns Bubble Tea state, selectors and rendering.
+- [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
+  Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
+  includes Chromium/fonts and uses a real non-root user's home plus an init process
+  for browser children. Keep browser packages aligned with the web-quality image.
 
 ## Behavior to preserve
 
@@ -32,6 +36,10 @@
   The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides
   it, including port `0` for fixtures. Set the API listen flag explicitly so
   generic `PORT` cannot change it. Report the bound address after readiness.
+- The all-in-one image binds the API to `0.0.0.0:4274` inside the container; document
+  host publishing on `127.0.0.1` by default. MCP stays internal. Container browser
+  runs use `CHROMIUM_NO_SANDBOX=true`; keep the process non-root. State remains
+  temporary; adding image dependencies must not change session persistence.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
 - Preserve the chat engine's single-owner state and responsive queued input,
@@ -62,6 +70,11 @@ Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
 behavior changes. The suite includes all-in-one coverage without a paid model
 or host browser. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
+
+For image changes, build both Dockerfiles from the repository root. Verify the
+all-in-one image starts without a model key, serves `/healthz` through its published
+API port, runs headless Chromium against a local fixture and exits cleanly on
+SIGTERM. Keep Docker lifecycle in shell/CI rather than Go test fixtures.
 
 [Native release builds](../../.github/workflows/build-binaries.yml) run environment
 discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.

@@ -82,6 +82,7 @@ Images use the exact release version as their tag, for example `v0.1.0`:
 
 | Image | Workflow |
 | --- | --- |
+| `ghcr.io/defos-ai/commander-aio` | [push-aio.yml](../.github/workflows/push-aio.yml) |
 | `ghcr.io/defos-ai/commander-api` | [push-api.yml](../.github/workflows/push-api.yml) |
 | `ghcr.io/defos-ai/commander-admin` | [push-admin.yml](../.github/workflows/push-admin.yml) |
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
@@ -90,6 +91,7 @@ Images use the exact release version as their tag, for example `v0.1.0`:
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
+The all-in-one image starts Playground with its local hosts and includes Chromium.
 There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.
 Git tags and images are separate publication steps; image failures do not undo tags.

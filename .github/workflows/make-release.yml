@@ -113,8 +113,17 @@ jobs:
     with:
       version: ${{ inputs.version }}
 
+  aio:
+    needs: publish
+    uses: ./.github/workflows/push-aio.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+
   release:
-    needs: [publish, api, admin, mcp, controllers, agents]
+    needs: [publish, api, admin, mcp, controllers, agents, aio]
     uses: ./.github/workflows/push-binaries.yml
     permissions:
       contents: write

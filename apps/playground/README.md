@@ -9,16 +9,37 @@ hosts or launch a temporary local demo.
 
 ### Docker (recommended)
 
-From the repository root:
+For a temporary all-in-one session, build and run from the repository root:
+
+```sh
+docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
+docker run --rm -it -p 127.0.0.1:4274:4274 commander:aio
+```
+
+This image starts Playground, MCP, the API, a controller and the web-quality agent
+with Chromium and fonts included. Type `/credentials` to view the generated API
+login, then connect to `http://localhost:4274`. `/exit` stops everything and deletes
+the session's state. Add `-e OPENAI_API_KEY` before the image name to use an exported
+key, or enter your provider's key during setup.
+
+For separate hosts and retained results, use Compose:
 
 ```sh
 docker compose up --build -d
 docker compose run --build --rm playground
 ```
 
-Export your model provider's key first, or enter it during setup. `/exit` closes
-chat; hosts and saved work remain. `docker compose down` stops the hosts. See
+Compose uses the lightweight `docker/Dockerfile`: Playground connects to the
+running MCP, without bundled browser dependencies. `/exit` closes chat; hosts and
+saved work remain. `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
+
+To use the lightweight image with your own hosts:
+
+```sh
+docker build -f apps/playground/docker/Dockerfile -t commander:playground .
+docker run --rm -it commander:playground --mcp-url https://YOUR_COMMANDER_HOST/mcp
+```
 
 ### Native: one executable
 
