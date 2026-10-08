@@ -241,6 +241,7 @@ services:
     <<: *agent
 
   playground:
+    profiles: [playground]
     build:
       context: .
       dockerfile: apps/playground/docker/Dockerfile
