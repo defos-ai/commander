@@ -1,8 +1,13 @@
-name: commander
+name: commander-full
 
 x-environment: &environment
-  BUS_URL: ${BUS_URL:-file:///state/bus}
-  STORAGE_URL: ${STORAGE_URL:-file:///state/storage}
+  BUS_URL: ${BUS_URL:-amqp://${RABBITMQ_USER:-commander}:${RABBITMQ_PASSWORD:-commander-local-secret}@rabbitmq:5672/}
+  STORAGE_URL: ${STORAGE_URL:-s3://commander}
+  AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://minio:9000}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-commander}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
+  S3_USE_PATH_STYLE: ${S3_USE_PATH_STYLE:-true}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_FORMAT: ${LOG_FORMAT:-json}
 
@@ -16,9 +21,6 @@ x-runtime: &runtime
 x-agent: &agent
   <<: *runtime
   shm_size: 256mb
-  volumes:
-    - bus:/state/bus
-    - storage:/state/storage
   image: commander-web-quality-agent:local
   pull_policy: never
   environment:
@@ -27,24 +29,87 @@ x-agent: &agent
   depends_on:
     controller:
       condition: service_started
+    rabbitmq:
+      condition: service_healthy
 
 services:
-  volume-init:
-    # Reuse the controller image for local volume permissions only.
-    image: commander-controller:local
-    pull_policy: never
-    user: "0:0"
-    network_mode: none
-    read_only: true
-    cap_drop: [ALL]
-    cap_add: [CHOWN]
-    security_opt: ["no-new-privileges:true"]
-    entrypoint: ["chown"]
-    command: ["1000:1000", "/bus", "/storage", "/database"]
+  rabbitmq:
+    image: rabbitmq:4.2.9-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-commander}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-commander-local-secret}
     volumes:
-      - bus:/bus
-      - storage:/storage
-      - database:/database
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 10s
+
+  mongo:
+    image: mongo:8.0.32
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      # Avoid MongoDB TCMalloc crashes on newer kernels: SERVER-121912.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    volumes:
+      - mongo:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - >-
+          try { rs.status(); }
+          catch (error) {
+            if (error.codeName !== "NotYetInitialized") throw error;
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
+          }
+          quit(db.hello().isWritablePrimary ? 0 : 1);
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 5s
+
+  minio:
+    image: commander-minio:local
+    build:
+      context: ./providers/s3/tests/minio
+      target: minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      # Local development credentials; hosting supplies its own credentials.
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-commander}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
+    volumes:
+      - minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 18
+      start_period: 5s
+
+  minio-init:
+    image: commander-minio-client:local
+    build:
+      context: ./providers/s3/tests/minio
+      target: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-commander}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-commander-local-secret}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
+        mc mb --ignore-existing local/commander
 
   controller:
     <<: *runtime
@@ -54,20 +119,20 @@ services:
       context: .
       dockerfile: apps/controllers/default/docker/Dockerfile
     depends_on:
-      volume-init:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio-init:
         condition: service_completed_successfully
     command:
       - --with-missions=/data/default-missions.json
-    volumes:
-      - bus:/state/bus
-      - storage:/state/storage
-      - database:/state/database
     configs:
       - source: default-missions
         target: /data/default-missions.json
     environment:
       <<: *environment
-      DATABASE_URL: ${DATABASE_URL:-file:///state/database}
+      DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
 
   mcp:
     <<: *runtime
@@ -79,18 +144,20 @@ services:
     command:
       - --listen-address=:4273
       - --allowed-hosts=localhost,127.0.0.1,::1,mcp
-    volumes:
-      - bus:/state/bus
-      - storage:/state/storage
-      - database:/state/database
     environment:
       <<: *environment
-      DATABASE_URL: ${DATABASE_URL:-file:///state/database}
+      DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
     ports:
       - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
     depends_on:
       controller:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
       interval: 5s
@@ -108,19 +175,14 @@ services:
         API_PASSWORD="$${API_PASSWORD:-$$(openssl rand -hex 32)}"
         export API_PASSWORD
         exec commander-api
-    profiles: [admin]
     image: commander-api:local
     pull_policy: never
     build:
       context: .
       dockerfile: apps/adapters/api/docker/Dockerfile
-    volumes:
-      - bus:/state/bus
-      - storage:/state/storage
-      - database:/state/database
     environment:
       <<: *environment
-      DATABASE_URL: ${DATABASE_URL:-file:///state/database}
+      DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       API_USERNAME: ${API_USERNAME:-commander}
       API_PASSWORD: ${API_PASSWORD:-}
       API_LISTEN_ADDRESS: 0.0.0.0:4274
@@ -132,6 +194,12 @@ services:
     depends_on:
       controller:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4274/readyz"]
       interval: 5s
@@ -142,7 +210,6 @@ services:
   ui:
     <<: *runtime
     read_only: true
-    profiles: [admin]
     image: commander-admin-ui:local
     pull_policy: never
     build:
@@ -174,7 +241,6 @@ services:
     <<: *agent
 
   playground:
-    profiles: [playground]
     build:
       context: .
       dockerfile: apps/playground/docker/Dockerfile
@@ -207,9 +273,9 @@ services:
         condition: service_started
 
 volumes:
-  bus:
-  storage:
-  database:
+  rabbitmq:
+  minio:
+  mongo:
 
 configs:
   default-missions:
