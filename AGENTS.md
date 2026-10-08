@@ -48,6 +48,9 @@ The user's current instructions take precedence over repository guidance.
   Keep independently triggered workflows' concurrency groups distinct so nested
   calls cannot cancel their release parent. Retry failed publication jobs in the
   same run; never overwrite published release assets.
+  Promote Docker `stable` tags only after the complete release publishes, using
+  the image digests from that run. Keep the newer-release check and serialized
+  release concurrency so maintenance releases cannot move `stable` backward.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.

@@ -1,0 +1,80 @@
+name: Promote stable Docker images
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Published Commander release version
+        type: string
+        required: true
+      images:
+        description: JSON map of image names to digests from the release builds
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  promote:
+    if: ${{ github.repository == 'defos-ai/commander' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ inputs.version }}
+      IMAGES: ${{ inputs.images }}
+    steps:
+      - name: Select the newest published release
+        id: select
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
+          jq -e '
+            keys == ["commander-admin", "commander-aio", "commander-api",
+                     "commander-controller", "commander-mcp", "commander-web-quality-agent"]
+            and all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))
+          ' <<< "$IMAGES" > /dev/null
+
+          published=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" |
+            jq -r '.[] | select(.draft == false and .prerelease == false) | .tag_name |
+              select(test("^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"))')
+          if ! grep -Fxq -- "$VERSION" <<< "$published"; then
+            echo "Release $VERSION is not published; stable tags will not change." >&2
+            exit 1
+          fi
+          newest=$(LC_ALL=C sort -V <<< "$published" | tail -n 1)
+          if [[ "$VERSION" != "$newest" ]]; then
+            echo "promote=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping $VERSION: newer release $newest is already published." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "promote=true" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+        if: steps.select.outputs.promote == 'true'
+      - uses: docker/login-action@v4
+        if: steps.select.outputs.promote == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote and verify stable tags
+        id: promote
+        if: steps.select.outputs.promote == 'true'
+        shell: bash
+        run: |
+          images=$(jq -r 'to_entries[] | [.key, .value] | @tsv' <<< "$IMAGES")
+          while IFS=$'\t' read -r name digest; do
+            image="ghcr.io/defos-ai/$name"
+            docker buildx imagetools create --prefer-index=false --tag "$image:stable" "$image@$digest"
+            actual=$(docker buildx imagetools inspect "$image:stable" --format '{{json .Manifest}}' | jq -r '.digest')
+            if [[ "$actual" != "$digest" ]]; then
+              echo "Stable digest verification failed for $image." >&2
+              exit 1
+            fi
+            echo "- $image:stable → $VERSION ($digest)" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$images"

@@ -129,3 +129,21 @@ jobs:
       contents: write
     with:
       version: ${{ inputs.version }}
+
+  stable:
+    needs: [release, api, admin, mcp, controllers, agents, aio]
+    uses: ./.github/workflows/push-stable.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+      images: |
+        {
+          "commander-api": "${{ needs.api.outputs.digest }}",
+          "commander-admin": "${{ needs.admin.outputs.digest }}",
+          "commander-mcp": "${{ needs.mcp.outputs.digest }}",
+          "commander-controller": "${{ needs.controllers.outputs.digest }}",
+          "commander-web-quality-agent": "${{ needs.agents.outputs.digest }}",
+          "commander-aio": "${{ needs.aio.outputs.digest }}"
+        }

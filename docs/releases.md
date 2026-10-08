@@ -78,7 +78,7 @@ the repository's `GITHUB_TOKEN` with `contents: write`.
 
 ## Docker images
 
-Images use the exact release version as their tag, for example `v0.1.0`:
+Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 
 | Image | Workflow |
 | --- | --- |
@@ -95,6 +95,16 @@ The all-in-one image starts Playground with its local hosts and includes Chromiu
 There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.
 Git tags and images are separate publication steps; image failures do not undo tags.
+
+After all images and native archives publish,
+[push-stable.yml](../.github/workflows/push-stable.yml) points each `stable` tag
+to that run's image digest without rebuilding. Only the highest published stable
+release advances these tags; publishing an older maintenance version leaves them
+unchanged. The all-in-one image remains `ghcr.io/defos-ai/commander-aio:stable`.
+
+Tags update individually. If promotion fails partway through, rerun failed jobs
+in the same release run. Pin version tags or digests when deploying several
+components together.
 
 Authentication uses the repository's `GITHUB_TOKEN` with `packages: write`.
 The organization must allow package creation; existing packages must grant this
