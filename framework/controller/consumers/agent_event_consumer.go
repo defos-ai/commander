@@ -106,15 +106,28 @@ func (c AgentEventConsumer) Consume(ctx context.Context, message messages.Messag
 }
 
 func (c AgentEventConsumer) observe(ctx context.Context, record agentmodel.Agent, snapshot agentmodel.AgentSnapshot, message messages.Message, receivedAt time.Time) (agentmodel.Agent, bool, error) {
-	if message.CreatedAt.After(record.ObservedAt) {
+	newSnapshot := message.CreatedAt.After(record.ObservedAt)
+	heartbeat := message.Type == controllerevents.AgentStarted || message.Type == controllerevents.AgentHeartbeat
+	heartbeatAt := message.CreatedAt
+	if heartbeatAt.After(receivedAt) {
+		heartbeatAt = receivedAt
+	}
+	renew := heartbeat && heartbeatAt.After(record.LastHeartbeat) && (newSnapshot || record.Status != agentmodel.AgentStopped)
+	changed := newSnapshot || renew
+	if newSnapshot {
 		record.AgentSnapshot = snapshot
-		record.ObservedAt, record.LastSeen, record.Stale = message.CreatedAt, receivedAt, false
-		if message.Type == controllerevents.AgentStarted || message.Type == controllerevents.AgentHeartbeat {
-			record.LastHeartbeat = message.CreatedAt
-			if record.LastHeartbeat.After(receivedAt) {
-				record.LastHeartbeat = receivedAt
-			}
-			record.LeaseExpiresAt = record.LastHeartbeat.Add(c.State.HeartbeatTimeout)
+		record.ObservedAt, record.Stale = message.CreatedAt, false
+	}
+	if renew {
+		// Liveness and snapshot ordering use independent source clocks. A
+		// delayed heartbeat can renew the current snapshot without reverting it.
+		record.LastHeartbeat = heartbeatAt
+		record.LeaseExpiresAt = heartbeatAt.Add(c.State.HeartbeatTimeout)
+		record.Stale = false
+	}
+	if changed {
+		if receivedAt.After(record.LastSeen) {
+			record.LastSeen = receivedAt
 		}
 		if err := c.Inventory.Upsert(ctx, record); errors.Is(err, agentmodel.ErrStaleObservation) {
 			current, err := c.Inventory.Get(ctx, message.AgentID)
@@ -122,6 +135,7 @@ func (c AgentEventConsumer) observe(ctx context.Context, record agentmodel.Agent
 				return agentmodel.Agent{}, false, err
 			}
 			record = current
+			changed = false
 		} else if err != nil {
 			return agentmodel.Agent{}, false, fmt.Errorf("persist agent observation: %w", err)
 		}
@@ -137,7 +151,7 @@ func (c AgentEventConsumer) observe(ctx context.Context, record agentmodel.Agent
 			}
 		}
 	}
-	return record, message.CreatedAt.Equal(record.ObservedAt), nil
+	return record, changed || message.CreatedAt.Equal(record.ObservedAt), nil
 }
 
 func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error) {

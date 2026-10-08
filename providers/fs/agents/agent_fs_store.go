@@ -102,7 +102,19 @@ func (s *AgentFsStore) Upsert(ctx context.Context, record agentmodel.Agent) erro
 			return err
 		}
 		if err == nil && !stored.ObservedAt.IsZero() && !snapshot.ObservedAt.After(stored.ObservedAt) {
-			return agentmodel.ErrStaleObservation
+			if stored.Expired || stored.Status == agentmodel.AgentStopped ||
+				!snapshot.ObservedAt.Equal(stored.ObservedAt) || !snapshot.LastHeartbeat.After(stored.LastHeartbeat) {
+				return agentmodel.ErrStaleObservation
+			}
+			// Equal observation marks may carry a newer source heartbeat.
+			// Keep the current snapshot and renew only its liveness metadata.
+			renewed := stored.Agent.Clone()
+			renewed.LastHeartbeat, renewed.LeaseExpiresAt = snapshot.LastHeartbeat, snapshot.LeaseExpiresAt
+			if snapshot.LastSeen.After(renewed.LastSeen) {
+				renewed.LastSeen = snapshot.LastSeen
+			}
+			renewed.Stale = false
+			snapshot = renewed
 		}
 		_, err = s.write(ctx, inventoryRecord{Agent: snapshot})
 		return err

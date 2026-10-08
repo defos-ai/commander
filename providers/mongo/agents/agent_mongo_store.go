@@ -85,7 +85,35 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 			return fmt.Errorf("invalid stored agent %q observed_at: %w", saved.ID, decodeErr)
 		}
 		if !observed.IsZero() && !record.ObservedAt.After(observed) {
-			return agentmodel.ErrStaleObservation
+			current, decodeErr := saved.decode()
+			if decodeErr != nil {
+				return decodeErr
+			}
+			if saved.Expired || current.Status == agentmodel.AgentStopped ||
+				!record.ObservedAt.Equal(observed) || !record.LastHeartbeat.After(current.LastHeartbeat) {
+				return agentmodel.ErrStaleObservation
+			}
+			// Renew only liveness at an equal observation mark. Matching both
+			// clocks and receipt time prevents a concurrent writer from losing
+			// its newer heartbeat, lifecycle snapshot, or last-seen metadata.
+			renewal := saved
+			renewal.LastHeartbeat = bsonvalue.NewTimestamp(record.LastHeartbeat)
+			renewal.LeaseExpiresAt = bsonvalue.NewTimestamp(record.LeaseExpiresAt)
+			if record.LastSeen.After(current.LastSeen) {
+				renewal.LastSeen = bsonvalue.NewTimestamp(record.LastSeen)
+			}
+			renewal.Stale = false
+			renewFilter := bson.M{"_id": record.ID, "observed_at": saved.ObservedAt,
+				"last_heartbeat": saved.LastHeartbeat, "last_seen": saved.LastSeen,
+				"expired": bson.M{"$ne": true}, "status": bson.M{"$ne": agentmodel.AgentStopped}}
+			result, err := s.database.Replace(ctx, collection, renewFilter, renewal, false)
+			if err != nil {
+				return err
+			}
+			if result.MatchedCount != 0 {
+				return nil
+			}
+			continue
 		}
 		// The current observation is eligible. A conditional replacement avoids
 		// another insert race; if it disappeared or advanced, reconsider it.

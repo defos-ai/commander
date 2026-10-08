@@ -9,8 +9,10 @@ import (
 // Implementations must be safe for concurrent use, honor context cancellation,
 // and return independent snapshots. Get returns ErrUnknownAgent when absent.
 // Upsert returns only after the observation is available to subsequent readers.
-// Once ObservedAt is set, an equal or older observation returns ErrStaleObservation
-// atomically without changing the record, including after lease expiry.
+// Once ObservedAt is set, older observations return ErrStaleObservation. An equal
+// mark may atomically renew a strictly newer LastHeartbeat on a live, non-stopped
+// record, retaining its current snapshot and monotonic LastSeen. Otherwise equal
+// observations are stale. Lease-expiry marks retain the original ordering rule.
 type AgentStore interface {
 	Upsert(ctx context.Context, record Agent) error
 	Get(ctx context.Context, agentID string) (Agent, error)
