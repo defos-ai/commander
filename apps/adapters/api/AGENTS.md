@@ -31,8 +31,17 @@
 
 ## Security boundaries
 
-- Keep credentials environment-only and validate both at startup. Do not expose
-  passwords in flags, logs, errors or responses.
+- Keep credentials environment-only and require nonblank `API_USERNAME` and
+  `API_PASSWORD` before opening listeners or provider clients. Do not introduce
+  credential files or shared passwords. Compose supplies the default username
+  and generates a password at each container start unless explicitly supplied.
+- Only the explicit `credentials` CLI command may print the supplied credentials;
+  never include passwords in flags, logs, errors or HTTP responses. Missing
+  credentials should explain setup with a copyable password-generation command.
+- `credentials --pid` reads process environment only for explicit retrieval, never
+  for server configuration. Compose must exec the API as PID 1 without an init
+  process so `credentials --pid 1` finds the shell-generated environment; Docker
+  exec does not inherit shell exports from another process.
 - Preserve Basic authentication on protected routes, including unknown paths and
   enabled Swagger. Public `GET`/`HEAD` health probes and approved CORS preflights
   have deliberate exceptions; see [security.go](security.go) and [cors.go](cors.go).

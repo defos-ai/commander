@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -251,19 +252,18 @@ func TestMainHelpAndConfigurationExitCodes(t *testing.T) {
 	t.Setenv("API_PASSWORD", "")
 	t.Setenv("DATABASE_URL", "postgres://user:private-help-password@example.invalid/database")
 	t.Setenv("PORT", "private-invalid-port")
-	var help bytes.Buffer
-
-	helpCode := cli.Main([]string{"--help"}, &help)
-
-	if helpCode != 0 || !strings.Contains(help.String(), "commander-api") {
-		t.Fatalf("help failed: code=%d output=%s", helpCode, &help)
-	}
-	if strings.Contains(help.String(), "private-help-password") || strings.Contains(help.String(), "private-invalid-port") {
-		t.Error("help includes environment configuration values")
+	for _, args := range [][]string{{"--help"}, {"credentials", "--help"}} {
+		var help bytes.Buffer
+		if code := cli.Main(args, &help, &help); code != 0 || !strings.Contains(help.String(), "commander-api") {
+			t.Fatalf("help failed: code=%d output=%s", code, &help)
+		}
+		if strings.Contains(help.String(), "private-help-password") || strings.Contains(help.String(), "private-invalid-port") {
+			t.Error("help includes environment configuration values")
+		}
 	}
 
 	var failure bytes.Buffer
-	failureCode := cli.Main(nil, &failure)
+	failureCode := cli.Main(nil, io.Discard, &failure)
 
 	if failureCode != 1 || failure.Len() == 0 {
 		t.Fatalf("configuration error should exit 1 with a diagnostic: code=%d output=%s", failureCode, &failure)

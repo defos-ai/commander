@@ -5,9 +5,11 @@ HTTP, and sends operation commands to the controller.
 
 ## Quick start
 
-From the repository root, with `API_USERNAME` and `API_PASSWORD` set:
+From the repository root:
 
 ```sh
+export API_USERNAME=commander
+export API_PASSWORD="$(openssl rand -hex 32)"
 go run ./apps/adapters/api/cmd/commander-api
 ```
 
@@ -67,7 +69,21 @@ the image does not prepare state directories.
 
 ### Authentication and health
 
-`API_USERNAME` and `API_PASSWORD` are environment-only and must both be nonblank.
+The API requires nonblank `API_USERNAME` and `API_PASSWORD` environment variables
+before serving requests. Native startup fails with copyable setup instructions
+when either is missing. Compose supplies username `commander` and generates a
+random password unless you set `API_PASSWORD`. Retrieve the running credentials:
+
+```sh
+docker compose exec api commander-api credentials --pid 1
+```
+
+Generated passwords change whenever the container restarts. Set `API_PASSWORD`
+before starting Compose for a stable password; `API_USERNAME` overrides the username.
+For full Compose, add `-f compose.full.yaml` after `docker compose`. Native hosts
+can run `commander-api credentials` with the same environment settings.
+Passwords are never included in startup logs or errors.
+
 Use HTTPS at the reverse proxy for hosted deployments. All routes, including
 unknown routes and Swagger, require Basic authentication except approved CORS
 preflights and public `GET`/`HEAD` probes on every host:

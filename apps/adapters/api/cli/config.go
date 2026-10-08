@@ -49,6 +49,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 		fmt.Fprintln(output, "Usage: commander-api [flags]")
 		fmt.Fprintln(output, "Read-only missions, actions, agents and controllers API; optional Swagger at /docs/.")
 		fmt.Fprintln(output, "API_USERNAME and API_PASSWORD must be supplied through the environment.")
+		fmt.Fprintln(output, "Use 'commander-api credentials' to display configured credentials locally.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -84,8 +85,12 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	if err := validateListenAddress(result.listenAddress); err != nil {
 		return config{}, err
 	}
+	credentials, err := resolveCredentials()
+	if err != nil {
+		return config{}, err
+	}
 	result.security = api.SecurityConfig{
-		Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD"),
+		Username: credentials.Username, Password: credentials.Password,
 		AllowedHosts:   splitList(host.Value(allowedHosts, provided["allowed-hosts"], "API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")),
 		AllowedOrigins: splitList(host.Value(allowedOrigins, provided["allowed-origins"], "API_ALLOWED_ORIGINS", defaultAllowedOrigins)),
 		TrustedProxies: splitList(host.Value(trustedProxies, provided["trusted-proxies"], "API_TRUSTED_PROXIES", "")),

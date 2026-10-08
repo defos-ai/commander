@@ -167,6 +167,14 @@ services:
 
   api:
     <<: *runtime
+    # Keep the API at PID 1 so the credentials command can read its environment.
+    init: false
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        API_PASSWORD="$${API_PASSWORD:-$$(openssl rand -hex 32)}"
+        export API_PASSWORD
+        exec commander-api
     profiles: [admin]
     image: commander-api:local
     pull_policy: never
@@ -177,7 +185,7 @@ services:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       API_USERNAME: ${API_USERNAME:-commander}
-      API_PASSWORD: ${API_PASSWORD:-commander-local-secret}
+      API_PASSWORD: ${API_PASSWORD:-}
       API_LISTEN_ADDRESS: 0.0.0.0:4274
       API_ALLOWED_HOSTS: ${API_ALLOWED_HOSTS:-localhost,127.0.0.1,::1,api}
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:${COMMANDER_UI_PORT:-4275},http://127.0.0.1:${COMMANDER_UI_PORT:-4275}}

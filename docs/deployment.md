@@ -26,15 +26,16 @@ Full Compose uses RabbitMQ for messaging, MongoDB for the database, and MinIO
 for file storage. The stacks use separate projects (`commander` and
 `commander-full`), but share the default MCP port. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
 [MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
-connection details. Bundled credentials are for local development.
+connection details. Bundled infrastructure credentials are for local development.
 
 Connect another AI client to `http://localhost:4273/mcp` using the
 [adapter guide](../apps/adapters/README.md#quick-start). For a temporary session
 without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#native-one-executable).
 
 Add `--profile admin` to either stack's `up` command for the API (`4274`) and
-admin UI (`4275`). See the [UI quick start](../apps/admin/ui/README.md#quick-start)
-for local credentials and port overrides.
+admin UI (`4275`). Compose generates an API password on each container start;
+set `API_PASSWORD` for a stable password. The
+[UI quick start](../apps/admin/ui/README.md#quick-start) shows retrieval and port overrides.
 
 ## Configuration
 

@@ -23,10 +23,18 @@ docker compose --profile admin up --build -d
 ```
 
 Open `http://localhost:4275` and choose **Connect** under **Local Commander detected**.
-Compose defaults are `http://localhost:4274`, username `commander` and password
-`commander-local-secret`; override credentials with `API_USERNAME` and
-`API_PASSWORD`. Use `docker compose -f compose.full.yaml --profile admin up --build -d`
-for MongoDB, RabbitMQ and MinIO.
+The API URL and username (`commander`) are prefilled. Compose generates a random
+password. Retrieve it and paste it into the connection dialog:
+
+```sh
+docker compose exec api commander-api credentials --pid 1
+```
+
+For MongoDB, RabbitMQ and MinIO, add `-f compose.full.yaml` after `docker compose`
+in both commands. Generated passwords change when the API container restarts;
+retrieve the new password and reconnect. For a stable password, set `API_PASSWORD`
+before starting Compose. `API_USERNAME` overrides the username; see
+[API authentication](../../adapters/api/README.md#authentication-and-health).
 
 `COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change the published ports. Discovery
 checks only `http://localhost:4274`; use **Add connection** for another port or
