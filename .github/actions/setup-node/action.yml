@@ -1,0 +1,14 @@
+name: Set up frontend
+description: Install Node and the admin frontend dependencies.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: apps/admin/ui/frontend/package-lock.json
+    - name: Install frontend dependencies
+      shell: bash
+      working-directory: apps/admin/ui/frontend
+      run: npm ci

@@ -34,10 +34,10 @@ requires known internal dependencies at the release version, checks workspace
 mappings, and builds, vets and compiles tests for every workspace module.
 It validates the workspace, not standalone module archives or remote availability.
 
-The release-test workflow then runs **every test suite** for the same commit:
-framework, all providers, controller, agent, Playground, API, MCP and Admin UI.
-This includes both FS and full-infrastructure API/MCP tests and browser tests.
-Regular development workflows keep their path filters; release checks run all suites.
+The release-test workflow then calls the [test pipeline](../.github/workflows/test.yml)
+for the same commit. All basic checks must pass before provider, FS/full-stack
+API/MCP and browser integration tests begin. Release validation always runs the
+complete pipeline.
 
 ## Publish
 

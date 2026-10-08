@@ -53,7 +53,7 @@ go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
 go vet ./apps/agents/web-quality/...
 ```
 
-[Agent CI](../../.github/workflows/test-agent.yml) covers the bundled host. Test
+[Unit CI](../../.github/workflows/test-unit.yml) covers the bundled host. Test
 discovery failures, permission boundaries and local fixtures without paid models
 or public websites. Use [adapter scenarios](../../framework/tests/README.md#mcp-api-tests)
 for behavior spanning agents, controller persistence and mission automation.

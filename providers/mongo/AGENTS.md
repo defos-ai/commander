@@ -30,7 +30,7 @@ artifact bytes and reports belong to the separate storage provider.
 ## Validation
 
 Use a dedicated test database on a running replica set. Follow
-[service setup](README.md#quick-start); tests clean their collections before and
+[service setup](README.md#development-and-testing); tests clean their collections before and
 after cases. Run from the repository root:
 
 ```sh
@@ -43,5 +43,5 @@ Integration tests skip unless `COMMANDER_TEST_MONGO_URL` is set. It also enables
 the optional controller startup test; run that affected downstream check when
 changing initialization. Preserve transaction rollback, concurrent mutation and
 uncertain-write coverage when changing operation persistence. See the
-[CI workflow](../../.github/workflows/test-provider-mongo.yml) and
+[integration CI](../../.github/workflows/test-integration.yml) and
 [stack test guide](../../framework/tests/README.md) for broader checks.

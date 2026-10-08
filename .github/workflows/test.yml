@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    paths:
+      - 'framework/**'
+      - 'providers/**'
+      - 'apps/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - 'compose*.yaml'
+      - '.github/composes/**'
+      - '.dockerignore'
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - '.github/tests/**'
+      - '!**/*.md'
+  pull_request:
+    paths:
+      - 'framework/**'
+      - 'providers/**'
+      - 'apps/**'
+      - 'go.work'
+      - 'go.work.sum'
+      - 'compose*.yaml'
+      - '.github/composes/**'
+      - '.dockerignore'
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - '.github/tests/**'
+      - '!**/*.md'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    uses: ./.github/workflows/test-unit.yml
+
+  integration:
+    needs: unit
+    uses: ./.github/workflows/test-integration.yml

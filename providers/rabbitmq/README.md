@@ -22,11 +22,9 @@ docker compose -f compose.full.yaml up --build -d
 ```
 
 The full stack supplies `amqp://commander:commander-local-secret@rabbitmq:5672/`
-to its hosts. Native hosts can use the same URL with `127.0.0.1` instead of
-`rabbitmq`. The [management UI](http://localhost:15672) uses the same credentials.
+to its hosts. Broker and management ports are not published to the host.
 `RABBITMQ_USER` and `RABBITMQ_PASSWORD` set initial broker credentials;
-`RABBITMQ_PORT` and `RABBITMQ_MANAGEMENT_PORT` change the published local ports
-(defaults `5672` and `15672`). `BUS_URL` can select an external broker.
+`BUS_URL` can select an external broker.
 
 See [local setup](../../docs/deployment.md#local-compose) for MCP and Playground.
 
@@ -104,28 +102,16 @@ business deduplication across controller restarts or multi-controller support.
 
 See [AGENTS.md](AGENTS.md) for topology and delivery-settlement guidance.
 
-Start a dedicated test broker from the repository root. Port `5673` keeps it
-separate from full Compose:
+Start a dedicated test broker from the repository root:
 
 ```sh
-docker run -d --rm --name commander-rabbitmq-test \
-  -p 127.0.0.1:5673:5672 \
-  -e RABBITMQ_DEFAULT_USER=commander \
-  -e RABBITMQ_DEFAULT_PASS=commander-test \
-  --health-cmd 'rabbitmq-diagnostics -q ping' \
-  --health-interval 5s --health-timeout 5s --health-retries 20 \
-  rabbitmq:4.2.9-management-alpine
-```
-
-Wait until `docker inspect --format '{{.State.Health.Status}}'
-commander-rabbitmq-test` reports `healthy`, then run:
-
-```sh
-COMMANDER_TEST_RABBITMQ_URL='amqp://commander:commander-test@127.0.0.1:5673/' \
+docker compose -f .github/composes/compose.providers.test.yaml up --wait rabbitmq
+COMMANDER_TEST_RABBITMQ_URL='amqp://commander-test:commander-test-secret@127.0.0.1:5673/' \
   go test -race -count=1 -timeout=3m ./providers/rabbitmq/...
 go vet ./providers/rabbitmq/...
-docker stop commander-rabbitmq-test
+docker compose -f .github/composes/compose.providers.test.yaml down --volumes
 ```
 
 Integration tests skip without `COMMANDER_TEST_RABBITMQ_URL`. Use a dedicated
 broker or virtual host: tests modify the shared failed-delivery queue's bindings.
+The test broker exposes localhost port `5673`. Always stop it after failures too.

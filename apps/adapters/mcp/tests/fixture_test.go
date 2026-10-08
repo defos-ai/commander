@@ -43,7 +43,7 @@ func connect(t *testing.T) *api {
 		canClean = canClean || tool.Name == "clean_up_state"
 	}
 	if !canClean {
-		t.Fatal("test MCP must expose clean_up_state (ENV=tests); rebuild compose.test.yaml")
+		t.Fatal("test MCP must expose clean_up_state (ENV=tests); rebuild .github/composes/compose.test.yaml")
 	}
 	if err := a.settle(a.ctx); err != nil {
 		t.Fatalf("settle previous test work: %v", err)
@@ -96,7 +96,7 @@ func openSession(t *testing.T) *api {
 	t.Cleanup(cancel)
 	session, err := newSession(ctx)
 	if err != nil {
-		t.Fatalf("connect to test MCP: %v; start compose.test.yaml or compose.full.test.yaml", err)
+		t.Fatalf("connect to test MCP: %v; start .github/composes/compose.test.yaml or .github/composes/compose.full.test.yaml", err)
 	}
 	t.Cleanup(func() { session.Close() })
 	return &api{t, ctx, session}

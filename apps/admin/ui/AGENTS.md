@@ -60,13 +60,13 @@ go vet ./apps/admin/ui/backend/...
 For browser changes, after installing frontend dependencies, use the isolated stack:
 
 ```sh
-docker compose -f compose.test.yaml --profile ui up --build --wait
+docker compose -f .github/composes/compose.test.yaml --profile ui up --build --wait
 (cd apps/admin/ui/frontend && npx playwright install chromium && npm run test:e2e)
-docker compose -f compose.test.yaml --profile ui down --volumes
+docker compose -f .github/composes/compose.test.yaml --profile ui down --volumes
 ```
 
 Always stop this test stack, including after failures. Browser tests use one
 worker and the test-only API cleanup; run them separately from HTTP/MCP tests
 sharing that stack. Keep traces/screenshots for failures. See
-[test-ui.yml](../../../.github/workflows/test-ui.yml) for CI browser dependencies
+[integration CI](../../../.github/workflows/test-integration.yml) for browser dependencies
 and [test guidance](../../../framework/tests/AGENTS.md) for isolation rules.

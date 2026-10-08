@@ -30,7 +30,7 @@ Mongo, S3 and RabbitMQ suites use real local services. Follow their setup/test c
 ## MCP API tests
 
 ```sh
-export COMPOSE_FILE=compose.test.yaml # or compose.full.test.yaml
+export COMPOSE_FILE=.github/composes/compose.test.yaml # or .github/composes/compose.full.test.yaml
 docker compose up --build --wait
 go test -race -count=1 -failfast -p 1 -timeout=5m -v ./apps/adapters/api/... ./apps/adapters/mcp/...
 docker compose down --volumes
@@ -48,7 +48,9 @@ Use `docker compose logs` to diagnose failures, and always run `down --volumes`.
 
 ## CI
 
-Each [workflow](../../.github/workflows/) supports manual **Run workflow**.
-Change filters select affected suites; Markdown-only changes do not run tests.
-API and MCP workflows test both FS and full-provider stacks and collect service
-logs on failure.
+[test.yml](../../.github/workflows/test.yml) runs on code/configuration changes or
+manual **Run workflow**; Markdown-only changes do not trigger it.
+[Unit checks](../../.github/workflows/test-unit.yml) must pass before
+[integration checks](../../.github/workflows/test-integration.yml) start.
+Separate jobs run provider tests and FS/full stacks. Each stack runs API then MCP;
+the FS job also runs browser tests. Failures retain service logs and browser traces.

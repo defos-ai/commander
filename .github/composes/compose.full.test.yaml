@@ -79,7 +79,7 @@ services:
   minio:
     image: commander-minio:test
     build:
-      context: ./providers/s3/tests/minio
+      context: ../../providers/s3/tests/minio
       target: minio
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -97,7 +97,7 @@ services:
   minio-init:
     image: commander-minio-client:test
     build:
-      context: ./providers/s3/tests/minio
+      context: ../../providers/s3/tests/minio
       target: mc
     depends_on:
       minio:
@@ -116,7 +116,7 @@ services:
     image: commander-controller:test
     pull_policy: never
     build:
-      context: .
+      context: ../..
       dockerfile: apps/controllers/default/docker/Dockerfile
     depends_on:
       rabbitmq:
@@ -138,7 +138,7 @@ services:
     image: commander-mcp:test
     pull_policy: never
     build:
-      context: .
+      context: ../..
       dockerfile: apps/adapters/mcp/docker/Dockerfile
     command:
       - --listen-address=:4273
@@ -170,7 +170,7 @@ services:
     image: commander-api:test
     pull_policy: never
     build:
-      context: .
+      context: ../..
       dockerfile: apps/adapters/api/docker/Dockerfile
     environment:
       <<: *environment
@@ -210,7 +210,7 @@ services:
     image: commander-admin-ui:test
     pull_policy: never
     build:
-      context: .
+      context: ../..
       dockerfile: apps/admin/ui/docker/Dockerfile
     environment:
       UI_API_UPSTREAMS: localhost:14274=api:4274,127.0.0.1:14274=api:4274
@@ -229,7 +229,7 @@ services:
   web-1:
     <<: *agent
     build:
-      context: .
+      context: ../..
       dockerfile: apps/agents/web-quality/docker/Dockerfile
 
   web-2:
@@ -242,4 +242,4 @@ volumes:
 
 configs:
   default-missions:
-    file: ./apps/controllers/default/data/default-missions.json
+    file: ../../apps/controllers/default/data/default-missions.json

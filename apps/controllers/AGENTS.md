@@ -54,7 +54,8 @@ go vet ./apps/controllers/default/...
 - [Host tests](default/tests/) cover registration, startup, imports and the bundled
   mission. Mongo startup coverage requires `COMMANDER_TEST_MONGO_URL` and a replica
   set; report that coverage as skipped if the variable is absent.
-- [Controller CI](../../.github/workflows/test-controller.yml) supplies MongoDB.
+- [Integration CI](../../.github/workflows/test-integration.yml) supplies MongoDB;
+  [unit CI](../../.github/workflows/test-unit.yml) covers the host without it.
   Follow [Mongo setup](../../providers/mongo/README.md#development-and-testing) for
   service-backed checks, and stop only the test services/state you started.
 - Scheduler or recovery changes need affected framework tests plus public

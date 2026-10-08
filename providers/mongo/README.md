@@ -11,22 +11,18 @@ Operation storage requires a replica set or sharded cluster for transactions.
 
 ## Quick start
 
-From the repository root, start the local MongoDB service:
+From the repository root, start the full local stack:
 
 ```sh
-docker compose -f compose.full.yaml up --wait mongo
+docker compose -f compose.full.yaml up --build -d
 ```
 
 Compose initializes a single-node replica set and persists data in a named
-volume. The host port defaults to `27017`; `MONGO_PORT` overrides it. For the
-complete RabbitMQ + MongoDB + MinIO stack, follow the
-[deployment guide](../../docs/deployment.md).
+volume. MongoDB has no published host port; apps connect through Compose. See the
+[deployment guide](../../docs/deployment.md) for the other services.
 
-URLs must include a database name. Use
-`mongodb://127.0.0.1:27017/commander?replicaSet=rs0&directConnection=true` from the
-host; Compose apps use `mongodb://mongo:27017/commander?replicaSet=rs0`.
-`directConnection=true` lets host clients use the forwarded port even though
-the replica-set member advertises its container hostname.
+URLs must include a database name. Compose apps use
+`mongodb://mongo:27017/commander?replicaSet=rs0`.
 
 Apps share one [`MongoStore`](store/mongo_store.go) client across domain stores:
 
@@ -38,7 +34,7 @@ import (
 
 // ctx is the caller's context with a deadline.
 database, err := store.Open(ctx,
-    "mongodb://127.0.0.1:27017/commander?replicaSet=rs0&directConnection=true")
+    "mongodb://mongo:27017/commander?replicaSet=rs0")
 if err != nil {
     return err
 }
@@ -55,18 +51,22 @@ for the framework and this provider.
 
 See [AGENTS.md](AGENTS.md) for transaction and persistence guidance.
 
-With MongoDB running, run from the repository root:
+Start the isolated test service and run from the repository root:
 
 ```sh
+docker compose -f .github/composes/compose.providers.test.yaml up --wait mongo
 COMMANDER_TEST_MONGO_URL='mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true' \
   go test -race -count=1 -timeout=3m ./providers/mongo/...
 go vet ./providers/mongo/...
+docker compose -f .github/composes/compose.providers.test.yaml down --volumes
 ```
 
 Integration tests skip without `COMMANDER_TEST_MONGO_URL`. Use a dedicated test
 database: tests clean their collections before and after each case. The same
 variable enables the optional controller startup test. See the
 [testing guide](../../framework/tests/README.md#mcp-api-tests) for full-stack tests.
+The test service exposes localhost port `27017`; `directConnection=true` handles
+the replica set's container hostname. Always stop test services after failures too.
 
 ## Persistence and recovery
 

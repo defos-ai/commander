@@ -48,4 +48,4 @@ go vet ./providers/fs/...
 Changes to publication or locks need failure, cancellation and concurrent-access
 coverage in `tests/`; operation changes also need snapshot/recovery scenarios.
 Use the [test guide](../../framework/tests/README.md) for stack checks and
-[CI workflow](../../.github/workflows/test-provider-fs.yml) for the module gate.
+[unit CI](../../.github/workflows/test-unit.yml) for the module gate.

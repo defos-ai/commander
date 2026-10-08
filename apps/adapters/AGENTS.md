@@ -39,8 +39,8 @@
 - Host tests live under each adapter's `tests/host/`; public HTTP/MCP scenarios
   live in `tests/` and use the running test stack. Group behavior by feature and
   exercise commands, saved queries and resulting evidence through public routes.
-- [API CI](../../.github/workflows/test-api.yml) and
-  [MCP CI](../../.github/workflows/test-mcp.yml) cover FS and full-provider stacks.
+- [Integration CI](../../.github/workflows/test-integration.yml) runs API and MCP
+  suites sequentially against each FS/full-provider stack.
   Follow the [stack setup](../../framework/tests/README.md#mcp-api-tests), then run
   affected modules from the repository root; when checking both, keep `-p 1`:
 

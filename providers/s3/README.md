@@ -51,23 +51,24 @@ for the framework and this provider.
 
 See [AGENTS.md](AGENTS.md) for object-storage implementation guidance.
 
-From the repository root, start MinIO and run integration tests with the default
-local credentials and port:
+From the repository root, start isolated MinIO services and run integration tests:
 
 ```sh
-docker compose -f compose.full.yaml up --build --wait minio
-docker compose -f compose.full.yaml run --build --rm minio-init
+docker compose -f .github/composes/compose.providers.test.yaml up --build --wait minio
+docker compose -f .github/composes/compose.providers.test.yaml run --build --rm minio-init
 AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000 AWS_REGION=us-east-1 \
-AWS_ACCESS_KEY_ID=commander AWS_SECRET_ACCESS_KEY=commander-local-secret \
-S3_USE_PATH_STYLE=true COMMANDER_TEST_S3_URL=s3://commander/tests \
+AWS_ACCESS_KEY_ID=commander-test AWS_SECRET_ACCESS_KEY=commander-test-secret \
+S3_USE_PATH_STYLE=true COMMANDER_TEST_S3_URL=s3://commander-test/provider-tests \
   go test -race -count=1 -timeout=3m ./providers/s3/...
 go vet ./providers/s3/...
+docker compose -f .github/composes/compose.providers.test.yaml down --volumes
 ```
 
 Use a dedicated test bucket or prefix. Integration tests skip without
 `COMMANDER_TEST_S3_URL` and remove their own objects afterward; cleanup also needs
 object listing and deletion permissions. See the
 [testing guide](../../framework/tests/README.md) for full-stack checks.
+Always stop test services, including after failures.
 
 ## Object layout and writes
 

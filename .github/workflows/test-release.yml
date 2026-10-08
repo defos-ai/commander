@@ -27,58 +27,13 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.work
-          cache-dependency-path: |
-            go.work.sum
-            **/go.sum
+      - uses: ./.github/actions/setup-go
       - name: Run release readiness tests
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           GOTOOLCHAIN: local
         run: go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
 
-  framework:
+  suites:
     needs: test
-    uses: ./.github/workflows/test-framework.yml
-
-  provider-fs:
-    needs: test
-    uses: ./.github/workflows/test-provider-fs.yml
-
-  provider-mongo:
-    needs: test
-    uses: ./.github/workflows/test-provider-mongo.yml
-
-  provider-rabbitmq:
-    needs: test
-    uses: ./.github/workflows/test-provider-rabbitmq.yml
-
-  provider-s3:
-    needs: test
-    uses: ./.github/workflows/test-provider-s3.yml
-
-  controller:
-    needs: test
-    uses: ./.github/workflows/test-controller.yml
-
-  agent:
-    needs: test
-    uses: ./.github/workflows/test-agent.yml
-
-  api:
-    needs: test
-    uses: ./.github/workflows/test-api.yml
-
-  mcp:
-    needs: test
-    uses: ./.github/workflows/test-mcp.yml
-
-  playground:
-    needs: test
-    uses: ./.github/workflows/test-playground.yml
-
-  ui:
-    needs: test
-    uses: ./.github/workflows/test-ui.yml
+    uses: ./.github/workflows/test.yml

@@ -50,7 +50,8 @@ For cross-host changes, start the appropriate test stack as described in the
 go test -race -count=1 -failfast -p 1 -timeout=5m -v ./apps/adapters/api/... ./apps/adapters/mcp/...
 ```
 
-Use `compose.test.yaml` for FS or `compose.full.test.yaml` for full providers;
+Use `.github/composes/compose.test.yaml` for FS or
+`.github/composes/compose.full.test.yaml` for full providers;
 run one stack at a time because their ports overlap. Always run the corresponding
 `docker compose down --volumes` afterward, including on failure. Match affected
 [CI workflows](../../.github/workflows/) and report suites not verified.

@@ -1,0 +1,11 @@
+name: Set up Go
+description: Install the workspace Go version and restore the dependency cache.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.work
+        cache-dependency-path: |
+          go.work.sum
+          **/go.sum

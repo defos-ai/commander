@@ -1,0 +1,33 @@
+name: commander-providers-test
+
+services:
+  mongo:
+    extends:
+      file: compose.full.test.yaml
+      service: mongo
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  rabbitmq:
+    extends:
+      file: compose.full.test.yaml
+      service: rabbitmq
+    ports:
+      - "127.0.0.1:5673:5672"
+
+  minio:
+    extends:
+      file: compose.full.test.yaml
+      service: minio
+    ports:
+      - "127.0.0.1:9000:9000"
+
+  minio-init:
+    extends:
+      file: compose.full.test.yaml
+      service: minio-init
+
+volumes:
+  mongo:
+  rabbitmq:
+  minio:

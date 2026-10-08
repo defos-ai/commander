@@ -27,12 +27,12 @@ reports in S3-compatible object storage; accepted metadata stays in the database
 
 Use a dedicated bucket/prefix and the MinIO startup/bucket initialization commands
 in [README.md](README.md#development-and-testing). With that setup and its default
-local credentials, run from the repository root:
+test credentials, run from the repository root:
 
 ```sh
 AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000 AWS_REGION=us-east-1 \
-AWS_ACCESS_KEY_ID=commander AWS_SECRET_ACCESS_KEY=commander-local-secret \
-S3_USE_PATH_STYLE=true COMMANDER_TEST_S3_URL=s3://commander/tests \
+AWS_ACCESS_KEY_ID=commander-test AWS_SECRET_ACCESS_KEY=commander-test-secret \
+S3_USE_PATH_STYLE=true COMMANDER_TEST_S3_URL=s3://commander-test/provider-tests \
   go test -race -count=1 -timeout=3m ./providers/s3/...
 go vet ./providers/s3/...
 ```
@@ -41,4 +41,4 @@ Integration tests skip without `COMMANDER_TEST_S3_URL`. Fixtures create unique
 prefixes and delete their own objects, requiring list/delete permissions in
 addition to reads/writes. Cover corrupt content, conditional write conflicts and
 cancellation when changing object I/O. See the
-[CI workflow](../../.github/workflows/test-provider-s3.yml) for the service gate.
+[integration CI](../../.github/workflows/test-integration.yml) for the service gate.

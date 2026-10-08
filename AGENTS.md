@@ -38,14 +38,17 @@ The user's current instructions take precedence over repository guidance.
 - Release publishing runs through `make-release.yml` after all suites in
   `test-release.yml` and native build checks succeed for the same commit.
   Keep `build-binaries.yml` and `push-*.yml` reusable-only; native assets must come
-  from that run. Preserve each test workflow's distinct concurrency group when
-  adding suites. Retry failed publication jobs in the same run; never overwrite
-  published release assets.
+  from that run. `test.yml` calls reusable `test-unit.yml` before
+  `test-integration.yml`; integration jobs must depend on passing basic checks.
+  Keep independently triggered workflows' concurrency groups distinct so nested
+  calls cannot cancel their release parent. Retry failed publication jobs in the
+  same run; never overwrite published release assets.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.
 - [compose.yaml](compose.yaml) uses FS; [compose.full.yaml](compose.full.yaml)
-  uses RabbitMQ, MongoDB and MinIO. Test stacks have separate projects and state.
+  uses RabbitMQ, MongoDB and MinIO. Test stacks in [.github/composes](.github/composes/)
+  have separate projects and state.
   See [setup](docs/deployment.md) and the relevant component README for usage.
 
 ## Cross-component boundaries

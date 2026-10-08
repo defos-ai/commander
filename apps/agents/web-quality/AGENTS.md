@@ -49,7 +49,7 @@ go vet ./apps/agents/web-quality/...
 - [tests/actions_test.go](tests/actions_test.go) covers hostname/redirect scope,
   observed SEO data and browser discovery with deterministic fixtures. Add coverage
   for changed limits, scope or readiness without requiring a host browser.
-- [Agent CI](../../../.github/workflows/test-agent.yml) runs this module. For actual
+- [Unit CI](../../../.github/workflows/test-unit.yml) runs this module. For actual
   browser execution, artifact persistence and the full review mission, use the
   [MCP/API test stack](../../../framework/tests/README.md#mcp-api-tests), which
   supplies browsers and local sites. No model key or public target is needed.

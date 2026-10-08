@@ -39,7 +39,7 @@ Start the dedicated test broker in [README.md](README.md#development-and-testing
 and wait for health. From the repository root:
 
 ```sh
-COMMANDER_TEST_RABBITMQ_URL='amqp://commander:commander-test@127.0.0.1:5673/' \
+COMMANDER_TEST_RABBITMQ_URL='amqp://commander-test:commander-test-secret@127.0.0.1:5673/' \
   go test -race -count=1 -timeout=3m ./providers/rabbitmq/...
 go vet ./providers/rabbitmq/...
 ```
@@ -48,4 +48,4 @@ Integration tests skip without `COMMANDER_TEST_RABBITMQ_URL`. Use a dedicated
 broker or virtual host because failure tests alter shared failed-queue bindings.
 Stop the test broker even after failures. Exercise connection loss, cancellation,
 unroutable publication and independent settlements when changing transport code.
-See the [CI workflow](../../.github/workflows/test-provider-rabbitmq.yml).
+See the [integration CI](../../.github/workflows/test-integration.yml).

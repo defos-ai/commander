@@ -56,6 +56,6 @@
 
 - Commands run from the repository root. For public behavior, run the full API
   suite against the stack as described in [adapter guidance](../AGENTS.md#validation).
-  [API CI](../../../.github/workflows/test-api.yml) covers both provider stacks.
+  [Integration CI](../../../.github/workflows/test-integration.yml) covers both provider stacks.
 - Changes consumed by the admin UI also need its API types/calls and relevant
   checks; follow [UI guidance](../../admin/ui/AGENTS.md).

@@ -1,0 +1,85 @@
+name: Unit tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-unit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+
+jobs:
+  framework-fs:
+    name: Framework and FS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+      - name: Test framework outside the workspace
+        working-directory: framework
+        env:
+          GOWORK: 'off'
+        run: go test -race -count=1 -timeout=3m ./...
+      - name: Vet framework outside the workspace
+        working-directory: framework
+        env:
+          GOWORK: 'off'
+        run: go vet ./...
+      - name: Test FS provider
+        run: go test -race -count=1 -timeout=3m ./providers/fs/...
+      - name: Vet FS provider
+        run: go vet ./providers/fs/...
+      - name: Vet service providers
+        run: go vet ./providers/mongo/... ./providers/rabbitmq/... ./providers/s3/...
+
+  apps:
+    name: Applications
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMMANDER_TEST_MONGO_URL: ''
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-go
+      - name: Test controller
+        run: go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+      - name: Test agent
+        run: go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
+      - name: Test Playground, including all-in-one
+        run: go test -race -count=1 -timeout=3m ./apps/playground/...
+      - name: Test API and MCP hosts
+        run: go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host/... ./apps/adapters/mcp/tests/host/...
+      - name: Vet applications
+        run: >-
+          go vet ./apps/controllers/default/... ./apps/agents/web-quality/...
+          ./apps/playground/... ./apps/adapters/api/... ./apps/adapters/mcp/...
+      - name: Test UI backend outside the workspace
+        working-directory: apps/admin/ui/backend
+        env:
+          GOWORK: 'off'
+        run: go test -race -count=1 -timeout=1m ./...
+      - name: Vet UI backend outside the workspace
+        working-directory: apps/admin/ui/backend
+        env:
+          GOWORK: 'off'
+        run: go vet ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/admin/ui/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test UI behavior
+        run: npm test
+      - name: Build
+        run: npm run build
