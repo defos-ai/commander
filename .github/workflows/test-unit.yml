@@ -7,8 +7,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: test-unit-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+  # Keep the caller's scope while using a distinct group for this nested workflow.
+  group: test-unit-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   framework-fs:

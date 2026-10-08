@@ -193,7 +193,7 @@ describe('connection setup and saved metadata', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
 
     expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-    expect(screen.getByRole('main')).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('main')).toHaveFocus());
     expect(screen.getByText('Connected', { exact: true })).toBeVisible();
     expect(screen.getByText(remoteURL)).toBeVisible();
     const [saved] = stored();

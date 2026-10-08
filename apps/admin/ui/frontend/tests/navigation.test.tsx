@@ -79,7 +79,7 @@ describe('location navigation', () => {
 
     act(() => { window.history.back(); });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Details' })).toHaveAttribute('aria-pressed', 'true'));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     act(() => { window.history.back(); });
     expect(await screen.findByRole('heading', { name: 'Operations', level: 1 })).toBeVisible();
     act(() => { window.history.forward(); });

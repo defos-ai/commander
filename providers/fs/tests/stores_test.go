@@ -159,7 +159,10 @@ func TestOperationWritesDoNotBlockOtherOperations(t *testing.T) {
 }
 
 func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	store, err := operationfs.NewOperationFsStore(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -456,7 +459,10 @@ func TestOperationWritesDistinguishUnpublishedAndUncertainSnapshots(t *testing.T
 	for _, name := range []string{"update", "create", "unchanged update"} {
 		t.Run(name, func(t *testing.T) {
 			create, unchanged := name == "create", name == "unchanged update"
-			dir := t.TempDir()
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			store, err := operationfs.NewOperationFsStore(dir)
 			if err != nil {
 				t.Fatal(err)
