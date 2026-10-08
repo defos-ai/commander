@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -103,10 +104,11 @@ func (s *AgentFsStore) Upsert(ctx context.Context, record agentmodel.Agent) erro
 		}
 		if err == nil && !stored.ObservedAt.IsZero() && !snapshot.ObservedAt.After(stored.ObservedAt) {
 			if stored.Expired || stored.Status == agentmodel.AgentStopped ||
-				!snapshot.ObservedAt.Equal(stored.ObservedAt) || !snapshot.LastHeartbeat.After(stored.LastHeartbeat) {
+				!snapshot.ObservedAt.Equal(stored.ObservedAt) || !snapshot.LastHeartbeat.After(stored.LastHeartbeat) ||
+				!reflect.DeepEqual(snapshot.AgentSnapshot, stored.AgentSnapshot) {
 				return agentmodel.ErrStaleObservation
 			}
-			// Equal observation marks may carry a newer source heartbeat.
+			// Equal marks may renew liveness only for the same public snapshot.
 			// Keep the current snapshot and renew only its liveness metadata.
 			renewed := stored.Agent.Clone()
 			renewed.LastHeartbeat, renewed.LeaseExpiresAt = snapshot.LastHeartbeat, snapshot.LeaseExpiresAt

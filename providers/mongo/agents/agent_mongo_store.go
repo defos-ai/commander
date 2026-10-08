@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
@@ -90,11 +91,12 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 				return decodeErr
 			}
 			if saved.Expired || current.Status == agentmodel.AgentStopped ||
-				!record.ObservedAt.Equal(observed) || !record.LastHeartbeat.After(current.LastHeartbeat) {
+				!record.ObservedAt.Equal(observed) || !record.LastHeartbeat.After(current.LastHeartbeat) ||
+				!reflect.DeepEqual(record.AgentSnapshot, current.AgentSnapshot) {
 				return agentmodel.ErrStaleObservation
 			}
-			// Renew only liveness at an equal observation mark. Matching both
-			// clocks and receipt time prevents a concurrent writer from losing
+			// Renew liveness only for the same snapshot at an equal mark.
+			// Matching both clocks and receipt time prevents a writer from losing
 			// its newer heartbeat, lifecycle snapshot, or last-seen metadata.
 			renewal := saved
 			renewal.LastHeartbeat = bsonvalue.NewTimestamp(record.LastHeartbeat)
