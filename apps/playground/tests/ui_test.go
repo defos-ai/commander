@@ -36,6 +36,77 @@ func TestProviderSelector(t *testing.T) {
 	}
 }
 
+func TestLocalAPICredentialsDuringSetup(t *testing.T) {
+	for _, local := range []*ui.LocalAPI{nil, {URL: "http://127.0.0.1:4274", Username: "commander", Password: "local-only-fixture-password"}} {
+		model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAPI: local}, io.Discard)
+		defer model.Close()
+		model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
+		model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		if local != nil && (!strings.Contains(model.View(), "/credentials") || strings.Contains(model.View(), local.Password)) {
+			t.Fatal("local help must advertise credential lookup without revealing the password")
+		}
+		model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/credentials")})
+		model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		view := model.View()
+		if !strings.Contains(view, "Select your model provider:") {
+			t.Fatal("credential lookup changed the setup stage")
+		}
+		if local == nil {
+			if !strings.Contains(view, "only with --all-in-one") {
+				t.Fatal("remote session did not explain unavailable local credentials")
+			}
+		} else if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "Username: "+local.Username) || !strings.Contains(view, "Password: "+local.Password) {
+			t.Fatal("explicit credential lookup did not display the local API credentials")
+		}
+	}
+}
+
+func TestLocalAPICredentialsStayOutOfModelRequests(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	local := &ui.LocalAPI{URL: "http://127.0.0.1:4274", Username: "local-api-user", Password: "local-only-fixture-password"}
+	var requests, calls atomic.Int32
+	server := mcp.NewServer(&mcp.Implementation{Name: "credentials-fixture", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: "list_missions", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		calls.Add(1)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "{}"}}}, nil
+	})
+	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+	defer endpoint.Close()
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error("could not inspect model request")
+		}
+		for _, private := range []string{local.Password, local.Username, local.URL, "/credentials"} {
+			if strings.Contains(string(body), private) {
+				t.Error("local credential lookup leaked into a model request")
+			}
+		}
+		writeModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
+	}))
+	defer provider.Close()
+	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAPI: local})
+	defer u.model.Close()
+	if strings.Contains(u.model.View(), local.Password) {
+		t.Fatal("local password was displayed before explicit lookup")
+	}
+	u.text("/credentials")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.model.View(), "Password: "+local.Password) {
+		t.Fatal("explicit credential lookup did not display the local password")
+	}
+	u.text("Hello")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("normal chat after credential lookup", func(view string) bool {
+		return strings.Contains(view, "Ready to chat") && !strings.Contains(view, "Thinking")
+	})
+	if requests.Load() != 1 || calls.Load() != 0 || strings.Contains(u.model.View(), "Unknown command") {
+		t.Fatal("credential lookup caused model or MCP work")
+	}
+}
+
 func TestQuestionSelector(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -346,7 +417,12 @@ type uiDriver struct {
 
 func newUI(t *testing.T, ctx context.Context, endpoint, provider string) *uiDriver {
 	t.Helper()
-	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider, MCPURL: endpoint, Keys: map[string]string{"other": "test-only"}, NoColor: true}, io.Discard)}
+	return newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider, MCPURL: endpoint, Keys: map[string]string{"other": "test-only"}, NoColor: true})
+}
+
+func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDriver {
+	t.Helper()
+	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, config, io.Discard)}
 	t.Cleanup(u.model.Close)
 	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	u.run(u.model.Init())

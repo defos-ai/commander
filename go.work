@@ -16,6 +16,7 @@ use (
 
 // Resolve workspace requirements locally while Go loads the dependency graph.
 replace (
+	github.com/defos-ai/commander/apps/adapters/api v0.0.0 => ./apps/adapters/api
 	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0 => ./apps/adapters/mcp
 	github.com/defos-ai/commander/apps/agents/web-quality v0.0.0 => ./apps/agents/web-quality
 	github.com/defos-ai/commander/apps/controllers/default v0.0.0 => ./apps/controllers/default

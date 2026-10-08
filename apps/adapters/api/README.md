@@ -69,8 +69,8 @@ the image does not prepare state directories.
 
 ### Authentication and health
 
-The API requires nonblank `API_USERNAME` and `API_PASSWORD` environment variables
-before serving requests. Native startup fails with copyable setup instructions
+The standalone API requires nonblank `API_USERNAME` and `API_PASSWORD` environment
+variables before serving requests. Startup fails with copyable setup instructions
 when either is missing. Compose supplies username `commander` and generates a
 random password unless you set `API_PASSWORD`. Retrieve the running credentials:
 
@@ -83,6 +83,9 @@ before starting Compose for a stable password; `API_USERNAME` overrides the user
 For full Compose, add `-f compose.full.yaml` after `docker compose`. Native hosts
 can run `commander-api credentials` with the same environment settings.
 Passwords are never included in startup logs or errors.
+
+[Playground's all-in-one mode](../../playground/README.md#native-one-executable)
+generates a session password automatically; use `/credentials` there to view it.
 
 Use HTTPS at the reverse proxy for hosted deployments. All routes, including
 unknown routes and Swagger, require Basic authentication except approved CORS

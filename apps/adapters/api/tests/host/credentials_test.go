@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 func TestMissingCredentialsExplainHowToStart(t *testing.T) {
@@ -46,6 +48,18 @@ func TestCredentialsCommandReadsOnlyEnvironment(t *testing.T) {
 	}
 	if output.String() != "Username: api-fixture-user\nPassword: api-fixture-password\n" || diagnostic.Len() != 0 {
 		t.Error("credential command did not print effective environment credentials only to standard output")
+	}
+}
+
+func TestEmbeddedCredentialsMustBeComplete(t *testing.T) {
+	fixture := newFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	err := cli.RunWithOptions(ctx, fixture.localArgs(), io.Discard, cli.Options{
+		Credentials: &host.Credentials{Username: "embedded-user"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "API_USERNAME and API_PASSWORD") {
+		t.Fatal("incomplete embedded credentials must fail instead of using environment credentials")
 	}
 }
 

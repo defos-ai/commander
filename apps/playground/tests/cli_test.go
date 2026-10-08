@@ -3,6 +3,7 @@ package playground_test
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/apps/playground/cli"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -29,9 +31,15 @@ import (
 )
 
 func TestAllInOne(t *testing.T) {
+	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
+	t.Run("generated API credentials", testAllInOneGeneratedCredentials)
+	t.Run("API startup failures clean up local hosts", testAllInOneAPIFailure)
+}
+
+func testAllInOneWorkflow(t *testing.T) {
 	// Browser presence satisfies mission preflight; this smoke test only executes SEO.
 	// Real browser execution is covered by the MCP suite against Compose.
-	temporary := t.TempDir()
+	temporary := allInOneEnvironment(t)
 	browser := filepath.Join(t.TempDir(), "browser-fixture")
 	if runtime.GOOS == "windows" {
 		browser += ".exe"
@@ -41,12 +49,6 @@ func TestAllInOne(t *testing.T) {
 	}
 	t.Setenv("CHROMIUM_PATH", browser)
 	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
-	t.Setenv("TMPDIR", temporary)
-	t.Setenv("TMP", temporary)
-	t.Setenv("TEMP", temporary)
-	t.Setenv("ENV", "")
-	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
-	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
 	website := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `<html lang="en"><title>Release preview</title><meta name="robots" content="noindex"><h1>Preview</h1></html>`)
 	}))
@@ -178,6 +180,37 @@ func TestAllInOne(t *testing.T) {
 	if endpoint == "" {
 		t.Fatalf("missing local endpoint: %s", output.String())
 	}
+	apiNotice := regexp.MustCompile(`API listening: (http://127\.0\.0\.1:\d+)`).FindStringSubmatch(output.String())
+	if len(apiNotice) != 2 {
+		t.Fatalf("missing local API endpoint: %s", output.String())
+	}
+	apiURL := apiNotice[1]
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	defer httpClient.CloseIdleConnections()
+	get := func(path, password string, status int) []byte {
+		t.Helper()
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if password != "" {
+			request.SetBasicAuth("commander", password)
+		}
+		response, err := httpClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(response.Body)
+		if err != nil || response.StatusCode != status {
+			t.Fatalf("API %s: status=%d, want %d, read error=%v", path, response.StatusCode, status, err)
+		}
+		return body
+	}
+	get("/healthz", "", http.StatusOK)
+	get("/readyz", "", http.StatusOK)
+	get("/api/v1/operations", "", http.StatusUnauthorized)
+	get("/api/v1/operations", "wrong-password", http.StatusUnauthorized)
 	client, err := mcp.NewClient(&mcp.Implementation{Name: "playground-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +249,24 @@ func TestAllInOne(t *testing.T) {
 	if result.IsError || json.Unmarshal(raw, &report) != nil || report.OperationID != operationID || !bytes.Contains(report.Output, []byte("operator confirmed intentional noindex")) {
 		t.Fatalf("Playground did not persist the mission report: %s", raw)
 	}
+	var apiOperation models.OperationResponse
+	if err := json.Unmarshal(get("/api/v1/operations/"+operationID, "all-in-one-api-secret", http.StatusOK), &apiOperation); err != nil {
+		t.Fatal(err)
+	}
+	if apiOperation.ID != operationID || apiOperation.Status != "completed" || apiOperation.ReportID != report.ID || len(apiOperation.Tasks) != 1 {
+		t.Fatalf("API did not read the MCP operation: %+v", apiOperation)
+	}
+	task := apiOperation.Tasks[0]
+	if task.ActionName != "check-seo" || task.Status != "succeeded" || task.Result == nil || !bytes.Contains(task.Result.Output, []byte("Release preview")) {
+		t.Fatalf("API did not read saved agent evidence: %+v", task)
+	}
+	var apiReport models.ReportResponse
+	if err := json.Unmarshal(get("/api/v1/reports/"+report.ID, "all-in-one-api-secret", http.StatusOK), &apiReport); err != nil {
+		t.Fatal(err)
+	}
+	if apiReport.ID != report.ID || apiReport.OperationID != operationID || !bytes.Contains(apiReport.Output, []byte("operator confirmed intentional noindex")) {
+		t.Fatalf("API did not read the MCP report: %+v", apiReport)
+	}
 	client.Close()
 	if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {
 		t.Fatal(err)
@@ -232,15 +283,219 @@ func TestAllInOne(t *testing.T) {
 	if requests.Load() < 10 || strings.Contains(output.String(), "**Review complete**") || !strings.Contains(output.String(), "Review complete") {
 		t.Fatalf("unexpected chat rendering: %s", output.String())
 	}
+	if strings.Contains(output.String(), "all-in-one-api-secret") {
+		t.Error("API credentials leaked into Playground output")
+	}
 	files, err := os.ReadDir(temporary)
 	if err != nil || len(files) != 0 {
 		t.Fatalf("temporary state remains after exit: %v (%v)", files, err)
 	}
-	address, _ := url.Parse(endpoint)
-	connection, err := net.DialTimeout("tcp", address.Host, time.Second)
-	if err == nil {
-		_ = connection.Close()
-		t.Fatal("local MCP is still listening after /exit")
+	for _, endpoint := range []string{endpoint, apiURL} {
+		address, _ := url.Parse(endpoint)
+		connection, err := net.DialTimeout("tcp", address.Host, time.Second)
+		if err == nil {
+			_ = connection.Close()
+			t.Errorf("local host %s is still listening after /exit", endpoint)
+		}
+	}
+}
+
+func allInOneEnvironment(t *testing.T) string {
+	t.Helper()
+	temporary := t.TempDir()
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, temporary)
+	}
+	t.Setenv("ENV", "")
+	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
+	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
+	t.Setenv("API_USERNAME", "commander")
+	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
+	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
+	t.Setenv("PORT", "not-a-port") // All-in-one uses an explicit API listener.
+	t.Setenv("API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")
+	t.Setenv("API_ALLOWED_ORIGINS", "")
+	t.Setenv("API_TRUSTED_PROXIES", "")
+	t.Setenv("API_PROXY_HEADERS", "none")
+	t.Setenv("API_SWAGGER_ENABLED", "false")
+	return temporary
+}
+
+func testAllInOneGeneratedCredentials(t *testing.T) {
+	var previousPassword string
+	for _, tc := range []struct {
+		name, username, password string
+	}{
+		{name: "no credentials"},
+		{name: "username override", username: "local-operator"},
+		{name: "password override", password: "operator-supplied-secret"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			temporary := allInOneEnvironment(t)
+			t.Setenv("API_USERNAME", tc.username)
+			t.Setenv("API_PASSWORD", tc.password)
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			input, keyboard := io.Pipe()
+			defer input.Close()
+			defer keyboard.Close()
+			var output terminalOutput
+			done := make(chan error, 1)
+			stopped := make(chan struct{})
+			go func() {
+				defer close(stopped)
+				done <- cli.Run(ctx, []string{"--all-in-one", "--provider=", "--model=", "--base-url=", "--no-color"}, input, &output, &output)
+			}()
+			t.Cleanup(func() {
+				cancel()
+				_ = keyboard.Close()
+				select {
+				case <-stopped:
+				case <-time.After(10 * time.Second):
+					t.Error("Playground did not stop local hosts")
+				}
+			})
+			wait := func(text string) {
+				t.Helper()
+				tick := time.NewTicker(20 * time.Millisecond)
+				defer tick.Stop()
+				for !strings.Contains(output.String(), text) {
+					select {
+					case err := <-done:
+						t.Fatalf("CLI stopped before %q: %v", text, err)
+					case <-tick.C:
+					case <-ctx.Done():
+						t.Fatalf("timed out waiting for %q", text)
+					}
+				}
+			}
+			wait("Select your model provider")
+			beforeLookup := output.String()
+			if _, err := io.WriteString(keyboard, "/credentials\r"); err != nil {
+				t.Fatal(err)
+			}
+			wait("Password:")
+			match := regexp.MustCompile(`API: (http://127\.0\.0\.1:\d+)\s+Username: ([^\r\n]+)\s+Password: ([^\r\n]+)`).FindStringSubmatch(output.String())
+			if len(match) != 4 {
+				t.Fatal("/credentials did not display the local API address and credentials")
+			}
+			apiURL, username, password := match[1], strings.TrimSpace(match[2]), strings.TrimSpace(match[3])
+			wantUsername := tc.username
+			if wantUsername == "" {
+				wantUsername = "commander"
+			}
+			if username != wantUsername {
+				t.Error("API username did not preserve the override or default to commander")
+			}
+			if tc.password == "" {
+				decoded, err := hex.DecodeString(password)
+				if err != nil || len(decoded) != 32 {
+					t.Fatal("generated API password must contain 32 bytes encoded as hex")
+				}
+				if previousPassword == password {
+					t.Error("new session reused a generated API password")
+				}
+				previousPassword = password
+			} else if password != tc.password {
+				t.Error("API password override was not preserved")
+			}
+			if strings.Contains(beforeLookup, password) {
+				t.Error("API password appeared without an explicit /credentials request")
+			}
+			if os.Getenv("API_USERNAME") != tc.username || os.Getenv("API_PASSWORD") != tc.password {
+				t.Error("all-in-one changed process-wide credential environment")
+			}
+			httpClient := &http.Client{Timeout: 3 * time.Second}
+			defer httpClient.CloseIdleConnections()
+			for _, attempt := range []struct {
+				password string
+				status   int
+			}{
+				{status: http.StatusUnauthorized},
+				{password: "wrong-password", status: http.StatusUnauthorized},
+				{password: password, status: http.StatusOK},
+			} {
+				request, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"/api/v1/operations", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if attempt.password != "" {
+					request.SetBasicAuth(username, attempt.password)
+				}
+				response, err := httpClient.Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				response.Body.Close()
+				if response.StatusCode != attempt.status {
+					t.Errorf("API credential authentication status=%d, want %d", response.StatusCode, attempt.status)
+				}
+			}
+			logs, err := filepath.Glob(filepath.Join(temporary, "commander-playground-*", "hosts.log"))
+			if err != nil || len(logs) != 1 {
+				t.Fatalf("expected one local host log, found %d (%v)", len(logs), err)
+			}
+			log, err := os.ReadFile(logs[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(log, []byte(password)) {
+				t.Error("API password leaked into host logs")
+			}
+			if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-ctx.Done():
+				t.Fatal("/exit did not stop the CLI")
+			}
+			files, err := os.ReadDir(temporary)
+			if err != nil || len(files) != 0 {
+				t.Fatalf("temporary state remains after exit: %v (%v)", files, err)
+			}
+		})
+	}
+}
+
+func testAllInOneAPIFailure(t *testing.T) {
+	for _, name := range []string{"invalid username", "blank password", "occupied port"} {
+		t.Run(name, func(t *testing.T) {
+			temporary := allInOneEnvironment(t)
+			want := "API_USERNAME and API_PASSWORD"
+			switch name {
+			case "invalid username":
+				t.Setenv("API_USERNAME", "invalid:username")
+				want = "username must not contain ':'"
+			case "blank password":
+				t.Setenv("API_PASSWORD", "   ")
+			case "occupied port":
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer listener.Close()
+				t.Setenv("API_LISTEN_ADDRESS", listener.Addr().String())
+				want = "listen"
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			var output bytes.Buffer
+			err := cli.Run(ctx, []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
+			if err == nil || !strings.Contains(err.Error(), want) || ctx.Err() != nil {
+				t.Fatalf("API startup failure was not propagated promptly: %v", err)
+			}
+			if strings.Contains(output.String(), "all-in-one-api-secret") || strings.Contains(err.Error(), "all-in-one-api-secret") {
+				t.Error("API credentials leaked into startup diagnostics")
+			}
+			files, err := os.ReadDir(temporary)
+			if err != nil || len(files) != 0 {
+				t.Fatalf("temporary state remains after API startup failed: %v (%v)", files, err)
+			}
+		})
 	}
 }
 

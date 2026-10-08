@@ -23,6 +23,11 @@ type Config struct {
 	NoColor                          bool
 	Debug                            bool
 	Notices                          []string
+	LocalAPI                         *LocalAPI
+}
+
+type LocalAPI struct {
+	URL, Username, Password string
 }
 type entry struct {
 	kind, text    string
@@ -154,6 +159,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			value := strings.TrimSpace(m.input.Value())
 			if value == "/exit" {
 				return m, tea.Quit
+			}
+			if m.localCommand(value) {
+				return m, nil
 			}
 			if m.stage != stageChat {
 				return m, m.setupInput(value)

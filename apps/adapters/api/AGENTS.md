@@ -31,13 +31,17 @@
 
 ## Security boundaries
 
-- Keep credentials environment-only and require nonblank `API_USERNAME` and
-  `API_PASSWORD` before opening listeners or provider clients. Do not introduce
-  credential files or shared passwords. Compose supplies the default username
-  and generates a password at each container start unless explicitly supplied.
-- Only the explicit `credentials` CLI command may print the supplied credentials;
-  never include passwords in flags, logs, errors or HTTP responses. Missing
-  credentials should explain setup with a copyable password-generation command.
+- Standalone CLI credentials come only from nonblank `API_USERNAME` and
+  `API_PASSWORD`. Embedded hosts may pass in-memory credentials through
+  `RunWithOptions` using `host.Credentials`; reuse framework validation before
+  opening listeners or provider clients.
+  Do not introduce credential files or shared passwords. Compose supplies the
+  default username and generates a password at each container start unless
+  explicitly supplied. Playground generates its own per-session credentials.
+- Only explicit local retrieval (`credentials` in the API CLI or `/credentials`
+  in Playground) may display credentials; never include passwords in flags, logs,
+  errors, HTTP responses or model messages. Missing standalone credentials should
+  explain setup with a copyable password-generation command.
 - `credentials --pid` reads process environment only for explicit retrieval, never
   for server configuration. Compose must exec the API as PID 1 without an init
   process so `credentials --pid 1` finds the shell-generated environment; Docker

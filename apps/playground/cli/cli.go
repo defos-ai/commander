@@ -38,6 +38,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		ctx = session.Context
 		config.MCPURL = session.MCPURL
 		config.Notices = session.Notices
+		config.LocalAPI = &ui.LocalAPI{URL: session.APIURL, Username: session.APICredentials.Username, Password: session.APICredentials.Password}
 		if config.Debug {
 			config.Notices = append(config.Notices, "Local host logs: "+session.Directory+"/hosts.log (removed on exit)")
 		}

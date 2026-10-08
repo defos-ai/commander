@@ -29,7 +29,7 @@ type config struct {
 	logFormat     string
 }
 
-func parseConfig(args []string, output io.Writer) (config, error) {
+func parseConfig(args []string, output io.Writer, supplied *host.Credentials) (config, error) {
 	var result config
 	var allowedHosts, allowedOrigins, trustedProxies, proxyHeaders string
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)
@@ -85,7 +85,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	if err := validateListenAddress(result.listenAddress); err != nil {
 		return config{}, err
 	}
-	credentials, err := resolveCredentials()
+	credentials, err := resolveCredentials(supplied)
 	if err != nil {
 		return config{}, err
 	}

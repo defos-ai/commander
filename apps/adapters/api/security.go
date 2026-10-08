@@ -4,11 +4,11 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"net/http"
-	"strings"
-	"unicode"
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 type SecurityConfig struct {
@@ -34,11 +34,8 @@ type security struct {
 }
 
 func newSecurity(config SecurityConfig) (*security, error) {
-	if strings.TrimSpace(config.Username) == "" || strings.TrimSpace(config.Password) == "" {
-		return nil, errors.New("API_USERNAME and API_PASSWORD must both be set and not blank")
-	}
-	if strings.Contains(config.Username, ":") || strings.ContainsFunc(config.Username, unicode.IsControl) || strings.ContainsFunc(config.Password, unicode.IsControl) {
-		return nil, errors.New("API credentials must not contain control characters; API_USERNAME must not contain ':'")
+	if err := (host.Credentials{Username: config.Username, Password: config.Password}).Validate(); err != nil {
+		return nil, fmt.Errorf("API_USERNAME/API_PASSWORD: %w", err)
 	}
 	hosts := make(map[string]struct{}, len(config.AllowedHosts))
 	for _, value := range config.AllowedHosts {

@@ -4,7 +4,7 @@
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
-  MCP, controller and agent hosts for `--all-in-one`.
+  MCP, API, controller and agent hosts for `--all-in-one`.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
@@ -20,6 +20,18 @@
 - All-in-one starts temporary state and loopback services, waits for readiness,
   then shuts down hosts before deleting that session's files. It must not use or
   delete the user's configured database/storage or existing Compose state.
+- All-in-one defaults an unset or empty `API_USERNAME` to `commander` and
+  generates a cryptographically random password when `API_PASSWORD` is unset or
+  empty. Preserve explicit nonempty overrides and pass session credentials to
+  the embedded API through its run options, without modifying process environment.
+  Reuse `host.Credentials` and `host.GeneratePassword`; never write credentials to
+  files or logs, include them in model messages, or expose them through `/status`.
+  Only the local `/credentials` command displays them, during setup or chat.
+  Keep generated credentials scoped to the session. Standalone API startup still
+  requires environment credentials.
+  The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides
+  it, including port `0` for fixtures. Set the API listen flag explicitly so
+  generic `PORT` cannot change it. Report the bound address after readiness.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
 - Preserve the chat engine's single-owner state and responsive queued input,

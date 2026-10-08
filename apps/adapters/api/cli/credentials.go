@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/defos-ai/commander/apps/adapters/api"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 const missingCredentials = `API_USERNAME and API_PASSWORD must both be set and not blank.
@@ -23,35 +23,34 @@ PowerShell:
   $env:API_USERNAME = 'commander'
   $env:API_PASSWORD = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')`
 
-type credentials struct {
-	Username string
-	Password string
+func resolveCredentials(supplied *host.Credentials) (host.Credentials, error) {
+	value := host.Credentials{Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD")}
+	if supplied != nil {
+		value = *supplied
+	}
+	return value, validateCredentials(value)
 }
 
-func resolveCredentials() (credentials, error) {
-	value := credentials{Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD")}
-	return value, value.validate()
-}
-
-func (value credentials) validate() error {
-	if strings.TrimSpace(value.Username) == "" || strings.TrimSpace(value.Password) == "" {
+func validateCredentials(value host.Credentials) error {
+	err := value.Validate()
+	if errors.Is(err, host.ErrMissingCredentials) {
 		return errors.New(missingCredentials)
 	}
-	return (api.SecurityConfig{
-		Username: value.Username, Password: value.Password,
-		AllowedHosts: []string{"localhost"},
-	}).Validate()
+	if err != nil {
+		return fmt.Errorf("API_USERNAME/API_PASSWORD: %w", err)
+	}
+	return nil
 }
 
-func processCredentials(pid int) (credentials, error) {
+func processCredentials(pid int) (host.Credentials, error) {
 	if runtime.GOOS != "linux" {
-		return credentials{}, errors.New("--pid requires Linux; use it inside the API container")
+		return host.Credentials{}, errors.New("--pid requires Linux; use it inside the API container")
 	}
 	environment, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
 	if err != nil {
-		return credentials{}, fmt.Errorf("read API process environment: %w", err)
+		return host.Credentials{}, fmt.Errorf("read API process environment: %w", err)
 	}
-	var value credentials
+	var value host.Credentials
 	for _, variable := range strings.Split(string(environment), "\x00") {
 		name, content, _ := strings.Cut(variable, "=")
 		switch name {
@@ -61,7 +60,7 @@ func processCredentials(pid int) (credentials, error) {
 			value.Password = content
 		}
 	}
-	return value, value.validate()
+	return value, validateCredentials(value)
 }
 
 func showCredentials(args []string, stdout, stderr io.Writer) error {
@@ -82,7 +81,7 @@ func showCredentials(args []string, stdout, stderr io.Writer) error {
 	}
 	fromProcess := false
 	flags.Visit(func(value *flag.Flag) { fromProcess = value.Name == "pid" })
-	var value credentials
+	var value host.Credentials
 	var err error
 	if fromProcess {
 		if pid <= 0 {
@@ -90,7 +89,7 @@ func showCredentials(args []string, stdout, stderr io.Writer) error {
 		}
 		value, err = processCredentials(pid)
 	} else {
-		value, err = resolveCredentials()
+		value, err = resolveCredentials(nil)
 	}
 	if err != nil {
 		return err

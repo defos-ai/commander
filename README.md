@@ -41,8 +41,9 @@ With Go 1.26.7+:
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-All-in-one state is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
-for agent dependencies.
+All-in-one includes the API at `http://127.0.0.1:4274`; type `/credentials` in
+Playground to view its generated login. State is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
+for Windows and agent dependencies.
 
 Choose a model, provide its API key, and try:
 

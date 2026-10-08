@@ -4,6 +4,9 @@
 
 - Keep this module independent of applications and providers. Inject interfaces;
   concrete clients and provider construction belong in app factories.
+- [`host/credentials.go`](host/credentials.go) owns the shared username/password
+  type, validation and secure password generation. Environment names, defaults,
+  startup policy and credential display belong to applications.
 - Start with [`agent`](agent/) for execution and discovery,
   [`controller`](controller/) for inventory and dispatch, and
   [`controller/runner`](controller/runner/) for operation scheduling and recovery.

@@ -65,9 +65,10 @@ Archive names are `commander_<version>_<os>_<arch>.tar.gz` (`.zip` for Windows);
 OS names are `linux`, `darwin` and `windows`. The SHA-256 checksums cover the archives.
 Binaries are unsigned; macOS builds are not notarized.
 
-Extract the archive and run `./commander --all-in-one`, or
-`.\commander.exe --all-in-one` on Windows. See [Playground](../apps/playground/README.md#native-one-executable)
-for model setup, browser dependencies and temporary-state behavior.
+Extract the archive, then run `./commander --all-in-one`, or
+`.\commander.exe --all-in-one` on Windows. See
+[native setup](../apps/playground/README.md#native-one-executable) for model setup,
+the generated API login, browser dependencies and temporary-state behavior.
 
 Uploads stay in a draft until all assets are attached. For a failed build or
 publication, rerun failed jobs in the same workflow run; partial draft uploads

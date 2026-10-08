@@ -11,11 +11,13 @@ import (
 	"sync"
 	"time"
 
+	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
 	agentcli "github.com/defos-ai/commander/apps/agents/web-quality/cli"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 type runningHost struct {
@@ -25,19 +27,20 @@ type runningHost struct {
 }
 
 type Session struct {
-	Context   context.Context
-	MCPURL    string
-	Directory string
-	Notices   []string
-	cancel    context.CancelCauseFunc
-	hosts     []runningHost
-	log       *os.File
-	once      sync.Once
-	closeErr  error
+	Context        context.Context
+	MCPURL         string
+	APIURL         string
+	APICredentials host.Credentials
+	Directory      string
+	Notices        []string
+	cancel         context.CancelCauseFunc
+	hosts          []runningHost
+	log            *os.File
+	once           sync.Once
+	closeErr       error
 }
 
-// Start reuses the real application hosts. No Go toolchain, checkout, Docker,
-// fixed port, or working-directory files are needed by the built executable.
+// Start reuses the real application hosts without a checkout or working-directory files.
 func Start(ctx context.Context) (session *Session, err error) {
 	s := &Session{}
 	s.Context, s.cancel = context.WithCancelCause(ctx)
@@ -46,6 +49,10 @@ func Start(ctx context.Context) (session *Session, err error) {
 			err = errors.Join(err, s.Close())
 		}
 	}()
+	s.APICredentials, err = apiCredentials()
+	if err != nil {
+		return nil, err
+	}
 	s.Directory, err = os.MkdirTemp("", "commander-playground-*")
 	if err != nil {
 		return nil, err
@@ -86,11 +93,28 @@ func Start(ctx context.Context) (session *Session, err error) {
 	if err = awaitReady(startup, mcpReady); err != nil {
 		return nil, err
 	}
+	apiReady := make(chan struct{})
+	s.start("API", func(ctx context.Context) error {
+		address := os.Getenv("API_LISTEN_ADDRESS")
+		if address == "" {
+			address = "127.0.0.1:4274"
+		}
+		args := append(append([]string{}, common...), database, "--listen-address="+address)
+		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Credentials: &s.APICredentials, Ready: func(address net.Addr) {
+			s.APIURL = "http://" + address.String()
+			close(apiReady)
+		}})
+	})
+	if err = awaitReady(startup, apiReady); err != nil {
+		return nil, err
+	}
 	if err = s.awaitAgent(startup); err != nil {
 		return nil, err
 	}
 	s.Notices = []string{
-		"All-in-one: 1 MCP, 1 controller, 1 web-quality agent. Hosts and temporary state are removed on exit.",
+		"All-in-one: 1 MCP, 1 API, 1 controller, 1 web-quality agent. Hosts and temporary state are removed on exit.",
+		"API listening: " + s.APIURL,
+		"Use /credentials to view the local API login.",
 		"Try: Run review-website for https://defos.ai and summarize what should be fixed before release.",
 	}
 	return s, nil

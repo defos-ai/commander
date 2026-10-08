@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.10.1
+	github.com/defos-ai/commander/apps/adapters/api v0.0.0
 	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0
 	github.com/defos-ai/commander/apps/agents/web-quality v0.0.0
 	github.com/defos-ai/commander/apps/controllers/default v0.0.0
@@ -52,6 +53,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
+	github.com/swaggo/files/v2 v2.0.2 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect

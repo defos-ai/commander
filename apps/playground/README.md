@@ -24,19 +24,22 @@ chat; hosts and saved work remain. `docker compose down` stops the hosts. See
 
 The first release is not published yet. [Native release archives](../../docs/releases.md#native-binaries)
 will provide `commander` for Linux, macOS and Windows (amd64/arm64), without Go.
-Extract your archive and run `./commander --all-in-one`, or
-`.\commander.exe --all-in-one` on Windows.
-
-To build from source with Go 1.26.7+, run from the repository root:
+Extract your archive and run `./commander --all-in-one` (`.\commander.exe --all-in-one`
+on Windows), or build and run with Go 1.26.7+ from the repository root:
 
 ```sh
-go build -o commander ./apps/playground/cmd/commander
-./commander --all-in-one
+go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts one MCP host, one controller and one web quality agent using temporary
-state and an available loopback port. The executable embeds the mission and needs
-no checkout or Go installation. Browser actions still need
+This starts MCP, the HTTP API, one controller and one web-quality agent using
+temporary FS state. The API listens at `http://127.0.0.1:4274` with username
+`commander` and a random password for this session. Type `/credentials` during
+setup or chat to view the address and login; credentials stay local and are never
+sent to the model. Set `API_USERNAME` or `API_PASSWORD` to override either value;
+an unset or empty value uses its default. Generated passwords change each session.
+`API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
+The executable embeds the mission and needs no checkout or Go installation.
+Browser actions still need
 [Chromium](../agents/web-quality/README.md#native-agent).
 **Exiting stops these hosts and deletes the session's operations, reports and artifacts.**
 Use Compose to retain work.
@@ -88,6 +91,7 @@ Try “List missions and available agents,” then:
 | Command | Effect |
 | --- | --- |
 | `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
+| `/credentials` | Show the local all-in-one API login. Also available during model setup. |
 | `/watch <operation-id>` | Follow saved work and resume model decisions. |
 | `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Questions and permission checks still apply. |
 | `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |
