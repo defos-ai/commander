@@ -36,6 +36,27 @@
 
 ## Validation
 
+- CI selection is declarative in [test-paths.yml](../../.github/test-paths.yml).
+  Keep owner and downstream paths aligned with module imports, embedded hosts
+  and stack dependencies. Reuse YAML anchors; do not add a custom selector.
+- [CI checks](../../.github/tests/ci_test.go) discover first-party manifests from
+  Git, including untracked, non-ignored files. New Go modules need a workspace
+  entry; every component needs a literal owner path and a selected test command.
+  Tooling under `.github/tests` is intentionally outside that release inventory.
+- Keep test commands as direct `go test` / `npm test` (or `npm run test`) lines
+  with literal paths and `working-directory`. Owner gates use positive OR chains
+  of `inputs.all` and `contains(fromJSON(inputs.changes), 'owner')`. The guard
+  validates this wiring; it does not interpret arbitrary shell or GitHub expressions.
+- Path filters use `some-with-excludes` so Markdown exclusions apply to every
+  included dependency. Check additions, deletions, cross-owner renames and mixed
+  documentation/code changes when changing these rules.
+- Selected unit checks gate the single Docker integration job. Reuse images, but
+  stop each Compose project and remove its volumes before the next phase. Do not
+  run shared-stack suites concurrently. Manual/release calls must select all suites.
+- Keep the final `Tests passed` check: required suites that fail or get skipped
+  must fail the gate; documentation-only skips may pass. Failed change detection
+  must fall back to all suites.
+
 Run from the repository root:
 
 ```sh

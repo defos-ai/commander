@@ -8,4 +8,5 @@ runs:
         go-version-file: go.work
         cache-dependency-path: |
           go.work.sum
+          .github/tests/go.sum
           **/go.sum

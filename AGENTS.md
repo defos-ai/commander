@@ -26,6 +26,8 @@ The user's current instructions take precedence over repository guidance.
 - Go modules are listed in [go.work](go.work); there is no root `go.mod`.
   Use its Go version and explicit module paths from the repository root:
   `go test ./framework/...`, not root `go test ./...`.
+  `.github/tests` is a separate CI tooling module, outside the release workspace;
+  run its configuration checks with `GOWORK=off` and `-run '^TestCI'`.
 - Module paths match `github.com/defos-ai/commander/<module-directory>`. Keep
   checkout-local wiring in `go.work`, not sibling-directory `replace` directives
   in `go.mod`. The workspace maps internal module versions to local directories;
@@ -40,6 +42,9 @@ The user's current instructions take precedence over repository guidance.
   Keep `build-binaries.yml` and `push-*.yml` reusable-only; native assets must come
   from that run. `test.yml` calls reusable `test-unit.yml` before
   `test-integration.yml`; integration jobs must depend on passing basic checks.
+  Maintain declarative dependency filters in `.github/test-paths.yml`; manual and
+  release runs always select every suite. Docker suites share one runner and
+  reuse images, with separate test state for each phase.
   Keep independently triggered workflows' concurrency groups distinct so nested
   calls cannot cancel their release parent. Retry failed publication jobs in the
   same run; never overwrite published release assets.

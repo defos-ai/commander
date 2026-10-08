@@ -1,0 +1,126 @@
+# Consumed with predicate-quantifier: some-with-excludes. Each suite matches any
+# dependency below, while Markdown-only changes never select a suite.
+# Keep owner paths and provider dependencies aligned with go.work and go.mod.
+framework: &shared
+  - 'framework/**'
+  - 'go.work'
+  - 'go.work.sum'
+  - '.dockerignore'
+  - 'compose*.yaml'
+  - '.github/**'
+  # New modules run everything until their dependencies are mapped here.
+  - 'providers/!(fs|mongo|rabbitmq|s3)/**'
+  - 'apps/!(adapters|admin|agents|controllers|playground)/**'
+  - 'apps/adapters/!(api|mcp)/**'
+  - 'apps/agents/!(web-quality)/**'
+  - 'apps/controllers/!(default)/**'
+  - 'apps/admin/!(ui)/**'
+  - 'apps/admin/ui/!(backend|frontend|docker)/**'
+  - '!**/*.md'
+
+fs:
+  - *shared
+  - &fs 'providers/fs/**'
+
+mongo:
+  - *shared
+  - &mongo 'providers/mongo/**'
+
+rabbitmq:
+  - *shared
+  - &rabbitmq 'providers/rabbitmq/**'
+
+s3:
+  - *shared
+  - &s3 'providers/s3/**'
+
+controller:
+  - *shared
+  - &providers
+    - *fs
+    - *mongo
+    - *rabbitmq
+    - *s3
+  - &controller 'apps/controllers/default/**'
+
+agent:
+  - *shared
+  - *fs
+  - *rabbitmq
+  - *s3
+  - &agent 'apps/agents/web-quality/**'
+
+api:
+  - *shared
+  - *providers
+  - &api 'apps/adapters/api/**'
+
+mcp:
+  - *shared
+  - *providers
+  - &mcp 'apps/adapters/mcp/**'
+
+playground:
+  - *shared
+  - *providers
+  - *controller
+  - *agent
+  - *api
+  - *mcp
+  - 'apps/playground/**'
+
+ui-backend:
+  - *shared
+  - &ui-docker 'apps/admin/ui/docker/**'
+  - 'apps/admin/ui/backend/**'
+
+frontend:
+  - *shared
+  - *ui-docker
+  - 'apps/admin/ui/frontend/**'
+
+# Provider integration checks use the mongo, rabbitmq and s3 filters above.
+controller-mongo:
+  - *shared
+  - *controller
+  - *mongo
+
+api-fs:
+  - *shared
+  - *api
+  - *controller
+  - *agent
+  - *fs
+
+api-full:
+  - *shared
+  - *api
+  - *controller
+  - *agent
+  - *mongo
+  - *rabbitmq
+  - *s3
+
+mcp-fs:
+  - *shared
+  - *mcp
+  - *controller
+  - *agent
+  - *fs
+
+mcp-full:
+  - *shared
+  - *mcp
+  - *controller
+  - *agent
+  - *mongo
+  - *rabbitmq
+  - *s3
+
+browser:
+  - *shared
+  - 'apps/admin/ui/**'
+  - *api
+  - *controller
+  - *agent
+  - *fs

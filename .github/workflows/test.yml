@@ -2,35 +2,15 @@ name: Tests
 
 on:
   push:
-    paths:
-      - 'framework/**'
-      - 'providers/**'
-      - 'apps/**'
-      - 'go.work'
-      - 'go.work.sum'
-      - 'compose*.yaml'
-      - '.github/composes/**'
-      - '.dockerignore'
-      - '.github/actions/**'
-      - '.github/workflows/**'
-      - '.github/tests/**'
-      - '!**/*.md'
+    branches: ['**']
   pull_request:
-    paths:
-      - 'framework/**'
-      - 'providers/**'
-      - 'apps/**'
-      - 'go.work'
-      - 'go.work.sum'
-      - 'compose*.yaml'
-      - '.github/composes/**'
-      - '.dockerignore'
-      - '.github/actions/**'
-      - '.github/workflows/**'
-      - '.github/tests/**'
-      - '!**/*.md'
   workflow_dispatch:
   workflow_call:
+    inputs:
+      all:
+        description: Run every suite, ignoring changed paths
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -41,9 +21,72 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Validate CI and select checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      all: ${{ inputs.all || github.event_name == 'workflow_dispatch' || steps.paths.outcome == 'failure' }}
+      changes: ${{ steps.paths.outputs.changes || '[]' }}
+      integration: >-
+        ${{ steps.paths.outputs.mongo == 'true' || steps.paths.outputs.rabbitmq == 'true' ||
+            steps.paths.outputs.s3 == 'true' || steps.paths.outputs.controller-mongo == 'true' ||
+            steps.paths.outputs.api-fs == 'true' || steps.paths.outputs.api-full == 'true' ||
+            steps.paths.outputs.mcp-fs == 'true' || steps.paths.outputs.mcp-full == 'true' ||
+            steps.paths.outputs.browser == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-go
+      - name: Check component test coverage
+        working-directory: .github/tests
+        env:
+          GOWORK: 'off'
+        run: go test -count=1 -timeout=1m -run '^TestCI' .
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: paths
+        if: ${{ !inputs.all && github.event_name != 'workflow_dispatch' }}
+        # Uncertain change detection runs all checks instead of skipping coverage.
+        continue-on-error: true
+        with:
+          token: ''
+          base: ${{ github.event.pull_request.base.sha || github.ref }}
+          filters: .github/test-paths.yml
+          predicate-quantifier: some-with-excludes
+
   unit:
+    needs: changes
+    if: ${{ needs.changes.outputs.all == 'true' || needs.changes.outputs.changes != '[]' }}
     uses: ./.github/workflows/test-unit.yml
+    with:
+      all: ${{ needs.changes.outputs.all == 'true' }}
+      changes: ${{ needs.changes.outputs.changes }}
 
   integration:
-    needs: unit
+    needs: [changes, unit]
+    if: ${{ needs.changes.outputs.all == 'true' || needs.changes.outputs.integration == 'true' }}
     uses: ./.github/workflows/test-integration.yml
+    with:
+      all: ${{ needs.changes.outputs.all == 'true' }}
+      changes: ${{ needs.changes.outputs.changes }}
+
+  passed:
+    name: Tests passed
+    needs: [changes, unit, integration]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check selected suites succeeded
+        env:
+          SELECTION_RESULT: ${{ needs.changes.result }}
+          UNIT_REQUIRED: ${{ needs.changes.outputs.all == 'true' || needs.changes.outputs.changes != '[]' }}
+          UNIT_RESULT: ${{ needs.unit.result }}
+          INTEGRATION_REQUIRED: ${{ needs.changes.outputs.all == 'true' || needs.changes.outputs.integration == 'true' }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+        run: |
+          test "$SELECTION_RESULT" = success
+          if [ "$UNIT_REQUIRED" = true ]; then test "$UNIT_RESULT" = success; fi
+          if [ "$INTEGRATION_REQUIRED" = true ]; then test "$INTEGRATION_RESULT" = success; fi

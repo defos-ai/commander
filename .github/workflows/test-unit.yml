@@ -2,6 +2,13 @@ name: Unit tests
 
 on:
   workflow_call:
+    inputs:
+      all:
+        type: boolean
+        default: false
+      changes:
+        type: string
+        default: '[]'
 
 permissions:
   contents: read
@@ -12,32 +19,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  framework-fs:
-    name: Framework and FS
+  core:
+    name: Framework and providers
+    if: >-
+      ${{ inputs.all || contains(fromJSON(inputs.changes), 'framework') ||
+          contains(fromJSON(inputs.changes), 'fs') || contains(fromJSON(inputs.changes), 'mongo') ||
+          contains(fromJSON(inputs.changes), 'rabbitmq') || contains(fromJSON(inputs.changes), 's3') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
-      - name: Test framework outside the workspace
+      - name: Test and vet framework outside the workspace
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'framework') }}
         working-directory: framework
         env:
           GOWORK: 'off'
-        run: go test -race -count=1 -timeout=3m ./...
-      - name: Vet framework outside the workspace
-        working-directory: framework
-        env:
-          GOWORK: 'off'
-        run: go vet ./...
-      - name: Test FS provider
-        run: go test -race -count=1 -timeout=3m ./providers/fs/...
-      - name: Vet FS provider
-        run: go vet ./providers/fs/...
-      - name: Vet service providers
-        run: go vet ./providers/mongo/... ./providers/rabbitmq/... ./providers/s3/...
+        run: |
+          go test -race -count=1 -timeout=3m ./...
+          go vet ./...
+      - name: Test and vet FS provider
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'fs') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./providers/fs/...
+          go vet ./providers/fs/...
+      - name: Vet Mongo provider
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'mongo') }}
+        run: go vet ./providers/mongo/...
+      - name: Vet RabbitMQ provider
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'rabbitmq') }}
+        run: go vet ./providers/rabbitmq/...
+      - name: Vet S3 provider
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 's3') }}
+        run: go vet ./providers/s3/...
 
   apps:
     name: Applications
+    if: >-
+      ${{ inputs.all || contains(fromJSON(inputs.changes), 'controller') ||
+          contains(fromJSON(inputs.changes), 'agent') || contains(fromJSON(inputs.changes), 'playground') ||
+          contains(fromJSON(inputs.changes), 'api') || contains(fromJSON(inputs.changes), 'mcp') ||
+          contains(fromJSON(inputs.changes), 'ui-backend') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -45,31 +67,43 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
-      - name: Test controller
-        run: go test -race -count=1 -timeout=3m ./apps/controllers/default/...
-      - name: Test agent
-        run: go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
-      - name: Test Playground, including all-in-one
-        run: go test -race -count=1 -timeout=3m ./apps/playground/...
-      - name: Test API and MCP hosts
-        run: go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host/... ./apps/adapters/mcp/tests/host/...
-      - name: Vet applications
-        run: >-
-          go vet ./apps/controllers/default/... ./apps/agents/web-quality/...
-          ./apps/playground/... ./apps/adapters/api/... ./apps/adapters/mcp/...
-      - name: Test UI backend outside the workspace
+      - name: Test and vet controller
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'controller') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+          go vet ./apps/controllers/default/...
+      - name: Test and vet agent
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'agent') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
+          go vet ./apps/agents/web-quality/...
+      - name: Test and vet Playground, including all-in-one
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'playground') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/playground/...
+          go vet ./apps/playground/...
+      - name: Test API host and vet adapter
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'api') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host/...
+          go vet ./apps/adapters/api/...
+      - name: Test MCP host and vet adapter
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'mcp') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/adapters/mcp/tests/host/...
+          go vet ./apps/adapters/mcp/...
+      - name: Test and vet UI backend outside the workspace
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'ui-backend') }}
         working-directory: apps/admin/ui/backend
         env:
           GOWORK: 'off'
-        run: go test -race -count=1 -timeout=1m ./...
-      - name: Vet UI backend outside the workspace
-        working-directory: apps/admin/ui/backend
-        env:
-          GOWORK: 'off'
-        run: go vet ./...
+        run: |
+          go test -race -count=1 -timeout=1m ./...
+          go vet ./...
 
   frontend:
     name: Frontend
+    if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'frontend') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:

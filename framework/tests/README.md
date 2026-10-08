@@ -48,9 +48,21 @@ Use `docker compose logs` to diagnose failures, and always run `down --volumes`.
 
 ## CI
 
-[test.yml](../../.github/workflows/test.yml) runs on code/configuration changes or
-manual **Run workflow**; Markdown-only changes do not trigger it.
-[Unit checks](../../.github/workflows/test-unit.yml) must pass before
+[test.yml](../../.github/workflows/test.yml) selects checks using
+[path filters](../../.github/test-paths.yml): framework and shared CI changes run
+everything; provider and application changes run their checks and affected consumers.
+Markdown-only changes skip component tests. Manual **Run workflow** and releases run every suite.
+
+A lightweight configuration check runs first, catching new components missing
+workspace registration, a path filter or a selected test command. Run it locally:
+
+```sh
+(cd .github/tests && GOWORK=off go test -count=1 -timeout=1m -run '^TestCI' .)
+```
+
+Selected [unit checks](../../.github/workflows/test-unit.yml) must pass before
 [integration checks](../../.github/workflows/test-integration.yml) start.
-Separate jobs run provider tests and FS/full stacks. Each stack runs API then MCP;
-the FS job also runs browser tests. Failures retain service logs and browser traces.
+One Docker runner reuses images across provider, FS and full-stack tests. Each
+phase has separate state; API, MCP and browser suites run sequentially.
+Failures retain logs and browser traces. Use **Tests passed** as the required
+check so intentionally skipped suites do not block documentation-only changes.

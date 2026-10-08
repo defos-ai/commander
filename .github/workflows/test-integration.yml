@@ -2,42 +2,105 @@ name: Integration tests
 
 on:
   workflow_call:
+    inputs:
+      all:
+        description: Run every integration suite.
+        type: boolean
+        default: false
+      changes:
+        description: JSON array of selected suite names from the path filters.
+        type: string
+        default: '[]'
 
 permissions:
   contents: read
 
 jobs:
-  providers:
-    name: Providers and controller integration
+  integration:
+    name: Selected integration suites
+    if: >-
+      inputs.all ||
+      contains(fromJSON(inputs.changes), 'mongo') ||
+      contains(fromJSON(inputs.changes), 'rabbitmq') ||
+      contains(fromJSON(inputs.changes), 's3') ||
+      contains(fromJSON(inputs.changes), 'controller-mongo') ||
+      contains(fromJSON(inputs.changes), 'api-fs') ||
+      contains(fromJSON(inputs.changes), 'api-full') ||
+      contains(fromJSON(inputs.changes), 'mcp-fs') ||
+      contains(fromJSON(inputs.changes), 'mcp-full') ||
+      contains(fromJSON(inputs.changes), 'browser')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
-      COMPOSE_FILE: .github/composes/compose.providers.test.yaml
+      RUN_PROVIDERS: >-
+        ${{ inputs.all || contains(fromJSON(inputs.changes), 'mongo') ||
+            contains(fromJSON(inputs.changes), 'rabbitmq') || contains(fromJSON(inputs.changes), 's3') ||
+            contains(fromJSON(inputs.changes), 'controller-mongo') }}
+      RUN_FS: >-
+        ${{ inputs.all || contains(fromJSON(inputs.changes), 'api-fs') ||
+            contains(fromJSON(inputs.changes), 'mcp-fs') || contains(fromJSON(inputs.changes), 'browser') }}
+      RUN_FULL: >-
+        ${{ inputs.all || contains(fromJSON(inputs.changes), 'api-full') ||
+            contains(fromJSON(inputs.changes), 'mcp-full') }}
+      RUN_BROWSER: ${{ inputs.all || contains(fromJSON(inputs.changes), 'browser') }}
     steps:
       - uses: actions/checkout@v7
+        id: checkout
       - uses: ./.github/actions/setup-go
-      - name: Build MinIO images
+      - uses: ./.github/actions/setup-node
+        if: env.RUN_BROWSER == 'true'
+      - name: Install Chromium
+        if: env.RUN_BROWSER == 'true'
+        working-directory: apps/admin/ui/frontend
+        run: npx playwright install --with-deps chromium
+
+      # Both stack definitions and the provider services use these same image tags.
+      - name: Build shared test images
+        if: env.RUN_FS == 'true' || env.RUN_FULL == 'true' || inputs.all || contains(fromJSON(inputs.changes), 's3')
         uses: ./.github/actions/build-test-images
         with:
-          compose-file: .github/composes/compose.providers.test.yaml
-          targets: minio,minio-init
-      - name: Start provider services
-        run: docker compose up --no-build --wait --wait-timeout 120 mongo rabbitmq minio
-      - name: Initialize S3 bucket
-        run: docker compose run --no-deps --rm minio-init
+          compose-file: .github/composes/compose.full.test.yaml
+          targets: >-
+            ${{ format('{0}{1}{2}',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,web-1' || 'minio,minio-init',
+                env.RUN_BROWSER == 'true' && ',ui' || '',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') &&
+                (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}
+
+      - name: Start MongoDB provider service
+        if: inputs.all || contains(fromJSON(inputs.changes), 'mongo') || contains(fromJSON(inputs.changes), 'controller-mongo')
+        env:
+          COMPOSE_FILE: .github/composes/compose.providers.test.yaml
+        run: docker compose up --no-build --wait --wait-timeout 120 mongo
+      - name: Start RabbitMQ provider service
+        if: inputs.all || contains(fromJSON(inputs.changes), 'rabbitmq')
+        env:
+          COMPOSE_FILE: .github/composes/compose.providers.test.yaml
+        run: docker compose up --no-build --wait --wait-timeout 120 rabbitmq
+      - name: Start S3 provider service
+        if: inputs.all || contains(fromJSON(inputs.changes), 's3')
+        env:
+          COMPOSE_FILE: .github/composes/compose.providers.test.yaml
+        run: |
+          docker compose up --no-build --wait --wait-timeout 120 minio
+          docker compose run --no-deps --rm minio-init
       - name: Test MongoDB provider
+        if: inputs.all || contains(fromJSON(inputs.changes), 'mongo')
         env:
           COMMANDER_TEST_MONGO_URL: mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true
         run: go test -race -count=1 -failfast -timeout=3m -v ./providers/mongo/...
       - name: Test controller startup with MongoDB
+        if: inputs.all || contains(fromJSON(inputs.changes), 'controller-mongo')
         env:
           COMMANDER_TEST_MONGO_URL: mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true
         run: go test -race -count=1 -timeout=3m -v ./apps/controllers/default/tests -run '^TestCLIStartsWithMongo$'
       - name: Test RabbitMQ provider
+        if: inputs.all || contains(fromJSON(inputs.changes), 'rabbitmq')
         env:
           COMMANDER_TEST_RABBITMQ_URL: amqp://commander-test:commander-test-secret@127.0.0.1:5673/
         run: go test -race -count=1 -failfast -timeout=3m -v ./providers/rabbitmq/...
       - name: Test S3 provider
+        if: inputs.all || contains(fromJSON(inputs.changes), 's3')
         env:
           COMMANDER_TEST_S3_URL: s3://commander-test/provider-tests
           AWS_ENDPOINT_URL_S3: http://127.0.0.1:9000
@@ -47,83 +110,86 @@ jobs:
           S3_USE_PATH_STYLE: 'true'
         run: go test -race -count=1 -failfast -timeout=3m -v ./providers/s3/...
       - name: Collect provider logs
-        if: failure() || cancelled()
+        if: (failure() || cancelled()) && env.RUN_PROVIDERS == 'true' && steps.checkout.outcome == 'success'
+        env:
+          COMPOSE_FILE: .github/composes/compose.providers.test.yaml
         run: |
           docker compose ps --all
           docker compose logs --no-color > "$RUNNER_TEMP/commander-providers.log"
       - name: Stop provider services
-        if: always()
+        if: always() && env.RUN_PROVIDERS == 'true' && steps.checkout.outcome == 'success'
+        env:
+          COMPOSE_FILE: .github/composes/compose.providers.test.yaml
         run: docker compose down --volumes
-      - name: Upload provider logs
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
-        with:
-          name: provider-integration-logs
-          path: ${{ runner.temp }}/commander-providers.log
-          if-no-files-found: ignore
 
-  stack:
-    name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.timeout-minutes }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - backend: fs
-            name: FS stack and browser
-            compose-file: .github/composes/compose.test.yaml
-            profiles: ui
-            targets: controller,api,mcp,web-1,ui
-            timeout-minutes: 20
-          - backend: full
-            name: Full stack
-            compose-file: .github/composes/compose.full.test.yaml
-            profiles: ''
-            targets: controller,api,mcp,web-1,minio,minio-init
-            timeout-minutes: 30
-    env:
-      COMPOSE_FILE: ${{ matrix.compose-file }}
-      COMPOSE_PROFILES: ${{ matrix.profiles }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-go
-      - uses: ./.github/actions/setup-node
-        if: matrix.backend == 'fs'
-      - name: Install Chromium
-        if: matrix.backend == 'fs'
-        working-directory: apps/admin/ui/frontend
-        run: npx playwright install --with-deps chromium
-      - name: Build test images
-        uses: ./.github/actions/build-test-images
-        with:
-          compose-file: ${{ matrix.compose-file }}
-          targets: ${{ matrix.targets }}
-      - name: Start test stack
+      - name: Start FS stack
+        if: env.RUN_FS == 'true'
+        env:
+          COMPOSE_FILE: .github/composes/compose.test.yaml
+          COMPOSE_PROFILES: ${{ env.RUN_BROWSER == 'true' && 'ui' || '' }}
         run: docker compose up --no-build --wait --wait-timeout 180
-      - name: Run API tests
+      - name: Test API with FS
+        if: inputs.all || contains(fromJSON(inputs.changes), 'api-fs')
         run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/api/tests
-      - name: Run MCP tests
+      - name: Test MCP with FS
+        if: inputs.all || contains(fromJSON(inputs.changes), 'mcp-fs')
         run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
       - name: Run browser tests
-        if: matrix.backend == 'fs'
+        if: env.RUN_BROWSER == 'true'
         working-directory: apps/admin/ui/frontend
         run: npm run test:e2e
-      - name: Collect service logs
-        if: failure() || cancelled()
+      - name: Collect FS stack logs
+        if: (failure() || cancelled()) && env.RUN_FS == 'true' && steps.checkout.outcome == 'success'
+        env:
+          COMPOSE_FILE: .github/composes/compose.test.yaml
+          COMPOSE_PROFILES: ui
         run: |
           docker compose ps --all
-          docker compose logs --no-color > "$RUNNER_TEMP/commander-stack.log"
-      - name: Stop test stack
-        if: always()
+          docker compose logs --no-color > "$RUNNER_TEMP/commander-fs.log"
+      - name: Stop FS stack
+        if: always() && env.RUN_FS == 'true' && steps.checkout.outcome == 'success'
+        env:
+          COMPOSE_FILE: .github/composes/compose.test.yaml
+          COMPOSE_PROFILES: ui
         run: docker compose down --volumes
-      - name: Upload service logs and browser results
+
+      - name: Start full stack
+        if: env.RUN_FULL == 'true'
+        env:
+          COMPOSE_FILE: .github/composes/compose.full.test.yaml
+        run: docker compose up --no-build --wait --wait-timeout 180
+      - name: Test API with full providers
+        if: inputs.all || contains(fromJSON(inputs.changes), 'api-full')
+        run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/api/tests
+      - name: Test MCP with full providers
+        if: inputs.all || contains(fromJSON(inputs.changes), 'mcp-full')
+        run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
+      - name: Collect full stack logs
+        if: (failure() || cancelled()) && env.RUN_FULL == 'true' && steps.checkout.outcome == 'success'
+        env:
+          COMPOSE_FILE: .github/composes/compose.full.test.yaml
+        run: |
+          docker compose ps --all
+          docker compose logs --no-color > "$RUNNER_TEMP/commander-full.log"
+      - name: Clean up all test stacks
+        if: always() && steps.checkout.outcome == 'success'
+        run: |
+          status=0
+          for compose_file in .github/composes/compose.providers.test.yaml \
+                              .github/composes/compose.test.yaml \
+                              .github/composes/compose.full.test.yaml; do
+            docker compose -f "$compose_file" --profile ui down --volumes || status=$?
+          done
+          exit "$status"
+      - name: Upload integration logs and browser results
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
-          name: stack-integration-results-${{ matrix.backend }}
+          name: integration-results
           path: |
-            ${{ runner.temp }}/commander-stack.log
+            ${{ runner.temp }}/commander-providers.log
+            ${{ runner.temp }}/commander-fs.log
+            ${{ runner.temp }}/commander-full.log
             apps/admin/ui/frontend/test-results/
             apps/admin/ui/frontend/playwright-report/
           if-no-files-found: ignore
