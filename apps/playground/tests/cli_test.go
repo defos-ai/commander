@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,17 +37,8 @@ func TestAllInOne(t *testing.T) {
 }
 
 func testAllInOneWorkflow(t *testing.T) {
-	// Browser presence satisfies mission preflight; this smoke test only executes SEO.
-	// Real browser execution is covered by the MCP suite against Compose.
 	temporary := allInOneEnvironment(t)
-	browser := filepath.Join(t.TempDir(), "browser-fixture")
-	if runtime.GOOS == "windows" {
-		browser += ".exe"
-	}
-	if err := os.WriteFile(browser, []byte("fixture executable, never launched"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("CHROMIUM_PATH", browser)
+	t.Setenv("CHROMIUM_PATH", filepath.Join(t.TempDir(), "missing-browser"))
 	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
 	website := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `<html lang="en"><title>Release preview</title><meta name="robots" content="noindex"><h1>Preview</h1></html>`)
@@ -76,9 +66,9 @@ func testAllInOneWorkflow(t *testing.T) {
 		}
 		request := requests.Add(1)
 		expected := map[int32][]string{
-			2: {"review-website"},
+			2: {"review-website-no-browser", "review-website-with-browser"},
 			3: {"starting_actions", "automations", "input_schema", "output_schema"},
-			4: {"web-quality-agent-"},
+			4: {"browser-agent-"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -95,11 +85,11 @@ func testAllInOneWorkflow(t *testing.T) {
 			}
 			delta = toolDelta(name, map[string]any{})
 		case 2:
-			delta = toolDelta("describe_mission", map[string]any{"mission_name": "review-website"})
+			delta = toolDelta("describe_mission", map[string]any{"mission_name": "review-website-no-browser"})
 		case 4:
-			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "review-website", "input": map[string]any{"url": website.URL}})
+			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "review-website-no-browser", "input": map[string]any{"url": website.URL}})
 		case 5:
-			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "check-seo", "input": map[string]any{"url": website.URL}})
+			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "discover-pages-no-browser", "input": map[string]any{"url": website.URL}})
 		case 6:
 			delta, finish = map[string]any{"content": "**Review running**"}, "stop"
 		case 7, 9:
@@ -108,13 +98,25 @@ func testAllInOneWorkflow(t *testing.T) {
 			last := body.Messages[len(body.Messages)-1]
 			_, state, ok := strings.Cut(last.Content, "Current state:\n")
 			var op operations.Operation
-			if !ok || last.Role != "user" || json.Unmarshal([]byte(state), &op) != nil || op.ID != operationID || len(op.Tasks) != 1 || op.Tasks[0].Result == nil || !bytes.Contains(op.Tasks[0].Result.Output, []byte("Release preview")) {
+			if !ok || last.Role != "user" || json.Unmarshal([]byte(state), &op) != nil || op.ID != operationID || len(op.Tasks) != 4 || op.Preflight == nil || !op.Preflight.Ready {
 				t.Errorf("model did not receive saved task evidence: %s", last.Content)
 				http.Error(w, "missing operation evidence", http.StatusBadRequest)
 				return
 			}
-			if !strings.HasPrefix(op.Tasks[0].AgentID, "web-quality-agent-") {
+			if !strings.HasPrefix(op.Tasks[0].AgentID, "browser-agent-") {
 				t.Errorf("controller did not record the selected agent: %+v", op.Tasks[0])
+			}
+			var seoFound bool
+			for _, task := range op.Tasks {
+				if task.Status != operations.TaskSucceeded || task.ActionName == "capture-page" || task.ActionName == "check-accessibility" {
+					t.Errorf("unexpected browser-free task: %+v", task)
+				}
+				if task.ActionName == "check-seo" && task.Result != nil && bytes.Contains(task.Result.Output, []byte("Release preview")) {
+					seoFound = true
+				}
+			}
+			if !seoFound {
+				t.Error("model did not receive saved SEO evidence")
 			}
 			if request == 7 {
 				task := op.Tasks[0]
@@ -130,7 +132,8 @@ func testAllInOneWorkflow(t *testing.T) {
 					t.Errorf("model did not receive operator guidance: %+v", op.Questions)
 				}
 				delta = toolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{"url": website.URL,
-					"summary": "Release preview reviewed; operator confirmed intentional noindex", "findings": []any{}}})
+					"summary": "Release preview reviewed; operator confirmed intentional noindex", "findings": []any{},
+					"limitations": []string{"Rendered accessibility and screenshots were not performed"}}})
 			}
 		case 8:
 			delta, finish = map[string]any{"content": "Please choose how to interpret the indexing restriction."}, "stop"
@@ -238,6 +241,25 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 	get("/api/v1/operations", "", http.StatusUnauthorized)
 	get("/api/v1/operations", "wrong-password", http.StatusUnauthorized)
+	var agents models.ListResponse[models.AgentResponse]
+	if err := json.Unmarshal(get("/api/v1/agents", "all-in-one-api-secret", http.StatusOK), &agents); err != nil {
+		t.Fatal(err)
+	}
+	if len(agents.Items) != 1 || agents.Items[0].Type != "browser-agent" || !regexp.MustCompile(`^browser-agent-[0-9a-f]{8}$`).MatchString(agents.Items[0].ID) {
+		t.Fatalf("unexpected bundled agent identity: %+v", agents.Items)
+	}
+	var unavailableChecks int
+	for _, action := range agents.Items[0].Actions {
+		if action.Name == "capture-page" || action.Name == "check-accessibility" {
+			if action.Status != "unavailable" {
+				t.Fatalf("missing Chromium did not disable %s: %s", action.Name, action.Status)
+			}
+			unavailableChecks++
+		}
+	}
+	if unavailableChecks != 2 {
+		t.Fatal("bundled agent did not advertise both rendering checks")
+	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
 		if err != nil {
@@ -272,7 +294,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		}
 	}
 
-	if _, err := io.WriteString(keyboard, "Review SEO for "+website.URL+"\r"); err != nil {
+	if _, err := io.WriteString(keyboard, "Review website without a browser: "+website.URL+"\r"); err != nil {
 		t.Fatal(err)
 	}
 	wait("Yes, preview only")
@@ -298,12 +320,17 @@ func testAllInOneWorkflow(t *testing.T) {
 	if err := json.Unmarshal(get("/api/v1/operations/"+operationID, "all-in-one-api-secret", http.StatusOK), &apiOperation); err != nil {
 		t.Fatal(err)
 	}
-	if apiOperation.ID != operationID || apiOperation.Status != "completed" || apiOperation.ReportID != report.ID || len(apiOperation.Tasks) != 1 {
+	if apiOperation.ID != operationID || apiOperation.Status != "completed" || apiOperation.ReportID != report.ID || len(apiOperation.Tasks) != 4 {
 		t.Fatalf("API did not read the MCP operation: %+v", apiOperation)
 	}
-	task := apiOperation.Tasks[0]
-	if task.ActionName != "check-seo" || task.Status != "succeeded" || task.Result == nil || !bytes.Contains(task.Result.Output, []byte("Release preview")) {
-		t.Fatalf("API did not read saved agent evidence: %+v", task)
+	var seoFound bool
+	for _, task := range apiOperation.Tasks {
+		if task.ActionName == "check-seo" && task.Status == "succeeded" && task.Result != nil && bytes.Contains(task.Result.Output, []byte("Release preview")) {
+			seoFound = true
+		}
+	}
+	if !seoFound {
+		t.Fatal("API did not read saved agent evidence")
 	}
 	var apiReport models.ReportResponse
 	if err := json.Unmarshal(get("/api/v1/reports/"+report.ID, "all-in-one-api-secret", http.StatusOK), &apiReport); err != nil {

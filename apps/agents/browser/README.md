@@ -1,13 +1,14 @@
-# Web Quality Agent
+# Browser Agent
 
 ## Overview
 
-The web quality agent gathers website evidence. Commander reviews findings and
+The `browser-agent` gathers website evidence. Commander reviews findings and
 handles open decisions; the controller runs mission automation and schedules checks.
 
 | Action | Result |
 | --- | --- |
 | `discover-pages` | Pages on the same hostname and proposed checks. |
+| `discover-pages-no-browser` | The same crawl, proposing HTTP-only checks. |
 | `check-links` | Broken links, HTTP statuses and skipped coverage. |
 | `check-accessibility` | Rendered title, language, image/control-name checks and JavaScript errors. |
 | `capture-page` | Desktop/mobile PNGs in one artifact; horizontal overflow detection. |
@@ -16,16 +17,19 @@ handles open decisions; the controller runs mission automation and schedules che
 
 ### Workflow
 
-The [review-website mission](../../controllers/default/data/default-missions.json)
-authorizes this flow:
+The [bundled missions](../../controllers/default/data/default-missions.json)
+use the same agent with different coverage:
 
 ```text
-discover-pages → five checks per page → grouped results → Commander review → report
+review-website-no-browser:   discover-pages-no-browser → links, SEO, technologies
+review-website-with-browser: discover-pages → those checks + accessibility, screenshots
 ```
 
 Commander assigns discovery once. The controller schedules proposed checks across
 ready agents and groups their results for review. Commander resolves the pending
-continuation, asks the operator when needed, and explicitly completes the operation.
+continuation, asks the operator when needed, and explicitly completes the operation
+with a report. The no-browser report states that rendering and accessibility were
+not assessed.
 
 ## Quick start
 
@@ -38,7 +42,7 @@ docker compose run --build --rm playground
 
 Choose your model, then ask:
 
-> Run review-website for https://defos.ai with max_pages 3.
+> Run review-website-with-browser for https://defos.ai with max_pages 3.
 > Review the results and report what needs fixing.
 
 Supply a URL reachable from the agents. Registration can take one heartbeat
@@ -55,15 +59,16 @@ updated definition; existing operations keep their saved rules. See
 With Go 1.26.7+, run from the repository root:
 
 ```sh
-go run ./apps/agents/web-quality/cmd
+go run ./apps/agents/browser/cmd
 ```
 
 Screenshot and rendered-accessibility actions require Chromium or Google Chrome
 on `PATH`, or an absolute executable path in `CHROMIUM_PATH`. They also require
 `network-access` and `execute-command` grants. The host grants both by default.
 Other actions need only `network-access`; no third-party API key is required.
-Without a browser, the two browser actions report unavailable and other actions
-remain usable; the full mission still waits for its required-action coverage.
+Without a browser, run `review-website-no-browser`: discovery, links, SEO and
+technology checks remain available. `review-website-with-browser` requires the
+two browser actions; its preflight waits until that coverage is available.
 
 Compose supplies Chromium and sets `CHROMIUM_NO_SANDBOX=true` in its non-root
 containers. Native runs use the browser sandbox by default. See
@@ -74,7 +79,7 @@ containers. Native runs use the browser sandbox by default. See
 See [AGENTS.md](AGENTS.md) for action and browser implementation guidance.
 
 ```sh
-go test -race -count=1 ./apps/agents/web-quality/...
+go test -race -count=1 ./apps/agents/browser/...
 ```
 
 Use the [agent guide](../README.md) to add actions. The
@@ -101,7 +106,7 @@ checks may finish. See the [Playground guide](../../playground/README.md) for co
 
 These are bounded quality checks. They do not provide a complete accessibility
 audit or prove vulnerabilities. A redirect to another hostname requires an
-operator scope decision under the bundled mission.
+operator scope decision under either bundled mission.
 
 Edit the [mission definition](../../controllers/default/data/default-missions.json)
 to change automatic transitions.

@@ -1,14 +1,14 @@
-# Working on the web quality agent
+# Working on the browser agent
 
 ## Source entrypoints
 
-- [web_quality_agent.go](web_quality_agent.go) supplies the fixed agent type and
+- [browser_agent.go](browser_agent.go) supplies the fixed `browser-agent` type and
   default responsibilities. A nil action catalog gets fresh defaults; an explicitly
   empty catalog stays empty. The constructor does not grant permissions.
 - [actions.go](actions.go) exposes the catalog; [actions/actions.go](actions/actions.go)
   owns action names, constructors and common input schemas. Keep CLI action-name
   selection consistent with this catalog when adding actions.
-- [cli/](cli/) owns host configuration and providers. The bundled mission lives in
+- [cli/](cli/) owns host configuration and providers. The bundled missions live in
   [default-missions.json](../../controllers/default/data/default-missions.json);
   change automatic transitions there, not in action dispatch code.
 
@@ -21,6 +21,10 @@
 - Discovery and link checks must retain explicit page/link limits, excluded-link
   reporting and redirect scope decisions. Follow-up proposals must use the resolved
   page URL and fit the mission's action schemas.
+- `discover-pages` and `discover-pages-no-browser` share the crawler. The latter
+  proposes only links, SEO and technology checks, so the no-browser mission can
+  finish without Chromium. Keep required actions and automation consistent; never
+  silently omit rendering from the with-browser mission.
 - Keep browser discovery in [actions/browser.go](actions/browser.go) through the
   environment abstraction. `CHROMIUM_PATH` must be absolute; an explicit discovery
   scope wins over configured paths. Rediscovery clears stale browser configuration.
@@ -42,8 +46,8 @@
 From the repository root:
 
 ```sh
-go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
-go vet ./apps/agents/web-quality/...
+go test -race -count=1 -timeout=3m ./apps/agents/browser/...
+go vet ./apps/agents/browser/...
 ```
 
 - [tests/actions_test.go](tests/actions_test.go) covers hostname/redirect scope,
@@ -53,5 +57,5 @@ go vet ./apps/agents/web-quality/...
   browser execution, artifact persistence and the full review mission, use the
   [MCP/API test stack](../../../framework/tests/README.md#mcp-api-tests), which
   supplies browsers and local sites. No model key or public target is needed.
-- When changing action output or proposals, check the bundled mission and adapter
+- When changing action output or proposals, check both bundled missions and adapter
   scenarios together so automatic checks still converge on a model continuation.

@@ -15,24 +15,38 @@ import (
 )
 
 func TestOperationWebsiteWorkflow(t *testing.T) {
+	for _, scenario := range []struct {
+		mission, discovery string
+		checks             []string
+	}{
+		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
+		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
+	} {
+		t.Run(scenario.mission, func(t *testing.T) {
+			testOperationWebsiteWorkflow(t, scenario.mission, scenario.discovery, scenario.checks)
+		})
+	}
+}
+
+func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, checks []string) {
 	a := connect(t)
 	url := website(t)
-	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "review-website", "input": object{"url": url, "max_pages": 2}})
+	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": mission, "input": object{"url": url, "max_pages": 2}})
 	op := decode[models.OperationResponse](t, created, http.StatusCreated)
 	base := operationPath(op.ID)
 	if created.header.Get("Location") != base || op.Status != "planning" || op.Preflight == nil || !op.Preflight.Ready || len(op.Tasks) != 0 {
 		t.Fatalf("new operation lacks identity, readiness or empty tasks: %+v headers=%v", op, created.header)
 	}
 	assertSchema(t, a, "Operation", created)
-	assertError(t, a.request(http.MethodPost, base+"/tasks", object{"action_name": "discover-pages", "step_id": "unknown", "input": object{"url": url}}), http.StatusUnprocessableEntity, "invalid_input")
-	assigned := a.request(http.MethodPost, base+"/tasks", object{"action_name": "discover-pages", "input": object{"url": url, "max_pages": 2}})
+	assertError(t, a.request(http.MethodPost, base+"/tasks", object{"action_name": discovery, "step_id": "unknown", "input": object{"url": url}}), http.StatusUnprocessableEntity, "invalid_input")
+	assigned := a.request(http.MethodPost, base+"/tasks", object{"action_name": discovery, "input": object{"url": url, "max_pages": 2}})
 	root := decode[models.TaskResponse](t, assigned, http.StatusCreated)
 	if assigned.header.Get("Location") != base+"/tasks/"+root.ID || root.OperationID != op.ID || root.CommandID == "" {
 		t.Fatalf("assignment lost task identity: %+v", root)
 	}
 	settled := a.wait(op.ID, func(op models.OperationResponse) bool { return tasksSettled(op) && modelDecision(op) != nil })
-	if len(settled.Tasks) != 11 {
-		t.Fatalf("discovery should create 2×5 checks, got %d tasks", len(settled.Tasks))
+	if len(settled.Tasks) != 1+2*len(checks) {
+		t.Fatalf("discovery should create two pages of %d checks, got %d tasks", len(checks), len(settled.Tasks))
 	}
 	counts, brokenLinks := map[string]int{}, false
 	for _, task := range settled.Tasks {
@@ -43,6 +57,9 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 			t.Fatalf("automatic task lost discovery parent: %+v", task)
 		}
 		counts[task.ActionName]++
+		if mission == "review-website-no-browser" && len(task.Result.Artifacts) != 0 {
+			t.Fatalf("browser-free review generated rendering artifacts: %+v", task.Result.Artifacts)
+		}
 		if task.ActionName == "check-links" {
 			var output struct {
 				BrokenLinks int `json:"broken_links"`
@@ -53,10 +70,13 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 			brokenLinks = brokenLinks || output.BrokenLinks > 0
 		}
 	}
-	for _, name := range []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"} {
+	for _, name := range checks {
 		if counts[name] != 2 {
 			t.Fatalf("%s count=%d", name, counts[name])
 		}
+	}
+	if mission == "review-website-no-browser" && (counts["capture-page"] != 0 || counts["check-accessibility"] != 0 || counts["discover-pages"] != 0) {
+		t.Fatalf("browser-free review queued browser workflow actions: %+v", counts)
 	}
 	if !brokenLinks {
 		t.Fatal("real link check missed the fixture's broken link")
@@ -74,7 +94,7 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 	}
 	byID := read[models.ReportResponse](a, "/api/v1/reports/"+completed.ReportID)
 	byOperation := read[models.ReportResponse](a, base+"/report")
-	if !reflect.DeepEqual(byID, byOperation) || byID.OperationID != op.ID || byID.Mission != "review-website" || !strings.Contains(string(byID.Output), "HTTP website review completed") {
+	if !reflect.DeepEqual(byID, byOperation) || byID.OperationID != op.ID || byID.Mission != mission || !strings.Contains(string(byID.Output), "HTTP website review completed") {
 		t.Fatalf("report identity/output changed across routes: %+v %+v", byID, byOperation)
 	}
 	assertSchema(t, a, "Report", a.request(http.MethodGet, base+"/report", nil))
@@ -88,21 +108,24 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 	if after := a.request(http.MethodGet, base, nil); after.body != before.body {
 		t.Fatal("completed operation queries changed saved state")
 	}
-	var artifact models.ArtifactResponse
-	for _, task := range completed.Tasks {
-		if task.Result != nil && len(task.Result.Artifacts) > 0 {
-			artifact = task.Result.Artifacts[0]
-			break
+	var artifactPath, filePath string
+	if mission == "review-website-with-browser" {
+		var artifact models.ArtifactResponse
+		for _, task := range completed.Tasks {
+			if task.Result != nil && len(task.Result.Artifacts) > 0 {
+				artifact = task.Result.Artifacts[0]
+				break
+			}
 		}
-	}
-	if artifact.ID == "" || len(artifact.Files) == 0 {
-		t.Fatal("website review produced no downloadable evidence")
-	}
-	artifactPath := "/api/v1/artifacts/" + artifact.ID
-	filePath := artifactPath + "/files/" + artifact.Files[0].ID
-	for _, path := range []string{artifactPath, filePath} {
-		if result := a.request(http.MethodGet, path, nil); result.status != http.StatusOK {
-			t.Fatalf("evidence was unavailable before cleanup: %s: %+v", path, result)
+		if artifact.ID == "" || len(artifact.Files) == 0 {
+			t.Fatal("website review produced no downloadable evidence")
+		}
+		artifactPath = "/api/v1/artifacts/" + artifact.ID
+		filePath = artifactPath + "/files/" + artifact.Files[0].ID
+		for _, path := range []string{artifactPath, filePath} {
+			if result := a.request(http.MethodGet, path, nil); result.status != http.StatusOK {
+				t.Fatalf("evidence was unavailable before cleanup: %s: %+v", path, result)
+			}
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -114,17 +137,20 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 	if err != nil || cleaned.status != http.StatusNoContent || cleaned.body != "" {
 		t.Fatalf("cleanup of completed workflow: %+v: %v", cleaned, err)
 	}
-	for _, tc := range []struct{ path, code string }{
+	removed := []struct{ path, code string }{
 		{base, "operation_not_found"}, {base + "/report", "operation_not_found"},
 		{"/api/v1/reports/" + completed.ReportID, "report_not_found"},
-		{artifactPath, "artifact_not_found"}, {filePath, "artifact_not_found"},
-	} {
+	}
+	if artifactPath != "" {
+		removed = append(removed, struct{ path, code string }{artifactPath, "artifact_not_found"}, struct{ path, code string }{filePath, "artifact_not_found"})
+	}
+	for _, tc := range removed {
 		assertError(t, a.request(http.MethodGet, tc.path, nil), http.StatusNotFound, tc.code)
 	}
-	if missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); len(missions.Items) != 1 || missions.Items[0].Name != "review-website" {
+	if missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); len(missions.Items) != 2 || missions.Items[0].Name != "review-website-no-browser" || missions.Items[1].Name != "review-website-with-browser" {
 		t.Fatalf("cleanup changed the mission catalog: %+v", missions)
 	}
-	if actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions"); len(actions.Items) != 6 {
+	if actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions"); len(actions.Items) != 7 {
 		t.Fatalf("cleanup changed the action catalog: %+v", actions)
 	}
 	if agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents"); len(agents.Items) != 2 {
@@ -138,7 +164,7 @@ func TestOperationStartReplayCancelAndFail(t *testing.T) {
 	for i, command := range []string{"cancel", "fail"} {
 		t.Run(command, func(t *testing.T) {
 			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1)
-			body := object{"operation_id": id, "mission_name": "review-website", "input": object{"url": url}}
+			body := object{"operation_id": id, "mission_name": "review-website-with-browser", "input": object{"url": url}}
 			op := post[models.OperationResponse](a, "/api/v1/operations", body, http.StatusCreated)
 			if op.ID != id {
 				t.Fatalf("explicit operation ID changed: %s", op.ID)
@@ -174,12 +200,12 @@ func TestOperationCommandsRejectInvalidRequests(t *testing.T) {
 	a := connect(t)
 	op := a.start(website(t))
 	base := operationPath(op.ID)
-	for _, body := range []any{object{}, object{"mission_name": "review-website"}, object{"mission_name": "review-website", "input": object{}, "unknown": true}} {
+	for _, body := range []any{object{}, object{"mission_name": "review-website-with-browser"}, object{"mission_name": "review-website-with-browser", "input": object{}, "unknown": true}} {
 		assertError(t, a.request(http.MethodPost, "/api/v1/operations", body), http.StatusBadRequest, "invalid_request")
 	}
 	assertError(t, a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "missing", "input": object{}}), http.StatusNotFound, "mission_not_found")
 	for _, input := range []any{nil, object{}, []string{"url"}, "https://example.test", true} {
-		assertError(t, a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "review-website", "input": input}), http.StatusUnprocessableEntity, "invalid_input")
+		assertError(t, a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "review-website-with-browser", "input": input}), http.StatusUnprocessableEntity, "invalid_input")
 	}
 	for _, body := range []object{{"action_name": "check-seo", "agent_id": "pinned"}, {"action_name": "check-seo", "operation_id": op.ID}, {"action_name": "check-seo", "input": nil}} {
 		assertError(t, a.request(http.MethodPost, base+"/tasks", body), http.StatusBadRequest, "invalid_request")

@@ -4,7 +4,7 @@ import type { Mission } from '../src/api/types';
 import { AutomationGraph } from '../src/components/AutomationGraph';
 
 const mission: Mission = {
-  name: 'review-website', objective: 'Review a website.',
+  name: 'review-website-with-browser', objective: 'Review a website.',
   required_actions: ['discover-pages', 'check-links', 'capture-page'],
   starting_actions: ['discover-pages', 'manual-start'], input_schema: null, output_schema: null,
   automations: {

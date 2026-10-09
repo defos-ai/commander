@@ -49,11 +49,12 @@ export class CommanderAPI {
         agents: agents.items.map(agent => ({ status: agent.status, stale: agent.stale, working: Boolean(agent.work),
           readyActions: agent.actions?.filter(action => action.status === 'ready').length })),
         actions: actions.items.length,
-        mission: missions.items.some(mission => mission.name === 'review-website'),
+        missions: missions.items.map(mission => mission.name).sort(),
         controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin'),
       };
-    }, { timeout: 60_000, message: 'Wait for controller, mission, action catalog and both browser-equipped agents' }).toEqual({
-      agents: Array(2).fill({ status: 'ready', stale: false, working: false, readyActions: 6 }), actions: 6, mission: true, controller: true,
+    }, { timeout: 60_000, message: 'Wait for controller, both missions, action catalog and both browser-equipped agents' }).toEqual({
+      agents: Array(2).fill({ status: 'ready', stale: false, working: false, readyActions: 7 }), actions: 7,
+      missions: ['review-website-no-browser', 'review-website-with-browser'], controller: true,
     });
   }
 
@@ -141,7 +142,7 @@ export async function connect(page: Page, connection = { name: 'Compose test', u
 export async function startOperation(page: Page, website: string): Promise<Operation> {
   await page.getByRole('button', { name: 'Start operation', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Start operation', exact: true });
-  await dialog.getByLabel('Mission', { exact: true }).selectOption('review-website');
+  await dialog.getByLabel('Mission', { exact: true }).selectOption('review-website-with-browser');
   await dialog.getByLabel('Mission input (JSON)').fill(JSON.stringify({ url: website, max_pages: 1 }));
   const response = page.waitForResponse(reply => new URL(reply.url()).searchParams.get('path') === '/api/v1/operations' && reply.request().method() === 'POST');
   await dialog.getByRole('button', { name: 'Start operation', exact: true }).click();

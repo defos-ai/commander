@@ -13,9 +13,9 @@ function requestedPath(input: RequestInfo | URL): string {
   return request.searchParams.get('path')!;
 }
 const id = '5cde98e0-23d3-447d-ad59-2238b244f689';
-const input = { operation_id: id, mission_name: 'review-website', input: { url: 'https://example.com' } };
+const input = { operation_id: id, mission_name: 'review-website-with-browser', input: { url: 'https://example.com' } };
 const operation: Operation = {
-  id, mission: { name: 'review-website', objective: 'Review a website', required_actions: null, starting_actions: null, input_schema: null, output_schema: null },
+  id, mission: { name: 'review-website-with-browser', objective: 'Review a website', required_actions: null, starting_actions: null, input_schema: null, output_schema: null },
   input: input.input, status: 'planning', tasks: null, questions: null, events: null,
   created_at: '2026-10-05T12:00:00Z', updated_at: '2026-10-05T12:00:00Z',
 };

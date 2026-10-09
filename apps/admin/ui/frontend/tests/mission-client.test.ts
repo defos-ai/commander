@@ -14,7 +14,7 @@ function requestedPath(input: RequestInfo | URL): string {
   return request.searchParams.get('path')!;
 }
 const mission: Mission = {
-  name: 'review-website',
+  name: 'review-website-with-browser',
   objective: 'Review a website',
   required_actions: ['discover-pages'],
   starting_actions: ['discover-pages'],

@@ -8,12 +8,12 @@ const connection = { id: 'local', name: 'Local Commander', url: 'https://command
 const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-05T10:00:00Z';
 const task: OperationTask = {
-  id: 'task-discovery', operation_id: 'operation-review', agent_id: 'web-quality-agent-1234abcd',
+  id: 'task-discovery', operation_id: 'operation-review', agent_id: 'browser-agent-1234abcd',
   action_name: 'discover-pages', status: 'succeeded', input: { url: 'https://defos.ai' },
   started_at: now, finished_at: now, result: { action_name: 'discover-pages', output: { pages: ['https://defos.ai'] } },
 };
 const operation: Operation = {
-  id: 'operation-review', mission: { name: 'review-website', objective: 'Review website quality.',
+  id: 'operation-review', mission: { name: 'review-website-with-browser', objective: 'Review website quality.',
     required_actions: ['discover-pages'], starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} },
   input: { url: 'https://defos.ai' }, status: 'planning', tasks: [task], questions: [], events: [], created_at: now, updated_at: now,
 };

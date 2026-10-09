@@ -15,7 +15,7 @@
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
   includes Chromium/fonts and uses a real non-root user's home plus an init process
-  for browser children. Keep browser packages aligned with the web-quality image.
+  for browser children. Keep browser packages aligned with the browser image.
 
 ## Behavior to preserve
 
@@ -86,6 +86,9 @@
   temporary; adding image dependencies must not change session persistence.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
+  Embed both website missions: native quick start uses `review-website-no-browser`;
+  `review-website-with-browser` requires discovered browser coverage. Do not create
+  partial completion or browser fallback policy in the client.
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.
@@ -122,5 +125,5 @@ SIGTERM. Keep Docker lifecycle in shell/CI rather than Go test fixtures.
 
 [Native release builds](../../.github/workflows/build-binaries.yml) run environment
 discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.
-Keep the embedded mission, local host lifecycle and test fixtures portable; native
+Keep the embedded missions, local host lifecycle and test fixtures portable; native
 binaries must run without a checkout or Go installation.

@@ -7,7 +7,7 @@ import { MissionsPage } from '../src/pages/MissionsPage';
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
 const credentials = { username: 'operator', url: connection.url };
 const mission: Mission = {
-  name: 'review-website',
+  name: 'review-website-with-browser',
   objective: 'Review links and page quality.',
   required_actions: ['discover-pages', 'check-links'],
   starting_actions: ['discover-pages'],
@@ -43,13 +43,13 @@ describe('missions browser', () => {
   it('searches missions, opens their definition and preserves the search when returning', async () => {
     const fetch = mockAPI();
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
-    expect(await screen.findByRole('button', { name: 'View mission review-website' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'View mission review-website-with-browser' })).toBeVisible();
     expect(screen.getByText('2 missions')).toBeVisible();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search missions' }), { target: { value: 'PAGE QUALITY' } });
     expect(screen.getByText('1 of 2 missions')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'View mission review-service' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View mission review-website' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View mission review-website-with-browser' }));
 
     expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
     expect(screen.getByRole('heading', { name: mission.name, level: 1 })).toHaveFocus();
@@ -60,7 +60,7 @@ describe('missions browser', () => {
     fireEvent.click(within(graph).getByRole('button', { name: 'Inspect automation discover-pages' }));
     expect(within(screen.getByRole('dialog', { name: 'Automation details' })).getByText('Continue after all generated tasks finish.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
-    expect(fetch.mock.calls.some(([url]) => upstreamURL(url) === `${connection.url}/api/v1/missions/review-website`)).toBe(true);
+    expect(fetch.mock.calls.some(([url]) => upstreamURL(url) === `${connection.url}/api/v1/missions/review-website-with-browser`)).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
 
     expect(await screen.findByRole('searchbox', { name: 'Search missions' })).toHaveValue('PAGE QUALITY');
@@ -103,7 +103,7 @@ describe('missions browser', () => {
     failed = false;
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
-    expect(await screen.findByRole('button', { name: 'View mission review-website' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'View mission review-website-with-browser' })).toBeVisible();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -111,7 +111,7 @@ describe('missions browser', () => {
     let items = [mission];
     mockAPI(url => url.endsWith('/api/v1/missions') ? Response.json({ items }) : new Response(null, { status: 404 }));
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'View mission review-website' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View mission review-website-with-browser' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('This mission is no longer available.');
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
 
@@ -154,14 +154,14 @@ describe('missions browser', () => {
       return detail.promise;
     });
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'View mission review-website' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View mission review-website-with-browser' }));
     expect(screen.getByText('Loading mission…')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
     expect(signal?.aborted).toBe(true);
 
     await act(async () => detail.resolve(Response.json(mission)));
 
-    expect(await screen.findByRole('button', { name: 'View mission review-website' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'View mission review-website-with-browser' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Starting actions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
@@ -181,7 +181,7 @@ describe('missions browser', () => {
     expect(await screen.findByRole('button', { name: 'View mission review-service' })).toBeVisible();
     await act(async () => first.resolve(Response.json({ items: [mission] })));
 
-    expect(screen.queryByRole('button', { name: 'View mission review-website' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View mission review-website-with-browser' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View mission review-service' })).toBeVisible();
   });
 
@@ -196,10 +196,10 @@ describe('missions browser', () => {
     });
     const onSignIn = vi.fn();
     const view = render(<MissionsPage connection={connection} credentials={credentials} onSignIn={onSignIn} />);
-    await screen.findByRole('button', { name: 'View mission review-website' });
+    await screen.findByRole('button', { name: 'View mission review-website-with-browser' });
 
     view.rerender(<MissionsPage connection={connection} onSignIn={onSignIn} />);
-    expect(screen.queryByRole('button', { name: 'View mission review-website' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View mission review-website-with-browser' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeVisible();
     view.rerender(<MissionsPage connection={connection} credentials={{ ...credentials }} onSignIn={onSignIn} />);
     await waitFor(() => expect(signal).toBeDefined());
@@ -207,7 +207,7 @@ describe('missions browser', () => {
     expect(signal?.aborted).toBe(true);
     await act(async () => refresh.resolve(Response.json({ items: [mission] })));
 
-    expect(screen.queryByRole('button', { name: 'View mission review-website' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View mission review-website-with-browser' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeVisible();
     expect(calls).toBe(2);
   });

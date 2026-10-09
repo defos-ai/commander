@@ -1,9 +1,9 @@
-package webquality
+package browser
 
 import (
 	"sort"
 
-	webactions "github.com/defos-ai/commander/apps/agents/web-quality/actions"
+	webactions "github.com/defos-ai/commander/apps/agents/browser/actions"
 	"github.com/defos-ai/commander/framework/agent/action"
 )
 

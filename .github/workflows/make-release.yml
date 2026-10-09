@@ -144,6 +144,6 @@ jobs:
           "commander-admin": "${{ needs.admin.outputs.digest }}",
           "commander-mcp": "${{ needs.mcp.outputs.digest }}",
           "commander-controller": "${{ needs.controllers.outputs.digest }}",
-          "commander-web-quality-agent": "${{ needs.agents.outputs.digest }}",
+          "commander-browser-agent": "${{ needs.agents.outputs.digest }}",
           "commander-aio": "${{ needs.aio.outputs.digest }}"
         }

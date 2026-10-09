@@ -5,10 +5,9 @@
 `github.com/defos-ai/commander/providers/rabbitmq` implements `comms.Bus` over
 AMQP 0-9-1 with [`amqp091-go`](https://github.com/rabbitmq/amqp091-go). It supports
 `amqp://` and `amqps://` URLs and both framework inbox modes. Controller, MCP, and
-web-quality agent factories select
+browser agent factories select
 this provider when `BUS_URL` or `--bus-url` uses either scheme.
-[`compose.full.yaml`](../../compose.full.yaml) selects RabbitMQ; the default
-Compose stack uses FS.
+[`compose.yaml`](../../compose.yaml) selects RabbitMQ; all-in-one uses FS.
 
 Hosts use transient inboxes, so a replacement host does not inherit its old
 queue. One active controller per database is supported.
@@ -18,7 +17,7 @@ queue. One active controller per database is supported.
 From the repository root:
 
 ```sh
-docker compose -f compose.full.yaml up --build -d
+docker compose up --build -d
 ```
 
 The full stack supplies `amqp://commander:commander-local-secret@rabbitmq:5672/`

@@ -179,7 +179,7 @@ func TestArtifactMongoCleanupKeepsDelayedResultsRetired(t *testing.T) {
 }
 
 func mongoArtifactFixture() artifacts.Artifact {
-	return artifacts.Artifact{ID: id.ArtifactID(), Name: "screenshots", AgentID: "web-quality-agent-1234abcd",
+	return artifacts.Artifact{ID: id.ArtifactID(), Name: "screenshots", AgentID: "browser-agent-1234abcd",
 		ActionName: "capture-page", CommandID: id.MessageID(), CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC),
 		Files: []artifacts.ArtifactFile{
 			{ID: id.ArtifactFileID(), Name: "desktop.png", MediaType: "image/png", Size: 128, SHA256: strings.Repeat("a", 64)},

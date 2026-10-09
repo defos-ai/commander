@@ -26,8 +26,8 @@ Choose backends independently through the host settings:
 | `DATABASE_URL` | Catalogs, inventory, executions, operations, artifact metadata | FS, MongoDB |
 | `STORAGE_URL` | Artifact bytes and reports | FS, S3 |
 
-The [local stack](../README.md#quick-start) uses FS throughout.
-[`compose.full.yaml`](../compose.full.yaml) uses RabbitMQ, MongoDB, and MinIO.
+All-in-one uses FS throughout.
+[`compose.yaml`](../compose.yaml) uses RabbitMQ, MongoDB and MinIO.
 See [deployment configuration](../docs/deployment.md#configuration) for host
 settings, and each provider's guide for constructors and backend setup. The
 repository [workspace](../go.work) includes all modules; private projects use

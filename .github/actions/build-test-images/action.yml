@@ -28,7 +28,7 @@ runs:
           for target in "${targets[@]}"; do
             case "$target" in
               controller|api|mcp|minio) scope="test-$target" ;;
-              web-1) scope=test-web-quality-agent ;;
+              browser-agent-1) scope=test-browser-agent ;;
               ui) scope=test-admin-ui ;;
               minio-init) scope=test-minio-client ;;
               *) echo "Unknown build target: $target" >&2; exit 1 ;;

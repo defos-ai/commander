@@ -13,7 +13,7 @@ import (
 
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
-	agentcli "github.com/defos-ai/commander/apps/agents/web-quality/cli"
+	agentcli "github.com/defos-ai/commander/apps/agents/browser/cli"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -117,10 +117,10 @@ func Start(ctx context.Context) (session *Session, err error) {
 		return nil, err
 	}
 	s.Notices = []string{
-		"All-in-one: 1 MCP, 1 API, 1 controller, 1 web-quality agent. Hosts and temporary state are removed on exit.",
+		"All-in-one: 1 MCP, 1 API, 1 controller, 1 browser agent. Hosts and temporary state are removed on exit.",
 		"API listening: " + s.APIURL,
 		"Use /credentials api for the API login or /credentials mcp for the MCP token.",
-		"Try: Run review-website for https://defos.ai and summarize what should be fixed before release.",
+		"Try: Run review-website-no-browser for https://defos.ai and summarize what should be fixed before release.",
 	}
 	return s, nil
 }

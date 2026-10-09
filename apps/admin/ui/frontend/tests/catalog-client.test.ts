@@ -15,7 +15,7 @@ const action: Action = {
   input_schema: { type: 'object', properties: { url: { type: 'string' } } }, output_schema: {},
 };
 const agent: Agent = {
-  id: 'web-quality-agent-0123abcd', type: 'web-quality', status: 'working', stale: false,
+  id: 'browser-agent-0123abcd', type: 'browser-agent', status: 'working', stale: false,
   server: { ip_address: '10.0.0.2', hostname: 'agent-pod-1' },
   work: { action_name: 'check-links', operation_id: 'operation-1', task_id: 'task-1', command_id: 'command-1' },
   responsibilities: ['Review websites'], granted_permissions: ['network'], actions: [action],

@@ -79,11 +79,11 @@ func connect(t *testing.T) *api {
 		catalog := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
 		ready := len(catalog.Items) == 2
 		for _, agent := range catalog.Items {
-			ready = ready && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == 6
+			ready = ready && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == 7
 		}
 		actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 		missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-		if ready && len(actions.Items) == 6 && len(missions.Items) == 1 && missions.Items[0].Name == "review-website" {
+		if ready && len(actions.Items) == 7 && len(missions.Items) == 2 && missions.Items[0].Name == "review-website-no-browser" && missions.Items[1].Name == "review-website-with-browser" {
 			break
 		}
 		if err := pause(ctx); err != nil {
@@ -179,7 +179,7 @@ func errorCode(result response) string {
 
 func (a *api) start(url string) models.OperationResponse {
 	a.t.Helper()
-	return post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "review-website", "input": object{"url": url, "max_pages": 2}}, http.StatusCreated)
+	return post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "review-website-with-browser", "input": object{"url": url, "max_pages": 2}}, http.StatusCreated)
 }
 
 func operationPath(id string) string { return "/api/v1/operations/" + id }

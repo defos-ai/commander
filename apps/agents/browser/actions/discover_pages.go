@@ -30,10 +30,24 @@ type DiscoverPagesOutput struct {
 	Errors               []string `json:"errors,omitempty"`
 }
 
-type DiscoverPages struct{ *action.Base }
+type DiscoverPages struct {
+	*action.Base
+	checks []string
+}
 
 func NewDiscoverPages() *DiscoverPages {
-	return &DiscoverPages{action.NewBase(actionmodel.Action{Name: DiscoverPagesName, Description: "Discover up to ten HTML pages on the same hostname, including HTTP(S) and port changes. Propose link, accessibility, screenshot, SEO and technology checks for each. Excludes other hostnames and subdomains; does not submit forms.", RequiredPermissions: []string{"network-access"}, InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"max_pages":{"type":"integer","minimum":1,"maximum":10,"default":3}},"required":["url"],"additionalProperties":false}`), OutputSchema: outputSchema[DiscoverPagesOutput]()})}
+	return newDiscoverPages(DiscoverPagesName, "Discover up to ten HTML pages on the same hostname, including HTTP(S) and port changes. Propose link, accessibility, screenshot, SEO and technology checks for each. Excludes other hostnames and subdomains; does not submit forms.", []string{CheckLinksName, CheckAccessibilityName, CapturePageName, CheckSEOName, DetectTechnologiesName})
+}
+
+func NewDiscoverPagesNoBrowser() *DiscoverPages {
+	return newDiscoverPages(DiscoverPagesNoBrowserName, "Discover up to ten HTML pages on the same hostname, including HTTP(S) and port changes. Propose link, SEO and technology checks without a browser. Excludes other hostnames and subdomains; does not submit forms.", []string{CheckLinksName, CheckSEOName, DetectTechnologiesName})
+}
+
+func newDiscoverPages(name, description string, checks []string) *DiscoverPages {
+	return &DiscoverPages{
+		Base:   action.NewBase(actionmodel.Action{Name: name, Description: description, RequiredPermissions: []string{"network-access"}, InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"max_pages":{"type":"integer","minimum":1,"maximum":10,"default":3}},"required":["url"],"additionalProperties":false}`), OutputSchema: outputSchema[DiscoverPagesOutput]()}),
+		checks: checks,
+	}
 }
 func (a *DiscoverPages) Run(ctx context.Context, raw json.RawMessage, grants []string) (action.Result, error) {
 	if err := a.Check(grants); err != nil {
@@ -121,7 +135,7 @@ func (a *DiscoverPages) Run(ctx context.Context, raw json.RawMessage, grants []s
 	}
 	for _, p := range out.Pages {
 		raw, _ := json.Marshal(PageInput{URL: p.URL})
-		for _, name := range []string{CheckLinksName, CheckAccessibilityName, CapturePageName, CheckSEOName, DetectTechnologiesName} {
+		for _, name := range a.checks {
 			result.NextActions = append(result.NextActions, action.NextAction{ActionName: name, Input: raw, Reason: "Review discovered page"})
 		}
 	}

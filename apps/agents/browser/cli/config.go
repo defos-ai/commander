@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	webquality "github.com/defos-ai/commander/apps/agents/web-quality"
+	browser "github.com/defos-ai/commander/apps/agents/browser"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/host"
@@ -28,7 +28,7 @@ type config struct {
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
-	knownActions := webquality.ActionNames()
+	knownActions := browser.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
 	var actionNames, permissions, searchPaths string

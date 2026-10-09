@@ -85,6 +85,12 @@ func discoverCIComponents(t *testing.T, root string) []string {
 			continue
 		}
 		if path.Base(file) == "go.mod" || path.Base(file) == "package.json" {
+			// The index still contains unstaged deletions during local renames.
+			if _, err := os.Stat(filepath.Join(root, file)); os.IsNotExist(err) {
+				continue
+			} else if err != nil {
+				t.Fatal(err)
+			}
 			manifests = append(manifests, file)
 		}
 	}

@@ -2,8 +2,8 @@
 
 ## Construction and lifecycle
 
-- Use the [web quality constructor](web-quality/web_quality_agent.go),
-  [host](web-quality/cli/cli.go) and [factory](web-quality/cli/factory.go) as the
+- Use the [browser constructor](browser/browser_agent.go),
+  [host](browser/cli/cli.go) and [factory](browser/cli/factory.go) as the
   extension points for an agent module. Add new modules to [go.work](../../go.work).
 - Give each agent a fixed type and a fresh ID per process. Construct fresh action
   instances for every agent so discovery state is never shared between hosts.
@@ -49,8 +49,8 @@
 Run the affected agent module from the repository root, for example:
 
 ```sh
-go test -race -count=1 -timeout=3m ./apps/agents/web-quality/...
-go vet ./apps/agents/web-quality/...
+go test -race -count=1 -timeout=3m ./apps/agents/browser/...
+go vet ./apps/agents/browser/...
 ```
 
 [Unit CI](../../.github/workflows/test-unit.yml) covers the bundled host. Test

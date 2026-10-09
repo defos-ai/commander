@@ -6,7 +6,7 @@ ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    go build -trimpath -buildvcs=false -o /out/commander-web-quality-agent ./apps/agents/web-quality/cmd
+    go build -trimpath -buildvcs=false -o /out/commander-browser-agent ./apps/agents/browser/cmd
 
 FROM debian:bookworm-slim
 # Browser dependencies belong to the agent image; runtime configuration comes
@@ -17,6 +17,6 @@ RUN apt-get update \
 # Chromium needs a real non-root user's writable home for its crash handler.
 RUN groupadd --gid 1000 commander \
     && useradd --uid 1000 --gid 1000 --create-home commander
-COPY --from=build /out/commander-web-quality-agent /usr/local/bin/commander-web-quality-agent
+COPY --from=build /out/commander-browser-agent /usr/local/bin/commander-browser-agent
 USER 1000:1000
-ENTRYPOINT ["/usr/local/bin/commander-web-quality-agent"]
+ENTRYPOINT ["/usr/local/bin/commander-browser-agent"]

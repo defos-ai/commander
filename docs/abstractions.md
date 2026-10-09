@@ -7,7 +7,7 @@ This guide defines the data and decisions passed between them.
 
 | Concept | Meaning | Website example |
 | --- | --- | --- |
-| **Mission** | Reusable objective, input/output schemas, required actions, optional steps and automation rules. | `review-website` |
+| **Mission** | Reusable objective, input/output schemas, required actions, optional steps and automation rules. | `review-website-with-browser` |
 | **Operation** | One run with specific input and a saved copy of the mission. | Review `https://defos.ai`, up to three pages. |
 | **Task** | One action assignment. The controller selects an agent when dispatching it. | Check one page's links. |
 | **Mission step** | Optional planning guidance that tasks can reference. It is not an action name or automatic workflow. | A declared step such as `quality-review`. |
@@ -25,7 +25,7 @@ is unknown. Cancelling an operation stops new dispatch; running actions may fini
 
 ## Agents and actions
 
-- **Agent type** identifies an implementation, such as `web-quality`. Its generated
+- **Agent type** identifies an implementation, such as `browser-agent`. Its generated
   **agent ID** identifies one process. Several instances can share a type.
 - **Action** is an executable capability with input/output schemas, permissions and
   readiness. It may use Go code, a host program or an external API.
@@ -106,7 +106,7 @@ Failures, absent proposals, unconfigured transitions and proposals outside a rul
 return to the model. Rules do not invent follow-up inputs. Changes affect new
 operations, which snapshot the mission when started.
 
-See the complete [website workflow](../apps/agents/web-quality/README.md#workflow),
+See the complete [website workflow](../apps/agents/browser/README.md#workflow),
 [authoring follow-ups](../apps/agents/README.md#propose-follow-up-work), and
 [loading missions](../apps/controllers/README.md#quick-start).
 

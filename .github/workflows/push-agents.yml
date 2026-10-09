@@ -1,4 +1,4 @@
-name: Push commander-web-quality-agent
+name: Push commander-browser-agent
 
 on:
   workflow_call:
@@ -38,10 +38,10 @@ jobs:
         id: build
         with:
           context: .
-          file: apps/agents/web-quality/docker/Dockerfile
+          file: apps/agents/browser/docker/Dockerfile
           push: true
           platforms: linux/amd64
-          tags: ghcr.io/defos-ai/commander-web-quality-agent:${{ inputs.version }}
+          tags: ghcr.io/defos-ai/commander-browser-agent:${{ inputs.version }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

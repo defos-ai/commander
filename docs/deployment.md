@@ -12,7 +12,7 @@ docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and admin UI, one controller and two web-quality agents.
+Compose runs MCP, the API and admin UI, one controller and two browser agents.
 It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
 storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
 [MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
@@ -52,7 +52,7 @@ Flags override environment values. Native hosts default to `./state/bus`,
 Compose supplies backend settings; application images do not choose providers.
 `COMMANDER_MCP_PORT` changes the published Compose port (default `4273`).
 Run a host with `--help` for its flags. Action-specific dependencies belong in the
-[agent guide](../apps/agents/web-quality/README.md); model settings belong in
+[agent guide](../apps/agents/browser/README.md); model settings belong in
 [Playground](../apps/playground/README.md).
 
 ## State
@@ -63,7 +63,7 @@ the only shared application volume holds the MCP credential, separate from data.
 Host inboxes remain transient: broker persistence does not preserve a replaced
 host's inbox.
 
-Compose passes `--with-missions` to load the example mission. This upserts supplied
+Compose passes `--with-missions` to load both website missions. This upserts supplied
 missions without removing others; without the flag the controller loads none.
 See [mission configuration](../apps/controllers/README.md#quick-start).
 

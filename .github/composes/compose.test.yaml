@@ -14,7 +14,7 @@ x-runtime: &runtime
 
 x-agent: &agent
   <<: *runtime
-  image: commander-web-quality-agent:test
+  image: commander-browser-agent:test
   pull_policy: never
   shm_size: 256mb
   command: ["--heartbeat-interval=1s"]
@@ -161,13 +161,13 @@ services:
       retries: 12
       start_period: 5s
 
-  web-1:
+  browser-agent-1:
     <<: *agent
     build:
       context: ../..
-      dockerfile: apps/agents/web-quality/docker/Dockerfile
+      dockerfile: apps/agents/browser/docker/Dockerfile
 
-  web-2:
+  browser-agent-2:
     <<: *agent
 
 volumes:

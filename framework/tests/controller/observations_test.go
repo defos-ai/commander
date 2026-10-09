@@ -16,6 +16,46 @@ import (
 	"github.com/defos-ai/commander/framework/internal/state"
 )
 
+func TestAgentObservationMatchesTypeWithOrWithoutRoleSuffix(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		agentType agents.AgentType
+		invalid   bool
+	}{
+		{name: "plain type", agentType: "browser"},
+		{name: "role suffix", agentType: "browser-agent"},
+		{name: "wrong type", agentType: "other-agent", invalid: true},
+		{name: "duplicated role", agentType: "browser-agent-agent", invalid: true},
+		{name: "malformed type", agentType: "browser--agent", invalid: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			consumer, store, catalog := observationFixture(t)
+			snapshot := observationSnapshot()
+			snapshot.ID, snapshot.Type = "browser-agent-12345678", test.agentType
+			message, err := messages.NewMessage(controllerevents.AgentStarted, snapshot.ID, snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = consumer.Consume(t.Context(), message)
+
+			if test.invalid {
+				if !errors.Is(err, consumers.ErrInvalidMessage) || store.record.Load() != nil || catalog.writes != 0 {
+					t.Fatalf("invalid observation changed inventory: error=%v record=%+v writes=%d", err, store.record.Load(), catalog.writes)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			record := store.record.Load()
+			if record == nil || record.ID != snapshot.ID || record.Type != test.agentType || catalog.writes != 1 {
+				t.Fatalf("observation changed public identity or missed catalog: record=%+v writes=%d", record, catalog.writes)
+			}
+		})
+	}
+}
+
 func TestDelayedAgentEventsKeepLatestSnapshot(t *testing.T) {
 	consumer, store, catalog := observationFixture(t)
 	newest := time.Now().UTC().Add(-time.Second)

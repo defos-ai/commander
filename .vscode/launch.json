@@ -2,11 +2,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Commander Web Quality Agent",
+      "name": "Commander Browser Agent",
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/apps/agents/web-quality/cmd",
+      "program": "${workspaceFolder}/apps/agents/browser/cmd",
       "cwd": "${workspaceFolder}",
       "buildFlags": "-buildvcs=false",
       "console": "integratedTerminal",

@@ -313,7 +313,7 @@ func TestExecutionMongoStorePreservesFailedOutcome(t *testing.T) {
 func executionCommand(index int) messages.Message {
 	work := messages.WorkContext{OperationID: "10000000-0000-4000-8000-000000000001", TaskID: "20000000-0000-4000-8000-000000000001", StepID: "review"}
 	payload, _ := json.Marshal(actions.ActionCall{ActionName: "check", Work: work, Input: json.RawMessage(`{"serial":9007199254740993,"site":"example.test"}`)})
-	return messages.Message{ID: fmt.Sprintf("00000000-0000-4000-8000-%012x", index), Type: messages.RunAction, AgentID: "web-quality-agent-00000001", Work: work, Payload: payload, CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)}
+	return messages.Message{ID: fmt.Sprintf("00000000-0000-4000-8000-%012x", index), Type: messages.RunAction, AgentID: "browser-agent-00000001", Work: work, Payload: payload, CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)}
 }
 
 func executionResult(command messages.Message) messages.Message {

@@ -19,7 +19,7 @@ const browserAction: Action = {
   ],
 };
 const agent: Agent = {
-  id: 'web-quality-agent-a1234567', type: 'web-quality', status: 'working',
+  id: 'browser-agent-a1234567', type: 'browser-agent', status: 'working',
   work: { action_name: 'check-links', operation_id: 'operation-123', task_id: 'task-456', step_id: 'step-789', command_id: 'command-012' },
   server: { hostname: 'worker-west-1', ip_address: '10.0.0.12' },
   responsibilities: ['Website quality'], actions: [action, browserAction], granted_permissions: ['network'],
@@ -27,7 +27,7 @@ const agent: Agent = {
   observed_at: '2026-10-05T10:01:00Z', last_seen: '2026-10-05T10:01:00Z', last_heartbeat: '2026-10-05T10:00:45Z',
   lease_expires_at: '2026-10-05T10:01:30Z', stale: false,
 };
-const staleAgent: Agent = { ...agent, id: 'web-quality-agent-b1234567', status: 'unavailable', stale: true,
+const staleAgent: Agent = { ...agent, id: 'browser-agent-b1234567', status: 'unavailable', stale: true,
   server: { ...agent.server, hostname: 'worker-east-1' } };
 
 function mockAPI(respond?: (url: string) => Response | Promise<Response>) {

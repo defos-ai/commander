@@ -6,8 +6,9 @@ Agents advertise actions, execute controller-selected tasks and return results
 and artifacts. They can propose follow-up actions; the controller applies mission
 rules and Commander handles open decisions.
 
-The bundled [web quality agent](web-quality/README.md) checks websites and captures
-browser screenshots. See the [architecture](../../docs/overview.md) for component
+The bundled [browser agent](browser/README.md) checks websites and captures
+browser screenshots. Its no-browser mission uses HTTP checks; its with-browser
+mission also renders pages. See the [architecture](../../docs/overview.md) for component
 boundaries and [action contracts](../../framework/README.md) for shared interfaces.
 
 ## Quick start
@@ -15,11 +16,11 @@ boundaries and [action contracts](../../framework/README.md) for shared interfac
 With Go 1.26.7+, run from the repository root:
 
 ```sh
-go run ./apps/agents/web-quality/cmd
+go run ./apps/agents/browser/cmd
 ```
 
 Start the [controller](../controllers/README.md#quick-start) with matching bus and
-artifact storage settings. See [native requirements](web-quality/README.md#native-agent)
+artifact storage settings. See [native requirements](browser/README.md#native-agent)
 and [deployment](../../docs/deployment.md) for configuration.
 
 ## Development and testing
@@ -27,16 +28,16 @@ and [deployment](../../docs/deployment.md) for configuration.
 ### Add an agent
 
 Create `apps/agents/<agent-type>` with the module path
-`github.com/defos-ai/commander/apps/agents/<agent-type>`, using the web quality agent's
-[go.mod](web-quality/go.mod), [constructor](web-quality/web_quality_agent.go) and
-[CLI](web-quality/cli/cli.go) as a starting point. Register it in the workspace:
+`github.com/defos-ai/commander/apps/agents/<agent-type>`, using the browser agent's
+[go.mod](browser/go.mod), [constructor](browser/browser_agent.go) and
+[CLI](browser/cli/cli.go) as a starting point. Register it in the workspace:
 
 ```sh
 go work use ./apps/agents/<agent-type>
 ```
 
 Supply your agent type, action catalog, permission grants and artifact storage to
-`agent.NewAgent`. The [provider factory](web-quality/cli/factory.go) shows how to
+`agent.NewAgent`. The [provider factory](browser/cli/factory.go) shows how to
 connect it to the bus and storage. For repository coding conventions, see
 [AGENTS.md](AGENTS.md).
 
@@ -46,29 +47,29 @@ Use [`action.NewFunc`](../../framework/agent/action/func.go) for typed JSON
 input/output; it derives schemas from your Go types. For file attachments,
 implement [`action.Executor`](../../framework/agent/action/action.go) directly.
 Declare the action's name and required permissions, implement its behavior, then
-add its constructor to the [action catalog](web-quality/actions/actions.go).
-[Check-SEO](web-quality/actions/check_seo.go) is a small JSON action example.
+add its constructor to the [action catalog](browser/actions/actions.go).
+[Check-SEO](browser/actions/check_seo.go) is a small JSON action example.
 
 ### Action readiness
 
 Install required programs and supply settings at deployment. Missing dependencies
 or permissions make an action unavailable; other actions can still serve. See
-[browser discovery](web-quality/actions/browser.go) for an implementation and
+[browser discovery](browser/actions/browser.go) for an implementation and
 [mission preflight](../../docs/abstractions.md#discovery-and-preflight) for how
-readiness affects scheduling. The web quality host's `--actions` flag selects its
+readiness affects scheduling. The browser host's `--actions` flag selects its
 exposed catalog.
 
 ### Return files
 
 Set `Result.Artifacts` to grouped files supplied as bytes or local paths. The
 runtime uploads them and records their metadata. See
-[capture-page](web-quality/actions/capture_page.go), which returns desktop/mobile
+[capture-page](browser/actions/capture_page.go), which returns desktop/mobile
 PNGs under one artifact.
 
 ### Propose follow-up work
 
 Use `FuncConfig.NextActions` or `Result.NextActions` to propose an action name,
-JSON input and optional reason. [Discover-pages](web-quality/actions/discover_pages.go)
+JSON input and optional reason. [Discover-pages](browser/actions/discover_pages.go)
 proposes five checks per page. Mission rules authorize automatic transitions;
 other proposals wait for Commander. See
 [continuations and scheduling](../../docs/abstractions.md#next-actions-and-continuations).
@@ -93,8 +94,8 @@ go mod edit -replace=github.com/defos-ai/commander/providers/fs=/absolute/path/t
 Add replacements for each additional Commander module you use, including its
 Commander dependencies; a dependency's own replacements do not apply to your
 project. The repository's `go.work` supplies local modules when developing inside
-the Commander checkout. Follow the [constructor](web-quality/web_quality_agent.go),
-[provider factory](web-quality/cli/factory.go) and [host lifecycle](web-quality/cli/cli.go)
+the Commander checkout. Follow the [constructor](browser/browser_agent.go),
+[provider factory](browser/cli/factory.go) and [host lifecycle](browser/cli/cli.go)
 to add your actions and entrypoint, then run:
 
 ```sh
@@ -113,8 +114,8 @@ independently of any surrounding workspace.
 From the repository root, replacing the path for your agent:
 
 ```sh
-go test -race -count=1 ./apps/agents/web-quality/...
-go vet ./apps/agents/web-quality/...
+go test -race -count=1 ./apps/agents/browser/...
+go vet ./apps/agents/browser/...
 ```
 
 See the [testing guide](../../framework/tests/README.md) for wider integration tests.

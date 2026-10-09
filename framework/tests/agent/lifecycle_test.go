@@ -18,6 +18,50 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
+func TestAgentIDMatchesTypeWithOrWithoutRoleSuffix(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		agentType agent.AgentType
+		id        string
+		prefix    string
+		wantError bool
+	}{
+		{name: "plain type", agentType: "fixture", prefix: "fixture-agent-"},
+		{name: "role suffix", agentType: "browser-agent", prefix: "browser-agent-"},
+		{name: "explicit ID", agentType: "browser-agent", id: "browser-agent-12345678", prefix: "browser-agent-"},
+		{name: "wrong type", agentType: "browser-agent", id: "other-agent-12345678", wantError: true},
+		{name: "duplicated role", agentType: "browser-agent", id: "browser-agent-agent-12345678", wantError: true},
+		{name: "malformed ID", agentType: "browser-agent", id: "browser-agent-INVALID", wantError: true},
+		{name: "malformed type", agentType: "browser--agent", id: "browser-agent-12345678", wantError: true},
+		{name: "uppercase type", agentType: "Browser-agent", wantError: true},
+		{name: "empty type after suffix", agentType: "-agent", wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a, err := agent.NewAgent(agent.AgentConfig{ID: test.id, Type: test.agentType,
+				Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"}, ArtifactFileStore: unusedArtifacts{},
+			})
+			if test.wantError {
+				if err == nil {
+					t.Fatal("invalid agent type or ID was accepted")
+				}
+				if test.agentType == "browser-agent" && strings.Contains(err.Error(), "browser-agent-agent") {
+					t.Fatalf("validation requested a duplicated role suffix: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !id.ValidAgent(a.ID()) || len(a.ID()) != len(test.prefix)+8 || !strings.HasPrefix(a.ID(), test.prefix) || a.Describe().Type != test.agentType {
+				t.Fatalf("agent ID or public type changed: %+v", a.Describe())
+			}
+			if test.id != "" && a.ID() != test.id {
+				t.Fatalf("explicit agent ID changed: %s", a.ID())
+			}
+		})
+	}
+}
+
 func TestAgentSnapshotsRemainReadableDuringAnnouncementsAndRestart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()

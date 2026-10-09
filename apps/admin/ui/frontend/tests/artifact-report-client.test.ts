@@ -12,7 +12,7 @@ const artifact: OperationArtifact = {
   files: [{ id: 'file-1', name: 'desktop.png', media_type: 'image/png', size: 4, sha256: 'abcd' }],
 };
 const report: Report = {
-  id: 'report-1', operation_id: 'operation-1', mission: 'review-website',
+  id: 'report-1', operation_id: 'operation-1', mission: 'review-website-with-browser',
   output: { summary: 'Review complete' }, created_at: '2026-10-05T12:00:00Z',
 };
 

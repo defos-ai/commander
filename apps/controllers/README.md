@@ -22,7 +22,9 @@ go run ./apps/controllers/default/cmd --with-missions ./apps/controllers/default
 
 `--with-missions` upserts definitions at each startup: matching names are updated,
 other missions are preserved. Without it, the host loads no mission file. Compose
-supplies the [example file](default/data/default-missions.json) automatically.
+supplies the [website missions](default/data/default-missions.json) automatically:
+`review-website-no-browser` uses HTTP checks; `review-website-with-browser` also
+requires rendering and screenshots.
 Existing operations retain their saved mission definition.
 
 Start the [MCP adapter](../adapters/README.md#quick-start) and

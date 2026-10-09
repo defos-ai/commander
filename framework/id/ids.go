@@ -4,10 +4,13 @@ package id
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
 )
 
-// AgentID returns <type>-agent-<8 lowercase hex characters>.
-func AgentID(agentType string) (string, error) { return NewRuntime(agentType, Agent) }
+// AgentID appends -agent unless already present, followed by eight lowercase hex characters.
+func AgentID(agentType string) (string, error) {
+	return NewRuntime(strings.TrimSuffix(agentType, "-agent"), Agent)
+}
 
 // ControllerID returns <type>-controller-<8 lowercase hex characters>.
 func ControllerID(controllerType string) (string, error) {

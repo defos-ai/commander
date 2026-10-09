@@ -166,7 +166,7 @@ func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error
 		return agentmodel.AgentSnapshot{}, errors.New("agent description must declare a valid type")
 	}
 	kind, ok := id.RuntimeType(description.ID, id.Agent)
-	if !ok || kind != string(description.Type) {
+	if !ok || kind != strings.TrimSuffix(string(description.Type), "-agent") {
 		return agentmodel.AgentSnapshot{}, errors.New("agent ID must match its type")
 	}
 	if err := description.Server.Validate(); err != nil {

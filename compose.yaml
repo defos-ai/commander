@@ -21,7 +21,7 @@ x-runtime: &runtime
 x-agent: &agent
   <<: *runtime
   shm_size: 256mb
-  image: commander-web-quality-agent:local
+  image: commander-browser-agent:local
   pull_policy: never
   environment:
     <<: *environment
@@ -279,14 +279,14 @@ services:
       retries: 12
       start_period: 5s
 
-  web-1:
+  browser-agent-1:
     <<: *agent
-    # Build the shared image once; web-2 uses the same image.
+    # Build the shared image once; browser-agent-2 uses the same image.
     build:
       context: .
-      dockerfile: apps/agents/web-quality/docker/Dockerfile
+      dockerfile: apps/agents/browser/docker/Dockerfile
 
-  web-2:
+  browser-agent-2:
     <<: *agent
 
   playground:
@@ -330,9 +330,9 @@ services:
         condition: service_completed_successfully
       mcp:
         condition: service_healthy
-      web-1:
+      browser-agent-1:
         condition: service_started
-      web-2:
+      browser-agent-2:
         condition: service_started
 
 volumes:

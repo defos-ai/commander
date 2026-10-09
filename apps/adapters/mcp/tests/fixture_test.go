@@ -249,7 +249,7 @@ func (a *api) fails(name string, args object, contains string) {
 func (a *api) start(url string) operations.Operation {
 	a.t.Helper()
 	var op operations.Operation
-	a.call("start_operation", object{"mission_name": "review-website", "input": object{"url": url, "max_pages": 2}}, &op)
+	a.call("start_operation", object{"mission_name": "review-website-with-browser", "input": object{"url": url, "max_pages": 2}}, &op)
 	return op
 }
 func (a *api) get(id string) operationDetail {

@@ -10,6 +10,20 @@ import (
 )
 
 func TestMissionPreflightReportsAgentReadiness(t *testing.T) {
+	for _, scenario := range []struct {
+		mission string
+		actions int
+	}{
+		{"review-website-no-browser", 4},
+		{"review-website-with-browser", 6},
+	} {
+		t.Run(scenario.mission, func(t *testing.T) {
+			testMissionPreflightReportsAgentReadiness(t, scenario.mission, scenario.actions)
+		})
+	}
+}
+
+func testMissionPreflightReportsAgentReadiness(t *testing.T, mission string, expectedActions int) {
 	a := connect(t)
 	var inventory struct {
 		Agents []agents.Agent `json:"agents"`
@@ -17,12 +31,16 @@ func TestMissionPreflightReportsAgentReadiness(t *testing.T) {
 	a.call("list_agents", object{}, &inventory)
 	url := website(t)
 
-	op := a.start(url)
+	var op operations.Operation
+	a.call("start_operation", object{"mission_name": mission, "input": object{"url": url}}, &op)
 
-	if op.Preflight == nil || !op.Preflight.Ready || len(op.Preflight.Actions) != 6 {
+	if op.Preflight == nil || !op.Preflight.Ready || len(op.Preflight.Actions) != expectedActions {
 		t.Fatalf("mission readiness missing: %+v", op)
 	}
 	for _, coverage := range op.Preflight.Actions {
+		if mission == "review-website-no-browser" && (coverage.ActionName == "capture-page" || coverage.ActionName == "check-accessibility") {
+			t.Fatalf("browser-free preflight requires rendered work: %+v", coverage)
+		}
 		if len(coverage.ReadyAgentIDs) != 2 || len(coverage.UnavailableAgents) != 0 {
 			t.Fatalf("ready action lost agent coverage: %+v", coverage)
 		}

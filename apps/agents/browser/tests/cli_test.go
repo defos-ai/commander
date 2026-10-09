@@ -1,4 +1,4 @@
-package webquality_test
+package browser_test
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/web-quality/cli"
+	"github.com/defos-ai/commander/apps/agents/browser/cli"
 )
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {

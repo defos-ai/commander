@@ -19,7 +19,7 @@ Use Commander for complex workflows that a single AI cannot reliably coordinate 
 
 Each option opens Playground. Choose a model, enter its API key, and ask:
 
-> Review defos.ai and summarize what should be fixed before release.
+> Run review-website-no-browser for defos.ai and summarize what should be fixed before release.
 
 ### Docker
 
@@ -28,6 +28,8 @@ Run all-in-one (AIO), with agent dependencies included:
 ```sh
 docker run --rm -it --name commander ghcr.io/defos-ai/commander-aio:stable
 ```
+
+Use `review-website-with-browser` to include rendered accessibility and screenshots.
 
 ### Binary
 

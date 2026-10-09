@@ -23,7 +23,7 @@ import (
 )
 
 type AgentConfig struct {
-	// ID is optional. Missing IDs become <type>-agent-<8 lowercase hex characters>.
+	// ID is optional. Missing IDs use the type, -agent if absent, and eight lowercase hex characters.
 	ID   string
 	Type AgentType
 	// Server overrides host information. Missing fields use SERVER_IP_ADDRESS
@@ -70,8 +70,9 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 			return nil, err
 		}
 	}
-	if kind, ok := id.RuntimeType(config.ID, id.Agent); !ok || kind != string(config.Type) {
-		return nil, fmt.Errorf("agent ID must match %s-agent-<8 lowercase hex characters>", config.Type)
+	idType := strings.TrimSuffix(string(config.Type), "-agent")
+	if kind, ok := id.RuntimeType(config.ID, id.Agent); !ok || kind != idType {
+		return nil, fmt.Errorf("agent ID must match %s-agent-<8 lowercase hex characters>", idType)
 	}
 	server, err := environment.ResolveHostInfo(environment.HostInfo{IPAddress: config.Server.IPAddress, Hostname: config.Server.Hostname})
 	if err != nil {

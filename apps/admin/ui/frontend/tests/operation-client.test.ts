@@ -8,7 +8,7 @@ const timestamp = '2026-10-05T12:00:00.123456789Z';
 const operation: Operation = {
   id: 'operation-1',
   mission: {
-    name: 'review-website', objective: 'Review a website', required_actions: ['check-links'],
+    name: 'review-website-with-browser', objective: 'Review a website', required_actions: ['check-links'],
     starting_actions: ['discover-pages'], input_schema: null, output_schema: null,
   },
   input: { url: 'https://example.com' }, status: 'waiting',

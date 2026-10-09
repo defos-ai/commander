@@ -20,9 +20,10 @@ flowchart TD
     Adapter -->|Read files and reports| Storage
 ```
 
-For the included website review:
+For the included website reviews:
 
-1. Commander reads `review-website`, starts an operation, and assigns `discover-pages`.
+1. Commander chooses `review-website-no-browser` for HTTP checks or
+   `review-website-with-browser` for rendered checks too, then assigns its starting action.
 2. The controller checks required actions against live agents and selects a ready
    instance with free capacity. Assignments specify an action and input, not an agent ID.
 3. Discovery proposes checks for each page. The mission's automation queues those
@@ -78,8 +79,8 @@ they remain interrupted for review. This is not an exactly-once execution guaran
 - **One active controller per database.** Multiple-controller ownership and shared
   capacity reservations are not implemented.
 - **Implemented providers:** filesystem bus/database/files, RabbitMQ messaging,
-  MongoDB database, and S3-compatible files/reports. Full Compose uses RabbitMQ,
-  MongoDB, and MinIO; the default Compose stack uses FS throughout.
+  MongoDB database, and S3-compatible files/reports. Compose uses RabbitMQ,
+  MongoDB and MinIO; all-in-one uses FS throughout.
 - **Hosts use transient inboxes.** Replacing a host does not replay its old inbox.
   RabbitMQ supports durable shared inboxes, but hosts do not activate them yet.
   FS retains failed delivery evidence without automatic redelivery.

@@ -1,4 +1,4 @@
-module github.com/defos-ai/commander/apps/agents/web-quality
+module github.com/defos-ai/commander/apps/agents/browser
 
 go 1.26.7
 

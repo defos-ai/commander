@@ -7,7 +7,7 @@ import { OperationsPage } from '../src/pages/OperationsPage';
 const connection = { id: 'test', name: 'Commander', url: 'https://commander.example.test' };
 const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-05T10:00:00Z';
-const mission = { name: 'review-website', objective: 'Review website quality.', required_actions: [], starting_actions: [],
+const mission = { name: 'review-website-with-browser', objective: 'Review website quality.', required_actions: [], starting_actions: [],
   input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } }, output_schema: {} };
 const operation: Operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'waiting', tasks: [], events: [],
   questions: [{ id: 'question-browser', status: 'pending', text: 'How should the review continue?', options: ['Configure the browser', 'Use HTTP checks'],

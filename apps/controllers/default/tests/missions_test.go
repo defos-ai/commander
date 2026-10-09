@@ -50,26 +50,44 @@ func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
 	if err := json.Unmarshal(data.DefaultMissions, &definitions); err != nil {
 		t.Fatal(err)
 	}
-	var website missions.Mission
+	websites := map[string]missions.Mission{}
 	for _, raw := range definitions {
 		mission, err := missions.LoadMission(raw)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if mission.Name == "review-website" {
-			website = mission
+		if _, exists := websites[mission.Name]; exists {
+			t.Fatalf("duplicate mission %q", mission.Name)
 		}
+		websites[mission.Name] = mission
 	}
-
-	workflow := website.Automations["discover-pages"]
-
-	if website.Name == "" || !slices.Equal(website.StartingActions, []string{"discover-pages"}) || workflow.Continue != missions.WhenAll || len(workflow.Run) == 0 {
-		t.Fatalf("website discovery is not grouped automatic work: %+v", website)
+	if len(websites) != 2 {
+		t.Fatalf("expected two website review missions, got %d", len(websites))
 	}
-	for _, name := range []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"} {
-		if !slices.Contains(workflow.Run, name) || !slices.Contains(website.RequiredActions, name) || website.Automations[name].Decide != missions.Model {
-			t.Errorf("%s is not an automatic check followed by model review", name)
-		}
+	for _, test := range []struct {
+		name      string
+		discovery string
+		checks    []string
+	}{
+		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
+		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			website := websites[test.name]
+			workflow := website.Automations[test.discovery]
+			required := append([]string{test.discovery}, test.checks...)
+			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(workflow.Run, test.checks) || workflow.Continue != missions.WhenAll {
+				t.Fatalf("website checks are not grouped automatic work: %+v", website)
+			}
+			if len(website.Automations) != len(test.checks)+1 {
+				t.Fatalf("unexpected automation rules: %+v", website.Automations)
+			}
+			for _, name := range test.checks {
+				if website.Automations[name].Decide != missions.Model {
+					t.Errorf("%s is not followed by model review", name)
+				}
+			}
+		})
 	}
 }
 

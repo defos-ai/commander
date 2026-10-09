@@ -35,7 +35,7 @@ func TestAgentMongoStore(t *testing.T) {
 	}
 	original.LeaseExpiresAt = original.LastHeartbeat.Add(45 * time.Second)
 	other := original.Clone()
-	other.ID, other.Status, other.Stale = "web-quality-agent-00000001", agents.AgentStopped, true
+	other.ID, other.Status, other.Stale = "browser-agent-00000001", agents.AgentStopped, true
 	other.DiscoveryScope.Paths = nil
 	items, err := catalog.List(t.Context())
 	if err != nil || items == nil || len(items) != 0 {
@@ -265,7 +265,7 @@ func TestAgentMongoStoreRejectsInvalidAndCancelledWrites(t *testing.T) {
 	if err := catalog.Upsert(t.Context(), original); err != nil {
 		t.Fatal(err)
 	}
-	for _, missing := range []string{"invalid/id", "web-quality-agent-00000002"} {
+	for _, missing := range []string{"invalid/id", "browser-agent-00000002"} {
 		if _, err := catalog.Get(t.Context(), missing); !errors.Is(err, agents.ErrUnknownAgent) {
 			t.Fatalf("missing agent %q: %v", missing, err)
 		}
@@ -452,7 +452,7 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 
 func inventoryAgent(index int, heartbeat time.Time) agents.Agent {
 	return agents.Agent{
-		AgentSnapshot: agents.AgentSnapshot{ID: fmt.Sprintf("web-quality-agent-%08x", index), Type: "web-quality", Status: agents.AgentReady},
+		AgentSnapshot: agents.AgentSnapshot{ID: fmt.Sprintf("browser-agent-%08x", index), Type: "browser-agent", Status: agents.AgentReady},
 		LastSeen:      time.Date(2026, 9, 30, 12, 0, 1, 123456789, time.UTC),
 		LastHeartbeat: heartbeat,
 	}

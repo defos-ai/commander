@@ -106,7 +106,7 @@ func TestBrowserSessionConnectionsAndProxy(t *testing.T) {
 	if forwarded.RequestURI != "/second/api/v1/agents/team%2Fagent%20%C3%A9?limit=5" {
 		t.Fatalf("escaped identifier changed: %s", forwarded.RequestURI)
 	}
-	command := "{\"mission_name\":\"review-website\",\"input\":{\"url\":\"https://example.test\"}}"
+	command := "{\"mission_name\":\"review-website-with-browser\",\"input\":{\"url\":\"https://example.test\"}}"
 	response = serveUI(handler, browserRequest(http.MethodPost, proxyPath(secondURL, "/api/v1/operations"), command, second))
 	if response.Code != http.StatusAccepted || response.Body.String() != command || len(observed) != 1 {
 		t.Fatal("proxy must forward a command once and preserve its response")

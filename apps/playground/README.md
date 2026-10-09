@@ -16,7 +16,7 @@ docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 docker run --name commander --rm -it -p 127.0.0.1:4274:4274 commander:aio
 ```
 
-This image starts Playground, MCP, the API, a controller and the web-quality agent
+This image starts Playground, MCP, the API, a controller and the browser agent
 with Chromium and fonts included. Inside Playground, type `/credentials` to view
 the API login and MCP token. From another terminal:
 
@@ -74,7 +74,7 @@ from the repository root:
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts MCP, the HTTP API, one controller and one web-quality agent using
+This starts MCP, the HTTP API, one controller and one browser agent using
 temporary FS state. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials api`
@@ -83,9 +83,10 @@ both; credentials stay local and are never sent to the model. Set `API_USERNAME`
 `API_PASSWORD` or `MCP_TOKEN` to override them; unset or empty values use their
 defaults. Generated credentials change each session.
 `API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
-The executable embeds the mission and needs no checkout or Go installation.
-Browser actions still need
-[Chromium](../agents/web-quality/README.md#native-agent).
+The executable embeds both website missions and needs no checkout or Go installation.
+Start with `review-website-no-browser` for links, SEO and technology checks.
+`review-website-with-browser` adds screenshots and rendered accessibility, requiring
+[Chromium](../agents/browser/README.md#native-agent).
 **Exiting stops these hosts and deletes the session's operations, reports and artifacts.**
 Use Compose to retain work.
 
@@ -153,8 +154,11 @@ guidance or `/watch <operation-id>` to resume review.
 
 Try “List missions and available agents,” then:
 
-> Run review-website for https://defos.ai with max_pages 3. Review the findings
+> Run review-website-no-browser for https://defos.ai with max_pages 3. Review the findings
 > and produce a report. Before completing, ask whether I want a brief or detailed report.
+
+With the Docker image or a configured browser, use `review-website-with-browser`
+to include rendered accessibility and screenshots.
 
 | Command | Effect |
 | --- | --- |
@@ -176,7 +180,7 @@ and count of others waiting. Only operator input records an answer; expiry retur
 the decision to model review without approving work. With separate hosts, exiting
 leaves operations running, but model decisions wait for a session to follow them.
 
-See [website scenarios](../agents/web-quality/README.md#try-these-in-playground)
+See [website scenarios](../agents/browser/README.md#try-these-in-playground)
 and the [MCP workflow](../adapters/README.md#operation-workflow).
 
 ## Development and testing

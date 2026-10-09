@@ -1,4 +1,4 @@
-package webquality_test
+package browser_test
 
 import (
 	"context"
@@ -13,53 +13,69 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/web-quality/actions"
+	"github.com/defos-ai/commander/apps/agents/browser/actions"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func TestDiscoveryFollowsHostnameAcrossPortsAndRejectsExternalHosts(t *testing.T) {
-	var visited []string
-	fixtureHTTP(t, func(request *http.Request) string {
-		visited = append(visited, request.URL.String())
-		switch request.URL.String() {
-		case "https://site.test/":
-			return `<title>Home</title><a href="http://site.test:8080/about">About</a><a href="http://site.test:8080/about#team">Duplicate</a><a href="https://sub.site.test/">Subdomain</a><a href="https://other.test/">External</a>`
-		case "http://site.test:8080/about":
-			return `<title>About</title>`
-		default:
-			t.Errorf("out-of-scope request: %s", request.URL)
-			return ""
-		}
-	})
+	for _, test := range []struct {
+		name     string
+		executor func() action.Executor
+		checks   []string
+	}{
+		{
+			name: "with browser", executor: func() action.Executor { return actions.NewDiscoverPages() },
+			checks: []string{actions.CheckLinksName, actions.CheckAccessibilityName, actions.CapturePageName, actions.CheckSEOName, actions.DetectTechnologiesName},
+		},
+		{
+			name: "without browser", executor: func() action.Executor { return actions.NewDiscoverPagesNoBrowser() },
+			checks: []string{actions.CheckLinksName, actions.CheckSEOName, actions.DetectTechnologiesName},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("CHROMIUM_PATH", "unavailable/browser")
+			var visited []string
+			fixtureHTTP(t, func(request *http.Request) string {
+				visited = append(visited, request.URL.String())
+				switch request.URL.String() {
+				case "https://site.test/":
+					return `<title>Home</title><a href="http://site.test:8080/about">About</a><a href="http://site.test:8080/about#team">Duplicate</a><a href="https://sub.site.test/">Subdomain</a><a href="https://other.test/">External</a>`
+				case "http://site.test:8080/about":
+					return `<title>About</title>`
+				default:
+					t.Errorf("out-of-scope request: %s", request.URL)
+					return ""
+				}
+			})
 
-	result := runAction(t, actions.NewDiscoverPages(), `{"url":"https://site.test","max_pages":3}`)
-	var output actions.DiscoverPagesOutput
-	if err := json.Unmarshal(result.Output, &output); err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(visited, []string{"https://site.test/", "http://site.test:8080/about"}) || len(output.Pages) != 2 || output.SkippedExternalLinks != 2 || output.Truncated {
-		t.Fatalf("visited=%v output=%+v", visited, output)
-	}
-	checks := map[string]map[string]bool{}
-	for _, next := range result.NextActions {
-		var page actions.PageInput
-		if err := json.Unmarshal(next.Input, &page); err != nil {
-			t.Fatal(err)
-		}
-		if checks[page.URL] == nil {
-			checks[page.URL] = map[string]bool{}
-		}
-		checks[page.URL][next.ActionName] = true
-	}
-	for _, page := range visited {
-		for _, name := range []string{actions.CheckLinksName, actions.CheckAccessibilityName, actions.CapturePageName, actions.CheckSEOName, actions.DetectTechnologiesName} {
-			if !checks[page][name] {
-				t.Errorf("missing %s proposal for %s", name, page)
+			result := runAction(t, test.executor(), `{"url":"https://site.test","max_pages":3}`)
+			var output actions.DiscoverPagesOutput
+			if err := json.Unmarshal(result.Output, &output); err != nil {
+				t.Fatal(err)
 			}
-		}
+
+			if !reflect.DeepEqual(visited, []string{"https://site.test/", "http://site.test:8080/about"}) || len(output.Pages) != 2 || output.SkippedExternalLinks != 2 || output.Truncated {
+				t.Fatalf("visited=%v output=%+v", visited, output)
+			}
+			if len(result.NextActions) != len(visited)*len(test.checks) {
+				t.Fatalf("unexpected number of check proposals: %+v", result.NextActions)
+			}
+			checks := map[string][]string{}
+			for _, next := range result.NextActions {
+				var page actions.PageInput
+				if err := json.Unmarshal(next.Input, &page); err != nil {
+					t.Fatal(err)
+				}
+				checks[page.URL] = append(checks[page.URL], next.ActionName)
+			}
+			for _, page := range visited {
+				if !reflect.DeepEqual(checks[page], test.checks) {
+					t.Errorf("check proposals for %s: %v, want %v", page, checks[page], test.checks)
+				}
+			}
+		})
 	}
 }
 

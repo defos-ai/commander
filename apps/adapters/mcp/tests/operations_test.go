@@ -328,20 +328,35 @@ func heldWebsite(t *testing.T, paths ...string) (string, <-chan string, func(str
 }
 
 func TestOperationWebsiteWorkflow(t *testing.T) {
+	for _, scenario := range []struct {
+		mission, discovery string
+		checks             []string
+	}{
+		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
+		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
+	} {
+		t.Run(scenario.mission, func(t *testing.T) {
+			testOperationWebsiteWorkflow(t, scenario.mission, scenario.discovery, scenario.checks)
+		})
+	}
+}
+
+func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, checks []string) {
 	const reportSummary = "MCP API website workflow passed"
 	a := connect(t)
 	url := website(t)
-	op := a.start(url)
-	a.fails("assign_task", object{"operation_id": op.ID, "step_id": "discover-pages", "action_name": "discover-pages", "input": object{"url": url, "max_pages": 2}},
-		`mission "review-website" declares no steps; omit step_id and use action_name`)
+	var op operations.Operation
+	a.call("start_operation", object{"mission_name": mission, "input": object{"url": url, "max_pages": 2}}, &op)
+	a.fails("assign_task", object{"operation_id": op.ID, "step_id": discovery, "action_name": discovery, "input": object{"url": url, "max_pages": 2}},
+		fmt.Sprintf(`mission %q declares no steps; omit step_id and use action_name`, mission))
 	if rejected := a.get(op.ID); len(rejected.Tasks) != 0 {
 		t.Fatalf("invalid step queued work: %+v", rejected.Tasks)
 	}
 	var root operations.Task
-	a.call("assign_task", object{"operation_id": op.ID, "action_name": "discover-pages", "input": object{"url": url, "max_pages": 2}}, &root)
+	a.call("assign_task", object{"operation_id": op.ID, "action_name": discovery, "input": object{"url": url, "max_pages": 2}}, &root)
 	settled := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
-	if len(settled.Tasks) != 11 {
-		t.Fatalf("expected discovery + 2×5 checks; got %d", len(settled.Tasks))
+	if len(settled.Tasks) != 1+2*len(checks) {
+		t.Fatalf("expected discovery + two pages of %d checks; got %d tasks", len(checks), len(settled.Tasks))
 	}
 	counts := map[string]int{}
 	brokenLinks := false
@@ -350,6 +365,9 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 			t.Fatalf("unsuccessful task: %+v", task)
 		}
 		counts[task.ActionName]++
+		if mission == "review-website-no-browser" && len(task.Result.Artifacts) != 0 {
+			t.Fatalf("browser-free review generated rendering artifacts: %+v", task.Result.Artifacts)
+		}
 		if task.ID != root.ID && task.ParentTaskID != root.ID {
 			t.Fatalf("child lost parent: %+v", task)
 		}
@@ -371,10 +389,13 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 			brokenLinks = brokenLinks || result.BrokenLinks > 0
 		}
 	}
-	for _, name := range []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"} {
+	for _, name := range checks {
 		if counts[name] != 2 {
 			t.Fatalf("%s count=%d", name, counts[name])
 		}
+	}
+	if mission == "review-website-no-browser" && (counts["capture-page"] != 0 || counts["check-accessibility"] != 0 || counts["discover-pages"] != 0) {
+		t.Fatalf("browser-free review queued browser workflow actions: %+v", counts)
 	}
 	if !brokenLinks {
 		t.Fatal("fixture's broken link was not reported")

@@ -111,5 +111,5 @@ func TestConcurrentReportsHaveOneImmutableWinner(t *testing.T) {
 }
 
 func reportFixture() reports.Report {
-	return reports.Report{ID: id.New(), OperationID: id.New(), Mission: "review-website", Output: json.RawMessage(`{"summary":"reviewed","serial":9007199254740993}`), CreatedAt: time.Now().UTC()}
+	return reports.Report{ID: id.New(), OperationID: id.New(), Mission: "review-website-with-browser", Output: json.RawMessage(`{"summary":"reviewed","serial":9007199254740993}`), CreatedAt: time.Now().UTC()}
 }

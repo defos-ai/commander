@@ -58,10 +58,10 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByText('Lease expires at', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/controllers\/default-controller-[^/]+$/);
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
-  await page.getByRole('button', { name: 'View mission review-website' }).click();
-  await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'View mission review-website-with-browser' }).click();
+  await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
   const missionURL = page.url();
-  await expect(page).toHaveURL(/\/missions\/review-website$/);
+  await expect(page).toHaveURL(/\/missions\/review-website-with-browser$/);
 
   const automationGraph = page.getByRole('region', { name: 'Mission automation graph' });
   await expect(automationGraph.getByRole('button', { name: /^Inspect automation / })).toHaveCount(6);
@@ -82,13 +82,13 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(2);
   await page.goBack();
   await expect(page).toHaveURL(missionURL);
-  await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
   await page.goForward();
   await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(2);
   await page.goBack();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
-  await expect(page.getByRole('heading', { name: 'review-website', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
   const browserStorage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(JSON.stringify(browserStorage)).not.toContain(password);
@@ -130,13 +130,13 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await signIn.getByLabel('Username', { exact: true }).fill(username);
   await signIn.getByLabel('Password', { exact: true }).fill(password);
   await signIn.getByRole('button', { name: 'Save connection' }).click();
-  await page.getByRole('button', { name: 'View mission review-website' }).click();
+  await page.getByRole('button', { name: 'View mission review-website-with-browser' }).click();
   await expect(page).toHaveURL(missionURL);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await navigation.getByRole('button', { name: 'Actions', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^View action / })).toHaveCount(6);
+  await expect(page.getByRole('button', { name: /^View action / })).toHaveCount(7);
   await page.getByRole('button', { name: 'View action capture-page', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -246,7 +246,7 @@ test('operation questions, automatic work, graph and downloads use the real stac
   await reportDialog.getByRole('button', { name: 'Download JSON' }).click();
   const download = await reportDownload;
   const report: Report = JSON.parse(await readFile((await download.path())!, 'utf8'));
-  expect(report).toMatchObject({ operation_id: operation.id, mission: 'review-website', output: { summary: 'Reviewed the current release with browser evidence.' } });
+  expect(report).toMatchObject({ operation_id: operation.id, mission: 'review-website-with-browser', output: { summary: 'Reviewed the current release with browser evidence.' } });
   expect(download.suggestedFilename()).toBe(`${report.id}.json`);
   await reportDialog.getByRole('button', { name: 'Close', exact: true }).click();
 

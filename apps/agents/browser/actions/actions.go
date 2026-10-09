@@ -7,16 +7,17 @@ import (
 )
 
 const (
-	DiscoverPagesName      = "discover-pages"
-	CheckLinksName         = "check-links"
-	CheckAccessibilityName = "check-accessibility"
-	CapturePageName        = "capture-page"
-	CheckSEOName           = "check-seo"
-	DetectTechnologiesName = "detect-technologies"
+	DiscoverPagesName          = "discover-pages"
+	DiscoverPagesNoBrowserName = "discover-pages-no-browser"
+	CheckLinksName             = "check-links"
+	CheckAccessibilityName     = "check-accessibility"
+	CapturePageName            = "capture-page"
+	CheckSEOName               = "check-seo"
+	DetectTechnologiesName     = "detect-technologies"
 )
 
 func NewActions() []action.Executor {
-	return []action.Executor{NewDiscoverPages(), NewCheckLinks(), NewCheckAccessibility(), NewCapturePage(), NewCheckSEO(), NewDetectTechnologies()}
+	return []action.Executor{NewDiscoverPages(), NewDiscoverPagesNoBrowser(), NewCheckLinks(), NewCheckAccessibility(), NewCapturePage(), NewCheckSEO(), NewDetectTechnologies()}
 }
 
 type PageInput struct {

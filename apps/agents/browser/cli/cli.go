@@ -10,14 +10,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	webquality "github.com/defos-ai/commander/apps/agents/web-quality"
+	browser "github.com/defos-ai/commander/apps/agents/browser"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const serviceName = "commander-" + string(webquality.WebQualityAgentType) + "-agent"
+const serviceName = "commander-" + string(browser.BrowserAgentType)
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
 func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
@@ -38,11 +38,11 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if err != nil {
 		return err
 	}
-	agentID, err := id.AgentID(string(webquality.WebQualityAgentType))
+	agentID, err := id.AgentID(string(browser.BrowserAgentType))
 	if err != nil {
 		return err
 	}
-	logger = logger.With("service", serviceName, "agent_type", webquality.WebQualityAgentType, "agent_id", agentID)
+	logger = logger.With("service", serviceName, "agent_type", browser.BrowserAgentType, "agent_id", agentID)
 	defer func() {
 		if result != nil && !cancellationOnly(result) {
 			logger.Error("agent stopped with error", "error", result)
@@ -55,7 +55,7 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, dependencies.Close()) }()
-	actions := webquality.NewActions()
+	actions := browser.NewActions()
 	if configuration.actionNames != nil {
 		selected := make([]action.Executor, 0, len(configuration.actionNames))
 		for _, name := range configuration.actionNames {
@@ -68,7 +68,7 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 		}
 		actions = selected
 	}
-	agent, err := webquality.NewWebQualityAgent(agents.AgentConfig{
+	agent, err := browser.NewBrowserAgent(agents.AgentConfig{
 		ID:                 agentID,
 		Actions:            actions,
 		GrantedPermissions: configuration.permissions,

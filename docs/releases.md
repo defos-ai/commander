@@ -70,7 +70,9 @@ Download the binary as `commander` (`commander.exe` on Windows). On Linux/macOS,
 run `chmod +x commander`, then `./commander --all-in-one`; on Windows, run
 `.\commander.exe --all-in-one`. See
 [native setup](../apps/playground/README.md#native-one-executable) for model setup,
-the generated API login, browser dependencies and temporary-state behavior.
+the generated API login and temporary-state behavior. Native users can run
+`review-website-no-browser` immediately; the with-browser mission also needs
+Chromium or Chrome.
 
 Use `/releases/latest/download/<file-name>` for a
 [versionless download](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases#linking-to-the-latest-release).
@@ -93,7 +95,7 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 | `ghcr.io/defos-ai/commander-admin` | [push-admin.yml](../.github/workflows/push-admin.yml) |
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
 | `ghcr.io/defos-ai/commander-controller` | [push-controllers.yml](../.github/workflows/push-controllers.yml) |
-| `ghcr.io/defos-ai/commander-web-quality-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
+| `ghcr.io/defos-ai/commander-browser-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.

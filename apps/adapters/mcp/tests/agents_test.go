@@ -21,11 +21,11 @@ func TestAgentsAndActions(t *testing.T) {
 		Actions []actions.Action `json:"actions"`
 	}
 	a.call("list_actions", object{}, &catalog)
-	if len(catalog.Actions) != 6 {
+	if len(catalog.Actions) != 7 {
 		t.Fatalf("actions=%+v", catalog)
 	}
 	for _, agent := range list.Agents {
-		if agent.Stale || len(agent.Actions) != 6 {
+		if agent.Stale || len(agent.Actions) != 7 {
 			t.Fatalf("incomplete/stale agent: %+v", agent)
 		}
 		for _, action := range agent.Actions {

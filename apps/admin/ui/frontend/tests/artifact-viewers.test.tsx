@@ -115,7 +115,7 @@ describe('artifact and report viewers', () => {
 
   it('downloads the saved report as JSON and can retry a failed report read', async () => {
     const files = browserFiles();
-    const report = { id: 'report-1', operation_id: 'operation-1', mission: 'review-website', output: { findings: ['Missing page title'] }, created_at: artifact.created_at };
+    const report = { id: 'report-1', operation_id: 'operation-1', mission: 'review-website-with-browser', output: { findings: ['Missing page title'] }, created_at: artifact.created_at };
     let unavailable = true;
     vi.stubGlobal('fetch', vi.fn(async () => unavailable ? new Response(null, { status: 503 }) : Response.json(report)));
     render(<ReportDialog url={url} credentials={credentials} operationID={report.operation_id} onClose={vi.fn()} />);

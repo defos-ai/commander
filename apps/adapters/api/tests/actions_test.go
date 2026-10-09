@@ -13,8 +13,8 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 	a := connect(t)
 	catalog := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 	agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-	if len(catalog.Items) != 6 {
-		t.Fatalf("expected six website actions: %+v", catalog)
+	if len(catalog.Items) != 7 {
+		t.Fatalf("expected seven browser-agent actions: %+v", catalog)
 	}
 	for i, action := range catalog.Items {
 		if i > 0 && catalog.Items[i-1].Name >= action.Name {
@@ -30,7 +30,7 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 		assertSchema(t, a, "Action", a.request(http.MethodGet, path, nil))
 	}
 	for _, agent := range agents.Items {
-		if len(agent.Actions) != 6 {
+		if len(agent.Actions) != 7 {
 			t.Fatalf("agent lacks actions: %+v", agent)
 		}
 		for _, action := range agent.Actions {
