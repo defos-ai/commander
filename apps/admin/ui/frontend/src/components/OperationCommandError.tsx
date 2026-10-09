@@ -1,6 +1,6 @@
 import type { CommandError } from '../api/operation-commands';
 import { useTranslation } from '../i18n';
-import messages from '../i18n/operationCommands';
+import messages from '../i18n/locales/en/operationCommands';
 import { Button } from './Button';
 
 export function OperationCommandError({ error, operationID, onInspect }: {

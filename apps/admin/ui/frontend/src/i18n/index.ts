@@ -1,7 +1,7 @@
 import type {} from './types';
 import { createInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import en from './en';
+import en from './locales/en';
 
 export { useTranslation } from 'react-i18next';
 export const i18n = createInstance();

@@ -7,7 +7,7 @@
 - Under `frontend/src/`: pages in `pages/`, API calls/types in `api/`, reusable
   controls in `components/`, state hooks in `hooks/`, routes in `navigation/`,
   connection/session handling in `connections/`, styles in `styles/`.
-- Put English copy in `frontend/src/i18n/` using typed translation selectors.
+- Put English copy in `frontend/src/i18n/locales/en/` using typed translation selectors.
 - `backend/cli/` configures the Go host; `backend/static/` serves built assets;
   `backend/connections/` handles sessions, upstream mapping and the API proxy.
 - [docker/Dockerfile](docker/Dockerfile) packages both frontend and Go server.
