@@ -86,6 +86,9 @@ func (m *Model) refresh() {
 			body = m.renderMarkdown(body)
 		}
 		text := m.color(label, color) + "  " + body
+		if item.kind == "notice" && strings.Contains(body, "\n") {
+			text = body
+		}
 		if item.kind == "user" || item.kind == "assistant" || item.kind == "question" {
 			text = m.color(label, color) + "\n" + body + "\n"
 		}

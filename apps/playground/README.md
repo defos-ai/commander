@@ -36,19 +36,21 @@ key, or enter your provider's key during setup.
 For separate hosts and retained results, use Compose:
 
 ```sh
-docker compose up --build --wait
+docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Paste the MCP token when prompted; Playground shows its lookup command.
-To reuse it for future launches from the same shell:
+The `mcp-credentials` initializer saves a shared token in a named Docker volume.
+MCP and Playground mount it read-only and export it to their process environments,
+so Playground connects automatically. The token survives restarts. Set `MCP_TOKEN`
+before starting Compose to replace it; `COMMANDER_MCP_TOKEN` overrides it for
+Playground. To retrieve the running token:
 
 ```sh
-export COMMANDER_MCP_TOKEN="$(docker compose exec -T mcp commander-mcp credentials --raw)"
+docker compose exec mcp commander-mcp credentials
 ```
 
-MCP generates its token on startup; refresh your token after it restarts.
-Set `MCP_TOKEN` before starting Compose to use your own token.
+Add `--raw` to print only the token.
 `/exit` closes chat; hosts and saved work remain.
 `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.

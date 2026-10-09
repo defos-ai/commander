@@ -17,6 +17,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
 	"github.com/defos-ai/commander/framework/host"
@@ -37,6 +38,57 @@ func TestProviderSelector(t *testing.T) {
 	}
 	if strings.Contains(selected, "\x1b[") {
 		t.Fatal("no-color rendering contains ANSI colors")
+	}
+}
+
+func TestHelpLayout(t *testing.T) {
+	for _, noColor := range []bool{true, false} {
+		t.Run(fmt.Sprintf("no-color=%t", noColor), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			server := mcp.NewServer(&mcp.Implementation{Name: "help-fixture", Version: "1"}, nil)
+			endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+			defer endpoint.Close()
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				t.Error("help must not call the model")
+				http.Error(w, "unexpected model request", http.StatusBadRequest)
+			}))
+			defer provider.Close()
+			u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: noColor})
+			defer u.model.Close()
+			u.model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
+			u.text("/help")
+			u.key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.wait("help", func(view string) bool { return strings.Contains(view, "Show this help") })
+
+			for _, width := range []int{120, 60, 120} {
+				u.model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
+				view := ansi.Strip(u.model.View())
+				start := strings.Index(view, "/help — Show this help")
+				if start < 1 || view[start-1] != '\n' {
+					t.Fatalf("help is not aligned at the start of the line at width %d", width)
+				}
+				end := strings.Index(view[start:], "exits.")
+				if end < 0 {
+					t.Fatalf("help was truncated at width %d", width)
+				}
+				help := view[start : start+end+len("exits.")]
+				if !strings.Contains(strings.Join(strings.Fields(help), " "), "Ctrl+D exits.") {
+					t.Fatal("help lost its final keyboard shortcut")
+				}
+				if !strings.Contains(help, "\n/run <operation-id> <action> <json-input> —") || !strings.Contains(help, "\n/exit —") {
+					t.Fatal("help command rows are misaligned")
+				}
+				for _, line := range strings.Split(help, "\n") {
+					if ansi.StringWidth(line) > width-4 {
+						t.Fatalf("help exceeds the viewport at width %d", width)
+					}
+				}
+				if !strings.Contains(view, "·  Try:") {
+					t.Fatal("single-line notices lost their marker")
+				}
+			}
+		})
 	}
 }
 

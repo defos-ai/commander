@@ -229,15 +229,15 @@ func (e *Engine) run() {
 	}
 }
 
-const Help = `/help                       Show this help
-/status                     Show connection and queue status
-/operations                 List saved operations
-/watch <operation-id>        Follow an operation and resume model review
-/run <operation-id> <action> <json-input> Queue an action directly through MCP
-/cancel <operation-id>       Cancel a server-side operation
-/stop                       Stop this reply and clear queued messages
-/clear                      Clear model conversation; keep saved operations
-/exit                       Exit; server-side work keeps running
+const Help = `/help — Show this help
+/status — Show connection and queue status
+/operations — List saved operations
+/watch <operation-id> — Follow an operation and resume model review
+/run <operation-id> <action> <json-input> — Queue an action directly through MCP
+/cancel <operation-id> — Cancel a server-side operation
+/stop — Stop this reply and clear queued messages
+/clear — Clear model conversation; keep saved operations
+/exit — Exit; server-side work keeps running
 
 Try: "List missions and available agents."
 Use PgUp/PgDown to scroll. Ctrl+C stops a reply; Ctrl+D exits.`

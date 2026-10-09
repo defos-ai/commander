@@ -1,4 +1,4 @@
-name: commander-full
+name: commander
 
 x-environment: &environment
   BUS_URL: ${BUS_URL:-amqp://${RABBITMQ_USER:-commander}:${RABBITMQ_PASSWORD:-commander-local-secret}@rabbitmq:5672/}
@@ -33,6 +33,38 @@ x-agent: &agent
       condition: service_healthy
 
 services:
+  mcp-credentials:
+    image: commander-mcp:local
+    pull_policy: never
+    user: "0:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        umask 077
+        chgrp 1000 /run/commander
+        chmod 750 /run/commander
+        if [ -e /run/commander/mcp-token ] || [ -L /run/commander/mcp-token ]; then
+          test -f /run/commander/mcp-token
+          test -s /run/commander/mcp-token
+          test ! -L /run/commander/mcp-token
+        fi
+        if [ -n "$$MCP_TOKEN" ] || [ ! -f /run/commander/mcp-token ]; then
+          temporary="$$(mktemp /run/commander/.mcp-token.XXXXXX)"
+          trap 'rm -f "$$temporary"' EXIT
+          MCP_TOKEN="$${MCP_TOKEN:-$$(openssl rand -hex 32)}"
+          export MCP_TOKEN
+          commander-mcp credentials --raw > "$$temporary"
+          chmod 440 "$$temporary"
+          mv "$$temporary" /run/commander/mcp-token
+        fi
+    environment:
+      MCP_TOKEN: ${MCP_TOKEN:-}
+    volumes:
+      - mcp-credentials:/run/commander
+
   rabbitmq:
     image: rabbitmq:4.2.9-management-alpine
     hostname: rabbitmq
@@ -138,17 +170,22 @@ services:
     <<: *runtime
     # Keep MCP at PID 1 so the credentials command can read its environment.
     init: false
-    entrypoint: ["/bin/sh", "-ec"]
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        MCP_TOKEN="$${MCP_TOKEN:-$$(cat /run/commander/mcp-token)}"
+        export MCP_TOKEN
+        exec commander-mcp "$$@"
+      - commander-mcp
     image: commander-mcp:local
     pull_policy: never
     build:
       context: .
       dockerfile: apps/adapters/mcp/docker/Dockerfile
     command:
-      - |
-        MCP_TOKEN="$${MCP_TOKEN:-$$(openssl rand -hex 32)}"
-        export MCP_TOKEN
-        exec commander-mcp --listen-address=:4273 --allowed-hosts=localhost,127.0.0.1,::1,mcp
+      - --listen-address=:4273
+      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
@@ -156,7 +193,11 @@ services:
       MCP_RUNTIME: docker-compose
     ports:
       - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
+    volumes:
+      - mcp-credentials:/run/commander:ro
     depends_on:
+      mcp-credentials:
+        condition: service_completed_successfully
       controller:
         condition: service_started
       rabbitmq:
@@ -258,6 +299,14 @@ services:
     tty: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        COMMANDER_MCP_TOKEN="$${COMMANDER_MCP_TOKEN:-$$(cat /run/commander/mcp-token)}"
+        export COMMANDER_MCP_TOKEN
+        exec commander "$$@"
+      - commander
     environment:
       COMMANDER_MCP_URL: http://mcp:4273/mcp
       COMMANDER_MCP_TOKEN: ${COMMANDER_MCP_TOKEN:-${MCP_TOKEN:-}}
@@ -274,7 +323,11 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       NO_COLOR: ${NO_COLOR:-}
       TERM: ${TERM:-xterm-256color}
+    volumes:
+      - mcp-credentials:/run/commander:ro
     depends_on:
+      mcp-credentials:
+        condition: service_completed_successfully
       mcp:
         condition: service_healthy
       web-1:
@@ -283,6 +336,7 @@ services:
         condition: service_started
 
 volumes:
+  mcp-credentials:
   rabbitmq:
   minio:
   mongo:

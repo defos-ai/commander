@@ -69,11 +69,17 @@
   validated deployment enums select predefined token lookup hints; do not display
   server-provided commands or response bodies. Return a typed authentication error
   with an optional predefined lookup command; missing metadata still allows token
-  entry. Successful connections need no metadata probe. Environment one-liners use
-  `--raw` and `docker compose exec -T` without automatically executing anything.
-- Compose Playground accepts token entry or host-side lookup through
-  `COMMANDER_MCP_TOKEN`. Use `run --no-deps` after stack readiness so launch cannot recreate MCP.
-  Do not add credential files, Docker socket mounts or an unauthenticated token endpoint.
+  entry. Successful connections need no metadata probe. Displayed token hints use
+  `--raw` and `docker compose exec -T`; the UI must never execute those commands.
+- Compose's `mcp-credentials` one-shot initializer persists the shared token in a
+  dedicated named volume. MCP and Playground mount it read-only; their wrappers
+  export credentials to process environments before exec. Reuse the saved token
+  across restarts, replacing it when an explicit nonempty `MCP_TOKEN` is configured.
+  Preserve `COMMANDER_MCP_TOKEN` as a client override. This Compose bootstrap file
+  is the only exception to native/all-in-one credential-file rules. Fail before
+  starting the client if its required token cannot be read. Use `run --no-deps`
+  after stack readiness so launch cannot recreate MCP. Do not add Docker socket
+  mounts or an unauthenticated token endpoint.
 - The all-in-one image binds the API to `0.0.0.0:4274` inside the container; document
   host publishing on `127.0.0.1` by default. MCP stays internal. Container browser
   runs use `CHROMIUM_NO_SANDBOX=true`; keep the process non-root. State remains

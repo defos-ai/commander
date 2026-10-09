@@ -8,7 +8,7 @@ development setup; production deployment is not yet documented.
 From the repository root, start the stack and launch Playground:
 
 ```sh
-docker compose up --build --wait
+docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
@@ -24,13 +24,16 @@ without Compose, use [Playground's all-in-one mode](../apps/playground/README.md
 which generates and shares its MCP token automatically.
 
 The API listens on `4274` and admin UI on `4275`. Compose generates an API password
-and MCP token on each container start; set `API_PASSWORD` and `MCP_TOKEN` to
-preserve your own credentials. The
+on each container start; set `API_PASSWORD` to preserve your own password. The
 [UI quick start](../apps/admin/ui/README.md#quick-start) shows retrieval and port overrides.
-Use `docker compose exec mcp commander-mcp credentials` to look up the MCP token.
-Paste the token when Playground prompts; after MCP restarts, retrieve its new token.
-For an environment one-liner, see [Playground setup](../apps/playground/README.md#docker-recommended).
-Credentials are kept in process environments; no credential files are created.
+
+The one-shot `mcp-credentials` initializer saves a shared MCP token in a named
+Docker volume. MCP and Playground mount it read-only and export it to their
+process environments. Playground connects automatically, and the token survives
+restarts. Set `MCP_TOKEN` before starting Compose to replace it;
+`COMMANDER_MCP_TOKEN` overrides it for Playground. Retrieve the running token with
+`docker compose exec mcp commander-mcp credentials`; add `--raw` for only the token.
+API credentials remain in its process environment.
 
 ## Configuration
 
@@ -56,8 +59,9 @@ Run a host with `--help` for its flags. Action-specific dependencies belong in t
 
 Compose creates named Docker volumes; no host `state/` directory is needed.
 It persists RabbitMQ, MongoDB, and MinIO data in their own volumes;
-application hosts need no shared filesystem volumes. Host inboxes remain
-transient: broker persistence does not preserve a replaced host's inbox.
+the only shared application volume holds the MCP credential, separate from data.
+Host inboxes remain transient: broker persistence does not preserve a replaced
+host's inbox.
 
 Compose passes `--with-missions` to load the example mission. This upserts supplied
 missions without removing others; without the flag the controller loads none.

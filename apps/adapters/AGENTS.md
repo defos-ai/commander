@@ -28,14 +28,18 @@
   `GET`/`HEAD` are public and retain Host/Origin checks. Keep tokens, paths and
   shell commands out of metadata responses.
 - Secrets belong in environment variables or explicit in-memory overrides. Never
-  log them. `commander-mcp credentials` is an explicit local lookup; on Linux it
+  log them. Compose alone may bootstrap the shared MCP token from its dedicated
+  Docker volume; hosts still read process environment credentials.
+  `commander-mcp credentials` is an explicit local lookup; on Linux it
   reads PID 1 only when that process uses the same executable. Lookup failures
   for a matching process must not fall back to a different environment token.
   `credentials --raw` prints only the token; it must not alter startup behavior.
-- Compose generates an unset/empty `MCP_TOKEN` in its shell entrypoint, exports it,
-  then execs MCP as PID 1 (`init: false`), matching API credential generation.
-  Keep OpenSSL explicit in the MCP image. Recreating/restarting MCP rotates a
-  generated token; an environment override remains unchanged.
+- Compose's `mcp-credentials` one-shot initializer persists a shared token in a
+  dedicated named volume, reusing it across restarts unless an explicit nonempty
+  `MCP_TOKEN` replaces it. MCP and Playground mount this volume read-only and export
+  the token to their environments; preserve an explicit `COMMANDER_MCP_TOKEN`
+  client override. MCP stays PID 1 (`init: false`) for credential lookup. Keep
+  OpenSSL explicit in the MCP image; API credential generation remains separate.
 - Keep input schemas and decoded request validation consistent. `addTool` strictly
   decodes arguments; malformed inputs use JSON-RPC invalid-params errors, while
   tool execution failures use text content with `IsError`.

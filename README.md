@@ -59,7 +59,7 @@ Docker Compose:
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground
 ```
 
-Go 1.26.7+:
+Go:
 
 ```sh
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
@@ -72,9 +72,9 @@ for native dependencies and configuration.
 
 **Commander -> Controller -> Agent**
 
-- **Commander** — your AI client chooses the mission and what work is needed.
-- **Controller** — automates the workflow and assigns tasks to available agents.
-- **Agent** — executes actions and returns results and evidence.
+- **Commander**, your AI client chooses the mission and what work is needed.
+- **Controller**, automates the workflow and assigns tasks to available agents.
+- **Agent**, executes actions and returns results and evidence.
 
 ## Explore the project
 

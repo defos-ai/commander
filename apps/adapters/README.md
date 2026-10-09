@@ -33,13 +33,14 @@ To look up a Compose server's token:
 docker compose exec mcp commander-mcp credentials
 ```
 
-Compose generates the token on each MCP container start. Set `MCP_TOKEN` before
-starting Compose to preserve your own token. Reconnect clients with the new token
-after a restart. Add `--raw` to print only the token for shell commands;
-[Playground setup](../playground/README.md#docker-recommended) shows an environment one-liner.
+Compose initializes a shared token in a named Docker volume and reuses it across
+restarts. Set `MCP_TOKEN` before starting Compose to replace it. Playground reads
+the shared token automatically; `COMMANDER_MCP_TOKEN` supplies a client override.
+Add `--raw` to print only the token for shell commands. See
+[Playground setup](../playground/README.md#docker-recommended).
 
-Native `commander-mcp credentials` reads the current environment. Tokens are never
-written to logs or credential files. This is shared-token authentication: clients
+Native `commander-mcp credentials` reads the current environment without credential
+files. Tokens are never written to logs. This is shared-token authentication: clients
 need custom-header support, and remote access needs HTTPS. OAuth sign-in and
 per-user permissions are not provided.
 
