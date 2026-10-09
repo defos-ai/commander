@@ -1,5 +1,5 @@
-.automation-graph { margin-top: 20px; min-width: 0; }
+.automation-graph { margin-top: 18px; min-width: 0; }
 .automation-graph .graph-node[data-starting='true'] { border-left: 3px solid var(--green); }
 .automation-graph .graph-node-meta { display: flex; align-items: center; gap: 6px; }
 .automation-graph .graph-node-meta svg { flex-shrink: 0; }
-.automation-graph .graph-node-details .graph-relations { margin-top: 12px; }
+.automation-graph .graph-node-details .graph-relations { margin-top: 11px; }

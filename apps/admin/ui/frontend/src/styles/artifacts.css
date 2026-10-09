@@ -1,24 +1,24 @@
-.dialog.artifact-dialog { width: min(880px, calc(100% - 32px)); }
-.artifact-loading { display: flex; align-items: center; gap: 10px; margin: 24px 0; color: var(--muted); }
-.artifact-content { display: grid; gap: 24px; margin: 24px 0; min-width: 0; }
-.artifact-content h3 { font-size: 18px; margin-bottom: 14px; overflow-wrap: anywhere; }
-.artifact-content .detail-list > div { padding: 12px 0; }
-.artifact-files { display: grid; gap: 14px; list-style: none; padding: 0; margin: 18px 0 0; }
-.artifact-file { padding: 18px; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
-.artifact-file h4 { font-size: 15px; margin: 0 0 8px; overflow-wrap: anywhere; }
-.artifact-file-controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 8px; }
-.artifact-file-metadata { margin: 12px 0; }
-.artifact-file-metadata summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-.artifact-file-metadata .detail-list { margin-top: 12px; }
+.dialog.artifact-dialog { width: min(792px, calc(100% - 29px)); }
+.artifact-loading { display: flex; align-items: center; gap: 9px; margin: 22px 0; color: var(--muted); }
+.artifact-content { display: grid; gap: 22px; margin: 22px 0; min-width: 0; }
+.artifact-content h3 { font-size: 16px; margin-bottom: 13px; overflow-wrap: anywhere; }
+.artifact-content .detail-list > div { padding: 11px 0; }
+.artifact-files { display: grid; gap: 13px; list-style: none; padding: 0; margin: 16px 0 0; }
+.artifact-file { padding: 16px; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.artifact-file h4 { font-size: 13px; margin: 0 0 7px; overflow-wrap: anywhere; }
+.artifact-file-controls { display: flex; gap: 9px; flex-wrap: wrap; margin: 14px 0 7px; }
+.artifact-file-metadata { margin: 11px 0; }
+.artifact-file-metadata summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.artifact-file-metadata .detail-list { margin-top: 11px; }
 .artifact-preview { min-width: 0; }
-.artifact-preview pre { max-height: 520px; overflow: auto; margin: 0; padding: 18px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); font: 400 12px/1.7 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.artifact-preview img { display: block; max-width: 100%; max-height: 620px; object-fit: contain; margin: 0 auto; border: 1px solid var(--line); }
-.artifact-transfer { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.artifact-transfer p { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.artifact-preview pre { max-height: 468px; overflow: auto; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); font: 400 11px/1.7 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.artifact-preview img { display: block; max-width: 100%; max-height: 558px; object-fit: contain; margin: 0 auto; border: 1px solid var(--line); }
+.artifact-transfer { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.artifact-transfer p { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .artifact-dialog .notice { line-height: 1.7; }
-.artifact-dialog .notice .button { margin-top: 12px; }
+.artifact-dialog .notice .button { margin-top: 11px; }
 .artifact-content .form-hint { overflow-wrap: anywhere; }
 @media (max-width: 760px) {
-  .dialog.artifact-dialog { padding: 20px; }
-  .artifact-file { padding: 14px; }
+  .dialog.artifact-dialog { padding: 18px; }
+  .artifact-file { padding: 13px; }
 }

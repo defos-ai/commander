@@ -1,55 +1,55 @@
-.missions-page { max-width: 1120px; }
+.missions-page { max-width: 1008px; }
 .missions-page h1 { overflow-wrap: anywhere; }
-.missions-back { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 24px; padding: 0; min-height: 32px; border: 0; background: transparent; color: var(--muted); font-size: 14px; }
+.missions-back { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 22px; padding: 0; min-height: 29px; border: 0; background: transparent; color: var(--muted); font-size: 13px; }
 .missions-back:hover { color: var(--ink); }
-.missions-loading { display: flex; align-items: center; gap: 10px; color: var(--muted); padding: 24px 0; }
-.missions-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; }
-.missions-toolbar > p { color: var(--muted); font: 400 11px/1.5 var(--font-mono); }
-.mission-search { display: flex; align-items: center; gap: 10px; padding: 0 14px; min-height: 44px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); width: min(100%, 400px); }
+.missions-loading { display: flex; align-items: center; gap: 9px; color: var(--muted); padding: 22px 0; }
+.missions-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin: 0 0 22px; }
+.missions-toolbar > p { color: var(--muted); font: 400 10px/1.5 var(--font-mono); }
+.mission-search { display: flex; align-items: center; gap: 9px; padding: 0 13px; min-height: 40px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); width: min(100%, 360px); }
 .mission-search:focus-within { outline: 2px solid var(--red); outline-offset: 3px; }
-.mission-search input { color: var(--ink); background: transparent; border: 0; min-width: 0; width: 100%; min-height: 44px; padding: 8px 0; font-size: 14px; }
+.mission-search input { color: var(--ink); background: transparent; border: 0; min-width: 0; width: 100%; min-height: 40px; padding: 7px 0; font-size: 13px; }
 .mission-search input:focus { outline: none; }
 .mission-search input::placeholder { color: var(--muted); }
-.mission-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
-.mission-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; width: 100%; padding: 24px; text-align: left; background: transparent; border: 1px solid var(--line); border-radius: 4px; }
+.mission-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 13px; }
+.mission-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; width: 100%; padding: 22px; text-align: left; background: transparent; border: 1px solid var(--line); border-radius: 4px; }
 .mission-row:hover { background: var(--panel); border-color: #a8a79f; }
 .mission-row > svg { color: var(--muted); margin-top: 3px; }
-.mission-row-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.mission-row-name { font-size: 21px; font-weight: 600; overflow-wrap: anywhere; }
-.mission-row-objective { color: var(--muted); font-size: 15px; line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
-.mission-row-meta { display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--muted); font: 400 11px/1.5 var(--font-mono); }
-.missions-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 48px 24px; border: 1px solid var(--line); text-align: center; }
+.mission-row-main { display: flex; flex-direction: column; gap: 11px; min-width: 0; }
+.mission-row-name { font-size: 19px; font-weight: 600; overflow-wrap: anywhere; }
+.mission-row-objective { color: var(--muted); font-size: 13px; line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.mission-row-meta { display: flex; flex-wrap: wrap; gap: 7px 22px; color: var(--muted); font: 400 10px/1.5 var(--font-mono); }
+.missions-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 43px 22px; border: 1px solid var(--line); text-align: center; }
 .missions-empty > svg, .missions-empty p { color: var(--muted); }
-.missions-empty h2 { font-size: 22px; }
+.missions-empty h2 { font-size: 20px; }
 .missions-empty p { line-height: 1.6; }
-.mission-details { display: grid; gap: 32px; }
+.mission-details { display: grid; gap: 29px; }
 .mission-section { min-width: 0; }
-.mission-section h2 { font-size: 20px; margin-bottom: 16px; }
-.mission-section p { font-size: 15px; line-height: 1.7; overflow-wrap: anywhere; }
+.mission-section h2 { font-size: 18px; margin-bottom: 14px; }
+.mission-section p { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 .mission-objective { white-space: pre-wrap; }
 .mission-muted { color: var(--muted); }
-.mission-action-sections { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
-.mission-action-names { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.mission-action-names li { padding: 6px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; font: 400 11px/1.6 var(--font-mono); overflow-wrap: anywhere; min-width: 0; }
-.mission-empty-rules { padding-top: 16px; }
-.mission-steps { padding-left: 24px; margin: 18px 0 0; }
-.mission-steps > li { padding: 0 0 22px 8px; }
-.mission-steps h3 { font: 400 13px/1.7 var(--font-mono); margin-bottom: 8px; }
-.mission-steps h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px; }
+.mission-action-sections { display: grid; grid-template-columns: 1fr 2fr; gap: 22px; }
+.mission-action-names { display: flex; flex-wrap: wrap; gap: 7px; list-style: none; margin: 0; padding: 0; }
+.mission-action-names li { padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; font: 400 10px/1.6 var(--font-mono); overflow-wrap: anywhere; min-width: 0; }
+.mission-empty-rules { padding-top: 14px; }
+.mission-steps { padding-left: 22px; margin: 16px 0 0; }
+.mission-steps > li { padding: 0 0 20px 7px; }
+.mission-steps h3 { font: 400 12px/1.7 var(--font-mono); margin-bottom: 7px; }
+.mission-steps h4 { font-size: 12px; font-weight: 600; margin: 14px 0 7px; }
 .mission-fields-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
-.mission-fields { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
-.mission-fields th, .mission-fields td { padding: 14px 16px; vertical-align: top; overflow-wrap: anywhere; }
+.mission-fields { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.mission-fields th, .mission-fields td { padding: 13px 14px; vertical-align: top; overflow-wrap: anywhere; }
 .mission-fields thead { background: var(--panel); }
 .mission-fields thead th { color: var(--muted); font-weight: 400; }
 .mission-fields tbody tr + tr { border-top: 1px solid var(--line); }
-.mission-fields code { font: 400 12px/1.7 var(--font-mono); }
-.mission-fields td p { font-size: 13px; }
-.mission-field-requirement { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 5px; }
-.mission-schema { margin-top: 14px; }
-.mission-schema summary { color: var(--muted); cursor: pointer; font-size: 13px; padding: 4px 0; }
-.mission-schema pre { max-height: 420px; overflow: auto; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font: 400 12px/1.7 var(--font-mono); }
+.mission-fields code { font: 400 11px/1.7 var(--font-mono); }
+.mission-fields td p { font-size: 12px; }
+.mission-field-requirement { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 5px; }
+.mission-schema { margin-top: 13px; }
+.mission-schema summary { color: var(--muted); cursor: pointer; font-size: 12px; padding: 4px 0; }
+.mission-schema pre { max-height: 378px; overflow: auto; padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font: 400 11px/1.7 var(--font-mono); }
 @media (max-width: 760px) {
-  .mission-row { padding: 20px; gap: 16px; }
+  .mission-row { padding: 18px; gap: 14px; }
   .mission-action-sections { grid-template-columns: 1fr; }
-  .mission-fields { min-width: 480px; }
+  .mission-fields { min-width: 432px; }
 }

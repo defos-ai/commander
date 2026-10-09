@@ -38,7 +38,7 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
     {sidebar.mobile && <button type="button" ref={sidebar.triggerRef} className="mobile-sidebar-toggle"
       aria-controls={sidebarId} aria-expanded={sidebar.modal} aria-label={t($ => $.shell.openMenu)}
       hidden={sidebar.modal} onClick={() => sidebar.setOpen(true)}>
-      <Menu size={21} aria-hidden="true" />
+      <Menu size={19} aria-hidden="true" />
     </button>}
     {sidebar.modal && <div className="sidebar-backdrop" aria-hidden="true" onClick={sidebar.close} />}
 
@@ -48,33 +48,35 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
       <div className="sidebar-brand">
         <Brand />
         {sidebar.mobile && <button type="button" className="sidebar-close" aria-label={t($ => $.shell.closeMenu)} onClick={sidebar.close}>
-          <X size={18} aria-hidden="true" />
+          <X size={16} aria-hidden="true" />
         </button>}
-      </div>
-      <div className="sidebar-connection">
-        <span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
-        <span className="sidebar-connection-name">{connection.name}</span>
-        <span className="sidebar-connection-url">{connection.url}</span>
       </div>
       <nav aria-label={t($ => $.shell.navigation)}>
         <div className="sidebar-primary">
           {navigation.filter(item => !sections || sections.includes(item.section)).map(({ section: destination, label, Icon }) => <button key={destination} type="button" className="sidebar-command"
             aria-current={section === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
-            <Icon size={17} strokeWidth={1.4} aria-hidden="true" />
+            <Icon size={15} strokeWidth={1.4} aria-hidden="true" />
             <span>{label}</span>
             {section === destination && <span className="nav-marker" aria-hidden="true" />}
           </button>)}
         </div>
         <div className="sidebar-footer">
-          {(!sections || sections.includes('settings')) && <button type="button" className="sidebar-command"
-            aria-current={section === 'settings' ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate('settings'); }}>
-            <Settings2 size={17} strokeWidth={1.4} aria-hidden="true" />
-            <span>{t($ => $.shell.nav.settings)}</span>
-            {section === 'settings' && <span className="nav-marker" aria-hidden="true" />}
-          </button>}
-          <button type="button" className="sidebar-command" onClick={() => { sidebar.close(); onBack(); }}>
-            <ArrowLeft size={17} strokeWidth={1.4} aria-hidden="true" /><span>{t($ => $.shell.allConnections)}</span>
-          </button>
+          <div className="sidebar-connection">
+            <span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
+            <span className="sidebar-connection-name">{connection.name}</span>
+            <span className="sidebar-connection-url">{connection.url}</span>
+          </div>
+          <div className="sidebar-settings">
+            {(!sections || sections.includes('settings')) && <button type="button" className="sidebar-command"
+              aria-current={section === 'settings' ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate('settings'); }}>
+              <Settings2 size={15} strokeWidth={1.4} aria-hidden="true" />
+              <span>{t($ => $.shell.nav.settings)}</span>
+              {section === 'settings' && <span className="nav-marker" aria-hidden="true" />}
+            </button>}
+            <button type="button" className="sidebar-command" onClick={() => { sidebar.close(); onBack(); }}>
+              <ArrowLeft size={15} strokeWidth={1.4} aria-hidden="true" /><span>{t($ => $.shell.allConnections)}</span>
+            </button>
+          </div>
         </div>
       </nav>
     </aside>

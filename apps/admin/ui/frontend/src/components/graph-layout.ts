@@ -1,8 +1,8 @@
-export const GRAPH_NODE_WIDTH = 240;
-export const GRAPH_NODE_HEIGHT = 112;
-const COLUMN_GAP = 80;
-const ROW_GAP = 32;
-const PADDING = 32;
+export const GRAPH_NODE_WIDTH = 216;
+export const GRAPH_NODE_HEIGHT = 100;
+const COLUMN_GAP = 72;
+const ROW_GAP = 28;
+const PADDING = 28;
 
 export interface PositionedGraphNode<Node extends { id: string } = { id: string }> { node: Node; x: number; y: number; }
 
