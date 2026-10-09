@@ -19,7 +19,7 @@ Use Commander for complex workflows that a single AI cannot reliably coordinate 
 
 Each option opens Playground. Choose a model, enter its API key, and ask:
 
-> Run review-website-no-browser for defos.ai and summarize what should be fixed before release.
+> Review defos.ai and summarize what should be fixed before release.
 
 ### Docker
 
@@ -28,8 +28,6 @@ Run all-in-one (AIO), with agent dependencies included:
 ```sh
 docker run --rm -it --name commander ghcr.io/defos-ai/commander-aio:stable
 ```
-
-Use `review-website-with-browser` to include rendered accessibility and screenshots.
 
 ### Binary
 
@@ -88,5 +86,5 @@ for native dependencies and configuration.
 | Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
 | Understand the architecture and limits | [Overview](docs/overview.md) |
 | Contribute | [Testing](framework/tests/README.md) · [Coding-agent guide](AGENTS.md) |
-
-[AGPL-3.0-only](LICENSE) · [Report a vulnerability](SECURITY.md)
+| License | [AGPL-3.0-only](LICENSE) |
+| Security | [Report a vulnerability](SECURITY.md) |
