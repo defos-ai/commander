@@ -8,12 +8,65 @@ DEFOS Commander orchestrates missions across distributed agents. Automate predic
 
 Use Commander for complex workflows that a single AI cannot reliably coordinate alone:
 
-- **Cybersecurity:** asset discovery and security assessments.
-- **Investigations:** evidence collection and analysis.
-- **Development:** code changes, testing, and review.
-- **IT operations:** diagnostics and approved recovery.
-- **Data processing:** validation and enrichment.
-- **Website quality:** links, accessibility, and SEO checks.
+- **Cybersecurity:** pen-testing, SOC alert triage, and incident response.
+- **Investigations:** collect evidence, correlate sources, and build case timelines.
+- **Development:** implement features, test changes, and review code across repositories.
+- **IT operations:** diagnose incidents and run approved recovery steps.
+- **Data processing:** validate datasets, enrich records, and generate reports.
+- **Website quality:** check links, accessibility, SEO, and page rendering before release.
+
+## Quick start
+
+Each option opens Playground. Choose a model, enter its API key, and ask:
+
+> Review defos.ai and summarize what should be fixed before release.
+
+### Docker
+
+Run all-in-one (AIO), with agent dependencies included:
+
+```sh
+docker run --rm -it --name commander ghcr.io/defos-ai/commander-aio:stable
+```
+
+### Binary
+
+Linux (amd64):
+
+```sh
+curl -fsSL https://github.com/defos-ai/commander/releases/latest/download/commander_linux_amd64 -o commander && chmod +x commander && ./commander --all-in-one
+```
+
+macOS (Apple silicon):
+
+```sh
+curl -fsSL https://github.com/defos-ai/commander/releases/latest/download/commander_darwin_arm64 -o commander && chmod +x commander && ./commander --all-in-one
+```
+
+Windows (amd64):
+
+```powershell
+powershell -c "iwr -UseBasicParsing https://github.com/defos-ai/commander/releases/latest/download/commander_windows_amd64.exe -OutFile commander.exe; .\commander.exe --all-in-one"
+```
+
+Other architectures: [Releases](https://github.com/defos-ai/commander/releases/latest).
+
+### Source
+
+Docker Compose:
+
+```sh
+docker compose up --build --wait && docker compose run --build --rm --no-deps playground
+```
+
+Go 1.26.7+:
+
+```sh
+go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
+```
+
+All-in-one results are temporary; Compose retains them. See [Playground](apps/playground/README.md)
+for native dependencies and configuration.
 
 ## How it works
 
@@ -22,42 +75,6 @@ Use Commander for complex workflows that a single AI cannot reliably coordinate 
 - **Commander** — your AI client chooses the mission and what work is needed.
 - **Controller** — automates the workflow and assigns tasks to available agents.
 - **Agent** — executes actions and returns results and evidence.
-
-## Quick start
-
-From a checkout, launch Playground, the Commander terminal chat.
-
-### Docker (recommended; includes agent dependencies)
-
-```sh
-docker compose up --build --wait
-docker compose run --build --rm --no-deps playground
-```
-
-### Go
-
-With Go 1.26.7+:
-
-```sh
-go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
-```
-
-All-in-one generates and connects with its MCP token automatically. It includes
-the API at `http://127.0.0.1:4274`; type `/credentials` to view both credentials.
-State is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
-for Windows and agent dependencies.
-
-Choose a model, provide its API key, paste the MCP token when prompted, and try:
-
-> Review defos.ai and summarize what should be fixed before release.
-
-The included [website review](apps/agents/web-quality/README.md#workflow) checks
-links, accessibility, SEO, and technology indicators, and captures screenshots.
-Your AI reviews the evidence and produces a report.
-
-Already using an AI client? Connect it to **`http://localhost:4273/mcp`** after
-starting Compose. Retrieve its generated token with `docker compose exec mcp commander-mcp credentials`.
-See [MCP setup](apps/adapters/README.md#quick-start).
 
 ## Explore the project
 

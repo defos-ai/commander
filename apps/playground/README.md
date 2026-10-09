@@ -62,10 +62,11 @@ docker run --rm -it -e COMMANDER_MCP_TOKEN commander:playground --mcp-url https:
 
 ### Native: one executable
 
-The first release is not published yet. [Native release archives](../../docs/releases.md#native-binaries)
+The first release is not published yet. [Native release binaries](../../docs/releases.md#native-binaries)
 will provide `commander` for Linux, macOS and Windows (amd64/arm64), without Go.
-Extract your archive and run `./commander --all-in-one` (`.\commander.exe --all-in-one`
-on Windows), or build and run with Go 1.26.7+ from the repository root:
+Download it as `commander` and run `chmod +x commander && ./commander --all-in-one`
+(`.\commander.exe --all-in-one` on Windows), or build and run with Go 1.26.7+
+from the repository root:
 
 ```sh
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one

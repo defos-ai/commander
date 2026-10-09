@@ -57,18 +57,24 @@ Use the separate release-test workflow for validation without publication.
 [build-binaries.yml](../.github/workflows/build-binaries.yml) builds `commander`
 for Linux, macOS and Windows on amd64 and arm64 runners. Each runner checks
 environment discovery, runs the all-in-one smoke test and checks the executable's
-`--help` before packaging it with `LICENSE`.
+`--help` before uploading it.
 
 After every image publishes, [push-binaries.yml](../.github/workflows/push-binaries.yml)
-attaches all six archives and `checksums.txt` to the root-version GitHub Release.
-Archive names are `commander_<version>_<os>_<arch>.tar.gz` (`.zip` for Windows);
-OS names are `linux`, `darwin` and `windows`. The SHA-256 checksums cover the archives.
+attaches all six executables, `LICENSE` and `checksums.txt` to the root-version
+GitHub Release. File names are `commander_<os>_<arch>` (`.exe` for Windows);
+OS names are `linux`, `darwin` and `windows`. SHA-256 checksums cover the binaries
+and license.
 Binaries are unsigned; macOS builds are not notarized.
 
-Extract the archive, then run `./commander --all-in-one`, or
-`.\commander.exe --all-in-one` on Windows. See
+Download the binary as `commander` (`commander.exe` on Windows). On Linux/macOS,
+run `chmod +x commander`, then `./commander --all-in-one`; on Windows, run
+`.\commander.exe --all-in-one`. See
 [native setup](../apps/playground/README.md#native-one-executable) for model setup,
 the generated API login, browser dependencies and temporary-state behavior.
+
+Use `/releases/latest/download/<file-name>` for a
+[versionless download](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases#linking-to-the-latest-release).
+Use `/releases/download/<version>/<file-name>` to pin a release.
 
 Uploads stay in a draft until all assets are attached. For a failed build or
 publication, rerun failed jobs in the same workflow run; partial draft uploads
@@ -96,11 +102,12 @@ There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.
 Git tags and images are separate publication steps; image failures do not undo tags.
 
-After all images and native archives publish,
+After all images and native binaries publish,
 [push-stable.yml](../.github/workflows/push-stable.yml) points each `stable` tag
-to that run's image digest without rebuilding. Only the highest published stable
-release advances these tags; publishing an older maintenance version leaves them
-unchanged. The all-in-one image remains `ghcr.io/defos-ai/commander-aio:stable`.
+to that run's image digest without rebuilding, then marks the GitHub Release as
+`Latest`. Only the highest published stable release advances these pointers;
+publishing an older maintenance version leaves them unchanged.
+The all-in-one image remains `ghcr.io/defos-ai/commander-aio:stable`.
 
 Tags update individually. If promotion fails partway through, rerun failed jobs
 in the same release run. Pin version tags or digests when deploying several

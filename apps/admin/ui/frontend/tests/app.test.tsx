@@ -94,13 +94,15 @@ describe('connection setup and saved metadata', () => {
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
-    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
-    for (const label of ['Connection name', 'API URL', 'Username', 'Password']) {
+    expect(screen.queryByText('Need a password? Run in a terminal:')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Connection name')).toHaveValue('New connection');
+    expect(screen.getByLabelText('Username')).toHaveValue('commander');
+    for (const label of ['API URL', 'Password']) {
       expect(screen.getByLabelText(label)).toHaveValue('');
     }
     fillConnection();
 
-    expect(await screen.findByText('Need a password?')).toBeVisible();
+    expect(await screen.findByText('Need a password? Run in a terminal:')).toBeVisible();
     const command = 'docker compose exec api commander-api credentials';
     expect(screen.getByText(command)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Copy command' }));
@@ -122,9 +124,11 @@ describe('connection setup and saved metadata', () => {
   it('clears the old password hint and ignores metadata that arrives after the URL changes', async () => {
     const api = mockAPI();
     const late = deferredResponse();
+    const nativePlaygroundURL = 'http://localhost:24274';
     api.state.intercept = url => {
       if (url === `${customLocalURL}/aboutz`) return late.promise;
       if (url === `${remoteURL}/aboutz`) return Promise.resolve(Response.json({ runtime: 'native', application: 'commander-api' }));
+      if (url === `${nativePlaygroundURL}/aboutz`) return Promise.resolve(Response.json({ runtime: 'native', application: 'commander' }));
       return undefined;
     };
     render(<App />);
@@ -133,7 +137,7 @@ describe('connection setup and saved metadata', () => {
     expect(await screen.findByText('docker compose exec api commander-api credentials')).toBeVisible();
 
     fireEvent.change(screen.getByLabelText('API URL'), { target: { value: customLocalURL } });
-    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Need a password? Run in a terminal:')).not.toBeInTheDocument();
     await waitFor(() => expect(api.fetch.mock.calls.some(([value]) => upstreamURL(value) === `${customLocalURL}/aboutz`)).toBe(true));
     const pending = api.fetch.mock.calls.find(([value]) => upstreamURL(value) === `${customLocalURL}/aboutz`)![1]?.signal;
     fireEvent.change(screen.getByLabelText('API URL'), { target: { value: remoteURL } });
@@ -145,8 +149,13 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByText('./commander-api credentials')).toBeVisible();
     expect(screen.queryByText('docker exec commander commander credentials api')).not.toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText('API URL'), { target: { value: nativePlaygroundURL } });
+    expect(await screen.findByText('/credentials api')).toBeVisible();
+    expect(screen.getByText('Need a password? Run in Playground:')).toBeVisible();
+    expect(screen.queryByText('Need a password? Run in a terminal:')).not.toBeInTheDocument();
+
     fireEvent.change(screen.getByLabelText('API URL'), { target: { value: '' } });
-    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Need a password? Run in Playground:')).not.toBeInTheDocument();
   });
 
   it.each(['unavailable', 'unsupported'])('keeps connecting available when credential metadata is %s', async failure => {
@@ -159,7 +168,7 @@ describe('connection setup and saved metadata', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
     const dialog = fillConnection();
     await waitFor(() => expect(api.fetch.mock.calls.some(([value]) => upstreamURL(value) === `${remoteURL}/aboutz`)).toBe(true));
-    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Need a password? Run in a terminal:')).not.toBeInTheDocument();
     expect(screen.queryByText('untrusted command')).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
     expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
@@ -230,7 +239,7 @@ describe('connection setup and saved metadata', () => {
     expect(api.fetch.mock.calls.filter(([input]) => upstreamURL(input) === `${localURL}/healthz`)).toHaveLength(1);
   });
 
-  it('opens manual Add with empty fields, including after cancelling detected local setup', async () => {
+  it('opens manual Add with default name and username, including after cancelling detected local setup', async () => {
     mockAPI();
     render(<App />);
     await screen.findByText('Local Commander detected');
@@ -245,10 +254,12 @@ describe('connection setup and saved metadata', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       }
       fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
-      for (const label of ['Connection name', 'API URL', 'Username', 'Password']) {
+      expect(screen.getByLabelText('Connection name')).toHaveValue('New connection');
+      expect(screen.getByLabelText('Username')).toHaveValue('commander');
+      for (const label of ['API URL', 'Password']) {
         expect(screen.getByLabelText(label)).toHaveValue('');
       }
-      expect(screen.getByLabelText('Connection name')).toHaveFocus();
+      expect(screen.getByLabelText('API URL')).toHaveFocus();
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     }
     expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).toBeNull();
@@ -316,7 +327,7 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByLabelText('API URL')).toHaveValue(remoteURL);
     expect(screen.getByLabelText('Username')).toHaveValue(username);
     expect(screen.getByLabelText('Password')).toHaveValue('');
-    expect(screen.getByLabelText('Connection name')).toHaveFocus();
+    expect(screen.getByLabelText('Password')).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(stored()).toEqual([saved]);
   });
@@ -349,6 +360,11 @@ describe('connection setup and saved metadata', () => {
     expect(screen.getByRole('heading', { name: page, level: 1 })).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent(`Sign in to view ${resource} on this connection.`);
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(screen.getByLabelText('Connection name')).toHaveValue(savedConnection.name);
+    expect(screen.getByLabelText('API URL')).toHaveValue(savedConnection.url);
+    expect(screen.getByLabelText('Username')).toHaveValue('commander');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+    expect(screen.getByLabelText('Password')).toHaveFocus();
     const dialog = fillConnection();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));
 
@@ -387,7 +403,7 @@ describe('connection setup and saved metadata', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Remote Commander' }));
     expect(screen.getByLabelText('Connection name')).toHaveValue(savedConnection.name);
     expect(screen.getByLabelText('API URL')).toHaveValue(savedConnection.url);
-    expect(screen.getByLabelText('Username')).toHaveValue('');
+    expect(screen.getByLabelText('Username')).toHaveValue('commander');
     expect(screen.getByLabelText('Password')).toHaveValue('');
     const dialog = fillConnection({ name: 'Renamed Commander', url: 'https://new.example.test/api-root/' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));

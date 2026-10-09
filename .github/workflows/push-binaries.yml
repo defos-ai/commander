@@ -36,7 +36,8 @@ jobs:
           pattern: commander-native-*
           merge-multiple: true
           path: artifacts
-      - name: Publish native archives and checksums
+      - name: Publish native binaries and checksums
+        id: publish
         working-directory: artifacts
         shell: bash
         env:
@@ -46,24 +47,25 @@ jobs:
           shopt -s nullglob dotglob
           downloaded=(*)
           if (( ${#downloaded[@]} != 6 )); then
-            echo "Expected exactly six native archives; refusing an incomplete release." >&2
+            echo "Expected exactly six native binaries; refusing an incomplete release." >&2
             exit 1
           fi
 
-          archives=()
+          binaries=()
           for os in linux darwin windows; do
-            extension=tar.gz
-            if [[ "$os" == windows ]]; then extension=zip; fi
+            extension=
+            if [[ "$os" == windows ]]; then extension=.exe; fi
             for arch in amd64 arm64; do
-              archive="commander_${VERSION}_${os}_${arch}.${extension}"
-              if [[ ! -s "$archive" || ! -f "$archive" || -L "$archive" ]]; then
-                echo "Missing native archive: $archive" >&2
+              binary="commander_${os}_${arch}${extension}"
+              if [[ ! -s "$binary" || ! -f "$binary" || -L "$binary" ]]; then
+                echo "Missing native binary: $binary" >&2
                 exit 1
               fi
-              archives+=("$archive")
+              binaries+=("$binary")
             done
           done
-          sha256sum "${archives[@]}" > checksums.txt
+          cp ../LICENSE LICENSE
+          sha256sum "${binaries[@]}" LICENSE > checksums.txt
 
           draft=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[]' |
             jq -sr --arg version "$VERSION" 'map(select(.tag_name == $version)) | if length == 0 then "missing" else .[0].draft end')
@@ -77,5 +79,5 @@ jobs:
               exit 1
               ;;
           esac
-          gh release upload "$VERSION" "${archives[@]}" checksums.txt --clobber
-          gh release edit "$VERSION" --draft=false
+          gh release upload "$VERSION" "${binaries[@]}" LICENSE checksums.txt --clobber
+          gh release edit "$VERSION" --draft=false --latest=false

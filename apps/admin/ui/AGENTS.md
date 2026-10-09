@@ -22,8 +22,11 @@
   upstream redirects. Do not send API credentials through URLs or browser storage.
 - `UI_API_UPSTREAMS` maps host/port internally while the user sees the public URL.
   Preserve URL scheme/base path; unmapped URLs connect directly. Keep this mapping
-  in the backend. Discovery checks the fixed local endpoint; adding a connection
-  stays blank, while connecting a discovered local API prefills non-secret fields.
+  in the backend. Discovery checks the fixed local endpoint. Manual Add defaults
+  to `New connection` and username `commander`, with URL/password blank. Discovered
+  local APIs retain their existing non-secret defaults. Re-login defaults to
+  `commander`; editing an active session retains its supplied username.
+  Focus the first empty field when the connection dialog opens.
 - The password hint reads public `/aboutz` through the existing proxy before
   sign-in. Keep commands predefined in the frontend; never use commands returned
   by an API. Cancel discovery on URL changes and keep failed hints from blocking

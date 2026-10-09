@@ -134,7 +134,7 @@ jobs:
     needs: [release, api, admin, mcp, controllers, agents, aio]
     uses: ./.github/workflows/push-stable.yml
     permissions:
-      contents: read
+      contents: write
       packages: write
     with:
       version: ${{ inputs.version }}

@@ -56,7 +56,7 @@ export function CredentialHint({ url }: { url: string }) {
   }
 
   return <div className="credential-hint">
-    <p className="form-hint">{t($ => $.connectionForm.needPassword)}{command === '/credentials api' && <> {t($ => $.connectionForm.inPlayground)}</>}</p>
+    <p className="form-hint">{t($ => command === '/credentials api' ? $.connectionForm.needPasswordInPlayground : $.connectionForm.needPassword)}</p>
     <div className="credential-command">
       <code>{command}</code>
       <button type="button" className="icon-button" aria-label={t($ => copied ? $.connectionForm.copied : $.connectionForm.copyCommand)}

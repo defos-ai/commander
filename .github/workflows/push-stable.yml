@@ -1,4 +1,4 @@
-name: Promote stable Docker images
+name: Promote stable images and latest release
 
 on:
   workflow_call:
@@ -13,7 +13,7 @@ on:
         required: true
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -66,6 +66,9 @@ jobs:
         id: promote
         if: steps.select.outputs.promote == 'true'
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           images=$(jq -r 'to_entries[] | [.key, .value] | @tsv' <<< "$IMAGES")
           while IFS=$'\t' read -r name digest; do
@@ -78,3 +81,5 @@ jobs:
             fi
             echo "- $image:stable → $VERSION ($digest)" >> "$GITHUB_STEP_SUMMARY"
           done <<< "$images"
+          gh release edit "$VERSION" --latest
+          echo "- GitHub latest release → $VERSION" >> "$GITHUB_STEP_SUMMARY"

@@ -117,4 +117,4 @@ SIGTERM. Keep Docker lifecycle in shell/CI rather than Go test fixtures.
 [Native release builds](../../.github/workflows/build-binaries.yml) run environment
 discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.
 Keep the embedded mission, local host lifecycle and test fixtures portable; native
-archives must run without a checkout or Go installation.
+binaries must run without a checkout or Go installation.

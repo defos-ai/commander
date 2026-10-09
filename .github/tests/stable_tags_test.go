@@ -57,13 +57,25 @@ func newStableFixture(t *testing.T) *stableFixture {
 	}
 	f.write(t, "gh", `#!/bin/bash
 set -euo pipefail
-[[ "$*" == 'api --paginate repos/defos-ai/commander/releases?per_page=100' ]]
-printf '%s\n' "$RELEASES"
-exit "${GH_STATUS:-0}"
+case "$1" in
+  api)
+    [[ "$*" == 'api --paginate repos/defos-ai/commander/releases?per_page=100' ]]
+    printf '%s\n' "$RELEASES"
+    exit "${GH_STATUS:-0}"
+    ;;
+  release)
+    [[ "$*" == "release edit $VERSION --latest" ]]
+    printf '%s\n' "$*" >> "$STATE/gh.log"
+    printf 'gh %s\n' "$*" >> "$STATE/operations.log"
+    exit "${LATEST_STATUS:-0}"
+    ;;
+  *) exit 1 ;;
+esac
 `)
 	f.write(t, "docker", `#!/bin/bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$STATE/docker.log"
+printf 'docker %s\n' "$*" >> "$STATE/operations.log"
 [[ "$1 $2" == 'buildx imagetools' ]]
 case "$3" in
   create)
@@ -164,6 +176,9 @@ func TestCIStableReleaseSelection(t *testing.T) {
 			if got := f.read(t, "docker.log"); got != "" {
 				t.Fatalf("selection invoked docker: %s", got)
 			}
+			if got := f.read(t, "gh.log"); got != "" {
+				t.Fatalf("selection changed the latest release: %s", got)
+			}
 		})
 	}
 	t.Run("newer release on page two", func(t *testing.T) {
@@ -183,15 +198,43 @@ func TestCIStableReleaseSelection(t *testing.T) {
 func TestCIStableReleaseWiring(t *testing.T) {
 	var workflow struct {
 		Jobs map[string]struct {
-			Needs yaml.Node
-			Uses  string
-			With  map[string]string
+			Needs       yaml.Node
+			Uses        string
+			With        map[string]string
+			Permissions map[string]string
 		}
 	}
 	readCIYAML(t, "..", "workflows/make-release.yml", &workflow)
 	stable := workflow.Jobs["stable"]
 	if stable.Uses != "./.github/workflows/push-stable.yml" {
 		t.Fatal("release must call the stable promotion workflow")
+	}
+	if stable.Permissions["contents"] != "write" || stable.Permissions["packages"] != "write" {
+		t.Error("release must grant stable promotion access to update releases and packages")
+	}
+	var promotion struct {
+		Permissions map[string]string
+		Jobs        map[string]struct {
+			Steps []struct {
+				ID, If string
+				Env    map[string]string
+			}
+		}
+	}
+	readCIYAML(t, "..", "workflows/push-stable.yml", &promotion)
+	if promotion.Permissions["contents"] != "write" || promotion.Permissions["packages"] != "write" {
+		t.Error("stable workflow must request access to update releases and packages")
+	}
+	for _, step := range promotion.Jobs["promote"].Steps {
+		if step.ID != "promote" {
+			continue
+		}
+		if step.If != "steps.select.outputs.promote == 'true'" {
+			t.Error("stable and latest promotion must be gated by the newest published release")
+		}
+		if step.Env["GH_TOKEN"] != "${{ secrets.GITHUB_TOKEN }}" || step.Env["GH_REPO"] != "${{ github.repository }}" {
+			t.Error("latest release promotion must use the repository token and target")
+		}
 	}
 	var needs []string
 	if stable.Needs.Kind == yaml.ScalarNode {
@@ -253,7 +296,7 @@ func TestCIStableDigestValidation(t *testing.T) {
 }
 
 func TestCIStablePromotion(t *testing.T) {
-	for _, mode := range []string{"success", "verification mismatch", "retry partial failure"} {
+	for _, mode := range []string{"success", "verification mismatch", "retry partial failure", "retry latest failure"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newStableFixture(t)
 			if mode == "verification mismatch" {
@@ -262,13 +305,19 @@ func TestCIStablePromotion(t *testing.T) {
 			if mode == "retry partial failure" {
 				f.env["FAIL_IMAGE"] = stableImageNames[2]
 			}
+			if mode == "retry latest failure" {
+				f.env["LATEST_STATUS"] = "1"
+			}
 			output, err := f.run(t, f.promoteRun)
 			if mode != "success" && err == nil {
-				t.Fatal("promotion must fail on registry error or verification mismatch")
+				t.Fatal("promotion must fail on registry, verification, or release update errors")
 			}
 			if mode == "verification mismatch" {
 				if !strings.Contains(output, "Stable digest verification failed") || strings.Count(f.read(t, "docker.log"), "\n") != 2 {
 					t.Fatalf("verification did not stop promotion: %s", output)
+				}
+				if f.read(t, "gh.log") != "" {
+					t.Fatal("failed image verification must not change the latest release")
 				}
 				return
 			}
@@ -276,7 +325,23 @@ func TestCIStablePromotion(t *testing.T) {
 				if f.read(t, stableImageNames[0]) == "" || f.read(t, stableImageNames[2]) != "" {
 					t.Fatal("expected partial registry state before retry")
 				}
+				if f.read(t, "gh.log") != "" {
+					t.Fatal("partial image promotion must not change the latest release")
+				}
+			}
+			if mode == "retry latest failure" {
+				if strings.Count(f.read(t, "docker.log"), "\n") != 2*len(stableImageNames) || f.read(t, "gh.log") == "" {
+					t.Fatal("latest update must be attempted after all image tags are verified")
+				}
+				if strings.Contains(f.read(t, "summary"), "GitHub latest release") {
+					t.Fatal("failed latest update must not report success")
+				}
+				f.env["LATEST_STATUS"] = "0"
+			}
+			if strings.HasPrefix(mode, "retry ") {
 				f.write(t, "docker.log", "")
+				f.write(t, "gh.log", "")
+				f.write(t, "operations.log", "")
 				output, err = f.run(t, f.promoteRun)
 			}
 			if err != nil {
@@ -293,6 +358,18 @@ func TestCIStablePromotion(t *testing.T) {
 			}
 			if got := f.read(t, "docker.log"); got != want.String() {
 				t.Errorf("unexpected Docker operations:\n%s\nwant:\n%s", got, want.String())
+			}
+			latest := "release edit " + f.env["VERSION"] + " --latest\n"
+			if got := f.read(t, "gh.log"); got != latest {
+				t.Errorf("latest release update = %q, want %q", got, latest)
+			}
+			var operations strings.Builder
+			for _, operation := range strings.Split(strings.TrimSuffix(want.String(), "\n"), "\n") {
+				fmt.Fprintln(&operations, "docker "+operation)
+			}
+			operations.WriteString("gh " + latest)
+			if got := f.read(t, "operations.log"); got != operations.String() {
+				t.Errorf("latest must follow all image verifications:\n%s", got)
 			}
 		})
 	}

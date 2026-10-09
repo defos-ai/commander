@@ -48,14 +48,16 @@ The user's current instructions take precedence over repository guidance.
   Keep independently triggered workflows' concurrency groups distinct so nested
   calls cannot cancel their release parent. Retry failed publication jobs in the
   same run; never overwrite published release assets.
-  Promote Docker `stable` tags only after the complete release publishes, using
-  the image digests from that run. Keep the newer-release check and serialized
-  release concurrency so maintenance releases cannot move `stable` backward.
+  Promote Docker `stable` tags and the GitHub `Latest` release only after the
+  complete release publishes, using the image digests from that run. Keep the
+  newer-release check and serialized release concurrency so maintenance releases
+  cannot move these pointers backward. Native asset names omit the version;
+  use `releases/latest/download` for quick start and version URLs for pinning.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.
-- [compose.yaml](compose.yaml) uses FS; [compose.full.yaml](compose.full.yaml)
-  uses RabbitMQ, MongoDB and MinIO. Test stacks in [.github/composes](.github/composes/)
+- [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO.
+  Test stacks in [.github/composes](.github/composes/)
   have separate projects and state.
   See [setup](docs/deployment.md) and the relevant component README for usage.
 

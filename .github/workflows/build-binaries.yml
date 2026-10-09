@@ -51,20 +51,13 @@ jobs:
           go test -count=1 -timeout=3m ./framework/tests/agent/environment
           go test -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne$'
       - name: Build Commander
+        id: build
         run: |
-          binary=commander
+          binary="commander_${GOOS}_${GOARCH}"
           if [[ "$GOOS" == windows ]]; then binary+=.exe; fi
-          mkdir -p bin dist
-          go build -trimpath -buildvcs=false -ldflags='-s -w' -o "bin/$binary" ./apps/playground/cmd/commander
-          cp LICENSE bin/LICENSE
-          "./bin/$binary" --help
-      - name: Package Unix binary
-        if: runner.os != 'Windows'
-        run: tar -czf "dist/commander_${VERSION}_${GOOS}_${GOARCH}.tar.gz" -C bin commander LICENSE
-      - name: Package Windows binary
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Compress-Archive -Path bin/commander.exe, bin/LICENSE -DestinationPath "dist/commander_$($env:VERSION)_$($env:GOOS)_$($env:GOARCH).zip"
+          mkdir -p dist
+          go build -trimpath -buildvcs=false -ldflags='-s -w' -o "dist/$binary" ./apps/playground/cmd/commander
+          "./dist/$binary" --help
       - uses: actions/upload-artifact@v4
         with:
           name: commander-native-${{ matrix.goos }}-${{ matrix.goarch }}

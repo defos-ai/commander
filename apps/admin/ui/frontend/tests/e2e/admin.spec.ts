@@ -21,12 +21,12 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByText('Local Commander detected')).not.toBeVisible();
   await page.getByRole('button', { name: 'Add connection', exact: true }).click();
   const connection = page.getByRole('dialog', { name: 'Add connection', exact: true });
-  await expect(connection.getByLabel('Connection name')).toHaveValue('');
+  await expect(connection.getByLabel('Connection name')).toHaveValue('New connection');
   await expect(connection.getByLabel('API URL')).toHaveValue('');
-  await expect(connection.getByLabel('Username', { exact: true })).toHaveValue('');
+  await expect(connection.getByLabel('Username', { exact: true })).toHaveValue('commander');
   await expect(connection.getByLabel('Password', { exact: true })).toHaveValue('');
-  await expect(connection.getByLabel('Connection name')).toBeFocused();
-  await expect(connection.getByText('Need a password?', { exact: true })).not.toBeVisible();
+  await expect(connection.getByLabel('API URL')).toBeFocused();
+  await expect(connection.getByText('Need a password? Run in a terminal:', { exact: true })).not.toBeVisible();
   await connection.getByLabel('Connection name').fill('Compose test');
   const aboutResponse = page.waitForResponse(response => {
     const url = new URL(response.url());
@@ -35,7 +35,7 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   });
   await connection.getByLabel('API URL').fill(publicAPIURL);
   expect((await aboutResponse).status()).toBe(200);
-  await expect(connection.getByText('Need a password?', { exact: true })).toBeVisible();
+  await expect(connection.getByText('Need a password? Run in a terminal:', { exact: true })).toBeVisible();
   await expect(connection.getByText('docker compose exec api commander-api credentials', { exact: true })).toBeVisible();
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await connection.getByRole('button', { name: 'Copy command', exact: true }).click();
@@ -122,7 +122,11 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const signIn = page.getByRole('dialog', { name: 'Edit connection' });
+  await expect(signIn.getByLabel('Connection name')).toHaveValue('Compose test');
+  await expect(signIn.getByLabel('API URL')).toHaveValue(publicAPIURL);
+  await expect(signIn.getByLabel('Username', { exact: true })).toHaveValue('commander');
   await expect(signIn.getByLabel('Password', { exact: true })).toHaveValue('');
+  await expect(signIn.getByLabel('Password', { exact: true })).toBeFocused();
   await signIn.getByLabel('Username', { exact: true }).fill(username);
   await signIn.getByLabel('Password', { exact: true }).fill(password);
   await signIn.getByRole('button', { name: 'Save connection' }).click();

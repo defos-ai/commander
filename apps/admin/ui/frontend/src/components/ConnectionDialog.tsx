@@ -23,11 +23,14 @@ export function ConnectionDialog({ connection, credentials, localURL, onClose, o
   const hintID = `${identity}-credentials-hint`;
   const urlHintID = `${identity}-url-hint`;
   const [values, setValues] = useState<ConnectionValues>(() => ({
-    name: connection?.name ?? (localURL ? t($ => $.connectionForm.defaultName) : ''),
+    name: connection?.name ?? t($ => localURL ? $.connectionForm.defaultName : $.connectionForm.newName),
     url: connection?.url ?? localURL ?? '',
-    username: credentials?.username ?? (!connection && localURL ? 'commander' : ''),
+    username: credentials?.username ?? 'commander',
     password: '',
   }));
+  const initialField = useRef<Field>(
+    (['name', 'url', 'username', 'password'] as const).find(field => !values[field].trim()) ?? 'name',
+  );
   const [error, setError] = useState('');
   const [invalidField, setInvalidField] = useState<Field>();
   const [submitting, setSubmitting] = useState(false);
@@ -35,8 +38,8 @@ export function ConnectionDialog({ connection, credentials, localURL, onClose, o
 
   useEffect(() => () => pending.current?.abort(), []);
   useEffect(() => {
-    document.getElementById(`${identity}-${!connection && localURL ? 'password' : 'name'}`)?.focus();
-  }, [identity, connection, localURL]);
+    document.getElementById(`${identity}-${initialField.current}`)?.focus();
+  }, [identity]);
 
   function close() {
     pending.current?.abort();
