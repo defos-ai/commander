@@ -129,9 +129,13 @@ func (m *Model) View() string {
 		case stageMCPToken:
 			lines = append(lines, "Commander MCP token", "Paste your token, then Enter.")
 			if m.mcpCommand != "" {
-				lines = append(lines, "", "Need a token? "+m.mcpCommand)
+				hint := "Need a token? Run in a terminal:"
+				if strings.HasPrefix(m.mcpCommand, "/") {
+					hint = "Need a token? Run in Playground:"
+				}
+				lines = append(lines, "", hint, m.color(m.mcpCommand, ReticleGreen))
 				if command := tokenEnvironmentCommand(m.mcpCommand); command != "" {
-					lines = append(lines, "", "For future launches from this shell:", m.color(command, MutedGray))
+					lines = append(lines, "", "For credential persistence in this shell, run:", m.color(command, ReticleGreen))
 				}
 			}
 		}

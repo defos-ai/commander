@@ -98,12 +98,15 @@ func TestMCPAuthenticationDuringSetup(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		environmentCommand = `$env:COMMANDER_MCP_TOKEN = (docker compose exec -T mcp commander-mcp credentials --raw)`
 	}
-	for _, want := range []string{"Need a token?", "docker compose exec mcp commander-mcp credentials", environmentCommand} {
+	for _, want := range []string{
+		"Need a token? Run in a terminal:\ndocker compose exec mcp commander-mcp credentials",
+		"For credential persistence in this shell, run:\n" + environmentCommand,
+	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("authentication hint is missing %q", want)
 		}
 	}
-	for _, unwanted := range []string{token, "then restart Playground", "sed ", "Start docker compose", "Commander connected"} {
+	for _, unwanted := range []string{token, "\x1b[", "then restart Playground", "sed ", "Start docker compose", "Commander connected"} {
 		if strings.Contains(view, unwanted) {
 			t.Error("token input disclosed credentials or confusing recovery advice")
 		}
