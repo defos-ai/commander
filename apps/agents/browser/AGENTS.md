@@ -1,45 +1,31 @@
 # Working on the browser agent
 
-## Source entrypoints
+## Entry points
 
-- [browser_agent.go](browser_agent.go) supplies the fixed `browser-agent` type and
-  default responsibilities. A nil action catalog gets fresh defaults; an explicitly
-  empty catalog stays empty. The constructor does not grant permissions.
-- [actions.go](actions.go) exposes the catalog; [actions/actions.go](actions/actions.go)
-  owns action names, constructors and common input schemas. Keep CLI action-name
-  selection consistent with this catalog when adding actions.
-- [cli/](cli/) owns host configuration and providers. The bundled missions live in
-  [default-missions.json](../../controllers/default/data/default-missions.json);
-  change automatic transitions there, not in action dispatch code.
+- [browser_agent.go](browser_agent.go) fixes the `browser-agent` type and supplies
+  fresh rendering actions for nil `Actions`; an explicitly empty catalog stays
+  empty. The constructor does not grant permissions.
+- [actions.go](actions.go) exposes the two-action catalog.
+  [cli/](cli/) configures providers and grants `network-access` and `execute-command`.
+- HTTP crawling and static checks belong to the [web agent](../web/README.md).
+  Mission rules, not either agent, own automatic transitions.
 
-## Scope and browser behavior
+## Rendering and dependencies
 
-- Preserve the bounded, observational checks. Use shared URL parsing, hostname
-  rules and HTTP helpers in [actions/http.go](actions/http.go). Scope compares exact
-  hostnames without case; different ports or HTTP/HTTPS are allowed, but subdomains
-  and `www` variants are different hosts.
-- Discovery and link checks must retain explicit page/link limits, excluded-link
-  reporting and redirect scope decisions. Follow-up proposals must use the resolved
-  page URL and fit the mission's action schemas.
-- `discover-pages` and `discover-pages-no-browser` share the crawler. The latter
-  proposes only links, SEO and technology checks, so the no-browser mission can
-  finish without Chromium. Keep required actions and automation consistent; never
-  silently omit rendering from the with-browser mission.
-- Keep browser discovery in [actions/browser.go](actions/browser.go) through the
-  environment abstraction. `CHROMIUM_PATH` must be absolute; an explicit discovery
-  scope wins over configured paths. Rediscovery clears stale browser configuration.
-- Missing or invalid Chromium configuration makes browser actions unavailable;
-  HTTP-only actions remain usable. Browser actions require `network-access` and
-  `execute-command`; permission grants belong to the host.
-- Each execution uses a fresh browser profile and bounded context. Keep GET/HEAD
-  restrictions and document navigation on the requested hostname, while allowing
-  external resources needed to render pages. Do not block CDP listeners with
-  synchronous commands to their own target.
-- Browser sandboxing stays enabled by default for native runs; honor the explicit
-  `CHROMIUM_NO_SANDBOX` setting used by container deployment.
-- Keep screenshots grouped as desktop/mobile PNG files in one artifact, with
-  descriptive metadata. Accessibility findings are bounded rendered checks;
-  technology versions remain unverified hints from passive observations.
+- [actions/url.go](actions/url.go) validates HTTP(S) URLs and exact hostname scope.
+  Schemes and ports may differ; subdomains and `www` variants are different hosts.
+- Browser discovery in [actions/browser.go](actions/browser.go) uses the environment
+  abstraction. `CHROMIUM_PATH` must be absolute; an explicit discovery scope wins.
+  Rediscovery clears stale configuration. Missing or invalid requirements make
+  browser actions unavailable without disabling the separate web agent.
+- Each execution uses a fresh profile and bounded context. Keep GET/HEAD request
+  restrictions and document navigation on the requested hostname, allowing external
+  page resources. Never issue synchronous CDP commands to their own target inside
+  blocked CDP listeners.
+- Native sandboxing stays enabled by default. Honor explicit
+  `CHROMIUM_NO_SANDBOX` for container deployment.
+- Group desktop/mobile PNGs in one artifact with descriptive metadata. Accessibility
+  findings remain bounded rendered checks, not complete audit claims.
 
 ## Validation
 
@@ -50,12 +36,8 @@ go test -race -count=1 -timeout=3m ./apps/agents/browser/...
 go vet ./apps/agents/browser/...
 ```
 
-- [tests/actions_test.go](tests/actions_test.go) covers hostname/redirect scope,
-  observed SEO data and browser discovery with deterministic fixtures. Add coverage
-  for changed limits, scope or readiness without requiring a host browser.
-- [Unit CI](../../../.github/workflows/test-unit.yml) runs this module. For actual
-  browser execution, artifact persistence and the full review mission, use the
-  [MCP/API test stack](../../../framework/tests/README.md#mcp-api-tests), which
-  supplies browsers and local sites. No model key or public target is needed.
-- When changing action output or proposals, check both bundled missions and adapter
-  scenarios together so automatic checks still converge on a model continuation.
+[tests/actions_test.go](tests/actions_test.go) covers dependency discovery, explicit
+scope and rediscovery without launching a host browser. Use the
+[MCP/API stack](../../../framework/tests/README.md#mcp-api-tests) for real rendering,
+artifact persistence and cross-agent mission automation. No model key or public
+target is needed.

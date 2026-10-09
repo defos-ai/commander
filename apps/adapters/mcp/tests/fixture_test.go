@@ -68,7 +68,16 @@ func connect(t *testing.T) *api {
 			Agents []agents.Agent `json:"agents"`
 		}
 		a.call("list_agents", object{}, &list)
-		if len(list.Agents) == 2 && !list.Agents[0].Stale && !list.Agents[1].Stale && list.Agents[0].Status == agents.AgentReady && list.Agents[1].Status == agents.AgentReady {
+		ready := len(list.Agents) == 3
+		types := map[string]int{}
+		for _, agent := range list.Agents {
+			types[string(agent.Type)]++
+			ready = ready && !agent.Stale && agent.Status == agents.AgentReady && agent.Work == nil && len(agent.Actions) == len(expectedAgentActions(string(agent.Type)))
+			for _, action := range agent.Actions {
+				ready = ready && action.Status == "ready"
+			}
+		}
+		if ready && types["web-agent"] == 2 && types["browser-agent"] == 1 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -76,7 +85,7 @@ func connect(t *testing.T) *api {
 			for _, agent := range list.Agents {
 				states = append(states, fmt.Sprintf("%s: status=%s stale=%t last_heartbeat=%s", agent.ID, agent.Status, agent.Stale, agent.LastHeartbeat.Format(time.RFC3339)))
 			}
-			t.Fatalf("expected 2 ready agents after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
+			t.Fatalf("expected two web agents and one browser agent ready after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -88,6 +97,24 @@ func connect(t *testing.T) *api {
 		t.Fatal("cleanup left operations from a previous test")
 	}
 	return a
+}
+
+func expectedAgentActions(agentType string) []string {
+	switch agentType {
+	case "web-agent":
+		return []string{"check-links", "check-seo", "detect-technologies", "discover-pages", "discover-pages-no-browser"}
+	case "browser-agent":
+		return []string{"capture-page", "check-accessibility"}
+	default:
+		return nil
+	}
+}
+
+func expectedExecutorType(action string) string {
+	if action == "capture-page" || action == "check-accessibility" {
+		return "browser-agent"
+	}
+	return "web-agent"
 }
 
 func openSession(t *testing.T) *api {

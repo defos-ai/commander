@@ -48,7 +48,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	assertWork(t, a, left.Tasks[0], right.Tasks[0])
 	queued := a.task(first.ID, "check-seo", url+"/extra")
 	if queued.Status != operations.TaskQueued {
-		t.Fatalf("third task exceeded the two agents' capacity: %+v", queued)
+		t.Fatalf("third HTTP task exceeded the two web agents' capacity: %+v", queued)
 	}
 	var question operations.Question
 	a.call("ask_question", object{"operation_id": first.ID, "text": "Approve the first review?", "options": []string{"Yes", "No"}}, &question)
@@ -363,6 +363,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	for _, task := range settled.Tasks {
 		if task.Status != operations.TaskSucceeded || task.Result == nil {
 			t.Fatalf("unsuccessful task: %+v", task)
+		}
+		if !strings.HasPrefix(task.AgentID, expectedExecutorType(task.ActionName)+"-") {
+			t.Fatalf("controller selected an agent without the task's capability: %+v", task)
 		}
 		counts[task.ActionName]++
 		if mission == "review-website-no-browser" && len(task.Result.Artifacts) != 0 {

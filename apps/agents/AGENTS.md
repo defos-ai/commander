@@ -2,8 +2,8 @@
 
 ## Construction and lifecycle
 
-- Use the [browser constructor](browser/browser_agent.go),
-  [host](browser/cli/cli.go) and [factory](browser/cli/factory.go) as the
+- Use the [web constructor](web/web_agent.go),
+  [host](web/cli/cli.go) and [factory](web/cli/factory.go) as the
   extension points for an agent module. Add new modules to [go.work](../../go.work).
 - Give each agent a fixed type and a fresh ID per process. Construct fresh action
   instances for every agent so discovery state is never shared between hosts.
@@ -32,6 +32,9 @@
 - Catalog entries describe capabilities; per-agent readiness, grants and leases
   determine availability. Do not claim that installing one agent guarantees
   complete required-action coverage for a mission.
+- Keep HTTP/HTML actions in `web` and rendering actions in `browser`. Discovery
+  can propose another agent type's actions by name; it must not import or call
+  that agent's runtime.
 
 ## Results and follow-up work
 

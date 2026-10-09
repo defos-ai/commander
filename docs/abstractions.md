@@ -25,7 +25,7 @@ is unknown. Cancelling an operation stops new dispatch; running actions may fini
 
 ## Agents and actions
 
-- **Agent type** identifies an implementation, such as `browser-agent`. Its generated
+- **Agent type** identifies an implementation, such as `web-agent` or `browser-agent`. Its generated
   **agent ID** identifies one process. Several instances can share a type.
 - **Action** is an executable capability with input/output schemas, permissions and
   readiness. It may use Go code, a host program or an external API.
@@ -106,7 +106,7 @@ Failures, absent proposals, unconfigured transitions and proposals outside a rul
 return to the model. Rules do not invent follow-up inputs. Changes affect new
 operations, which snapshot the mission when started.
 
-See the complete [website workflow](../apps/agents/browser/README.md#workflow),
+See the complete [website workflow](../apps/agents/web/README.md#workflow),
 [authoring follow-ups](../apps/agents/README.md#propose-follow-up-work), and
 [loading missions](../apps/controllers/README.md#quick-start).
 

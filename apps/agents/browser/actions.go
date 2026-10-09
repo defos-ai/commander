@@ -3,14 +3,14 @@ package browser
 import (
 	"sort"
 
-	webactions "github.com/defos-ai/commander/apps/agents/browser/actions"
+	agentactions "github.com/defos-ai/commander/apps/agents/browser/actions"
 	"github.com/defos-ai/commander/framework/agent/action"
 )
 
 // NewActions creates the default catalog. Each call returns fresh instances so
 // agents do not share mutable action discovery state.
 func NewActions() []action.Executor {
-	return webactions.NewActions()
+	return agentactions.NewActions()
 }
 
 func ActionNames() []string {

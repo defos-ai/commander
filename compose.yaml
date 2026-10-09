@@ -20,12 +20,8 @@ x-runtime: &runtime
 
 x-agent: &agent
   <<: *runtime
-  shm_size: 256mb
-  image: commander-browser-agent:local
   pull_policy: never
-  environment:
-    <<: *environment
-    CHROMIUM_NO_SANDBOX: "true"
+  environment: *environment
   depends_on:
     controller:
       condition: service_started
@@ -279,15 +275,27 @@ services:
       retries: 12
       start_period: 5s
 
-  browser-agent-1:
+  browser-agent:
     <<: *agent
-    # Build the shared image once; browser-agent-2 uses the same image.
+    image: commander-browser-agent:local
+    shm_size: 256mb
+    environment:
+      <<: *environment
+      CHROMIUM_NO_SANDBOX: "true"
     build:
       context: .
       dockerfile: apps/agents/browser/docker/Dockerfile
 
-  browser-agent-2:
+  web-agent-1:
     <<: *agent
+    image: commander-web-agent:local
+    build:
+      context: .
+      dockerfile: apps/agents/web/docker/Dockerfile
+
+  web-agent-2:
+    <<: *agent
+    image: commander-web-agent:local
 
   playground:
     profiles: [playground]
@@ -330,9 +338,11 @@ services:
         condition: service_completed_successfully
       mcp:
         condition: service_healthy
-      browser-agent-1:
+      browser-agent:
         condition: service_started
-      browser-agent-2:
+      web-agent-1:
+        condition: service_started
+      web-agent-2:
         condition: service_started
 
 volumes:

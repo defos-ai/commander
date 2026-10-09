@@ -12,7 +12,8 @@ docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and admin UI, one controller and two browser agents.
+Compose runs MCP, the API and admin UI, one controller, two web agents and one
+browser agent. Web agents run HTTP checks; the browser agent runs rendering checks.
 It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
 storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
 [MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for

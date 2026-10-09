@@ -11,6 +11,7 @@ require (
 	github.com/defos-ai/commander/apps/adapters/api v0.0.0
 	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0
 	github.com/defos-ai/commander/apps/agents/browser v0.0.0
+	github.com/defos-ai/commander/apps/agents/web v0.0.0
 	github.com/defos-ai/commander/apps/controllers/default v0.0.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/modelcontextprotocol/go-sdk v1.7.0

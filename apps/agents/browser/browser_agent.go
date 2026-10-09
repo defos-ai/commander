@@ -8,12 +8,12 @@ type BrowserAgent struct {
 	*agents.Agent
 }
 
-// NewBrowserAgent supplies a fresh website quality catalog when config.Actions is
+// NewBrowserAgent supplies a fresh rendering catalog when config.Actions is
 // nil. An explicitly empty catalog stays empty. It never grants permissions.
 func NewBrowserAgent(config agents.AgentConfig) (*BrowserAgent, error) {
 	config.Type = BrowserAgentType
 	if config.Responsibilities == nil {
-		config.Responsibilities = []string{"Review website links, basic accessibility, and desktop/mobile rendering"}
+		config.Responsibilities = []string{"Check rendered accessibility and capture desktop/mobile screenshots"}
 	}
 	if config.Actions == nil {
 		config.Actions = NewActions()

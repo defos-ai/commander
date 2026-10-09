@@ -3,6 +3,8 @@ package api_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,8 +15,8 @@ import (
 func TestAgentsTrackDispatchedWorkUntilCancelledTaskFinishes(t *testing.T) {
 	a := connect(t)
 	initial := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-	if len(initial.Items) != 2 || initial.Items[0].ID >= initial.Items[1].ID {
-		t.Fatalf("inventory should contain two sorted agents: %+v", initial)
+	if len(initial.Items) != 3 || !slices.IsSortedFunc(initial.Items, func(left, right models.AgentResponse) int { return strings.Compare(left.ID, right.ID) }) {
+		t.Fatalf("inventory should contain three sorted agents: %+v", initial)
 	}
 	for _, agent := range initial.Items {
 		result := a.request(http.MethodGet, "/api/v1/agents/"+agent.ID, nil)
@@ -62,7 +64,7 @@ func TestAgentsTrackDispatchedWorkUntilCancelledTaskFinishes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if worker.Stale || worker.Work.OperationID != op.ID || worker.Work.CommandID != task.CommandID || worker.Work.ActionName != "check-seo" {
+	if worker.Type != "web-agent" || worker.Stale || worker.Work.OperationID != op.ID || worker.Work.CommandID != task.CommandID || worker.Work.ActionName != "check-seo" {
 		t.Fatalf("work ownership differs: %+v", worker)
 	}
 	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil), http.StatusConflict, "test_state_busy")

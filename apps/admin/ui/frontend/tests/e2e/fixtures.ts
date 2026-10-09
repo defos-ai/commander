@@ -46,14 +46,17 @@ export class CommanderAPI {
         this.get<{ items: Controller[] }>('/controllers'),
       ]);
       return {
-        agents: agents.items.map(agent => ({ status: agent.status, stale: agent.stale, working: Boolean(agent.work),
-          readyActions: agent.actions?.filter(action => action.status === 'ready').length })),
+        agents: agents.items.map(agent => ({ type: agent.type, status: agent.status, stale: agent.stale, working: Boolean(agent.work),
+          readyActions: agent.actions?.filter(action => action.status === 'ready').length })).sort((left, right) => left.type.localeCompare(right.type)),
         actions: actions.items.length,
         missions: missions.items.map(mission => mission.name).sort(),
         controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin'),
       };
-    }, { timeout: 60_000, message: 'Wait for controller, both missions, action catalog and both browser-equipped agents' }).toEqual({
-      agents: Array(2).fill({ status: 'ready', stale: false, working: false, readyActions: 7 }), actions: 7,
+    }, { timeout: 60_000, message: 'Wait for controller, both missions, action catalog, two web agents and one browser agent' }).toEqual({
+      agents: [
+        { type: 'browser-agent', status: 'ready', stale: false, working: false, readyActions: 2 },
+        ...Array(2).fill({ type: 'web-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
+      ], actions: 7,
       missions: ['review-website-no-browser', 'review-website-with-browser'], controller: true,
     });
   }

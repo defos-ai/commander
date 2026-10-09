@@ -19,4 +19,5 @@ RUN groupadd --gid 1000 commander \
     && useradd --uid 1000 --gid 1000 --create-home commander
 COPY --from=build /out/commander-browser-agent /usr/local/bin/commander-browser-agent
 USER 1000:1000
+WORKDIR /home/commander
 ENTRYPOINT ["/usr/local/bin/commander-browser-agent"]

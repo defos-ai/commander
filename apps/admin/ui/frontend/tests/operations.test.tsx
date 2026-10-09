@@ -8,7 +8,7 @@ const connection = { id: 'local', name: 'Local Commander', url: 'https://command
 const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-05T10:00:00Z';
 const task: OperationTask = {
-  id: 'task-discovery', operation_id: 'operation-review', agent_id: 'browser-agent-1234abcd',
+  id: 'task-discovery', operation_id: 'operation-review', agent_id: 'web-agent-1234abcd',
   action_name: 'discover-pages', status: 'succeeded', input: { url: 'https://defos.ai' },
   started_at: now, finished_at: now, result: { action_name: 'discover-pages', output: { pages: ['https://defos.ai'] } },
 };
@@ -53,7 +53,7 @@ describe('operations browser', () => {
 
   it('shows saved task results, questions, blocking requirements and artifact file metadata without sending commands', async () => {
     const waiting: Operation = { ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [
-      { action_name: 'capture-page', unavailable_agents: [{ agent_id: task.agent_id, reason: 'Browser dependency missing',
+      { action_name: 'capture-page', unavailable_agents: [{ agent_id: 'browser-agent-1234abcd', reason: 'Browser dependency missing',
         missing_requirements: [{ kind: 'executable', name: 'chromium' }] }] },
     ] }, tasks: [{ ...task, error: 'Partial page response', continuation: { status: 'waiting', decision_by: 'user', version: 2,
       proposed_actions: [{ action_name: 'capture-page', reason: 'Check rendering' }], created_task_ids: [], question_id: 'question-browser' },

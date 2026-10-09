@@ -327,3 +327,12 @@ func seoNodeText(node *html.Node) string {
 	visit(node)
 	return strings.Join(strings.Fields(text.String()), " ")
 }
+
+func boundedText(text string, limit int) string {
+	text = strings.TrimSpace(text)
+	runes := []rune(text)
+	if len(runes) > limit {
+		return string(runes[:limit]) + "…"
+	}
+	return text
+}

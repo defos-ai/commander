@@ -5,6 +5,7 @@ use (
 	./apps/adapters/mcp
 	./apps/admin/ui/backend
 	./apps/agents/browser
+	./apps/agents/web
 	./apps/controllers/default
 	./apps/playground
 	./framework
@@ -19,6 +20,7 @@ replace (
 	github.com/defos-ai/commander/apps/adapters/api v0.0.0 => ./apps/adapters/api
 	github.com/defos-ai/commander/apps/adapters/mcp v0.0.0 => ./apps/adapters/mcp
 	github.com/defos-ai/commander/apps/agents/browser v0.0.0 => ./apps/agents/browser
+	github.com/defos-ai/commander/apps/agents/web v0.0.0 => ./apps/agents/web
 	github.com/defos-ai/commander/apps/controllers/default v0.0.0 => ./apps/controllers/default
 	github.com/defos-ai/commander/framework v0.0.0 => ./framework
 	github.com/defos-ai/commander/providers/fs v0.0.0 => ./providers/fs

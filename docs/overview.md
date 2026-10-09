@@ -27,7 +27,8 @@ For the included website reviews:
 2. The controller checks required actions against live agents and selects a ready
    instance with free capacity. Assignments specify an action and input, not an agent ID.
 3. Discovery proposes checks for each page. The mission's automation queues those
-   checks without another model call; the controller distributes them across agents.
+   checks without another model call; the controller sends HTTP checks to web
+   agents and rendering checks to the browser agent.
 4. Agents publish results. The controller saves outcomes and artifact metadata
    before confirming acceptance; file bytes stay in storage.
 5. Commander reviews collected results, requests operator guidance if needed,

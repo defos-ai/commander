@@ -73,7 +73,7 @@ func (a *CheckLinks) Run(ctx context.Context, raw json.RawMessage, grants []stri
 		}
 		result := Link{URL: link.String()}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, link.String(), nil)
-		req.Header.Set("User-Agent", "Commander-Web-Quality/1.0")
+		req.Header.Set("User-Agent", "Commander-Web-Agent/1.0")
 		response, err := client.Do(req)
 		if response != nil {
 			response.Body.Close()

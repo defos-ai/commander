@@ -7,7 +7,7 @@ import { AgentsPage } from '../src/pages/AgentsPage';
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
 const credentials = { username: 'operator', url: connection.url };
 const action: Action = {
-  name: 'check-links', description: 'Check website links.', status: 'ready', required_permissions: ['network'],
+  name: 'check-accessibility', description: 'Check rendered accessibility.', status: 'ready', required_permissions: ['network'],
   input_schema: {}, output_schema: {},
 };
 const browserAction: Action = {
@@ -20,7 +20,7 @@ const browserAction: Action = {
 };
 const agent: Agent = {
   id: 'browser-agent-a1234567', type: 'browser-agent', status: 'working',
-  work: { action_name: 'check-links', operation_id: 'operation-123', task_id: 'task-456', step_id: 'step-789', command_id: 'command-012' },
+  work: { action_name: 'check-accessibility', operation_id: 'operation-123', task_id: 'task-456', step_id: 'step-789', command_id: 'command-012' },
   server: { hostname: 'worker-west-1', ip_address: '10.0.0.12' },
   responsibilities: ['Website quality'], actions: [action, browserAction], granted_permissions: ['network'],
   discovery_scope: null, config: { secret: 'DO-NOT-DISPLAY-CONFIG' },
@@ -46,12 +46,12 @@ describe('agents browser', () => {
     const working = await screen.findByRole('button', { name: `View agent ${agent.id}` });
     const stale = screen.getByRole('button', { name: `View agent ${staleAgent.id}` });
     expect(within(working).getByText('Working')).toBeVisible();
-    expect(within(working).getByText('Current work: check-links')).toBeVisible();
+    expect(within(working).getByText('Current work: check-accessibility')).toBeVisible();
     expect(within(working).getByText('1 / 2 actions reported ready')).toBeVisible();
     expect(within(stale).getByText('Stale')).toBeVisible();
     expect(within(stale).getByText('Unavailable')).toBeVisible();
-    expect(within(stale).getByText('Last reported work: check-links')).toBeVisible();
-    expect(within(stale).queryByText('Current work: check-links')).not.toBeInTheDocument();
+    expect(within(stale).getByText('Last reported work: check-accessibility')).toBeVisible();
+    expect(within(stale).queryByText('Current work: check-accessibility')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search agents' }), { target: { value: 'WORKER-WEST' } });
     expect(screen.getByText('1 of 2 agents')).toBeVisible();
@@ -112,13 +112,13 @@ describe('agents browser', () => {
       let response = Response.json({ items: [agent] });
       const fetch = mockAPI(() => response);
       await act(async () => { render(<AgentsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); });
-      expect(screen.getByText('Current work: check-links')).toBeVisible();
+      expect(screen.getByText('Current work: check-accessibility')).toBeVisible();
 
       response = Response.json({ items: [{ ...agent, status: 'ready', work: null }] });
       await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
 
       expect(fetch).toHaveBeenCalledTimes(2);
-      expect(screen.queryByText('Current work: check-links')).not.toBeInTheDocument();
+      expect(screen.queryByText('Current work: check-accessibility')).not.toBeInTheDocument();
       expect(screen.getByText('No active work reported')).toBeVisible();
       expect(screen.getByText('Ready')).toBeVisible();
 
@@ -133,7 +133,7 @@ describe('agents browser', () => {
       response = Response.json({ items: [agent] });
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
       await act(async () => {});
-      expect(screen.getByText('Current work: check-links')).toBeVisible();
+      expect(screen.getByText('Current work: check-accessibility')).toBeVisible();
     } finally { vi.useRealTimers(); }
   });
 

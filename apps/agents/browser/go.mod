@@ -9,7 +9,6 @@ require (
 	github.com/defos-ai/commander/providers/fs v0.0.0
 	github.com/defos-ai/commander/providers/rabbitmq v0.0.0
 	github.com/defos-ai/commander/providers/s3 v0.0.0
-	golang.org/x/net v0.59.0
 )
 
 require (

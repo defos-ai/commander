@@ -19,13 +19,9 @@ x-runtime: &runtime
 
 x-agent: &agent
   <<: *runtime
-  image: commander-browser-agent:test
   pull_policy: never
-  shm_size: 256mb
   command: ["--heartbeat-interval=1s"]
-  environment:
-    <<: *environment
-    CHROMIUM_NO_SANDBOX: "true"
+  environment: *environment
   extra_hosts:
     - "host.docker.internal:host-gateway"
   depends_on:
@@ -229,14 +225,27 @@ services:
       retries: 12
       start_period: 5s
 
-  browser-agent-1:
+  browser-agent:
     <<: *agent
+    image: commander-browser-agent:test
+    shm_size: 256mb
+    environment:
+      <<: *environment
+      CHROMIUM_NO_SANDBOX: "true"
     build:
       context: ../..
       dockerfile: apps/agents/browser/docker/Dockerfile
 
-  browser-agent-2:
+  web-agent-1:
     <<: *agent
+    image: commander-web-agent:test
+    build:
+      context: ../..
+      dockerfile: apps/agents/web/docker/Dockerfile
+
+  web-agent-2:
+    <<: *agent
+    image: commander-web-agent:test
 
 volumes:
   rabbitmq:

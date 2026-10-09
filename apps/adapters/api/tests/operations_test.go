@@ -53,6 +53,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		if task.Status != "succeeded" || task.Result == nil || task.OperationID != op.ID || task.AgentID == "" {
 			t.Fatalf("unsuccessful or unowned task: %+v", task)
 		}
+		if !strings.HasPrefix(task.AgentID, expectedExecutorType(task.ActionName)+"-") {
+			t.Fatalf("controller selected an agent without the task's capability: %+v", task)
+		}
 		if task.ID != root.ID && task.ParentTaskID != root.ID {
 			t.Fatalf("automatic task lost discovery parent: %+v", task)
 		}
@@ -153,7 +156,7 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	if actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions"); len(actions.Items) != 7 {
 		t.Fatalf("cleanup changed the action catalog: %+v", actions)
 	}
-	if agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents"); len(agents.Items) != 2 {
+	if agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents"); len(agents.Items) != 3 {
 		t.Fatalf("cleanup changed the agent catalog: %+v", agents)
 	}
 }

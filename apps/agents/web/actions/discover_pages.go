@@ -11,6 +11,11 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
+const (
+	checkAccessibilityName = "check-accessibility"
+	capturePageName        = "capture-page"
+)
+
 type DiscoverPagesInput struct {
 	URL      string `json:"url"`
 	MaxPages int    `json:"max_pages,omitempty"`
@@ -36,7 +41,7 @@ type DiscoverPages struct {
 }
 
 func NewDiscoverPages() *DiscoverPages {
-	return newDiscoverPages(DiscoverPagesName, "Discover up to ten HTML pages on the same hostname, including HTTP(S) and port changes. Propose link, accessibility, screenshot, SEO and technology checks for each. Excludes other hostnames and subdomains; does not submit forms.", []string{CheckLinksName, CheckAccessibilityName, CapturePageName, CheckSEOName, DetectTechnologiesName})
+	return newDiscoverPages(DiscoverPagesName, "Discover up to ten HTML pages on the same hostname, including HTTP(S) and port changes. Propose link, accessibility, screenshot, SEO and technology checks for each. Excludes other hostnames and subdomains; does not submit forms.", []string{CheckLinksName, checkAccessibilityName, capturePageName, CheckSEOName, DetectTechnologiesName})
 }
 
 func NewDiscoverPagesNoBrowser() *DiscoverPages {

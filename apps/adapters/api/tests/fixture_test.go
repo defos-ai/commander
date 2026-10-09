@@ -77,10 +77,16 @@ func connect(t *testing.T) *api {
 	}
 	for {
 		catalog := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-		ready := len(catalog.Items) == 2
+		ready := len(catalog.Items) == 3
+		types := map[string]int{}
 		for _, agent := range catalog.Items {
-			ready = ready && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == 7
+			types[agent.Type]++
+			ready = ready && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == len(expectedAgentActions(agent.Type))
+			for _, action := range agent.Actions {
+				ready = ready && action.Status == "ready"
+			}
 		}
+		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1
 		actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 		missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
 		if ready && len(actions.Items) == 7 && len(missions.Items) == 2 && missions.Items[0].Name == "review-website-no-browser" && missions.Items[1].Name == "review-website-with-browser" {
@@ -94,6 +100,24 @@ func connect(t *testing.T) *api {
 		t.Fatal("cleanup retained operations from a previous test")
 	}
 	return a
+}
+
+func expectedAgentActions(agentType string) []string {
+	switch agentType {
+	case "web-agent":
+		return []string{"check-links", "check-seo", "detect-technologies", "discover-pages", "discover-pages-no-browser"}
+	case "browser-agent":
+		return []string{"capture-page", "check-accessibility"}
+	default:
+		return nil
+	}
+}
+
+func expectedExecutorType(action string) string {
+	if action == "capture-page" || action == "check-accessibility" {
+		return "browser-agent"
+	}
+	return "web-agent"
 }
 
 func environment(name, fallback string) string {

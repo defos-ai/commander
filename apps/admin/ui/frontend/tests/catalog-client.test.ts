@@ -17,7 +17,7 @@ const action: Action = {
 const agent: Agent = {
   id: 'browser-agent-0123abcd', type: 'browser-agent', status: 'working', stale: false,
   server: { ip_address: '10.0.0.2', hostname: 'agent-pod-1' },
-  work: { action_name: 'check-links', operation_id: 'operation-1', task_id: 'task-1', command_id: 'command-1' },
+  work: { action_name: 'capture-page', operation_id: 'operation-1', task_id: 'task-1', command_id: 'command-1' },
   responsibilities: ['Review websites'], granted_permissions: ['network'], actions: [action],
   discovery_scope: { paths: ['/usr/bin'], services: null }, config: { max_pages: 3 },
   observed_at: '2026-10-05T09:00:00.123456789Z', last_seen: '2026-10-05T09:00:01Z',

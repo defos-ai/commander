@@ -68,7 +68,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		expected := map[int32][]string{
 			2: {"review-website-no-browser", "review-website-with-browser"},
 			3: {"starting_actions", "automations", "input_schema", "output_schema"},
-			4: {"browser-agent-"},
+			4: {"web-agent-", "browser-agent-"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -103,11 +103,11 @@ func testAllInOneWorkflow(t *testing.T) {
 				http.Error(w, "missing operation evidence", http.StatusBadRequest)
 				return
 			}
-			if !strings.HasPrefix(op.Tasks[0].AgentID, "browser-agent-") {
-				t.Errorf("controller did not record the selected agent: %+v", op.Tasks[0])
-			}
 			var seoFound bool
 			for _, task := range op.Tasks {
+				if !strings.HasPrefix(task.AgentID, "web-agent-") {
+					t.Errorf("HTTP task did not execute on the web agent: %+v", task)
+				}
 				if task.Status != operations.TaskSucceeded || task.ActionName == "capture-page" || task.ActionName == "check-accessibility" {
 					t.Errorf("unexpected browser-free task: %+v", task)
 				}
@@ -245,20 +245,33 @@ func testAllInOneWorkflow(t *testing.T) {
 	if err := json.Unmarshal(get("/api/v1/agents", "all-in-one-api-secret", http.StatusOK), &agents); err != nil {
 		t.Fatal(err)
 	}
-	if len(agents.Items) != 1 || agents.Items[0].Type != "browser-agent" || !regexp.MustCompile(`^browser-agent-[0-9a-f]{8}$`).MatchString(agents.Items[0].ID) {
-		t.Fatalf("unexpected bundled agent identity: %+v", agents.Items)
+	if len(agents.Items) != 2 {
+		t.Fatalf("unexpected bundled agents: %+v", agents.Items)
 	}
-	var unavailableChecks int
-	for _, action := range agents.Items[0].Actions {
-		if action.Name == "capture-page" || action.Name == "check-accessibility" {
-			if action.Status != "unavailable" {
-				t.Fatalf("missing Chromium did not disable %s: %s", action.Name, action.Status)
+	var webChecks, unavailableChecks int
+	for _, agent := range agents.Items {
+		if !regexp.MustCompile(`^(web|browser)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) {
+			t.Fatalf("unexpected bundled agent identity: %+v", agent)
+		}
+		for _, action := range agent.Actions {
+			switch agent.Type {
+			case "browser-agent":
+				if (action.Name != "capture-page" && action.Name != "check-accessibility") || action.Status != "unavailable" {
+					t.Fatalf("unexpected browser action without Chromium: %+v", action)
+				}
+				unavailableChecks++
+			case "web-agent":
+				if action.Status != "ready" || action.Name == "capture-page" || action.Name == "check-accessibility" {
+					t.Fatalf("HTTP action depends on Chromium: %+v", action)
+				}
+				webChecks++
+			default:
+				t.Fatalf("unexpected bundled agent type: %s", agent.Type)
 			}
-			unavailableChecks++
 		}
 	}
-	if unavailableChecks != 2 {
-		t.Fatal("bundled agent did not advertise both rendering checks")
+	if webChecks != 5 || unavailableChecks != 2 {
+		t.Fatalf("unexpected HTTP/rendering coverage: ready=%d, unavailable=%d", webChecks, unavailableChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))

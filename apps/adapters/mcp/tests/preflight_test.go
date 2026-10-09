@@ -41,13 +41,17 @@ func testMissionPreflightReportsAgentReadiness(t *testing.T, mission string, exp
 		if mission == "review-website-no-browser" && (coverage.ActionName == "capture-page" || coverage.ActionName == "check-accessibility") {
 			t.Fatalf("browser-free preflight requires rendered work: %+v", coverage)
 		}
-		if len(coverage.ReadyAgentIDs) != 2 || len(coverage.UnavailableAgents) != 0 {
-			t.Fatalf("ready action lost agent coverage: %+v", coverage)
-		}
+		expectedIDs := []string{}
 		for _, agent := range inventory.Agents {
-			if !slices.Contains(coverage.ReadyAgentIDs, agent.ID) {
-				t.Fatalf("preflight omits ready agent %s: %+v", agent.ID, coverage)
+			if string(agent.Type) == expectedExecutorType(coverage.ActionName) {
+				expectedIDs = append(expectedIDs, agent.ID)
 			}
+		}
+		slices.Sort(expectedIDs)
+		readyIDs := slices.Clone(coverage.ReadyAgentIDs)
+		slices.Sort(readyIDs)
+		if !slices.Equal(readyIDs, expectedIDs) || len(coverage.UnavailableAgents) != 0 {
+			t.Fatalf("ready action lost agent coverage: %+v", coverage)
 		}
 	}
 	var definition actions.Action

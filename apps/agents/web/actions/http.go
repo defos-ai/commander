@@ -69,7 +69,7 @@ func readPage(ctx context.Context, client *http.Client, target *url.URL) (pageDo
 	if err != nil {
 		return pageDocument{}, err
 	}
-	req.Header.Set("User-Agent", "Commander-Web-Quality/1.0")
+	req.Header.Set("User-Agent", "Commander-Web-Agent/1.0")
 	response, err := client.Do(req)
 	if err != nil {
 		return pageDocument{}, err

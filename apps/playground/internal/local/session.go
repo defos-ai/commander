@@ -13,7 +13,8 @@ import (
 
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
-	agentcli "github.com/defos-ai/commander/apps/agents/browser/cli"
+	browsercli "github.com/defos-ai/commander/apps/agents/browser/cli"
+	webcli "github.com/defos-ai/commander/apps/agents/web/cli"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -86,7 +87,8 @@ func Start(ctx context.Context) (session *Session, err error) {
 	if err = awaitReady(startup, controllerReady); err != nil {
 		return nil, err
 	}
-	s.start("agent", func(ctx context.Context) error { return agentcli.Run(ctx, common, s.log) })
+	s.start("web agent", func(ctx context.Context) error { return webcli.Run(ctx, common, s.log) })
+	s.start("browser agent", func(ctx context.Context) error { return browsercli.Run(ctx, common, s.log) })
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
@@ -113,11 +115,11 @@ func Start(ctx context.Context) (session *Session, err error) {
 	if err = awaitReady(startup, apiReady); err != nil {
 		return nil, err
 	}
-	if err = s.awaitAgent(startup); err != nil {
+	if err = s.awaitAgents(startup); err != nil {
 		return nil, err
 	}
 	s.Notices = []string{
-		"All-in-one: 1 MCP, 1 API, 1 controller, 1 browser agent. Hosts and temporary state are removed on exit.",
+		"All-in-one: 1 MCP, 1 API, 1 controller, 1 web agent, 1 browser agent. Hosts and temporary state are removed on exit.",
 		"API listening: " + s.APIURL,
 		"Use /credentials api for the API login or /credentials mcp for the MCP token.",
 		"Try: Run review-website-no-browser for https://defos.ai and summarize what should be fixed before release.",
@@ -135,7 +137,7 @@ func awaitReady(ctx context.Context, ready <-chan struct{}) error {
 }
 
 func (s *Session) start(name string, run func(context.Context) error) {
-	// Close stops hosts in reverse order, allowing the agent to publish its final
+	// Close stops hosts in reverse order, allowing agents to publish their final
 	// results while the controller is still available.
 	ctx, cancel := context.WithCancel(context.WithoutCancel(s.Context))
 	host := runningHost{name: name, stop: cancel, done: make(chan error, 1)}
@@ -152,7 +154,7 @@ func (s *Session) start(name string, run func(context.Context) error) {
 	}()
 }
 
-func (s *Session) awaitAgent(ctx context.Context) error {
+func (s *Session) awaitAgents(ctx context.Context) error {
 	client, err := bridge.Connect(ctx, s.MCPURL, s.MCPCredentials)
 	if err != nil {
 		return err
@@ -171,12 +173,21 @@ func (s *Session) awaitAgent(ctx context.Context) error {
 		var inventory struct {
 			Agents []struct {
 				Status string `json:"status"`
+				Type   string `json:"type"`
 			} `json:"agents"`
 		}
 		if err := json.Unmarshal(result.Data, &inventory); err != nil {
 			return err
 		}
-		if len(inventory.Agents) == 1 && inventory.Agents[0].Status == "ready" {
+		var webReady, browserReady bool
+		for _, agent := range inventory.Agents {
+			if agent.Status != "ready" {
+				continue
+			}
+			webReady = webReady || agent.Type == "web-agent"
+			browserReady = browserReady || agent.Type == "browser-agent"
+		}
+		if webReady && browserReady {
 			return nil
 		}
 		select {

@@ -5,7 +5,7 @@
 `github.com/defos-ai/commander/providers/rabbitmq` implements `comms.Bus` over
 AMQP 0-9-1 with [`amqp091-go`](https://github.com/rabbitmq/amqp091-go). It supports
 `amqp://` and `amqps://` URLs and both framework inbox modes. Controller, MCP, and
-browser agent factories select
+web and browser agent factories select
 this provider when `BUS_URL` or `--bus-url` uses either scheme.
 [`compose.yaml`](../../compose.yaml) selects RabbitMQ; all-in-one uses FS.
 

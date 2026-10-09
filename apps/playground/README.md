@@ -16,7 +16,7 @@ docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 docker run --name commander --rm -it -p 127.0.0.1:4274:4274 commander:aio
 ```
 
-This image starts Playground, MCP, the API, a controller and the browser agent
+This image starts Playground, MCP, the API, a controller, a web agent and a browser agent
 with Chromium and fonts included. Inside Playground, type `/credentials` to view
 the API login and MCP token. From another terminal:
 
@@ -74,7 +74,7 @@ from the repository root:
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts MCP, the HTTP API, one controller and one browser agent using
+This starts MCP, the HTTP API, one controller, one web agent and one browser agent using
 temporary FS state. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials api`
@@ -180,7 +180,7 @@ and count of others waiting. Only operator input records an answer; expiry retur
 the decision to model review without approving work. With separate hosts, exiting
 leaves operations running, but model decisions wait for a session to follow them.
 
-See [website scenarios](../agents/browser/README.md#try-these-in-playground)
+See [website scenarios](../agents/web/README.md#try-these-in-playground)
 and the [MCP workflow](../adapters/README.md#operation-workflow).
 
 ## Development and testing

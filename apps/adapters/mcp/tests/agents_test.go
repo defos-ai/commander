@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,19 +25,29 @@ func TestAgentsAndActions(t *testing.T) {
 	if len(catalog.Actions) != 7 {
 		t.Fatalf("actions=%+v", catalog)
 	}
+	var webID string
 	for _, agent := range list.Agents {
-		if agent.Stale || len(agent.Actions) != 7 {
+		if agent.Stale {
 			t.Fatalf("incomplete/stale agent: %+v", agent)
 		}
+		var names []string
 		for _, action := range agent.Actions {
+			names = append(names, action.Name)
 			if action.Status != actions.Ready {
 				t.Fatalf("Compose must prepare dependencies: %s: %+v", agent.ID, action)
 			}
 		}
+		slices.Sort(names)
+		if !slices.Equal(names, expectedAgentActions(string(agent.Type))) {
+			t.Fatalf("agent advertises the wrong capabilities: %+v", agent)
+		}
+		if agent.Type == "web-agent" {
+			webID = agent.ID
+		}
 	}
 	var detail agents.Agent
-	a.call("describe_agent", object{"agent_id": list.Agents[0].ID}, &detail)
-	if detail.ID != list.Agents[0].ID || detail.Status != agents.AgentReady {
+	a.call("describe_agent", object{"agent_id": webID}, &detail)
+	if detail.ID != webID || detail.Status != agents.AgentReady {
 		t.Fatalf("agent query lost identity or readiness: %+v", detail)
 	}
 	var action actions.Action
@@ -85,10 +96,10 @@ func TestAgentsAndActions(t *testing.T) {
 	}
 	knownAgent := false
 	for _, agent := range list.Agents {
-		knownAgent = knownAgent || agent.ID == task.AgentID
+		knownAgent = knownAgent || agent.ID == task.AgentID && agent.Type == "web-agent"
 	}
 	if !knownAgent {
-		t.Fatalf("controller selected an unannounced agent: %s", task.AgentID)
+		t.Fatalf("controller selected an unannounced or incapable agent: %s", task.AgentID)
 	}
 	var idle agents.Agent
 	a.call("describe_agent", object{"agent_id": task.AgentID}, &idle)

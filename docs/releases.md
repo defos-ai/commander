@@ -96,6 +96,7 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
 | `ghcr.io/defos-ai/commander-controller` | [push-controllers.yml](../.github/workflows/push-controllers.yml) |
 | `ghcr.io/defos-ai/commander-browser-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
+| `ghcr.io/defos-ai/commander-web-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.

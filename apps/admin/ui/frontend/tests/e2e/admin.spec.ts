@@ -79,12 +79,12 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(automationGraph.getByRole('button', { name: 'Inspect automation capture-page', exact: true })).toBeFocused();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);
   await page.goBack();
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
   await page.goForward();
-  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);
   await page.goBack();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
@@ -165,6 +165,10 @@ test('operation questions, automatic work, graph and downloads use the real stac
   const finished = await api.operation(operation.id, value => value.tasks?.length === 6 && value.tasks.every(task => !['queued', 'running'].includes(task.status))
     && value.tasks.some(task => task.id === root.id && task.continuation?.status === 'pending'));
   expect(finished.tasks?.map(task => task.status)).toEqual(Array(6).fill('succeeded'));
+  for (const task of finished.tasks!) {
+    const type = ['capture-page', 'check-accessibility'].includes(task.action_name) ? 'browser-agent' : 'web-agent';
+    expect(task.agent_id).toMatch(new RegExp(`^${type}-[0-9a-f]{8}$`));
+  }
   const artifact = finished.tasks?.flatMap(task => task.result?.artifacts ?? []).find(item => item.action_name === 'capture-page');
   expect(artifact).toBeDefined();
   const file = artifact!.files!.find(item => item.name === 'desktop.png')!;

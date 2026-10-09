@@ -62,7 +62,7 @@ jobs:
           compose-file: .github/composes/compose.full.test.yaml
           targets: >-
             ${{ format('{0}{1}{2}',
-                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,browser-agent-1' || 'minio,minio-init',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,browser-agent,web-agent-1' || 'minio,minio-init',
                 env.RUN_BROWSER == 'true' && ',ui' || '',
                 (env.RUN_FS == 'true' || env.RUN_FULL == 'true') &&
                 (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}

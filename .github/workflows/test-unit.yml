@@ -57,7 +57,8 @@ jobs:
     name: Applications
     if: >-
       ${{ inputs.all || contains(fromJSON(inputs.changes), 'controller') ||
-          contains(fromJSON(inputs.changes), 'agent') || contains(fromJSON(inputs.changes), 'playground') ||
+          contains(fromJSON(inputs.changes), 'agent') || contains(fromJSON(inputs.changes), 'web') ||
+          contains(fromJSON(inputs.changes), 'playground') ||
           contains(fromJSON(inputs.changes), 'api') || contains(fromJSON(inputs.changes), 'mcp') ||
           contains(fromJSON(inputs.changes), 'ui-backend') }}
     runs-on: ubuntu-latest
@@ -72,11 +73,16 @@ jobs:
         run: |
           go test -race -count=1 -timeout=3m ./apps/controllers/default/...
           go vet ./apps/controllers/default/...
-      - name: Test and vet agent
+      - name: Test and vet browser agent
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'agent') }}
         run: |
           go test -race -count=1 -timeout=3m ./apps/agents/browser/...
           go vet ./apps/agents/browser/...
+      - name: Test and vet web agent
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'web') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/agents/web/...
+          go vet ./apps/agents/web/...
       - name: Test and vet Playground, including all-in-one
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'playground') }}
         run: |

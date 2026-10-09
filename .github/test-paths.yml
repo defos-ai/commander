@@ -12,7 +12,7 @@ framework: &shared
   - 'providers/!(fs|mongo|rabbitmq|s3)/**'
   - 'apps/!(adapters|admin|agents|controllers|playground)/**'
   - 'apps/adapters/!(api|mcp)/**'
-  - 'apps/agents/!(browser)/**'
+  - 'apps/agents/!(browser|web)/**'
   - 'apps/controllers/!(default)/**'
   - 'apps/admin/!(ui)/**'
   - 'apps/admin/ui/!(backend|frontend|docker)/**'
@@ -50,6 +50,13 @@ agent:
   - *s3
   - &agent 'apps/agents/browser/**'
 
+web:
+  - *shared
+  - *fs
+  - *rabbitmq
+  - *s3
+  - &web 'apps/agents/web/**'
+
 api:
   - *shared
   - *providers
@@ -65,6 +72,7 @@ playground:
   - *providers
   - *controller
   - *agent
+  - *web
   - *api
   - *mcp
   - 'apps/playground/**'
@@ -90,6 +98,7 @@ api-fs:
   - *api
   - *controller
   - *agent
+  - *web
   - *fs
 
 api-full:
@@ -97,6 +106,7 @@ api-full:
   - *api
   - *controller
   - *agent
+  - *web
   - *mongo
   - *rabbitmq
   - *s3
@@ -106,6 +116,7 @@ mcp-fs:
   - *mcp
   - *controller
   - *agent
+  - *web
   - *fs
 
 mcp-full:
@@ -113,6 +124,7 @@ mcp-full:
   - *mcp
   - *controller
   - *agent
+  - *web
   - *mongo
   - *rabbitmq
   - *s3
@@ -123,4 +135,5 @@ browser:
   - *api
   - *controller
   - *agent
+  - *web
   - *fs

@@ -16,7 +16,7 @@ import (
 
 var stableImageNames = []string{
 	"commander-admin", "commander-aio", "commander-api", "commander-browser-agent",
-	"commander-controller", "commander-mcp",
+	"commander-controller", "commander-mcp", "commander-web-agent",
 }
 
 type stableFixture struct {
@@ -254,7 +254,7 @@ func TestCIStableReleaseWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(images) != len(stableImageNames) {
-		t.Fatalf("expected six promotion images, got %v", images)
+		t.Fatalf("expected %d promotion images, got %v", len(stableImageNames), images)
 	}
 	for name, job := range workflow.Jobs {
 		if !strings.HasPrefix(job.Uses, "./.github/workflows/push-") || name == "release" || name == "stable" {
@@ -263,12 +263,24 @@ func TestCIStableReleaseWiring(t *testing.T) {
 		if !dependencies[name] {
 			t.Errorf("stable promotion does not depend on image publisher %s", name)
 		}
-		found := false
-		for _, image := range stableImageNames {
-			found = found || images[image] == "${{ needs."+name+".outputs.digest }}"
+		var publisher struct {
+			On map[string]struct {
+				Outputs map[string]struct{ Value string }
+			}
 		}
-		if !found {
-			t.Errorf("image publisher %s does not provide its digest to stable promotion", name)
+		readCIYAML(t, "../..", strings.TrimPrefix(job.Uses, "./"), &publisher)
+		outputs := publisher.On["workflow_call"].Outputs
+		if len(outputs) == 0 {
+			t.Errorf("image publisher %s exposes no image digests", name)
+		}
+		for output := range outputs {
+			found := false
+			for _, image := range stableImageNames {
+				found = found || images[image] == "${{ needs."+name+".outputs."+output+" }}"
+			}
+			if !found {
+				t.Errorf("image publisher %s does not provide %s to stable promotion", name, output)
+			}
 		}
 	}
 }
