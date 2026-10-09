@@ -82,6 +82,7 @@ for the API login or `/credentials mcp` for the MCP token. `/credentials` shows
 both; credentials stay local and are never sent to the model. Set `API_USERNAME`,
 `API_PASSWORD` or `MCP_TOKEN` to override them; unset or empty values use their
 defaults. Generated credentials change each session.
+Use `/status` to see the running API and MCP addresses.
 `API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
 The executable embeds both website missions and needs no checkout or Go installation.
 Start with `review-website-no-browser` for links, SEO and technology checks.

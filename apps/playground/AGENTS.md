@@ -42,7 +42,8 @@
   requires environment credentials.
   The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides
   it, including port `0` for fixtures. Set the API listen flag explicitly so
-  generic `PORT` cannot change it. Report the bound address after readiness.
+  generic `PORT` cannot change it. Expose the bound API and MCP addresses through
+  `/status` after readiness, keeping credentials out of that command.
 - All-in-one also generates `host.BearerCredentials` from an unset/empty
   `MCP_TOKEN`, preserving explicit nonempty overrides. Validate it before starting
   hosts and pass the same credentials to MCP and Playground without changing the
@@ -104,6 +105,9 @@
   Keep keys/history in memory and avoid repeating full schemas/results in prompts.
 - Preserve the DEFOS palette, star loaders, Markdown rendering, keyboard selectors
   and `NO_COLOR`/non-terminal behavior. Use [README.md](README.md) for user commands.
+  All-in-one startup shows the provider/model, readiness with two connected agents,
+  one review prompt and the temporary-state note. Keep URLs, host inventories and
+  credential instructions behind `/status`, model queries and `/credentials`.
 
 ## Checks
 

@@ -18,6 +18,13 @@ func tokenEnvironmentCommand(command string) string {
 }
 
 func (m *Model) localCommand(value string) bool {
+	if value == "/status" && m.stage == stageChat {
+		m.add("notice", "MCP: "+m.config.MCPURL)
+		if m.config.LocalAPI != nil {
+			m.add("notice", "API: "+m.config.LocalAPI.URL)
+		}
+		return false
+	}
 	if value == "/help" && m.config.LocalAPI != nil {
 		m.add("notice", "/credentials api shows the API login; /credentials mcp shows the MCP token. /credentials shows both in this terminal only.")
 	}

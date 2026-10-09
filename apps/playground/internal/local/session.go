@@ -119,10 +119,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 		return nil, err
 	}
 	s.Notices = []string{
-		"All-in-one: 1 MCP, 1 API, 1 controller, 1 web agent, 1 browser agent. Hosts and temporary state are removed on exit.",
-		"API listening: " + s.APIURL,
-		"Use /credentials api for the API login or /credentials mcp for the MCP token.",
-		"Try: Run review-website-no-browser for https://defos.ai and summarize what should be fixed before release.",
+		"\nTry: Review defos.ai\n\nTemporary session · results deleted on exit",
 	}
 	return s, nil
 }

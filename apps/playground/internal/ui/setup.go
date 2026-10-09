@@ -102,11 +102,17 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		m.engine = chat.New(m.ctx, m.modelClient, m.commander)
 		m.setStage(stageChat, "Ask about missions, agents, or an objective…", "")
 		m.add("success", m.provider.Name+" · "+m.settings.Model)
-		m.add("success", "Commander connected · "+m.config.MCPURL)
+		connection := "Commander connected · " + m.config.MCPURL
+		if m.config.LocalAPI != nil {
+			connection = "Commander ready · all-in-one · 2 agents connected"
+		}
+		m.add("success", connection)
 		for _, notice := range m.config.Notices {
 			m.add("notice", notice)
 		}
-		m.add("notice", "Try: List missions and available agents. Type /help for commands.")
+		if m.config.LocalAPI == nil {
+			m.add("notice", "Try: List missions and available agents. Type /help for commands.")
+		}
 		return waitEvent(m.engine), true
 	}
 	return nil, false

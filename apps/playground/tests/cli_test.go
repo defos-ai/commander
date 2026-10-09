@@ -184,12 +184,27 @@ func testAllInOneWorkflow(t *testing.T) {
 			t.Error("Playground did not clean up its local hosts")
 		}
 	})
-	wait("Commander connected")
+	wait("Temporary session · results deleted on exit")
+	welcome := output.String()
+	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try: Review defos.ai"} {
+		if !strings.Contains(welcome, want) {
+			t.Fatalf("missing startup message %q: %s", want, welcome)
+		}
+	}
+	for _, unwanted := range []string{"http://127.0.0.1:", "API listening:", "Use /credentials", "All-in-one: 1 MCP", "Try: List missions", "Try: Run review-website-no-browser"} {
+		if strings.Contains(welcome, unwanted) {
+			t.Fatalf("startup still shows %q: %s", unwanted, welcome)
+		}
+	}
+	if _, err := io.WriteString(keyboard, "/status\r"); err != nil {
+		t.Fatal(err)
+	}
+	wait("MCP connected · watching 0 operations · 0 queued messages")
 	endpoint := regexp.MustCompile(`http://127\.0\.0\.1:\d+/mcp`).FindString(output.String())
 	if endpoint == "" {
 		t.Fatalf("missing local endpoint: %s", output.String())
 	}
-	apiNotice := regexp.MustCompile(`API listening: (http://127\.0\.0\.1:\d+)`).FindStringSubmatch(output.String())
+	apiNotice := regexp.MustCompile(`API: (http://127\.0\.0\.1:\d+)`).FindStringSubmatch(output.String())
 	if len(apiNotice) != 2 {
 		t.Fatalf("missing local API endpoint: %s", output.String())
 	}

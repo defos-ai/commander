@@ -339,6 +339,18 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 	if strings.Contains(u.model.View(), local.Password) || strings.Contains(u.model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")
 	}
+	if strings.Contains(u.model.View(), local.URL) || strings.Contains(u.model.View(), endpoint.URL) {
+		t.Fatal("local startup displayed endpoints before a status request")
+	}
+	u.text("/status")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("local status", func(view string) bool {
+		return strings.Contains(view, "MCP connected · watching 0 operations · 0 queued messages")
+	})
+	view := u.model.View()
+	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || strings.Contains(view, local.Password) || strings.Contains(view, credentials.Token) {
+		t.Fatal("status did not show endpoints without credentials")
+	}
 	for _, command := range []string{"/credentials api", "/credentials mcp", "/credentials invalid", "/credentials api extra"} {
 		u.text(command)
 		u.key(tea.KeyMsg{Type: tea.KeyEnter})
@@ -675,7 +687,11 @@ func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDri
 	t.Cleanup(u.model.Close)
 	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	u.run(u.model.Init())
-	u.wait("connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
+	ready := "Commander connected"
+	if config.LocalAPI != nil {
+		ready = "Commander ready · all-in-one · 2 agents connected"
+	}
+	u.wait("connection", func(view string) bool { return strings.Contains(view, ready) })
 	return u
 }
 
