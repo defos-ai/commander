@@ -30,7 +30,9 @@
   the embedded API through its run options, without modifying process environment.
   Reuse `host.BasicCredentials` and `host.GeneratePassword`; never write credentials
   to files or logs, include them in model messages, or expose them through `/status`.
-  Only the local `/credentials` command displays them, during setup or chat.
+  Local `/credentials api` and `/credentials mcp` display only the selected
+  credentials during setup or chat; `/credentials` displays both. Handle these
+  commands, including invalid arguments, before forwarding input to the model.
   Keep generated credentials scoped to the session. Standalone API startup still
   requires environment credentials.
   The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides
@@ -40,6 +42,14 @@
   `MCP_TOKEN`, preserving explicit nonempty overrides. Validate it before starting
   hosts and pass the same credentials to MCP and Playground without changing the
   environment. Local `/credentials` displays the token only on request.
+- Native `commander credentials api|mcp` reads only its own environment; generated
+  native credentials remain in the running Playground and use `/credentials`.
+  In the all-in-one image, [`docker/entrypoint.aio.sh`](docker/entrypoint.aio.sh) exports credentials
+  before starting Tini, then Commander. Preserve explicit nonempty overrides;
+  generated values change on restart. Docker lookup reads PID 1's startup
+  environment only after identifying Commander or its exact Tini invocation.
+  Once identified, lookup failures must not fall back to another environment.
+  Do not add credential files, sockets or session-discovery directories.
 - Remote MCP uses environment-only `COMMANDER_MCP_TOKEN`; all-in-one ignores this
   remote credential. The MCP transport clones requests before attaching Bearer
   authorization, blocks redirects, and never exposes HTTP error bodies. After

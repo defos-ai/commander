@@ -39,26 +39,49 @@ func TestProviderSelector(t *testing.T) {
 
 func TestLocalCredentialsDuringSetup(t *testing.T) {
 	credentials := host.BearerCredentials{Token: "local-only-fixture-token"}
-	for _, local := range []*ui.LocalAPI{nil, {URL: "http://127.0.0.1:4274", Username: "commander", Password: "local-only-fixture-password"}} {
-		model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAPI: local, MCPURL: "http://127.0.0.1:4273/mcp", MCPCredentials: credentials}, io.Discard)
-		defer model.Close()
-		model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
-		model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		if local != nil && (!strings.Contains(model.View(), "/credentials") || strings.Contains(model.View(), local.Password) || strings.Contains(model.View(), credentials.Token)) {
-			t.Fatal("local help must advertise credential lookup without revealing secrets")
-		}
-		model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/credentials")})
-		model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		view := model.View()
-		if !strings.Contains(view, "Select your model provider:") {
-			t.Fatal("credential lookup changed the setup stage")
-		}
-		if local == nil {
-			if !strings.Contains(view, "only with --all-in-one") {
-				t.Fatal("remote session did not explain unavailable local credentials")
+	for _, tc := range []struct {
+		command           string
+		api, mcp, invalid bool
+	}{
+		{command: "/credentials", api: true, mcp: true},
+		{command: "/credentials api", api: true},
+		{command: "/credentials mcp", mcp: true},
+		{command: "/credentials other", invalid: true},
+		{command: "/credentials api extra", invalid: true},
+	} {
+		for _, local := range []*ui.LocalAPI{nil, {URL: "http://127.0.0.1:4274", Username: "commander", Password: "local-only-fixture-password"}} {
+			mode := "all-in-one"
+			if local == nil {
+				mode = "remote"
 			}
-		} else if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "Username: "+local.Username) || !strings.Contains(view, "Password: "+local.Password) || !strings.Contains(view, "Token: "+credentials.Token) {
-			t.Fatal("explicit credential lookup did not display the local API and MCP credentials")
+			t.Run(mode+"/"+tc.command, func(t *testing.T) {
+				model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAPI: local, MCPURL: "http://127.0.0.1:4273/mcp", MCPCredentials: credentials}, io.Discard)
+				defer model.Close()
+				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
+				model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				if local != nil && (!strings.Contains(model.View(), "/credentials api") || !strings.Contains(model.View(), "/credentials mcp") || strings.Contains(model.View(), local.Password) || strings.Contains(model.View(), credentials.Token)) {
+					t.Fatal("local help must advertise credential lookup without revealing secrets")
+				}
+				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.command)})
+				model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				view := model.View()
+				if !strings.Contains(view, "Select your model provider:") {
+					t.Fatal("credential lookup changed the setup stage")
+				}
+				if tc.invalid && !strings.Contains(view, "Usage: /credentials [api|mcp]") {
+					t.Fatal("invalid credential command did not show usage")
+				}
+				if local == nil && !tc.invalid && !strings.Contains(view, "only with --all-in-one") {
+					t.Fatal("remote session did not explain unavailable local credentials")
+				}
+				wantAPI, wantMCP := local != nil && tc.api, local != nil && tc.mcp
+				if strings.Contains(view, "Password: local-only-fixture-password") != wantAPI || strings.Contains(view, "Token: "+credentials.Token) != wantMCP {
+					t.Fatal("credential command did not show only the requested local credentials")
+				}
+				if wantAPI && (!strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "Username: "+local.Username)) {
+					t.Fatal("API lookup did not display its endpoint and username")
+				}
+			})
 		}
 	}
 }
@@ -95,8 +118,10 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 	if strings.Contains(u.model.View(), local.Password) || strings.Contains(u.model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")
 	}
-	u.text("/credentials")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	for _, command := range []string{"/credentials api", "/credentials mcp", "/credentials invalid", "/credentials api extra"} {
+		u.text(command)
+		u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	}
 	if !strings.Contains(u.model.View(), "Password: "+local.Password) || !strings.Contains(u.model.View(), "Token: "+credentials.Token) {
 		t.Fatal("explicit credential lookup did not display local credentials")
 	}

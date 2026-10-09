@@ -13,12 +13,23 @@ For a temporary all-in-one session, build and run from the repository root:
 
 ```sh
 docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
-docker run --rm -it -p 127.0.0.1:4274:4274 commander:aio
+docker run --name commander --rm -it -p 127.0.0.1:4274:4274 commander:aio
 ```
 
 This image starts Playground, MCP, the API, a controller and the web-quality agent
-with Chromium and fonts included. Type `/credentials` to view the generated API
-login and MCP token, then connect to `http://localhost:4274`. `/exit` stops everything and deletes
+with Chromium and fonts included. Inside Playground, type `/credentials` to view
+the API login and MCP token. From another terminal:
+
+```sh
+docker exec commander commander credentials api
+docker exec commander commander credentials mcp
+```
+
+Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
+`-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
+
+Connect Admin to
+`http://localhost:4274`. `/exit` stops everything and deletes
 the session's state. Add `-e OPENAI_API_KEY` before the image name to use an exported
 key, or enter your provider's key during setup.
 
@@ -58,7 +69,8 @@ go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-on
 This starts MCP, the HTTP API, one controller and one web-quality agent using
 temporary FS state. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
-shared directly with Playground. Type `/credentials` during setup or chat to view
+shared directly with Playground. During setup or chat, type `/credentials api`
+for the API login or `/credentials mcp` for the MCP token. `/credentials` shows
 both; credentials stay local and are never sent to the model. Set `API_USERNAME`,
 `API_PASSWORD` or `MCP_TOKEN` to override them; unset or empty values use their
 defaults. Generated credentials change each session.
@@ -73,6 +85,20 @@ Use Compose to retain work.
 `COMMANDER_MCP_TOKEN`, `BUS_URL`, `STORAGE_URL` and `DATABASE_URL`; it cannot be
 combined with `--mcp-url`. `--debug`
 shows the temporary host log location, which is also deleted on exit.
+
+### Credentials
+
+For native sessions, use `/credentials [api|mcp]` inside Playground to see generated
+credentials. These shell commands read only credentials configured in that shell:
+
+```sh
+./commander credentials api
+./commander credentials mcp
+```
+
+On Windows, use `.\commander.exe`. Each command prints the selected credentials
+from `API_USERNAME` / `API_PASSWORD` or `MCP_TOKEN` and exits. In Docker, use the
+`docker exec` commands above to retrieve the running container's credentials.
 
 ### Model setup
 
@@ -120,7 +146,7 @@ Try “List missions and available agents,” then:
 | Command | Effect |
 | --- | --- |
 | `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
-| `/credentials` | Show the local all-in-one API login and MCP token. Also available during model setup. |
+| `/credentials api`, `/credentials mcp` | Show the selected all-in-one credentials in Playground; `/credentials` shows both. Also available during model setup. |
 | `/watch <operation-id>` | Follow saved work and resume model decisions. |
 | `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Questions and permission checks still apply. |
 | `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |

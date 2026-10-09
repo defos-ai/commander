@@ -17,6 +17,12 @@ import (
 )
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (result error) {
+	if len(args) != 0 && args[0] == "credentials" {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return showCredentials(args[1:], stdout)
+	}
 	caller := ctx
 	config, err := configuration(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {

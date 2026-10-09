@@ -10,13 +10,14 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation tini \
+    && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation openssl tini \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1000 commander \
     && useradd --uid 1000 --gid 1000 --create-home commander
 COPY --from=build /out/commander /usr/local/bin/commander
+COPY --chmod=755 apps/playground/docker/entrypoint.aio.sh /usr/local/bin/commander-entrypoint
 ENV API_LISTEN_ADDRESS=0.0.0.0:4274 CHROMIUM_NO_SANDBOX=true
 EXPOSE 4274
 USER 1000:1000
 WORKDIR /home/commander
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/commander", "--all-in-one"]
+ENTRYPOINT ["/usr/local/bin/commander-entrypoint"]

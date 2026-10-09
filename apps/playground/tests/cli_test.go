@@ -398,7 +398,14 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			}
 			wait("Select your model provider")
 			beforeLookup := output.String()
-			if _, err := io.WriteString(keyboard, "/credentials\r"); err != nil {
+			if _, err := io.WriteString(keyboard, "/credentials api\r"); err != nil {
+				t.Fatal(err)
+			}
+			wait("Password:")
+			if strings.Contains(output.String(), "Token:") {
+				t.Fatal("API credential lookup also displayed the MCP token")
+			}
+			if _, err := io.WriteString(keyboard, "/credentials mcp\r"); err != nil {
 				t.Fatal(err)
 			}
 			wait("Token:")
@@ -504,6 +511,61 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 				t.Fatalf("temporary state remains after exit: %v (%v)", files, err)
 			}
 		})
+	}
+}
+
+func TestCredentialCommand(t *testing.T) {
+	t.Setenv("COMMANDER_MCP_URL", "invalid-url")
+	t.Setenv("COMMANDER_DEBUG", "invalid-boolean")
+	for _, tc := range []struct {
+		name, target, username, password, token, want, missing string
+	}{
+		{name: "API only", target: "api", username: "commander", password: "fixture-password", token: "invalid token", want: "Username: commander\nPassword: fixture-password\n"},
+		{name: "MCP only", target: "mcp", username: "invalid:username", password: "fixture-password", token: "fixture-token", want: "Token: fixture-token\n"},
+		{name: "missing API username", target: "api", password: "fixture-password", missing: "API_USERNAME and API_PASSWORD must be set"},
+		{name: "missing API password", target: "api", username: "commander", missing: "API_USERNAME and API_PASSWORD must be set"},
+		{name: "missing MCP token", target: "mcp", missing: "MCP_TOKEN must be set"},
+		{name: "invalid API username", target: "api", username: "invalid:username", password: "fixture-password"},
+		{name: "invalid API password", target: "api", username: "commander", password: "fixture\npassword"},
+		{name: "invalid MCP token", target: "mcp", token: "fixture token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("API_USERNAME", tc.username)
+			t.Setenv("API_PASSWORD", tc.password)
+			t.Setenv("MCP_TOKEN", tc.token)
+			var stdout, stderr bytes.Buffer
+			err := cli.Run(t.Context(), []string{"credentials", tc.target}, nil, &stdout, &stderr)
+			if stderr.Len() != 0 {
+				t.Fatal("credential command wrote startup output or diagnostics")
+			}
+			if tc.want != "" {
+				if err != nil || stdout.String() != tc.want {
+					t.Fatal("credential command did not return only the selected environment credentials")
+				}
+				return
+			}
+			if err == nil || stdout.Len() != 0 {
+				t.Fatal("missing or invalid credentials must fail without printing credentials")
+			}
+			if tc.missing != "" && (!strings.HasPrefix(err.Error(), tc.missing) || !strings.Contains(err.Error(), "/credentials")) {
+				t.Fatal("missing credentials error must identify the environment variables and in-chat lookup")
+			}
+			for _, secret := range []string{tc.password, tc.token} {
+				if secret != "" && strings.Contains(err.Error(), secret) {
+					t.Fatal("credential validation error echoed a secret")
+				}
+			}
+		})
+	}
+}
+
+func TestCredentialCommandArguments(t *testing.T) {
+	for _, arguments := range [][]string{{"credentials"}, {"credentials", "unexpected-secret"}, {"credentials", "api", "unexpected-secret"}} {
+		var output bytes.Buffer
+		err := cli.Run(t.Context(), arguments, nil, &output, &output)
+		if err == nil || err.Error() != "usage: commander credentials api|mcp" || output.Len() != 0 {
+			t.Fatal("invalid credentials arguments must fail without starting Playground or echoing values")
+		}
 	}
 }
 
