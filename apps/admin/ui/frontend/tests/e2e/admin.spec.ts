@@ -26,8 +26,22 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(connection.getByLabel('Username', { exact: true })).toHaveValue('');
   await expect(connection.getByLabel('Password', { exact: true })).toHaveValue('');
   await expect(connection.getByLabel('Connection name')).toBeFocused();
+  await expect(connection.getByText('Need a password?', { exact: true })).not.toBeVisible();
   await connection.getByLabel('Connection name').fill('Compose test');
+  const aboutResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/ui/proxy' && url.searchParams.get('url') === publicAPIURL
+      && url.searchParams.get('path') === '/aboutz';
+  });
   await connection.getByLabel('API URL').fill(publicAPIURL);
+  expect((await aboutResponse).status()).toBe(200);
+  await expect(connection.getByText('Need a password?', { exact: true })).toBeVisible();
+  await expect(connection.getByText('docker compose exec api commander-api credentials', { exact: true })).toBeVisible();
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await connection.getByRole('button', { name: 'Copy command', exact: true }).click();
+  await expect(connection.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('docker compose exec api commander-api credentials');
+  expect(browserRequests.every(request => !request.authorization)).toBe(true);
   await connection.getByLabel('Username', { exact: true }).fill(username);
   await connection.getByLabel('Password', { exact: true }).fill(password);
   await connection.getByRole('button', { name: 'Connect', exact: true }).click();

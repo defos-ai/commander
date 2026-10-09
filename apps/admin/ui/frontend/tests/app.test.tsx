@@ -44,6 +44,7 @@ function mockAPI() {
     }
     if (!state.online && !url.startsWith(localURL)) throw new TypeError('Network unavailable');
     if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
+    if (url.endsWith('/aboutz')) return Response.json({ runtime: 'docker-compose', application: 'commander-api' });
     if (['operations', 'missions', 'controllers', 'agents', 'actions'].some(resource => url.endsWith(`/api/v1/${resource}`))) {
       return state.authorize && state.sessions.has(address.searchParams.get('url') ?? '')
         ? Response.json({ items: [] })
@@ -86,6 +87,97 @@ afterEach(() => {
 });
 
 describe('connection setup and saved metadata', () => {
+  it('offers a copyable password command after entering a URL without sending credentials', async () => {
+    const api = mockAPI();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { clipboard: { writeText } }));
+    render(<App />);
+    await screen.findByText('Local Commander detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+    for (const label of ['Connection name', 'API URL', 'Username', 'Password']) {
+      expect(screen.getByLabelText(label)).toHaveValue('');
+    }
+    fillConnection();
+
+    expect(await screen.findByText('Need a password?')).toBeVisible();
+    const command = 'docker compose exec api commander-api credentials';
+    expect(screen.getByText(command)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy command' }));
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeVisible();
+    expect(writeText).toHaveBeenCalledWith(command);
+
+    const [input, options] = api.fetch.mock.calls.find(([value]) => upstreamURL(value) === `${remoteURL}/aboutz`)!;
+    expect(new URL(String(input), 'http://ui.test').pathname).toBe('/ui/proxy');
+    expect(new Headers(options?.headers).get('X-Commander-UI')).toBe('1');
+    expect(new Headers(options?.headers).has('Authorization')).toBe(false);
+    expect(options?.credentials).toBe('same-origin');
+    expect(options?.body).toBeUndefined();
+    expect(String(input)).not.toContain(username.trim());
+    expect(String(input)).not.toContain(password.trim());
+    expect(api.fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).toBeNull();
+  });
+
+  it('clears the old password hint and ignores metadata that arrives after the URL changes', async () => {
+    const api = mockAPI();
+    const late = deferredResponse();
+    api.state.intercept = url => {
+      if (url === `${customLocalURL}/aboutz`) return late.promise;
+      if (url === `${remoteURL}/aboutz`) return Promise.resolve(Response.json({ runtime: 'native', application: 'commander-api' }));
+      return undefined;
+    };
+    render(<App />);
+    await screen.findByText('Local Commander detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByText('docker compose exec api commander-api credentials')).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('API URL'), { target: { value: customLocalURL } });
+    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+    await waitFor(() => expect(api.fetch.mock.calls.some(([value]) => upstreamURL(value) === `${customLocalURL}/aboutz`)).toBe(true));
+    const pending = api.fetch.mock.calls.find(([value]) => upstreamURL(value) === `${customLocalURL}/aboutz`)![1]?.signal;
+    fireEvent.change(screen.getByLabelText('API URL'), { target: { value: remoteURL } });
+    expect(pending?.aborted).toBe(true);
+    expect(await screen.findByText('./commander-api credentials')).toBeVisible();
+    await act(async () => {
+      late.resolve(Response.json({ runtime: 'docker', application: 'commander' }));
+    });
+    expect(screen.getByText('./commander-api credentials')).toBeVisible();
+    expect(screen.queryByText('docker exec commander commander credentials api')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('API URL'), { target: { value: '' } });
+    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+  });
+
+  it.each(['unavailable', 'unsupported'])('keeps connecting available when credential metadata is %s', async failure => {
+    const api = mockAPI();
+    api.state.intercept = url => url.endsWith('/aboutz') ? Promise.resolve(failure === 'unavailable'
+      ? Response.json({}, { status: 503 })
+      : Response.json({ runtime: 'unknown', application: 'commander-api', command: 'untrusted command' })) : undefined;
+    render(<App />);
+    await screen.findByText('Local Commander detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+    const dialog = fillConnection();
+    await waitFor(() => expect(api.fetch.mock.calls.some(([value]) => upstreamURL(value) === `${remoteURL}/aboutz`)).toBe(true));
+    expect(screen.queryByText('Need a password?')).not.toBeInTheDocument();
+    expect(screen.queryByText('untrusted command')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  });
+
+  it('leaves the password command selectable when clipboard access is denied', async () => {
+    mockAPI();
+    const writeText = vi.fn().mockRejectedValue(new Error('Clipboard denied'));
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { clipboard: { writeText } }));
+    render(<App />);
+    await screen.findByText('Local Commander detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy command' }));
+    expect(await screen.findByText('Select and copy the command.')).toBeVisible();
+    expect(screen.getByText('docker compose exec api commander-api credentials')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument();
+  });
+
   it('discovers the local API without sending credentials or saving a connection', async () => {
     const api = mockAPI();
     render(<App />);

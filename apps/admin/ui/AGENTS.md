@@ -24,6 +24,10 @@
   Preserve URL scheme/base path; unmapped URLs connect directly. Keep this mapping
   in the backend. Discovery checks the fixed local endpoint; adding a connection
   stays blank, while connecting a discovered local API prefills non-secret fields.
+- The password hint reads public `/aboutz` through the existing proxy before
+  sign-in. Keep commands predefined in the frontend; never use commands returned
+  by an API. Cancel discovery on URL changes and keep failed hints from blocking
+  connection. Public discovery must never forward session credentials.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
 - Preserve routes across reload/back/forward, stale-request cancellation and

@@ -197,6 +197,10 @@ func TestBrowserSessionRequestBoundaries(t *testing.T) {
 		{name: "encoded traversal", path: proxyPath(upstream.URL, "/api/v1/%2e%2e/secret"), status: 400},
 		{name: "double encoded traversal", path: proxyPath(upstream.URL, "/api/v1/%252e%252e/secret"), status: 400},
 		{name: "unknown endpoint", path: proxyPath(upstream.URL, "/admin/secret"), status: 400},
+		{name: "about metadata is read-only", method: http.MethodPost, path: proxyPath(upstream.URL, "/aboutz"), status: 400},
+		{name: "about subpath is not public", path: proxyPath(upstream.URL, "/aboutz/secret"), status: 400},
+		{name: "about trailing slash is rejected", path: proxyPath(upstream.URL, "/aboutz/"), status: 400},
+		{name: "about requires same origin", path: proxyPath(upstream.URL, "/aboutz"), header: "Origin", value: "http://attacker.example", status: 403},
 		{name: "proxy delete unsupported", method: http.MethodDelete, path: proxyPath(upstream.URL, "/api/v1/missions"), status: 405},
 		{name: "unknown UI route", path: "/ui/missing", status: 404},
 		{name: "oversized login", method: http.MethodPost, path: "/ui/connections", body: "{\"password\":\"" + strings.Repeat("x", 65<<10) + "\"}", status: 413},
@@ -271,11 +275,13 @@ func TestBrowserSessionRedirectsAndSecureCookie(t *testing.T) {
 		t.Fatalf("reverse proxy did not issue secure cookie: %d %v", response.Code, response.Header())
 	}
 	cookie := response.Result().Cookies()[0]
-	request = browserRequest(http.MethodGet, proxyPath(upstream.URL, "/api/v1/redirect"), "", cookie)
-	request.Header.Set("Origin", "https://admin.example")
-	response = serveUI(handler, request)
-	if response.Code != http.StatusBadGateway || redirected.Load() || response.Header().Get("Location") != "" || response.Header().Get("Set-Cookie") != "" {
-		t.Fatalf("upstream redirect escaped proxy: %d %v", response.Code, response.Header())
+	for _, path := range []string{"/api/v1/redirect", "/aboutz"} {
+		request = browserRequest(http.MethodGet, proxyPath(upstream.URL, path), "", cookie)
+		request.Header.Set("Origin", "https://admin.example")
+		response = serveUI(handler, request)
+		if response.Code != http.StatusBadGateway || redirected.Load() || response.Header().Get("Location") != "" || response.Header().Get("Set-Cookie") != "" {
+			t.Fatalf("upstream redirect escaped proxy: %d %v", response.Code, response.Header())
+		}
 	}
 	request = browserRequest(http.MethodPost, "/ui/connections", loginBody(upstream.URL+"/redirect"), cookie)
 	request.Header.Set("Origin", "https://admin.example")

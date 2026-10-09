@@ -24,6 +24,10 @@ func TestAPIUpstreamRouting(t *testing.T) {
 	observed := make(chan *http.Request, 8)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		observed <- r.Clone(r.Context())
+		if strings.HasSuffix(r.URL.Path, "/aboutz") {
+			io.WriteString(w, `{"runtime":"docker-compose","application":"commander-api"}`)
+			return
+		}
 		io.WriteString(w, `{"items":[]}`)
 	}))
 	defer upstream.Close()
@@ -46,6 +50,32 @@ func TestAPIUpstreamRouting(t *testing.T) {
 	if forwarded.RequestURI != "/public%2Fbase/healthz" || forwarded.Header.Get("Authorization") != "" {
 		t.Fatalf("mapped health request changed: %s %v", forwarded.RequestURI, forwarded.Header)
 	}
+	checkAbout := func(cookie *http.Cookie) {
+		t.Helper()
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			request := browserRequest(method, proxyPath(publicURL, "/aboutz"), "", cookie)
+			request.SetBasicAuth("browser-user", "must-not-be-forwarded")
+			request.AddCookie(&http.Cookie{Name: "browser-cookie", Value: "must-not-be-forwarded"})
+			response := serveUI(handler, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("mapped about discovery failed: %d", response.Code)
+			}
+			if method == http.MethodGet && response.Body.String() != `{"runtime":"docker-compose","application":"commander-api"}` {
+				t.Fatalf("about metadata changed: %s", response.Body.String())
+			}
+			if method == http.MethodHead && response.Body.Len() != 0 {
+				t.Fatal("HEAD about response must be empty")
+			}
+			forwarded := <-observed
+			if forwarded.RequestURI != "/public%2Fbase/aboutz" || forwarded.Method != method {
+				t.Fatalf("mapped about request changed: %s %s", forwarded.Method, forwarded.RequestURI)
+			}
+			if forwarded.Header.Get("Authorization") != "" || forwarded.Header.Get("Cookie") != "" {
+				t.Fatal("public about request leaked browser or saved API credentials")
+			}
+		}
+	}
+	checkAbout(nil)
 	response = serveUI(handler, browserRequest(http.MethodPost, "/ui/connections", loginBody(publicURL), nil))
 	var connection connections.Connection
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &connection) != nil || connection.URL != publicURL || len(response.Result().Cookies()) != 1 {
@@ -57,6 +87,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 	if forwarded.RequestURI != "/public%2Fbase/api/v1/missions" || !ok || user != "operator" || password != "private-password" {
 		t.Fatalf("mapped authentication changed: %s", forwarded.RequestURI)
 	}
+	checkAbout(cookie)
 	response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(publicURL, "/api/v1/agents/team%2Fagent?limit=5&label=a%2Fb"), "", cookie))
 	if response.Code != http.StatusOK {
 		t.Fatalf("mapped proxy failed: %d %s", response.Code, response.Body.String())

@@ -14,6 +14,11 @@ export interface Session {
   username: string;
 }
 
+export interface Deployment {
+  runtime: 'native' | 'docker' | 'docker-compose';
+  application: 'commander-api' | 'commander';
+}
+
 export type ConnectionStatus = 'unchecked' | 'checking' | 'ready' | 'authentication' | 'degraded' | 'unreachable';
 
 export type HealthState = 'unknown' | 'ok' | 'unavailable';

@@ -24,14 +24,13 @@ docker compose --profile admin up --build -d
 
 Open `http://localhost:4275` and choose **Connect** under **Local Commander detected**.
 The API URL and username (`commander`) are prefilled. Compose generates a random
-password. Retrieve it and paste it into the connection dialog:
+password. The dialog's **Need a password?** hint offers the command to copy:
 
 ```sh
 docker compose exec api commander-api credentials
 ```
 
-For MongoDB, RabbitMQ and MinIO, add `-f compose.full.yaml` after `docker compose`
-in both commands. Generated passwords change when the API container restarts;
+Generated passwords change when the API container restarts;
 retrieve the new password and reconnect. For a stable password, set `API_PASSWORD`
 before starting Compose. `API_USERNAME` overrides the username; see
 [API authentication](../../adapters/api/README.md#authentication-and-health).

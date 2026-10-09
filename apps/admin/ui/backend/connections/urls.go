@@ -121,7 +121,7 @@ func endpoint(base *url.URL, value string) (*url.URL, bool, error) {
 		strings.ContainsAny(u.Path, "\\%\x00") || path.Clean(u.Path) != u.Path {
 		return nil, false, errors.New("invalid API path")
 	}
-	public := u.Path == "/healthz" || u.Path == "/readyz"
+	public := u.Path == "/healthz" || u.Path == "/readyz" || u.Path == "/aboutz"
 	if !public && !strings.HasPrefix(u.Path, "/api/v1/") {
 		return nil, false, errors.New("path must identify a Commander API endpoint")
 	}

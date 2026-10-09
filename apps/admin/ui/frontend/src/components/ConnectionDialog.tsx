@@ -5,6 +5,7 @@ import type { Connection, Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
+import { CredentialHint } from './CredentialHint';
 
 type ConnectionValues = { name: string; url: string; username: string; password: string };
 type Field = keyof ConnectionValues;
@@ -129,6 +130,7 @@ export function ConnectionDialog({ connection, credentials, localURL, onClose, o
         <input id={`${identity}-password`} name="password" type="password" required maxLength={4096} value={values.password}
           disabled={submitting} aria-invalid={invalidField === 'password' || undefined} aria-describedby={description('password')}
           onChange={event => update('password', event.target.value)} />
+        <CredentialHint key={values.url} url={values.url} />
       </div>
       <p className="form-hint" id={hintID}>{t($ => $.connectionForm.credentialsHint)}</p>
       {error && <p className="form-error" id={errorID} role="alert">{error}</p>}

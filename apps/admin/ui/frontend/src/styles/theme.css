@@ -118,6 +118,10 @@ svg { flex-shrink: 0; }
 .form-field input:disabled { opacity: .65; }
 .form-field input[aria-invalid='true'] { border-color: var(--red); }
 .form-hint { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.credential-hint { display: grid; gap: 6px; min-width: 0; }
+.credential-command { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.credential-command code { flex: 1; min-width: 0; font: 400 12px/1.6 var(--font-mono); overflow-wrap: anywhere; user-select: all; }
+.credential-command .icon-button { flex-shrink: 0; }
 .form-error { color: var(--red); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
 .button--secondary.danger-button { color: var(--red); }

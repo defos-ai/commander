@@ -1,4 +1,4 @@
-import type { ConnectionCheck, Session } from './types';
+import type { ConnectionCheck, Deployment, Session } from './types';
 
 const REQUEST_TIMEOUT_MS = 5_000;
 
@@ -65,6 +65,15 @@ export function proxyURL(url: string, path: string, session?: Session): string {
 
 export function expireSession(url: string) {
   window.dispatchEvent(new CustomEvent('commander:session-expired', { detail: normalizeURL(url) }));
+}
+
+export async function getDeployment(url: string, signal: AbortSignal): Promise<Deployment | null> {
+  const response = await request(proxyURL(url, '/aboutz'), signal);
+  const body = response?.status === 200 ? response.body : null;
+  if (!body || typeof body !== 'object' || !('runtime' in body) || !('application' in body)) return null;
+  if (body.runtime !== 'native' && body.runtime !== 'docker' && body.runtime !== 'docker-compose') return null;
+  if (body.application !== 'commander-api' && body.application !== 'commander') return null;
+  return { runtime: body.runtime, application: body.application };
 }
 
 export async function checkConnection(
