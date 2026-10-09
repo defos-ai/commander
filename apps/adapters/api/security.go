@@ -94,7 +94,7 @@ func (s *security) protect(next http.Handler) http.Handler {
 			writePreflight(w, r)
 			return
 		}
-		if !s.authenticated(r) {
+		if !publicAbout(r) && !s.authenticated(r) {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Commander", charset="UTF-8"`)
 			endpoints.WriteError(w, http.StatusUnauthorized, "authentication_required")
 			return
@@ -131,6 +131,10 @@ func sameOrigin(r *http.Request, expected requestOrigin) bool {
 
 func publicHealth(r *http.Request) bool {
 	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && (r.URL.Path == "/healthz" || r.URL.Path == "/readyz")
+}
+
+func publicAbout(r *http.Request) bool {
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.URL.Path == "/aboutz"
 }
 
 func securityHeaders(w http.ResponseWriter) {

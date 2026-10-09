@@ -21,6 +21,10 @@
 
 - Chat goes through MCP even in all-in-one mode. Reuse app hosts rather than
   duplicating their lifecycle or calling the runner directly from chat.
+- The embedded API identifies itself as `application: commander` at `/aboutz`;
+  `API_RUNTIME` defaults to `native`, and the all-in-one image sets `docker`.
+  Keep this public metadata limited to deployment enums; it retains API Host,
+  Origin and proxy validation and must never expose credentials or paths.
 - All-in-one starts temporary state and loopback services, waits for readiness,
   then shuts down hosts before deleting that session's files. It must not use or
   delete the user's configured database/storage or existing Compose state.

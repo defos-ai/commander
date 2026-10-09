@@ -16,7 +16,7 @@ RUN groupadd --gid 1000 commander \
     && useradd --uid 1000 --gid 1000 --create-home commander
 COPY --from=build /out/commander /usr/local/bin/commander
 COPY --chmod=755 apps/playground/docker/entrypoint.aio.sh /usr/local/bin/commander-entrypoint
-ENV API_LISTEN_ADDRESS=0.0.0.0:4274 CHROMIUM_NO_SANDBOX=true
+ENV API_LISTEN_ADDRESS=0.0.0.0:4274 API_RUNTIME=docker CHROMIUM_NO_SANDBOX=true
 EXPOSE 4274
 USER 1000:1000
 WORKDIR /home/commander

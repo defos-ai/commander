@@ -215,6 +215,13 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 	get("/healthz", "", http.StatusOK)
 	get("/readyz", "", http.StatusOK)
+	var about map[string]string
+	if err := json.Unmarshal(get("/aboutz", "", http.StatusOK), &about); err != nil {
+		t.Fatal(err)
+	}
+	if len(about) != 2 || about["runtime"] != "native" || about["application"] != "commander" {
+		t.Fatalf("unexpected all-in-one API metadata: %+v", about)
+	}
 	get("/api/v1/operations", "", http.StatusUnauthorized)
 	get("/api/v1/operations", "wrong-password", http.StatusUnauthorized)
 	for _, token := range []string{"", "wrong-token"} {
@@ -338,6 +345,7 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("API_USERNAME", "commander")
 	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
+	t.Setenv("API_RUNTIME", "native")
 	t.Setenv("PORT", "not-a-port") // All-in-one uses an explicit API listener.
 	t.Setenv("API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")
 	t.Setenv("API_ALLOWED_ORIGINS", "")

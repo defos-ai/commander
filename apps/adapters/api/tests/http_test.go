@@ -85,6 +85,13 @@ func TestHTTPAuthenticationOriginMethodsAndPublicProbes(t *testing.T) {
 			t.Fatalf("HEAD probe: %+v", head)
 		}
 	}
+	about := a.request(http.MethodGet, "/aboutz", nil, func(r *http.Request) { r.Header.Del("Authorization") })
+	deployment := decode[map[string]string](t, about, http.StatusOK)
+	if len(deployment) != 2 || deployment["runtime"] != "docker-compose" || deployment["application"] != "commander-api" {
+		t.Fatalf("unexpected public deployment metadata: %+v", deployment)
+	}
+	assertHeaders(t, about)
+	assertSchema(t, a, "About", about)
 	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil, func(r *http.Request) { r.Header.Del("Authorization") }), http.StatusUnauthorized, "authentication_required")
 	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil, func(r *http.Request) { r.Header.Set("Origin", "https://attacker.invalid") }), http.StatusForbidden, "cross_origin_request")
 	if result := a.request(http.MethodGet, "/api/v1/testing/cleanup", nil); result.status != http.StatusMethodNotAllowed {

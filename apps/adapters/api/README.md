@@ -80,8 +80,7 @@ docker compose exec api commander-api credentials
 
 Generated passwords change whenever the container restarts. Set `API_PASSWORD`
 before starting Compose for a stable password; `API_USERNAME` overrides the username.
-For full Compose, add `-f compose.full.yaml` after `docker compose`. Native hosts
-can run `commander-api credentials` with the same environment settings.
+Native hosts can run `commander-api credentials` with the same environment settings.
 Passwords are never included in startup logs or errors.
 
 [Playground's all-in-one mode](../../playground/README.md#native-one-executable)
@@ -89,11 +88,17 @@ generates a session password automatically; use `/credentials` there to view it.
 
 Use HTTPS at the reverse proxy for hosted deployments. All routes, including
 unknown routes and Swagger, require Basic authentication except approved CORS
-preflights and public `GET`/`HEAD` probes on every host:
+preflights, `/aboutz`, and public `GET`/`HEAD` probes on every host:
 
 - `/healthz`: server liveness.
 - `/readyz`: metadata database readability; does not check broker connectivity,
   file storage or controller availability.
+
+Public `GET`/`HEAD /aboutz` describes the deployment: `runtime` is `native`,
+`docker` or `docker-compose`; `application` is `commander-api` or `commander`
+(all-in-one). Host, Origin and trusted-proxy checks still apply. It returns no
+credentials. Set `API_RUNTIME` or `--runtime` when deploying; the default is
+`native`, and the Docker images and Compose set it automatically.
 
 Responses include no-cache, content-type, framing and referrer protections;
 HTTPS responses also set HSTS.

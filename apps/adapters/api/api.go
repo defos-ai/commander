@@ -23,6 +23,7 @@ import (
 
 type Config struct {
 	Security          SecurityConfig
+	Deployment        DeploymentConfig
 	SwaggerEnabled    bool
 	Operations        controllercommands.Operations
 	MissionStore      missions.MissionStore
@@ -41,12 +42,19 @@ func NewHandler(config Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := config.Deployment.Validate(); err != nil {
+		return nil, err
+	}
 	if config.Operations == nil || config.MissionStore == nil || config.OperationStore == nil ||
 		config.AgentStore == nil || config.ControllerStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil {
 		return nil, errors.New("API requires controller commands and mission, operation, agent, controller, action, report, artifact metadata and artifact file stores")
 	}
 	mux := http.NewServeMux()
+	about := config.Deployment.response()
+	mux.HandleFunc("GET /aboutz", func(w http.ResponseWriter, _ *http.Request) {
+		endpoints.WriteJSON(w, http.StatusOK, about)
+	})
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
 	endpoints.RegisterAgents(mux, config.AgentStore)

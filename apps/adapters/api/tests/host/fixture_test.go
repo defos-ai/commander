@@ -20,7 +20,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_ALLOWED_ORIGINS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "API_SWAGGER_ENABLED", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
+	for _, name := range []string{"API_LISTEN_ADDRESS", "API_ALLOWED_HOSTS", "API_ALLOWED_ORIGINS", "API_TRUSTED_PROXIES", "API_PROXY_HEADERS", "API_SWAGGER_ENABLED", "API_RUNTIME", "PORT", "BUS_URL", "STORAGE_URL", "DATABASE_URL", "LOG_LEVEL", "LOG_FORMAT", "ENV"} {
 		t.Setenv(name, "")
 	}
 	t.Setenv("API_USERNAME", "api-fixture-user")
@@ -47,15 +47,18 @@ type runningAPI struct {
 	stopped bool
 }
 
-func startAPI(t *testing.T, args []string) *runningAPI {
+func startAPI(t *testing.T, args []string, supplied ...cli.Options) *runningAPI {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
+	var options cli.Options
+	if len(supplied) != 0 {
+		options = supplied[0]
+	}
+	options.Ready = func(address net.Addr) { ready <- address }
 	go func() {
-		done <- cli.RunWithOptions(ctx, args, io.Discard, cli.Options{Ready: func(address net.Addr) {
-			ready <- address
-		}})
+		done <- cli.RunWithOptions(ctx, args, io.Discard, options)
 	}()
 	server := &runningAPI{cancel: cancel, done: done, client: &http.Client{
 		Timeout: 2 * time.Second,

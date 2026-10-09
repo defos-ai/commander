@@ -24,6 +24,7 @@ type config struct {
 	databaseURL   string
 	listenAddress string
 	security      api.SecurityConfig
+	deployment    api.DeploymentConfig
 	swagger       bool
 	logLevel      string
 	logFormat     string
@@ -35,6 +36,7 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (API_LISTEN_ADDRESS, then 0.0.0.0:$PORT, then 127.0.0.1:4274)")
+	flags.StringVar(&result.deployment.Runtime, "runtime", "", "Deployment runtime: native, docker or docker-compose (API_RUNTIME; default native)")
 	flags.StringVar(&result.busURL, "bus-url", "", "Message broker connection (BUS_URL; default ./state/bus)")
 	flags.StringVar(&result.storageURL, "storage-url", "", "Artifact file and report storage (STORAGE_URL; default ./state/storage)")
 	flags.StringVar(&result.databaseURL, "database-url", "", "Database connection (DATABASE_URL; default ./state/database)")
@@ -68,6 +70,7 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 		}
 	}
 	result.busURL = host.Value(result.busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
+	result.deployment.Runtime = host.Value(result.deployment.Runtime, provided["runtime"], "API_RUNTIME", "native")
 	result.storageURL = host.Value(result.storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
 	result.databaseURL = host.Value(result.databaseURL, provided["database-url"], "DATABASE_URL", filepath.Join("state", "database"))
 	result.logLevel = host.Value(result.logLevel, provided["log-level"], "LOG_LEVEL", "info")

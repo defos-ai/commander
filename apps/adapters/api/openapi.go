@@ -30,6 +30,7 @@ func openAPIDocument() ([]byte, error) {
 		name   string
 		typeOf reflect.Type
 	}{
+		{"About", reflect.TypeFor[models.AboutResponse]()},
 		{"MissionAutomation", reflect.TypeFor[models.MissionAutomationResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
@@ -50,6 +51,9 @@ func openAPIDocument() ([]byte, error) {
 			}
 		}
 		switch model.name {
+		case "About":
+			schema.Properties["runtime"].Enum = []any{"native", "docker", "docker-compose"}
+			schema.Properties["application"].Enum = []any{"commander-api", "commander"}
 		case "MissionAutomation":
 			schema.Properties["continue"].Enum = []any{"when_each", "when_all"}
 			schema.Properties["decide"].Enum = []any{"model"}
@@ -73,6 +77,15 @@ func openAPIDocument() ([]byte, error) {
 		options.TypeSchemas[model.typeOf] = schema
 	}
 	paths := map[string]any{
+		"/aboutz": map[string]any{"get": map[string]any{
+			"operationId": "getAbout", "summary": "Deployment information", "tags": []string{"Server"}, "security": []any{},
+			"description": "Public deployment metadata. Host, origin and trusted-proxy rules still apply. HEAD returns the same headers without a body.",
+			"responses": map[string]any{
+				"200": endpoints.OpenAPIResponse("Deployment runtime and application", endpoints.OpenAPIRef("About")),
+				"400": endpoints.OpenAPIResponse("invalid_request_origin", endpoints.OpenAPIRef("Error")),
+				"403": endpoints.OpenAPIResponse("host_not_allowed or cross_origin_request", endpoints.OpenAPIRef("Error")),
+			},
+		}},
 		"/healthz": map[string]any{"get": map[string]any{
 			"operationId": "getHealth", "summary": "Process health", "tags": []string{"Health"}, "security": []any{},
 			"responses": map[string]any{"200": endpoints.OpenAPIResponse("Process is running", endpoints.OpenAPIRef("Health"))},
@@ -122,7 +135,7 @@ func openAPIDocument() ([]byte, error) {
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.1.0",
-			"description": "Read Commander catalogs, saved operation state, reports and artifacts, or send operation commands to the controller over the bus. Health probes are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"description": "Read Commander catalogs, saved operation state, reports and artifacts, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},

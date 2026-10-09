@@ -26,6 +26,7 @@ type Options struct {
 	Ready func(net.Addr)
 	// Embedded hosts can supply a credential pair without changing process environment.
 	Credentials *host.BasicCredentials
+	Application string
 }
 
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
@@ -41,6 +42,10 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		return nil
 	}
 	if err != nil {
+		return err
+	}
+	configuration.deployment.Application = options.Application
+	if err := configuration.deployment.Validate(); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
@@ -85,6 +90,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	defer func() { result = errors.Join(result, controller.Close()) }()
 	handler, err := api.NewHandler(api.Config{
 		Security: configuration.security, SwaggerEnabled: configuration.swagger,
+		Deployment: configuration.deployment,
 		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ControllerStore: deps.ControllerStore,

@@ -49,8 +49,13 @@
   Docker exec does not inherit shell exports from another process. A matched
   process with unreadable or invalid credentials must fail without falling back.
 - Preserve Basic authentication on protected routes, including unknown paths and
-  enabled Swagger. Public `GET`/`HEAD` health probes and approved CORS preflights
-  have deliberate exceptions; see [security.go](security.go) and [cors.go](cors.go).
+  enabled Swagger. Public `GET`/`HEAD` health probes, `/aboutz` and approved CORS
+  preflights have deliberate exceptions; see [security.go](security.go) and [cors.go](cors.go).
+- `/aboutz` exposes only `runtime` (`native`, `docker`, `docker-compose`) and
+  `application` (`commander-api`, `commander`). Configure runtime explicitly with
+  `API_RUNTIME`/`--runtime`; embedded Playground identifies its application through
+  CLI options. Only `GET`/`HEAD` are unauthenticated and still require valid Host,
+  Origin and proxy headers. Never expose secrets, paths or shell commands here.
 - Origin approval must not bypass authentication, host checks or proxy trust.
   Cross-origin cookies and browser-managed credentials remain disabled.
 - Trust forwarding headers only from configured peers and only in the selected

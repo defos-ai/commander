@@ -105,7 +105,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 			address = "127.0.0.1:4274"
 		}
 		args := append(append([]string{}, common...), database, "--listen-address="+address)
-		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Credentials: &s.APICredentials, Ready: func(address net.Addr) {
+		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Application: "commander", Credentials: &s.APICredentials, Ready: func(address net.Addr) {
 			s.APIURL = "http://" + address.String()
 			close(apiReady)
 		}})

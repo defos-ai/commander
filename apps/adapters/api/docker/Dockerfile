@@ -12,6 +12,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/commander-api /usr/local/bin/commander-api
+ENV API_RUNTIME=docker
 USER 1000:1000
 EXPOSE 4274
 ENTRYPOINT ["/usr/local/bin/commander-api"]
