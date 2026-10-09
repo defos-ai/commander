@@ -25,14 +25,16 @@ key, or enter your provider's key during setup.
 For separate hosts and retained results, use Compose:
 
 ```sh
-export MCP_TOKEN="$(openssl rand -hex 32)"
-docker compose up --build -d
-docker compose run --build --rm playground
+docker compose up --build --wait
+mcp_credentials="$(docker compose exec -T mcp commander-mcp credentials)" && \
+  COMMANDER_MCP_TOKEN="${mcp_credentials#Token: }" docker compose run --build --rm --no-deps playground
 ```
 
-Compose passes this token to MCP and the lightweight Playground image.
-`/exit` closes chat; hosts and
-saved work remain. `docker compose down` stops the hosts. See
+MCP generates its token on startup. The launch command retrieves it and passes it
+to Playground through the environment. Set `MCP_TOKEN` before starting Compose to
+use your own token. Generated tokens change when MCP restarts; rerun the launch
+command to reconnect. `/exit` closes chat; hosts and saved work remain.
+`docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
 
 To use the lightweight image with your own hosts:

@@ -136,14 +136,19 @@ services:
 
   mcp:
     <<: *runtime
+    # Keep MCP at PID 1 so the credentials command can read its environment.
+    init: false
+    entrypoint: ["/bin/sh", "-ec"]
     image: commander-mcp:local
     pull_policy: never
     build:
       context: .
       dockerfile: apps/adapters/mcp/docker/Dockerfile
     command:
-      - --listen-address=:4273
-      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
+      - |
+        MCP_TOKEN="$${MCP_TOKEN:-$$(openssl rand -hex 32)}"
+        export MCP_TOKEN
+        exec commander-mcp --listen-address=:4273 --allowed-hosts=localhost,127.0.0.1,::1,mcp
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
@@ -253,7 +258,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       COMMANDER_MCP_URL: http://mcp:4273/mcp
-      COMMANDER_MCP_TOKEN: ${MCP_TOKEN:-}
+      COMMANDER_MCP_TOKEN: ${COMMANDER_MCP_TOKEN:-${MCP_TOKEN:-}}
       COMMANDER_LLM_PROVIDER: ${COMMANDER_LLM_PROVIDER:-}
       COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-}
       COMMANDER_LLM_BASE_URL: ${COMMANDER_LLM_BASE_URL:-}

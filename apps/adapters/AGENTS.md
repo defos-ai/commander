@@ -26,6 +26,10 @@
   log them. `commander-mcp credentials` is an explicit local lookup; on Linux it
   reads PID 1 only when that process uses the same executable. Lookup failures
   for a matching process must not fall back to a different environment token.
+- Compose generates an unset/empty `MCP_TOKEN` in its shell entrypoint, exports it,
+  then execs MCP as PID 1 (`init: false`), matching API credential generation.
+  Keep OpenSSL explicit in the MCP image. Recreating/restarting MCP rotates a
+  generated token; an environment override remains unchanged.
 - Keep input schemas and decoded request validation consistent. `addTool` strictly
   decodes arguments; malformed inputs use JSON-RPC invalid-params errors, while
   tool execution failures use text content with `IsError`.

@@ -5,13 +5,12 @@ development setup; production deployment is not yet documented.
 
 ## Local Compose
 
-From the repository root, set an MCP token and start the stack. Compose passes the
-same token to MCP and Playground; keep it in your shell for subsequent commands.
+From the repository root, start the stack and launch Playground with MCP's token:
 
 ```sh
-export MCP_TOKEN="$(openssl rand -hex 32)"
-docker compose up --build -d
-docker compose run --build --rm playground
+docker compose up --build --wait
+mcp_credentials="$(docker compose exec -T mcp commander-mcp credentials)" && \
+  COMMANDER_MCP_TOKEN="${mcp_credentials#Token: }" docker compose run --build --rm --no-deps playground
 ```
 
 Compose runs MCP, the API and admin UI, one controller and two web-quality agents.
@@ -25,10 +24,13 @@ Connect another AI client to `http://localhost:4273/mcp` with the same bearer to
 without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#native-one-executable),
 which generates and shares its MCP token automatically.
 
-The API listens on `4274` and admin UI on `4275`. Compose generates an API password on each container start;
-set `API_PASSWORD` for a stable password. The
+The API listens on `4274` and admin UI on `4275`. Compose generates an API password
+and MCP token on each container start; set `API_PASSWORD` and `MCP_TOKEN` to
+preserve your own credentials. The
 [UI quick start](../apps/admin/ui/README.md#quick-start) shows retrieval and port overrides.
 Use `docker compose exec mcp commander-mcp credentials` to look up the MCP token.
+After MCP restarts, rerun Playground's launch command to receive its new token.
+Credentials are kept in process environments; no credential files are created.
 
 ## Configuration
 

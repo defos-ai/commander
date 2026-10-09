@@ -30,8 +30,9 @@ From a checkout, launch Playground, the Commander terminal chat.
 ### Docker (recommended; includes agent dependencies)
 
 ```sh
-export MCP_TOKEN="$(openssl rand -hex 32)"
-docker compose up --build -d && docker compose run --build --rm playground
+docker compose up --build --wait
+mcp_credentials="$(docker compose exec -T mcp commander-mcp credentials)" && \
+  COMMANDER_MCP_TOKEN="${mcp_credentials#Token: }" docker compose run --build --rm --no-deps playground
 ```
 
 ### Go
@@ -56,7 +57,8 @@ links, accessibility, SEO, and technology indicators, and captures screenshots.
 Your AI reviews the evidence and produces a report.
 
 Already using an AI client? Connect it to **`http://localhost:4273/mcp`** after
-starting Compose, using the same token. See [MCP setup](apps/adapters/README.md#quick-start).
+starting Compose. Retrieve its generated token with `docker compose exec mcp commander-mcp credentials`.
+See [MCP setup](apps/adapters/README.md#quick-start).
 
 ## Explore the project
 

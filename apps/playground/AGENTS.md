@@ -45,6 +45,10 @@
   authorization, blocks redirects, and never exposes HTTP error bodies. After
   `401`, reject subsequent requests locally, including the SDK's initialization
   fallback. Reconnection is required; never retry commands on authentication failure.
+- Compose Playground receives MCP's running token through host-side credential
+  lookup and `COMMANDER_MCP_TOKEN`. Keep lookup failures from launching the client
+  and use `run --no-deps` after stack readiness so launch cannot recreate MCP.
+  Do not add credential files, Docker socket mounts or an unauthenticated token endpoint.
 - The all-in-one image binds the API to `0.0.0.0:4274` inside the container; document
   host publishing on `127.0.0.1` by default. MCP stays internal. Container browser
   runs use `CHROMIUM_NO_SANDBOX=true`; keep the process non-root. State remains
