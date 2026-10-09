@@ -86,5 +86,5 @@ for native dependencies and configuration.
 | Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
 | Understand the architecture and limits | [Overview](docs/overview.md) |
 | Contribute | [Testing](framework/tests/README.md) · [Coding-agent guide](AGENTS.md) |
-| License | [AGPL-3.0-only](LICENSE) |
-| Security | [Report a vulnerability](SECURITY.md) |
+| Understand licensing | [AGPL-3.0-only](LICENSE) |
+| Report a vulnerability | [Security](SECURITY.md) |
