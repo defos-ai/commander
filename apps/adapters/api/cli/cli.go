@@ -25,7 +25,7 @@ const adapterType = "api"
 type Options struct {
 	Ready func(net.Addr)
 	// Embedded hosts can supply a credential pair without changing process environment.
-	Credentials *host.Credentials
+	Credentials *host.BasicCredentials
 }
 
 func Run(ctx context.Context, args []string, stderr io.Writer) error {

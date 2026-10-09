@@ -30,7 +30,7 @@ type Session struct {
 	Context        context.Context
 	MCPURL         string
 	APIURL         string
-	APICredentials host.Credentials
+	APICredentials host.BasicCredentials
 	Directory      string
 	Notices        []string
 	cancel         context.CancelCauseFunc

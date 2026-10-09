@@ -27,7 +27,7 @@ The API URL and username (`commander`) are prefilled. Compose generates a random
 password. Retrieve it and paste it into the connection dialog:
 
 ```sh
-docker compose exec api commander-api credentials --pid 1
+docker compose exec api commander-api credentials
 ```
 
 For MongoDB, RabbitMQ and MinIO, add `-f compose.full.yaml` after `docker compose`

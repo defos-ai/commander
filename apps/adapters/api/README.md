@@ -75,7 +75,7 @@ when either is missing. Compose supplies username `commander` and generates a
 random password unless you set `API_PASSWORD`. Retrieve the running credentials:
 
 ```sh
-docker compose exec api commander-api credentials --pid 1
+docker compose exec api commander-api credentials
 ```
 
 Generated passwords change whenever the container restarts. Set `API_PASSWORD`

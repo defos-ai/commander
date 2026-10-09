@@ -33,7 +33,7 @@
 
 - Standalone CLI credentials come only from nonblank `API_USERNAME` and
   `API_PASSWORD`. Embedded hosts may pass in-memory credentials through
-  `RunWithOptions` using `host.Credentials`; reuse framework validation before
+  `RunWithOptions` using `host.BasicCredentials`; reuse framework validation before
   opening listeners or provider clients.
   Do not introduce credential files or shared passwords. Compose supplies the
   default username and generates a password at each container start unless
@@ -42,10 +42,12 @@
   in Playground) may display credentials; never include passwords in flags, logs,
   errors, HTTP responses or model messages. Missing standalone credentials should
   explain setup with a copyable password-generation command.
-- `credentials --pid` reads process environment only for explicit retrieval, never
-  for server configuration. Compose must exec the API as PID 1 without an init
-  process so `credentials --pid 1` finds the shell-generated environment; Docker
-  exec does not inherit shell exports from another process.
+- `credentials` automatically reads the running container's startup environment
+  only when PID 1 uses the same executable; otherwise it reads the current
+  environment. Keep this lookup exclusive to explicit retrieval, never server
+  configuration. Compose must exec the API as PID 1 without an init process;
+  Docker exec does not inherit shell exports from another process. A matched
+  process with unreadable or invalid credentials must fail without falling back.
 - Preserve Basic authentication on protected routes, including unknown paths and
   enabled Swagger. Public `GET`/`HEAD` health probes and approved CORS preflights
   have deliberate exceptions; see [security.go](security.go) and [cors.go](cors.go).

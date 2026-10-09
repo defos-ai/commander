@@ -29,7 +29,7 @@ type config struct {
 	logFormat     string
 }
 
-func parseConfig(args []string, output io.Writer, supplied *host.Credentials) (config, error) {
+func parseConfig(args []string, output io.Writer, supplied *host.BasicCredentials) (config, error) {
 	var result config
 	var allowedHosts, allowedOrigins, trustedProxies, proxyHeaders string
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)

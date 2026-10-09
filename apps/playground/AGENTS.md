@@ -28,8 +28,8 @@
   generates a cryptographically random password when `API_PASSWORD` is unset or
   empty. Preserve explicit nonempty overrides and pass session credentials to
   the embedded API through its run options, without modifying process environment.
-  Reuse `host.Credentials` and `host.GeneratePassword`; never write credentials to
-  files or logs, include them in model messages, or expose them through `/status`.
+  Reuse `host.BasicCredentials` and `host.GeneratePassword`; never write credentials
+  to files or logs, include them in model messages, or expose them through `/status`.
   Only the local `/credentials` command displays them, during setup or chat.
   Keep generated credentials scoped to the session. Standalone API startup still
   requires environment credentials.

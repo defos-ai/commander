@@ -5,10 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -56,18 +53,20 @@ func TestEmbeddedCredentialsMustBeComplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	err := cli.RunWithOptions(ctx, fixture.localArgs(), io.Discard, cli.Options{
-		Credentials: &host.Credentials{Username: "embedded-user"},
+		Credentials: &host.BasicCredentials{Username: "embedded-user"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "API_USERNAME and API_PASSWORD") {
 		t.Fatal("incomplete embedded credentials must fail instead of using environment credentials")
 	}
 }
 
-func TestCredentialsCommandRejectsMissingOrPartialCredentials(t *testing.T) {
+func TestCredentialsCommandRejectsInvalidCredentials(t *testing.T) {
 	for _, test := range []struct{ name, username, password string }{
 		{name: "missing"},
 		{name: "username only", username: "private-command-user"},
 		{name: "password only", password: "private-command-password"},
+		{name: "invalid username", username: "private:command:user", password: "private-command-password"},
+		{name: "invalid password", username: "private-command-user", password: "private\ncommand\npassword"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			newFixture(t)
@@ -75,7 +74,7 @@ func TestCredentialsCommandRejectsMissingOrPartialCredentials(t *testing.T) {
 			t.Setenv("API_PASSWORD", test.password)
 			var output, diagnostic bytes.Buffer
 			if code := cli.Main([]string{"credentials"}, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
-				t.Error("retrieving incomplete credentials must fail with a diagnostic and no credentials")
+				t.Error("retrieving invalid credentials must fail with a diagnostic and no credentials")
 			}
 			for _, value := range []string{test.username, test.password} {
 				if value != "" && strings.Contains(diagnostic.String(), value) {
@@ -86,58 +85,18 @@ func TestCredentialsCommandRejectsMissingOrPartialCredentials(t *testing.T) {
 	}
 }
 
-func TestCredentialsCommandReadsProcessEnvironment(t *testing.T) {
-	if os.Getenv("COMMANDER_TEST_CREDENTIAL_PROCESS") == "1" {
-		t.Setenv("API_USERNAME", "runtime-only-user")
-		t.Setenv("API_PASSWORD", "runtime-only-password")
-		os.Exit(cli.Main([]string{"credentials", "--pid", strconv.Itoa(os.Getpid())}, os.Stdout, os.Stderr))
-	}
-	if runtime.GOOS != "linux" {
-		t.Skip("process environment retrieval is Linux-specific")
-	}
-	for _, test := range []struct {
-		name     string
-		password string
-	}{
-		{name: "configured", password: "private-process-password"},
-		{name: "missing password"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			newFixture(t)
-			t.Setenv("API_USERNAME", "private-process-user")
-			t.Setenv("API_PASSWORD", test.password)
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			defer cancel()
-			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCredentialsCommandReadsProcessEnvironment$")
-			command.Env = append(os.Environ(), "COMMANDER_TEST_CREDENTIAL_PROCESS=1")
-			var output, diagnostic bytes.Buffer
-			command.Stdout, command.Stderr = &output, &diagnostic
-			err := command.Run()
-			if ctx.Err() != nil {
-				t.Fatal("process credential retrieval timed out")
-			}
-			if test.password != "" {
-				if err != nil || output.String() != "Username: private-process-user\nPassword: private-process-password\n" || diagnostic.Len() != 0 {
-					t.Error("process retrieval did not return its startup environment credentials only to standard output")
-				}
-			} else if err == nil || output.Len() != 0 || diagnostic.Len() == 0 {
-				t.Error("missing process credentials must fail without falling back to current environment")
-			}
-			for _, value := range []string{"private-process-user", "private-process-password", "runtime-only-user", "runtime-only-password"} {
-				if strings.Contains(diagnostic.String(), value) {
-					t.Error("process credential retrieval exposed credentials in diagnostics")
-				}
-			}
-		})
-	}
-}
-
-func TestCredentialsCommandRejectsInvalidProcessIDs(t *testing.T) {
+func TestCredentialsCommandHelpDoesNotRevealCredentials(t *testing.T) {
 	newFixture(t)
-	for _, pid := range []string{"0", "-1", "not-a-pid", "2147483647"} {
-		var output, diagnostic bytes.Buffer
-		if code := cli.Main([]string{"credentials", "--pid", pid}, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
-			t.Errorf("invalid or absent process %q did not reject retrieval", pid)
+	var output, diagnostic bytes.Buffer
+	if code := cli.Main([]string{"credentials", "--help"}, &output, &diagnostic); code != 0 {
+		t.Fatalf("credential help failed with exit code %d", code)
+	}
+	if output.Len() != 0 || !strings.Contains(diagnostic.String(), "Usage: commander-api credentials\n") {
+		t.Error("credential help must describe the command without retrieving credentials")
+	}
+	for _, value := range []string{"api-fixture-user", "api-fixture-password", "--pid", "--raw"} {
+		if strings.Contains(diagnostic.String(), value) {
+			t.Error("credential help includes a secret or an unsupported option")
 		}
 	}
 }

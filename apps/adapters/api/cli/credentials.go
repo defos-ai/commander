@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/defos-ai/commander/framework/host"
@@ -23,15 +22,15 @@ PowerShell:
   $env:API_USERNAME = 'commander'
   $env:API_PASSWORD = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')`
 
-func resolveCredentials(supplied *host.Credentials) (host.Credentials, error) {
-	value := host.Credentials{Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD")}
+func resolveCredentials(supplied *host.BasicCredentials) (host.BasicCredentials, error) {
+	value := host.BasicCredentials{Username: os.Getenv("API_USERNAME"), Password: os.Getenv("API_PASSWORD")}
 	if supplied != nil {
 		value = *supplied
 	}
 	return value, validateCredentials(value)
 }
 
-func validateCredentials(value host.Credentials) error {
+func validateCredentials(value host.BasicCredentials) error {
 	err := value.Validate()
 	if errors.Is(err, host.ErrMissingCredentials) {
 		return errors.New(missingCredentials)
@@ -42,15 +41,24 @@ func validateCredentials(value host.Credentials) error {
 	return nil
 }
 
-func processCredentials(pid int) (host.Credentials, error) {
+func lookupCredentials() (host.BasicCredentials, error) {
 	if runtime.GOOS != "linux" {
-		return host.Credentials{}, errors.New("--pid requires Linux; use it inside the API container")
+		return resolveCredentials(nil)
 	}
-	environment, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
+	current, err := os.Stat("/proc/self/exe")
 	if err != nil {
-		return host.Credentials{}, fmt.Errorf("read API process environment: %w", err)
+		return resolveCredentials(nil)
 	}
-	var value host.Credentials
+	running, err := os.Stat("/proc/1/exe")
+	if err != nil || !os.SameFile(current, running) {
+		return resolveCredentials(nil)
+	}
+	// Docker exec does not inherit credentials exported before the server's exec.
+	environment, err := os.ReadFile("/proc/1/environ")
+	if err != nil {
+		return host.BasicCredentials{}, fmt.Errorf("read API process environment: %w", err)
+	}
+	var value host.BasicCredentials
 	for _, variable := range strings.Split(string(environment), "\x00") {
 		name, content, _ := strings.Cut(variable, "=")
 		switch name {
@@ -66,12 +74,9 @@ func processCredentials(pid int) (host.Credentials, error) {
 func showCredentials(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("commander-api credentials", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	var pid int
-	flags.IntVar(&pid, "pid", 0, "Read credentials from a running Linux process; use 1 inside the Compose API container")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: commander-api credentials [--pid PID]")
-		fmt.Fprintln(stderr, "Print API_USERNAME and API_PASSWORD from the environment to stdout. Does not start the API.")
-		flags.PrintDefaults()
+		fmt.Fprintln(stderr, "Usage: commander-api credentials")
+		fmt.Fprintln(stderr, "Print the running container's API credentials, or credentials from the current environment. Does not start the API.")
 	}
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -79,18 +84,7 @@ func showCredentials(args []string, stdout, stderr io.Writer) error {
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	fromProcess := false
-	flags.Visit(func(value *flag.Flag) { fromProcess = value.Name == "pid" })
-	var value host.Credentials
-	var err error
-	if fromProcess {
-		if pid <= 0 {
-			return errors.New("--pid must be a positive process ID")
-		}
-		value, err = processCredentials(pid)
-	} else {
-		value, err = resolveCredentials(nil)
-	}
+	value, err := lookupCredentials()
 	if err != nil {
 		return err
 	}

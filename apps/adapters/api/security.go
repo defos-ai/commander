@@ -34,7 +34,7 @@ type security struct {
 }
 
 func newSecurity(config SecurityConfig) (*security, error) {
-	if err := (host.Credentials{Username: config.Username, Password: config.Password}).Validate(); err != nil {
+	if err := (host.BasicCredentials{Username: config.Username, Password: config.Password}).Validate(); err != nil {
 		return nil, fmt.Errorf("API_USERNAME/API_PASSWORD: %w", err)
 	}
 	hosts := make(map[string]struct{}, len(config.AllowedHosts))
