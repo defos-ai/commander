@@ -1,7 +1,10 @@
 {
   "mcpServers": {
     "commander-mcp": {
-      "url": "http://localhost:4273/mcp"
+      "url": "http://localhost:4273/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:MCP_TOKEN}"
+      }
     }
   }
 }

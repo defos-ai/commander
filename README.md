@@ -30,6 +30,7 @@ From a checkout, launch Playground, the Commander terminal chat.
 ### Docker (recommended; includes agent dependencies)
 
 ```sh
+export MCP_TOKEN="$(openssl rand -hex 32)"
 docker compose up --build -d && docker compose run --build --rm playground
 ```
 
@@ -41,8 +42,9 @@ With Go 1.26.7+:
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-All-in-one includes the API at `http://127.0.0.1:4274`; type `/credentials` in
-Playground to view its generated login. State is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
+All-in-one generates and connects with its MCP token automatically. It includes
+the API at `http://127.0.0.1:4274`; type `/credentials` to view both credentials.
+State is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
 for Windows and agent dependencies.
 
 Choose a model, provide its API key, and try:
@@ -54,7 +56,7 @@ links, accessibility, SEO, and technology indicators, and captures screenshots.
 Your AI reviews the evidence and produces a report.
 
 Already using an AI client? Connect it to **`http://localhost:4273/mcp`** after
-starting Compose. See [MCP setup](apps/adapters/README.md#quick-start).
+starting Compose, using the same token. See [MCP setup](apps/adapters/README.md#quick-start).
 
 ## Explore the project
 

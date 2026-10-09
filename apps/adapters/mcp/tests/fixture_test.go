@@ -103,11 +103,34 @@ func openSession(t *testing.T) *api {
 }
 
 func newSession(ctx context.Context) (*mcp.ClientSession, error) {
+	token := os.Getenv("COMMANDER_TEST_MCP_TOKEN")
+	if token == "" {
+		token = "mcp-fixture-token"
+	}
+	client := &http.Client{
+		Timeout:       90 * time.Second,
+		Transport:     bearerTransport(token),
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	return mcp.NewClient(&mcp.Implementation{Name: "commander-mcp-tests", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint: mcpEndpoint(), HTTPClient: client, DisableStandaloneSSE: true,
+	}, nil)
+}
+
+func mcpEndpoint() string {
 	endpoint := os.Getenv("COMMANDER_TEST_MCP_URL")
 	if endpoint == "" {
 		endpoint = "http://127.0.0.1:14273/mcp"
 	}
-	return mcp.NewClient(&mcp.Implementation{Name: "commander-mcp-tests", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint}, nil)
+	return endpoint
+}
+
+type bearerTransport string
+
+func (transport bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	request = request.Clone(request.Context())
+	request.Header.Set("Authorization", "Bearer "+string(transport))
+	return http.DefaultTransport.RoundTrip(request)
 }
 
 func (a *api) settle(ctx context.Context) error {

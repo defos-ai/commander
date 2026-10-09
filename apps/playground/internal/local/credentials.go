@@ -21,3 +21,18 @@ func apiCredentials() (host.BasicCredentials, error) {
 	}
 	return value, nil
 }
+
+func mcpCredentials() (host.BearerCredentials, error) {
+	value := host.BearerCredentials{Token: os.Getenv("MCP_TOKEN")}
+	if value.Token == "" {
+		var err error
+		value.Token, err = host.GeneratePassword()
+		if err != nil {
+			return host.BearerCredentials{}, fmt.Errorf("generate MCP token: %w", err)
+		}
+	}
+	if err := value.Validate(); err != nil {
+		return host.BearerCredentials{}, fmt.Errorf("MCP_TOKEN: %w", err)
+	}
+	return value, nil
+}

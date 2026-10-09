@@ -31,6 +31,7 @@ type Session struct {
 	MCPURL         string
 	APIURL         string
 	APICredentials host.BasicCredentials
+	MCPCredentials host.BearerCredentials
 	Directory      string
 	Notices        []string
 	cancel         context.CancelCauseFunc
@@ -50,6 +51,10 @@ func Start(ctx context.Context) (session *Session, err error) {
 		}
 	}()
 	s.APICredentials, err = apiCredentials()
+	if err != nil {
+		return nil, err
+	}
+	s.MCPCredentials, err = mcpCredentials()
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +90,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
-		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Ready: func(address net.Addr) {
+		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Credentials: &s.MCPCredentials, Ready: func(address net.Addr) {
 			s.MCPURL = "http://" + address.String() + "/mcp"
 			close(mcpReady)
 		}})
@@ -114,7 +119,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 	s.Notices = []string{
 		"All-in-one: 1 MCP, 1 API, 1 controller, 1 web-quality agent. Hosts and temporary state are removed on exit.",
 		"API listening: " + s.APIURL,
-		"Use /credentials to view the local API login.",
+		"Use /credentials to view the local API login and MCP token.",
 		"Try: Run review-website for https://defos.ai and summarize what should be fixed before release.",
 	}
 	return s, nil
@@ -148,7 +153,7 @@ func (s *Session) start(name string, run func(context.Context) error) {
 }
 
 func (s *Session) awaitAgent(ctx context.Context) error {
-	client, err := bridge.Connect(ctx, s.MCPURL)
+	client, err := bridge.Connect(ctx, s.MCPURL, s.MCPCredentials)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ import (
 )
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {
+	t.Setenv("MCP_TOKEN", "mcp-fixture-token")
 	const secret = "provider-test-secret"
 	for _, test := range []struct {
 		name, flag, url   string

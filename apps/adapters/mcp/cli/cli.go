@@ -23,7 +23,8 @@ import (
 const adapterType = "mcp"
 
 type Options struct {
-	Ready func(net.Addr)
+	Ready       func(net.Addr)
+	Credentials *host.BearerCredentials
 }
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
@@ -35,7 +36,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	configuration, err := parseConfig(args, stderr)
+	configuration, err := parseConfig(args, stderr, options.Credentials)
 	if errors.Is(err, flag.ErrHelp) {
 		return nil
 	}
@@ -95,7 +96,7 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 		return err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", newMCPHandler(server, logger, configuration.allowedHosts))
+	mux.Handle("/mcp", newMCPHandler(server, logger, configuration.allowedHosts, configuration.credentials))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		check, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -138,9 +139,19 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	}
 }
 
-func Main(args []string, stderr io.Writer) int {
+func Main(args []string, stdout, stderr io.Writer) int {
+	if stdout == nil {
+		stdout = io.Discard
+	}
 	if stderr == nil {
 		stderr = io.Discard
+	}
+	if len(args) > 0 && args[0] == "credentials" {
+		if err := showCredentials(args[1:], stdout, stderr); err != nil && !errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(stderr, "commander-mcp:", err)
+			return 1
+		}
+		return 0
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

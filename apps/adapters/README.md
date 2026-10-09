@@ -10,14 +10,32 @@ automation. Queries read saved state.
 With Go 1.26.7+, run from the repository root:
 
 ```sh
+export MCP_TOKEN="$(openssl rand -hex 32)"
 go run ./apps/adapters/mcp/cmd/commander-mcp
 ```
 
 Start the [controller](../controllers/README.md#quick-start) and agents with matching
-connection settings. Connect your MCP client to `http://localhost:4273/mcp`.
+connection settings. Connect your MCP client to `http://localhost:4273/mcp` with
+`Authorization: Bearer <MCP_TOKEN>` on every request. Standalone MCP refuses to
+start without a valid token; `/healthz` stays public.
 Examples: [VS Code](../../.vscode/mcp.json), [Codex](../../.codex/config.toml),
 [Cursor](../../.cursor/mcp.json). See [deployment](../../docs/deployment.md) for
 Compose, providers and host configuration.
+
+Codex and Cursor read `MCP_TOKEN` from their environment; VS Code prompts for it.
+Playground uses `COMMANDER_MCP_TOKEN`. In all-in-one mode, Playground generates and
+shares the token internally; `/credentials` shows it on request.
+
+To look up a Compose server's token:
+
+```sh
+docker compose exec mcp commander-mcp credentials
+```
+
+Native `commander-mcp credentials` reads the current environment. Tokens are never
+written to logs or credential files. This is shared-token authentication: clients
+need custom-header support, and remote access needs HTTPS. OAuth sign-in and
+per-user permissions are not provided.
 
 ### Operation workflow
 

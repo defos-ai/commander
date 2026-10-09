@@ -1,5 +1,6 @@
 [mcp_servers.commander-mcp]
 url = "http://localhost:4273/mcp"
+bearer_token_env_var = "MCP_TOKEN"
 
 [mcp_servers.commander-mcp.tools.list_missions]
 approval_mode = "approve"

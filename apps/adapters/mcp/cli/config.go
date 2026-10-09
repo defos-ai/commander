@@ -21,9 +21,10 @@ type config struct {
 	allowedHosts  []string
 	logLevel      string
 	logFormat     string
+	credentials   host.BearerCredentials
 }
 
-func parseConfig(args []string, stderr io.Writer) (config, error) {
+func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCredentials) (config, error) {
 	var result config
 	var allowedHosts, busURL, storageURL, databaseURL string
 	flags := flag.NewFlagSet("commander-mcp", flag.ContinueOnError)
@@ -39,13 +40,19 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		fmt.Fprintln(stderr, "Usage: commander-mcp [flags]")
 		fmt.Fprintln(stderr, "Send commands to the controller over the bus and query its stores; serve /mcp and /healthz.")
 		fmt.Fprintln(stderr, "Use the same bus-url, storage-url and database-url as commander-controller.")
+		fmt.Fprintln(stderr, "Set MCP_TOKEN for bearer authentication. Use 'commander-mcp credentials' to look it up.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
 	}
 	if flags.NArg() != 0 {
-		return config{}, fmt.Errorf("unexpected positional argument: %s", flags.Arg(0))
+		return config{}, errors.New("unexpected positional arguments; run commander-mcp --help")
+	}
+	var err error
+	result.credentials, err = resolveCredentials(credentials)
+	if err != nil {
+		return config{}, err
 	}
 	// Flags override nonempty environment values, which override default paths.
 	// Provider selection and URL validation belong to the provider factory.

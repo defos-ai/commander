@@ -147,6 +147,7 @@ services:
       <<: *environment
       DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
       ENV: tests
+      MCP_TOKEN: mcp-fixture-token
     ports:
       - "127.0.0.1:14273:4273"
     depends_on:

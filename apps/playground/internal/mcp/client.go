@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	"github.com/defos-ai/commander/framework/host"
 	protocol "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -22,18 +23,26 @@ type Client struct {
 	stop         func() bool
 }
 
-func Connect(ctx context.Context, endpoint string) (*Client, error) {
+func Connect(ctx context.Context, endpoint string, credentials host.BearerCredentials) (*Client, error) {
 	if err := llm.ValidateURL(endpoint); err != nil {
 		return nil, err
+	}
+	if credentials.Token != "" {
+		if err := credentials.Validate(); err != nil {
+			return nil, fmt.Errorf("COMMANDER_MCP_TOKEN: %w", err)
+		}
 	}
 	lifetime := ctx
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	client := protocol.NewClient(&protocol.Implementation{Name: "commander-playground", Version: "0.1.0"}, &protocol.ClientOptions{Logger: logger})
-	httpClient := &http.Client{Timeout: 2 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	httpClient := &http.Client{Transport: &bearerTransport{credentials: credentials}, Timeout: 2 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	session, err := client.Connect(ctx, &protocol.StreamableClientTransport{Endpoint: endpoint, HTTPClient: httpClient, DisableStandaloneSSE: true}, nil)
 	if err != nil {
+		if errors.Is(err, errAuthentication) {
+			return nil, errAuthentication
+		}
 		return nil, errors.New("cannot connect to Commander MCP; check the URL and that the server is running")
 	}
 	result := &Client{session: session, instructions: session.InitializeResult().Instructions}
@@ -42,6 +51,9 @@ func Connect(ctx context.Context, endpoint string) (*Client, error) {
 		page, err := session.ListTools(ctx, &protocol.ListToolsParams{Cursor: cursor})
 		if err != nil {
 			session.Close()
+			if errors.Is(err, errAuthentication) {
+				return nil, errAuthentication
+			}
 			return nil, errors.New("could not discover Commander MCP tools")
 		}
 		for _, tool := range page.Tools {

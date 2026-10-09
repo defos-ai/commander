@@ -18,6 +18,14 @@
 
 ## MCP contracts
 
+- Standalone MCP requires `MCP_TOKEN`; embedded hosts inject `host.BearerCredentials`
+  through CLI options. Validate before opening listeners or providers. Protect
+  every `/mcp` method, including notifications/resources, and keep `/healthz` public.
+  Preserve Host/Origin checks alongside bearer verification.
+- Secrets belong in environment variables or explicit in-memory overrides. Never
+  log them. `commander-mcp credentials` is an explicit local lookup; on Linux it
+  reads PID 1 only when that process uses the same executable. Lookup failures
+  for a matching process must not fall back to a different environment token.
 - Keep input schemas and decoded request validation consistent. `addTool` strictly
   decodes arguments; malformed inputs use JSON-RPC invalid-params errors, while
   tool execution failures use text content with `IsError`.

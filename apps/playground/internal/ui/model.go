@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/defos-ai/commander/apps/playground/internal/chat"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/host"
 	"github.com/muesli/termenv"
 )
 
@@ -24,6 +25,7 @@ type Config struct {
 	Debug                            bool
 	Notices                          []string
 	LocalAPI                         *LocalAPI
+	MCPCredentials                   host.BearerCredentials
 }
 
 type LocalAPI struct {

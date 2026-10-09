@@ -42,7 +42,7 @@ Run only one stack locally at a time: both expose MCP on `14273` and HTTP API on
 `14274`. Keep `-p 1` so the two adapter suites use the stack sequentially.
 
 Tests use these endpoints and test credentials automatically. Override with
-`COMMANDER_TEST_MCP_URL`, `COMMANDER_TEST_API_URL`,
+`COMMANDER_TEST_MCP_URL`, `COMMANDER_TEST_MCP_TOKEN`, `COMMANDER_TEST_API_URL`,
 `COMMANDER_TEST_API_USERNAME` and `COMMANDER_TEST_API_PASSWORD` when needed.
 Use `docker compose logs` to diagnose failures, and always run `down --volumes`.
 

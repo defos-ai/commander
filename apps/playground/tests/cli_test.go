@@ -32,8 +32,9 @@ import (
 
 func TestAllInOne(t *testing.T) {
 	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
-	t.Run("generated API credentials", testAllInOneGeneratedCredentials)
+	t.Run("generated API and MCP credentials", testAllInOneGeneratedCredentials)
 	t.Run("API startup failures clean up local hosts", testAllInOneAPIFailure)
+	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
 }
 
 func testAllInOneWorkflow(t *testing.T) {
@@ -67,6 +68,11 @@ func testAllInOneWorkflow(t *testing.T) {
 			t.Error(err)
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
+		}
+		for _, message := range body.Messages {
+			if strings.Contains(message.Content, "all-in-one-mcp-secret") {
+				t.Error("MCP credentials leaked into a model request")
+			}
 		}
 		request := requests.Add(1)
 		expected := map[int32][]string{
@@ -211,7 +217,25 @@ func testAllInOneWorkflow(t *testing.T) {
 	get("/readyz", "", http.StatusOK)
 	get("/api/v1/operations", "", http.StatusUnauthorized)
 	get("/api/v1/operations", "wrong-password", http.StatusUnauthorized)
-	client, err := mcp.NewClient(&mcp.Implementation{Name: "playground-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint}, nil)
+	for _, token := range []string{"", "wrong-token"} {
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			request.Header.Set("Authorization", "Bearer "+token)
+		}
+		response, err := httpClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusUnauthorized {
+			t.Errorf("MCP accepted missing or wrong token: status=%d", response.StatusCode)
+		}
+	}
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "playground-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: &http.Client{Transport: mcpAuthTransport("all-in-one-mcp-secret")}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,8 +307,8 @@ func testAllInOneWorkflow(t *testing.T) {
 	if requests.Load() < 10 || strings.Contains(output.String(), "**Review complete**") || !strings.Contains(output.String(), "Review complete") {
 		t.Fatalf("unexpected chat rendering: %s", output.String())
 	}
-	if strings.Contains(output.String(), "all-in-one-api-secret") {
-		t.Error("API credentials leaked into Playground output")
+	if strings.Contains(output.String(), "all-in-one-api-secret") || strings.Contains(output.String(), "all-in-one-mcp-secret") {
+		t.Error("credentials leaked into Playground output")
 	}
 	files, err := os.ReadDir(temporary)
 	if err != nil || len(files) != 0 {
@@ -309,6 +333,8 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("ENV", "")
 	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
+	t.Setenv("COMMANDER_MCP_TOKEN", "invalid remote token") // Local credentials win too.
+	t.Setenv("MCP_TOKEN", "all-in-one-mcp-secret")
 	t.Setenv("API_USERNAME", "commander")
 	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
@@ -322,18 +348,19 @@ func allInOneEnvironment(t *testing.T) string {
 }
 
 func testAllInOneGeneratedCredentials(t *testing.T) {
-	var previousPassword string
+	var previousPassword, previousToken string
 	for _, tc := range []struct {
-		name, username, password string
+		name, username, password, token string
 	}{
 		{name: "no credentials"},
 		{name: "username override", username: "local-operator"},
-		{name: "password override", password: "operator-supplied-secret"},
+		{name: "password and token overrides", password: "operator-supplied-secret", token: "operator-supplied-token"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			temporary := allInOneEnvironment(t)
 			t.Setenv("API_USERNAME", tc.username)
 			t.Setenv("API_PASSWORD", tc.password)
+			t.Setenv("MCP_TOKEN", tc.token)
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
 			input, keyboard := io.Pipe()
@@ -374,12 +401,26 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			if _, err := io.WriteString(keyboard, "/credentials\r"); err != nil {
 				t.Fatal(err)
 			}
-			wait("Password:")
+			wait("Token:")
 			match := regexp.MustCompile(`API: (http://127\.0\.0\.1:\d+)\s+Username: ([^\r\n]+)\s+Password: ([^\r\n]+)`).FindStringSubmatch(output.String())
 			if len(match) != 4 {
 				t.Fatal("/credentials did not display the local API address and credentials")
 			}
 			apiURL, username, password := match[1], strings.TrimSpace(match[2]), strings.TrimSpace(match[3])
+			mcpMatch := regexp.MustCompile(`MCP: (http://127\.0\.0\.1:\d+/mcp)\s+Token: ([^\r\n]+)`).FindStringSubmatch(output.String())
+			if len(mcpMatch) != 3 {
+				t.Fatal("/credentials did not display local MCP credentials")
+			}
+			mcpURL, token := mcpMatch[1], strings.TrimSpace(mcpMatch[2])
+			if tc.token == "" {
+				decoded, err := hex.DecodeString(token)
+				if err != nil || len(decoded) != 32 || token == previousToken || token == password {
+					t.Fatal("generated MCP token must be independent and contain 32 random bytes")
+				}
+				previousToken = token
+			} else if token != tc.token {
+				t.Error("MCP token override was not preserved")
+			}
 			wantUsername := tc.username
 			if wantUsername == "" {
 				wantUsername = "commander"
@@ -399,12 +440,17 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			} else if password != tc.password {
 				t.Error("API password override was not preserved")
 			}
-			if strings.Contains(beforeLookup, password) {
-				t.Error("API password appeared without an explicit /credentials request")
+			if strings.Contains(beforeLookup, password) || strings.Contains(beforeLookup, token) {
+				t.Error("credentials appeared without an explicit /credentials request")
 			}
-			if os.Getenv("API_USERNAME") != tc.username || os.Getenv("API_PASSWORD") != tc.password {
+			if os.Getenv("API_USERNAME") != tc.username || os.Getenv("API_PASSWORD") != tc.password || os.Getenv("MCP_TOKEN") != tc.token {
 				t.Error("all-in-one changed process-wide credential environment")
 			}
+			mcpClient, err := mcp.NewClient(&mcp.Implementation{Name: "generated-credential-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: mcpURL, HTTPClient: &http.Client{Transport: mcpAuthTransport(token)}}, nil)
+			if err != nil {
+				t.Fatalf("generated or overridden MCP credentials did not authenticate: %v", err)
+			}
+			mcpClient.Close()
 			httpClient := &http.Client{Timeout: 3 * time.Second}
 			defer httpClient.CloseIdleConnections()
 			for _, attempt := range []struct {
@@ -439,8 +485,8 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if bytes.Contains(log, []byte(password)) {
-				t.Error("API password leaked into host logs")
+			if bytes.Contains(log, []byte(password)) || bytes.Contains(log, []byte(token)) {
+				t.Error("credentials leaked into host logs")
 			}
 			if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {
 				t.Fatal(err)
@@ -456,6 +502,24 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			files, err := os.ReadDir(temporary)
 			if err != nil || len(files) != 0 {
 				t.Fatalf("temporary state remains after exit: %v (%v)", files, err)
+			}
+		})
+	}
+}
+
+func testAllInOneMCPFailure(t *testing.T) {
+	for _, token := range []string{"   ", "invalid\nheader"} {
+		t.Run("invalid token", func(t *testing.T) {
+			temporary := allInOneEnvironment(t)
+			t.Setenv("MCP_TOKEN", token)
+			var output bytes.Buffer
+			err := cli.Run(t.Context(), []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
+			if err == nil || !strings.Contains(err.Error(), "MCP_TOKEN") || strings.Contains(err.Error(), token) {
+				t.Fatal("invalid MCP credentials were accepted or disclosed")
+			}
+			files, err := os.ReadDir(temporary)
+			if err != nil || len(files) != 0 {
+				t.Fatal("local hosts created state with invalid MCP credentials")
 			}
 		})
 	}

@@ -1,8 +1,19 @@
 {
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "commander-mcp-token",
+      "description": "Commander MCP token",
+      "password": true
+    }
+  ],
   "servers": {
     "commander-mcp": {
       "type": "http",
-      "url": "http://localhost:4273/mcp"
+      "url": "http://localhost:4273/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:commander-mcp-token}"
+      }
     }
   }
 }

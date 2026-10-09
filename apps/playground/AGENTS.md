@@ -36,6 +36,15 @@
   The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides
   it, including port `0` for fixtures. Set the API listen flag explicitly so
   generic `PORT` cannot change it. Report the bound address after readiness.
+- All-in-one also generates `host.BearerCredentials` from an unset/empty
+  `MCP_TOKEN`, preserving explicit nonempty overrides. Validate it before starting
+  hosts and pass the same credentials to MCP and Playground without changing the
+  environment. Local `/credentials` displays the token only on request.
+- Remote MCP uses environment-only `COMMANDER_MCP_TOKEN`; all-in-one ignores this
+  remote credential. The MCP transport clones requests before attaching Bearer
+  authorization, blocks redirects, and never exposes HTTP error bodies. After
+  `401`, reject subsequent requests locally, including the SDK's initialization
+  fallback. Reconnection is required; never retry commands on authentication failure.
 - The all-in-one image binds the API to `0.0.0.0:4274` inside the container; document
   host publishing on `127.0.0.1` by default. MCP stays internal. Container browser
   runs use `CHROMIUM_NO_SANDBOX=true`; keep the process non-root. State remains

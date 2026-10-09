@@ -147,6 +147,7 @@ services:
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
+      MCP_TOKEN: ${MCP_TOKEN:-}
     ports:
       - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
     depends_on:
@@ -252,6 +253,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       COMMANDER_MCP_URL: http://mcp:4273/mcp
+      COMMANDER_MCP_TOKEN: ${MCP_TOKEN:-}
       COMMANDER_LLM_PROVIDER: ${COMMANDER_LLM_PROVIDER:-}
       COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-}
       COMMANDER_LLM_BASE_URL: ${COMMANDER_LLM_BASE_URL:-}

@@ -164,8 +164,9 @@ func (m *Model) connect() tea.Cmd {
 	m.activity = "Connecting to Commander"
 	ctx, generation := m.setupContext()
 	endpoint := m.config.MCPURL
+	credentials := m.config.MCPCredentials
 	return func() tea.Msg {
-		client, err := bridge.Connect(ctx, endpoint)
+		client, err := bridge.Connect(ctx, endpoint, credentials)
 		return connected{generation, client, err}
 	}
 }
