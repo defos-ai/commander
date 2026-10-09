@@ -1,9 +1,12 @@
 package playground_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -31,6 +34,10 @@ func TestMCPBearerAuthentication(t *testing.T) {
 	})
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/aboutz" {
+			http.NotFound(w, r)
+			return
+		}
 		requests.Add(1)
 		if reject.Load() || r.Header.Get("Authorization") != "Bearer "+token {
 			http.Error(w, "private body "+token, http.StatusUnauthorized)
@@ -45,6 +52,9 @@ func TestMCPBearerAuthentication(t *testing.T) {
 		before := requests.Load()
 		_, err := bridge.Connect(ctx, endpoint.URL, host.BearerCredentials{Token: value})
 		assertMCPAuthError(t, err, token)
+		if assertMCPConnectAuthError(t, err).Command != "" {
+			t.Error("missing metadata produced a credential command")
+		}
 		if requests.Load()-before != 1 {
 			t.Error("authentication rejection was retried")
 		}
@@ -73,6 +83,199 @@ func TestMCPBearerAuthentication(t *testing.T) {
 	assertMCPAuthError(t, err, token)
 	if requests.Load()-before != 1 || calls.Load() != 1 || reads.Load() != 1 {
 		t.Fatal("rejected session retried or dispatched work")
+	}
+}
+
+func TestMCPCredentialHints(t *testing.T) {
+	unavailable := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	_, authentication := bridge.Connect(t.Context(), unavailable.URL+"/mcp", host.BearerCredentials{})
+	unavailable.Close()
+	assertMCPAuthError(t, authentication, "private-hint-token")
+	assertMCPConnectAuthError(t, authentication)
+	for _, test := range []struct {
+		name, runtime, application, command string
+	}{
+		{"native MCP", "native", "commander-mcp", "./commander-mcp credentials"},
+		{"Docker MCP", "docker", "commander-mcp", "docker exec commander-mcp commander-mcp credentials"},
+		{"Compose MCP", "docker-compose", "commander-mcp", "docker compose exec mcp commander-mcp credentials"},
+		{"native all-in-one", "native", "commander", "/credentials mcp (in Playground)"},
+		{"Docker all-in-one", "docker", "commander", "docker exec commander commander credentials mcp"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			const token = "private-hint-token"
+			var calls, metadata atomic.Int32
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/prefix/mcp":
+					calls.Add(1)
+					w.WriteHeader(http.StatusUnauthorized)
+					fmt.Fprint(w, "private body "+token)
+				case "/prefix/aboutz":
+					metadata.Add(1)
+					if r.Method != http.MethodGet || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" || r.URL.RawQuery != "" {
+						t.Error("public metadata request carried credentials or endpoint query")
+					}
+					_ = json.NewEncoder(w).Encode(map[string]string{"runtime": test.runtime, "application": test.application, "command": "untrusted-server-command"})
+				default:
+					t.Error("metadata lookup lost the endpoint mount prefix")
+					http.NotFound(w, r)
+				}
+			}))
+			defer endpoint.Close()
+			_, err := bridge.Connect(t.Context(), endpoint.URL+"/prefix/mcp", host.BearerCredentials{Token: token})
+			assertMCPAuthError(t, err, token)
+			failure := assertMCPConnectAuthError(t, err)
+			if failure.Command != test.command || strings.Contains(err.Error(), "untrusted-server-command") {
+				t.Fatal("credential hint was missing or contained server-provided instructions")
+			}
+			if !errors.Is(err, errors.Unwrap(authentication)) {
+				t.Fatal("credential hint lost the authentication error")
+			}
+			if calls.Load() != 1 || metadata.Load() != 1 {
+				t.Fatal("authentication was retried or metadata was requested more than once")
+			}
+		})
+	}
+}
+
+func TestMCPCredentialHintOnToolDiscoveryFailure(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "auth-fixture", Version: "1"}, nil)
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	var rejected, metadata atomic.Int32
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/aboutz" {
+			metadata.Add(1)
+			fmt.Fprint(w, `{"runtime":"native","application":"commander-mcp"}`)
+			return
+		}
+		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error("could not read MCP request")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			var request struct {
+				Method string `json:"method"`
+			}
+			if json.Unmarshal(body, &request) != nil {
+				t.Error("invalid MCP request")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if request.Method == "tools/list" {
+				rejected.Add(1)
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	defer endpoint.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	_, err := bridge.Connect(ctx, endpoint.URL+"/mcp", host.BearerCredentials{})
+	assertMCPAuthError(t, err, "private-token")
+	failure := assertMCPConnectAuthError(t, err)
+	if failure.Command != "./commander-mcp credentials" || rejected.Load() != 1 || metadata.Load() != 1 {
+		t.Fatal("tool discovery rejection was retried or did not provide a credential hint")
+	}
+}
+
+func TestMCPCredentialHintFallback(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"missing", http.StatusNotFound, "private-metadata-error"},
+		{"protected", http.StatusUnauthorized, "private-metadata-error"},
+		{"invalid JSON", http.StatusOK, `{"runtime":`},
+		{"unknown runtime", http.StatusOK, `{"runtime":"private-metadata-error","application":"commander-mcp"}`},
+		{"unknown application", http.StatusOK, `{"runtime":"native","application":"private-metadata-error"}`},
+		{"missing application", http.StatusOK, `{"runtime":"native"}`},
+		{"unsupported combination", http.StatusOK, `{"runtime":"docker-compose","application":"commander"}`},
+		{"multiple JSON objects", http.StatusOK, `{"runtime":"native","application":"commander-mcp"} {}`},
+		{"oversized", http.StatusOK, `{"runtime":"native","application":"commander-mcp","data":"` + strings.Repeat("x", 4096) + `"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/aboutz" {
+					w.WriteHeader(test.status)
+					fmt.Fprint(w, test.body)
+					return
+				}
+				w.WriteHeader(http.StatusUnauthorized)
+			}))
+			defer endpoint.Close()
+			_, err := bridge.Connect(t.Context(), endpoint.URL+"/mcp", host.BearerCredentials{})
+			assertMCPAuthError(t, err, "private-metadata-error")
+			failure := assertMCPConnectAuthError(t, err)
+			if failure.Command != "" {
+				t.Fatal("invalid metadata changed the existing authentication error")
+			}
+		})
+	}
+}
+
+func TestMCPCredentialHintsDoNotFollowRedirects(t *testing.T) {
+	var redirected atomic.Int32
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirected.Add(1)
+		fmt.Fprint(w, `{"runtime":"native","application":"commander-mcp"}`)
+	}))
+	defer destination.Close()
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/aboutz" {
+			http.Redirect(w, r, destination.URL+"/private-redirect", http.StatusTemporaryRedirect)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer endpoint.Close()
+	_, err := bridge.Connect(t.Context(), endpoint.URL+"/mcp", host.BearerCredentials{Token: "private-token"})
+	assertMCPAuthError(t, err, "private-redirect")
+	failure := assertMCPConnectAuthError(t, err)
+	if redirected.Load() != 0 || failure.Command != "" {
+		t.Fatal("metadata lookup followed a redirect")
+	}
+}
+
+func TestMCPCredentialHintsRespectCancellation(t *testing.T) {
+	started := make(chan struct{})
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/aboutz" {
+			close(started)
+			<-r.Context().Done()
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer endpoint.Close()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := bridge.Connect(ctx, endpoint.URL+"/mcp", host.BearerCredentials{})
+		done <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("metadata lookup did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		assertMCPAuthError(t, err, "private-token")
+		if assertMCPConnectAuthError(t, err).Command != "" {
+			t.Fatal("cancelled metadata lookup produced a command")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("metadata lookup did not stop after cancellation")
 	}
 }
 
@@ -115,6 +318,18 @@ func assertMCPAuthError(t *testing.T, err error, token string) {
 	if err == nil || !strings.Contains(err.Error(), "authentication failed") || !strings.Contains(err.Error(), "COMMANDER_MCP_TOKEN") || strings.Contains(err.Error(), token) || strings.Contains(err.Error(), "private body") {
 		t.Fatal("MCP authentication error was missing, unclear, or disclosed response contents")
 	}
+}
+
+func assertMCPConnectAuthError(t *testing.T, err error) *bridge.AuthenticationError {
+	t.Helper()
+	var failure *bridge.AuthenticationError
+	if !errors.As(err, &failure) {
+		t.Fatal("connection rejection did not return a typed authentication error")
+	}
+	if failure.Unwrap() == nil || !errors.Is(err, failure.Unwrap()) || err.Error() != failure.Unwrap().Error() {
+		t.Fatal("connection rejection changed the ordinary authentication error")
+	}
+	return failure
 }
 
 type mcpAuthTransport string

@@ -48,6 +48,19 @@ func TestCredentialsCommandReadsOnlyEnvironment(t *testing.T) {
 	}
 }
 
+func TestCredentialsCommandRaw(t *testing.T) {
+	newFixture(t)
+	t.Setenv("DATABASE_URL", "unsupported://do-not-open")
+	t.Setenv("PORT", "invalid-do-not-parse")
+	var output, diagnostic bytes.Buffer
+	if code := cli.Main([]string{"credentials", "--raw"}, &output, &diagnostic); code != 0 {
+		t.Fatalf("raw credential retrieval failed with exit code %d", code)
+	}
+	if output.String() != "api-fixture-password\n" || diagnostic.Len() != 0 {
+		t.Error("raw credential command must print only the password and a newline")
+	}
+}
+
 func TestEmbeddedCredentialsMustBeComplete(t *testing.T) {
 	fixture := newFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
@@ -72,13 +85,15 @@ func TestCredentialsCommandRejectsInvalidCredentials(t *testing.T) {
 			newFixture(t)
 			t.Setenv("API_USERNAME", test.username)
 			t.Setenv("API_PASSWORD", test.password)
-			var output, diagnostic bytes.Buffer
-			if code := cli.Main([]string{"credentials"}, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
-				t.Error("retrieving invalid credentials must fail with a diagnostic and no credentials")
-			}
-			for _, value := range []string{test.username, test.password} {
-				if value != "" && strings.Contains(diagnostic.String(), value) {
-					t.Error("credential retrieval failure leaked an environment credential")
+			for _, args := range [][]string{{"credentials"}, {"credentials", "--raw"}} {
+				var output, diagnostic bytes.Buffer
+				if code := cli.Main(args, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
+					t.Error("retrieving invalid credentials must fail with a diagnostic and no credentials")
+				}
+				for _, value := range []string{test.username, test.password} {
+					if value != "" && strings.Contains(diagnostic.String(), value) {
+						t.Error("credential retrieval failure leaked an environment credential")
+					}
 				}
 			}
 		})
@@ -87,16 +102,32 @@ func TestCredentialsCommandRejectsInvalidCredentials(t *testing.T) {
 
 func TestCredentialsCommandHelpDoesNotRevealCredentials(t *testing.T) {
 	newFixture(t)
+	t.Setenv("API_USERNAME", "invalid:private-help-user")
+	t.Setenv("API_PASSWORD", "private-help-password")
 	var output, diagnostic bytes.Buffer
 	if code := cli.Main([]string{"credentials", "--help"}, &output, &diagnostic); code != 0 {
 		t.Fatalf("credential help failed with exit code %d", code)
 	}
-	if output.Len() != 0 || !strings.Contains(diagnostic.String(), "Usage: commander-api credentials\n") {
+	if output.Len() != 0 || !strings.Contains(diagnostic.String(), "Usage: commander-api credentials [--raw]\n") {
 		t.Error("credential help must describe the command without retrieving credentials")
 	}
-	for _, value := range []string{"api-fixture-user", "api-fixture-password", "--pid", "--raw"} {
+	for _, value := range []string{"invalid:private-help-user", "private-help-password", "--pid"} {
 		if strings.Contains(diagnostic.String(), value) {
 			t.Error("credential help includes a secret or an unsupported option")
+		}
+	}
+}
+
+func TestCredentialsCommandRejectsArgumentsWithoutEchoing(t *testing.T) {
+	newFixture(t)
+	const secret = "private-argument-password"
+	for _, args := range [][]string{{"credentials", secret}, {"credentials", "--raw=" + secret}, {"credentials", "--" + secret}} {
+		var output, diagnostic bytes.Buffer
+		if code := cli.Main(args, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
+			t.Error("invalid credential arguments must fail without printing credentials")
+		}
+		if strings.Contains(diagnostic.String(), secret) || strings.Contains(diagnostic.String(), "api-fixture-password") {
+			t.Error("invalid credential arguments leaked a value")
 		}
 	}
 }

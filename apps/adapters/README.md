@@ -17,13 +17,14 @@ go run ./apps/adapters/mcp/cmd/commander-mcp
 Start the [controller](../controllers/README.md#quick-start) and agents with matching
 connection settings. Connect your MCP client to `http://localhost:4273/mcp` with
 `Authorization: Bearer <MCP_TOKEN>` on every request. Standalone MCP refuses to
-start without a valid token; `/healthz` stays public.
+start without a valid token; `/healthz` and `/aboutz` stay public. `/aboutz` reports
+the runtime and application so supporting clients can suggest a token lookup command.
 Examples: [VS Code](../../.vscode/mcp.json), [Codex](../../.codex/config.toml),
 [Cursor](../../.cursor/mcp.json). See [deployment](../../docs/deployment.md) for
 Compose, providers and host configuration.
 
 Codex and Cursor read `MCP_TOKEN` from their environment; VS Code prompts for it.
-Playground uses `COMMANDER_MCP_TOKEN`. In all-in-one mode, Playground generates and
+Playground accepts a hidden token input or `COMMANDER_MCP_TOKEN`. In all-in-one mode, it generates and
 shares the token internally; `/credentials` shows it on request.
 
 To look up a Compose server's token:
@@ -34,8 +35,8 @@ docker compose exec mcp commander-mcp credentials
 
 Compose generates the token on each MCP container start. Set `MCP_TOKEN` before
 starting Compose to preserve your own token. Reconnect clients with the new token
-after a restart; Playground's [Compose launch command](../playground/README.md#docker-recommended)
-retrieves it automatically.
+after a restart. Add `--raw` to print only the token for shell commands;
+[Playground setup](../playground/README.md#docker-recommended) shows an environment one-liner.
 
 Native `commander-mcp credentials` reads the current environment. Tokens are never
 written to logs or credential files. This is shared-token authentication: clients

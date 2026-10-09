@@ -12,8 +12,27 @@ import (
 )
 
 func showCredentials(args []string, output io.Writer) error {
-	if len(args) != 1 || (args[0] != "api" && args[0] != "mcp") {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		_, err := fmt.Fprintln(output, "Usage: commander credentials api|mcp [--raw]\n--raw prints only the API password or MCP token.")
+		return err
+	}
+	if len(args) == 0 || (args[0] != "api" && args[0] != "mcp") {
 		return errors.New("usage: commander credentials api|mcp")
+	}
+	var raw, help bool
+	for _, option := range args[1:] {
+		switch option {
+		case "--raw":
+			raw = true
+		case "--help", "-h":
+			help = true
+		default:
+			return errors.New("usage: commander credentials api|mcp")
+		}
+	}
+	if help {
+		_, err := fmt.Fprintln(output, "Usage: commander credentials api|mcp [--raw]\n--raw prints only the API password or MCP token.")
+		return err
 	}
 	environment, err := credentialEnvironment()
 	if err != nil {
@@ -27,6 +46,10 @@ func showCredentials(args []string, output io.Writer) error {
 			}
 			return fmt.Errorf("API_USERNAME/API_PASSWORD: %w", err)
 		}
+		if raw {
+			_, err = fmt.Fprintln(output, value.Password)
+			return err
+		}
 		_, err = fmt.Fprintf(output, "Username: %s\nPassword: %s\n", value.Username, value.Password)
 		return err
 	}
@@ -36,6 +59,10 @@ func showCredentials(args []string, output io.Writer) error {
 			return errors.New("MCP_TOKEN must be set in this environment; for a generated native all-in-one token, use /credentials inside Playground")
 		}
 		return fmt.Errorf("MCP_TOKEN: %w", err)
+	}
+	if raw {
+		_, err = fmt.Fprintln(output, value.Token)
+		return err
 	}
 	_, err = fmt.Fprintf(output, "Token: %s\n", value.Token)
 	return err

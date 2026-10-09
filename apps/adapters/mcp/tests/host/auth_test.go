@@ -26,7 +26,8 @@ func TestMCPRequiresBearerOnEveryRequest(t *testing.T) {
 		{http.MethodPost, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"start_operation","arguments":{}}}`},
 		{http.MethodPost, `{"jsonrpc":"2.0","id":4,"method":"resources/list"}`},
 		{http.MethodPost, `{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"missions://artifacts/private"}}`},
-		{http.MethodGet, ""}, {http.MethodDelete, ""}, {http.MethodOptions, ""},
+		{http.MethodGet, ""}, {http.MethodHead, ""}, {http.MethodPut, ""}, {http.MethodPatch, ""},
+		{http.MethodDelete, ""}, {http.MethodOptions, ""},
 	} {
 		for _, authorization := range [][]string{
 			nil, {"Bearer rejected-test-token"}, {"Basic " + token}, {"Bearer"},

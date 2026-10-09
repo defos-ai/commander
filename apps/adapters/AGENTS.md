@@ -22,10 +22,16 @@
   through CLI options. Validate before opening listeners or providers. Protect
   every `/mcp` method, including notifications/resources, and keep `/healthz` public.
   Preserve Host/Origin checks alongside bearer verification.
+- MCP `/aboutz` exposes only `runtime` (`native`, `docker`, `docker-compose`) and
+  `application` (`commander-mcp`, `commander`). Configure `MCP_RUNTIME`/`--runtime`
+  explicitly; embedded hosts set the application through run options. Only exact
+  `GET`/`HEAD` are public and retain Host/Origin checks. Keep tokens, paths and
+  shell commands out of metadata responses.
 - Secrets belong in environment variables or explicit in-memory overrides. Never
   log them. `commander-mcp credentials` is an explicit local lookup; on Linux it
   reads PID 1 only when that process uses the same executable. Lookup failures
   for a matching process must not fall back to a different environment token.
+  `credentials --raw` prints only the token; it must not alter startup behavior.
 - Compose generates an unset/empty `MCP_TOKEN` in its shell entrypoint, exports it,
   then execs MCP as PID 1 (`init: false`), matching API credential generation.
   Keep OpenSSL explicit in the MCP image. Recreating/restarting MCP rotates a

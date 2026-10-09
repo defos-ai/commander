@@ -24,13 +24,19 @@ func hostArgs(root string) []string {
 
 func startMCP(t *testing.T, credentials *host.BearerCredentials, logs io.Writer) (string, *http.Client, func()) {
 	t.Helper()
+	return startMCPWithOptions(t, nil, cli.Options{Credentials: credentials}, logs)
+}
+
+func startMCPWithOptions(t *testing.T, extraArgs []string, options cli.Options, logs io.Writer) (string, *http.Client, func()) {
+	t.Helper()
 	t.Setenv("ENV", "")
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	args := hostArgs(t.TempDir())
+	args := append(hostArgs(t.TempDir()), extraArgs...)
+	options.Ready = func(address net.Addr) { ready <- address }
 	go func() {
-		done <- cli.RunWithOptions(ctx, args, logs, cli.Options{Credentials: credentials, Ready: func(address net.Addr) { ready <- address }})
+		done <- cli.RunWithOptions(ctx, args, logs, options)
 	}()
 	stopped := false
 	stop := func() {

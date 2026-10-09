@@ -42,6 +42,7 @@
   in Playground) may display credentials; never include passwords in flags, logs,
   errors, HTTP responses or model messages. Missing standalone credentials should
   explain setup with a copyable password-generation command.
+  `credentials --raw` prints only the password, preserving normal credential output.
 - `credentials` automatically reads the running container's startup environment
   only when PID 1 uses the same executable; otherwise it reads the current
   environment. Keep this lookup exclusive to explicit retrieval, never server

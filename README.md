@@ -31,8 +31,7 @@ From a checkout, launch Playground, the Commander terminal chat.
 
 ```sh
 docker compose up --build --wait
-mcp_credentials="$(docker compose exec -T mcp commander-mcp credentials)" && \
-  COMMANDER_MCP_TOKEN="${mcp_credentials#Token: }" docker compose run --build --rm --no-deps playground
+docker compose run --build --rm --no-deps playground
 ```
 
 ### Go
@@ -48,7 +47,7 @@ the API at `http://127.0.0.1:4274`; type `/credentials` to view both credentials
 State is removed on exit. See [native setup](apps/playground/README.md#native-one-executable)
 for Windows and agent dependencies.
 
-Choose a model, provide its API key, and try:
+Choose a model, provide its API key, paste the MCP token when prompted, and try:
 
 > Review defos.ai and summarize what should be fixed before release.
 

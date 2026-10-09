@@ -81,6 +81,7 @@ docker compose exec api commander-api credentials
 Generated passwords change whenever the container restarts. Set `API_PASSWORD`
 before starting Compose for a stable password; `API_USERNAME` overrides the username.
 Native hosts can run `commander-api credentials` with the same environment settings.
+Add `--raw` to print only the password.
 Passwords are never included in startup logs or errors.
 
 [Playground's all-in-one mode](../../playground/README.md#native-one-executable)

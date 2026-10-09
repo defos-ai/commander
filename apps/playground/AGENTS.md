@@ -23,6 +23,7 @@
   duplicating their lifecycle or calling the runner directly from chat.
 - The embedded API identifies itself as `application: commander` at `/aboutz`;
   `API_RUNTIME` defaults to `native`, and the all-in-one image sets `docker`.
+  Embedded MCP uses the same application and reads `MCP_RUNTIME` (default native).
   Keep this public metadata limited to deployment enums; it retains API Host,
   Origin and proxy validation and must never expose credentials or paths.
 - All-in-one starts temporary state and loopback services, waits for readiness,
@@ -48,20 +49,30 @@
   environment. Local `/credentials` displays the token only on request.
 - Native `commander credentials api|mcp` reads only its own environment; generated
   native credentials remain in the running Playground and use `/credentials`.
+  `--raw` prints only the selected password or token on explicit CLI lookup.
   In the all-in-one image, [`docker/entrypoint.aio.sh`](docker/entrypoint.aio.sh) exports credentials
   before starting Tini, then Commander. Preserve explicit nonempty overrides;
   generated values change on restart. Docker lookup reads PID 1's startup
   environment only after identifying Commander or its exact Tini invocation.
   Once identified, lookup failures must not fall back to another environment.
   Do not add credential files, sockets or session-discovery directories.
-- Remote MCP uses environment-only `COMMANDER_MCP_TOKEN`; all-in-one ignores this
-  remote credential. The MCP transport clones requests before attaching Bearer
+- Remote MCP uses `COMMANDER_MCP_TOKEN` or a masked setup input; all-in-one ignores
+  this remote credential. Validate entered tokens with `host.BearerCredentials`;
+  keep them in session memory, outside the environment, files and model history.
+  The MCP transport clones requests before attaching Bearer
   authorization, blocks redirects, and never exposes HTTP error bodies. After
   `401`, reject subsequent requests locally, including the SDK's initialization
-  fallback. Reconnection is required; never retry commands on authentication failure.
-- Compose Playground receives MCP's running token through host-side credential
-  lookup and `COMMANDER_MCP_TOKEN`. Keep lookup failures from launching the client
-  and use `run --no-deps` after stack readiness so launch cannot recreate MCP.
+  fallback. During setup, reconnect only when the operator submits a token with
+  Enter; never retry commands on authentication failure.
+- Connection authentication errors may query the endpoint's sibling `/aboutz`
+  without credentials, cookies or redirects, using a bounded wait/body. Only
+  validated deployment enums select predefined token lookup hints; do not display
+  server-provided commands or response bodies. Return a typed authentication error
+  with an optional predefined lookup command; missing metadata still allows token
+  entry. Successful connections need no metadata probe. Environment one-liners use
+  `--raw` and `docker compose exec -T` without automatically executing anything.
+- Compose Playground accepts token entry or host-side lookup through
+  `COMMANDER_MCP_TOKEN`. Use `run --no-deps` after stack readiness so launch cannot recreate MCP.
   Do not add credential files, Docker socket mounts or an unauthenticated token endpoint.
 - The all-in-one image binds the API to `0.0.0.0:4274` inside the container; document
   host publishing on `127.0.0.1` by default. MCP stays internal. Container browser

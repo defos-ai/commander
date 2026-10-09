@@ -68,19 +68,28 @@ func lookupCredentials() (host.BearerCredentials, error) {
 
 func showCredentials(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("commander-mcp credentials", flag.ContinueOnError)
-	flags.SetOutput(stderr)
+	flags.SetOutput(io.Discard)
+	raw := flags.Bool("raw", false, "Print only the token")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: commander-mcp credentials")
+		fmt.Fprintln(stderr, "Usage: commander-mcp credentials [--raw]")
 		fmt.Fprintln(stderr, "Print the running container's MCP token, or the token from the current environment. Does not start MCP.")
+		fmt.Fprintln(stderr, "--raw prints only the token.")
 	}
 	if err := flags.Parse(args); err != nil {
-		return err
+		if errors.Is(err, flag.ErrHelp) {
+			return err
+		}
+		return errors.New("invalid credential options; run commander-mcp credentials --help")
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
 	value, err := lookupCredentials()
 	if err != nil {
+		return err
+	}
+	if *raw {
+		_, err = fmt.Fprintln(stdout, value.Token)
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "Token: %s\n", value.Token)

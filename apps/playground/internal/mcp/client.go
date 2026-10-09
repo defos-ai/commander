@@ -41,7 +41,7 @@ func Connect(ctx context.Context, endpoint string, credentials host.BearerCreden
 	session, err := client.Connect(ctx, &protocol.StreamableClientTransport{Endpoint: endpoint, HTTPClient: httpClient, DisableStandaloneSSE: true}, nil)
 	if err != nil {
 		if errors.Is(err, errAuthentication) {
-			return nil, errAuthentication
+			return nil, authenticationError(ctx, endpoint)
 		}
 		return nil, errors.New("cannot connect to Commander MCP; check the URL and that the server is running")
 	}
@@ -52,7 +52,7 @@ func Connect(ctx context.Context, endpoint string, credentials host.BearerCreden
 		if err != nil {
 			session.Close()
 			if errors.Is(err, errAuthentication) {
-				return nil, errAuthentication
+				return nil, authenticationError(ctx, endpoint)
 			}
 			return nil, errors.New("could not discover Commander MCP tools")
 		}

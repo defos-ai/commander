@@ -90,7 +90,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
-		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Credentials: &s.MCPCredentials, Ready: func(address net.Addr) {
+		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Application: "commander", Credentials: &s.MCPCredentials, Ready: func(address net.Addr) {
 			s.MCPURL = "http://" + address.String() + "/mcp"
 			close(mcpReady)
 		}})

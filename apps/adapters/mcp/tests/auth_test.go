@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -9,6 +10,40 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
+
+func TestMCPDeploymentMetadata(t *testing.T) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	defer client.CloseIdleConnections()
+	endpoint := strings.TrimSuffix(mcpEndpoint(), "/mcp") + "/aboutz"
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		request, err := http.NewRequestWithContext(t.Context(), method, endpoint, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(io.LimitReader(response.Body, 4096))
+		response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusOK {
+			t.Fatalf("%s /aboutz: status=%d, error=%v", method, response.StatusCode, err)
+		}
+		if method == http.MethodHead {
+			if len(body) != 0 {
+				t.Error("HEAD /aboutz returned a body")
+			}
+			continue
+		}
+		var metadata map[string]string
+		if err := json.Unmarshal(body, &metadata); err != nil {
+			t.Fatal(err)
+		}
+		if len(metadata) != 2 || metadata["runtime"] != "docker-compose" || metadata["application"] != "commander-mcp" {
+			t.Fatalf("unexpected MCP deployment metadata: %+v", metadata)
+		}
+	}
+}
 
 func TestUnauthorizedCleanupPreservesSavedWork(t *testing.T) {
 	a := connect(t)

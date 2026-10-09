@@ -2,8 +2,20 @@ package ui
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 )
+
+func tokenEnvironmentCommand(command string) string {
+	if strings.HasPrefix(command, "/") {
+		return ""
+	}
+	command = strings.Replace(command, "docker compose exec mcp ", "docker compose exec -T mcp ", 1)
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("$env:COMMANDER_MCP_TOKEN = (%s --raw)", command)
+	}
+	return fmt.Sprintf("export COMMANDER_MCP_TOKEN=\"$(%s --raw)\"", command)
+}
 
 func (m *Model) localCommand(value string) bool {
 	if value == "/help" && m.config.LocalAPI != nil {

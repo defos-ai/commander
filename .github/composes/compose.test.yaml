@@ -88,6 +88,7 @@ services:
       DATABASE_URL: file:///state/database
       ENV: tests
       MCP_TOKEN: mcp-fixture-token
+      MCP_RUNTIME: docker-compose
     ports:
       - "127.0.0.1:14273:4273"
     depends_on:

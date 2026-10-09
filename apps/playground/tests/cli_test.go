@@ -222,6 +222,20 @@ func testAllInOneWorkflow(t *testing.T) {
 	if len(about) != 2 || about["runtime"] != "native" || about["application"] != "commander" {
 		t.Fatalf("unexpected all-in-one API metadata: %+v", about)
 	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(endpoint, "/mcp")+"/aboutz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mcpAbout map[string]string
+	err = json.NewDecoder(response.Body).Decode(&mcpAbout)
+	response.Body.Close()
+	if err != nil || response.StatusCode != http.StatusOK || len(mcpAbout) != 2 || mcpAbout["runtime"] != "native" || mcpAbout["application"] != "commander" {
+		t.Fatalf("unexpected all-in-one MCP metadata: status=%d, metadata=%+v, error=%v", response.StatusCode, mcpAbout, err)
+	}
 	get("/api/v1/operations", "", http.StatusUnauthorized)
 	get("/api/v1/operations", "wrong-password", http.StatusUnauthorized)
 	for _, token := range []string{"", "wrong-token"} {
@@ -342,6 +356,7 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
 	t.Setenv("COMMANDER_MCP_TOKEN", "invalid remote token") // Local credentials win too.
 	t.Setenv("MCP_TOKEN", "all-in-one-mcp-secret")
+	t.Setenv("MCP_RUNTIME", "native")
 	t.Setenv("API_USERNAME", "commander")
 	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")

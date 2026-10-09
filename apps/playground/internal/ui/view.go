@@ -126,6 +126,14 @@ func (m *Model) View() string {
 			lines = append(lines, "Model name", "Choose a chat model that supports tool calling.")
 		case stageMCP:
 			lines = append(lines, "Commander MCP URL")
+		case stageMCPToken:
+			lines = append(lines, "Commander MCP token", "Paste your token, then Enter.")
+			if m.mcpCommand != "" {
+				lines = append(lines, "", "Need a token? "+m.mcpCommand)
+				if command := tokenEnvironmentCommand(m.mcpCommand); command != "" {
+					lines = append(lines, "", "For future launches from this shell:", m.color(command, MutedGray))
+				}
+			}
 		}
 		start := max(0, len(m.entries)-3)
 		for _, item := range m.entries[start:] {

@@ -25,6 +25,7 @@ const adapterType = "mcp"
 type Options struct {
 	Ready       func(net.Addr)
 	Credentials *host.BearerCredentials
+	Application string
 }
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
@@ -42,6 +43,12 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	}
 	if err != nil {
 		return err
+	}
+	if options.Application == "" {
+		options.Application = "commander-mcp"
+	}
+	if options.Application != "commander-mcp" && options.Application != "commander" {
+		return errors.New("application must be commander-mcp or commander")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -97,6 +104,7 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", newMCPHandler(server, logger, configuration.allowedHosts, configuration.credentials))
+	mux.Handle("GET /aboutz", protectHost(configuration.allowedHosts, protectOrigin(aboutHandler(configuration.runtime, options.Application))))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		check, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

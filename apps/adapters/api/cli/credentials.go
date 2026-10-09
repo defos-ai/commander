@@ -73,19 +73,28 @@ func lookupCredentials() (host.BasicCredentials, error) {
 
 func showCredentials(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("commander-api credentials", flag.ContinueOnError)
-	flags.SetOutput(stderr)
+	flags.SetOutput(io.Discard)
+	raw := flags.Bool("raw", false, "Print only the password")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: commander-api credentials")
+		fmt.Fprintln(stderr, "Usage: commander-api credentials [--raw]")
 		fmt.Fprintln(stderr, "Print the running container's API credentials, or credentials from the current environment. Does not start the API.")
+		fmt.Fprintln(stderr, "--raw prints only the password.")
 	}
 	if err := flags.Parse(args); err != nil {
-		return err
+		if errors.Is(err, flag.ErrHelp) {
+			return err
+		}
+		return errors.New("invalid credential options; run commander-api credentials --help")
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
 	value, err := lookupCredentials()
 	if err != nil {
+		return err
+	}
+	if *raw {
+		_, err = fmt.Fprintln(stdout, value.Password)
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "Username: %s\nPassword: %s\n", value.Username, value.Password)

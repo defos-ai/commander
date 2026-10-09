@@ -37,14 +37,19 @@ For separate hosts and retained results, use Compose:
 
 ```sh
 docker compose up --build --wait
-mcp_credentials="$(docker compose exec -T mcp commander-mcp credentials)" && \
-  COMMANDER_MCP_TOKEN="${mcp_credentials#Token: }" docker compose run --build --rm --no-deps playground
+docker compose run --build --rm --no-deps playground
 ```
 
-MCP generates its token on startup. The launch command retrieves it and passes it
-to Playground through the environment. Set `MCP_TOKEN` before starting Compose to
-use your own token. Generated tokens change when MCP restarts; rerun the launch
-command to reconnect. `/exit` closes chat; hosts and saved work remain.
+Paste the MCP token when prompted; Playground shows its lookup command.
+To reuse it for future launches from the same shell:
+
+```sh
+export COMMANDER_MCP_TOKEN="$(docker compose exec -T mcp commander-mcp credentials --raw)"
+```
+
+MCP generates its token on startup; refresh your token after it restarts.
+Set `MCP_TOKEN` before starting Compose to use your own token.
+`/exit` closes chat; hosts and saved work remain.
 `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
 
@@ -99,6 +104,7 @@ credentials. These shell commands read only credentials configured in that shell
 On Windows, use `.\commander.exe`. Each command prints the selected credentials
 from `API_USERNAME` / `API_PASSWORD` or `MCP_TOKEN` and exits. In Docker, use the
 `docker exec` commands above to retrieve the running container's credentials.
+Add `--raw` to print only the API password or MCP token.
 
 ### Model setup
 
@@ -107,7 +113,8 @@ lists. Select a model supporting tool calls, using **Enter model name…** if ne
 Missing keys are entered privately. **Other** accepts an OpenAI-compatible base
 URL, model name and optional key. Discovery failures offer manual setup.
 
-To connect to an existing MCP server, set `COMMANDER_MCP_TOKEN` to its token:
+To connect to an existing MCP server, paste its token when prompted or set
+`COMMANDER_MCP_TOKEN` beforehand:
 
 ```sh
 ./commander --provider openai --model YOUR_MODEL --mcp-url http://localhost:4273/mcp
@@ -116,7 +123,7 @@ To connect to an existing MCP server, set `COMMANDER_MCP_TOKEN` to its token:
 | Setting | Environment | Flag |
 | --- | --- | --- |
 | MCP endpoint | `COMMANDER_MCP_URL` | `--mcp-url` |
-| MCP bearer token | `COMMANDER_MCP_TOKEN` | Environment only |
+| MCP bearer token | `COMMANDER_MCP_TOKEN` | Hidden setup prompt |
 | Provider | `COMMANDER_LLM_PROVIDER` | `--provider` |
 | Model | `COMMANDER_LLM_MODEL` | `--model` |
 | Model API base URL | `COMMANDER_LLM_BASE_URL` | `--base-url` |
@@ -125,7 +132,10 @@ To connect to an existing MCP server, set `COMMANDER_MCP_TOKEN` to its token:
 
 Flags override environment values. MCP defaults to `http://localhost:4273/mcp`.
 MCP credentials are sent only to the configured endpoint; redirects are not followed.
-An HTTP `401` stops requests until you reconnect with the correct token.
+An HTTP `401` stops requests until you reconnect with the correct token. During
+setup, paste the token into the hidden input and press **Enter** to reconnect.
+**Need a token?** shows a lookup command when deployment metadata is available.
+Tokens entered here stay in memory for this session.
 Provider keys are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or
 `GOOGLE_API_KEY`), `XAI_API_KEY`, `DEEPSEEK_API_KEY` and `COMMANDER_LLM_API_KEY`
 for **Other**. Keys and chat history stay in memory; hosts save operation state.

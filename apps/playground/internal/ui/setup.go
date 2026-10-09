@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -9,6 +10,7 @@ import (
 	"github.com/defos-ai/commander/apps/playground/internal/chat"
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/host"
 )
 
 type setupStage string
@@ -21,6 +23,7 @@ const (
 	stageModel         setupStage = "model"
 	stageManualModel   setupStage = "manual_model"
 	stageMCP           setupStage = "mcp"
+	stageMCPToken      setupStage = "mcp_token"
 	stageConnecting    setupStage = "connecting"
 	stageChat          setupStage = "chat"
 )
@@ -35,6 +38,7 @@ type setupState struct {
 	generation  int
 	setupCancel context.CancelFunc
 	manual      bool
+	mcpCommand  string
 }
 
 type initialProvider string
@@ -81,7 +85,16 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		}
 		m.busy = false
 		if msg.err != nil {
-			m.add("error", msg.err.Error()+". Start docker compose, then enter the MCP URL to retry.")
+			var authentication *bridge.AuthenticationError
+			if errors.As(msg.err, &authentication) {
+				m.mcpCommand = authentication.Command
+				if m.config.MCPCredentials.Token != "" {
+					m.add("error", "MCP token rejected. Try again.")
+				}
+				m.setStage(stageMCPToken, "MCP token (hidden)", "")
+				return nil, true
+			}
+			m.add("error", msg.err.Error())
 			m.setStage(stageMCP, "MCP URL", m.config.MCPURL)
 			return nil, true
 		}
@@ -191,6 +204,9 @@ func (m *Model) setStage(stage setupStage, placeholder, value string) {
 		}
 	}
 	m.input.EchoMode = textinput.EchoNormal
+	if stage == stageMCPToken {
+		m.input.EchoMode = textinput.EchoPassword
+	}
 	m.input.Placeholder = placeholder
 	m.input.SetValue(value)
 	m.input.CursorEnd()
@@ -228,6 +244,14 @@ func (m *Model) submit(value string) tea.Cmd {
 		}
 		m.config.MCPURL = value
 		return m.connect()
+	case stageMCPToken:
+		credentials := host.BearerCredentials{Token: value}
+		if credentials.Validate() != nil {
+			m.add("error", "Enter a valid MCP token.")
+			return nil
+		}
+		m.config.MCPCredentials = credentials
+		return m.connect()
 	}
 	return nil
 }
@@ -244,6 +268,10 @@ func (m *Model) setupInput(value string) tea.Cmd {
 		}
 		m.generation++
 		m.busy = false
+		if m.stage == stageMCPToken {
+			m.setStage(stageMCP, "MCP URL", m.config.MCPURL)
+			return nil
+		}
 		m.manual = false
 		m.setStage(stageProvider, "/help, /back, or /exit", "")
 		return nil

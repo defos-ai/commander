@@ -1,12 +1,15 @@
 package playground_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,6 +37,169 @@ func TestProviderSelector(t *testing.T) {
 	}
 	if strings.Contains(selected, "\x1b[") {
 		t.Fatal("no-color rendering contains ANSI colors")
+	}
+}
+
+func TestMCPAuthenticationDuringSetup(t *testing.T) {
+	const token = "private-session-fixture-token"
+	const wrongToken = "wrong-setup-token"
+	const invalidToken = "invalid:setup-token"
+	const originalEnvironment = "existing-environment-token"
+	t.Setenv("COMMANDER_MCP_TOKEN", originalEnvironment)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	var attempts, requests atomic.Int32
+	server := mcp.NewServer(&mcp.Implementation{Name: "token-fixture", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: "list_missions", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "{}"}}}, nil
+	})
+	transport := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/aboutz" {
+			if r.Header.Get("Authorization") != "" {
+				t.Error("public metadata probe included credentials")
+			}
+			fmt.Fprint(w, `{"runtime":"docker-compose","application":"commander-mcp"}`)
+			return
+		}
+		attempts.Add(1)
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			http.Error(w, token, http.StatusUnauthorized)
+			return
+		}
+		transport.ServeHTTP(w, r)
+	}))
+	defer endpoint.Close()
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error("could not inspect model request")
+		}
+		for _, private := range []string{token, wrongToken, invalidToken, originalEnvironment, "COMMANDER_MCP_TOKEN", "Need a token?"} {
+			if bytes.Contains(body, []byte(private)) {
+				t.Error("MCP token setup leaked into a model request")
+			}
+		}
+		writeModelDelta(w, map[string]any{"content": "Authenticated and ready"}, "stop")
+	}))
+	defer provider.Close()
+	var output bytes.Buffer
+	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{
+		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL + "/mcp",
+		Keys: map[string]string{"other": "fixture-key"}, NoColor: true,
+	}, &output)}
+	defer u.model.Close()
+	u.model.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	u.run(u.model.Init())
+	u.wait("token input", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	view := u.model.View()
+	environmentCommand := `export COMMANDER_MCP_TOKEN="$(docker compose exec -T mcp commander-mcp credentials --raw)"`
+	if runtime.GOOS == "windows" {
+		environmentCommand = `$env:COMMANDER_MCP_TOKEN = (docker compose exec -T mcp commander-mcp credentials --raw)`
+	}
+	for _, want := range []string{"Need a token?", "docker compose exec mcp commander-mcp credentials", environmentCommand} {
+		if !strings.Contains(view, want) {
+			t.Errorf("authentication hint is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{token, "then restart Playground", "sed ", "Start docker compose", "Commander connected"} {
+		if strings.Contains(view, unwanted) {
+			t.Error("token input disclosed credentials or confusing recovery advice")
+		}
+	}
+	if attempts.Load() != 1 || requests.Load() != 0 {
+		t.Fatal("initial authentication failure retried or contacted the model")
+	}
+	for _, value := range []string{"", invalidToken} {
+		before := attempts.Load()
+		u.text(value)
+		if strings.Contains(u.model.View(), invalidToken) {
+			t.Fatal("token input was not masked")
+		}
+		u.key(tea.KeyMsg{Type: tea.KeyEnter})
+		if attempts.Load() != before || !strings.Contains(u.model.View(), "Commander MCP token") {
+			t.Fatal("invalid or blank token made a network request or left the prompt")
+		}
+		if strings.Contains(u.model.View(), invalidToken) {
+			t.Fatal("invalid token was disclosed in the validation error")
+		}
+	}
+	u.text(wrongToken)
+	if strings.Contains(u.model.View(), wrongToken) || !strings.Contains(u.model.View(), strings.Repeat("*", len(wrongToken))) || attempts.Load() != 1 {
+		t.Fatal("typing a token disclosed it or retried authentication")
+	}
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("token input after rejected token", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	if attempts.Load() != 2 || strings.Contains(u.model.View(), wrongToken) {
+		t.Fatal("rejected token was retried automatically or disclosed")
+	}
+	u.text(token)
+	if strings.Contains(u.model.View(), token) || attempts.Load() != 2 {
+		t.Fatal("typing the replacement token disclosed it or connected before Enter")
+	}
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("authenticated connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
+	u.text("Hello")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("chat after token entry", func(view string) bool {
+		return strings.Contains(view, "Authenticated and ready") && !strings.Contains(view, "Thinking")
+	})
+	if requests.Load() != 1 || os.Getenv("COMMANDER_MCP_TOKEN") != originalEnvironment {
+		t.Fatal("interactive authentication changed the environment or made unexpected model requests")
+	}
+	for _, private := range []string{token, wrongToken, invalidToken} {
+		if strings.Contains(u.model.View(), private) || strings.Contains(output.String(), private) {
+			t.Fatal("token setup retained a credential in rendered history or output")
+		}
+	}
+}
+
+func TestMCPTokenInputWithoutDeploymentHintAndBack(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	const private = "private-token-draft"
+	const untrusted = "untrusted-server-command"
+	var attempts atomic.Int32
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/aboutz" {
+			fmt.Fprint(w, `{"runtime":"unknown","application":"commander-mcp","command":"`+untrusted+`"}`)
+			return
+		}
+		attempts.Add(1)
+		if r.Header.Get("Authorization") != "" {
+			t.Error("URL retry reused the abandoned token draft")
+		}
+		http.Error(w, private, http.StatusUnauthorized)
+	}))
+	defer endpoint.Close()
+	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{
+		Provider: "other", Model: "fixture", BaseURL: endpoint.URL, MCPURL: endpoint.URL + "/mcp",
+		Keys: map[string]string{"other": "fixture-key"}, NoColor: true,
+	}, io.Discard)}
+	defer u.model.Close()
+	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	u.run(u.model.Init())
+	u.wait("token prompt without metadata", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	u.text(private)
+	if strings.Contains(u.model.View(), private) || strings.Contains(u.model.View(), untrusted) {
+		t.Fatal("token prompt disclosed credentials or trusted a server-provided command")
+	}
+	u.key(tea.KeyMsg{Type: tea.KeyCtrlA})
+	u.key(tea.KeyMsg{Type: tea.KeyCtrlK})
+	u.text("/back")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	view := u.model.View()
+	if !strings.Contains(view, "Commander MCP URL") || !strings.Contains(view, endpoint.URL+"/mcp") || strings.Contains(view, private) || strings.Contains(view, "Select your model provider:") {
+		t.Fatal("back did not return to the MCP URL with a cleared private input")
+	}
+	if attempts.Load() != 1 {
+		t.Fatal("back retried the connection")
+	}
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("token prompt after URL submission", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	if attempts.Load() != 2 || strings.Contains(u.model.View(), private) || strings.Contains(u.model.View(), untrusted) {
+		t.Fatal("URL submission reused the abandoned token or untrusted metadata")
 	}
 }
 

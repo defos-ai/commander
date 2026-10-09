@@ -51,6 +51,15 @@ func TestCredentialsCommand(t *testing.T) {
 	if output.String() != "Token: "+secret+"\n" || diagnostic.Len() != 0 {
 		t.Error("credential command did not print effective environment credentials only to standard output")
 	}
+	output.Reset()
+	diagnostic.Reset()
+	if code := cli.Main([]string{"credentials", "--raw"}, &output, &diagnostic); code != 0 {
+		t.Fatalf("raw credential retrieval failed with exit code %d", code)
+	}
+	if output.String() != secret+"\n" || diagnostic.Len() != 0 {
+		t.Error("raw credential command must print only the token and a newline")
+	}
+	t.Setenv("MCP_TOKEN", "private invalid-help-token")
 	for _, args := range [][]string{{"--help"}, {"credentials", "--help"}} {
 		output.Reset()
 		diagnostic.Reset()
@@ -60,7 +69,7 @@ func TestCredentialsCommand(t *testing.T) {
 		if output.Len() != 0 || !strings.Contains(diagnostic.String(), "commander-mcp") {
 			t.Error("help must describe the command without retrieving credentials")
 		}
-		for _, value := range []string{secret, "--pid", "--raw"} {
+		for _, value := range []string{secret, "private invalid-help-token", "--pid"} {
 			if strings.Contains(diagnostic.String(), value) {
 				t.Error("help includes a secret or an unsupported option")
 			}
@@ -71,7 +80,7 @@ func TestCredentialsCommand(t *testing.T) {
 func TestCLIRejectsInvalidCredentialsWithoutLeaking(t *testing.T) {
 	for _, secret := range []string{"", " ", "private invalid token", "private\ninvalid-token", "private=invalid-token"} {
 		t.Setenv("MCP_TOKEN", secret)
-		for _, args := range [][]string{hostArgs(t.TempDir()), {"credentials"}} {
+		for _, args := range [][]string{hostArgs(t.TempDir()), {"credentials"}, {"credentials", "--raw"}} {
 			var output, diagnostic bytes.Buffer
 			if code := cli.Main(args, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
 				t.Error("invalid credentials must fail with a diagnostic and no credentials")
@@ -79,6 +88,20 @@ func TestCLIRejectsInvalidCredentialsWithoutLeaking(t *testing.T) {
 			if strings.TrimSpace(secret) != "" && strings.Contains(diagnostic.String(), secret) {
 				t.Error("failure leaked an environment credential")
 			}
+		}
+	}
+}
+
+func TestCredentialsCommandRejectsArgumentsWithoutEchoing(t *testing.T) {
+	t.Setenv("MCP_TOKEN", "private-environment-token")
+	const secret = "private-argument-token"
+	for _, args := range [][]string{{"credentials", secret}, {"credentials", "--raw=" + secret}, {"credentials", "--" + secret}} {
+		var output, diagnostic bytes.Buffer
+		if code := cli.Main(args, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
+			t.Error("invalid credential arguments must fail without printing credentials")
+		}
+		if strings.Contains(diagnostic.String(), secret) || strings.Contains(diagnostic.String(), "private-environment-token") {
+			t.Error("invalid credential arguments leaked a value")
 		}
 	}
 }
