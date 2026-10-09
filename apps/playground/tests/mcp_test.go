@@ -100,7 +100,7 @@ func TestMCPCredentialHints(t *testing.T) {
 		{"native MCP", "native", "commander-mcp", "./commander-mcp credentials"},
 		{"Docker MCP", "docker", "commander-mcp", "docker exec commander-mcp commander-mcp credentials"},
 		{"Compose MCP", "docker-compose", "commander-mcp", "docker compose exec mcp commander-mcp credentials"},
-		{"native all-in-one", "native", "commander", "/credentials mcp (in Playground)"},
+		{"native all-in-one", "native", "commander", "/credentials"},
 		{"Docker all-in-one", "docker", "commander", "docker exec commander commander credentials mcp"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

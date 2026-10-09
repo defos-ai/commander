@@ -35,9 +35,9 @@
   the embedded API through its run options, without modifying process environment.
   Reuse `host.BasicCredentials` and `host.GeneratePassword`; never write credentials
   to files or logs, include them in model messages, or expose them through `/status`.
-  Local `/credentials api` and `/credentials mcp` display only the selected
-  credentials during setup or chat; `/credentials` displays both. Handle these
-  commands, including invalid arguments, before forwarding input to the model.
+  Local `/credentials` displays both credentials during setup or chat; it accepts
+  no arguments. Handle the command and invalid arguments before forwarding input
+  to the model. List it inside help, without a separate pre-help notice.
   Keep generated credentials scoped to the session. Standalone API startup still
   requires environment credentials.
   The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides

@@ -42,53 +42,68 @@ func TestProviderSelector(t *testing.T) {
 }
 
 func TestHelpLayout(t *testing.T) {
-	for _, noColor := range []bool{true, false} {
-		t.Run(fmt.Sprintf("no-color=%t", noColor), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			defer cancel()
-			server := mcp.NewServer(&mcp.Implementation{Name: "help-fixture", Version: "1"}, nil)
-			endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
-			defer endpoint.Close()
-			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				t.Error("help must not call the model")
-				http.Error(w, "unexpected model request", http.StatusBadRequest)
-			}))
-			defer provider.Close()
-			u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: noColor})
-			defer u.model.Close()
-			u.model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
-			u.text("/help")
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("help", func(view string) bool { return strings.Contains(view, "Show this help") })
+	for _, local := range []*ui.LocalAPI{nil, {URL: "http://127.0.0.1:4274", Username: "commander", Password: "local-only-fixture-password"}} {
+		mode := "all-in-one"
+		if local == nil {
+			mode = "remote"
+		}
+		for _, noColor := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/no-color=%t", mode, noColor), func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+				defer cancel()
+				server := mcp.NewServer(&mcp.Implementation{Name: "help-fixture", Version: "1"}, nil)
+				endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+				defer endpoint.Close()
+				provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("help must not call the model")
+					http.Error(w, "unexpected model request", http.StatusBadRequest)
+				}))
+				defer provider.Close()
+				u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAPI: local})
+				defer u.model.Close()
+				u.model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
+				u.text("/help")
+				u.key(tea.KeyMsg{Type: tea.KeyEnter})
+				u.wait("help", func(view string) bool { return strings.Contains(view, "Show this help") })
 
-			for _, width := range []int{120, 60, 120} {
-				u.model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
-				view := ansi.Strip(u.model.View())
-				start := strings.Index(view, "/help — Show this help")
-				if start < 1 || view[start-1] != '\n' {
-					t.Fatalf("help is not aligned at the start of the line at width %d", width)
-				}
-				end := strings.Index(view[start:], "exits.")
-				if end < 0 {
-					t.Fatalf("help was truncated at width %d", width)
-				}
-				help := view[start : start+end+len("exits.")]
-				if !strings.Contains(strings.Join(strings.Fields(help), " "), "Ctrl+D exits.") {
-					t.Fatal("help lost its final keyboard shortcut")
-				}
-				if !strings.Contains(help, "\n/run <operation-id> <action> <json-input> —") || !strings.Contains(help, "\n/exit —") {
-					t.Fatal("help command rows are misaligned")
-				}
-				for _, line := range strings.Split(help, "\n") {
-					if ansi.StringWidth(line) > width-4 {
-						t.Fatalf("help exceeds the viewport at width %d", width)
+				for _, width := range []int{120, 60, 120} {
+					u.model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
+					view := ansi.Strip(u.model.View())
+					start := strings.Index(view, "/help — Show this help")
+					if start < 1 || view[start-1] != '\n' {
+						t.Fatalf("help is not aligned at the start of the line at width %d", width)
+					}
+					end := strings.Index(view[start:], "exits.")
+					if end < 0 {
+						t.Fatalf("help was truncated at width %d", width)
+					}
+					help := view[start : start+end+len("exits.")]
+					if !strings.Contains(strings.Join(strings.Fields(help), " "), "Ctrl+D exits.") {
+						t.Fatal("help lost its final keyboard shortcut")
+					}
+					if !strings.Contains(help, "\n/run <operation-id> <action> <json-input> —") || !strings.Contains(help, "\n/exit —") {
+						t.Fatal("help command rows are misaligned")
+					}
+					if !strings.Contains(strings.Join(strings.Fields(help), " "), "/credentials — Show API login and MCP token (all-in-one)") {
+						t.Fatal("credential lookup is missing from the help command rows")
+					}
+					if strings.Contains(view[:start], "/credentials") || strings.Contains(view, "/credentials api") || strings.Contains(view, "/credentials mcp") {
+						t.Fatal("credential guidance appeared outside the help command rows")
+					}
+					if local != nil && strings.Contains(view, local.Password) {
+						t.Fatal("help disclosed local credentials")
+					}
+					for _, line := range strings.Split(help, "\n") {
+						if ansi.StringWidth(line) > width-4 {
+							t.Fatalf("help exceeds the viewport at width %d", width)
+						}
+					}
+					if local == nil && !strings.Contains(view, "·  Try:") {
+						t.Fatal("single-line notices lost their marker")
 					}
 				}
-				if !strings.Contains(view, "·  Try:") {
-					t.Fatal("single-line notices lost their marker")
-				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -265,8 +280,8 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 		api, mcp, invalid bool
 	}{
 		{command: "/credentials", api: true, mcp: true},
-		{command: "/credentials api", api: true},
-		{command: "/credentials mcp", mcp: true},
+		{command: "/credentials api", invalid: true},
+		{command: "/credentials mcp", invalid: true},
 		{command: "/credentials other", invalid: true},
 		{command: "/credentials api extra", invalid: true},
 	} {
@@ -280,8 +295,11 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 				defer model.Close()
 				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
 				model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				if local != nil && (!strings.Contains(model.View(), "/credentials api") || !strings.Contains(model.View(), "/credentials mcp") || strings.Contains(model.View(), local.Password) || strings.Contains(model.View(), credentials.Token)) {
+				if local != nil && (!strings.Contains(model.View(), "/credentials") || strings.Contains(model.View(), "/credentials api") || strings.Contains(model.View(), "/credentials mcp") || strings.Contains(model.View(), local.Password) || strings.Contains(model.View(), credentials.Token)) {
 					t.Fatal("local help must advertise credential lookup without revealing secrets")
+				}
+				if local == nil && strings.Contains(model.View(), "/credentials") {
+					t.Fatal("remote setup help advertised local credential lookup")
 				}
 				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.command)})
 				model.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -289,7 +307,7 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 				if !strings.Contains(view, "Select your model provider:") {
 					t.Fatal("credential lookup changed the setup stage")
 				}
-				if tc.invalid && !strings.Contains(view, "Usage: /credentials [api|mcp]") {
+				if tc.invalid && !strings.Contains(view, "Usage: /credentials") {
 					t.Fatal("invalid credential command did not show usage")
 				}
 				if local == nil && !tc.invalid && !strings.Contains(view, "only with --all-in-one") {
@@ -297,7 +315,7 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 				}
 				wantAPI, wantMCP := local != nil && tc.api, local != nil && tc.mcp
 				if strings.Contains(view, "Password: local-only-fixture-password") != wantAPI || strings.Contains(view, "Token: "+credentials.Token) != wantMCP {
-					t.Fatal("credential command did not show only the requested local credentials")
+					t.Fatal("credential command did not show both local credentials only for a valid request")
 				}
 				if wantAPI && (!strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "Username: "+local.Username)) {
 					t.Fatal("API lookup did not display its endpoint and username")
@@ -355,6 +373,11 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		u.text(command)
 		u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	}
+	if strings.Contains(u.model.View(), "Password: "+local.Password) || strings.Contains(u.model.View(), "Token: "+credentials.Token) {
+		t.Fatal("invalid credential arguments disclosed local credentials")
+	}
+	u.text("/credentials")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	if !strings.Contains(u.model.View(), "Password: "+local.Password) || !strings.Contains(u.model.View(), "Token: "+credentials.Token) {
 		t.Fatal("explicit credential lookup did not display local credentials")
 	}

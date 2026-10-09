@@ -150,7 +150,7 @@ describe('connection setup and saved metadata', () => {
     expect(screen.queryByText('docker exec commander commander credentials api')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('API URL'), { target: { value: nativePlaygroundURL } });
-    expect(await screen.findByText('/credentials api')).toBeVisible();
+    expect(await screen.findByText('/credentials')).toBeVisible();
     expect(screen.getByText('Need a password? Run in Playground:')).toBeVisible();
     expect(screen.queryByText('Need a password? Run in a terminal:')).not.toBeInTheDocument();
 

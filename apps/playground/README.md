@@ -77,11 +77,10 @@ go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-on
 This starts MCP, the HTTP API, one controller, one web agent and one browser agent using
 temporary FS state. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
-shared directly with Playground. During setup or chat, type `/credentials api`
-for the API login or `/credentials mcp` for the MCP token. `/credentials` shows
-both; credentials stay local and are never sent to the model. Set `API_USERNAME`,
-`API_PASSWORD` or `MCP_TOKEN` to override them; unset or empty values use their
-defaults. Generated credentials change each session.
+shared directly with Playground. During setup or chat, type `/credentials` to
+view the API login and MCP token. Credentials stay local and are never sent to the
+model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
+empty values use their defaults. Generated credentials change each session.
 Use `/status` to see the running API and MCP addresses.
 `API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
 The executable embeds both website missions and needs no checkout or Go installation.
@@ -98,7 +97,7 @@ shows the temporary host log location, which is also deleted on exit.
 
 ### Credentials
 
-For native sessions, use `/credentials [api|mcp]` inside Playground to see generated
+For native sessions, use `/credentials` inside Playground to see generated
 credentials. These shell commands read only credentials configured in that shell:
 
 ```sh
@@ -164,7 +163,7 @@ to include rendered accessibility and screenshots.
 | Command | Effect |
 | --- | --- |
 | `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
-| `/credentials api`, `/credentials mcp` | Show the selected all-in-one credentials in Playground; `/credentials` shows both. Also available during model setup. |
+| `/credentials` | Show the all-in-one API login and MCP token. Also available during model setup. |
 | `/watch <operation-id>` | Follow saved work and resume model decisions. |
 | `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Questions and permission checks still apply. |
 | `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |

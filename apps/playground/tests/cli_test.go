@@ -476,16 +476,10 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			}
 			wait("Select your model provider")
 			beforeLookup := output.String()
-			if _, err := io.WriteString(keyboard, "/credentials api\r"); err != nil {
+			if _, err := io.WriteString(keyboard, "/credentials\r"); err != nil {
 				t.Fatal(err)
 			}
 			wait("Password:")
-			if strings.Contains(output.String(), "Token:") {
-				t.Fatal("API credential lookup also displayed the MCP token")
-			}
-			if _, err := io.WriteString(keyboard, "/credentials mcp\r"); err != nil {
-				t.Fatal(err)
-			}
 			wait("Token:")
 			match := regexp.MustCompile(`API: (http://127\.0\.0\.1:\d+)\s+Username: ([^\r\n]+)\s+Password: ([^\r\n]+)`).FindStringSubmatch(output.String())
 			if len(match) != 4 {

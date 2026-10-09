@@ -59,7 +59,7 @@ func credentialCommand(ctx context.Context, endpoint string) string {
 	if deployment.Application == "commander" {
 		switch deployment.Runtime {
 		case "native":
-			return "/credentials mcp (in Playground)"
+			return "/credentials"
 		case "docker":
 			return "docker exec commander commander credentials mcp"
 		}

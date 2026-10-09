@@ -11,7 +11,7 @@ const commands = {
     'docker-compose': 'docker compose exec api commander-api credentials',
   },
   commander: {
-    native: '/credentials api',
+    native: '/credentials',
     docker: 'docker exec commander commander credentials api',
     'docker-compose': null,
   },
@@ -56,7 +56,7 @@ export function CredentialHint({ url }: { url: string }) {
   }
 
   return <div className="credential-hint">
-    <p className="form-hint">{t($ => command === '/credentials api' ? $.connectionForm.needPasswordInPlayground : $.connectionForm.needPassword)}</p>
+    <p className="form-hint">{t($ => command === '/credentials' ? $.connectionForm.needPasswordInPlayground : $.connectionForm.needPassword)}</p>
     <div className="credential-command">
       <code>{command}</code>
       <button type="button" className="icon-button" aria-label={t($ => copied ? $.connectionForm.copied : $.connectionForm.copyCommand)}
