@@ -19,7 +19,7 @@ const (
 	TaskInterrupted TaskStatus = "interrupted"
 )
 
-// Task is one externally selected action assignment. Result is retained even if
+// Task is one durable action assignment. Result is retained even if
 // the operation is cancelled while its already-dispatched work finishes.
 type Task struct {
 	ID           string                    `json:"id"`

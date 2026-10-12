@@ -35,9 +35,11 @@ func (r *Runner) run() {
 			r.signalScheduler()
 		case <-r.wake:
 			r.expireOperatorQuestions()
+			r.publishFinalizations()
 			r.dispatchQueued()
 		case <-ticker.C:
 			r.expireOperatorQuestions()
+			r.publishFinalizations()
 			r.dispatchQueued()
 		}
 	}

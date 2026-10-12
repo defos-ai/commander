@@ -18,6 +18,10 @@
   state and send operation commands; only the controller selects agent instances.
 - Mission definitions own automation. Actions may propose schema-valid next
   actions, but must never dispatch them or contact a controller themselves.
+- Mission `start`, `on_empty: resolve` and `finalize` explicitly opt into automatic
+  lifecycle. Finalization snapshots accepted artifact descriptors, freezes new
+  work and records its task ID atomically. Domain report interpretation belongs
+  to the configured finalizer action; keep it out of the framework.
 
 ## Runtime and persistence invariants
 
@@ -37,6 +41,9 @@
 - Preserve immutable execution outcomes and reports. Save reports before
   completing operations. Agents upload bytes through `ArtifactFileStore`;
   controllers accept metadata through `ArtifactStore`. Bytes alone are not evidence.
+- Automatic reports use the saved finalizer task ID and completion time for
+  idempotent publication. Completion rechecks that output and the settled graph;
+  recovery may reconcile a missing finalizer handoff but never repeat scan work.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns readiness, permission and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -31,6 +32,8 @@ type Step struct {
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
+	Start           *actions.NextAction   `json:"start,omitempty"`
+	Finalize        string                `json:"finalize,omitempty"`
 	Automations     map[string]Automation `json:"automations,omitempty"`
 	Name            string                `json:"name"`
 	Objective       string                `json:"objective"`
@@ -83,6 +86,17 @@ func (m Mission) Validate() error {
 			return fmt.Errorf("starting action %q is not a required action", action)
 		}
 	}
+	if m.Start != nil {
+		if err := m.Start.Validate(); err != nil {
+			return fmt.Errorf("start action: %w", err)
+		}
+		if !required[m.Start.ActionName] {
+			return errors.New("start action must be a required action")
+		}
+	}
+	if m.Finalize != "" && !required[m.Finalize] {
+		return errors.New("finalize action must be a required action")
+	}
 	seenSteps := make(map[string]bool, len(m.Steps))
 	for _, step := range m.Steps {
 		if strings.TrimSpace(step.ID) == "" || seenSteps[step.ID] || strings.TrimSpace(step.Objective) == "" {
@@ -118,6 +132,10 @@ func (m Mission) Validate() error {
 }
 
 func (m Mission) Clone() Mission {
+	if m.Start != nil {
+		start := actions.CloneNextActions([]actions.NextAction{*m.Start})[0]
+		m.Start = &start
+	}
 	m.Automations = maps.Clone(m.Automations)
 	for name, rule := range m.Automations {
 		rule.Run = slices.Clone(rule.Run)

@@ -9,7 +9,8 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Recover reconciles saved state without creating tasks or dispatching commands.
+// Recover reconciles saved state and a settled finalization handoff without
+// dispatching commands or repeating already recorded assignments.
 func (o *Operation) Recover(now time.Time) (bool, error) {
 	if now.IsZero() {
 		return false, errors.New("operation recovery requires a cutoff time")
@@ -21,6 +22,7 @@ func (o *Operation) Recover(now time.Time) (bool, error) {
 	if o.Status.Terminal() && !slices.ContainsFunc(o.Tasks, Task.NeedsRecovery) {
 		return expired, nil
 	}
+	o.reconcileFinalization()
 	o.RefreshStatus()
 	o.AppendEvent(OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")
 	o.UpdatedAt = time.Now().UTC()
@@ -63,5 +65,5 @@ func (o Operation) validateRecovery() error {
 			}
 		}
 	}
-	return nil
+	return o.validateFinalizationTask()
 }

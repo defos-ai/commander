@@ -35,6 +35,18 @@ func (o Operation) ValidateCompletion(output json.RawMessage) error {
 }
 
 func (o *Operation) Complete(reportID string, output json.RawMessage) error {
+	if o.Status.Terminal() {
+		return ErrFinished
+	}
+	if o.FinalizationTaskID != "" && reportID == o.FinalizationTaskID {
+		saved, err := o.FinalizationOutput()
+		if err != nil {
+			return err
+		}
+		if !sameJSON(saved, output) {
+			return ErrOperationConflict
+		}
+	}
 	if err := o.ValidateCompletion(output); err != nil {
 		return err
 	}

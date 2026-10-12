@@ -3,6 +3,8 @@ package models
 import "encoding/json"
 
 type MissionResponse struct {
+	Start           *NextActionResponse                  `json:"start,omitempty"`
+	Finalize        string                               `json:"finalize,omitempty"`
 	Automations     map[string]MissionAutomationResponse `json:"automations,omitempty"`
 	Name            string                               `json:"name"`
 	Objective       string                               `json:"objective"`
@@ -24,4 +26,5 @@ type MissionAutomationResponse struct {
 	Run      []string `json:"run,omitempty"`
 	Continue string   `json:"continue,omitempty"`
 	Decide   string   `json:"decide,omitempty"`
+	OnEmpty  string   `json:"on_empty,omitempty"`
 }

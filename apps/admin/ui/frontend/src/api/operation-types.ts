@@ -10,6 +10,7 @@ export interface Operation {
   questions: OperationQuestion[] | null;
   output?: unknown;
   report_id?: string;
+  finalization_task_id?: string;
   error?: string;
   events: OperationEvent[] | null;
   created_at: string;

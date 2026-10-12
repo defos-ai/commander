@@ -23,8 +23,9 @@ type OperationStore interface {
 	// identical readiness returns the saved operation without writing.
 	RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (Operation, error)
 	// Recover validates the latest saved work, expires due questions, and records
-	// recovery together. Terminal operations without recoverable tasks only expire
-	// questions, with no write if none are due. It never dispatches work.
+	// recovery and any once-only settled finalizer assignment together. Terminal
+	// operations without recoverable tasks only expire questions, with no write
+	// if none are due. It never dispatches work.
 	Recover(ctx context.Context, operationID string, now time.Time) (Operation, error)
 	// Task queries are scoped to one operation. A missing operation returns
 	// ErrUnknownOperation; GetTask returns ErrUnknownTask when its task is absent.
@@ -47,8 +48,8 @@ type OperationStore interface {
 	// together. A competing claim returns ErrOperationConflict without dispatching.
 	DispatchTask(ctx context.Context, operationID string, dispatch TaskDispatch) (Operation, error)
 	// FinishTask saves a running or interrupted task's outcome together with its
-	// continuation, automatic follow-ups, events, and operation status. Repeated
-	// outcomes return the saved snapshot unchanged; conflicting final outcomes
+	// continuation, automatic follow-ups, once-only finalization, events, and
+	// operation status. Repeated outcomes return the saved snapshot unchanged; conflicting final outcomes
 	// return ErrOperationConflict. Late results preserve terminal operation status.
 	FinishTask(ctx context.Context, operationID string, result TaskResult) (Operation, error)
 	// ResolveContinuation checks the current decision version and commits the
@@ -69,6 +70,8 @@ type OperationStore interface {
 	// Complete rechecks eligibility and saves output, report reference, resolved
 	// model continuations, status, and event together. The caller must persist
 	// the immutable report first. Terminal operations return ErrFinished unchanged.
+	// Using the saved finalization task ID as reportID requires its exact saved
+	// output and rechecks every normal task and continuation is successfully settled.
 	Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (Operation, error)
 	// Fail saves the reason, terminal status, queued task cancellations, and event
 	// together. Running tasks can still finish; terminal operations return ErrFinished.

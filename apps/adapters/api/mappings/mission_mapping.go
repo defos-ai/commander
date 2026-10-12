@@ -5,17 +5,23 @@ import (
 	"slices"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	response := models.MissionResponse{
 		Name:            mission.Name,
+		Finalize:        mission.Finalize,
 		Objective:       mission.Objective,
 		RequiredActions: slices.Clone(mission.RequiredActions),
 		StartingActions: slices.Clone(mission.StartingActions),
 		InputSchema:     bytes.Clone(mission.InputSchema),
 		OutputSchema:    bytes.Clone(mission.OutputSchema),
+	}
+	if mission.Start != nil {
+		start := ToNextActionResponses([]actions.NextAction{*mission.Start})[0]
+		response.Start = &start
 	}
 	if mission.Automations != nil {
 		response.Automations = make(map[string]models.MissionAutomationResponse, len(mission.Automations))
@@ -24,6 +30,7 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 				Run:      slices.Clone(automation.Run),
 				Continue: string(automation.Continue),
 				Decide:   string(automation.Decide),
+				OnEmpty:  automation.OnEmpty,
 			}
 		}
 	}

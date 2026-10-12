@@ -30,6 +30,9 @@ func (o *Operation) QueueTask(task Task) (bool, error) {
 	if o.Status.Terminal() {
 		return false, ErrFinished
 	}
+	if o.FinalizationTaskID != "" {
+		return false, ErrOperationConflict
+	}
 	if err := o.ValidateStep(task.StepID); err != nil {
 		return false, err
 	}

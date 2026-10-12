@@ -36,18 +36,19 @@ func ToFailOperationCommand(operationID string, request models.FailOperationRequ
 
 func ToOperationResponse(operation operations.Operation) models.OperationResponse {
 	response := models.OperationResponse{
-		ID:        operation.ID,
-		Mission:   ToMissionResponse(operation.Mission),
-		Input:     bytes.Clone(operation.Input),
-		Status:    string(operation.Status),
-		Tasks:     ToTaskResponses(operation.Tasks),
-		Questions: ToQuestionResponses(operation.Questions),
-		Output:    bytes.Clone(operation.Output),
-		ReportID:  operation.ReportID,
-		Error:     operation.Error,
-		Events:    ToEventResponses(operation.Events),
-		CreatedAt: operation.CreatedAt,
-		UpdatedAt: operation.UpdatedAt,
+		ID:                 operation.ID,
+		Mission:            ToMissionResponse(operation.Mission),
+		Input:              bytes.Clone(operation.Input),
+		Status:             string(operation.Status),
+		Tasks:              ToTaskResponses(operation.Tasks),
+		Questions:          ToQuestionResponses(operation.Questions),
+		Output:             bytes.Clone(operation.Output),
+		ReportID:           operation.ReportID,
+		FinalizationTaskID: operation.FinalizationTaskID,
+		Error:              operation.Error,
+		Events:             ToEventResponses(operation.Events),
+		CreatedAt:          operation.CreatedAt,
+		UpdatedAt:          operation.UpdatedAt,
 	}
 	if operation.Preflight != nil {
 		preflight := ToPreflightResponse(*operation.Preflight)

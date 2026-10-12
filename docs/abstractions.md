@@ -11,11 +11,12 @@ This guide defines the data and decisions passed between them.
 | **Operation** | One run with specific input and a saved copy of the mission. | Review `https://defos.ai`, up to three pages. |
 | **Task** | One action assignment. The controller selects an agent when dispatching it. | Check one page's links. |
 | **Mission step** | Optional planning guidance that tasks can reference. It is not an action name or automatic workflow. | A declared step such as `quality-review`. |
-| **Report** | The output saved when Commander explicitly completes an operation. | Findings and limitations from the website review. |
+| **Report** | The immutable output saved when an operation completes explicitly or through its configured finalizer. | Findings and limitations from the website review. |
 
 `list_missions` gives a summary; `describe_mission` supplies the full definition.
-`starting_actions` guides initial assignments. Starting an operation still requires
-an initial task assignment. Omit `step_id` when the mission has no declared steps.
+`starting_actions` guides initial assignments. Missions with `start` queue their
+entry action automatically; other missions require an initial task assignment.
+Omit `step_id` when the mission has no declared steps.
 
 An operation keeps its mission snapshot through updates and restarts. Callers may
 supply a canonical lowercase UUID as `operation_id`; an existing ID is a conflict.
@@ -71,8 +72,8 @@ follows. Its `decision_by` is `code`, `model`, or `user`; its status is `pending
 `resolve_continuation` saves a decision and its queued tasks atomically.
 Its explicit `version` rejects stale decisions; refresh the task before retrying.
 `actions: []` closes a branch. Children record `parent_task_id`; the continuation
-records `created_task_ids`. Finishing all tasks still requires explicit operation
-completion, with no queued/running work or pending questions.
+records `created_task_ids`. Missions without `finalize` still require explicit
+operation completion, with no queued/running work or pending questions.
 
 ## Mission automation
 
@@ -101,10 +102,52 @@ the website mission follows discovery with its five proposed checks:
 | `continue: "when_each"` | Each generated child continues independently; the default. |
 | `continue: "when_all"` | Collect all children before applying their rules; if the group cannot continue automatically, expose one model decision. |
 | `decide: "model"` | Return the decision to Commander. |
+| `on_empty: "resolve"` | Close a successful branch with no proposals automatically; can be the entire rule for a terminal action. |
 
-Failures, absent proposals, unconfigured transitions and proposals outside a rule
-return to the model. Rules do not invent follow-up inputs. Changes affect new
+Failures, absent proposals without `on_empty`, unconfigured transitions and
+proposals outside a rule return to the model. Rules do not invent follow-up inputs. Changes affect new
 operations, which snapshot the mission when started.
+
+Missions can opt into automatic startup and report publication:
+
+```json
+{
+  "start": {"action_name": "collect", "input": {"mode": "standard"}},
+  "finalize": "summarize",
+  "required_actions": ["collect", "inspect", "summarize"],
+  "automations": {
+    "collect": {"run": ["collect", "inspect"], "continue": "when_each", "on_empty": "resolve"},
+    "inspect": {"on_empty": "resolve"}
+  }
+}
+```
+
+`start_operation` durably queues the configured entry action, merging supplied
+mission input over the action's default input object. The operation retains the
+original supplied input. Without `start`, initial task selection remains explicit.
+Both the start and finalizer actions must be declared in `required_actions`.
+
+Once every normal task has succeeded, all continuations are resolved and no
+question remains pending, the controller queues `finalize` once and records its
+ID as `finalization_task_id`. Further assignments are rejected while this accepted
+evidence snapshot is finalized. The finalizer receives an object with
+`operation_id`, the original `input`, and `tasks`: each task includes `id`,
+`action_name`, `status`, optional `error` and accepted `artifacts` descriptors.
+It reads artifact bytes through its configured file store and owns interpretation
+of the evidence. Raw task outputs are not copied into this handoff.
+
+The handoff is limited to 8 MiB and the operation's 10,000-task limit includes the
+finalizer. A bound failure preserves accepted results and exposes a model decision
+with an explanatory event. Failed or indeterminate tasks also remain reviewable;
+they are never treated as successful terminal branches.
+
+A successful finalizer must propose no further work and return output matching
+the mission's `output_schema`. The controller saves the immutable report before
+completing the operation, rechecks the settled graph and retries publication after
+transient failures or restart. The finalizer's task ID and completion timestamp
+identify the same report across retries. Restart preserves existing assignments
+and accepted execution outcomes. Missions without these fields keep their current
+startup and completion behavior.
 
 See the complete [website workflow](../apps/agents/web/README.md#workflow),
 [authoring follow-ups](../apps/agents/README.md#propose-follow-up-work), and

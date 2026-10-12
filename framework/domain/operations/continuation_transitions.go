@@ -33,6 +33,16 @@ func continueTask(op *Operation, taskID string, success bool) {
 		}
 	}
 	task.Continuation = c
+	if task.ID == op.FinalizationTaskID {
+		if success && task.Result != nil && len(task.Result.NextActions) == 0 {
+			if err := op.Mission.ValidateOutput(op.Input, task.Result.Output); err == nil {
+				c.DecisionBy, c.Status = DecisionCode, ContinuationResolved
+			} else {
+				op.AppendEvent(ContinuationReady, task.ID, "", "Finalizer output requires review: "+err.Error())
+			}
+		}
+		return
+	}
 	if parentCollects(op, *task) {
 		c.DecisionBy, c.Status = DecisionCode, ContinuationResolved
 		return
@@ -160,9 +170,13 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 	if len(op.Tasks)+len(actions) > 10000 {
 		return ErrTaskLimitExceeded
 	}
+	if op.FinalizationTaskID != "" && len(actions) > 0 {
+		return ErrOperationConflict
+	}
 	c.ProposedActions = actionmodel.CloneNextActions(actions)
 	c.Version++
 	createChildren(op, i, actions, false)
+	op.reconcileFinalization()
 	op.RefreshStatus()
 	op.AppendEvent(ContinuationResolvedEvent, taskID, "", "Model decision recorded")
 	op.UpdatedAt = time.Now().UTC()

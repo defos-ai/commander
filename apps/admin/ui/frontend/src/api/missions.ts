@@ -22,7 +22,8 @@ function isStep(value: unknown): value is MissionStep {
 function isAutomation(value: unknown): value is MissionAutomation {
   return isObject(value) && (value.run === undefined || isStringArray(value.run)) &&
     (value.continue === undefined || typeof value.continue === 'string') &&
-    (value.decide === undefined || typeof value.decide === 'string');
+    (value.decide === undefined || typeof value.decide === 'string') &&
+    (value.on_empty === undefined || typeof value.on_empty === 'string');
 }
 
 function isMissionName(value: unknown): value is string {
@@ -34,6 +35,10 @@ export function isMission(value: unknown): value is Mission {
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
+    (value.finalize === undefined || typeof value.finalize === 'string') &&
+    (value.start === undefined || (isObject(value.start) && typeof value.start.action_name === 'string' &&
+      (value.start.input === undefined || isObject(value.start.input)) &&
+      (value.start.reason === undefined || typeof value.start.reason === 'string'))) &&
     (value.steps === undefined || (Array.isArray(value.steps) && value.steps.every(isStep))) &&
     (value.automations === undefined || (isObject(value.automations) && Object.values(value.automations).every(isAutomation)));
 }

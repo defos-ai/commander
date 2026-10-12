@@ -59,7 +59,20 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	}
 	operation.Preflight = operations.AssessPreflight(definition, records)
 	operation.RefreshStatus()
-	operation.AppendEvent(operations.OperationStarted, "", "", "Awaiting the next action from the decision maker")
+	message := "Awaiting the next action from the decision maker"
+	if definition.Start != nil {
+		message = "Mission entry action will start automatically"
+	}
+	operation.AppendEvent(operations.OperationStarted, "", "", message)
+	if definition.Start != nil {
+		action, err := definition.StartAction(input)
+		if err != nil {
+			return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+		}
+		if _, err := operation.QueueTask(operations.NewTask(operation.ID, "", "", action)); err != nil {
+			return operations.Operation{}, err
+		}
+	}
 	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
 		if err := r.store.Create(ctx, operation); err != nil {
 			if errors.Is(err, operations.ErrWriteUncertain) {
@@ -70,6 +83,7 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 			return operations.Operation{}, err
 		}
 		r.states[operation.ID] = &operationState{operation: operation, changed: make(chan struct{})}
+		r.signalScheduler()
 		return operation.Clone(), nil
 	})
 }

@@ -145,6 +145,7 @@ func (o *Operation) AnswerQuestion(questionID, answer string) error {
 			c.Version++
 		}
 		question.Status, question.Answer, question.AnsweredAt = QuestionAnswered, answer, &now
+		o.reconcileFinalization()
 		o.RefreshStatus()
 		o.AppendEvent(QuestionAnsweredEvent, "", question.ID, "Answer received; planning can continue")
 		o.UpdatedAt = time.Now().UTC()
@@ -176,6 +177,8 @@ func (o *Operation) ExpireQuestions(now time.Time) bool {
 		changed = true
 	}
 	if changed {
+		o.reconcileFinalization()
+		o.RefreshStatus()
 		o.UpdatedAt = time.Now().UTC()
 	}
 	return changed

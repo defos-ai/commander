@@ -63,6 +63,7 @@ func (o *Operation) FinishTask(result TaskResult) (bool, error) {
 	}
 	continueTask(o, result.TaskID, result.Status == TaskSucceeded)
 	refreshGroups(o)
+	o.reconcileFinalization()
 	o.RefreshStatus()
 	kind, message := TaskFinished, "Task finished; inspect its result or error"
 	if result.Status == TaskInterrupted {

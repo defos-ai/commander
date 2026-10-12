@@ -13,10 +13,9 @@ func automaticRule(mission missions.Mission, task Task) (missions.Automation, bo
 		return missions.Automation{}, false
 	}
 	actions := task.Continuation.ProposedActions
-	// A rule permits proposed work; it does not mean an empty result finishes
-	// the branch. Leave that decision to the model so the operation can continue.
+	// Closing an empty successful branch requires an explicit mission policy.
 	if len(actions) == 0 {
-		return missions.Automation{}, false
+		return rule, rule.OnEmpty == missions.ResolveEmpty
 	}
 	if err := actionmodel.ValidateNextActions(actions); err != nil {
 		return missions.Automation{}, false

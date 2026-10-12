@@ -1,4 +1,4 @@
-// Package runner owns operations while an external decision maker selects work.
+// Package runner owns operation scheduling, mission automation and decisions.
 package runner
 
 import (

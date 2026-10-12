@@ -5,6 +5,8 @@ export interface Mission {
   starting_actions: string[] | null;
   steps?: MissionStep[];
   automations?: Record<string, MissionAutomation>;
+  start?: { action_name: string; input?: Record<string, unknown>; reason?: string };
+  finalize?: string;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
 }
@@ -20,6 +22,7 @@ export interface MissionAutomation {
   run?: string[];
   continue?: string;
   decide?: string;
+  on_empty?: string;
 }
 
 export interface Action {

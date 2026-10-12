@@ -17,10 +17,13 @@ type Decision string
 
 const Model Decision = "model"
 
+const ResolveEmpty = "resolve"
+
 type Automation struct {
 	Run      []string     `json:"run,omitempty"`
 	Continue ContinueWhen `json:"continue,omitempty"`
 	Decide   Decision     `json:"decide,omitempty"`
+	OnEmpty  string       `json:"on_empty,omitempty"`
 }
 
 func (a Automation) Validate() error {
@@ -30,10 +33,13 @@ func (a Automation) Validate() error {
 	if a.Decide != "" && a.Decide != Model {
 		return fmt.Errorf("unsupported decision %q", a.Decide)
 	}
-	if len(a.Run) == 0 && a.Decide == "" || len(a.Run) > 0 && a.Decide != "" {
-		return errors.New("specify either run actions or decide model")
+	if a.OnEmpty != "" && a.OnEmpty != ResolveEmpty {
+		return fmt.Errorf("on_empty must be %q", ResolveEmpty)
 	}
-	if a.Decide == Model && a.Continue == WhenAll {
+	if len(a.Run) == 0 && a.Decide == "" && a.OnEmpty == "" || a.Decide != "" && (len(a.Run) > 0 || a.OnEmpty != "") {
+		return errors.New("specify run actions, on_empty resolve, or decide model")
+	}
+	if a.Decide == Model && a.Continue == WhenAll || a.Decide == "" && len(a.Run) == 0 && a.Continue != "" {
 		return errors.New("continue applies to generated children")
 	}
 	for _, action := range a.Run {
