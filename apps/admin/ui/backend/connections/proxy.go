@@ -56,6 +56,8 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
 	if value != nil {
 		request.SetBasicAuth(value.username, value.password)
 	}
+	// Both clients from resolveTarget enforce apiDialer checks before connecting;
+	// private access is limited to configured mappings and local API discovery.
 	response, err := client.Do(request)
 	if err != nil {
 		if failUnsafeTarget(w, err) {

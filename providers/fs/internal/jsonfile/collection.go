@@ -64,6 +64,8 @@ func OpenContext(ctx context.Context, path string) (*Collection, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Callers build paths from configured roots and fixed, validated or encoded
+	// components; Abs does not sanitize input. Root ancestors must be trusted.
 	if err := os.MkdirAll(filepath.Dir(absolute), 0700); err != nil {
 		return nil, err
 	}
@@ -145,6 +147,8 @@ func (c *Collection) Update(ctx context.Context, fn func([]byte) ([]byte, error)
 
 func (c *Collection) open() (*Collection, error) {
 	directory := filepath.Dir(c.path)
+	// Callers validate parent-path components. The identity check below detects
+	// replacement during open; os.Root pins the directory for this operation.
 	info, err := os.Lstat(directory)
 	if err != nil {
 		return nil, err

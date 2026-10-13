@@ -76,6 +76,8 @@ func readPage(ctx context.Context, client *http.Client, target *url.URL) (pageDo
 		return pageDocument{}, err
 	}
 	req.Header.Set("User-Agent", "Commander-Web-Agent/1.0")
+	// client must come from httpClient, which pins validated IPs and restricts
+	// redirect hostnames. Private targets are intentionally supported for reviews.
 	response, err := client.Do(req)
 	if err != nil {
 		return pageDocument{}, err

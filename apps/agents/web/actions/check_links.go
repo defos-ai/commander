@@ -78,6 +78,7 @@ func (a *CheckLinks) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 		result := Link{URL: link.String()}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, link.String(), nil)
 		req.Header.Set("User-Agent", "Commander-Web-Agent/1.0")
+		// Reuse httpClient's pinned IPs and redirect checks for same-hostname links.
 		response, err := client.Do(req)
 		if response != nil {
 			response.Body.Close()

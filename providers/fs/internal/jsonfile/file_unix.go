@@ -25,6 +25,7 @@ func openRootFile(root *os.Root, name string, create bool) (*os.File, error) {
 	if err != nil {
 		return nil, &os.PathError{Op: "openat", Path: name, Err: err}
 	}
+	// NewFile wraps the validated descriptor; name labels errors, not a path lookup.
 	return os.NewFile(uintptr(fd), name), nil
 }
 

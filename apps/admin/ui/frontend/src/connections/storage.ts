@@ -29,6 +29,8 @@ export function loadConnections(): Connection[] {
 
 export function saveConnections(connections: Connection[]): boolean {
   try {
+    // Callers can carry credential fields beyond Connection's type; keep this explicit projection.
+    // normalizeURL rejects userinfo, query strings and fragments before persistence.
     const metadata = connections.map(({ id, name, url }) => ({ id, name, url: normalizeURL(url) }));
     localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(metadata));
     return true;

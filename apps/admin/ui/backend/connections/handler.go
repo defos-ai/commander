@@ -84,6 +84,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// These are browser CSRF checks; direct HTTP clients can supply the same headers.
+// Access to this backend must be restricted at the deployment boundary.
 func (h *Handler) sameOrigin(r *http.Request) bool {
 	if r.Header.Get("X-Commander-UI") != "1" {
 		return false
@@ -156,6 +158,8 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	request.SetBasicAuth(value.username, value.password)
 	request.Header.Set("Accept", "application/json")
+	// resolveTarget returns a guarded client: apiDialer checks destination IPs
+	// before sending credentials, and newAPIClient disables redirects and proxies.
 	response, err := client.Do(request)
 	if err != nil {
 		if failUnsafeTarget(w, err) {

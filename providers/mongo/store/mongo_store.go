@@ -61,6 +61,8 @@ func (s *MongoStore) Find(ctx context.Context, collection string, filter, out an
 	return cursor.All(ctx, out)
 }
 
+// Filters are built by provider code; request-derived IDs are string values,
+// never BSON keys or operators. Do not pass client-decoded query documents.
 func (s *MongoStore) FindOne(ctx context.Context, collection string, filter, out any, opts ...options.Lister[options.FindOneOptions]) error {
 	return s.database.Collection(collection).FindOne(ctx, filter, opts...).Decode(out)
 }
