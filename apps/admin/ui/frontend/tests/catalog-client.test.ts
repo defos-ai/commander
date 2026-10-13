@@ -7,7 +7,7 @@ const url = 'https://commander.example/team';
 const credentials = { url, username: 'operator' };
 const action: Action = {
   name: 'capture-page', description: 'Capture a page in the browser', status: 'unavailable',
-  status_reason: 'Browser and API key are missing', required_permissions: ['network'],
+  status_reason: 'Browser and API key are missing',
   missing_requirements: [
     { kind: 'executable', name: 'chromium' },
     { kind: 'configuration', name: 'BROWSER_API_KEY', secret: true },
@@ -18,7 +18,7 @@ const agent: Agent = {
   id: 'browser-agent-0123abcd', type: 'browser-agent', status: 'working', stale: false,
   server: { ip_address: '10.0.0.2', hostname: 'agent-pod-1' },
   work: { action_name: 'capture-page', operation_id: 'operation-1', task_id: 'task-1', command_id: 'command-1' },
-  responsibilities: ['Review websites'], granted_permissions: ['network'], actions: [action],
+  responsibilities: ['Review websites'], actions: [action],
   discovery_scope: { paths: ['/usr/bin'], services: null }, config: { max_pages: 3 },
   observed_at: '2026-10-05T09:00:00.123456789Z', last_seen: '2026-10-05T09:00:01Z',
   last_heartbeat: '2026-10-05T09:00:00Z', lease_expires_at: '2026-10-05T09:00:45Z',
@@ -59,12 +59,12 @@ describe('agent and action catalogs', () => {
   it('accepts empty catalogs, nullable Go fields and unknown future status values', async () => {
     const nullableAction: Action = {
       name: 'future-action', description: '', status: 'preparing',
-      required_permissions: null, missing_requirements: null, input_schema: null, output_schema: null,
+      missing_requirements: null, input_schema: null, output_schema: null,
     };
     const nullableAgent: Agent = {
       id: 'future-agent', type: 'future', status: 'draining', stale: true,
       server: { ip_address: '', hostname: '' }, work: null, responsibilities: null,
-      granted_permissions: null, actions: null, discovery_scope: null, config: null,
+      actions: null, discovery_scope: null, config: null,
       last_seen: '0001-01-01T00:00:00Z', last_heartbeat: '0001-01-01T00:00:00Z',
     };
     respond({ items: [] }, { items: [] }, nullableAgent, nullableAction);
@@ -132,7 +132,6 @@ describe('agent and action catalogs', () => {
 
   it.each([
     { status_reason: { message: 'missing' } },
-    { required_permissions: ['network', 42] },
     { missing_requirements: [{ name: 'chromium' }] },
     { input_schema: [] },
     { output_schema: true },

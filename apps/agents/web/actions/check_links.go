@@ -30,10 +30,10 @@ type CheckLinksOutput struct {
 type CheckLinks struct{ *action.Base }
 
 func NewCheckLinks() *CheckLinks {
-	return &CheckLinks{action.NewBase(actionmodel.Action{Name: CheckLinksName, Description: "Check up to 40 unique links on the same hostname using HTTP GET, including HTTP(S) and port changes. Reports broken links and skipped external/non-HTTP links; does not follow forms or execute JavaScript.", RequiredPermissions: []string{"network-access"}, InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[CheckLinksOutput]()})}
+	return &CheckLinks{action.NewBase(actionmodel.Action{Name: CheckLinksName, Description: "Check up to 40 unique links on the same hostname using HTTP GET, including HTTP(S) and port changes. Reports broken links and skipped external/non-HTTP links; does not follow forms or execute JavaScript.", InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[CheckLinksOutput]()})}
 }
-func (a *CheckLinks) Run(ctx context.Context, raw json.RawMessage, grants []string) (action.Result, error) {
-	if err := a.Check(grants); err != nil {
+func (a *CheckLinks) Run(ctx context.Context, raw json.RawMessage) (action.Result, error) {
+	if err := a.Check(); err != nil {
 		return action.Result{}, err
 	}
 	var in PageInput

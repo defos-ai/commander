@@ -19,7 +19,7 @@ function isAgent(value: unknown): value is Agent {
     typeof value.status === 'string' && typeof value.stale === 'boolean' &&
     (value.work === undefined || value.work === null || isWork(value.work)) &&
     isObject(value.server) && typeof value.server.ip_address === 'string' && typeof value.server.hostname === 'string' &&
-    isNullableStringArray(value.responsibilities) && isNullableStringArray(value.granted_permissions) &&
+    isNullableStringArray(value.responsibilities) &&
     (value.actions === null || (Array.isArray(value.actions) && value.actions.every(isAction))) &&
     (value.discovery_scope === null || (isObject(value.discovery_scope) &&
       isNullableStringArray(value.discovery_scope.paths) && isNullableStringArray(value.discovery_scope.services))) &&

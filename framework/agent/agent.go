@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -28,12 +27,11 @@ type AgentConfig struct {
 	Type AgentType
 	// Server overrides host information. Missing fields use SERVER_IP_ADDRESS
 	// and SERVER_HOSTNAME, then local discovery, once at construction.
-	Server             ServerInfo
-	Responsibilities   []string
-	Actions            []action.Executor
-	GrantedPermissions []string
-	PublicConfig       json.RawMessage
-	Environment        environment.Environment
+	Server           ServerInfo
+	Responsibilities []string
+	Actions          []action.Executor
+	PublicConfig     json.RawMessage
+	Environment      environment.Environment
 	// ArtifactFileStore is required and is created by the host.
 	ArtifactFileStore artifacts.ArtifactFileStore
 	// Logger receives runtime events without action inputs or results. Nil is silent.
@@ -115,7 +113,6 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	}
 	config.Actions = append([]action.Executor(nil), config.Actions...)
 	config.Responsibilities = append([]string(nil), config.Responsibilities...)
-	config.GrantedPermissions = append([]string(nil), config.GrantedPermissions...)
 	config.PublicConfig = append(json.RawMessage(nil), config.PublicConfig...)
 	a := &Agent{config: config, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1)}
 	a.state.Store(&agentState{status: AgentIdle})
@@ -136,28 +133,14 @@ func (a *Agent) Describe() AgentSnapshot {
 	state := a.state.Load()
 	description := AgentSnapshot{
 		ID: a.ID(), Type: a.config.Type, Status: state.status,
-		Work:               state.work.Clone(),
-		Server:             a.config.Server,
-		Responsibilities:   append([]string(nil), a.config.Responsibilities...),
-		GrantedPermissions: append([]string(nil), a.config.GrantedPermissions...),
-		DiscoveryScope:     state.scope.Clone(), Config: append(json.RawMessage(nil), a.config.PublicConfig...),
+		Work:             state.work.Clone(),
+		Server:           a.config.Server,
+		Responsibilities: append([]string(nil), a.config.Responsibilities...),
+		DiscoveryScope:   state.scope.Clone(), Config: append(json.RawMessage(nil), a.config.PublicConfig...),
 		Actions: make([]actionmodel.Action, 0, len(a.config.Actions)),
 	}
 	for _, instance := range a.config.Actions {
-		d := instance.Action()
-		for _, permission := range d.RequiredPermissions {
-			if !slices.Contains(a.config.GrantedPermissions, permission) {
-				if d.StatusReason == "" {
-					d.StatusReason = "missing permission: " + permission
-				}
-				d.Status = action.Unavailable
-				requirement := actionmodel.Requirement{Kind: actionmodel.PermissionRequirement, Name: permission}
-				if !slices.Contains(d.MissingRequirements, requirement) {
-					d.MissingRequirements = append(d.MissingRequirements, requirement)
-				}
-			}
-		}
-		description.Actions = append(description.Actions, d)
+		description.Actions = append(description.Actions, instance.Action())
 	}
 
 	return description
@@ -260,11 +243,6 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 	for _, t := range a.config.Actions {
 		description := t.Action()
 		if description.Name == call.ActionName {
-			for _, permission := range description.RequiredPermissions {
-				if !slices.Contains(a.config.GrantedPermissions, permission) {
-					return ActionOutput{}, fmt.Errorf("missing permission: %s", permission)
-				}
-			}
 			if description.Status != action.Ready {
 				return ActionOutput{}, fmt.Errorf("action %q is not ready; run discovery first", call.ActionName)
 			}
@@ -272,7 +250,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			if len(input) == 0 {
 				input = json.RawMessage(`{}`)
 			}
-			result, err := t.Run(ctx, input, append([]string(nil), a.config.GrantedPermissions...))
+			result, err := t.Run(ctx, input)
 			if err != nil {
 				return ActionOutput{}, err
 			}

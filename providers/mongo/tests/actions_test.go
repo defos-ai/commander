@@ -20,7 +20,6 @@ func TestActionMongoStore(t *testing.T) {
 	original := actions.Action{
 		Name: "alpha", Description: "Inspect a page", Status: actions.Unknown,
 		StatusReason:        "Readiness is determined by the agent",
-		RequiredPermissions: []string{"network-access"},
 		MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Secret: true}},
 		InputSchema:         json.RawMessage(`{"type":"application-specific","x-example":9007199254740993}`),
 		OutputSchema:        json.RawMessage(`{"type":"object","x-example":18446744073709551615}`),
@@ -51,7 +50,7 @@ func TestActionMongoStore(t *testing.T) {
 
 	updated := original
 	updated.Description = "Inspect before release"
-	updated.StatusReason, updated.MissingRequirements, updated.RequiredPermissions = "", nil, nil
+	updated.StatusReason, updated.MissingRequirements = "", nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +79,6 @@ func TestActionMongoStoreRejectsInvalidAndCancelledWrites(t *testing.T) {
 		{name: "unavailable belongs to inventory", change: func(a *actions.Action) { a.Status = actions.Unavailable }},
 		{name: "unknown status value", change: func(a *actions.Action) { a.Status = "invalid" }},
 		{name: "invalid input schema", change: func(a *actions.Action) { a.InputSchema = json.RawMessage(`[]`) }},
-		{name: "invalid permission", change: func(a *actions.Action) { a.RequiredPermissions = []string{" "} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			invalid := original
@@ -148,9 +146,8 @@ func TestConcurrentActionUpserts(t *testing.T) {
 	for i := range writers {
 		item := actions.Action{
 			Name: "shared", Description: fmt.Sprintf("Revision %d", i), Status: actions.Unknown,
-			RequiredPermissions: []string{fmt.Sprintf("permission-%d", i)},
-			InputSchema:         json.RawMessage(fmt.Sprintf(`{"revision":%d}`, i)),
-			OutputSchema:        json.RawMessage(`{}`),
+			InputSchema:  json.RawMessage(fmt.Sprintf(`{"revision":%d}`, i)),
+			OutputSchema: json.RawMessage(`{}`),
 		}
 		revisions[item.Description] = item
 		separate := item

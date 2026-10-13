@@ -30,9 +30,8 @@ go run ./apps/agents/browser/cmd
 
 Connect the controller to the same `BUS_URL` and `STORAGE_URL`. Chromium or Google
 Chrome must be on `PATH`, or set an absolute executable path in `CHROMIUM_PATH`.
-The host grants `network-access` and `execute-command` by default. Missing browser
-configuration leaves these actions unavailable; the web agent can still run
-`review-website-no-browser` independently.
+Missing browser configuration leaves these actions unavailable; the web agent
+can still run `review-website-no-browser` independently.
 
 Compose supplies Chromium and sets `CHROMIUM_NO_SANDBOX=true` in its non-root
 container. Native runs keep sandboxing enabled by default. See

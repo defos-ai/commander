@@ -40,7 +40,6 @@ func (record Agent) Snapshot(now time.Time) Agent {
 func (record Agent) Clone() Agent {
 	record.Work = record.Work.Clone()
 	record.Responsibilities = slices.Clone(record.Responsibilities)
-	record.GrantedPermissions = slices.Clone(record.GrantedPermissions)
 	if record.DiscoveryScope != nil {
 		scope := *record.DiscoveryScope
 		scope.Paths = slices.Clone(scope.Paths)
@@ -50,7 +49,6 @@ func (record Agent) Clone() Agent {
 	record.Config = bytes.Clone(record.Config)
 	record.Actions = slices.Clone(record.Actions)
 	for i := range record.Actions {
-		record.Actions[i].RequiredPermissions = slices.Clone(record.Actions[i].RequiredPermissions)
 		record.Actions[i].MissingRequirements = slices.Clone(record.Actions[i].MissingRequirements)
 		record.Actions[i].InputSchema = bytes.Clone(record.Actions[i].InputSchema)
 		record.Actions[i].OutputSchema = bytes.Clone(record.Actions[i].OutputSchema)

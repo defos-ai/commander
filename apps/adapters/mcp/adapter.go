@@ -103,20 +103,20 @@ func NewServer(config Config) (*mcp.Server, error) {
 				return struct{}{}, frameworktesting.CleanContext(ctx, config.TestCleaner)
 			})
 	}
-	addTool(server, "list_actions", "List action names, descriptions and required permissions. Use describe_action for schemas and list_agents for current availability and grants.", emptySchema,
+	addTool(server, "list_actions", "List action names and descriptions. Use describe_action for schemas and list_agents for current availability.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Actions []actionSummary `json:"actions"`
 		}, error) {
 			items, err := config.ActionStore.List(ctx)
 			summaries := make([]actionSummary, 0, len(items))
 			for _, item := range items {
-				summaries = append(summaries, actionSummary{item.Name, item.Description, item.RequiredPermissions})
+				summaries = append(summaries, actionSummary{item.Name, item.Description})
 			}
 			return struct {
 				Actions []actionSummary `json:"actions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_action", "Read one action's full input/output schemas and required permissions. With agent_id, returns that agent's advertised definition and readiness; otherwise returns catalog metadata.", actionSchema,
+	addTool(server, "describe_action", "Read one action's full input/output schemas. With agent_id, returns that agent's advertised definition and readiness; otherwise returns catalog metadata.", actionSchema,
 		func(ctx context.Context, request ActionRequest) (actionmodel.Action, error) {
 			if request.AgentID == "" {
 				return config.ActionStore.Get(ctx, request.ActionName)
@@ -132,7 +132,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			}
 			return actionmodel.Action{}, fmt.Errorf("%w: %s on agent %s", actionmodel.ErrUnknownAction, request.ActionName, request.AgentID)
 		})
-	addTool(server, "list_agents", "List agent IDs, current work, hosts, freshness, grants and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details.", emptySchema,
+	addTool(server, "list_agents", "List agent IDs, current work, hosts, freshness and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details.", emptySchema,
 		func(ctx context.Context, _ struct{}) (agentList, error) {
 			agents, err := config.AgentStore.List(ctx)
 			if err != nil {

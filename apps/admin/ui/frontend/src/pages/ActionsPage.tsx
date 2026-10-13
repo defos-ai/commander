@@ -65,7 +65,6 @@ export function ActionsPage({ connection, credentials, onSignIn, selectedID: rou
         {visible.map(item => <li key={item.name}><button type="button" className="catalog-row"
           aria-label={t($ => $.actions.open, { name: item.name })} onClick={() => select(item.name)}>
           <span className="catalog-row-main"><span className="catalog-row-name">{item.name}</span><span className="catalog-row-description">{item.description}</span>
-            <span className="catalog-row-meta">{t($ => $.actions.permissionsCount, { count: item.required_permissions?.length ?? 0 })}</span>
           </span><ArrowUpRight size={18} aria-hidden="true" />
         </button></li>)}
       </ul> : <div className="catalog-empty">

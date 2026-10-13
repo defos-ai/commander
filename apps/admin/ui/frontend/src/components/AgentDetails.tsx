@@ -59,15 +59,13 @@ export function AgentDetails({ agent }: { agent: Agent }) {
             <ul className="catalog-tags">{action.missing_requirements?.map((requirement, index) => {
               const kind = requirement.kind;
               return <li key={`${index}:${kind}:${requirement.name}`}>
-              {kind === 'executable' || kind === 'configuration' || kind === 'permission' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>
+              {kind === 'executable' || kind === 'configuration' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>
               {requirement.secret && <> · {t($ => $.agents.secret)}</>}
             </li>; })}</ul>
           </div>}
-          <h3>{t($ => $.agents.requiredPermissions)}</h3><Labels values={action.required_permissions} />
         </details>
       </li>)}</ul> : <p className="catalog-muted">{t($ => $.agents.noActions)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.agents.responsibilities)}</h2><Labels values={agent.responsibilities} /></section>
-    <section className="catalog-section"><h2>{t($ => $.agents.permissions)}</h2><Labels values={agent.granted_permissions} /></section>
   </div>;
 }

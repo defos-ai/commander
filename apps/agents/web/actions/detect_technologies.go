@@ -52,14 +52,14 @@ type DetectTechnologies struct{ *action.Base }
 
 func NewDetectTechnologies() *DetectTechnologies {
 	return &DetectTechnologies{action.NewBase(actionmodel.Action{
-		Name:                DetectTechnologiesName,
-		Description:         "Inspect one HTTP response for Server/X-Powered-By headers, generator metadata, and recognizable JavaScript package/framework declarations. Reports explicit versions and evidence; does not fetch scripts, execute JavaScript, or assess vulnerabilities or current versions.",
-		RequiredPermissions: []string{"network-access"}, InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[DetectTechnologiesOutput](),
+		Name:        DetectTechnologiesName,
+		Description: "Inspect one HTTP response for Server/X-Powered-By headers, generator metadata, and recognizable JavaScript package/framework declarations. Reports explicit versions and evidence; does not fetch scripts, execute JavaScript, or assess vulnerabilities or current versions.",
+		InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[DetectTechnologiesOutput](),
 	})}
 }
 
-func (a *DetectTechnologies) Run(ctx context.Context, raw json.RawMessage, grants []string) (action.Result, error) {
-	if err := a.Check(grants); err != nil {
+func (a *DetectTechnologies) Run(ctx context.Context, raw json.RawMessage) (action.Result, error) {
+	if err := a.Check(); err != nil {
 		return action.Result{}, err
 	}
 	var in PageInput

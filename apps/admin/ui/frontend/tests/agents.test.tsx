@@ -7,7 +7,7 @@ import { AgentsPage } from '../src/pages/AgentsPage';
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
 const credentials = { username: 'operator', url: connection.url };
 const action: Action = {
-  name: 'check-accessibility', description: 'Check rendered accessibility.', status: 'ready', required_permissions: ['network'],
+  name: 'check-accessibility', description: 'Check rendered accessibility.', status: 'ready',
   input_schema: {}, output_schema: {},
 };
 const browserAction: Action = {
@@ -22,7 +22,7 @@ const agent: Agent = {
   id: 'browser-agent-a1234567', type: 'browser-agent', status: 'working',
   work: { action_name: 'check-accessibility', operation_id: 'operation-123', task_id: 'task-456', step_id: 'step-789', command_id: 'command-012' },
   server: { hostname: 'worker-west-1', ip_address: '10.0.0.12' },
-  responsibilities: ['Website quality'], actions: [action, browserAction], granted_permissions: ['network'],
+  responsibilities: ['Website quality'], actions: [action, browserAction],
   discovery_scope: null, config: { secret: 'DO-NOT-DISPLAY-CONFIG' },
   observed_at: '2026-10-05T10:01:00Z', last_seen: '2026-10-05T10:01:00Z', last_heartbeat: '2026-10-05T10:00:45Z',
   lease_expires_at: '2026-10-05T10:01:30Z', stale: false,
@@ -77,7 +77,6 @@ describe('agents browser', () => {
     for (const value of ['operation-123', 'task-456', 'step-789', 'command-012', '10.0.0.12', 'worker-west-1', 'Website quality']) {
       expect(screen.getByText(value)).toBeVisible();
     }
-    expect(screen.getByRole('heading', { name: 'Granted permissions' })).toBeVisible();
     expect(screen.getByText('Last heartbeat')).toBeVisible();
     expect(screen.getByText('Lease expires at')).toBeVisible();
     const summary = screen.getByText('capture-page').closest('summary');
@@ -92,7 +91,7 @@ describe('agents browser', () => {
   });
 
   it('keeps stale detail work explicitly historical and handles absent fields without inventing readiness', async () => {
-    const snapshot: Agent = { ...staleAgent, responsibilities: null, granted_permissions: null, actions: null,
+    const snapshot: Agent = { ...staleAgent, responsibilities: null, actions: null,
       observed_at: undefined, lease_expires_at: undefined, last_heartbeat: '0001-01-01T00:00:00Z' };
     mockAPI(url => url.endsWith('/api/v1/agents') ? Response.json({ items: [snapshot] }) : Response.json(snapshot));
     render(<AgentsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);

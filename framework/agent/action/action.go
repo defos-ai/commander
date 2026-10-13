@@ -33,10 +33,10 @@ type Result struct {
 type Executor interface {
 	Action() actionmodel.Action
 	Discover(context.Context, environment.Environment, *environment.DiscoveryScope) (Status, error)
-	Run(context.Context, json.RawMessage, []string) (Result, error)
+	Run(context.Context, json.RawMessage) (Result, error)
 }
 
-// Base publishes immutable readiness snapshots and checks permissions for extensions.
+// Base publishes immutable readiness snapshots for extensions.
 // Embed *Base, implement Run, and override Discover for external dependencies.
 type Base struct {
 	definition actionmodel.Action
@@ -53,7 +53,6 @@ func NewBase(definition actionmodel.Action) *Base {
 	definition.Status = Unknown
 	definition.StatusReason = ""
 	definition.MissingRequirements = nil
-	definition.RequiredPermissions = slices.Clone(definition.RequiredPermissions)
 	definition.InputSchema = bytes.Clone(definition.InputSchema)
 	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
 	return &Base{definition: definition}
@@ -67,7 +66,6 @@ func (b *Base) Action() actionmodel.Action {
 		definition.StatusReason = current.reason
 		definition.MissingRequirements = current.requirements
 	}
-	definition.RequiredPermissions = slices.Clone(definition.RequiredPermissions)
 	definition.MissingRequirements = slices.Clone(definition.MissingRequirements)
 	definition.InputSchema = bytes.Clone(definition.InputSchema)
 	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
@@ -94,13 +92,8 @@ func (b *Base) Discover(ctx context.Context, _ environment.Environment, _ *envir
 	return Ready, nil
 }
 
-func (b *Base) Check(grantedPermissions []string) error {
+func (b *Base) Check() error {
 	definition := b.Action()
-	for _, permission := range definition.RequiredPermissions {
-		if !slices.Contains(grantedPermissions, permission) {
-			return fmt.Errorf("missing permission: %s", permission)
-		}
-	}
 	if definition.Status != Ready {
 		return fmt.Errorf("action %q is not ready; run discovery first", definition.Name)
 	}

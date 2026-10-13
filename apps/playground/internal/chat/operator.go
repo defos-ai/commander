@@ -108,7 +108,7 @@ func (e *Engine) submitAnswer(answer answerRequest, operations map[string]bridge
 }
 
 // runAction submits explicit operator input without asking the model to choose
-// or approve an action. Controller validation and permission checks still apply.
+// or approve an action. Controller validation and readiness checks still apply.
 func (e *Engine) runAction(text string) {
 	operationID, rest, ok := strings.Cut(strings.TrimSpace(text), " ")
 	actionName, raw, hasInput := strings.Cut(strings.TrimSpace(rest), " ")

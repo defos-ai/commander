@@ -10,7 +10,6 @@ type RequirementKind string
 const (
 	ExecutableRequirement    RequirementKind = "executable"
 	ConfigurationRequirement RequirementKind = "configuration"
-	PermissionRequirement    RequirementKind = "permission"
 )
 
 // Requirements describe missing prerequisites, never configuration values or secrets.
@@ -25,7 +24,7 @@ func (r Requirement) Validate() error {
 		return errors.New("requirement name must not be blank")
 	}
 	switch r.Kind {
-	case ExecutableRequirement, ConfigurationRequirement, PermissionRequirement:
+	case ExecutableRequirement, ConfigurationRequirement:
 	default:
 		return errors.New("invalid requirement kind")
 	}

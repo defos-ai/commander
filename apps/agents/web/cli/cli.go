@@ -69,12 +69,11 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 		actions = selected
 	}
 	agent, err := web.NewWebAgent(agents.AgentConfig{
-		ID:                 agentID,
-		Actions:            actions,
-		GrantedPermissions: configuration.permissions,
-		ArtifactFileStore:  dependencies.ArtifactFileStore,
-		Logger:             logger,
-		HeartbeatInterval:  &configuration.heartbeatInterval,
+		ID:                agentID,
+		Actions:           actions,
+		ArtifactFileStore: dependencies.ArtifactFileStore,
+		Logger:            logger,
+		HeartbeatInterval: &configuration.heartbeatInterval,
 	})
 	if err != nil {
 		return err

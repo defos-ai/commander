@@ -71,7 +71,7 @@ type artifactAction struct {
 	result action.Result
 }
 
-func (a *artifactAction) Run(context.Context, json.RawMessage, []string) (action.Result, error) {
+func (a *artifactAction) Run(context.Context, json.RawMessage) (action.Result, error) {
 	return a.result, nil
 }
 

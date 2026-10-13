@@ -18,7 +18,6 @@ import (
 
 type config struct {
 	actionNames       []string
-	permissions       []string
 	busURL            string
 	storageURL        string
 	logLevel          string
@@ -31,12 +30,11 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	knownActions := browser.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
-	var actionNames, permissions, searchPaths string
+	var actionNames, searchPaths string
 	var busURL, storageURL string
 	flags := flag.NewFlagSet(serviceName, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
-	flags.StringVar(&permissions, "permissions", "", "Comma-separated permission grants; omitted uses host defaults, explicit empty denies all")
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Log level: debug, info, warn, error; overrides LOG_LEVEL")
@@ -79,13 +77,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		if !slices.Contains(knownActions, name) {
 			return config{}, fmt.Errorf("unknown action %q; available: %s", name, availableActions)
 		}
-	}
-	result.permissions = []string{"network-access", "execute-command"}
-	if provided["permissions"] {
-		result.permissions, err = parseList(permissions)
-	}
-	if err != nil {
-		return config{}, fmt.Errorf("permissions: %w", err)
 	}
 	if provided["search-paths"] {
 		paths := filepath.SplitList(searchPaths)

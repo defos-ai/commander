@@ -51,7 +51,7 @@
   completing operations. Agents upload bytes through `ArtifactFileStore`;
   controllers accept metadata through `ArtifactStore`. Bytes alone are not evidence.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
-  eligible candidates. The runner owns readiness, permission and capacity checks
+  eligible candidates. The runner owns readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
 - Keep registration ready only after recovery and consumers start. During
@@ -66,8 +66,8 @@
 - Discover executables and configuration through [`Environment`](agent/environment/environment.go).
   Missing requirements make only the affected action unavailable. Advertise
   secret names, never values, and recheck configuration during execution.
-- Grant permissions explicitly and preserve schema validation of action input,
-  output and proposed next actions. Public snapshots must remain independent.
+- Preserve schema validation of action input, output and proposed next actions.
+  Public snapshots must remain independent.
 
 ## Validation
 

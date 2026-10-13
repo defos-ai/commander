@@ -57,7 +57,7 @@ func TestCustomAgentSelectorChoosesFromEligibleCandidates(t *testing.T) {
 func TestAgentSelectorCannotMutateSnapshotsOrAddEligibleAgents(t *testing.T) {
 	config := fixture()
 	record := readyAgent(agentID)
-	record.GrantedPermissions = []string{"network-access"}
+	record.Responsibilities = []string{"Inspect websites"}
 	record.Actions[0].InputSchema = json.RawMessage(`{"type":"object"}`)
 	catalog := &selectionCatalog{records: []agents.Agent{record}}
 	want := record.Clone()
@@ -71,7 +71,7 @@ func TestAgentSelectorCannotMutateSnapshotsOrAddEligibleAgents(t *testing.T) {
 		if mutated.CompareAndSwap(false, true) {
 			selection.Task.Input[0] = '['
 			selection.Candidates[0].Agent.ID = "review-agent-00000099"
-			selection.Candidates[0].Agent.GrantedPermissions[0] = "altered"
+			selection.Candidates[0].Agent.Responsibilities[0] = "altered"
 			selection.Candidates[0].Agent.Actions[0].InputSchema[0] = '['
 			attempted <- struct{}{}
 			return selection.Candidates[0].Agent.ID, nil

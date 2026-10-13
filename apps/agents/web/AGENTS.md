@@ -3,12 +3,11 @@
 ## Entry points
 
 - [web_agent.go](web_agent.go) fixes the `web-agent` type and supplies a fresh
-  catalog for nil `Actions`; an explicitly empty catalog stays empty. The
-  constructor does not grant permissions.
+  catalog for nil `Actions`; an explicitly empty catalog stays empty.
 - [actions.go](actions.go) exposes the catalog; [actions/actions.go](actions/actions.go)
   owns HTTP action names and input schemas. Keep CLI selection aligned with it.
-- [cli/](cli/) configures the host and providers. HTTP actions need only
-  `network-access`; keep browser drivers and executable dependencies out of this module.
+- [cli/](cli/) configures the host and providers. Keep browser drivers and
+  executable dependencies out of this module.
 
 ## HTTP scope and proposals
 

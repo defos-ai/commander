@@ -27,7 +27,7 @@ is unknown. Cancelling an operation stops new dispatch; running actions may fini
 
 - **Agent type** identifies an implementation, such as `web-agent` or `browser-agent`. Its generated
   **agent ID** identifies one process. Several instances can share a type.
-- **Action** is an executable capability with input/output schemas, permissions and
+- **Action** is an executable capability with input/output schemas and
   readiness. It may use Go code, a host program or an external API.
 - **Agent snapshot** reports actions, status and current `work` (action, operation,
   task and command IDs). Work clears when execution ends. Stale snapshots describe
@@ -41,8 +41,8 @@ Missions refer to action names. MCP **tools** are client-facing endpoints such a
 
 **Discovery runs on each agent:** actions check their environment and report
 `ready` or `unavailable`, with a reason and structured `missing_requirements`.
-Requirements describe executables, configuration keys or permissions; secret values
-must never appear in them. Discovery does not install dependencies or grant permissions.
+Requirements describe executables or configuration keys; secret values
+must never appear in them. Discovery does not install dependencies or configure credentials.
 
 **Preflight runs on the controller:** it checks the mission's and steps' required
 actions against live inventory. Different agents can satisfy different requirements.

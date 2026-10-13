@@ -27,10 +27,10 @@ type CapturePageOutput struct {
 type CapturePage struct{ *browserAction }
 
 func NewCapturePage() *CapturePage {
-	return &CapturePage{&browserAction{Base: action.NewBase(actionmodel.Action{Name: CapturePageName, Description: "Capture desktop and mobile viewport PNG screenshots with Chromium and report horizontal overflow. Returns one artifact containing desktop and mobile images for visual review.", RequiredPermissions: []string{"network-access", "execute-command"}, InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[CapturePageOutput]()})}}
+	return &CapturePage{&browserAction{Base: action.NewBase(actionmodel.Action{Name: CapturePageName, Description: "Capture desktop and mobile viewport PNG screenshots with Chromium and report horizontal overflow. Returns one artifact containing desktop and mobile images for visual review.", InputSchema: json.RawMessage(pageInputSchema), OutputSchema: outputSchema[CapturePageOutput]()})}}
 }
-func (a *CapturePage) Run(ctx context.Context, raw json.RawMessage, grants []string) (action.Result, error) {
-	if err := a.Check(grants); err != nil {
+func (a *CapturePage) Run(ctx context.Context, raw json.RawMessage) (action.Result, error) {
+	if err := a.Check(); err != nil {
 		return action.Result{}, err
 	}
 	var in PageInput

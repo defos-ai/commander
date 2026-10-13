@@ -10,19 +10,18 @@ import (
 
 func ToAgentResponse(agent agents.Agent) models.AgentResponse {
 	response := models.AgentResponse{
-		ID:                 agent.ID,
-		Type:               string(agent.Type),
-		Status:             string(agent.Status),
-		Server:             models.AgentServerResponse{IPAddress: agent.Server.IPAddress, Hostname: agent.Server.Hostname},
-		Responsibilities:   slices.Clone(agent.Responsibilities),
-		Actions:            ToActionResponses(agent.Actions),
-		GrantedPermissions: slices.Clone(agent.GrantedPermissions),
-		Config:             bytes.Clone(agent.Config),
-		ObservedAt:         agent.ObservedAt,
-		LastSeen:           agent.LastSeen,
-		LastHeartbeat:      agent.LastHeartbeat,
-		LeaseExpiresAt:     agent.LeaseExpiresAt,
-		Stale:              agent.Stale,
+		ID:               agent.ID,
+		Type:             string(agent.Type),
+		Status:           string(agent.Status),
+		Server:           models.AgentServerResponse{IPAddress: agent.Server.IPAddress, Hostname: agent.Server.Hostname},
+		Responsibilities: slices.Clone(agent.Responsibilities),
+		Actions:          ToActionResponses(agent.Actions),
+		Config:           bytes.Clone(agent.Config),
+		ObservedAt:       agent.ObservedAt,
+		LastSeen:         agent.LastSeen,
+		LastHeartbeat:    agent.LastHeartbeat,
+		LeaseExpiresAt:   agent.LeaseExpiresAt,
+		Stale:            agent.Stale,
 	}
 	if agent.Work != nil {
 		response.Work = &models.AgentWorkResponse{

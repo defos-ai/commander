@@ -36,7 +36,7 @@ Create `apps/agents/<agent-type>` with the module path
 go work use ./apps/agents/<agent-type>
 ```
 
-Supply your agent type, action catalog, permission grants and artifact storage to
+Supply your agent type, action catalog and artifact storage to
 `agent.NewAgent`. The [provider factory](web/cli/factory.go) shows how to
 connect it to the bus and storage. For repository coding conventions, see
 [AGENTS.md](AGENTS.md).
@@ -46,14 +46,14 @@ connect it to the bus and storage. For repository coding conventions, see
 Use [`action.NewFunc`](../../framework/agent/action/func.go) for typed JSON
 input/output; it derives schemas from your Go types. For file attachments,
 implement [`action.Executor`](../../framework/agent/action/action.go) directly.
-Declare the action's name and required permissions, implement its behavior, then
+Declare the action's name, implement its behavior, then
 add its constructor to the [action catalog](web/actions/actions.go).
 [Check-SEO](web/actions/check_seo.go) is a small JSON action example.
 
 ### Action readiness
 
 Install required programs and supply settings at deployment. Missing dependencies
-or permissions make an action unavailable; other actions can still serve. See
+make an action unavailable; other actions can still serve. See
 [browser discovery](browser/actions/browser.go) for an implementation and
 [mission preflight](../../docs/abstractions.md#discovery-and-preflight) for how
 readiness affects scheduling. Each host's `--actions` flag selects its exposed

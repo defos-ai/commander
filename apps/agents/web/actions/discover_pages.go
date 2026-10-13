@@ -50,12 +50,12 @@ func NewDiscoverPagesNoBrowser() *DiscoverPages {
 
 func newDiscoverPages(name, description string, checks []string) *DiscoverPages {
 	return &DiscoverPages{
-		Base:   action.NewBase(actionmodel.Action{Name: name, Description: description, RequiredPermissions: []string{"network-access"}, InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"max_pages":{"type":"integer","minimum":1,"maximum":10,"default":3}},"required":["url"],"additionalProperties":false}`), OutputSchema: outputSchema[DiscoverPagesOutput]()}),
+		Base:   action.NewBase(actionmodel.Action{Name: name, Description: description, InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"max_pages":{"type":"integer","minimum":1,"maximum":10,"default":3}},"required":["url"],"additionalProperties":false}`), OutputSchema: outputSchema[DiscoverPagesOutput]()}),
 		checks: checks,
 	}
 }
-func (a *DiscoverPages) Run(ctx context.Context, raw json.RawMessage, grants []string) (action.Result, error) {
-	if err := a.Check(grants); err != nil {
+func (a *DiscoverPages) Run(ctx context.Context, raw json.RawMessage) (action.Result, error) {
+	if err := a.Check(); err != nil {
 		return action.Result{}, err
 	}
 	in := DiscoverPagesInput{MaxPages: 3}

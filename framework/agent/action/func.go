@@ -31,7 +31,7 @@ type FuncConfig[I, O any] struct {
 	NextActions func(context.Context, I, O) ([]NextAction, error)
 }
 
-// Func adapts a typed function to Executor. It checks discovery, permissions, schemas
+// Func adapts a typed function to Executor. It checks discovery, schemas
 // and, when implemented by I or *I, Validate() error before invoking the handler.
 // Each agent owns its Func instances; callbacks must honor context cancellation.
 type Func[I, O any] struct {
@@ -44,8 +44,8 @@ type Func[I, O any] struct {
 	outputSchema *jsonschema.Resolved
 }
 
-// NewFunc validates metadata and prepares schemas without running callbacks,
-// discovering dependencies or granting permissions.
+// NewFunc validates metadata and prepares schemas without running callbacks
+// or discovering dependencies.
 func NewFunc[I, O any](config FuncConfig[I, O]) (*Func[I, O], error) {
 	if strings.TrimSpace(config.Action.Name) == "" {
 		return nil, errors.New("action name must not be blank")
@@ -92,11 +92,11 @@ func (f *Func[I, O]) Discover(ctx context.Context, env environment.Environment, 
 	return status, err
 }
 
-func (f *Func[I, O]) Run(ctx context.Context, raw json.RawMessage, grants []string) (Result, error) {
+func (f *Func[I, O]) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	if err := f.Check(grants); err != nil {
+	if err := f.Check(); err != nil {
 		return Result{}, err
 	}
 	if err := validateObject(f.inputSchema, raw); err != nil {

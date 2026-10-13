@@ -12,32 +12,29 @@ import (
 // Listings carry selection and progress information. Schemas, configuration and
 // evidence stay in detail queries, rather than repeating on every inventory read.
 type actionSummary struct {
-	Name                string   `json:"name"`
-	Description         string   `json:"description"`
-	RequiredPermissions []string `json:"required_permissions"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type agentActionSummary struct {
 	Name                string                `json:"name"`
 	Status              actions.Status        `json:"status"`
 	StatusReason        string                `json:"status_reason,omitempty"`
-	RequiredPermissions []string              `json:"required_permissions"`
 	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
 }
 
 type agentSummary struct {
-	ID                 string               `json:"id"`
-	Type               agents.AgentType     `json:"type"`
-	Status             agents.AgentStatus   `json:"status"`
-	Work               *agents.Work         `json:"work,omitempty"`
-	Server             agents.ServerInfo    `json:"server"`
-	Responsibilities   []string             `json:"responsibilities,omitempty"`
-	Actions            []agentActionSummary `json:"actions"`
-	GrantedPermissions []string             `json:"granted_permissions"`
-	LastSeen           time.Time            `json:"last_seen"`
-	LastHeartbeat      time.Time            `json:"last_heartbeat"`
-	LeaseExpiresAt     time.Time            `json:"lease_expires_at,omitzero"`
-	Stale              bool                 `json:"stale"`
+	ID               string               `json:"id"`
+	Type             agents.AgentType     `json:"type"`
+	Status           agents.AgentStatus   `json:"status"`
+	Work             *agents.Work         `json:"work,omitempty"`
+	Server           agents.ServerInfo    `json:"server"`
+	Responsibilities []string             `json:"responsibilities,omitempty"`
+	Actions          []agentActionSummary `json:"actions"`
+	LastSeen         time.Time            `json:"last_seen"`
+	LastHeartbeat    time.Time            `json:"last_heartbeat"`
+	LeaseExpiresAt   time.Time            `json:"lease_expires_at,omitzero"`
+	Stale            bool                 `json:"stale"`
 }
 
 func summarizeAgent(agent agents.Agent) agentSummary {
@@ -45,13 +42,12 @@ func summarizeAgent(agent agents.Agent) agentSummary {
 	for _, action := range agent.Actions {
 		items = append(items, agentActionSummary{
 			Name: action.Name, Status: action.Status, StatusReason: action.StatusReason,
-			RequiredPermissions: action.RequiredPermissions,
 			MissingRequirements: action.MissingRequirements,
 		})
 	}
 	return agentSummary{
 		ID: agent.ID, Type: agent.Type, Status: agent.Status, Work: agent.Work, Server: agent.Server,
-		Responsibilities: agent.Responsibilities, Actions: items, GrantedPermissions: agent.GrantedPermissions,
+		Responsibilities: agent.Responsibilities, Actions: items,
 		LastSeen: agent.LastSeen, LastHeartbeat: agent.LastHeartbeat, LeaseExpiresAt: agent.LeaseExpiresAt, Stale: agent.Stale,
 	}
 }

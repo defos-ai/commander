@@ -62,7 +62,7 @@ func openAPIDocument() ([]byte, error) {
 		case "Mission":
 			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results or decide-next-actions. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. Failures and empty proposals also require model review."
 		case "ActionRequirement":
-			schema.Properties["kind"].Enum = []any{"executable", "configuration", "permission"}
+			schema.Properties["kind"].Enum = []any{"executable", "configuration"}
 		case "Action":
 			schema.Properties["status"].Description = "Discovered readiness, normally unknown, ready or unavailable. Check the selected agent's action state before dispatch."
 		case "Agent":

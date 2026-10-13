@@ -134,7 +134,7 @@ function Preflight({ preflight }: { preflight: OperationPreflight }) {
           {Boolean(agent.missing_requirements?.length) && <div className="operation-nested"><h4>{t($ => $.operations.missingRequirements)}</h4>
             <ul className="catalog-tags">{agent.missing_requirements?.map((requirement, index) => {
               const { kind } = requirement;
-              return <li key={index}>{kind === 'executable' || kind === 'configuration' || kind === 'permission' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>{requirement.secret && <> · {t($ => $.agents.secret)}</>}</li>;
+              return <li key={index}>{kind === 'executable' || kind === 'configuration' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>{requirement.secret && <> · {t($ => $.agents.secret)}</>}</li>;
             })}</ul>
           </div>}
         </div>)}

@@ -20,7 +20,6 @@ type Action struct {
 	Description         string          `json:"description"`
 	StatusReason        string          `json:"status_reason,omitempty"`
 	Status              Status          `json:"status"`
-	RequiredPermissions []string        `json:"required_permissions"`
 	MissingRequirements []Requirement   `json:"missing_requirements,omitempty"`
 	InputSchema         json.RawMessage `json:"input_schema"`
 	OutputSchema        json.RawMessage `json:"output_schema"`
@@ -31,11 +30,6 @@ type Action struct {
 func (a Action) Validate() error {
 	if strings.TrimSpace(a.Name) == "" {
 		return errors.New("action requires a name")
-	}
-	for _, permission := range a.RequiredPermissions {
-		if strings.TrimSpace(permission) == "" {
-			return errors.New("action permissions must not be blank")
-		}
 	}
 	for _, requirement := range a.MissingRequirements {
 		if err := requirement.Validate(); err != nil {

@@ -51,12 +51,6 @@ func AssessPreflight(mission missions.Mission, records []agents.Agent) *Prefligh
 
 func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness {
 	result := AgentReadiness{AgentID: agent.ID, MissingRequirements: slices.Clone(action.MissingRequirements)}
-	for _, permission := range action.RequiredPermissions {
-		requirement := actions.Requirement{Kind: actions.PermissionRequirement, Name: permission}
-		if !slices.Contains(agent.GrantedPermissions, permission) && !slices.Contains(result.MissingRequirements, requirement) {
-			result.MissingRequirements = append(result.MissingRequirements, requirement)
-		}
-	}
 	switch {
 	case agent.Stale:
 		result.Reason = "Agent heartbeat has expired"

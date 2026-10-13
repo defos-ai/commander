@@ -16,7 +16,7 @@
 - Reusable hosts also run inside Playground. Keep process exits, global signal
   handlers and UI-specific dependencies out of constructors and reusable `Run` code.
 
-## Actions, readiness and permissions
+## Actions and readiness
 
 - Use [action.NewFunc](../../framework/agent/action/func.go) for typed JSON actions;
   use [action.Executor](../../framework/agent/action/action.go) when execution needs
@@ -27,9 +27,7 @@
   disabling unrelated actions; report actionable requirement metadata.
 - Advertise secret names, never values. Recheck required configuration during
   execution and invalidate stale discovery state when rediscovering dependencies.
-- Declare required permissions on actions and grant permissions explicitly in host
-  configuration. Constructors must not silently grant their own requirements.
-- Catalog entries describe capabilities; per-agent readiness, grants and leases
+- Catalog entries describe capabilities; per-agent readiness and leases
   determine availability. Do not claim that installing one agent guarantees
   complete required-action coverage for a mission.
 - Keep HTTP/HTML actions in `web` and rendering actions in `browser`. Discovery
@@ -57,6 +55,6 @@ go vet ./apps/agents/browser/...
 ```
 
 [Unit CI](../../.github/workflows/test-unit.yml) covers the bundled host. Test
-discovery failures, permission boundaries and local fixtures without paid models
+discovery failures, readiness and local fixtures without paid models
 or public websites. Use [adapter scenarios](../../framework/tests/README.md#mcp-api-tests)
 for behavior spanning agents, controller persistence and mission automation.

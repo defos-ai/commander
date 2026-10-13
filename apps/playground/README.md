@@ -165,7 +165,7 @@ to include rendered accessibility and screenshots.
 | `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
 | `/credentials` | Show the all-in-one API login and MCP token. Also available during model setup. |
 | `/watch <operation-id>` | Follow saved work and resume model decisions. |
-| `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Questions and permission checks still apply. |
+| `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Pending questions and action readiness still apply. |
 | `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |
 | `/stop` or **Ctrl+C** | Stop this reply and clear queued messages; server-side work continues. |
 | `/clear` | Clear conversation after stopping the reply. |

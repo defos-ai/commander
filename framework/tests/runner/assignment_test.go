@@ -82,13 +82,11 @@ func TestControllerSelectsReadyAgentsAndRespectsCapacity(t *testing.T) {
 	unavailable := readyAgent(agentID)
 	unavailable.Actions[0].Status = actions.Unavailable
 	first, second := readyAgent("review-agent-00000002"), readyAgent("review-agent-00000003")
-	denied := readyAgent("review-agent-00000004")
-	denied.Actions[0].RequiredPermissions = []string{"network-access"}
 	stale := readyAgent("review-agent-00000005")
 	stale.Stale = true
 	busy := readyAgent("review-agent-00000006")
 	busy.Status = agents.AgentWorking
-	config.AgentCatalog.(*agentCatalog).set(denied, second, unavailable, stale, busy, first)
+	config.AgentCatalog.(*agentCatalog).set(second, unavailable, stale, busy, first)
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
 	op := start(t, r)

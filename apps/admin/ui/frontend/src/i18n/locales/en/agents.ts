@@ -60,8 +60,6 @@ export default {
   leaseExpiresAt: 'Lease expires at',
   notReported: 'Not reported',
   responsibilities: 'Responsibilities',
-  permissions: 'Granted permissions',
-  requiredPermissions: 'Required permissions',
   actions: 'Reported actions',
   actionsDescription: 'Readiness reported by this agent, including missing dependencies.',
   noActions: 'No actions reported.',
@@ -70,6 +68,5 @@ export default {
   requirementKinds: {
     executable: 'Executable',
     configuration: 'Configuration',
-    permission: 'Permission',
   },
 } as const;

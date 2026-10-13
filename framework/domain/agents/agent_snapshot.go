@@ -42,14 +42,13 @@ func (work *Work) Clone() *Work {
 // AgentSnapshot is the public state reported by an agent. The controller adds
 // liveness observations when storing it as an Agent.
 type AgentSnapshot struct {
-	ID                 string               `json:"id"`
-	Type               AgentType            `json:"type"`
-	Status             AgentStatus          `json:"status"`
-	Work               *Work                `json:"work,omitempty"`
-	Server             ServerInfo           `json:"server"`
-	Responsibilities   []string             `json:"responsibilities"`
-	Actions            []actionmodel.Action `json:"actions"`
-	GrantedPermissions []string             `json:"granted_permissions"`
-	DiscoveryScope     *DiscoveryScope      `json:"discovery_scope"`
-	Config             json.RawMessage      `json:"config"`
+	ID               string               `json:"id"`
+	Type             AgentType            `json:"type"`
+	Status           AgentStatus          `json:"status"`
+	Work             *Work                `json:"work,omitempty"`
+	Server           ServerInfo           `json:"server"`
+	Responsibilities []string             `json:"responsibilities"`
+	Actions          []actionmodel.Action `json:"actions"`
+	DiscoveryScope   *DiscoveryScope      `json:"discovery_scope"`
+	Config           json.RawMessage      `json:"config"`
 }

@@ -115,7 +115,7 @@ func TestDiscoveryRedirectScope(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			result, err := executor.Run(t.Context(), json.RawMessage(`{"url":"https://site.test","max_pages":1}`), []string{"network-access"})
+			result, err := executor.Run(t.Context(), json.RawMessage(`{"url":"https://site.test","max_pages":1}`))
 
 			if len(test.wantError) > 0 {
 				if err == nil {
@@ -181,7 +181,7 @@ func runAction(t *testing.T, executor action.Executor, input string) action.Resu
 	if _, err := executor.Discover(ctx, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	result, err := executor.Run(ctx, json.RawMessage(input), []string{"network-access"})
+	result, err := executor.Run(ctx, json.RawMessage(input))
 	if err != nil {
 		t.Fatal(err)
 	}

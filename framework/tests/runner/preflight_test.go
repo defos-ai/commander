@@ -36,8 +36,7 @@ func (c *agentCatalog) set(records ...agents.Agent) {
 func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 	ready := agents.Agent{AgentSnapshot: agents.AgentSnapshot{
 		ID: agentID, Status: agents.AgentReady,
-		Actions:            []actions.Action{{Name: "inspect", Status: actions.Ready, RequiredPermissions: []string{"network-access"}}},
-		GrantedPermissions: []string{"network-access"},
+		Actions: []actions.Action{{Name: "inspect", Status: actions.Ready}},
 	}}
 	tests := []struct {
 		name        string
@@ -54,14 +53,13 @@ func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 		{name: "undiscovered action", change: func(a *agents.Agent) { a.Actions[0].Status = actions.Unknown }},
 		{name: "missing executable", requirement: actions.Requirement{Kind: actions.ExecutableRequirement, Name: "browser"}},
 		{name: "missing configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "SERVICE_API_KEY", Secret: true}},
-		{name: "missing permission", change: func(a *agents.Agent) { a.GrantedPermissions = nil }, requirement: actions.Requirement{Kind: actions.PermissionRequirement, Name: "network-access"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			config := fixture()
 			config.MissionStore.(*missionStore).mission.RequiredActions = []string{"inspect"}
 			candidate := ready.Clone()
-			if test.requirement.Kind != "" && test.requirement.Kind != actions.PermissionRequirement {
+			if test.requirement.Kind != "" {
 				candidate.Actions[0].Status = actions.Unavailable
 				candidate.Actions[0].MissingRequirements = []actions.Requirement{test.requirement}
 			}

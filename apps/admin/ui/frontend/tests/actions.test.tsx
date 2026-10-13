@@ -8,7 +8,7 @@ const connection = { id: 'local', name: 'Local Commander', url: 'https://command
 const credentials = { username: 'operator', url: connection.url };
 const action: Action = {
   name: 'capture-page', description: 'Capture a screenshot of a page.', status: 'unavailable',
-  status_reason: 'Chromium and configuration are missing.', required_permissions: ['network-access'],
+  status_reason: 'Chromium and configuration are missing.',
   missing_requirements: [{ kind: 'executable', name: 'chromium' }, { kind: 'configuration', name: 'BROWSER_TOKEN', secret: true }],
   input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string', description: 'Page to capture' } } },
   output_schema: { type: 'object', properties: { width: { type: 'integer' } } },
@@ -37,11 +37,10 @@ describe('actions browser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'View action capture-page' }));
 
-    expect(await screen.findByRole('heading', { name: 'Required permissions' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Missing requirements' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'capture-page', level: 1 })).toHaveFocus();
     expect(screen.getByText('Unavailable')).toBeVisible();
     expect(screen.getByText('Chromium and configuration are missing.')).toBeVisible();
-    expect(screen.getByText('network-access')).toBeVisible();
     expect(screen.getByText('chromium')).toBeVisible();
     expect(screen.getByText('BROWSER_TOKEN')).toBeVisible();
     expect(screen.getByText(/Secret configuration/)).toBeVisible();
@@ -67,7 +66,7 @@ describe('actions browser', () => {
   });
 
   it('handles empty catalogs, nullable details and new status values without claiming readiness', async () => {
-    const minimal: Action = { name: 'custom-action', description: 'A custom action.', status: 'maintenance', required_permissions: null, missing_requirements: null, input_schema: null, output_schema: null };
+    const minimal: Action = { name: 'custom-action', description: 'A custom action.', status: 'maintenance', missing_requirements: null, input_schema: null, output_schema: null };
     let items: Action[] = [];
     mockAPI(url => url.endsWith('/api/v1/actions') ? Response.json({ items }) : Response.json(minimal));
     render(<ActionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
@@ -80,7 +79,6 @@ describe('actions browser', () => {
 
     expect(await screen.findByText('No missing requirements reported.')).toBeVisible();
     expect(screen.getByText('maintenance')).toHaveAttribute('data-tone', 'muted');
-    expect(screen.getByText('None specified')).toBeVisible();
     expect(screen.getAllByText('No schema specified.')).toHaveLength(2);
   });
 
@@ -142,6 +140,6 @@ describe('actions browser', () => {
     await act(async () => finish(Response.json(action)));
 
     expect(await screen.findByRole('button', { name: 'View action capture-page' })).toBeVisible();
-    expect(screen.queryByRole('heading', { name: 'Required permissions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Availability' })).not.toBeInTheDocument();
   });
 });

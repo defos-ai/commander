@@ -20,15 +20,11 @@ export function ActionDetails({ action }: { action: Action }) {
       {hasReadiness && action.status_reason && <p>{action.status_reason}</p>}
       <p className="catalog-muted">{t($ => $.actions.readinessNote)}</p>
     </section>
-    <section className="catalog-section"><h2>{t($ => $.actions.permissions)}</h2>
-      {action.required_permissions?.length ? <ul className="catalog-tags">{action.required_permissions.map(permission => <li key={permission}>{permission}</li>)}</ul>
-        : <p className="catalog-muted">{t($ => $.actions.none)}</p>}
-    </section>
     {hasReadiness && <section className="catalog-section"><h2>{t($ => $.actions.requirements)}</h2>
       {action.missing_requirements?.length ? <dl className="detail-list">{action.missing_requirements.map((requirement, index) => {
         const kind = requirement.kind;
         return <div key={`${kind}:${requirement.name}:${index}`}>
-          <dt>{kind === 'executable' || kind === 'configuration' || kind === 'permission' ? t($ => $.actions.requirementKinds[kind]) : kind}</dt>
+          <dt>{kind === 'executable' || kind === 'configuration' ? t($ => $.actions.requirementKinds[kind]) : kind}</dt>
           <dd><code>{requirement.name}</code>{requirement.secret && <span className="catalog-muted"> · {t($ => $.actions.secret)}</span>}</dd>
         </div>;
       })}</dl> : <p className="catalog-muted">{t($ => $.actions.noRequirements)}</p>}

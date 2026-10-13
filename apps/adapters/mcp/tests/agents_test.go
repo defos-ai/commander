@@ -55,6 +55,21 @@ func TestAgentsAndActions(t *testing.T) {
 	if len(action.InputSchema) == 0 || len(action.OutputSchema) == 0 || action.Status != actions.Ready {
 		t.Fatalf("missing schema or readiness: %+v", action)
 	}
+	for _, query := range []struct {
+		name string
+		args object
+	}{
+		{"list_agents", object{}},
+		{"list_actions", object{}},
+		{"describe_agent", object{"agent_id": webID}},
+		{"describe_action", object{"agent_id": webID, "action_name": "check-seo"}},
+	} {
+		var raw json.RawMessage
+		a.call(query.name, query.args, &raw)
+		if strings.Contains(string(raw), `"required_permissions"`) || strings.Contains(string(raw), `"granted_permissions"`) {
+			t.Fatalf("%s still publishes application action permissions: %s", query.name, raw)
+		}
+	}
 
 	tools, err := a.session.ListTools(a.ctx, nil)
 	if err != nil {

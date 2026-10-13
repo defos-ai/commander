@@ -145,6 +145,13 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 			t.Fatalf("OpenAPI must publish controller %s as a required string", name)
 		}
 	}
+	if document.Components.Schemas["Action"].Properties["required_permissions"] != nil || document.Components.Schemas["Agent"].Properties["granted_permissions"] != nil {
+		t.Fatal("OpenAPI must not publish application action permissions")
+	}
+	requirement := document.Components.Schemas["ActionRequirement"]
+	if kind := requirement.Properties["kind"]; kind == nil || len(kind.Enum) != 2 || kind.Enum[0] != "executable" || kind.Enum[1] != "configuration" {
+		t.Fatal("OpenAPI must describe executable and configuration requirements")
+	}
 	for _, path := range []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/{controller_id}", "/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/graph", "/api/v1/operations/{operation_id}/report", "/api/v1/reports/{report_id}", "/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}"} {
 		if document.Paths[path].Get.Responses["200"] == nil {
 			t.Errorf("OpenAPI omitted GET %s", path)

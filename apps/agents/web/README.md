@@ -19,8 +19,8 @@ From the repository root:
 go run ./apps/agents/web/cmd
 ```
 
-Connect the controller to the same `BUS_URL` and `STORAGE_URL`. The host grants
-`network-access` by default. See [deployment](../../../docs/deployment.md).
+Connect the controller to the same `BUS_URL` and `STORAGE_URL`.
+See [deployment](../../../docs/deployment.md).
 
 Compose starts two web agents and one [browser agent](../browser/README.md):
 

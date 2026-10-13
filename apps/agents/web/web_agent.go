@@ -9,7 +9,7 @@ type WebAgent struct {
 }
 
 // NewWebAgent supplies a fresh HTTP catalog when config.Actions is
-// nil. An explicitly empty catalog stays empty. It never grants permissions.
+// nil. An explicitly empty catalog stays empty.
 func NewWebAgent(config agents.AgentConfig) (*WebAgent, error) {
 	config.Type = WebAgentType
 	if config.Responsibilities == nil {

@@ -4,9 +4,9 @@
 
 - [browser_agent.go](browser_agent.go) fixes the `browser-agent` type and supplies
   fresh rendering actions for nil `Actions`; an explicitly empty catalog stays
-  empty. The constructor does not grant permissions.
+  empty.
 - [actions.go](actions.go) exposes the two-action catalog.
-  [cli/](cli/) configures providers and grants `network-access` and `execute-command`.
+  [cli/](cli/) configures the host and providers.
 - HTTP crawling and static checks belong to the [web agent](../web/README.md).
   Mission rules, not either agent, own automatic transitions.
 

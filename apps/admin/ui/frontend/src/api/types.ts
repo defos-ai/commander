@@ -28,7 +28,6 @@ export interface Action {
   description: string;
   status: string;
   status_reason?: string;
-  required_permissions: string[] | null;
   missing_requirements?: ActionRequirement[] | null;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
@@ -48,7 +47,6 @@ export interface Agent {
   server: { ip_address: string; hostname: string };
   responsibilities: string[] | null;
   actions: Action[] | null;
-  granted_permissions: string[] | null;
   discovery_scope: { paths: string[] | null; services: string[] | null } | null;
   config: unknown;
   observed_at?: string;
