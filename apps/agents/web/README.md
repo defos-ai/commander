@@ -53,6 +53,11 @@ defaults to three pages and allows ten. Subdomains, `www` variants, sitemaps and
 JavaScript-only routes are excluded. Redirects to another hostname require an
 operator scope decision. Link checks inspect at most 40 links.
 
+Public, internal and localhost sites are supported. Each action pins its hostname
+to its initial validated IP addresses, including across redirects and port changes.
+Metadata, link-local and reserved addresses are blocked. HTTP proxy environment
+variables are not used. Run agents only on networks they are authorized to inspect.
+
 SEO checks use static HTML. Technology indicators are declarations, not verified
 runtime use or vulnerability findings; scripts are neither downloaded nor executed.
 

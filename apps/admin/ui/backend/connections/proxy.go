@@ -18,7 +18,8 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := target.String()
-	address, public, err := endpoint(h.resolveTarget(target), r.URL.Query().Get("path"))
+	upstream, client := h.resolveTarget(target)
+	address, public, err := endpoint(upstream, r.URL.Query().Get("path"))
 	if err != nil || (public && r.Method == http.MethodPost) {
 		fail(w, http.StatusBadRequest, "Invalid API endpoint.")
 		return
@@ -55,8 +56,11 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
 	if value != nil {
 		request.SetBasicAuth(value.username, value.password)
 	}
-	response, err := h.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
+		if failUnsafeTarget(w, err) {
+			return
+		}
 		fail(w, http.StatusBadGateway, "API request did not complete. Check its outcome before retrying a command.")
 		return
 	}

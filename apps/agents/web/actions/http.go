@@ -39,8 +39,14 @@ func sameHostname(a, b *url.URL) bool {
 	return a != nil && b != nil && a.Hostname() != "" && strings.EqualFold(a.Hostname(), b.Hostname())
 }
 
-func httpClient(scope *url.URL) *http.Client {
-	return &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+func httpClient(ctx context.Context, scope *url.URL) (*http.Client, error) {
+	resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	policy, err := resolveNetwork(resolveCtx, scope.Hostname(), lookupWebsite)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{Transport: policy.transport(), Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return errors.New("redirect limit reached")
 		}
@@ -51,7 +57,7 @@ func httpClient(scope *url.URL) *http.Client {
 			return fmt.Errorf("redirect to %q leaves website scope %q; operator approval is required before reviewing hostname %q", req.URL.String(), scope.Hostname(), req.URL.Hostname())
 		}
 		return nil
-	}}
+	}}, nil
 }
 
 type pageDocument struct {

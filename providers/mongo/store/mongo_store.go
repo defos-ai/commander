@@ -65,7 +65,7 @@ func (s *MongoStore) FindOne(ctx context.Context, collection string, filter, out
 	return s.database.Collection(collection).FindOne(ctx, filter, opts...).Decode(out)
 }
 
-func (s *MongoStore) GetByID(ctx context.Context, collection string, id, out any) error {
+func (s *MongoStore) GetByID(ctx context.Context, collection, id string, out any) error {
 	return s.FindOne(ctx, collection, bson.M{"_id": id}, out)
 }
 

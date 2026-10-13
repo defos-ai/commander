@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +24,7 @@ type Handler struct {
 	apiUpstreams map[string]string
 	sessions     *sessions
 	client       *http.Client
+	mappedClient *http.Client
 	now          func() time.Time
 }
 
@@ -45,15 +45,8 @@ func NewHandler(config Config) (*Handler, error) {
 		return nil, fmt.Errorf("api-upstreams: %w", err)
 	}
 	h.apiUpstreams = upstreams
-	h.client = &http.Client{
-		Timeout:       30 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Transport: &http.Transport{
-			DialContext:         (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-			TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 25 * time.Second,
-			IdleConnTimeout: 90 * time.Second, MaxIdleConns: 32, MaxIdleConnsPerHost: 8, MaxConnsPerHost: 64,
-		},
-	}
+	h.client = newAPIClient(false)
+	h.mappedClient = newAPIClient(true)
 	h.sessions = newSessions(h.now)
 	return h, nil
 }
@@ -61,6 +54,7 @@ func NewHandler(config Config) (*Handler, error) {
 func (h *Handler) Close() {
 	h.sessions.close()
 	h.client.CloseIdleConnections()
+	h.mappedClient.CloseIdleConnections()
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +147,8 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 	value := &credentials{username: input.Username, password: input.Password}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	address, _, _ := endpoint(h.resolveTarget(target), "/api/v1/missions")
+	upstream, client := h.resolveTarget(target)
+	address, _, _ := endpoint(upstream, "/api/v1/missions")
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
 	if err != nil {
 		fail(w, http.StatusBadGateway, "Could not connect to this API.")
@@ -161,8 +156,11 @@ func (h *Handler) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	request.SetBasicAuth(value.username, value.password)
 	request.Header.Set("Accept", "application/json")
-	response, err := h.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
+		if failUnsafeTarget(w, err) {
+			return
+		}
 		fail(w, http.StatusBadGateway, "Could not connect to this API.")
 		return
 	}

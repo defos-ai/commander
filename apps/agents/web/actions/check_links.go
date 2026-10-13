@@ -46,7 +46,11 @@ func (a *CheckLinks) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	client := httpClient(target)
+	client, err := httpClient(ctx, target)
+	if err != nil {
+		return action.Result{}, err
+	}
+	defer client.CloseIdleConnections()
 	page, err := readPage(ctx, client, target)
 	if err != nil {
 		return action.Result{}, err

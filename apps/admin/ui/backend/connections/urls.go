@@ -3,6 +3,7 @@ package connections
 import (
 	"errors"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"path"
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-func (h *Handler) resolveTarget(base *url.URL) *url.URL {
+func (h *Handler) resolveTarget(base *url.URL) (*url.URL, *http.Client) {
 	port := base.Port()
 	if port == "" {
 		port = "80"
@@ -21,9 +22,9 @@ func (h *Handler) resolveTarget(base *url.URL) *url.URL {
 	if upstream, ok := h.apiUpstreams[normalizedHostPort(base.Hostname(), port)]; ok {
 		result := *base
 		result.Host = upstream
-		return &result
+		return &result, h.mappedClient
 	}
-	return base
+	return base, h.client
 }
 
 func parseAPIUpstreams(value string) (map[string]string, error) {

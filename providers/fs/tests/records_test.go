@@ -242,9 +242,14 @@ func TestRecordsNoOpRetryConfirmsDirectoryDurability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restore := denyDirectoryRead(t, dir)
-	err = records.Update(t.Context(), func(map[string]json.RawMessage) error { return nil })
-	restore()
+	var restore func()
+	err = records.Update(t.Context(), func(map[string]json.RawMessage) error {
+		restore = denyDirectoryRead(t, dir)
+		return nil
+	})
+	if restore != nil {
+		restore()
+	}
 	if !errors.Is(err, jsonfile.ErrWriteUncertain) || !errors.Is(err, os.ErrPermission) {
 		t.Fatalf("no-op retry must report failure to confirm manifest durability: %v", err)
 	}

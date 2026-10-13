@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/subtle"
 	"log/slog"
 	"net"
@@ -28,10 +27,9 @@ func newMCPHandler(server *sdkmcp.Server, logger *slog.Logger, allowedHosts []st
 }
 
 func protectBearer(credentials host.BearerCredentials, next http.Handler) http.Handler {
-	expected := sha256.Sum256([]byte(credentials.Token))
+	expected := []byte(credentials.Token)
 	verify := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-		actual := sha256.Sum256([]byte(token))
-		if subtle.ConstantTimeCompare(actual[:], expected[:]) != 1 {
+		if subtle.ConstantTimeCompare([]byte(token), expected) != 1 {
 			return nil, auth.ErrInvalidToken
 		}
 		return &auth.TokenInfo{UserID: "commander"}, nil

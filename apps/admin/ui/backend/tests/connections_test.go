@@ -51,7 +51,7 @@ func TestBrowserSessionConnectionsAndProxy(t *testing.T) {
 	defer other.Close()
 	firstURL, secondURL := "http://localhost:4274/first", other.URL+"/second"
 	handler, err := connections.NewHandler(connections.Config{
-		APIUpstreams: "localhost:4274=" + strings.TrimPrefix(upstream.URL, "http://"),
+		APIUpstreams: "localhost:4274=" + strings.TrimPrefix(upstream.URL, "http://") + "," + localMappings(upstream.URL, other.URL),
 		Now:          func() time.Time { return time.Unix(0, now.Load()) },
 	})
 	if err != nil {
@@ -170,7 +170,7 @@ func TestBrowserSessionRequestBoundaries(t *testing.T) {
 		io.WriteString(w, "{\"items\":[]}")
 	}))
 	defer upstream.Close()
-	handler, err := connections.NewHandler(connections.Config{})
+	handler, err := connections.NewHandler(connections.Config{APIUpstreams: localMappings(upstream.URL)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestBrowserSessionRedirectsAndSecureCookie(t *testing.T) {
 		http.Redirect(w, r, destination.URL, http.StatusTemporaryRedirect)
 	}))
 	defer upstream.Close()
-	handler, err := connections.NewHandler(connections.Config{PublicOrigin: "https://admin.example"})
+	handler, err := connections.NewHandler(connections.Config{PublicOrigin: "https://admin.example", APIUpstreams: localMappings(upstream.URL)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestOldUnauthorizedReplyPreservesNewLogin(t *testing.T) {
 			close(release)
 		}
 	}()
-	handler, err := connections.NewHandler(connections.Config{})
+	handler, err := connections.NewHandler(connections.Config{APIUpstreams: localMappings(upstream.URL)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,4 +390,13 @@ func assertConnections(t *testing.T, handler http.Handler, cookie *http.Cookie, 
 
 func proxyPath(target, path string) string {
 	return "/ui/proxy?" + url.Values{"url": {target}, "path": {path}}.Encode()
+}
+
+func localMappings(addresses ...string) string {
+	entries := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		host := strings.TrimPrefix(address, "http://")
+		entries = append(entries, host+"="+host)
+	}
+	return strings.Join(entries, ",")
 }

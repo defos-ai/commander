@@ -144,7 +144,7 @@ services:
       context: ../..
       dockerfile: apps/admin/ui/docker/Dockerfile
     environment:
-      UI_API_UPSTREAMS: localhost:14274=api:4274,127.0.0.1:14274=api:4274
+      UI_API_UPSTREAMS: localhost:14274=api:4274,127.0.0.1:14274=api:4274,api-secondary:4274=api-secondary:4274
     ports:
       - "127.0.0.1:14275:4275"
     depends_on:

@@ -7,31 +7,31 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func openNoFollow(path string, create bool) (*os.File, error) {
-	name, err := windows.UTF16PtrFromString(path)
+func openRootFile(root *os.Root, name string, create bool) (*os.File, error) {
+	flags := os.O_RDONLY | windows.FILE_FLAG_OPEN_REPARSE_POINT
+	if create {
+		flags = os.O_RDWR | windows.FILE_FLAG_OPEN_REPARSE_POINT
+	}
+	file, err := root.OpenFile(name, flags, 0600)
+	if create && errors.Is(err, os.ErrNotExist) {
+		file, err = root.OpenFile(name, flags|os.O_CREATE|os.O_EXCL, 0600)
+		if errors.Is(err, os.ErrExist) {
+			file, err = root.OpenFile(name, flags, 0600)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	access, disposition := uint32(windows.GENERIC_READ), uint32(windows.OPEN_EXISTING)
-	if create {
-		access |= windows.GENERIC_WRITE
-		disposition = windows.OPEN_ALWAYS
-	}
-	handle, err := windows.CreateFile(name, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
-		nil, disposition, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
-	if err != nil {
-		return nil, &os.PathError{Op: "open", Path: path, Err: err}
-	}
 	var info windows.ByHandleFileInformation
-	err = windows.GetFileInformationByHandle(handle, &info)
+	err = windows.GetFileInformationByHandle(windows.Handle(file.Fd()), &info)
 	if err == nil && info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 		err = errors.New("JSON collection and lock paths must not be reparse points")
 	}
 	if err != nil {
-		windows.CloseHandle(handle)
+		file.Close()
 		return nil, err
 	}
-	return os.NewFile(uintptr(handle), path), nil
+	return file, nil
 }
 
 func tryLock(file *os.File) (bool, error) {
@@ -46,3 +46,5 @@ func tryLock(file *os.File) (bool, error) {
 // Windows does not support fsync on directories. The temporary file itself is
 // synced before the same-volume replacement.
 func syncDirectory(string) error { return nil }
+
+func syncRoot(*os.Root) error { return nil }

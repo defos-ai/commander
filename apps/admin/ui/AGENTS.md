@@ -21,8 +21,12 @@
   HttpOnly/SameSite cookies, Secure cookies for HTTPS, session expiry and rejected
   upstream redirects. Do not send API credentials through URLs or browser storage.
 - `UI_API_UPSTREAMS` maps host/port internally while the user sees the public URL.
-  Preserve URL scheme/base path; unmapped URLs connect directly. Keep this mapping
-  in the backend. Discovery checks the fixed local endpoint. Manual Add defaults
+  Preserve URL scheme/base path. Unmapped public APIs connect directly; private
+  APIs require an exact mapping, except loopback on the fixed local port 4274.
+  Keep public and mapped connection pools separate, validate every DNS address
+  and dial the checked IP. Always block metadata/link-local addresses and never
+  use environment proxies. Keep this mapping in the backend. Discovery checks
+  the fixed local endpoint. Manual Add defaults
   to `New connection` and username `commander`, with URL/password blank. Discovered
   local APIs retain their existing non-secret defaults. Re-login defaults to
   `commander`; editing an active session retains its supplied username.
@@ -31,6 +35,8 @@
   sign-in. Keep commands predefined in the frontend; never use commands returned
   by an API. Cancel discovery on URL changes and keep failed hints from blocking
   connection. Public discovery must never forward session credentials.
+- Validate URLs before writing saved connection metadata. Persist only IDs,
+  names and normalized URLs without credentials, query strings or fragments.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
 - Preserve routes across reload/back/forward, stale-request cancellation and

@@ -22,7 +22,7 @@ func TestAPIUpstreamHostMapping(t *testing.T) {
 				t.Fatal(err)
 			}
 			publicURL := base.String()
-			resolved := handler.resolveTarget(base)
+			resolved, _ := handler.resolveTarget(base)
 			if resolved.String() != test.want || base.String() != publicURL {
 				t.Fatalf("mapping must preserve the public URL and rewrite its host once: got %s, want %s, public %s", resolved, test.want, base)
 			}

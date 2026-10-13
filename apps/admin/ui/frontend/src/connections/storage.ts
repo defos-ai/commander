@@ -29,7 +29,7 @@ export function loadConnections(): Connection[] {
 
 export function saveConnections(connections: Connection[]): boolean {
   try {
-    const metadata = connections.map(({ id, name, url }) => ({ id, name, url }));
+    const metadata = connections.map(({ id, name, url }) => ({ id, name, url: normalizeURL(url) }));
     localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(metadata));
     return true;
   } catch {

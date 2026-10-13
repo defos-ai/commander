@@ -41,7 +41,7 @@ export default {
     restoring: 'Restoring connections…',
     restoreError: 'Could not restore sign-ins. Check the UI server and sign in again.',
     removeError: 'Could not end this connection’s server session. The connection was not removed. Try again.',
-    accessError: 'The connection request was denied. Check your API access and try signing in again.',
+    accessError: 'Connection denied. Internal APIs need a UI_API_UPSTREAMS mapping on the UI server.',
     authenticationError: 'The API did not accept these credentials. Check the username and password.',
     degradedError: 'The API responded, but its database or catalog is unavailable. Check the service and API access settings.',
     unreachableError: 'Could not reach this API. Check the URL and whether the UI server can reach it.',

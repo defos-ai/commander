@@ -9,16 +9,23 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func openNoFollow(path string, create bool) (*os.File, error) {
+func openRootFile(root *os.Root, name string, create bool) (*os.File, error) {
+	directory, err := root.Open(".")
+	if err != nil {
+		return nil, err
+	}
+	defer directory.Close()
 	flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_CLOEXEC | unix.O_NONBLOCK
 	if create {
 		flags = unix.O_RDWR | unix.O_CREAT | unix.O_NOFOLLOW | unix.O_CLOEXEC | unix.O_NONBLOCK
 	}
-	fd, err := unix.Open(path, flags, 0600)
+	// openRegular accepts one local filename, so no parent traversal can occur
+	// between this directory handle and the final no-follow open.
+	fd, err := unix.Openat(int(directory.Fd()), name, flags, 0600)
 	if err != nil {
-		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+		return nil, &os.PathError{Op: "openat", Path: name, Err: err}
 	}
-	return os.NewFile(uintptr(fd), path), nil
+	return os.NewFile(uintptr(fd), name), nil
 }
 
 func tryLock(file *os.File) (bool, error) {
@@ -30,7 +37,16 @@ func tryLock(file *os.File) (bool, error) {
 }
 
 func syncDirectory(path string) error {
-	file, err := os.Open(path)
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return syncRoot(root)
+}
+
+func syncRoot(root *os.Root) error {
+	file, err := root.Open(".")
 	if err != nil {
 		return err
 	}

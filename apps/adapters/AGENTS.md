@@ -30,6 +30,9 @@
 - Secrets belong in environment variables or explicit in-memory overrides. Never
   log them. Compose alone may bootstrap the shared MCP token from its dedicated
   Docker volume; hosts still read process environment credentials.
+  Use `crypto/subtle` to compare supplied credentials with configured in-memory
+  values. Basic authentication must evaluate both username and password matches.
+  These adapters do not store password hashes or need a password-storage KDF.
   `commander-mcp credentials` is an explicit local lookup; on Linux it
   reads PID 1 only when that process uses the same executable. Lookup failures
   for a matching process must not fall back to a different environment token.

@@ -99,6 +99,30 @@ func TestMongoQueriesAndUpdates(t *testing.T) {
 	}
 }
 
+func TestMongoLookupTreatsIDsAsLiteralValues(t *testing.T) {
+	const collection = "literal_id_tests"
+	database := openStore(t, collection)
+	ctx := t.Context()
+	ids := []string{"ordinary", `{"$ne":null}`, `{"$gt":""}`, "$where", "nested.id"}
+	for _, id := range ids {
+		if err := database.Insert(ctx, collection, bson.M{"_id": id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range ids {
+		var found struct {
+			ID string `bson:"_id"`
+		}
+		if err := database.GetByID(ctx, collection, id, &found); err != nil || found.ID != id {
+			t.Fatalf("literal ID %q: found=%q, error=%v", id, found.ID, err)
+		}
+	}
+	var found bson.M
+	if err := database.GetByID(ctx, collection, `{"$exists":true}`, &found); !errors.Is(err, mongo.ErrNoDocuments) {
+		t.Fatalf("operator-looking ID matched a different document: %v", err)
+	}
+}
+
 func TestMongoTransactionCommitAndRollback(t *testing.T) {
 	const collection = "transaction_tests"
 	database := openStore(t, collection)

@@ -20,6 +20,7 @@ import (
 type Records struct {
 	manifest  *Collection
 	directory string
+	blobs     *os.Root
 }
 
 type recordRef struct {
@@ -42,7 +43,7 @@ func OpenRecords(ctx context.Context, path string) (*Records, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Records{manifest: manifest, directory: manifest.path + ".records"}, nil
+	return &Records{manifest: manifest, directory: filepath.Base(manifest.path) + ".records"}, nil
 }
 
 func (r *Records) Read(ctx context.Context) (map[string]json.RawMessage, error) {
@@ -72,8 +73,27 @@ func (r *Records) View(ctx context.Context, read func(*RecordView) error) error 
 	if read == nil {
 		return errors.New("record reader is required")
 	}
+	if ctx == nil {
+		return errors.New("JSON collection requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	manifest, err := r.manifest.open()
+	if err != nil {
+		return err
+	}
+	defer manifest.root.Close()
+	scoped := &Records{manifest: manifest, directory: r.directory}
+	return scoped.view(ctx, read)
+}
+
+func (r *Records) view(ctx context.Context, read func(*RecordView) error) error {
 	for {
-		data, err := Read(ctx, r.manifest.path)
+		data, exists, err := r.manifest.read(ctx)
+		if err == nil && !exists {
+			err = &os.PathError{Op: "read", Path: r.manifest.path, Err: os.ErrNotExist}
+		}
 		if err != nil {
 			return err
 		}
@@ -91,7 +111,10 @@ func (r *Records) View(ctx context.Context, read func(*RecordView) error) error 
 		}
 		// A subsequent writer may collect an older reader's blobs. Restart the
 		// entire read from the new manifest rather than mixing two snapshots.
-		latest, readErr := Read(ctx, r.manifest.path)
+		latest, exists, readErr := r.manifest.read(ctx)
+		if readErr == nil && !exists {
+			readErr = &os.PathError{Op: "read", Path: r.manifest.path, Err: os.ErrNotExist}
+		}
 		if readErr != nil {
 			return readErr
 		}
@@ -108,7 +131,8 @@ func (r *Records) Update(ctx context.Context, mutate func(map[string]json.RawMes
 	if mutate == nil {
 		return errors.New("record mutation is required")
 	}
-	return r.manifest.locked(ctx, func() error {
+	return r.manifest.locked(ctx, func(collection *Collection) error {
+		r := &Records{manifest: collection, directory: r.directory}
 		data, exists, err := r.manifest.read(ctx)
 		if err != nil {
 			return err
@@ -134,7 +158,7 @@ func (r *Records) Update(ctx context.Context, mutate func(map[string]json.RawMes
 		if exists && slices.Equal(current.Records, next) {
 			// An identical retry must confirm a previous uncertain publication,
 			// even though it does not replace any files or advance the version.
-			if err := syncDirectory(filepath.Dir(r.manifest.path)); err != nil {
+			if err := syncRoot(r.manifest.root); err != nil {
 				return errors.Join(ErrWriteUncertain, err)
 			}
 			return nil
@@ -145,9 +169,10 @@ func (r *Records) Update(ctx context.Context, mutate func(map[string]json.RawMes
 		if err := r.prepareDirectory(); err != nil {
 			return err
 		}
+		defer r.blobs.Close()
 		// Make the current manifest and blob directory durable before collecting
 		// older generations, including after a previous uncertain publication.
-		if err := syncDirectory(filepath.Dir(r.manifest.path)); err != nil {
+		if err := syncRoot(r.manifest.root); err != nil {
 			return err
 		}
 		if err := r.collect(ctx, current.Records); err != nil {
@@ -158,7 +183,7 @@ func (r *Records) Update(ctx context.Context, mutate func(map[string]json.RawMes
 				return err
 			}
 		}
-		if err := syncDirectory(r.directory); err != nil {
+		if err := syncRoot(r.blobs); err != nil {
 			return err
 		}
 		manifest, err := json.Marshal([]recordManifest{{Version: current.Version + 1, Records: next}})
@@ -170,14 +195,39 @@ func (r *Records) Update(ctx context.Context, mutate func(map[string]json.RawMes
 }
 
 func (r *Records) prepareDirectory() error {
-	if err := os.Mkdir(r.directory, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+	if err := r.manifest.root.Mkdir(r.directory, 0700); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
-	return r.checkDirectory()
+	var err error
+	r.blobs, err = r.openDirectory()
+	return err
+}
+
+func (r *Records) openDirectory() (*os.Root, error) {
+	info, err := r.manifest.root.Lstat(r.directory)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, errors.New("record directory must not be a symlink or file")
+	}
+	root, err := r.manifest.root.OpenRoot(r.directory)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := root.Stat(".")
+	if err == nil && !os.SameFile(info, opened) {
+		err = errors.New("record directory changed while opening")
+	}
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	return root, nil
 }
 
 func (r *Records) checkDirectory() error {
-	info, err := os.Lstat(r.directory)
+	info, err := r.manifest.root.Lstat(r.directory)
 	if err != nil {
 		return err
 	}
@@ -205,7 +255,19 @@ func (r *Records) readRecords(ctx context.Context, refs []recordRef) (map[string
 }
 
 func (r *Records) readRecord(ctx context.Context, digest string) ([]byte, error) {
-	file, err := openRegular(r.recordPath(digest), false)
+	if !validDigest(digest) {
+		return nil, errors.New("invalid record digest")
+	}
+	root := r.blobs
+	if root == nil {
+		var err error
+		root, err = r.openDirectory()
+		if err != nil {
+			return nil, err
+		}
+		defer root.Close()
+	}
+	file, err := openRegular(root, digest+".json", false)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +292,7 @@ func (r *Records) stage(ctx context.Context, ref recordRef, data []byte) error {
 	}
 	// Sync each file before publication, then sync the whole blob directory
 	// once. Staging failures must never report a published manifest.
-	return (&Collection{path: r.recordPath(ref.Digest)}).replace(ctx, data)
+	return (&Collection{path: ref.Digest + ".json", root: r.blobs}).replace(ctx, data)
 }
 
 func (r *Records) collect(ctx context.Context, current []recordRef) error {
@@ -238,7 +300,12 @@ func (r *Records) collect(ctx context.Context, current []recordRef) error {
 	for _, ref := range current {
 		keep[ref.Digest+".json"] = true
 	}
-	entries, err := os.ReadDir(r.directory)
+	directory, err := r.blobs.Open(".")
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	entries, err := directory.ReadDir(-1)
 	if err != nil {
 		return err
 	}
@@ -252,15 +319,11 @@ func (r *Records) collect(ctx context.Context, current []recordRef) error {
 		if entry.IsDir() || keep[name] || !blob && !temporary {
 			continue
 		}
-		if err := os.Remove(filepath.Join(r.directory, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := r.blobs.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
 	return nil
-}
-
-func (r *Records) recordPath(digest string) string {
-	return filepath.Join(r.directory, digest+".json")
 }
 
 func references(records map[string]json.RawMessage) ([]recordRef, error) {

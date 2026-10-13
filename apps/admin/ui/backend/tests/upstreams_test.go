@@ -134,12 +134,12 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		}
 	}
 	for _, target := range []string{
-		other.URL + "/public%2Fbase", // The same hostname on another port stays direct.
+		other.URL + "/public%2Fbase",
 		strings.Replace(publicURL, "127.0.0.1", "localhost", 1),
 	} {
 		response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(target, "/healthz"), "", nil))
-		if response.Code != http.StatusOK || response.Body.String() != "direct" {
-			t.Fatalf("different API was rewritten: %s: %d %s", target, response.Code, response.Body.String())
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("unmapped internal API escaped the network policy: %s: %d %s", target, response.Code, response.Body.String())
 		}
 	}
 	upstream.Close()
@@ -152,7 +152,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 			t.Fatalf("unavailable upstream response: %d %s", response.Code, response.Body.String())
 		}
 	}
-	if directCalls.Load() != 2 {
+	if directCalls.Load() != 0 {
 		t.Fatal("upstream failure must not fall back to the public address")
 	}
 }

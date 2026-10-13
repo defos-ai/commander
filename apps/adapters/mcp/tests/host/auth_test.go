@@ -31,6 +31,7 @@ func TestMCPRequiresBearerOnEveryRequest(t *testing.T) {
 	} {
 		for _, authorization := range [][]string{
 			nil, {"Bearer rejected-test-token"}, {"Basic " + token}, {"Bearer"},
+			{"Bearer " + token[:len(token)-1] + "X"}, {"Bearer " + token[:len(token)-1]}, {"Bearer " + token + "X"},
 			{"Bearer " + token, "Bearer " + token}, {"Bearer " + token + ", Bearer " + token},
 			{"Bearer " + token + " extra"}, {"Bearer\t" + token},
 		} {

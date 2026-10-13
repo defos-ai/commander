@@ -5,6 +5,7 @@ package jsonfile
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,7 +16,10 @@ import (
 	"time"
 )
 
-type Collection struct{ path string }
+type Collection struct {
+	path string
+	root *os.Root
+}
 
 var ErrWriteUncertain = errors.New("JSON collection was replaced but directory sync failed")
 
@@ -31,7 +35,7 @@ func NewContext(ctx context.Context, path string) (*Collection, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = c.locked(ctx, func() error {
+	err = c.locked(ctx, func(c *Collection) error {
 		_, exists, err := c.read(ctx)
 		if err != nil || exists {
 			return err
@@ -69,7 +73,12 @@ func OpenContext(ctx context.Context, path string) (*Collection, error) {
 		return nil, err
 	}
 	c := &Collection{path: filepath.Join(directory, filepath.Base(absolute))}
-	if err := regularPath(c.path); err != nil {
+	scoped, err := c.open()
+	if err != nil {
+		return nil, err
+	}
+	defer scoped.root.Close()
+	if err := regularPath(scoped.root, filepath.Base(c.path)); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -86,7 +95,12 @@ func Read(ctx context.Context, path string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	data, exists, err := (&Collection{path: path}).read(ctx)
+	c, err := (&Collection{path: path}).open()
+	if err != nil {
+		return nil, err
+	}
+	defer c.root.Close()
+	data, exists, err := c.read(ctx)
 	if err == nil && !exists {
 		err = &os.PathError{Op: "read", Path: path, Err: os.ErrNotExist}
 	}
@@ -97,7 +111,7 @@ func Read(ctx context.Context, path string) ([]byte, error) {
 // file is an empty collection, including if it was removed after construction.
 // Callbacks must not reenter this collection or wait for another writer to it.
 func (c *Collection) View(ctx context.Context, fn func([]byte) error) error {
-	return c.locked(ctx, func() error {
+	return c.locked(ctx, func(c *Collection) error {
 		data, _, err := c.read(ctx)
 		if err != nil {
 			return err
@@ -113,7 +127,7 @@ func (c *Collection) View(ctx context.Context, fn func([]byte) error) error {
 // validation, and pre-commit cancellation failures leave the old file intact.
 // Once the rename commits, cancellation does not change a successful result.
 func (c *Collection) Update(ctx context.Context, fn func([]byte) ([]byte, error)) error {
-	return c.locked(ctx, func() error {
+	return c.locked(ctx, func(c *Collection) error {
 		data, _, err := c.read(ctx)
 		if err != nil {
 			return err
@@ -129,15 +143,44 @@ func (c *Collection) Update(ctx context.Context, fn func([]byte) ([]byte, error)
 	})
 }
 
-func (c *Collection) locked(ctx context.Context, fn func() error) error {
+func (c *Collection) open() (*Collection, error) {
+	directory := filepath.Dir(c.path)
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, errors.New("JSON collection directory must not be a symlink or file")
+	}
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := root.Stat(".")
+	if err == nil && !os.SameFile(info, opened) {
+		err = errors.New("JSON collection directory changed while opening")
+	}
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	return &Collection{path: c.path, root: root}, nil
+}
+
+func (c *Collection) locked(ctx context.Context, fn func(*Collection) error) error {
 	if ctx == nil {
 		return errors.New("JSON collection requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	lockPath := c.path + ".lock"
-	file, err := openRegular(lockPath, true)
+	scoped, err := c.open()
+	if err != nil {
+		return err
+	}
+	defer scoped.root.Close()
+	lockPath := filepath.Base(c.path) + ".lock"
+	file, err := openRegular(scoped.root, lockPath, true)
 	if err != nil {
 		return fmt.Errorf("open collection lock: %w", err)
 	}
@@ -159,7 +202,7 @@ func (c *Collection) locked(ctx context.Context, fn func() error) error {
 		}
 	}
 	// A lock path must not have been removed or replaced while we waited.
-	current, err := os.Lstat(lockPath)
+	current, err := scoped.root.Lstat(lockPath)
 	if err != nil {
 		return err
 	}
@@ -173,15 +216,25 @@ func (c *Collection) locked(ctx context.Context, fn func() error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return fn()
+	return fn(scoped)
 }
 
-func openRegular(path string, create bool) (*os.File, error) {
-	file, err := openNoFollow(path, create)
+func openRegular(root *os.Root, name string, create bool) (*os.File, error) {
+	filename := filepath.Base(name)
+	if !filepath.IsLocal(name) || filename != name {
+		return nil, errors.New("JSON collection file name must stay within its directory")
+	}
+	if err := regularPath(root, filename); err != nil {
+		return nil, err
+	}
+	file, err := openRootFile(root, filename, create)
 	if err != nil {
 		return nil, err
 	}
 	info, err := file.Stat()
+	if err == nil {
+		err = regularPath(root, filename)
+	}
 	if err == nil && !info.Mode().IsRegular() {
 		err = errors.New("JSON collection and lock paths must be regular files")
 	}
@@ -192,8 +245,8 @@ func openRegular(path string, create bool) (*os.File, error) {
 	return file, nil
 }
 
-func regularPath(path string) error {
-	info, err := os.Lstat(path)
+func regularPath(root *os.Root, name string) error {
+	info, err := root.Lstat(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -204,7 +257,7 @@ func regularPath(path string) error {
 }
 
 func (c *Collection) read(ctx context.Context) ([]byte, bool, error) {
-	file, err := openRegular(c.path, false)
+	file, err := openRegular(c.root, filepath.Base(c.path), false)
 	if errors.Is(err, os.ErrNotExist) {
 		return []byte("[]"), false, nil
 	}
@@ -234,7 +287,7 @@ func (c *Collection) write(ctx context.Context, data []byte) error {
 	if err := c.replace(ctx, data); err != nil {
 		return err
 	}
-	if err := syncDirectory(filepath.Dir(c.path)); err != nil {
+	if err := syncRoot(c.root); err != nil {
 		return errors.Join(ErrWriteUncertain, err)
 	}
 	return nil
@@ -244,11 +297,12 @@ func (c *Collection) replace(ctx context.Context, data []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(filepath.Dir(c.path), "."+filepath.Base(c.path)+"-*.tmp")
+	temporary := "." + filepath.Base(c.path) + "-" + rand.Text() + ".tmp"
+	file, err := c.root.OpenFile(temporary, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
+	defer c.root.Remove(temporary)
 	defer file.Close()
 	if err := file.Chmod(0600); err != nil {
 		return err
@@ -262,13 +316,13 @@ func (c *Collection) replace(ctx context.Context, data []byte) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	if err := regularPath(c.path); err != nil {
+	if err := regularPath(c.root, filepath.Base(c.path)); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), c.path)
+	return c.root.Rename(temporary, filepath.Base(c.path))
 }
 
 type contextReader struct {

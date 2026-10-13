@@ -70,7 +70,12 @@ func (a *DetectTechnologies) Run(ctx context.Context, raw json.RawMessage) (acti
 	if err != nil {
 		return action.Result{}, err
 	}
-	page, err := readPage(ctx, httpClient(target), target)
+	client, err := httpClient(ctx, target)
+	if err != nil {
+		return action.Result{}, err
+	}
+	defer client.CloseIdleConnections()
+	page, err := readPage(ctx, client, target)
 	if err != nil {
 		// http.Client errors include the requested URL, which may contain query secrets.
 		var requestError *url.Error

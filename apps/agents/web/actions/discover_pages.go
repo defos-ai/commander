@@ -71,7 +71,11 @@ func (a *DiscoverPages) Run(ctx context.Context, raw json.RawMessage) (action.Re
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	client := httpClient(target)
+	client, err := httpClient(ctx, target)
+	if err != nil {
+		return action.Result{}, err
+	}
+	defer client.CloseIdleConnections()
 	out := DiscoverPagesOutput{URL: target.String(), MaxPages: in.MaxPages, Pages: []Page{}}
 	queue := []string{target.String()}
 	seen := map[string]bool{target.String(): true}

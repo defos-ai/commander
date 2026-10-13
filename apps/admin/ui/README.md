@@ -66,10 +66,13 @@ UI_API_UPSTREAMS=localhost:4274=api:4274,127.0.0.1:4274=api:4274
 ```
 
 Only the matching host and port change; scheme, path and query remain intact.
-Unmapped URLs connect directly. Compose supplies mappings automatically; adding
-other APIs needs no routing changes or restart. A hosted UI cannot discover an
-API on a visitor's laptop through `localhost`. Base paths are supported;
-redirects are rejected.
+Public APIs connect directly. Internal APIs require an explicit mapping; Compose
+supplies its own automatically. For another internal API, map its host and port
+to itself, for example `commander.internal:4274=commander.internal:4274`.
+Native local discovery allows loopback on port `4274`. Other local ports need a
+mapping. A hosted UI cannot discover an API on a visitor's laptop through
+`localhost`. Base paths are supported; redirects, cloud metadata addresses and
+environment HTTP proxies are blocked.
 
 Each API must allow its upstream hostname in `API_ALLOWED_HOSTS`. Browser CORS
 configuration is unnecessary because the backend sends Basic authentication.

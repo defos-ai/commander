@@ -21,6 +21,18 @@ describe('connection metadata storage', () => {
     expect(loadConnections()).toEqual([{ ...connection, url: 'https://example.com/commander' }]);
   });
 
+  it.each([
+    'https://operator:secret@example.com',
+    'https://example.com?token=secret',
+    'https://example.com#token=secret',
+  ])('rejects credential-bearing URLs before saving: %s', url => {
+    expect(saveConnections([connection])).toBe(true);
+
+    expect(saveConnections([{ ...connection, url }])).toBe(false);
+
+    expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).toBe(JSON.stringify([connection]));
+  });
+
   it('returns an empty list for missing storage', () => {
     expect(loadConnections()).toEqual([]);
   });

@@ -489,15 +489,17 @@ func TestOperationWritesDistinguishUnpublishedAndUncertainSnapshots(t *testing.T
 				}
 			}
 			operationDir := filepath.Join(dir, "operations")
-			restore := denyDirectoryRead(t, operationDir)
+			var restore func()
 			calls := 0
 			var published operations.Operation
 
 			if create {
+				restore = denyDirectoryRead(t, operationDir)
 				err = store.Create(t.Context(), op)
 			} else {
 				published, err = store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 					calls++
+					restore = denyDirectoryRead(t, operationDir)
 					if !unchanged {
 						next.Status = operations.Running
 						next.Events = append(next.Events, operations.Event{Sequence: 1})
@@ -505,14 +507,12 @@ func TestOperationWritesDistinguishUnpublishedAndUncertainSnapshots(t *testing.T
 					return nil
 				})
 			}
-			restore()
+			if restore != nil {
+				restore()
+			}
 
 			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) != unchanged {
 				t.Fatalf("directory sync failure lost its cause or publication state: %v", err)
-			}
-			var pathErr *os.PathError
-			if !errors.As(err, &pathErr) || pathErr.Op != "open" || pathErr.Path != operationDir {
-				t.Fatalf("expected failure opening the directory for sync, got %v", err)
 			}
 			if !create && calls != 1 {
 				t.Fatalf("write failure replayed its mutation: calls=%d", calls)

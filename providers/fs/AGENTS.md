@@ -21,6 +21,13 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   mix snapshots or accumulate partial results across attempts.
 - Preserve regular-file and directory checks, including symlink rejection where
   required by `jsonfile` and cleanup. Keep persistent locks when removing test data.
+- JSON collection reads and transactions pin a directory with `os.Root`; staging,
+  rename and blob cleanup stay relative to that handle. Keep final file opens
+  non-following and release scoped handles even when callbacks fail. Inject sync
+  failures after root acquisition when testing uncertain publication.
+- Provider roots and their ancestors are trusted host configuration. Scoped roots
+  constrain one read or transaction; they do not preserve ancestor identity between
+  operations. Keep those directories inaccessible to untrusted local writers.
 
 ## Bus lifecycle
 

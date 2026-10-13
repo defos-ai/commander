@@ -10,6 +10,41 @@ func authenticate(request *http.Request) {
 	request.SetBasicAuth("api-fixture-user", "api-fixture-password")
 }
 
+func TestBasicAuthenticationRequiresExactCredentials(t *testing.T) {
+	fixture := newFixture(t)
+	server := startAPI(t, fixture.localArgs())
+	const username, password = "api-fixture-user", "api-fixture-password"
+	for _, test := range []struct {
+		name, username, password string
+	}{
+		{"wrong username", "api-fixture-useX", password},
+		{"short username", "api-fixture-use", password},
+		{"long username", username + "X", password},
+		{"empty username", "", password},
+		{"wrong password", username, "api-fixture-passworX"},
+		{"short password", username, "api-fixture-passwor"},
+		{"long password", username, password + "X"},
+		{"empty password", username, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result := server.request(t, http.MethodGet, "/api/v1/missions", func(request *http.Request) {
+				request.SetBasicAuth(test.username, test.password)
+			})
+			assertAPIError(t, result, http.StatusUnauthorized, "authentication_required")
+			if !strings.HasPrefix(result.header.Get("WWW-Authenticate"), "Basic ") {
+				t.Error("authentication failure lost its Basic challenge")
+			}
+		})
+	}
+	duplicate := server.request(t, http.MethodGet, "/api/v1/missions", authenticate, func(request *http.Request) {
+		request.Header.Add("Authorization", request.Header.Get("Authorization"))
+	})
+	assertAPIError(t, duplicate, http.StatusUnauthorized, "authentication_required")
+	if result := server.request(t, http.MethodGet, "/api/v1/missions", authenticate); result.status != http.StatusOK {
+		t.Fatalf("configured credentials were rejected: status=%d", result.status)
+	}
+}
+
 func TestPublicHealthProbesBypassHostAndProxyChecks(t *testing.T) {
 	fixture := newFixture(t)
 	server := startAPI(t, append(fixture.localArgs(), "--allowed-hosts=api.example", "--trusted-proxies=127.0.0.1", "--proxy-headers=forwarded"))

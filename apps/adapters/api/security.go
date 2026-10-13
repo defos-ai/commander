@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -26,8 +25,8 @@ func (c SecurityConfig) Validate() error {
 }
 
 type security struct {
-	username [sha256.Size]byte
-	password [sha256.Size]byte
+	username []byte
+	password []byte
 	hosts    map[string]struct{}
 	proxy    proxyPolicy
 	cors     corsPolicy
@@ -57,8 +56,8 @@ func newSecurity(config SecurityConfig) (*security, error) {
 		return nil, err
 	}
 	return &security{
-		username: sha256.Sum256([]byte(config.Username)),
-		password: sha256.Sum256([]byte(config.Password)),
+		username: []byte(config.Username),
+		password: []byte(config.Password),
 		hosts:    hosts, proxy: proxy, cors: cors,
 	}, nil
 }
@@ -108,9 +107,8 @@ func (s *security) authenticated(r *http.Request) bool {
 		return false
 	}
 	username, password, ok := r.BasicAuth()
-	userHash, passwordHash := sha256.Sum256([]byte(username)), sha256.Sum256([]byte(password))
-	userMatch := subtle.ConstantTimeCompare(userHash[:], s.username[:])
-	passwordMatch := subtle.ConstantTimeCompare(passwordHash[:], s.password[:])
+	userMatch := subtle.ConstantTimeCompare([]byte(username), s.username)
+	passwordMatch := subtle.ConstantTimeCompare([]byte(password), s.password)
 	return ok && userMatch&passwordMatch == 1
 }
 

@@ -14,6 +14,11 @@
 - [actions/http.go](actions/http.go) owns bounded response parsing and hostname
   scope. Compare exact hostnames without case; schemes and ports may differ,
   while subdomains and `www` variants remain outside scope.
+- [actions/network.go](actions/network.go) validates every resolved address and
+  pins the hostname to those IPs for the action. Private/loopback targets are
+  intentional; metadata/link-local/reserved addresses and environment proxies are
+  blocked. Keep numeric-IP dialing and exact-hostname redirect scope together so
+  DNS changes cannot redirect later requests to another address.
 - Preserve page/link limits, excluded-link reporting and redirect scope decisions.
   Follow-up proposals must use resolved page URLs and fit the target action schema.
 - `discover-pages` proposes HTTP checks plus actions owned by the browser agent.
