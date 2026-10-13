@@ -25,6 +25,12 @@
   failures and empty proposals also require review. Aggregation uses the current
   decision's saved child IDs. Preserve parent grouping before evaluating children,
   each child's parentage, and fresh group membership on subsequent decisions.
+- [`RuleSelector`](controller/runner/rule_selector.go) selects a complete rule set
+  at operation start, after mission/input validation and before persistence. The
+  default retains mission rules. Validate and clone selection output into the
+  operation's mission snapshot; never reselect on recovery or per-task execution.
+  Selection runs outside the owner loop, may overlap across starts, and must honor
+  cancellation. Errors fail the start without falling back or saving an operation.
 
 ## Runtime and persistence invariants
 

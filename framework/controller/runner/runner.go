@@ -43,7 +43,9 @@ type Config struct {
 	AgentCatalog AgentCatalog
 	// AgentSelector defaults to round-robin over eligible instances.
 	AgentSelector AgentSelector
-	Logger        *slog.Logger
+	// RuleSelector defaults to the mission's declared rules.
+	RuleSelector RuleSelector
+	Logger       *slog.Logger
 	// Capacity is per agent for work owned by this runner; default one.
 	Capacity int
 
@@ -62,25 +64,26 @@ type operationState struct {
 }
 
 type Runner struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	executor    ActionExecutor
-	store       operations.OperationStore
-	missions    missions.MissionStore
-	reports     reports.ReportStore
-	states      map[string]*operationState
-	taskTimeout time.Duration
-	catalog     AgentCatalog
-	selector    AgentSelector
-	logger      *slog.Logger
-	capacity    int
-	lastAgent   string
-	wake        chan struct{}
-	requests    chan func()
-	results     chan taskResult
-	workers     int
-	closeErr    error // written before done closes
-	done        chan struct{}
+	ctx          context.Context
+	cancel       context.CancelFunc
+	executor     ActionExecutor
+	store        operations.OperationStore
+	missions     missions.MissionStore
+	reports      reports.ReportStore
+	states       map[string]*operationState
+	taskTimeout  time.Duration
+	catalog      AgentCatalog
+	selector     AgentSelector
+	ruleSelector RuleSelector
+	logger       *slog.Logger
+	capacity     int
+	lastAgent    string
+	wake         chan struct{}
+	requests     chan func()
+	results      chan taskResult
+	workers      int
+	closeErr     error // written before done closes
+	done         chan struct{}
 }
 
 func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Runner, error) {
@@ -117,12 +120,15 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 	if config.AgentSelector == nil {
 		config.AgentSelector = RoundRobinSelector{}
 	}
+	if config.RuleSelector == nil {
+		config.RuleSelector = MissionRuleSelector{}
+	}
 	if config.Logger == nil {
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	lifetime, cancel := context.WithCancel(ctx)
 	r := &Runner{catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
-		missions: config.MissionStore, reports: config.ReportStore, selector: config.AgentSelector, logger: config.Logger, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
+		missions: config.MissionStore, reports: config.ReportStore, selector: config.AgentSelector, ruleSelector: config.RuleSelector, logger: config.Logger, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
 	if err := r.recover(ctx); err != nil {
 		cancel()
 		return nil, err

@@ -25,6 +25,8 @@ published yet; private projects use the
 
 Controller hosts can supply an `AgentSelector` to customize which eligible agent
 receives a task. See [agent selection](../apps/controllers/README.md#agent-selection).
+They can also supply a `RuleSelector` to choose rules for each new operation;
+see [rule selection](../apps/controllers/README.md#rule-selection).
 
 ## Reference
 

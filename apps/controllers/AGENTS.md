@@ -27,6 +27,15 @@
 - Report the selector's `Name()` in registration. The previous selected agent ID
   advances only after durable dispatch reservation; load/capacity describe this
   runner's work, not a distributed global limit.
+- [runner.RuleSelector](../../framework/controller/runner/rule_selector.go) selects
+  the full rule set at operation start. Inject it through `runner.Config.RuleSelector`;
+  the default `MissionRuleSelector` clones the mission's rules. To extend a definition,
+  clone `selection.Mission.Rules` before editing; nil or empty means no explicit rules.
+- Rule selection runs outside the owner loop and may overlap concurrent starts.
+  Implementations must honor the context and be concurrency-safe. The runner
+  validates and clones selected rules before saving them only in the operation's
+  mission snapshot. Errors and invalid rules reject the start without fallback.
+  Recovery uses that saved selection; do not reselect rules or mutate the catalog.
 - Dispatched tasks remain bound to their recorded agent and command. Never silently
   reassign an execution whose outcome is unknown or retry it from host code.
 - Lifecycle changes need coordinated persistence, consumers and restart recovery.

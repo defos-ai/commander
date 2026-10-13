@@ -106,6 +106,11 @@ model. Rules do not invent follow-up inputs, merge outputs or wait for recursive
 descendants. They apply independently of their order in JSON. Changes affect new
 operations, which snapshot the mission when started.
 
+A custom controller can [select rules per operation](../apps/controllers/README.md#rule-selection)
+from its mission and input. The selected set replaces the rules in that operation's
+saved mission without changing the catalog. Selection happens once at start;
+recovery keeps the saved rules.
+
 See the complete [website workflow](../apps/agents/web/README.md#workflow),
 [authoring follow-ups](../apps/agents/README.md#propose-follow-up-work), and
 [loading missions](../apps/controllers/README.md#quick-start).

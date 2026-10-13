@@ -45,6 +45,17 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	if err := definition.ValidateInput(input); err != nil {
 		return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 	}
+	rules, err := r.ruleSelector.Select(ctx, RuleSelection{Mission: definition.Clone(), Input: append(json.RawMessage(nil), input...)})
+	if err != nil {
+		return operations.Operation{}, fmt.Errorf("select mission rules: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return operations.Operation{}, err
+	}
+	definition.Rules = rules.Clone()
+	if err := definition.Rules.Validate(); err != nil {
+		return operations.Operation{}, fmt.Errorf("selected mission rules: %w", err)
+	}
 	now := time.Now().UTC()
 	operationID := command.OperationID
 	if operationID == "" {
