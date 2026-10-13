@@ -22,8 +22,11 @@ func TestMissionMongoStore(t *testing.T) {
 	original := missions.Mission{
 		Name: "alpha", Objective: "Review a page",
 		RequiredActions: []string{"discover", "check"}, StartingActions: []string{"discover"},
-		Steps:        []missions.Step{{ID: "review", Objective: "Review findings"}},
-		Automations:  map[string]missions.Automation{"discover": {Run: []string{"check"}, Continue: missions.WhenAll}},
+		Steps: []missions.Step{{ID: "review", Objective: "Review findings"}},
+		Rules: missions.RuleSet{
+			missions.AggregateResults:  {Actions: []string{"discover"}},
+			missions.DecideNextActions: {Actions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		},
 		InputSchema:  json.RawMessage(`{"type":"object","x-example":9007199254740993,"properties":{"url":{"type":"string"}}}`),
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}}}`),
 	}
@@ -60,6 +63,8 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 	stored.RequiredActions[0] = "modified by reader"
 	stored.InputSchema[0] = '!'
+	stored.Rules[missions.AggregateResults].Actions[0] = "modified by reader"
+	stored.Rules[missions.DecideNextActions].Params.DecisionBy = "modified by reader"
 	unchanged, err := catalog.Get(ctx, original.Name)
 	if err != nil || !reflect.DeepEqual(unchanged, original) {
 		t.Fatalf("caller changed persisted mission: %#v, error = %v", unchanged, err)
@@ -67,7 +72,7 @@ func TestMissionMongoStore(t *testing.T) {
 
 	updated := original.Clone()
 	updated.Objective = "Review before release"
-	updated.Steps, updated.Automations = nil, nil
+	updated.Steps, updated.Rules = nil, nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}

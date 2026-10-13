@@ -39,11 +39,11 @@
   before upserting any. Preserve missions omitted from the file; no `--with-missions`
   means no import. An operation retains the mission definition saved at its start.
 - Update [default-missions.json](default/data/default-missions.json) for mission
-  automation. Agents propose actions, while the controller applies these rules;
+  rules. Agents propose actions, while the controller applies these rules;
   do not move mission policy into host or agent special cases.
   The no-browser review uses `discover-pages-no-browser` and three HTTP checks;
   the with-browser review uses `discover-pages` and five checks. Keep starting
-  actions, requirements and automation aligned with each discovery's proposals.
+  actions, requirements and rules aligned with each discovery's proposals.
 
 ## Validation
 

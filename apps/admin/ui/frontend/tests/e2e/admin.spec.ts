@@ -63,20 +63,21 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   const missionURL = page.url();
   await expect(page).toHaveURL(/\/missions\/review-website-with-browser$/);
 
-  const automationGraph = page.getByRole('region', { name: 'Mission automation graph' });
-  await expect(automationGraph.getByRole('button', { name: /^Inspect automation / })).toHaveCount(6);
-  await automationGraph.getByRole('button', { name: 'Inspect automation discover-pages', exact: true }).click();
-  const automation = page.getByRole('dialog', { name: 'Automation details', exact: true });
-  await expect(automation.getByRole('heading', { name: 'Automatically run proposed actions', exact: true })).toBeVisible();
-  await expect(automation.getByText('Run proposals automatically only when all are allowed below. These are possible follow-ups, not mandatory steps. Failed work or no proposals also require model review.', { exact: true })).toBeVisible();
-  await expect(automation.getByRole('list').getByRole('button')).toHaveCount(5);
-  await expect(automation.getByText('Continue after all generated tasks finish.', { exact: true })).toBeVisible();
-  await automation.getByRole('button', { name: 'capture-page', exact: true }).click();
-  await expect(automation.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
-  await expect(automation.getByRole('heading', { name: 'Model review', exact: true })).toBeVisible();
-  await expect(automation.getByText('The model decides how to continue. If this action belongs to a wait-for-all group, its results are reviewed with the group.', { exact: true })).toBeVisible();
-  await automation.getByRole('button', { name: 'Close dialog' }).click();
-  await expect(automationGraph.getByRole('button', { name: 'Inspect automation capture-page', exact: true })).toBeFocused();
+  const rulesGraph = page.getByRole('region', { name: 'Mission rules graph' });
+  await expect(rulesGraph.getByRole('button', { name: /^Inspect rules for / })).toHaveCount(6);
+  await rulesGraph.getByRole('button', { name: 'Inspect rules for discover-pages', exact: true }).click();
+  const rule = page.getByRole('dialog', { name: 'Rule details', exact: true });
+  await expect(rule.getByRole('heading', { name: 'Automatically run proposed actions', exact: true })).toBeVisible();
+  await expect(rule.getByText('Valid next-action proposals run automatically. The action chooses which follow-ups to propose.', { exact: true })).toBeVisible();
+  await expect(rule.getByText(/Wait for every direct child created by this execution/)).toBeVisible();
+  await rule.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(rulesGraph.getByRole('button', { name: 'Inspect rules for discover-pages', exact: true })).toBeFocused();
+  await rulesGraph.getByRole('button', { name: 'Inspect rules for capture-page', exact: true }).click();
+  await expect(rule.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
+  await expect(rule.getByRole('heading', { name: 'Model review', exact: true })).toBeVisible();
+  await expect(rule.getByText('Commander decides the next actions. Inside an aggregation group, this decision waits for the group and includes all its results.', { exact: true })).toBeVisible();
+  await rule.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(rulesGraph.getByRole('button', { name: 'Inspect rules for capture-page', exact: true })).toBeFocused();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);

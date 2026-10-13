@@ -16,14 +16,15 @@
   Transport commands belong in [`comms/clients`](comms/clients/).
 - Preserve Commander → Controller → Agent control flow: adapters query saved
   state and send operation commands; only the controller selects agent instances.
-- Mission definitions own automation. Actions may propose schema-valid next
+- Mission definitions own rules. Actions may propose schema-valid next
   actions, but must never dispatch them or contact a controller themselves.
-- [`missions.RuleSet`](domain/missions/rule.go) and
-  [`operations.RuleApplier`](domain/operations/rule_applier.go) are the first step
-  toward replacing automation. They are not yet wired into mission loading or
-  execution. Keep application deterministic and free of I/O; effects must be
-  committed with the triggering operation transition. Aggregation uses saved
-  child IDs, and automatic group effects retain each child's parentage.
+- [`missions.RuleSet`](domain/missions/rule.go) is saved in each operation's
+  mission snapshot. [`operations.RuleApplier`](domain/operations/rule_applier.go)
+  evaluates it without I/O; effects commit with the triggering transition.
+  Valid proposals run automatically unless a matching rule requires model review;
+  failures and empty proposals also require review. Aggregation uses the current
+  decision's saved child IDs. Preserve parent grouping before evaluating children,
+  each child's parentage, and fresh group membership on subsequent decisions.
 
 ## Runtime and persistence invariants
 

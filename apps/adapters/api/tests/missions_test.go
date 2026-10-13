@@ -23,8 +23,13 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	} {
 		path := "/api/v1/missions/" + expected.name
 		mission := read[models.MissionResponse](a, path)
-		if !reflect.DeepEqual(catalog.Items[i], mission) || mission.Objective == "" || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) || !reflect.DeepEqual(mission.Automations[expected.discovery].Run, expected.checks) {
-			t.Fatalf("default mission catalog lost schemas or automation: %+v", mission)
+		aggregate := mission.Rules["aggregate-results"]
+		decision := mission.Rules["decide-next-actions"]
+		if !reflect.DeepEqual(catalog.Items[i], mission) || mission.Objective == "" || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
+			t.Fatalf("default mission catalog lost schemas or actions: %+v", mission)
+		}
+		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.Actions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.Actions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != "model" {
+			t.Fatalf("default mission catalog lost grouping or model rules: %+v", mission.Rules)
 		}
 		assertSchema(t, a, "Mission", a.request(http.MethodGet, path, nil))
 	}

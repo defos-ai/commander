@@ -39,7 +39,7 @@ export default {
   },
   questionStatuses: { pending: 'Pending', answered: 'Answered', expired: 'Expired' },
   continuationStatuses: { pending: 'Pending', waiting: 'Waiting', resolved: 'Resolved' },
-  decisions: { code: 'Automation', model: 'Model', user: 'Operator' },
+  decisions: { code: 'Rules', model: 'Model', user: 'Operator' },
   progress: '{{finished}}/{{total}} tasks finished',
   progressNote: 'Finished tasks can succeed, fail or be cancelled. Task progress does not mean the mission is complete.',
   interruptedNote: 'The execution outcome is unknown. Recovery or a decision is still needed.',

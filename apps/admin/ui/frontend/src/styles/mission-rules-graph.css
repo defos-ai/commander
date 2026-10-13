@@ -1,0 +1,4 @@
+.mission-rules-graph { margin-top: 18px; min-width: 0; }
+.mission-rules-graph .graph-node[data-starting='true'] { border-left: 3px solid var(--green); }
+.mission-rules-graph .graph-rule-stage { border-style: dashed; background: var(--panel); }
+.mission-rules-graph > .mission-muted { margin-top: 14px; }

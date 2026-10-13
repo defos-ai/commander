@@ -1,6 +1,6 @@
 import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
-import type { Mission, MissionAutomation, MissionStep } from './types';
+import type { Mission, MissionRule, MissionStep } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -19,10 +19,13 @@ function isStep(value: unknown): value is MissionStep {
     isNullableStringArray(value.agent_types) && isNullableStringArray(value.required_actions);
 }
 
-function isAutomation(value: unknown): value is MissionAutomation {
-  return isObject(value) && (value.run === undefined || isStringArray(value.run)) &&
-    (value.continue === undefined || typeof value.continue === 'string') &&
-    (value.decide === undefined || typeof value.decide === 'string');
+function isRule(name: string, value: unknown): value is MissionRule {
+  if (!isObject(value) || !isStringArray(value.actions) || !value.actions.length ||
+    value.actions.some(action => !action || action.trim() !== action) || new Set(value.actions).size !== value.actions.length) return false;
+  const params = value.params;
+  if (params !== undefined && (!isObject(params) || Object.keys(params).some(key => key !== 'decision_by'))) return false;
+  if (name === 'aggregate-results') return params === undefined || params.decision_by === undefined;
+  return name === 'decide-next-actions' && isObject(params) && params.decision_by === 'model';
 }
 
 function isMissionName(value: unknown): value is string {
@@ -35,7 +38,7 @@ export function isMission(value: unknown): value is Mission {
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
     (value.steps === undefined || (Array.isArray(value.steps) && value.steps.every(isStep))) &&
-    (value.automations === undefined || (isObject(value.automations) && Object.values(value.automations).every(isAutomation)));
+    (value.rules === undefined || (isObject(value.rules) && Object.entries(value.rules).every(([name, rule]) => isRule(name, rule))));
 }
 
 export async function listMissions(url: string, credentials: Session, signal?: AbortSignal): Promise<Mission[]> {

@@ -17,14 +17,14 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 		InputSchema:     bytes.Clone(mission.InputSchema),
 		OutputSchema:    bytes.Clone(mission.OutputSchema),
 	}
-	if mission.Automations != nil {
-		response.Automations = make(map[string]models.MissionAutomationResponse, len(mission.Automations))
-		for name, automation := range mission.Automations {
-			response.Automations[name] = models.MissionAutomationResponse{
-				Run:      slices.Clone(automation.Run),
-				Continue: string(automation.Continue),
-				Decide:   string(automation.Decide),
+	if mission.Rules != nil {
+		response.Rules = make(map[string]models.MissionRuleResponse, len(mission.Rules))
+		for name, rule := range mission.Rules {
+			mapped := models.MissionRuleResponse{Actions: slices.Clone(rule.Actions)}
+			if rule.Params != nil {
+				mapped.Params = &models.MissionRuleParamsResponse{DecisionBy: string(rule.Params.DecisionBy)}
 			}
+			response.Rules[string(name)] = mapped
 		}
 	}
 	if mission.Steps != nil {

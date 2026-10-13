@@ -28,6 +28,9 @@ func (o *Operation) Recover(now time.Time) (bool, error) {
 }
 
 func (o Operation) validateRecovery() error {
+	if err := o.Mission.Rules.Validate(); err != nil {
+		return err
+	}
 	switch o.Status {
 	case Planning, Running, Waiting, Completed, Failed, Cancelled:
 	default:

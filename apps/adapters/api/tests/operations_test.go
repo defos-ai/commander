@@ -59,6 +59,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		if task.ID != root.ID && task.ParentTaskID != root.ID {
 			t.Fatalf("automatic task lost discovery parent: %+v", task)
 		}
+		if task.ID != root.ID && (task.Continuation == nil || task.Continuation.Status != "resolved") {
+			t.Fatalf("group member exposed a separate decision: %+v", task)
+		}
 		counts[task.ActionName]++
 		if mission == "review-website-no-browser" && len(task.Result.Artifacts) != 0 {
 			t.Fatalf("browser-free review generated rendering artifacts: %+v", task.Result.Artifacts)
@@ -86,7 +89,7 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	}
 	assertTaskAndEventPages(t, a, settled)
 	decision := modelDecision(settled)
-	if decision.ID != root.ID {
+	if decision.ID != root.ID || len(decision.Continuation.CreatedTaskIDs) != 2*len(checks) {
 		t.Fatalf("grouped decision belongs to %s, want root %s", decision.ID, root.ID)
 	}
 	a.resolve(op.ID, *decision, []object{})

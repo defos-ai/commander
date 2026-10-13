@@ -2,7 +2,7 @@
 
 Playground is a terminal chat with one model per session. The model acts as
 Commander through MCP: choose missions, assign work and review evidence while
-the controller runs automation and agents execute actions. Connect to running
+the controller applies mission rules and agents execute actions. Connect to running
 hosts or launch a temporary local demo.
 
 ## Quick start

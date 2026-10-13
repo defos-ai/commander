@@ -3,7 +3,7 @@
 ## Overview
 
 The controller turns Commander's operation commands into agent work. It runs
-mission automation, selects exact agent instances, and saves tasks, execution
+mission rules, selects exact agent instances, and saves tasks, execution
 results, questions and reports. The bundled [default host](default/) receives
 commands through the bus, restores operations after restart and opens no HTTP port.
 
@@ -36,7 +36,7 @@ Start the [MCP adapter](../adapters/README.md#quick-start) and
 Customize host configuration and provider connections in
 [`default/cli/`](default/cli/). For a new host, use its module and entrypoint as a
 starting point. The [framework](../../framework/README.md) provides coordination
-and recovery; [missions](../../docs/abstractions.md#mission-automation) define
+and recovery; [missions](../../docs/abstractions.md#mission-rules) define
 automatic action transitions.
 
 ### Agent selection

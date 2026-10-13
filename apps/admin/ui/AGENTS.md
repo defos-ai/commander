@@ -36,8 +36,8 @@
 - Preserve routes across reload/back/forward, stale-request cancellation and
   per-connection state. Keep expired questions unanswerable and handle conflicts.
 - Reuse `GraphCanvas`, graph layout and panning hooks. Execution graphs show saved
-  work; automation graphs show mission rules. Keep node details in dialogs and
-  preserve mouse, keyboard, zoom and focus behavior.
+  work; mission rules graphs show decision and aggregation policies. Keep node
+  details in dialogs and preserve mouse, keyboard, zoom and focus behavior.
 - Use existing theme tokens/fonts. The COMMANDER wordmark uses Grunt Grotesk
   SemiBold without a star. Keep dialog labels and focus behavior accessible.
 

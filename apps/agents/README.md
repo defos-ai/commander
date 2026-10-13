@@ -70,8 +70,8 @@ PNGs under one artifact.
 
 Use `FuncConfig.NextActions` or `Result.NextActions` to propose an action name,
 JSON input and optional reason. [Discover-pages](web/actions/discover_pages.go)
-proposes five checks per page. Mission rules authorize automatic transitions;
-other proposals wait for Commander. See
+proposes five checks per page. The controller queues valid proposals by default;
+mission rules can require model review or collect child results. See
 [continuations and scheduling](../../docs/abstractions.md#next-actions-and-continuations).
 
 ### Develop an agent in a private repository

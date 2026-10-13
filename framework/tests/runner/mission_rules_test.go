@@ -104,10 +104,13 @@ func TestMissionRulesCloneIsolatesConfiguration(t *testing.T) {
 }
 
 func TestMissionRulesJSON(t *testing.T) {
-	type definition struct {
-		Rules missions.RuleSet `json:"rules"`
-	}
 	const input = `{
+		"name": "scan",
+		"objective": "Review network services",
+		"required_actions": ["batch-ports", "scan-ports"],
+		"starting_actions": ["batch-ports"],
+		"input_schema": {},
+		"output_schema": {},
 		"rules": {
 			"aggregate-results": {"actions": ["batch-ports"]},
 			"decide-next-actions": {
@@ -116,11 +119,8 @@ func TestMissionRulesJSON(t *testing.T) {
 			}
 		}
 	}`
-	var decoded definition
-	if err := json.Unmarshal([]byte(input), &decoded); err != nil {
-		t.Fatal(err)
-	}
-	if err := decoded.Rules.Validate(); err != nil {
+	decoded, err := missions.LoadMission([]byte(input))
+	if err != nil {
 		t.Fatal(err)
 	}
 	want := missions.RuleSet{
@@ -143,5 +143,27 @@ func TestMissionRulesJSON(t *testing.T) {
 	}
 	if !reflect.DeepEqual(originalJSON, encodedJSON) {
 		t.Fatalf("JSON roundtrip changed configuration: %s", encoded)
+	}
+}
+
+func TestMissionRulesLoadingRejectsInvalidConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		fields string
+		want   string
+	}{
+		{"legacy automations", `"automations": {"batch-ports": {"run": ["scan-ports"], "continue": "when_all"}}`, `unknown field "automations"`},
+		{"unknown rule", `"rules": {"invented": {"actions": ["batch-ports"]}}`, `rule "invented": unsupported rule`},
+		{"unknown selector", `"rules": {"aggregate-results": {"for_actions": ["batch-ports"]}}`, `unknown field "for_actions"`},
+		{"unknown parameters", `"rules": {"decide-next-actions": {"actions": ["scan-ports"], "params": {"decision_by": "model", "extra": true}}}`, `unknown field "extra"`},
+		{"unsupported decision", `"rules": {"decide-next-actions": {"actions": ["scan-ports"], "params": {"decision_by": "other"}}}`, `decision_by must be "model"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := `{"name":"scan","objective":"Review network services","input_schema":{},"output_schema":{},` + tc.fields + `}`
+			_, err := missions.LoadMission([]byte(input))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("LoadMission() = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }

@@ -21,14 +21,17 @@ func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testin
 	before := map[string]missions.Mission{"review": store["review"], "other": store["other"]}
 	path := filepath.Join(t.TempDir(), "missions.json")
 	valid := `{"name":"review","objective":"New objective","input_schema":{},"output_schema":{}}`
-	if err := os.WriteFile(path, []byte("["+valid+`,{"name":"broken"}]`), 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	err := data.UpsertMissions(t.Context(), store, path)
-
-	if err == nil || !reflect.DeepEqual(map[string]missions.Mission(store), before) {
-		t.Fatalf("invalid import changed catalog: %+v, error=%v", store, err)
+	for _, invalid := range []string{
+		`{"name":"broken"}`,
+		`{"name":"broken","objective":"Invalid rule","input_schema":{},"output_schema":{},"rules":{"decide-next-actions":{"actions":["inspect"],"params":{"decision_by":"unknown"}}}}`,
+	} {
+		if err := os.WriteFile(path, []byte("["+valid+","+invalid+"]"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		err := data.UpsertMissions(t.Context(), store, path)
+		if err == nil || !reflect.DeepEqual(map[string]missions.Mission(store), before) {
+			t.Fatalf("invalid import changed catalog: %+v, error=%v", store, err)
+		}
 	}
 
 	if err := os.WriteFile(path, []byte("["+valid+"]"), 0600); err != nil {
@@ -74,18 +77,17 @@ func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			website := websites[test.name]
-			workflow := website.Automations[test.discovery]
+			aggregate := website.Rules[missions.AggregateResults]
+			decision := website.Rules[missions.DecideNextActions]
 			required := append([]string{test.discovery}, test.checks...)
-			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(workflow.Run, test.checks) || workflow.Continue != missions.WhenAll {
+			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(aggregate.Actions, []string{test.discovery}) {
 				t.Fatalf("website checks are not grouped automatic work: %+v", website)
 			}
-			if len(website.Automations) != len(test.checks)+1 {
-				t.Fatalf("unexpected automation rules: %+v", website.Automations)
+			if len(website.Rules) != 2 {
+				t.Fatalf("unexpected mission rules: %+v", website.Rules)
 			}
-			for _, name := range test.checks {
-				if website.Automations[name].Decide != missions.Model {
-					t.Errorf("%s is not followed by model review", name)
-				}
+			if !slices.Equal(decision.Actions, test.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+				t.Fatalf("website checks are not followed by model review: %+v", decision)
 			}
 		})
 	}

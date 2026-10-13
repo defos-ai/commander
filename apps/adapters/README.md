@@ -3,7 +3,7 @@
 Adapters connect clients to Commander. The [MCP adapter](mcp/) lets an LLM choose
 missions, assign work and review evidence; the [HTTP API](api/README.md) provides
 application access. Commands go to the controller, which selects agents and runs
-automation. Queries read saved state.
+mission rules. Queries read saved state.
 
 ## Quick start
 
@@ -47,7 +47,7 @@ per-user permissions are not provided.
 ### Operation workflow
 
 1. Use `list_missions` and `describe_mission` to choose a mission and read its
-   actions, automation and schemas. `describe_action` gives an action's schema;
+   actions, rules and schemas. `describe_action` gives an action's schema;
    optional `agent_id` selects an instance's definition.
 2. Call `start_operation`, inspect preflight, then `assign_task` with `action_name`
    and `input`. The controller chooses an available agent; missing required-action

@@ -4,7 +4,7 @@ export interface Mission {
   required_actions: string[] | null;
   starting_actions: string[] | null;
   steps?: MissionStep[];
-  automations?: Record<string, MissionAutomation>;
+  rules?: Partial<Record<MissionRuleName, MissionRule>>;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
 }
@@ -16,10 +16,11 @@ export interface MissionStep {
   required_actions: string[] | null;
 }
 
-export interface MissionAutomation {
-  run?: string[];
-  continue?: string;
-  decide?: string;
+export type MissionRuleName = 'aggregate-results' | 'decide-next-actions';
+
+export interface MissionRule {
+  actions: string[];
+  params?: { decision_by?: 'model' };
 }
 
 export interface Action {

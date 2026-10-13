@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
-	"slices"
 	"strings"
 
 	"github.com/defos-ai/commander/framework/domain"
@@ -31,14 +29,14 @@ type Step struct {
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
-	Automations     map[string]Automation `json:"automations,omitempty"`
-	Name            string                `json:"name"`
-	Objective       string                `json:"objective"`
-	RequiredActions []string              `json:"required_actions"`
-	StartingActions []string              `json:"starting_actions"`
-	Steps           []Step                `json:"steps,omitempty"`
-	InputSchema     json.RawMessage       `json:"input_schema"`
-	OutputSchema    json.RawMessage       `json:"output_schema"`
+	Rules           RuleSet         `json:"rules,omitempty"`
+	Name            string          `json:"name"`
+	Objective       string          `json:"objective"`
+	RequiredActions []string        `json:"required_actions"`
+	StartingActions []string        `json:"starting_actions"`
+	Steps           []Step          `json:"steps,omitempty"`
+	InputSchema     json.RawMessage `json:"input_schema"`
+	OutputSchema    json.RawMessage `json:"output_schema"`
 }
 
 // LoadMission strictly decodes and validates one JSON definition. Unknown
@@ -100,13 +98,8 @@ func (m Mission) Validate() error {
 			}
 		}
 	}
-	for name, rule := range m.Automations {
-		if strings.TrimSpace(name) == "" {
-			return errors.New("automation requires a source action")
-		}
-		if err := rule.Validate(); err != nil {
-			return fmt.Errorf("automation %q: %w", name, err)
-		}
+	if err := m.Rules.Validate(); err != nil {
+		return err
 	}
 	if _, err := resolveSchema(m.InputSchema); err != nil {
 		return fmt.Errorf("input schema: %w", err)
@@ -118,11 +111,7 @@ func (m Mission) Validate() error {
 }
 
 func (m Mission) Clone() Mission {
-	m.Automations = maps.Clone(m.Automations)
-	for name, rule := range m.Automations {
-		rule.Run = slices.Clone(rule.Run)
-		m.Automations[name] = rule
-	}
+	m.Rules = m.Rules.Clone()
 	if m.RequiredActions != nil {
 		m.RequiredActions = append([]string{}, m.RequiredActions...)
 	}

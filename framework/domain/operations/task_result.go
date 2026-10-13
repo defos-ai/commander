@@ -61,8 +61,12 @@ func (o *Operation) FinishTask(result TaskResult) (bool, error) {
 		output := result.Result.Clone()
 		task.Result = &output
 	}
-	continueTask(o, result.TaskID, result.Status == TaskSucceeded)
-	refreshGroups(o)
+	if err := continueTask(o, result.TaskID, result.Status == TaskSucceeded); err != nil {
+		return false, err
+	}
+	if err := refreshGroups(o); err != nil {
+		return false, err
+	}
 	o.RefreshStatus()
 	kind, message := TaskFinished, "Task finished; inspect its result or error"
 	if result.Status == TaskInterrupted {

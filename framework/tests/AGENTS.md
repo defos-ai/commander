@@ -6,7 +6,7 @@
   scenarios in [`agent`](agent/), [`controller`](controller/), [`runner`](runner/)
   and [`comms`](comms/), grouped by feature.
 - Prefer public HTTP/MCP scenarios in the adapter modules for cross-host behavior.
-  Use framework unit tests for complex invariants, automation, recovery and
+  Use framework unit tests for complex invariants, mission rules, recovery and
   failure paths; avoid tests that mirror implementation or duplicate coverage.
 - Use deterministic local fixtures and scripted models. Tests must need no paid
   model requests or public websites. Keep waits bounded and failures diagnostic.

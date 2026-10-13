@@ -34,8 +34,13 @@ func TestMissions(t *testing.T) {
 		if mission.Name != summary["name"] || mission.Objective != summary["objective"] {
 			t.Fatalf("mission detail differs from summary: %+v", mission)
 		}
-		if !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) || !reflect.DeepEqual(mission.Automations[expected.discovery].Run, expected.checks) || len(mission.RequiredActions) != 1+len(expected.checks) {
+		if !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) || len(mission.RequiredActions) != 1+len(expected.checks) {
 			t.Fatalf("incorrect website workflow: %+v", mission)
+		}
+		aggregate := mission.Rules[missions.AggregateResults]
+		decision := mission.Rules[missions.DecideNextActions]
+		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.Actions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.Actions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+			t.Fatalf("mission detail lost grouping or model rules: %+v", mission.Rules)
 		}
 		if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {
 			t.Fatal("mission schemas missing")

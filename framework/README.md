@@ -14,7 +14,7 @@ Read [core concepts](../docs/abstractions.md) for terminology and
 Use the repository's Go workspace and start from a concrete implementation:
 
 - [Agent](../apps/agents/README.md): register actions and run an agent, including in a private project.
-- [Controller](../apps/controllers/README.md): coordinate operations and mission automation.
+- [Controller](../apps/controllers/README.md): coordinate operations and apply mission rules.
 - [Adapter](../apps/adapters/README.md): expose operation commands and saved data to clients.
 
 Import the framework packages you need and inject their interfaces. The bundled

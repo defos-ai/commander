@@ -11,15 +11,15 @@ import (
 
 // continueTask is part of the same operation update as the result. No publication
 // happens here: child IDs and the decision are committed before the scheduler runs.
-func continueTask(op *Operation, taskID string, success bool) {
+func continueTask(op *Operation, taskID string, success bool) error {
 	index := taskIndex(op, taskID)
 	if index < 0 {
-		return
+		return nil
 	}
 	task := &op.Tasks[index]
 	previous := task.Continuation
 	if previous != nil && (previous.Status != ContinuationPending || previous.QuestionID != "") {
-		return
+		return nil
 	}
 	c := &Continuation{Version: 1, DecisionBy: DecisionModel, Status: ContinuationPending,
 		ProposedActions: []actionmodel.NextAction{}, CreatedTaskIDs: []string{}}
@@ -35,22 +35,28 @@ func continueTask(op *Operation, taskID string, success bool) {
 	task.Continuation = c
 	if parentCollects(op, *task) {
 		c.DecisionBy, c.Status = DecisionCode, ContinuationResolved
-		return
+		return nil
 	}
 	if op.Status.Terminal() {
-		return
+		return nil
 	}
-	rule, automatic := automaticRule(op.Mission, *task)
-	if !automatic || len(op.Tasks)+len(c.ProposedActions) > 10000 {
-		return
+	effects, err := (DefaultRuleApplier{}).Apply(RuleContext{Rules: op.Mission.Rules, Task: *task})
+	if err != nil {
+		return err
+	}
+	if effects.Decision != RuleAutomatic || len(op.Tasks)+len(c.ProposedActions) > 10000 {
+		return nil
 	}
 	c.DecisionBy = DecisionCode
-	createChildren(op, index, c.ProposedActions, rule.Continue == missions.WhenAll)
+	applyFollowUps(op, effects.FollowUps)
+	return nil
 }
 
 func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAction, collect bool) {
 	parent := op.Tasks[parentIndex]
 	c := parent.Continuation
+	// Each decision owns its group; earlier children remain in the task graph.
+	c.CreatedTaskIDs = make([]string, 0, len(actions))
 	for _, action := range actions {
 		task := NewTask(op.ID, parent.StepID, parent.ID, action)
 		c.CreatedTaskIDs = append(c.CreatedTaskIDs, task.ID)
@@ -59,7 +65,7 @@ func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAc
 	}
 	c.Status = ContinuationResolved
 	if collect && len(actions) > 0 {
-		c.Status = ContinuationWaiting
+		c.DecisionBy, c.Status = DecisionCode, ContinuationWaiting
 	}
 }
 
@@ -89,47 +95,46 @@ func taskIndex(op *Operation, taskID string) int {
 // Collected siblings reach a decision together. If all can continue in code,
 // apply each child's rule in this same durable update. Otherwise expose one
 // model decision on the parent, retaining all child results and proposals.
-func refreshGroups(op *Operation) {
+func refreshGroups(op *Operation) error {
 	for i := 0; i < len(op.Tasks); i++ {
 		c := op.Tasks[i].Continuation
 		if c == nil || c.Status != ContinuationWaiting || c.DecisionBy != DecisionCode {
 			continue
 		}
-		ready, automatic := true, !op.Status.Terminal()
-		var proposals []actionmodel.NextAction
-		var children []int
-		for _, childID := range c.CreatedTaskIDs {
-			j := taskIndex(op, childID)
-			if j < 0 || op.Tasks[j].Status == TaskQueued || op.Tasks[j].Status == TaskRunning {
-				ready = false
-				break
-			}
-			children = append(children, j)
-			child := op.Tasks[j]
-			_, allowed := automaticRule(op.Mission, child)
-			automatic = automatic && allowed
-			if child.Continuation != nil {
-				proposals = append(proposals, actionmodel.CloneNextActions(child.Continuation.ProposedActions)...)
-			}
+		effects, err := (DefaultRuleApplier{}).Apply(RuleContext{Rules: op.Mission.Rules, Task: op.Tasks[i], Tasks: op.Tasks})
+		if err != nil {
+			return err
 		}
-		if !ready {
+		if effects.Decision == RuleWait {
 			continue
 		}
+		proposals := effects.ProposedActions
+		for _, next := range effects.FollowUps {
+			proposals = append(proposals, actionmodel.CloneNextActions(next.Actions)...)
+		}
 		c.Version++
-		if automatic && len(op.Tasks)+len(proposals) <= 10000 {
+		if effects.Decision == RuleAutomatic && !op.Status.Terminal() && len(op.Tasks)+len(proposals) <= 10000 {
 			c.Status = ContinuationResolved
-			for _, j := range children {
-				rule, _ := automaticRule(op.Mission, op.Tasks[j])
-				child := op.Tasks[j].Continuation
-				child.Version++
-				createChildren(op, j, child.ProposedActions, rule.Continue == missions.WhenAll)
-			}
+			applyFollowUps(op, effects.FollowUps)
 			op.AppendEvent(ContinuationResolvedEvent, op.Tasks[i].ID, "", "Task group settled; automatic rules applied")
 		} else {
 			c.DecisionBy, c.Status = DecisionModel, ContinuationPending
 			c.ProposedActions = append([]actionmodel.NextAction{}, proposals...)
 			op.AppendEvent(ContinuationReady, op.Tasks[i].ID, "", "Task group settled; model decision is required")
 		}
+	}
+	return nil
+}
+
+func applyFollowUps(op *Operation, followUps []RuleFollowUp) {
+	for _, next := range followUps {
+		i := taskIndex(op, next.TaskID)
+		c := op.Tasks[i].Continuation
+		if c.Status == ContinuationResolved {
+			c.Version++
+		}
+		c.DecisionBy = DecisionCode
+		createChildren(op, i, next.Actions, next.AggregateResults)
 	}
 }
 
@@ -162,7 +167,7 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 	}
 	c.ProposedActions = actionmodel.CloneNextActions(actions)
 	c.Version++
-	createChildren(op, i, actions, false)
+	createChildren(op, i, actions, ruleMatches(op.Mission.Rules, missions.AggregateResults, op.Tasks[i].ActionName))
 	op.RefreshStatus()
 	op.AppendEvent(ContinuationResolvedEvent, taskID, "", "Model decision recorded")
 	op.UpdatedAt = time.Now().UTC()

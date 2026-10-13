@@ -78,7 +78,7 @@ type OperationTasksResult struct {
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
-	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, automation and schemas before starting it.", emptySchema,
+	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, rules and schemas before starting it.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Missions []missionListItem `json:"missions"`
 		}, error) {
@@ -91,7 +91,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's full definition: required and starting actions, automation rules, declared steps and input/output schemas. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's actions, rules, steps and input/output schemas. Valid proposals run automatically; rules group results or request model review. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})

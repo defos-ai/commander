@@ -19,7 +19,10 @@ const mission: Mission = {
   required_actions: ['discover-pages'],
   starting_actions: ['discover-pages'],
   steps: [{ id: 'discover', objective: 'Find pages', agent_types: null, required_actions: ['discover-pages'] }],
-  automations: { 'discover-pages': { run: ['check-links'], continue: 'when_all' } },
+  rules: {
+    'aggregate-results': { actions: ['discover-pages'] },
+    'decide-next-actions': { actions: ['check-links'], params: { decision_by: 'model' } },
+  },
   input_schema: { type: 'object', properties: { url: { type: 'string' } } },
   output_schema: {},
 };
@@ -86,7 +89,16 @@ describe('mission API', () => {
     { items: null },
     { items: [{ ...mission, required_actions: 'discover-pages' }] },
     { items: [{ ...mission, steps: [{ id: 'discover' }] }] },
-    { items: [{ ...mission, automations: { 'discover-pages': { run: [42] } } }] },
+    { items: [{ ...mission, rules: [] }] },
+    { items: [{ ...mission, rules: { 'aggregate-results': { actions: [42] } } }] },
+    { items: [{ ...mission, rules: { 'aggregate-results': { actions: [] } } }] },
+    { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages', 'discover-pages'] } } }] },
+    { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['  '] } } }] },
+    { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages'], params: { decision_by: 'model' } } } }] },
+    { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages'], params: { unknown: true } } } }] },
+    { items: [{ ...mission, rules: { 'decide-next-actions': { actions: ['check-links'] } } }] },
+    { items: [{ ...mission, rules: { 'decide-next-actions': { actions: ['check-links'], params: { decision_by: 'unknown' } } } }] },
+    { items: [{ ...mission, rules: { 'unknown-rule': { actions: ['check-links'] } } }] },
     { items: [{ ...mission, input_schema: [] }] },
   ])('rejects malformed fields before they reach rendering', async body => {
     vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(body)));

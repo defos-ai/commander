@@ -31,7 +31,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 			if automatic {
 				var err error
 				op, err = first.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-					next.Mission.Automations["inspect"] = missions.Automation{Run: []string{"report"}, Continue: missions.WhenEach}
+					delete(next.Mission.Rules, missions.DecideNextActions)
 					return nil
 				})
 				if err != nil {
@@ -94,6 +94,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			assertResultJSONEqual(t, saved.Mission.Rules, op.Mission.Rules)
 			for i, request := range requests {
 				child := saved.Tasks[i+1]
 				if child.Status != operations.TaskSucceeded || child.Result == nil || child.Continuation == nil || child.Continuation.Status != operations.ContinuationResolved {
@@ -260,8 +261,9 @@ func createResultOperation(t *testing.T, store *operationfs.OperationFsStore) (o
 	operationID, taskID := id.OperationID(), id.TaskID()
 	op := operations.Operation{
 		ID: operationID, Status: operations.Running, CreatedAt: created, UpdatedAt: created,
-		Mission: missions.Mission{Automations: map[string]missions.Automation{
-			"discover": {Run: []string{"inspect"}, Continue: missions.WhenAll},
+		Mission: missions.Mission{Rules: missions.RuleSet{
+			missions.AggregateResults:  {Actions: []string{"discover"}},
+			missions.DecideNextActions: {Actions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 		}},
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,

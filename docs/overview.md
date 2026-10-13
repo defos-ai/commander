@@ -26,8 +26,9 @@ For the included website reviews:
    `review-website-with-browser` for rendered checks too, then assigns its starting action.
 2. The controller checks required actions against live agents and selects a ready
    instance with free capacity. Assignments specify an action and input, not an agent ID.
-3. Discovery proposes checks for each page. The mission's automation queues those
-   checks without another model call; the controller sends HTTP checks to web
+3. Discovery proposes checks for each page. The controller queues those checks
+   automatically; mission rules collect their results for one model decision.
+   The controller sends HTTP checks to web
    agents and rendering checks to the browser agent.
 4. Agents publish results. The controller saves outcomes and artifact metadata
    before confirming acceptance; file bytes stay in storage.
@@ -37,7 +38,7 @@ For the included website reviews:
 MCP exposes operation commands and queries, including agent readiness and current
 `work`. The controller owns instance selection and agent administration. Adapters
 expose client APIs; controllers and agents consume messages. See
-[core concepts](abstractions.md) for tasks, automation, questions and evidence.
+[core concepts](abstractions.md) for tasks, mission rules, questions and evidence.
 
 ## Dependencies
 

@@ -64,7 +64,7 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
         {visible.map(item => <li key={item.name}><button type="button" className="mission-row"
           aria-label={t($ => $.missions.open, { name: item.name })} onClick={() => select(item.name)}>
           <span className="mission-row-main"><span className="mission-row-name">{item.name}</span><span className="mission-row-objective">{item.objective}</span>
-            <span className="mission-row-meta"><span>{t($ => $.missions.actions, { count: item.required_actions?.length ?? 0 })}</span><span>{t($ => $.missions.automationCount, { count: Object.keys(item.automations ?? {}).length })}</span></span>
+            <span className="mission-row-meta"><span>{t($ => $.missions.actions, { count: item.required_actions?.length ?? 0 })}</span><span>{t($ => $.missions.ruleCount, { count: Object.keys(item.rules ?? {}).length })}</span></span>
           </span><ArrowUpRight size={18} aria-hidden="true" />
         </button></li>)}
       </ul> : <div className="missions-empty">

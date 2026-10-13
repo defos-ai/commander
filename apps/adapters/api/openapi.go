@@ -31,7 +31,8 @@ func openAPIDocument() ([]byte, error) {
 		typeOf reflect.Type
 	}{
 		{"About", reflect.TypeFor[models.AboutResponse]()},
-		{"MissionAutomation", reflect.TypeFor[models.MissionAutomationResponse]()},
+		{"MissionRuleParams", reflect.TypeFor[models.MissionRuleParamsResponse]()},
+		{"MissionRule", reflect.TypeFor[models.MissionRuleResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
 		{"Action", reflect.TypeFor[models.ActionResponse]()},
@@ -54,9 +55,12 @@ func openAPIDocument() ([]byte, error) {
 		case "About":
 			schema.Properties["runtime"].Enum = []any{"native", "docker", "docker-compose"}
 			schema.Properties["application"].Enum = []any{"commander-api", "commander"}
-		case "MissionAutomation":
-			schema.Properties["continue"].Enum = []any{"when_each", "when_all"}
-			schema.Properties["decide"].Enum = []any{"model"}
+		case "MissionRuleParams":
+			schema.Properties["decision_by"].Enum = []any{"model"}
+		case "MissionRule":
+			schema.Properties["actions"].Description = "Actions whose executions this rule applies to."
+		case "Mission":
+			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results or decide-next-actions. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. Failures and empty proposals also require model review."
 		case "ActionRequirement":
 			schema.Properties["kind"].Enum = []any{"executable", "configuration", "permission"}
 		case "Action":

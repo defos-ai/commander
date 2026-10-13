@@ -82,7 +82,7 @@ for native dependencies and configuration.
 | --- | --- |
 | Run and configure Commander | [Setup](docs/deployment.md) · [Playground](apps/playground/README.md) |
 | Inspect operations in a browser | [Admin UI](apps/admin/ui/README.md) |
-| Build an agent or workflow | [Agents](apps/agents/README.md) · [Missions and automation](docs/abstractions.md) |
+| Build an agent or workflow | [Agents](apps/agents/README.md) · [Missions and rules](docs/abstractions.md) |
 | Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
 | Understand the architecture and limits | [Overview](docs/overview.md) |
 | Contribute | [Testing](framework/tests/README.md) · [Coding-agent guide](AGENTS.md) |

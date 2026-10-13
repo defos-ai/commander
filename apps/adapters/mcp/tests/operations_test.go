@@ -374,6 +374,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		if task.ID != root.ID && task.ParentTaskID != root.ID {
 			t.Fatalf("child lost parent: %+v", task)
 		}
+		if task.ID != root.ID && (task.Continuation == nil || task.Continuation.Status != operations.ContinuationResolved) {
+			t.Fatalf("group member exposed a separate decision: %+v", task)
+		}
 		if task.ActionName == "capture-page" {
 			if len(task.Result.Artifacts) != 1 {
 				t.Fatalf("missing desktop/mobile screenshots: %+v", task.Result)
@@ -404,7 +407,7 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		t.Fatal("fixture's broken link was not reported")
 	}
 	decision := modelDecision(settled)
-	if decision.ID != root.ID {
+	if decision.ID != root.ID || len(decision.Continuation.CreatedTaskIDs) != 2*len(checks) {
 		t.Fatalf("expected one grouped decision on discovery, got %+v", decision)
 	}
 	a.resolve(op.ID, *decision, []object{})

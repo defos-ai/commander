@@ -116,12 +116,23 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 				Responses map[string]json.RawMessage `json:"responses"`
 			} `json:"get"`
 		} `json:"paths"`
+		Components struct {
+			Schemas map[string]jsonschema.Schema `json:"schemas"`
+		} `json:"components"`
 	}](a, "/openapi.json")
 	if !strings.HasPrefix(document.OpenAPI, "3.") || len(document.Security) != 1 {
 		t.Fatalf("OpenAPI version/security: %+v", document)
 	}
 	if _, ok := document.Security[0]["basicAuth"]; !ok {
 		t.Fatal("OpenAPI does not declare Basic authentication")
+	}
+	mission := document.Components.Schemas["Mission"]
+	if mission.Properties["rules"] == nil || mission.Properties["automations"] != nil {
+		t.Fatal("OpenAPI must publish mission rules without the old automation format")
+	}
+	params := document.Components.Schemas["MissionRuleParams"]
+	if decision := params.Properties["decision_by"]; decision == nil || len(decision.Enum) != 1 || decision.Enum[0] != "model" {
+		t.Fatal("OpenAPI must document model as the supported rule decision maker")
 	}
 	for _, path := range []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/{controller_id}", "/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/graph", "/api/v1/operations/{operation_id}/report", "/api/v1/reports/{report_id}", "/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}"} {
 		if document.Paths[path].Get.Responses["200"] == nil {

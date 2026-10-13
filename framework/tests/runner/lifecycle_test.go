@@ -120,8 +120,8 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 
 func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testing.T) {
 	config := fixture()
-	config.MissionStore.(*missionStore).mission.Automations = map[string]missions.Automation{
-		"discover": {Run: []string{"inspect"}, Continue: missions.WhenAll},
+	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
+		missions.AggregateResults: {Actions: []string{"discover"}},
 	}
 	exec, calls := controlledExecutor()
 	r, err := runner.NewRunner(t.Context(), exec, config)

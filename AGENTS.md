@@ -65,7 +65,10 @@ The user's current instructions take precedence over repository guidance.
 
 - **Commander → Controller → Agent**: adapters submit operation commands; the
   controller selects agents; agents execute and propose follow-up work. Mission
-  definitions own automation. Do not bypass the controller from a client.
+  definitions own rules. Valid nonempty proposals run automatically unless a
+  matching rule requires a model decision. Aggregation covers the saved direct
+  children of one execution, never recursive descendants. Do not bypass the
+  controller from a client.
 - Framework code must not import apps or providers. Keep driver dependencies,
   storage locks, transactions and storage revisions within providers.
 - Only one active controller per database is supported. Registration and backend

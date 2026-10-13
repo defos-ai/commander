@@ -171,8 +171,12 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		t.Fatalf("operation root must remain the database root: %q", store.Root())
 	}
 	first := operations.Operation{ID: "00000000-0000-4000-8000-000000000001", Status: operations.Planning,
-		Input:     json.RawMessage(`{}`),
-		Mission:   missions.Mission{Name: "inspect", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)},
+		Input: json.RawMessage(`{}`),
+		Mission: missions.Mission{Name: "inspect", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
+			Rules: missions.RuleSet{
+				missions.AggregateResults:  {Actions: []string{"discover"}},
+				missions.DecideNextActions: {Actions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			}},
 		Tasks:     []operations.Task{{ID: id.New(), Input: json.RawMessage(`1`)}},
 		Events:    []operations.Event{{Sequence: 1, Type: operations.QuestionAsked}},
 		Questions: []operations.Question{{ID: id.New(), Text: "Proceed?", Options: []string{"yes", "no"}}}}
@@ -228,6 +232,8 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(stored, op.Clone()) {
 			t.Fatalf("split records must reconstruct the complete operation: %+v, %v", stored, err)
 		}
+		stored.Mission.Rules[missions.AggregateResults].Actions[0] = "changed"
+		stored.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	}
 	if err := store.Create(t.Context(), first); !errors.Is(err, operations.ErrOperationConflict) {
 		t.Fatalf("duplicate operation creation must conflict: %v", err)

@@ -6,7 +6,7 @@ import actions from './actions';
 import operations from './operations';
 import operationCommands from './operationCommands';
 import operationGraph from './operationGraph';
-import automationGraph from './automationGraph';
+import missionRulesGraph from './missionRulesGraph';
 import artifacts from './artifacts';
 
 export default {
@@ -19,7 +19,7 @@ export default {
   operations,
   operationCommands,
   operationGraph,
-  automationGraph,
+  missionRulesGraph,
   artifacts,
   connections: {
     introduction: 'Administration of yours Command Centers',
