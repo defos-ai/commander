@@ -77,18 +77,19 @@ completion, with no queued/running work or pending questions.
 
 ## Mission rules
 
-Rules belong to the **mission**. Each rule's `actions` selects the actions whose
-executions it applies to. For example, the website mission collects discovery's
+Rules belong to the **mission**. Each rule's `for_actions` selects the actions whose
+executions it applies to; one entry can cover several actions with the same settings.
+For example, the website mission collects discovery's
 generated checks before asking Commander to review their results:
 
 ```json
 {
   "rules": {
     "aggregate-results": {
-      "actions": ["discover-pages"]
+      "for_actions": ["discover-pages"]
     },
     "decide-next-actions": {
-      "actions": ["check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"],
+      "for_actions": ["check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"],
       "params": {"decision_by": "model"}
     }
   }

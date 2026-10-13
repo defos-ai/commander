@@ -13,12 +13,12 @@
     ],
     "rules": {
       "aggregate-results": {
-        "actions": [
+        "for_actions": [
           "discover-pages-no-browser"
         ]
       },
       "decide-next-actions": {
-        "actions": [
+        "for_actions": [
           "check-links",
           "check-seo",
           "detect-technologies"
@@ -117,12 +117,12 @@
     ],
     "rules": {
       "aggregate-results": {
-        "actions": [
+        "for_actions": [
           "discover-pages"
         ]
       },
       "decide-next-actions": {
-        "actions": [
+        "for_actions": [
           "check-links",
           "check-accessibility",
           "capture-page",

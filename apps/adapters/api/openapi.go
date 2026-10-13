@@ -58,7 +58,7 @@ func openAPIDocument() ([]byte, error) {
 		case "MissionRuleParams":
 			schema.Properties["decision_by"].Enum = []any{"model"}
 		case "MissionRule":
-			schema.Properties["actions"].Description = "Actions whose executions this rule applies to."
+			schema.Properties["for_actions"].Description = "Actions whose executions this rule applies to."
 		case "Mission":
 			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results or decide-next-actions. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. Failures and empty proposals also require model review."
 		case "ActionRequirement":

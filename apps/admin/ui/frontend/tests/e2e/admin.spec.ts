@@ -63,21 +63,12 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   const missionURL = page.url();
   await expect(page).toHaveURL(/\/missions\/review-website-with-browser$/);
 
-  const rulesGraph = page.getByRole('region', { name: 'Mission rules graph' });
-  await expect(rulesGraph.getByRole('button', { name: /^Inspect rules for / })).toHaveCount(6);
-  await rulesGraph.getByRole('button', { name: 'Inspect rules for discover-pages', exact: true }).click();
-  const rule = page.getByRole('dialog', { name: 'Rule details', exact: true });
-  await expect(rule.getByRole('heading', { name: 'Automatically run proposed actions', exact: true })).toBeVisible();
-  await expect(rule.getByText('Valid next-action proposals run automatically. The action chooses which follow-ups to propose.', { exact: true })).toBeVisible();
-  await expect(rule.getByText(/Wait for every direct child created by this execution/)).toBeVisible();
-  await rule.getByRole('button', { name: 'Close dialog' }).click();
-  await expect(rulesGraph.getByRole('button', { name: 'Inspect rules for discover-pages', exact: true })).toBeFocused();
-  await rulesGraph.getByRole('button', { name: 'Inspect rules for capture-page', exact: true }).click();
-  await expect(rule.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
-  await expect(rule.getByRole('heading', { name: 'Model review', exact: true })).toBeVisible();
-  await expect(rule.getByText('Commander decides the next actions. Inside an aggregation group, this decision waits for the group and includes all its results.', { exact: true })).toBeVisible();
-  await rule.getByRole('button', { name: 'Close dialog' }).click();
-  await expect(rulesGraph.getByRole('button', { name: 'Inspect rules for capture-page', exact: true })).toBeFocused();
+  const rules = page.getByRole('table', { name: 'Mission rules' });
+  await expect(rules.getByRole('row')).toHaveCount(3);
+  await expect(rules.getByRole('row', { name: 'Aggregate results discover-pages All direct children', exact: true })).toBeVisible();
+  const decisions = rules.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Decide next actions', exact: true }) });
+  await expect(decisions.getByRole('listitem')).toHaveText(['check-links', 'check-accessibility', 'capture-page', 'check-seo', 'detect-technologies']);
+  await expect(decisions.getByRole('cell', { name: 'Model', exact: true })).toBeVisible();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);

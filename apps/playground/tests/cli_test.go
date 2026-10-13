@@ -67,7 +67,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		request := requests.Add(1)
 		expected := map[int32][]string{
 			2: {"review-website-no-browser", "review-website-with-browser"},
-			3: {"starting_actions", "rules", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
+			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
 			4: {"web-agent-", "browser-agent-"},
 		}
 		for _, want := range expected[request] {

@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -29,8 +30,12 @@ func TestMissions(t *testing.T) {
 		if summary["name"] != expected.name || len(summary) != 2 || summary["objective"] == "" {
 			t.Fatalf("expected mission name and objective only: %+v", summary)
 		}
-		var mission missions.Mission
-		a.call("describe_mission", object{"mission_name": summary["name"]}, &mission)
+		var raw json.RawMessage
+		a.call("describe_mission", object{"mission_name": summary["name"]}, &raw)
+		mission, err := missions.LoadMission(raw)
+		if err != nil {
+			t.Fatalf("mission detail does not match the mission definition format: %v", err)
+		}
 		if mission.Name != summary["name"] || mission.Objective != summary["objective"] {
 			t.Fatalf("mission detail differs from summary: %+v", mission)
 		}
@@ -39,7 +44,7 @@ func TestMissions(t *testing.T) {
 		}
 		aggregate := mission.Rules[missions.AggregateResults]
 		decision := mission.Rules[missions.DecideNextActions]
-		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.Actions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.Actions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
 			t.Fatalf("mission detail lost grouping or model rules: %+v", mission.Rules)
 		}
 		if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {

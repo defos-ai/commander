@@ -67,8 +67,8 @@ func TestRuleApplierDefersUnfinishedWorkAndRequestsReview(t *testing.T) {
 
 func TestRuleApplierMatchesSourceActionsAndPreservesAggregation(t *testing.T) {
 	rules := missions.RuleSet{
-		missions.AggregateResults:  {Actions: []string{"batch-ports", "scan-ports"}},
-		missions.DecideNextActions: {Actions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.AggregateResults:  {ForActions: []string{"batch-ports", "scan-ports"}},
+		missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 	cases := []struct {
 		action    string
@@ -108,7 +108,7 @@ func TestRuleApplierUsesDurableGroupMembersAndTheirOwnRules(t *testing.T) {
 	input := ruleGroup(first, second)
 	input.Task.ActionName = "old-batch-action"
 	input.Task.Continuation.CreatedTaskIDs = []string{second.ID, first.ID}
-	input.Rules = missions.RuleSet{missions.AggregateResults: {Actions: []string{"batch-ports"}}}
+	input.Rules = missions.RuleSet{missions.AggregateResults: {ForActions: []string{"batch-ports"}}}
 	otherExecution := ruleTask("other-execution", "batch-ports")
 	otherExecution.ParentTaskID = "another-parent"
 	unrecordedChild := ruleTask("unrecorded", "scan-ports")
@@ -137,7 +137,7 @@ func TestRuleApplierWaitsForWholeGroupBeforeModelReview(t *testing.T) {
 	for _, state := range []string{"missing", "running"} {
 		t.Run(state, func(t *testing.T) {
 			input := ruleGroup(ruleTask("review", "scan-ports"), ruleTask("pending", "batch-ports"))
-			input.Rules = missions.RuleSet{missions.DecideNextActions: {Actions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}}}
+			input.Rules = missions.RuleSet{missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}}}
 			if state == "missing" {
 				input.Tasks = input.Tasks[:1]
 			} else {
@@ -156,8 +156,8 @@ func TestRuleApplierReturnsOneModelDecisionForMixedGroup(t *testing.T) {
 	second := ruleTask("second", "scan-ports", actions.NextAction{ActionName: "report-scan", Input: json.RawMessage(`{"port":443}`)})
 	input := ruleGroup(first, second)
 	input.Rules = missions.RuleSet{
-		missions.AggregateResults:  {Actions: []string{"batch-ports"}},
-		missions.DecideNextActions: {Actions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.AggregateResults:  {ForActions: []string{"batch-ports"}},
+		missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 	before := []operations.Task{input.Tasks[0].Clone(), input.Tasks[1].Clone()}
 	effects := applyRules(t, input)
@@ -203,7 +203,7 @@ func TestRuleApplierRejectsInvalidGroupsWithoutEffects(t *testing.T) {
 		{"duplicate snapshot", func(input *operations.RuleContext) { input.Tasks = append(input.Tasks, input.Tasks[0].Clone()) }},
 		{"unknown task status", func(input *operations.RuleContext) { input.Tasks[0].Status = "unknown" }},
 		{"invalid rule", func(input *operations.RuleContext) {
-			input.Rules = missions.RuleSet{"unknown-rule": {Actions: []string{"scan-ports"}}}
+			input.Rules = missions.RuleSet{"unknown-rule": {ForActions: []string{"scan-ports"}}}
 		}},
 	}
 	for _, tc := range cases {

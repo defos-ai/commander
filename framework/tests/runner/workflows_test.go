@@ -66,7 +66,7 @@ func TestRulesDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 func TestRulesModelDecisionStopsProposedTasks(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.DecideNextActions: {Actions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
@@ -90,8 +90,8 @@ func TestRulesModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	config := fixture()
 	config.AgentCatalog.(*agentCatalog).set(readyAgent(agentID), readyAgent("review-agent-00000002"))
 	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults:  {Actions: []string{"discover"}},
-		missions.DecideNextActions: {Actions: []string{"discover", "inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.AggregateResults:  {ForActions: []string{"discover"}},
+		missions.DecideNextActions: {ForActions: []string{"discover", "inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
@@ -153,17 +153,17 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	config := fixture()
 	catalog := config.MissionStore.(*missionStore)
 	catalog.mission.Rules = missions.RuleSet{
-		missions.AggregateResults:  {Actions: []string{"inspect"}},
-		missions.DecideNextActions: {Actions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.AggregateResults:  {ForActions: []string{"inspect"}},
+		missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 	expected := catalog.mission.Rules.Clone()
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)
 	op := start(t, r)
-	catalog.mission.Rules[missions.DecideNextActions].Actions[0] = "inspect"
+	catalog.mission.Rules[missions.DecideNextActions].ForActions[0] = "inspect"
 	catalog.mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	delete(catalog.mission.Rules, missions.AggregateResults)
-	op.Mission.Rules[missions.DecideNextActions].Actions[0] = "returned snapshot changed"
+	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot changed"
 	op.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	assign(t, r, op.ID, "discover")
 	receive(t, calls).reply <- output("discover", actions.NextAction{ActionName: "inspect"})
@@ -187,7 +187,7 @@ func TestRulesWaitForAllChildrenBeforeModelReview(t *testing.T) {
 	config := fixture()
 	config.AgentCatalog.(*agentCatalog).set(readyAgent(agentID), readyAgent("review-agent-00000002"))
 	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {Actions: []string{"discover"}},
+		missions.AggregateResults: {ForActions: []string{"discover"}},
 	}
 	exec, calls := controlledExecutor()
 	r := newRunner(t, config, exec)

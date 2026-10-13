@@ -150,7 +150,7 @@ func TestUncertainCompletionRetainsReportThroughRecovery(t *testing.T) {
 func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {Actions: []string{"discover"}},
+		missions.AggregateResults: {ForActions: []string{"discover"}},
 	}
 	failure := errors.New("directory sync failed")
 	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterFail: func(operations.Operation) error {

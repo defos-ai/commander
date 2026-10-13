@@ -130,6 +130,10 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 	if mission.Properties["rules"] == nil || mission.Properties["automations"] != nil {
 		t.Fatal("OpenAPI must publish mission rules without the old automation format")
 	}
+	rule := document.Components.Schemas["MissionRule"]
+	if rule.Properties["for_actions"] == nil || rule.Properties["actions"] != nil {
+		t.Fatal("OpenAPI must identify rule selectors as for_actions")
+	}
 	params := document.Components.Schemas["MissionRuleParams"]
 	if decision := params.Properties["decision_by"]; decision == nil || len(decision.Enum) != 1 || decision.Enum[0] != "model" {
 		t.Fatal("OpenAPI must document model as the supported rule decision maker")

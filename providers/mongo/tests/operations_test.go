@@ -32,8 +32,8 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	}
 	original := newMongoOperation()
 	original.Mission.Rules = missions.RuleSet{
-		missions.AggregateResults:  {Actions: []string{"discover"}},
-		missions.DecideNextActions: {Actions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.AggregateResults:  {ForActions: []string{"discover"}},
+		missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 	task := operations.NewTask(original.ID, "review", "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
 	original.Tasks = []operations.Task{task}
@@ -48,7 +48,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Input[0] = '!'
 	original.Tasks[0].Input[0] = '!'
 	original.Questions[0].Options[0] = "changed"
-	original.Mission.Rules[missions.AggregateResults].Actions[0] = "changed"
+	original.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
 	original.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	got := readMongoOperation(t, catalog, expected.ID)
 	assertOperationEqual(t, got, expected)
@@ -57,7 +57,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	}
 	got.Preflight.Actions[0].ReadyAgentIDs[0] = "changed"
 	got.Mission.RequiredActions[0] = "changed"
-	got.Mission.Rules[missions.AggregateResults].Actions[0] = "changed"
+	got.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
 	got.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	got.Questions[0].Options[0] = "changed"
 	assertOperationEqual(t, readMongoOperation(t, catalog, expected.ID), expected)
@@ -237,7 +237,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 	first, _ := openOperations(t)
 	second, _ := openOperations(t)
 	op := newMongoOperation()
-	op.Mission.Rules = missions.RuleSet{missions.AggregateResults: {Actions: []string{"discover"}}}
+	op.Mission.Rules = missions.RuleSet{missions.AggregateResults: {ForActions: []string{"discover"}}}
 	op = createMongoOperation(t, first, op)
 	parent := queueAndDispatch(t, first, op.ID, "discover")
 	result := successfulTask(parent)

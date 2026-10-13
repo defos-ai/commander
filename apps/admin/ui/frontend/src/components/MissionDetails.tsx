@@ -1,7 +1,7 @@
 import type { Mission } from '../api/types';
 import { useTranslation } from '../i18n';
 import { SchemaDetails } from './SchemaDetails';
-import { MissionRulesGraph } from './MissionRulesGraph';
+import { MissionRules } from './MissionRules';
 
 function ActionNames({ names }: { names: string[] | null | undefined }) {
   const { t } = useTranslation();
@@ -17,8 +17,8 @@ export function MissionDetails({ mission }: { mission: Mission }) {
       <section className="mission-section"><h2>{t($ => $.missions.startingActions)}</h2><ActionNames names={mission.starting_actions} /></section>
       <section className="mission-section"><h2>{t($ => $.missions.requiredActions)}</h2><ActionNames names={mission.required_actions} /></section>
     </div>
-    <section className="mission-section"><h2>{t($ => $.missions.rules)}</h2><p className="mission-muted">{t($ => $.missions.rulesDescription)}</p>
-      <MissionRulesGraph key={mission.name} mission={mission} />
+    <section className="mission-section"><h2>{t($ => $.missions.rules)}</h2>
+      <MissionRules rules={mission.rules} />
     </section>
     {Boolean(mission.steps?.length) && <section className="mission-section"><h2>{t($ => $.missions.steps)}</h2><p className="mission-muted">{t($ => $.missions.stepsDescription)}</p>
       <ol className="mission-steps">{mission.steps?.map(step => <li key={step.id}>

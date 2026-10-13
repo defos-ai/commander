@@ -21,8 +21,8 @@ type MissionStepResponse struct {
 }
 
 type MissionRuleResponse struct {
-	Actions []string                   `json:"actions"`
-	Params  *MissionRuleParamsResponse `json:"params,omitempty"`
+	ForActions []string                   `json:"for_actions"`
+	Params     *MissionRuleParamsResponse `json:"params,omitempty"`
 }
 
 type MissionRuleParamsResponse struct {

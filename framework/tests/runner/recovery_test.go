@@ -296,7 +296,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {Actions: []string{"discover"}},
+		missions.AggregateResults: {ForActions: []string{"discover"}},
 	}
 	failure := errors.New("directory sync failed")
 	var failed atomic.Bool

@@ -19,7 +19,7 @@ export interface MissionStep {
 export type MissionRuleName = 'aggregate-results' | 'decide-next-actions';
 
 export interface MissionRule {
-  actions: string[];
+  for_actions: string[];
   params?: { decision_by?: 'model' };
 }
 

@@ -35,9 +35,10 @@
   to inspect its outcome. Update TypeScript response validation with API changes.
 - Preserve routes across reload/back/forward, stale-request cancellation and
   per-connection state. Keep expired questions unanswerable and handle conflicts.
-- Reuse `GraphCanvas`, graph layout and panning hooks. Execution graphs show saved
-  work; mission rules graphs show decision and aggregation policies. Keep node
-  details in dialogs and preserve mouse, keyboard, zoom and focus behavior.
+- Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning
+  hooks; keep node details in dialogs and preserve mouse, keyboard, zoom and focus
+  behavior. Mission rules use a compact table of rules, `for_actions` and settings;
+  they describe policies, not execution dependencies.
 - Use existing theme tokens/fonts. The COMMANDER wordmark uses Grunt Grotesk
   SemiBold without a star. Keep dialog labels and focus behavior accessible.
 

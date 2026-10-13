@@ -20,7 +20,7 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	if mission.Rules != nil {
 		response.Rules = make(map[string]models.MissionRuleResponse, len(mission.Rules))
 		for name, rule := range mission.Rules {
-			mapped := models.MissionRuleResponse{Actions: slices.Clone(rule.Actions)}
+			mapped := models.MissionRuleResponse{ForActions: slices.Clone(rule.ForActions)}
 			if rule.Params != nil {
 				mapped.Params = &models.MissionRuleParamsResponse{DecisionBy: string(rule.Params.DecisionBy)}
 			}

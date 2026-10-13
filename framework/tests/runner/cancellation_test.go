@@ -76,7 +76,7 @@ func TestCancellationWriteFailurePreservesQueuedWorkAndRetry(t *testing.T) {
 func TestUncertainCancellationRecoversRunningResultsWithoutNewWork(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {Actions: []string{"discover"}},
+		missions.AggregateResults: {ForActions: []string{"discover"}},
 	}
 	failure := errors.New("directory sync failed")
 	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterCancel: func(operations.Operation) error {

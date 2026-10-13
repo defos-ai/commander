@@ -22,8 +22,8 @@ const Model Decision = "model"
 type RuleSet map[RuleName]Rule
 
 type Rule struct {
-	Actions []string    `json:"actions"`
-	Params  *RuleParams `json:"params,omitempty"`
+	ForActions []string    `json:"for_actions"`
+	Params     *RuleParams `json:"params,omitempty"`
 }
 
 type RuleParams struct {
@@ -43,13 +43,13 @@ func (rule Rule) validate(name RuleName) error {
 	if name != AggregateResults && name != DecideNextActions {
 		return errors.New("unsupported rule")
 	}
-	if len(rule.Actions) == 0 {
-		return errors.New("actions must not be empty")
+	if len(rule.ForActions) == 0 {
+		return errors.New("for_actions must not be empty")
 	}
-	seen := make(map[string]bool, len(rule.Actions))
-	for _, action := range rule.Actions {
+	seen := make(map[string]bool, len(rule.ForActions))
+	for _, action := range rule.ForActions {
 		if strings.TrimSpace(action) == "" || strings.TrimSpace(action) != action {
-			return errors.New("actions must be nonblank names without surrounding whitespace")
+			return errors.New("for_actions must be nonblank names without surrounding whitespace")
 		}
 		if seen[action] {
 			return fmt.Errorf("duplicate action %q", action)
@@ -68,7 +68,7 @@ func (rule Rule) validate(name RuleName) error {
 func (rules RuleSet) Clone() RuleSet {
 	cloned := maps.Clone(rules)
 	for name, rule := range cloned {
-		rule.Actions = slices.Clone(rule.Actions)
+		rule.ForActions = slices.Clone(rule.ForActions)
 		if rule.Params != nil {
 			params := *rule.Params
 			rule.Params = &params

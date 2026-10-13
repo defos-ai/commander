@@ -24,8 +24,8 @@ func TestMissionMongoStore(t *testing.T) {
 		RequiredActions: []string{"discover", "check"}, StartingActions: []string{"discover"},
 		Steps: []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
-			missions.AggregateResults:  {Actions: []string{"discover"}},
-			missions.DecideNextActions: {Actions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.AggregateResults:  {ForActions: []string{"discover"}},
+			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 		},
 		InputSchema:  json.RawMessage(`{"type":"object","x-example":9007199254740993,"properties":{"url":{"type":"string"}}}`),
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}}}`),
@@ -63,7 +63,7 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 	stored.RequiredActions[0] = "modified by reader"
 	stored.InputSchema[0] = '!'
-	stored.Rules[missions.AggregateResults].Actions[0] = "modified by reader"
+	stored.Rules[missions.AggregateResults].ForActions[0] = "modified by reader"
 	stored.Rules[missions.DecideNextActions].Params.DecisionBy = "modified by reader"
 	unchanged, err := catalog.Get(ctx, original.Name)
 	if err != nil || !reflect.DeepEqual(unchanged, original) {

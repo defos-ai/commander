@@ -20,8 +20,9 @@ function isStep(value: unknown): value is MissionStep {
 }
 
 function isRule(name: string, value: unknown): value is MissionRule {
-  if (!isObject(value) || !isStringArray(value.actions) || !value.actions.length ||
-    value.actions.some(action => !action || action.trim() !== action) || new Set(value.actions).size !== value.actions.length) return false;
+  if (!isObject(value) || Object.keys(value).some(key => key !== 'for_actions' && key !== 'params') ||
+    !isStringArray(value.for_actions) || !value.for_actions.length ||
+    value.for_actions.some(action => !action || action.trim() !== action) || new Set(value.for_actions).size !== value.for_actions.length) return false;
   const params = value.params;
   if (params !== undefined && (!isObject(params) || Object.keys(params).some(key => key !== 'decision_by'))) return false;
   if (name === 'aggregate-results') return params === undefined || params.decision_by === undefined;

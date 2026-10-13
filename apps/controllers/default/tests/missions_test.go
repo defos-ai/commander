@@ -23,7 +23,7 @@ func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testin
 	valid := `{"name":"review","objective":"New objective","input_schema":{},"output_schema":{}}`
 	for _, invalid := range []string{
 		`{"name":"broken"}`,
-		`{"name":"broken","objective":"Invalid rule","input_schema":{},"output_schema":{},"rules":{"decide-next-actions":{"actions":["inspect"],"params":{"decision_by":"unknown"}}}}`,
+		`{"name":"broken","objective":"Invalid rule","input_schema":{},"output_schema":{},"rules":{"decide-next-actions":{"for_actions":["inspect"],"params":{"decision_by":"unknown"}}}}`,
 	} {
 		if err := os.WriteFile(path, []byte("["+valid+","+invalid+"]"), 0600); err != nil {
 			t.Fatal(err)
@@ -80,13 +80,13 @@ func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
 			aggregate := website.Rules[missions.AggregateResults]
 			decision := website.Rules[missions.DecideNextActions]
 			required := append([]string{test.discovery}, test.checks...)
-			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(aggregate.Actions, []string{test.discovery}) {
+			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(aggregate.ForActions, []string{test.discovery}) {
 				t.Fatalf("website checks are not grouped automatic work: %+v", website)
 			}
 			if len(website.Rules) != 2 {
 				t.Fatalf("unexpected mission rules: %+v", website.Rules)
 			}
-			if !slices.Equal(decision.Actions, test.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+			if !slices.Equal(decision.ForActions, test.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
 				t.Fatalf("website checks are not followed by model review: %+v", decision)
 			}
 		})

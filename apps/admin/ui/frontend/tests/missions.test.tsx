@@ -17,8 +17,8 @@ const mission: Mission = {
   },
   output_schema: { type: 'object', properties: { summary: { type: 'string' } } },
   rules: {
-    'aggregate-results': { actions: ['discover-pages'] },
-    'decide-next-actions': { actions: ['check-links'], params: { decision_by: 'model' } },
+    'aggregate-results': { for_actions: ['discover-pages'] },
+    'decide-next-actions': { for_actions: ['check-links', 'capture-page'], params: { decision_by: 'model' } },
   },
 };
 const otherMission: Mission = { ...mission, name: 'review-service', objective: 'Check service availability.' };
@@ -54,12 +54,10 @@ describe('missions browser', () => {
     expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
     expect(screen.getByRole('heading', { name: mission.name, level: 1 })).toHaveFocus();
     expect(screen.getByText('Website to review')).toBeVisible();
-    const graph = screen.getByRole('region', { name: 'Mission rules graph' });
-    expect(within(graph).getAllByRole('button')).toHaveLength(2);
-    expect(within(within(graph).getByRole('button', { name: 'Inspect rules for check-links' })).getByText('Model review')).toBeVisible();
-    fireEvent.click(within(graph).getByRole('button', { name: 'Inspect rules for discover-pages' }));
-    expect(within(screen.getByRole('dialog', { name: 'Rule details' })).getByText(/Wait for every direct child created by this execution/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    const rules = within(screen.getByRole('table', { name: 'Mission rules' }));
+    expect(rules.getAllByRole('row')).toHaveLength(3);
+    expect(rules.getByRole('row', { name: 'Aggregate results discover-pages All direct children' })).toBeVisible();
+    expect(rules.getByRole('row', { name: 'Decide next actions check-links capture-page Model' })).toBeVisible();
     expect(fetch.mock.calls.some(([url]) => upstreamURL(url) === `${connection.url}/api/v1/missions/review-website-with-browser`)).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
 
@@ -86,7 +84,9 @@ describe('missions browser', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     fireEvent.click(await screen.findByRole('button', { name: 'View mission manual-review' }));
 
-    expect(await screen.findByText('No action rules defined. Valid proposals run automatically; failures or no proposals require model review.')).toBeVisible();
+    expect(await screen.findByText('No rules defined.')).toBeVisible();
+    expect(screen.getByText('Valid proposals run automatically unless a rule requires model review. Failed work and invalid or empty proposals require model review.')).toBeVisible();
+    expect(screen.queryByRole('table', { name: 'Mission rules' })).not.toBeInTheDocument();
     expect(screen.getAllByText('None specified')).toHaveLength(2);
     expect(screen.getAllByText('No schema specified.')).toHaveLength(2);
     expect(screen.queryByText('discover-pages')).not.toBeInTheDocument();

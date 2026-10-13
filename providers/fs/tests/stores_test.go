@@ -174,8 +174,8 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		Input: json.RawMessage(`{}`),
 		Mission: missions.Mission{Name: "inspect", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 			Rules: missions.RuleSet{
-				missions.AggregateResults:  {Actions: []string{"discover"}},
-				missions.DecideNextActions: {Actions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+				missions.AggregateResults:  {ForActions: []string{"discover"}},
+				missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 			}},
 		Tasks:     []operations.Task{{ID: id.New(), Input: json.RawMessage(`1`)}},
 		Events:    []operations.Event{{Sequence: 1, Type: operations.QuestionAsked}},
@@ -232,7 +232,7 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(stored, op.Clone()) {
 			t.Fatalf("split records must reconstruct the complete operation: %+v, %v", stored, err)
 		}
-		stored.Mission.Rules[missions.AggregateResults].Actions[0] = "changed"
+		stored.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
 		stored.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	}
 	if err := store.Create(t.Context(), first); !errors.Is(err, operations.ErrOperationConflict) {

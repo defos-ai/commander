@@ -28,7 +28,7 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 		if !reflect.DeepEqual(catalog.Items[i], mission) || mission.Objective == "" || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
 			t.Fatalf("default mission catalog lost schemas or actions: %+v", mission)
 		}
-		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.Actions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.Actions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != "model" {
+		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != "model" {
 			t.Fatalf("default mission catalog lost grouping or model rules: %+v", mission.Rules)
 		}
 		assertSchema(t, a, "Mission", a.request(http.MethodGet, path, nil))

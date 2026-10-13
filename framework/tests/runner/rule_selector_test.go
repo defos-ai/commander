@@ -39,7 +39,7 @@ func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
 		selection.Input[0] = '['
 		selection.Mission.Objective = "modified"
 		selection.Mission.InputSchema[0] = '['
-		selection.Mission.Rules[missions.DecideNextActions].Actions[0] = "modified"
+		selection.Mission.Rules[missions.DecideNextActions].ForActions[0] = "modified"
 		selection.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "modified"
 		return selected, nil
 	})
@@ -52,10 +52,10 @@ func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
 	if string(input) != `{"page":1}` || !reflect.DeepEqual(catalog.mission, definition) {
 		t.Fatal("selector modified caller input or the mission catalog")
 	}
-	selected[missions.DecideNextActions].Actions[0] = "modified"
+	selected[missions.DecideNextActions].ForActions[0] = "modified"
 	selected[missions.DecideNextActions].Params.DecisionBy = "modified"
 	delete(selected, missions.DecideNextActions)
-	op.Mission.Rules[missions.DecideNextActions].Actions[0] = "returned snapshot modified"
+	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot modified"
 	input[0] = '['
 	assign(t, r, op.ID, "discover")
 	receive(t, calls).reply <- output("discover", actions.NextAction{ActionName: "inspect"})
@@ -104,8 +104,8 @@ func TestRuleSelectionFailsBeforeSavingAnOperation(t *testing.T) {
 			m.InputSchema = json.RawMessage(`{"type":"object","required":["target"]}`)
 		}},
 		{name: "selector error", err: selectionFailure, selections: 1},
-		{name: "unknown rule", rules: missions.RuleSet{"unknown": {Actions: []string{"discover"}}}, selections: 1},
-		{name: "invalid rule parameters", rules: missions.RuleSet{missions.DecideNextActions: {Actions: []string{"discover"}}}, selections: 1},
+		{name: "unknown rule", rules: missions.RuleSet{"unknown": {ForActions: []string{"discover"}}}, selections: 1},
+		{name: "invalid rule parameters", rules: missions.RuleSet{missions.DecideNextActions: {ForActions: []string{"discover"}}}, selections: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			config := fixture()
@@ -256,6 +256,6 @@ func TestRecoveryKeepsSelectedRulesWithoutReselection(t *testing.T) {
 
 func modelRules(action string) missions.RuleSet {
 	return missions.RuleSet{
-		missions.DecideNextActions: {Actions: []string{action}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.DecideNextActions: {ForActions: []string{action}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 }

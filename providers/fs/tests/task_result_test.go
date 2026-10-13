@@ -262,8 +262,8 @@ func createResultOperation(t *testing.T, store *operationfs.OperationFsStore) (o
 	op := operations.Operation{
 		ID: operationID, Status: operations.Running, CreatedAt: created, UpdatedAt: created,
 		Mission: missions.Mission{Rules: missions.RuleSet{
-			missions.AggregateResults:  {Actions: []string{"discover"}},
-			missions.DecideNextActions: {Actions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.AggregateResults:  {ForActions: []string{"discover"}},
+			missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 		}},
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,

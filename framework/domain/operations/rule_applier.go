@@ -151,5 +151,5 @@ func ruleGroupMembers(input RuleContext) ([]Task, error) {
 }
 
 func ruleMatches(rules missions.RuleSet, name missions.RuleName, action string) bool {
-	return slices.Contains(rules[name].Actions, action)
+	return slices.Contains(rules[name].ForActions, action)
 }

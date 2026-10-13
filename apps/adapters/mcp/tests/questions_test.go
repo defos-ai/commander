@@ -154,7 +154,7 @@ func TestDiscoveryRedirectWaitsForOperatorBeforeLimitedReport(t *testing.T) {
 		http.Redirect(w, r, "http://"+net.JoinHostPort(host, port)+"/outside", http.StatusFound)
 	}))
 	op := a.start(url)
-	if len(op.Mission.Rules["aggregate-results"].Actions) == 0 {
+	if len(op.Mission.Rules["aggregate-results"].ForActions) == 0 {
 		t.Fatal("fixture mission has no discovery grouping rule")
 	}
 
