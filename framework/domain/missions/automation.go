@@ -13,10 +13,6 @@ const (
 	WhenAll  ContinueWhen = "when_all"
 )
 
-type Decision string
-
-const Model Decision = "model"
-
 type Automation struct {
 	Run      []string     `json:"run,omitempty"`
 	Continue ContinueWhen `json:"continue,omitempty"`
