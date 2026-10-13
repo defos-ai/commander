@@ -1,0 +1,65 @@
+name: Make Playground image for an existing release
+run-name: Publish Playground ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Already published Commander version
+        type: string
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commander-playground-backfill
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: ${{ github.repository == 'defos-ai/commander' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      commit: ${{ steps.verify-release.outputs.commit }}
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Reuse successful release validation
+        id: verify-release
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
+          gh api "repos/$GH_REPO/releases/tags/$VERSION" |
+            jq -e --arg version "$VERSION" '.tag_name == $version and .draft == false and .prerelease == false' > /dev/null
+          commit=$(gh api "repos/$GH_REPO/commits/$VERSION" --jq .sha)
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          runs=$(gh api --paginate "repos/$GH_REPO/actions/workflows/make-release.yml/runs?head_sha=$commit&event=workflow_dispatch&status=success&per_page=100")
+          if ! jq -e -s --arg commit "$commit" --arg branch "$DEFAULT_BRANCH" '
+            any(.[].workflow_runs[]; .head_sha == $commit and .head_branch == $branch
+              and .event == "workflow_dispatch" and .conclusion == "success")
+          ' <<< "$runs" > /dev/null; then
+            echo "No successful Make release run for $VERSION at $commit; refusing to skip release validation." >&2
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "Reuse successful release validation for $VERSION ($commit). Publish only the missing Playground version tag." >> "$GITHUB_STEP_SUMMARY"
+
+  playground:
+    needs: verify
+    uses: ./.github/workflows/push-playground.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+      commit: ${{ needs.verify.outputs.commit }}
