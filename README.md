@@ -11,6 +11,7 @@ Use Commander for complex workflows that a single AI cannot reliably coordinate 
 - **Cybersecurity:** pen-testing, SOC alert triage, and incident response.
 - **Investigations:** collect evidence, correlate sources, and build case timelines.
 - **Development:** implement features, test changes, and review code across repositories.
+- **Sales:** research prospects, qualify leads, prepare outreach, and update CRM records.
 - **IT operations:** diagnose incidents and run approved recovery steps.
 - **Data processing:** validate datasets, enrich records, and generate reports.
 - **Website quality:** check links, accessibility, SEO, and page rendering before release.
