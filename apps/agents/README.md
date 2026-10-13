@@ -84,13 +84,13 @@ framework and only the providers your host uses, with replacements in your own
 
 ```sh
 go mod init private.example/my-agent
-go mod edit -require=github.com/defos-ai/commander/framework@v0.0.0
+go mod edit -require=github.com/defos-ai/commander/framework@v0.1.0
 go mod edit -replace=github.com/defos-ai/commander/framework=/absolute/path/to/commander/framework
-go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.0.0
+go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.1.0
 go mod edit -replace=github.com/defos-ai/commander/providers/fs=/absolute/path/to/commander/providers/fs
 ```
 
-`v0.0.0` is an unreleased placeholder resolved by those local replacements.
+`v0.1.0` is the prepared release version, resolved here by local replacements.
 Add replacements for each additional Commander module you use, including its
 Commander dependencies; a dependency's own replacements do not apply to your
 project. The repository's `go.work` supplies local modules when developing inside

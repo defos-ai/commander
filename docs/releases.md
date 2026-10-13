@@ -1,9 +1,9 @@
 # Releasing Commander
 
 Commander uses one version for the repository and all
-[workspace modules](../go.work). `v0.1.0` is the planned first version, not an
-existing release. Current `v0.0.0` requirements are placeholders and block
-release validation until maintainers update them.
+[workspace modules](../go.work). Internal dependencies are pinned to `v0.1.0`
+for the first release. These pins do not publish tags or artifacts; publication
+still requires the checks and workflow below.
 
 ## Version and tags
 
