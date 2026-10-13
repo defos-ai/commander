@@ -132,19 +132,23 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 			return nil
 		}
 		return err
+	case <-controller.Done():
+		if ctx.Err() == nil {
+			return fmt.Errorf("controller command client stopped: %w", controller.Err())
+		}
 	case <-ctx.Done():
-		logger.Info("MCP server shutting down")
-		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if err := httpServer.Shutdown(shutdown); err != nil {
-			logger.Warn("HTTP shutdown timed out; closing active requests", "error", err)
-			result = errors.Join(result, httpServer.Close())
-		}
-		if err := <-finished; !errors.Is(err, http.ErrServerClosed) {
-			result = errors.Join(result, err)
-		}
-		return result
 	}
+	logger.Info("MCP server shutting down")
+	shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(shutdown); err != nil {
+		logger.Warn("HTTP shutdown timed out; closing active requests", "error", err)
+		result = errors.Join(result, httpServer.Close())
+	}
+	if err := <-finished; !errors.Is(err, http.ErrServerClosed) {
+		result = errors.Join(result, err)
+	}
+	return result
 }
 
 func Main(args []string, stdout, stderr io.Writer) int {

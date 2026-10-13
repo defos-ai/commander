@@ -104,10 +104,10 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return serve(ctx, listener, handler, logger, options)
+	return serve(ctx, listener, handler, logger, options, controller)
 }
 
-func serve(ctx context.Context, listener net.Listener, handler http.Handler, logger *slog.Logger, options Options) (result error) {
+func serve(ctx context.Context, listener net.Listener, handler http.Handler, logger *slog.Logger, options Options, controller *controllercommands.Client) (result error) {
 	server := &http.Server{
 		Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 		WriteTimeout: 35 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 1 << 20,
@@ -126,19 +126,23 @@ func serve(ctx context.Context, listener net.Listener, handler http.Handler, log
 			return nil
 		}
 		return err
+	case <-controller.Done():
+		if ctx.Err() == nil {
+			return fmt.Errorf("controller command client stopped: %w", controller.Err())
+		}
 	case <-ctx.Done():
-		logger.Info("API server shutting down")
-		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdown); err != nil {
-			logger.Warn("HTTP shutdown timed out; closing active requests")
-			result = errors.Join(result, err, server.Close())
-		}
-		if err := <-finished; !errors.Is(err, http.ErrServerClosed) {
-			result = errors.Join(result, err)
-		}
-		return result
 	}
+	logger.Info("API server shutting down")
+	shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdown); err != nil {
+		logger.Warn("HTTP shutdown timed out; closing active requests")
+		result = errors.Join(result, err, server.Close())
+	}
+	if err := <-finished; !errors.Is(err, http.ErrServerClosed) {
+		result = errors.Join(result, err)
+	}
+	return result
 }
 
 func Main(args []string, stdout, stderr io.Writer) int {
