@@ -86,6 +86,7 @@ for native dependencies and configuration.
 | Build an agent or workflow | [Agents](apps/agents/README.md) · [Missions and rules](docs/abstractions.md) |
 | Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
 | Understand the architecture and limits | [Overview](docs/overview.md) |
-| Contribute | [Testing](framework/tests/README.md) · [Coding-agent guide](AGENTS.md) |
+| Contribute | [Contributing](CONTRIBUTING.md) · [Testing](framework/tests/README.md) |
+| Participate in the community | [Code of Conduct](CODE_OF_CONDUCT.md) |
 | Understand licensing | [AGPL-3.0-only](LICENSE) |
 | Report a vulnerability | [Security](SECURITY.md) |
