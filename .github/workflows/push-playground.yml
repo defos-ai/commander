@@ -7,10 +7,6 @@ on:
         description: Released Commander version
         type: string
         required: true
-      commit:
-        description: Validated release commit
-        type: string
-        required: true
     outputs:
       digest:
         description: Published image digest
@@ -30,44 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.commit }}
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Verify the release source
-        id: verify-source
-        shell: bash
-        env:
-          VERSION: ${{ inputs.version }}
-          COMMIT: ${{ inputs.commit }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
-          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          checkout_commit=$(git rev-parse HEAD)
-          tag_commit=$(gh api "repos/$GH_REPO/commits/$VERSION" --jq .sha)
-          test "$checkout_commit" = "$COMMIT"
-          test "$tag_commit" = "$COMMIT"
-      - name: Require a missing Playground version
-        id: check-image
-        shell: bash
-        env:
-          VERSION: ${{ inputs.version }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          error_file="$RUNNER_TEMP/playground-package-error"
-          if versions=$(gh api --paginate "orgs/defos-ai/packages/container/commander-playground/versions?per_page=100" 2> "$error_file"); then
-            if ! jq -e -s --arg version "$VERSION" '
-              length > 0 and all(.[]; type == "array")
-              and all(.[][]; .metadata.container.tags |
-                type == "array" and all(.[]; type == "string") and index($version) == null)
-            ' <<< "$versions" > /dev/null; then
-              echo "Playground $VERSION already exists or its package metadata is invalid; refusing to overwrite it." >&2
-              exit 1
-            fi
-          elif ! grep -Fq '(HTTP 404)' "$error_file"; then
-            cat "$error_file" >&2
-            exit 1
-          fi
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -84,5 +44,5 @@ jobs:
           tags: ghcr.io/defos-ai/commander-playground:${{ inputs.version }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ inputs.commit }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ inputs.version }}

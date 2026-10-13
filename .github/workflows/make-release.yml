@@ -122,8 +122,17 @@ jobs:
     with:
       version: ${{ inputs.version }}
 
+  playground:
+    needs: publish
+    uses: ./.github/workflows/push-playground.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ inputs.version }}
+
   release:
-    needs: [publish, api, admin, mcp, controllers, agents, aio]
+    needs: [publish, api, admin, mcp, controllers, agents, aio, playground]
     uses: ./.github/workflows/push-binaries.yml
     permissions:
       contents: write
@@ -131,7 +140,7 @@ jobs:
       version: ${{ inputs.version }}
 
   stable:
-    needs: [release, api, admin, mcp, controllers, agents, aio]
+    needs: [release, api, admin, mcp, controllers, agents, aio, playground]
     uses: ./.github/workflows/push-stable.yml
     permissions:
       contents: write
@@ -146,5 +155,6 @@ jobs:
           "commander-controller": "${{ needs.controllers.outputs.digest }}",
           "commander-browser-agent": "${{ needs.agents.outputs.browser-digest }}",
           "commander-web-agent": "${{ needs.agents.outputs.web-digest }}",
-          "commander-aio": "${{ needs.aio.outputs.digest }}"
+          "commander-aio": "${{ needs.aio.outputs.digest }}",
+          "commander-playground": "${{ needs.playground.outputs.digest }}"
         }

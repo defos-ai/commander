@@ -36,7 +36,7 @@ jobs:
           jq -e '
             keys == ["commander-admin", "commander-aio", "commander-api",
                      "commander-browser-agent", "commander-controller", "commander-mcp",
-                     "commander-web-agent"]
+                     "commander-playground", "commander-web-agent"]
             and all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))
           ' <<< "$IMAGES" > /dev/null
 

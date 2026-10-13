@@ -91,6 +91,7 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 | Image | Workflow |
 | --- | --- |
 | `ghcr.io/defos-ai/commander-aio` | [push-aio.yml](../.github/workflows/push-aio.yml) |
+| `ghcr.io/defos-ai/commander-playground` | [push-playground.yml](../.github/workflows/push-playground.yml) |
 | `ghcr.io/defos-ai/commander-api` | [push-api.yml](../.github/workflows/push-api.yml) |
 | `ghcr.io/defos-ai/commander-admin` | [push-admin.yml](../.github/workflows/push-admin.yml) |
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
@@ -101,6 +102,7 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
 The all-in-one image starts Playground with its local hosts and includes Chromium.
+The lightweight Playground image connects to an existing MCP service.
 There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.
 Git tags and images are separate publication steps; image failures do not undo tags.
