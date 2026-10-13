@@ -5,10 +5,10 @@ go 1.26.7
 require (
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
-	github.com/defos-ai/commander/framework v0.0.0
-	github.com/defos-ai/commander/providers/fs v0.0.0
-	github.com/defos-ai/commander/providers/rabbitmq v0.0.0
-	github.com/defos-ai/commander/providers/s3 v0.0.0
+	github.com/defos-ai/commander/framework v0.1.0
+	github.com/defos-ai/commander/providers/fs v0.1.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.1.0
+	github.com/defos-ai/commander/providers/s3 v0.1.0
 )
 
 require (

@@ -3,11 +3,11 @@ module github.com/defos-ai/commander/apps/adapters/mcp
 go 1.26.7
 
 require (
-	github.com/defos-ai/commander/framework v0.0.0
-	github.com/defos-ai/commander/providers/fs v0.0.0
-	github.com/defos-ai/commander/providers/mongo v0.0.0
-	github.com/defos-ai/commander/providers/rabbitmq v0.0.0
-	github.com/defos-ai/commander/providers/s3 v0.0.0
+	github.com/defos-ai/commander/framework v0.1.0
+	github.com/defos-ai/commander/providers/fs v0.1.0
+	github.com/defos-ai/commander/providers/mongo v0.1.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.1.0
+	github.com/defos-ai/commander/providers/s3 v0.1.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 )
