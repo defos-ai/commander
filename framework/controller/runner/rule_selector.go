@@ -13,6 +13,7 @@ import (
 // concurrency-safe and honor ctx. The runner validates and snapshots the result.
 // Recovery and task execution use that saved snapshot without selecting again.
 type RuleSelector interface {
+	Name() string
 	Select(ctx context.Context, selection RuleSelection) (missions.RuleSet, error)
 }
 
@@ -22,6 +23,8 @@ type RuleSelection struct {
 }
 
 type MissionRuleSelector struct{}
+
+func (MissionRuleSelector) Name() string { return "mission-rules" }
 
 func (MissionRuleSelector) Select(ctx context.Context, selection RuleSelection) (missions.RuleSet, error) {
 	if err := ctx.Err(); err != nil {

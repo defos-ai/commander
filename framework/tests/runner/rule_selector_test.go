@@ -18,6 +18,8 @@ import (
 
 type ruleSelectorFunc func(context.Context, runner.RuleSelection) (missions.RuleSet, error)
 
+func (ruleSelectorFunc) Name() string { return "test-rules" }
+
 func (f ruleSelectorFunc) Select(ctx context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
 	return f(ctx, selection)
 }

@@ -14,7 +14,7 @@ func TestDocumentPreservesNanosecondsAndRejectsInvalidPrecision(t *testing.T) {
 	record := controllermodel.Controller{
 		ID: "default-controller-0123abcd", Type: "default", Status: controllermodel.Ready,
 		Server:  controllermodel.ServerInfo{Hostname: "worker-1", OS: "linux", Arch: "amd64"},
-		Version: "v1", AgentSelector: "*", StartedAt: heartbeat.Add(-time.Minute),
+		Version: "v1", AgentSelector: "*", RuleSelector: "mission-rules", StartedAt: heartbeat.Add(-time.Minute),
 		LastHeartbeat: heartbeat, LeaseExpiresAt: heartbeat.Add(45*time.Second + time.Nanosecond),
 	}
 	data, err := bson.Marshal(encode(record))

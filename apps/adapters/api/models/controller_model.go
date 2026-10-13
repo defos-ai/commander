@@ -10,6 +10,7 @@ type ControllerResponse struct {
 	Server         ControllerServerResponse `json:"server"`
 	Version        string                   `json:"version"`
 	AgentSelector  string                   `json:"agent_selector"`
+	RuleSelector   string                   `json:"rule_selector"`
 	StartedAt      time.Time                `json:"started_at"`
 	LastHeartbeat  time.Time                `json:"last_heartbeat"`
 	LeaseExpiresAt time.Time                `json:"lease_expires_at"`

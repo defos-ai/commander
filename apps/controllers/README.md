@@ -57,6 +57,7 @@ The [default host](default/cli/cli.go) shows runtime and registration setup. See
 Pass a [`runner.RuleSelector`](../../framework/controller/runner/rule_selector.go)
 in `runner.Config.RuleSelector` to choose rules from a mission and operation input.
 The default `runner.MissionRuleSelector{}` uses the mission's rules.
+Report the selector's `Name()` in `controller.RegistrationConfig.RuleSelector`.
 
 Return the complete rule set; clone `selection.Mission.Rules` first to extend it.
 An empty set uses default automatic behavior. The controller validates and saves

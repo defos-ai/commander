@@ -7,6 +7,7 @@ const credentials = { url, username: 'operator' };
 const controller: Controller = {
   id: 'default-controller-0123abcd', type: 'default', status: 'ready', stale: false,
   server: { hostname: 'control-west-1', os: 'linux', arch: 'amd64' }, version: '0.1.0', agent_selector: 'round-robin',
+  rule_selector: 'mission-rules',
   started_at: '2026-10-06T09:00:00Z', last_heartbeat: '2026-10-06T09:10:00.123456789Z', lease_expires_at: '2026-10-06T09:10:45Z',
 };
 
@@ -40,7 +41,7 @@ describe('controller catalog client', () => {
   });
 
   it('accepts empty catalogs and future statuses and reports status reasons', async () => {
-    const future = { ...controller, status: 'recovering', status_reason: 'Waiting for broker', agent_selector: 'custom-policy' };
+    const future = { ...controller, status: 'recovering', status_reason: 'Waiting for broker', agent_selector: 'custom-policy', rule_selector: 'custom-rules' };
     respond({ items: [] }, future);
     expect(await listControllers(url, credentials)).toEqual([]);
     expect(await getController(url, credentials, controller.id)).toEqual(future);
@@ -58,7 +59,7 @@ describe('controller catalog client', () => {
   it.each([
     { id: '' }, { type: null }, { status: 42 }, { stale: 'false' }, { status_reason: null },
     { server: null }, { server: { hostname: 'host', os: 'linux', arch: 64 } },
-    { version: null }, { agent_selector: [] }, { started_at: 'invalid' },
+    { version: null }, { agent_selector: [] }, { rule_selector: undefined }, { rule_selector: [] }, { started_at: 'invalid' },
     { last_heartbeat: 42 }, { lease_expires_at: undefined },
   ])('rejects malformed snapshots: %j', async patch => {
     respond({ items: [{ ...controller, ...patch }] });

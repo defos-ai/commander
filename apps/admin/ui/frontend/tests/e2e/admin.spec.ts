@@ -54,6 +54,8 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByRole('heading', { name: 'Controller snapshot', exact: true })).toBeVisible();
   await expect(page.getByText('default', { exact: true })).toBeVisible();
   await expect(page.getByText('round-robin', { exact: true })).toBeVisible();
+  await expect(page.getByText('Rule selector', { exact: true })).toBeVisible();
+  await expect(page.getByText('mission-rules', { exact: true })).toBeVisible();
   await expect(page.getByText('Last heartbeat', { exact: true })).toBeVisible();
   await expect(page.getByText('Lease expires at', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/controllers\/default-controller-[^/]+$/);

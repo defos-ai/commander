@@ -46,7 +46,7 @@ func TestCLIRegistersController(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ready.Status != controllers.Ready || ready.Type != "default" || ready.AgentSelector != "round-robin" || ready.Version == "" {
+	if ready.Status != controllers.Ready || ready.Type != "default" || ready.AgentSelector != "round-robin" || ready.RuleSelector != "mission-rules" || ready.Version == "" {
 		t.Fatalf("controller did not advertise readiness: %+v", ready)
 	}
 	record, err := store.Get(t.Context(), ready.ID)

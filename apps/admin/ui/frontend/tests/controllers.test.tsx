@@ -9,6 +9,7 @@ const credentials = { username: 'operator', url: connection.url };
 const controller: Controller = {
   id: 'default-controller-0123abcd', type: 'default', status: 'ready', stale: false,
   server: { hostname: 'control-west-1', os: 'linux', arch: 'amd64' }, version: '0.1.0', agent_selector: 'round-robin',
+  rule_selector: 'mission-rules',
   started_at: '2026-10-06T09:00:00Z', last_heartbeat: '2026-10-06T09:10:00Z', lease_expires_at: '2026-10-06T09:10:45Z',
 };
 const stale: Controller = { ...controller, id: 'custom-controller-4567efab', type: 'custom', status: 'unavailable', stale: true,
@@ -37,7 +38,7 @@ describe('controllers browser', () => {
     fireEvent.click(ready);
     expect(await screen.findByRole('heading', { name: 'Controller snapshot' })).toBeVisible();
     expect(screen.getByRole('heading', { name: controller.id, level: 1 })).toHaveFocus();
-    for (const value of ['default', 'control-west-1', 'linux', 'amd64', '0.1.0', 'round-robin', 'Started at', 'Last heartbeat', 'Lease expires at']) {
+    for (const value of ['default', 'control-west-1', 'linux', 'amd64', '0.1.0', 'round-robin', 'Rule selector', 'mission-rules', 'Started at', 'Last heartbeat', 'Lease expires at']) {
       expect(screen.getByText(value)).toBeVisible();
     }
     expect(screen.getByText(new Date(controller.lease_expires_at).toLocaleString())).toHaveAttribute('datetime', controller.lease_expires_at);

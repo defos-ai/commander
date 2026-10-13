@@ -14,6 +14,7 @@ func ToControllerResponse(controller controllers.Controller) models.ControllerRe
 		Server:         models.ControllerServerResponse{Hostname: controller.Server.Hostname, OS: controller.Server.OS, Arch: controller.Server.Arch},
 		Version:        controller.Version,
 		AgentSelector:  controller.AgentSelector,
+		RuleSelector:   controller.RuleSelector,
 		StartedAt:      controller.StartedAt,
 		LastHeartbeat:  controller.LastHeartbeat,
 		LeaseExpiresAt: controller.LeaseExpiresAt,

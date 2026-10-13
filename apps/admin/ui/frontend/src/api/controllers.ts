@@ -12,7 +12,7 @@ function isController(value: unknown): value is Controller {
     typeof value.status === 'string' && isOptionalString(value.status_reason) && typeof value.stale === 'boolean' &&
     isObject(value.server) && typeof value.server.hostname === 'string' &&
     typeof value.server.os === 'string' && typeof value.server.arch === 'string' &&
-    typeof value.version === 'string' && typeof value.agent_selector === 'string' &&
+    typeof value.version === 'string' && typeof value.agent_selector === 'string' && typeof value.rule_selector === 'string' &&
     isTimestamp(value.started_at) && isTimestamp(value.last_heartbeat) && isTimestamp(value.lease_expires_at);
 }
 

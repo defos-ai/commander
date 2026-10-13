@@ -31,6 +31,7 @@ export function ControllerDetails({ controller }: { controller: Controller }) {
         <div><dt>{t($ => $.controllers.architecture)}</dt><dd>{controller.server.arch || t($ => $.controllers.notReported)}</dd></div>
         <div><dt>{t($ => $.controllers.version)}</dt><dd>{controller.version || t($ => $.controllers.notReported)}</dd></div>
         <div><dt>{t($ => $.controllers.agentSelector)}</dt><dd>{controller.agent_selector || t($ => $.controllers.notReported)}</dd></div>
+        <div><dt>{t($ => $.controllers.ruleSelector)}</dt><dd>{controller.rule_selector || t($ => $.controllers.notReported)}</dd></div>
         <div><dt>{t($ => $.controllers.startedAt)}</dt><dd><ControllerTime value={controller.started_at} /></dd></div>
         <div><dt>{t($ => $.controllers.lastHeartbeat)}</dt><dd><ControllerTime value={controller.last_heartbeat} /></dd></div>
         <div><dt>{t($ => $.controllers.leaseExpiresAt)}</dt><dd><ControllerTime value={controller.lease_expires_at} /></dd></div>

@@ -66,7 +66,8 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	agentSelector := runner.RoundRobinSelector{}
 	ruleSelector := runner.MissionRuleSelector{}
 	registration, err := controller.Register(ctx, deps.ControllerStore, controller.RegistrationConfig{
-		ID: configuration.controllerID, Type: controllerType, AgentSelector: agentSelector.Name(), Logger: logger,
+		ID: configuration.controllerID, Type: controllerType,
+		AgentSelector: agentSelector.Name(), RuleSelector: ruleSelector.Name(), Logger: logger,
 	})
 	if err != nil {
 		return fmt.Errorf("controller registration: %w", err)

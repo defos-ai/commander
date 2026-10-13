@@ -39,6 +39,7 @@ type Controller struct {
 	Server         ServerInfo `json:"server"`
 	Version        string     `json:"version"`
 	AgentSelector  string     `json:"agent_selector"`
+	RuleSelector   string     `json:"rule_selector"`
 	StartedAt      time.Time  `json:"started_at"`
 	LastHeartbeat  time.Time  `json:"last_heartbeat"`
 	LeaseExpiresAt time.Time  `json:"lease_expires_at"`
@@ -76,7 +77,7 @@ func (record Controller) Validate() error {
 	if record.LeaseExpiresAt.Before(record.LastHeartbeat) || record.Status != Stopped && record.LeaseExpiresAt.Equal(record.LastHeartbeat) {
 		return errors.New("controller lease must follow its heartbeat, or equal it when stopped")
 	}
-	for _, value := range []string{record.StatusReason, record.Version, record.AgentSelector, record.Server.Hostname, record.Server.OS, record.Server.Arch} {
+	for _, value := range []string{record.StatusReason, record.Version, record.AgentSelector, record.RuleSelector, record.Server.Hostname, record.Server.OS, record.Server.Arch} {
 		if !utf8.ValidString(value) || strings.IndexFunc(value, unicode.IsControl) >= 0 {
 			return errors.New("controller metadata must contain valid UTF-8 without control characters")
 		}

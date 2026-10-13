@@ -14,9 +14,9 @@ import (
 )
 
 type RegistrationConfig struct {
-	ID, Type, Version, AgentSelector string
-	HeartbeatInterval, LeaseDuration time.Duration
-	Logger                           *slog.Logger
+	ID, Type, Version, AgentSelector, RuleSelector string
+	HeartbeatInterval, LeaseDuration               time.Duration
+	Logger                                         *slog.Logger
 }
 
 type registrationUpdate struct {
@@ -58,7 +58,7 @@ func Register(ctx context.Context, store controllers.ControllerStore, config Reg
 	record := controllers.Controller{
 		ID: config.ID, Type: config.Type, Status: controllers.Starting,
 		Server:  controllers.ServerInfo{Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH},
-		Version: config.Version, AgentSelector: config.AgentSelector,
+		Version: config.Version, AgentSelector: config.AgentSelector, RuleSelector: config.RuleSelector,
 		StartedAt: now, LastHeartbeat: now, LeaseExpiresAt: now.Add(config.LeaseDuration),
 	}
 	if err := record.Validate(); err != nil {

@@ -34,7 +34,7 @@ func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
 		record := controllers.Controller{
 			ID: controllerID, Type: "default", Status: status, StatusReason: "observed state",
 			Server:  controllers.ServerInfo{Hostname: "controller-host", OS: "linux", Arch: "amd64"},
-			Version: "test-version", AgentSelector: "round-robin", StartedAt: now.Add(-time.Hour),
+			Version: "test-version", AgentSelector: "custom-agents", RuleSelector: "custom-rules", StartedAt: now.Add(-time.Hour),
 			LastHeartbeat: now.Add(-time.Minute), LeaseExpiresAt: now.Add(-time.Second),
 		}
 		if err := store.Upsert(t.Context(), record); err != nil {
@@ -47,6 +47,9 @@ func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
 		}
 		if detail.Status != wantStatus || detail.Stale != wantStale || detail.StatusReason != record.StatusReason {
 			t.Fatalf("HTTP lease projection differs: %+v", detail)
+		}
+		if detail.AgentSelector != record.AgentSelector || detail.RuleSelector != record.RuleSelector {
+			t.Fatalf("HTTP query lost the controller's selection policies: %+v", detail)
 		}
 		inventory := decodeResponse[models.ListResponse[models.ControllerResponse]](t, server.request(t, http.MethodGet, "/api/v1/controllers", authenticate))
 		found := false

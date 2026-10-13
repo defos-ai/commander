@@ -18,7 +18,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 	defer stopHost()
 	store := &registrationStore{observations: make(chan controllers.Controller, 100)}
 	registration, err := controller.Register(hostCtx, store, controller.RegistrationConfig{
-		ID: "default-controller-12345678", Type: "default", AgentSelector: "round-robin",
+		ID: "default-controller-12345678", Type: "default", AgentSelector: "round-robin", RuleSelector: "custom-rules",
 		HeartbeatInterval: 10 * time.Millisecond, LeaseDuration: time.Second,
 	})
 	if err != nil {
@@ -26,7 +26,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = registration.Close(context.Background()) })
 	previous := receive(t, ctx, store.observations)
-	if previous.Status != controllers.Starting || previous.Version == "" || previous.Server.OS == "" || previous.Server.Arch == "" {
+	if previous.Status != controllers.Starting || previous.Version == "" || previous.Server.OS == "" || previous.Server.Arch == "" || previous.RuleSelector != "custom-rules" {
 		t.Fatalf("incomplete starting registration: %+v", previous)
 	}
 	if err := registration.SetStatus(ctx, controllers.Degraded, "invalid\nreason"); err == nil {
@@ -44,7 +44,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 		}
 		for {
 			current := receive(t, ctx, store.observations)
-			if !current.LastHeartbeat.After(previous.LastHeartbeat) || !current.StartedAt.Equal(previous.StartedAt) {
+			if !current.LastHeartbeat.After(previous.LastHeartbeat) || !current.StartedAt.Equal(previous.StartedAt) || current.RuleSelector != previous.RuleSelector {
 				t.Fatalf("registration lost observation ordering: previous=%+v current=%+v", previous, current)
 			}
 			previous = current

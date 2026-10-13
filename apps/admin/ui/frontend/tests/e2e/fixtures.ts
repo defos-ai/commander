@@ -50,7 +50,7 @@ export class CommanderAPI {
           readyActions: agent.actions?.filter(action => action.status === 'ready').length })).sort((left, right) => left.type.localeCompare(right.type)),
         actions: actions.items.length,
         missions: missions.items.map(mission => mission.name).sort(),
-        controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin'),
+        controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin' && controller.rule_selector === 'mission-rules'),
       };
     }, { timeout: 60_000, message: 'Wait for controller, both missions, action catalog, two web agents and one browser agent' }).toEqual({
       agents: [

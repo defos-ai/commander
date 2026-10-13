@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,6 +138,12 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 	params := document.Components.Schemas["MissionRuleParams"]
 	if decision := params.Properties["decision_by"]; decision == nil || len(decision.Enum) != 1 || decision.Enum[0] != "model" {
 		t.Fatal("OpenAPI must document model as the supported rule decision maker")
+	}
+	controller := document.Components.Schemas["Controller"]
+	for _, name := range []string{"agent_selector", "rule_selector"} {
+		if property := controller.Properties[name]; property == nil || property.Type != "string" || !slices.Contains(controller.Required, name) {
+			t.Fatalf("OpenAPI must publish controller %s as a required string", name)
+		}
 	}
 	for _, path := range []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/{controller_id}", "/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/graph", "/api/v1/operations/{operation_id}/report", "/api/v1/reports/{report_id}", "/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}"} {
 		if document.Paths[path].Get.Responses["200"] == nil {

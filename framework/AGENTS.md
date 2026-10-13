@@ -56,6 +56,8 @@
   return promptly; an empty choice defers work.
 - Keep registration ready only after recovery and consumers start. During
   shutdown, await runner and consumer termination before closing registration.
+  Hosts register both selectors' `Name()` values with the same implementations
+  injected into the runner.
 
 ## Agent extension contracts
 

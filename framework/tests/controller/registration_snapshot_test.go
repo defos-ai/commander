@@ -13,7 +13,7 @@ func registration() controllers.Controller {
 	return controllers.Controller{
 		ID: "default-controller-0123abcd", Type: "default", Status: controllers.Ready,
 		Server:  controllers.ServerInfo{Hostname: "worker-1", OS: "linux", Arch: "amd64"},
-		Version: "v1", AgentSelector: "*", StartedAt: stamp.Add(-time.Minute),
+		Version: "v1", AgentSelector: "*", RuleSelector: "mission-rules", StartedAt: stamp.Add(-time.Minute),
 		LastHeartbeat: stamp, LeaseExpiresAt: stamp.Add(45 * time.Second),
 	}
 }
@@ -77,6 +77,7 @@ func TestControllerValidation(t *testing.T) {
 		func(r *controllers.Controller) { r.Server.Hostname = "invalid host" },
 		func(r *controllers.Controller) { r.Server.OS = "linux\n" },
 		func(r *controllers.Controller) { r.StatusReason = "invalid\x00reason" },
+		func(r *controllers.Controller) { r.RuleSelector = "invalid\nselector" },
 	} {
 		invalid := record
 		change(&invalid)

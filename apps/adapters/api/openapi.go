@@ -70,6 +70,8 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
 			schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
 		case "Controller":
+			schema.Properties["agent_selector"].Description = "Policy used to select an agent for each task."
+			schema.Properties["rule_selector"].Description = "Policy used to select mission rules when starting an operation."
 			schema.Properties["status"].Enum = []any{"starting", "ready", "degraded", "draining", "stopped", "unavailable"}
 			schema.Properties["status"].Description = "Observed controller state. A stale lease is reported as unavailable unless the controller has stopped."
 			schema.Properties["status_reason"].Description = "Reason for the observed state, when one is available."
