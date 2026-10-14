@@ -30,7 +30,10 @@ Run all-in-one (AIO), with agent dependencies included:
 docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
-Optional: [open the Admin UI](apps/admin/ui/README.md#all-in-one).
+Admin UI is available at [locally](http://localhost:4275). View credentials with `/credentials` in Playground or run in another terminal:
+```
+docker exec commander commander credentials api
+```
 
 ### Binary
 
