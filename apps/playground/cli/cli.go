@@ -57,7 +57,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	defer cancel()
 	model := ui.New(ctx, config.Config, stdout)
 	defer model.Close()
-	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout), tea.WithAltScreen())
+	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err = program.Run()
 	if config.AllInOne && ctx.Err() != nil && caller.Err() == nil {
 		return context.Cause(ctx)

@@ -112,6 +112,11 @@
   clear it on retry, success or back; never carry it into the chat history.
 - Preserve the DEFOS palette, star loaders, Markdown rendering, keyboard selectors
   and `NO_COLOR`/non-terminal behavior. Use [README.md](README.md) for user commands.
+  Enable mouse reporting in the terminal program. Vertical wheel events scroll
+  chat or move provider/model selection; they never submit input or answers.
+  Keep keyboard scrolling available and preserve drafts and question focus.
+  Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
+  while a reply is active.
   All-in-one startup shows the provider/model, readiness with two connected agents,
   one review prompt and the temporary-state note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.

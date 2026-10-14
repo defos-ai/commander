@@ -211,13 +211,13 @@ func (m *Model) View() string {
 		input = m.renderer.NewStyle().Background(lipgloss.Color(StealthBlack)).Foreground(lipgloss.Color(SmokeWhite)).Padding(0, 1).Render(input)
 	}
 	if m.selecting() && m.input.Value() == "" {
-		input = m.color("↑/↓ choose · Enter select", MutedGray)
+		input = m.color("↑/↓ or wheel · Enter select", MutedGray)
 	}
 	foot := "/help · /exit"
-	if m.stage == stageChat {
-		foot += " · PgUp/PgDown scroll · Ctrl+C stop reply"
-	} else {
+	if m.stage != stageChat {
 		foot += " · /back"
+	} else if m.busy {
+		foot += " · Ctrl+C stop reply"
 	}
 	question := ""
 	if panel := m.questionView(time.Now()); panel != "" {

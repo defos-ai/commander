@@ -241,4 +241,4 @@ const Help = `/help — Show this help
 /exit — Exit; server-side work keeps running
 
 Try: "List missions and available agents."
-Use PgUp/PgDown to scroll. Ctrl+C stops a reply; Ctrl+D exits.`
+Use the mouse wheel, trackpad or PgUp/PgDown to scroll. Ctrl+C stops a reply; Ctrl+D exits.`

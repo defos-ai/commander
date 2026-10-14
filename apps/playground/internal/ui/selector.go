@@ -96,7 +96,7 @@ func (m *Model) selectionView() []string {
 		}
 	}
 	if len(choices) > visible {
-		lines = append(lines, m.color(fmt.Sprintf("  %d / %d · PgUp/PgDown", m.selection+1, len(choices)), MutedGray))
+		lines = append(lines, m.color(fmt.Sprintf("  %d / %d · Wheel/PgUp/PgDown", m.selection+1, len(choices)), MutedGray))
 	}
 	return lines
 }

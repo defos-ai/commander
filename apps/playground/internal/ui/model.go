@@ -137,6 +137,27 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.receive(msg.event)
 		return m, waitEvent(m.engine)
+	case tea.MouseMsg:
+		if msg.Action != tea.MouseActionPress {
+			return m, nil
+		}
+		var direction tea.KeyType
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			direction = tea.KeyUp
+		case tea.MouseButtonWheelDown:
+			direction = tea.KeyDown
+		default:
+			return m, nil
+		}
+		if m.selecting() {
+			m.navigate(tea.KeyMsg{Type: direction})
+		} else if m.stage == stageChat {
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 	case tea.KeyMsg:
 		if m.questionKey(msg) {
 			m.refresh()

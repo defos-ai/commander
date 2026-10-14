@@ -112,8 +112,9 @@ Add `--raw` to print only the API password or MCP token.
 
 ### Model setup
 
-Choose a provider and model with **↑/↓** and **Enter**; **PgUp/PgDown** scroll long
-lists. Select a model supporting tool calls, using **Enter model name…** if needed.
+Choose a provider and model with **↑/↓** and **Enter**; mouse wheel, trackpad or
+**PgUp/PgDown** scroll long lists. Select a model supporting tool calls, using
+**Enter model name…** if needed.
 Missing keys are entered privately. **Other** accepts an OpenAI-compatible base
 URL, model name and optional key. Key prompts link to the provider's API key page.
 Rejected keys can be corrected in place; other discovery failures offer manual setup.
@@ -173,7 +174,8 @@ to include rendered accessibility and screenshots.
 | `/exit` or **Ctrl+D** | Exit chat; all-in-one hosts also stop. |
 
 Messages queue during replies; slash commands and operation updates remain
-responsive. **PgUp/PgDown** scrolls chat.
+responsive. Scroll chat with the mouse wheel, two-finger trackpad gestures or
+**PgUp/PgDown**. Mouse gestures require a terminal that forwards mouse events.
 
 Questions appear in a selector: use **↑/↓** and **Enter**, type a custom answer,
 or press **Tab** to return to chat. The panel shows the latest question, deadline
