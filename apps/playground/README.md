@@ -64,26 +64,33 @@ docker run --rm -it -e COMMANDER_MCP_TOKEN commander:playground --mcp-url https:
 
 ### Native: one executable
 
-The first release is not published yet. [Native release binaries](../../docs/releases.md#native-binaries)
-will provide `commander` for Linux, macOS and Windows (amd64/arm64), without Go.
+[Native release binaries](../../docs/releases.md#native-binaries)
+provide `commander` for Linux, macOS and Windows (amd64/arm64), without Go.
 Download it as `commander` and run `chmod +x commander && ./commander --all-in-one`
-(`.\commander.exe --all-in-one` on Windows), or build and run with Go 1.26.7+
+(`.\commander.exe --all-in-one` on Windows), or build and run with Go 1.26.7+ and Node 24+
 from the repository root:
 
 ```sh
-go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
+npm --prefix apps/admin/ui/frontend ci
+npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist --emptyOutDir
+go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts MCP, the HTTP API, one controller, one web agent and one browser agent using
+This starts Admin, MCP, the HTTP API, one controller, one web agent and one browser agent using
 temporary FS state. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
-Use `/status` to see the running API and MCP addresses.
+Open **http://127.0.0.1:4275** for Admin, connect to `http://127.0.0.1:4274`, and use
+the API login shown by `/credentials`. Use `/status` to see the running addresses.
+`--no-admin` disables Admin; `UI_LISTEN_ADDRESS` changes its address.
+If Admin cannot start, Playground continues with a notice.
 `API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
-The executable embeds both website missions and needs no checkout or Go installation.
+The packaged executable embeds Admin and both website missions and needs no checkout
+or Go installation. For a Go-only source build, omit `-tags embed_ui` and use
+`--no-admin`, or set `UI_STATIC_DIR` to a built frontend directory.
 Start with `review-website-no-browser` for links, SEO and technology checks.
 `review-website-with-browser` adds screenshots and rendered accessibility, requiring
 [Chromium](../agents/browser/README.md#native-agent).

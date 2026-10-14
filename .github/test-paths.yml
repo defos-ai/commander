@@ -67,16 +67,6 @@ mcp:
   - *providers
   - &mcp 'apps/adapters/mcp/**'
 
-playground:
-  - *shared
-  - *providers
-  - *controller
-  - *agent
-  - *web
-  - *api
-  - *mcp
-  - 'apps/playground/**'
-
 ui-backend:
   - *shared
   - &ui-docker 'apps/admin/ui/docker/**'
@@ -86,7 +76,19 @@ frontend:
   - *shared
   - *ui-docker
   - *ui-backend
-  - 'apps/admin/ui/frontend/**'
+  - &ui-frontend 'apps/admin/ui/frontend/**'
+
+playground:
+  - *shared
+  - *providers
+  - *controller
+  - *agent
+  - *web
+  - *api
+  - *mcp
+  - *ui-backend
+  - *ui-frontend
+  - 'apps/playground/**'
 
 # Provider integration checks use the mongo, rabbitmq and s3 filters above.
 controller-mongo:

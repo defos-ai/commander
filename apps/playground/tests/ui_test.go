@@ -335,6 +335,7 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	local := &ui.LocalAPI{URL: "http://127.0.0.1:4274", Username: "local-api-user", Password: "local-only-fixture-password"}
+	const adminURL = "http://127.0.0.1:4275"
 	credentials := host.BearerCredentials{Token: "local-only-fixture-token"}
 	var requests, calls atomic.Int32
 	server := mcp.NewServer(&mcp.Implementation{Name: "credentials-fixture", Version: "1"}, nil)
@@ -350,7 +351,7 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		if err != nil {
 			t.Error("could not inspect model request")
 		}
-		for _, private := range []string{local.Password, local.Username, local.URL, "/credentials", credentials.Token} {
+		for _, private := range []string{local.Password, local.Username, local.URL, adminURL, "/credentials", credentials.Token} {
 			if strings.Contains(string(body), private) {
 				t.Error("local credential lookup leaked into a model request")
 			}
@@ -358,12 +359,12 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		writeModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
 	}))
 	defer provider.Close()
-	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, MCPCredentials: credentials, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAPI: local})
+	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, MCPCredentials: credentials, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAPI: local, AdminURL: adminURL})
 	defer u.model.Close()
 	if strings.Contains(u.model.View(), local.Password) || strings.Contains(u.model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")
 	}
-	if strings.Contains(u.model.View(), local.URL) || strings.Contains(u.model.View(), endpoint.URL) {
+	if strings.Contains(u.model.View(), local.URL) || strings.Contains(u.model.View(), endpoint.URL) || strings.Contains(u.model.View(), adminURL) {
 		t.Fatal("local startup displayed endpoints before a status request")
 	}
 	u.text("/status")
@@ -372,7 +373,7 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		return strings.Contains(view, "MCP connected · watching 0 operations · 0 queued messages")
 	})
 	view := u.model.View()
-	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || strings.Contains(view, local.Password) || strings.Contains(view, credentials.Token) {
+	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || !strings.Contains(view, "Admin: "+adminURL) || strings.Contains(view, local.Password) || strings.Contains(view, credentials.Token) {
 		t.Fatal("status did not show endpoints without credentials")
 	}
 	for _, command := range []string{"/credentials api", "/credentials mcp", "/credentials invalid", "/credentials api extra"} {

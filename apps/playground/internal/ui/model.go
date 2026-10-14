@@ -20,6 +20,7 @@ import (
 
 type Config struct {
 	Provider, Model, BaseURL, MCPURL string
+	AdminURL                         string
 	Keys                             map[string]string
 	NoColor                          bool
 	Debug                            bool

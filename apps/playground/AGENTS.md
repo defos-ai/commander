@@ -4,7 +4,7 @@
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
-  MCP, API, controller, web and browser agent hosts for `--all-in-one`.
+  Admin, MCP, API, controller, web and browser agent hosts for `--all-in-one`.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
@@ -21,6 +21,21 @@
 
 - Chat goes through MCP even in all-in-one mode. Reuse app hosts rather than
   duplicating their lifecycle or calling the runner directly from chat.
+- Native all-in-one starts Admin through its existing CLI host after API and agent
+  readiness. Default to `127.0.0.1:4275`, honor `UI_LISTEN_ADDRESS`, and pass the
+  listen flag explicitly so `PORT` cannot expose it. `--no-admin` is all-in-one
+  only. Admin startup failures must leave MCP, API and agents running; retain a
+  short notice and host-log details. Optional Admin failures must not fail cleanup.
+  Stop and await Admin before removing session state. Show its ready address in
+  `/status`; keep the startup banner short and never put credentials in a URL.
+- Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
+  and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
+  use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only
+  run. Keep `UI_STATIC_DIR`, `UI_PUBLIC_ORIGIN` and `UI_API_UPSTREAMS` semantics in
+  the Admin host. When no upstream mapping is supplied, map the session's exact
+  bound API address to itself so custom ports work without relaxing network
+  policy. Use loopback URLs for wildcard listeners. Native tests must exercise
+  both bundled and directory assets.
 - The embedded API identifies itself as `application: commander` at `/aboutz`;
   `API_RUNTIME` defaults to `native`, and the all-in-one image sets `docker`.
   Embedded MCP uses the same application and reads `MCP_RUNTIME` (default native).
@@ -130,6 +145,10 @@ go test -race -count=1 -timeout=3m ./apps/playground/...
 go vet ./apps/playground/...
 go build -o commander ./apps/playground/cmd/commander
 ```
+
+For native packaging, build the frontend as shown in [README.md](README.md#native-one-executable),
+then run `go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/...`
+and `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
 
 Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
 behavior changes. The suite includes all-in-one coverage without a paid model

@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.10.1
 	github.com/defos-ai/commander/apps/adapters/api v0.1.0
 	github.com/defos-ai/commander/apps/adapters/mcp v0.1.0
+	github.com/defos-ai/commander/apps/admin/ui/backend v0.1.0
 	github.com/defos-ai/commander/apps/agents/browser v0.1.0
 	github.com/defos-ai/commander/apps/agents/web v0.1.0
 	github.com/defos-ai/commander/apps/controllers/default v0.1.0

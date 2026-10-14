@@ -19,6 +19,7 @@ use (
 replace (
 	github.com/defos-ai/commander/apps/adapters/api v0.1.0 => ./apps/adapters/api
 	github.com/defos-ai/commander/apps/adapters/mcp v0.1.0 => ./apps/adapters/mcp
+	github.com/defos-ai/commander/apps/admin/ui/backend v0.1.0 => ./apps/admin/ui/backend
 	github.com/defos-ai/commander/apps/agents/browser v0.1.0 => ./apps/agents/browser
 	github.com/defos-ai/commander/apps/agents/web v0.1.0 => ./apps/agents/web
 	github.com/defos-ai/commander/apps/controllers/default v0.1.0 => ./apps/controllers/default

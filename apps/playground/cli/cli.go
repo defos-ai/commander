@@ -36,13 +36,14 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
-		session, err := local.Start(ctx)
+		session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: config.NoAdmin})
 		if err != nil {
 			return err
 		}
 		defer func() { result = errors.Join(result, session.Close()) }()
 		ctx = session.Context
 		config.MCPURL = session.MCPURL
+		config.AdminURL = session.AdminURL
 		config.MCPCredentials = session.MCPCredentials
 		config.Notices = session.Notices
 		config.LocalAPI = &ui.LocalAPI{URL: session.APIURL, Username: session.APICredentials.Username, Password: session.APICredentials.Password}

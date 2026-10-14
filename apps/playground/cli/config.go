@@ -16,6 +16,7 @@ import (
 type config struct {
 	ui.Config
 	AllInOne bool
+	NoAdmin  bool
 }
 
 func configuration(args []string, stderr io.Writer) (config, error) {
@@ -23,7 +24,8 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags := flag.NewFlagSet("commander", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&c.MCPURL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
-	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller and agent; credentials are generated when unset; temporary state is removed on exit")
+	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and agents; credentials are generated when unset; temporary state is removed on exit")
+	flags.BoolVar(&c.NoAdmin, "no-admin", false, "Disable Admin UI in --all-in-one mode")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
 	flags.StringVar(&c.Model, "model", env("COMMANDER_LLM_MODEL", ""), "Model name; omitted asks interactively (COMMANDER_LLM_MODEL)")
 	flags.StringVar(&c.BaseURL, "base-url", env("COMMANDER_LLM_BASE_URL", ""), "Override the model API base URL (COMMANDER_LLM_BASE_URL)")
@@ -52,6 +54,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	})
 	if c.AllInOne && mcpProvided {
 		return c, errors.New("--all-in-one starts its own MCP; omit --mcp-url to use it")
+	}
+	if c.NoAdmin && !c.AllInOne {
+		return c, errors.New("--no-admin requires --all-in-one")
 	}
 	if value := env("COMMANDER_DEBUG", ""); !debugProvided && value != "" {
 		var err error

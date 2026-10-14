@@ -60,10 +60,10 @@ Docker Compose:
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground
 ```
 
-Go:
+Go (terminal only; [build with Admin](apps/playground/README.md#native-one-executable)):
 
 ```sh
-go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
+go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one --no-admin
 ```
 
 All-in-one results are temporary; Compose retains them. See [Playground](apps/playground/README.md)

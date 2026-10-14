@@ -31,6 +31,7 @@ import (
 
 func TestAllInOne(t *testing.T) {
 	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
+	t.Run("optional Admin lifecycle", testAllInOneAdmin)
 	t.Run("generated API and MCP credentials", testAllInOneGeneratedCredentials)
 	t.Run("API startup failures clean up local hosts", testAllInOneAPIFailure)
 	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
@@ -209,6 +210,11 @@ func testAllInOneWorkflow(t *testing.T) {
 		t.Fatalf("missing local API endpoint: %s", output.String())
 	}
 	apiURL := apiNotice[1]
+	adminNotice := regexp.MustCompile(`Admin: (http://127\.0\.0\.1:\d+)`).FindStringSubmatch(output.String())
+	if len(adminNotice) != 2 {
+		t.Fatalf("missing local Admin endpoint: %s", output.String())
+	}
+	adminURL := adminNotice[1]
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	defer httpClient.CloseIdleConnections()
 	get := func(path, password string, status int) []byte {
@@ -390,7 +396,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	if err != nil || len(files) != 0 {
 		t.Fatalf("temporary state remains after exit: %v (%v)", files, err)
 	}
-	for _, endpoint := range []string{endpoint, apiURL} {
+	for _, endpoint := range []string{endpoint, apiURL, adminURL} {
 		address, _ := url.Parse(endpoint)
 		connection, err := net.DialTimeout("tcp", address.Host, time.Second)
 		if err == nil {
@@ -403,6 +409,10 @@ func testAllInOneWorkflow(t *testing.T) {
 func allInOneEnvironment(t *testing.T) string {
 	t.Helper()
 	temporary := t.TempDir()
+	frontend := t.TempDir()
+	if err := os.WriteFile(filepath.Join(frontend, "index.html"), []byte(`<html>Admin fixture</html>`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
 		t.Setenv(name, temporary)
 	}
@@ -416,7 +426,11 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
 	t.Setenv("API_RUNTIME", "native")
-	t.Setenv("PORT", "not-a-port") // All-in-one uses an explicit API listener.
+	t.Setenv("UI_LISTEN_ADDRESS", "127.0.0.1:0")
+	t.Setenv("UI_STATIC_DIR", frontend)
+	t.Setenv("UI_PUBLIC_ORIGIN", "")
+	t.Setenv("UI_API_UPSTREAMS", "")
+	t.Setenv("PORT", "not-a-port") // All-in-one uses explicit API and Admin listeners.
 	t.Setenv("API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")
 	t.Setenv("API_ALLOWED_ORIGINS", "")
 	t.Setenv("API_TRUSTED_PROXIES", "")

@@ -55,8 +55,9 @@ Use the separate release-test workflow for validation without publication.
 ## Native binaries
 
 [build-binaries.yml](../.github/workflows/build-binaries.yml) builds `commander`
-for Linux, macOS and Windows on amd64 and arm64 runners. Each runner checks
-environment discovery, runs the all-in-one smoke test and checks the executable's
+for Linux, macOS and Windows on amd64 and arm64 runners. Each runner builds and
+embeds the Admin frontend, checks environment discovery, runs the all-in-one smoke
+tests (including Admin), and checks the executable's
 `--help` before uploading it.
 
 After every image publishes, [push-binaries.yml](../.github/workflows/push-binaries.yml)

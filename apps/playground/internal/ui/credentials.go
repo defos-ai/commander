@@ -23,6 +23,9 @@ func (m *Model) localCommand(value string) bool {
 		if m.config.LocalAPI != nil {
 			m.add("notice", "API: "+m.config.LocalAPI.URL)
 		}
+		if m.config.AdminURL != "" {
+			m.add("notice", "Admin: "+m.config.AdminURL)
+		}
 		return false
 	}
 	args := strings.Fields(value)

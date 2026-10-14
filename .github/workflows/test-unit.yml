@@ -108,8 +108,8 @@ jobs:
           go vet ./...
 
   frontend:
-    name: Frontend and UI package
-    if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'frontend') }}
+    name: Frontend and bundled hosts
+    if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'frontend') || contains(fromJSON(inputs.changes), 'playground') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -133,3 +133,8 @@ jobs:
           cp -R ../frontend/dist static/dist
           go test -tags embed_ui -race -count=1 -timeout=1m ./...
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./cmd/commander-ui
+      - name: Test and build bundled Playground
+        working-directory: .
+        run: |
+          go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/...
+          go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander" ./apps/playground/cmd/commander

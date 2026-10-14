@@ -46,17 +46,20 @@ jobs:
           cache-dependency-path: |
             go.work.sum
             **/go.sum
+      - uses: ./.github/actions/setup-node
+      - name: Build bundled Admin frontend
+        run: npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist --emptyOutDir
       - name: Test native environment and all-in-one hosts
         run: |
           go test -count=1 -timeout=3m ./framework/tests/agent/environment
-          go test -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne$'
+          go test -tags embed_ui -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne'
       - name: Build Commander
         id: build
         run: |
           binary="commander_${GOOS}_${GOARCH}"
           if [[ "$GOOS" == windows ]]; then binary+=.exe; fi
           mkdir -p dist
-          go build -trimpath -buildvcs=false -ldflags='-s -w' -o "dist/$binary" ./apps/playground/cmd/commander
+          go build -tags embed_ui -trimpath -buildvcs=false -ldflags='-s -w' -o "dist/$binary" ./apps/playground/cmd/commander
           "./dist/$binary" --help
       - uses: actions/upload-artifact@v4
         with:

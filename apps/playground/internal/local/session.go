@@ -22,21 +22,28 @@ import (
 )
 
 type runningHost struct {
-	name string
-	stop context.CancelFunc
-	done chan error
+	name     string
+	stop     context.CancelFunc
+	done     chan struct{}
+	err      error
+	required bool
+}
+
+type Options struct {
+	DisableAdmin bool
 }
 
 type Session struct {
 	Context        context.Context
 	MCPURL         string
 	APIURL         string
+	AdminURL       string
 	APICredentials host.BasicCredentials
 	MCPCredentials host.BearerCredentials
 	Directory      string
 	Notices        []string
 	cancel         context.CancelCauseFunc
-	hosts          []runningHost
+	hosts          []*runningHost
 	log            *os.File
 	once           sync.Once
 	closeErr       error
@@ -44,6 +51,10 @@ type Session struct {
 
 // Start reuses the real application hosts without a checkout or working-directory files.
 func Start(ctx context.Context) (session *Session, err error) {
+	return StartWithOptions(ctx, Options{})
+}
+
+func StartWithOptions(ctx context.Context, options Options) (session *Session, err error) {
 	s := &Session{}
 	s.Context, s.cancel = context.WithCancelCause(ctx)
 	defer func() {
@@ -108,7 +119,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 		}
 		args := append(append([]string{}, common...), database, "--listen-address="+address)
 		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Application: "commander", Credentials: &s.APICredentials, Ready: func(address net.Addr) {
-			s.APIURL = "http://" + address.String()
+			s.APIURL = localHTTPURL(address)
 			close(apiReady)
 		}})
 	})
@@ -118,9 +129,15 @@ func Start(ctx context.Context) (session *Session, err error) {
 	if err = s.awaitAgents(startup); err != nil {
 		return nil, err
 	}
-	s.Notices = []string{
-		"\nTry: Review defos.ai\n\nTemporary session · results deleted on exit",
+	if !options.DisableAdmin {
+		s.startAdmin()
 	}
+	if err = s.Context.Err(); err != nil {
+		return nil, context.Cause(s.Context)
+	}
+	s.Notices = append(s.Notices,
+		"\nTry: Review defos.ai\n\nTemporary session · results deleted on exit",
+	)
 	return s, nil
 }
 
@@ -134,21 +151,42 @@ func awaitReady(ctx context.Context, ready <-chan struct{}) error {
 }
 
 func (s *Session) start(name string, run func(context.Context) error) {
+	s.startHost(name, true, run)
+}
+
+func (s *Session) startHost(name string, required bool, run func(context.Context) error) *runningHost {
 	// Close stops hosts in reverse order, allowing agents to publish their final
 	// results while the controller is still available.
 	ctx, cancel := context.WithCancel(context.WithoutCancel(s.Context))
-	host := runningHost{name: name, stop: cancel, done: make(chan error, 1)}
+	host := &runningHost{name: name, stop: cancel, done: make(chan struct{}), required: required}
 	s.hosts = append(s.hosts, host)
 	go func() {
 		err := run(ctx)
-		if ctx.Err() == nil {
+		if required && ctx.Err() == nil {
 			if err == nil {
 				err = errors.New("stopped unexpectedly")
 			}
 			s.cancel(fmt.Errorf("local %s: %w", name, err))
 		}
-		host.done <- err
+		if !required && err != nil && !cancellationOnly(err) {
+			fmt.Fprintf(s.log, "local %s: %v\n", name, err)
+		}
+		host.err = err
+		close(host.done)
 	}()
+	return host
+}
+
+// Wildcard listeners are bind addresses, not URLs for a local browser or client.
+func localHTTPURL(address net.Addr) string {
+	host, port, _ := net.SplitHostPort(address.String())
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		host = "::1"
+		if ip.To4() != nil {
+			host = "127.0.0.1"
+		}
+	}
+	return "http://" + net.JoinHostPort(host, port)
 }
 
 func (s *Session) awaitAgents(ctx context.Context) error {
@@ -202,7 +240,8 @@ func (s *Session) Close() error {
 		for i := len(s.hosts) - 1; i >= 0; i-- {
 			host := s.hosts[i]
 			host.stop()
-			if err := <-host.done; err != nil && !cancellationOnly(err) {
+			<-host.done
+			if err := host.err; host.required && err != nil && !cancellationOnly(err) {
 				s.closeErr = errors.Join(s.closeErr, fmt.Errorf("stop %s: %w", host.name, err))
 			}
 		}

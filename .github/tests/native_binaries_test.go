@@ -232,6 +232,7 @@ func TestCINativeBinaryBuildNames(t *testing.T) {
 			f.write(t, "go", `#!/bin/bash
 set -euo pipefail
 [[ "$1" == build ]]
+[[ " $* " == *' -tags embed_ui '* ]]
 while [[ "$1" != '-o' ]]; do shift; done
 cat > "$2" <<'BINARY'
 #!/bin/bash
