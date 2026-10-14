@@ -14,14 +14,15 @@
 - [`internal/ui/`](internal/ui/) owns Bubble Tea state, selectors and rendering.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
-  includes Chromium/fonts and uses a real non-root user's home plus an init process
-  for browser children. Keep browser packages aligned with the browser image.
+  embeds Admin, includes Chromium/fonts and uses a real non-root user's home plus
+  an init process for browser children. Keep browser packages aligned with the
+  browser image.
 
 ## Behavior to preserve
 
 - Chat goes through MCP even in all-in-one mode. Reuse app hosts rather than
   duplicating their lifecycle or calling the runner directly from chat.
-- Native all-in-one starts Admin through its existing CLI host after API and agent
+- All-in-one starts Admin through its existing CLI host after API and agent
   readiness. Default to `127.0.0.1:4275`, honor `UI_LISTEN_ADDRESS`, and pass the
   listen flag explicitly so `PORT` cannot expose it. `--no-admin` is all-in-one
   only. Admin startup failures must leave MCP, API and agents running; retain a
@@ -96,10 +97,15 @@
   starting the client if its required token cannot be read. Use `run --no-deps`
   after stack readiness so launch cannot recreate MCP. Do not add Docker socket
   mounts or an unauthenticated token endpoint.
-- The all-in-one image binds the API to `0.0.0.0:4274` inside the container; document
-  host publishing on `127.0.0.1` by default. MCP stays internal. Container browser
-  runs use `CHROMIUM_NO_SANDBOX=true`; keep the process non-root. State remains
-  temporary; adding image dependencies must not change session persistence.
+- The all-in-one image builds Admin assets with Node, copies them into
+  `apps/admin/ui/backend/static/dist`, and compiles Commander with `-tags embed_ui`.
+  Do not copy a loose frontend directory into the runtime image. It binds Admin
+  to `0.0.0.0:4275` and the API to `0.0.0.0:4274`; document host publishing on
+  `127.0.0.1` by default. Admin proxies to the API inside the same container, so
+  the quick start publishes only `4275`; API publishing stays optional. MCP stays
+  internal. Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
+  non-root. State remains temporary; adding image dependencies must not change
+  session persistence. Container ports cannot be published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
   Embed both website missions: native quick start uses `review-website-no-browser`;
@@ -156,9 +162,11 @@ or host browser. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
 
 For image changes, build both Dockerfiles from the repository root. Verify the
-all-in-one image starts without a model key, serves `/healthz` through its published
-API port, runs headless Chromium against a local fixture and exits cleanly on
-SIGTERM. Keep Docker lifecycle in shell/CI rather than Go test fixtures.
+all-in-one image starts without a model key, serves Admin assets and `/healthz`
+through published port `4275`, and authenticates/proxies to its API without
+publishing `4274`. Check `--no-admin`, explicit credential overrides, headless
+Chromium against a local fixture and clean SIGTERM shutdown. Keep Docker lifecycle
+in shell/CI rather than Go test fixtures.
 
 [Native release builds](../../.github/workflows/build-binaries.yml) run environment
 discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.

@@ -39,6 +39,14 @@ before starting Compose. `API_USERNAME` overrides the username; see
 checks only `http://localhost:4274`; use **Add connection** for another port or
 API, then enter a name, URL and credentials. The UI checks before saving.
 
+### All-in-one
+
+[Playground's all-in-one image](../../playground/README.md#docker-recommended)
+includes Admin. Publish `127.0.0.1:4275:4275`, open `http://localhost:4275` and
+connect to `http://localhost:4274`. The API port need not be published.
+Use `/credentials` in Playground or `docker exec commander commander credentials api`
+for the API login.
+
 ### Native server
 
 With Node 24+ and Go 1.26.7+, run from `apps/admin/ui`:

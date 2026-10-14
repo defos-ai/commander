@@ -102,7 +102,9 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
-The all-in-one image starts Playground with its local hosts and includes Chromium.
+The all-in-one image starts Playground with its local hosts, embeds Admin in the
+Commander binary and includes Chromium. Publish `127.0.0.1:4275:4275` to use Admin;
+its API connection stays inside the container.
 The lightweight Playground image connects to an existing MCP service.
 There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.

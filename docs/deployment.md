@@ -3,6 +3,14 @@
 Start with [the root quick start](../README.md#quick-start). Compose is a local
 development setup; production deployment is not yet documented.
 
+## All-in-one Docker
+
+[Run Playground's all-in-one image](../apps/playground/README.md#docker-recommended)
+with `-p 127.0.0.1:4275:4275`, then open **http://localhost:4275** for Admin.
+Connect to `http://localhost:4274` using the API login from `/credentials` in
+Playground. Admin reaches the API inside the container; publish `4274` only if
+other tools need it. Exiting removes the session's results.
+
 ## Local Compose
 
 From the repository root, start the stack and launch Playground:

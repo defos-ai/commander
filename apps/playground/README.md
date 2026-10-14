@@ -13,12 +13,13 @@ For a temporary all-in-one session, build and run from the repository root:
 
 ```sh
 docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
-docker run --name commander --rm -it -p 127.0.0.1:4274:4274 commander:aio
+docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
 ```
 
-This image starts Playground, MCP, the API, a controller, a web agent and a browser agent
-with Chromium and fonts included. Inside Playground, type `/credentials` to view
-the API login and MCP token. From another terminal:
+This image includes Admin, MCP, the API, a controller, a web agent and a browser agent
+with Chromium and fonts. Open **http://localhost:4275** for Admin and connect to
+`http://localhost:4274`. Type `/credentials` in Playground for the API login and
+MCP token, or use another terminal:
 
 ```sh
 docker exec commander commander credentials api
@@ -28,10 +29,11 @@ docker exec commander commander credentials mcp
 Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
 
-Connect Admin to
-`http://localhost:4274`. `/exit` stops everything and deletes
-the session's state. Add `-e OPENAI_API_KEY` before the image name to use an exported
-key, or enter your provider's key during setup.
+Admin reaches the API inside the container; publishing API port `4274` is optional.
+Add `-p 127.0.0.1:4274:4274` if other tools need API access. To skip Admin, append
+`--no-admin` after the image name. Ports must be published when creating the container.
+`/exit` stops everything and deletes the session's state. Add `-e OPENAI_API_KEY`
+before the image name to use an exported key, or enter your provider's key during setup.
 
 For separate hosts and retained results, use Compose:
 
