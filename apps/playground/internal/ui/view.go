@@ -124,7 +124,12 @@ func (m *Model) View() string {
 		case stageURL:
 			lines = append(lines, "API base URL")
 		case stageKey:
-			lines = append(lines, m.provider.Name+" API key", "Kept in memory for this session.")
+			lines = append(lines, m.provider.Name+" API key · Kept in memory for this session.")
+			if m.provider.KeyURL != "" {
+				lines = append(lines, "Get an API key: "+m.color(m.provider.KeyURL, ReticleGreen))
+			} else {
+				lines = append(lines, "Get a key from your provider's dashboard. Leave empty if your server does not require one.")
+			}
 		case stageManualModel:
 			lines = append(lines, "Model name", "Choose a chat model that supports tool calling.")
 		case stageMCP:
@@ -149,6 +154,9 @@ func (m *Model) View() string {
 				color = AssaultRed
 			}
 			lines = append(lines, "", m.color(item.text, color))
+		}
+		if m.setupError != "" {
+			lines = append(lines, "", m.color(m.setupError, AssaultRed))
 		}
 		content = strings.Join(lines, "\n")
 	}

@@ -3,9 +3,47 @@ package llm
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"unicode"
 )
+
+// AuthenticationError identifies a rejected credential or access permission.
+// Its diagnostic is redacted before wrapping; it does not imply a safe retry.
+type AuthenticationError struct {
+	Err error
+}
+
+func (e *AuthenticationError) Error() string { return e.Err.Error() }
+func (e *AuthenticationError) Unwrap() error { return e.Err }
+
+func (c *Client) authenticationFailure(status int, body []byte) bool {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return true
+	}
+	if c.config.Provider != "gemini" || status != http.StatusBadRequest {
+		return false
+	}
+	// Gemini reports invalid keys as structured HTTP 400 errors, alongside
+	// unrelated bad requests that must retain the normal endpoint/model flow.
+	var response struct {
+		Error struct {
+			Details []struct {
+				Type   string `json:"@type"`
+				Reason string `json:"reason"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &response) != nil {
+		return false
+	}
+	for _, detail := range response.Error.Details {
+		if detail.Type == "type.googleapis.com/google.rpc.ErrorInfo" && detail.Reason == "API_KEY_INVALID" {
+			return true
+		}
+	}
+	return false
+}
 
 func (c *Client) diagnosticError(summary string, body []byte) error {
 	if !c.config.Debug {

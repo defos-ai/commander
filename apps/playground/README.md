@@ -115,7 +115,8 @@ Add `--raw` to print only the API password or MCP token.
 Choose a provider and model with **↑/↓** and **Enter**; **PgUp/PgDown** scroll long
 lists. Select a model supporting tool calls, using **Enter model name…** if needed.
 Missing keys are entered privately. **Other** accepts an OpenAI-compatible base
-URL, model name and optional key. Discovery failures offer manual setup.
+URL, model name and optional key. Key prompts link to the provider's API key page.
+Rejected keys can be corrected in place; other discovery failures offer manual setup.
 
 To connect to an existing MCP server, paste its token when prompted or set
 `COMMANDER_MCP_TOKEN` beforehand:

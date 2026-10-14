@@ -259,6 +259,11 @@ func (m *Model) receive(event chat.Event) {
 	}
 }
 func (m *Model) add(kind, text string) {
+	// Setup failures belong to the current prompt, not the chat history.
+	if kind == "error" && m.stage != stageChat {
+		m.setupError = clean(text)
+		return
+	}
 	m.entries = append(m.entries, entry{kind: kind, text: clean(text), dirty: true})
 	if len(m.entries) > 500 {
 		m.entries = m.entries[len(m.entries)-500:]

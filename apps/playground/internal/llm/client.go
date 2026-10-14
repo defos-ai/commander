@@ -15,18 +15,18 @@ import (
 )
 
 type Preset struct {
-	ID, Name, URL string
-	KeyEnv        []string
+	ID, Name, URL, KeyURL string
+	KeyEnv                []string
 }
 
 func Presets() []Preset {
 	return []Preset{
-		{"openai", "OpenAI", "https://api.openai.com/v1", []string{"OPENAI_API_KEY"}},
-		{"anthropic", "Anthropic", "https://api.anthropic.com/v1", []string{"ANTHROPIC_API_KEY"}},
-		{"gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
-		{"xai", "xAI", "https://api.x.ai/v1", []string{"XAI_API_KEY"}},
-		{"deepseek", "DeepSeek", "https://api.deepseek.com/v1", []string{"DEEPSEEK_API_KEY"}},
-		{"other", "Other (OpenAI-compatible)", "", []string{"COMMANDER_LLM_API_KEY"}},
+		{"openai", "OpenAI", "https://api.openai.com/v1", "https://platform.openai.com/api-keys", []string{"OPENAI_API_KEY"}},
+		{"anthropic", "Anthropic", "https://api.anthropic.com/v1", "https://platform.claude.com/settings/keys", []string{"ANTHROPIC_API_KEY"}},
+		{"gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "https://aistudio.google.com/api-keys", []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
+		{"xai", "xAI", "https://api.x.ai/v1", "https://console.x.ai/team/default/api-keys", []string{"XAI_API_KEY"}},
+		{"deepseek", "DeepSeek", "https://api.deepseek.com/v1", "https://platform.deepseek.com/api_keys", []string{"DEEPSEEK_API_KEY"}},
+		{"other", "Other (OpenAI-compatible)", "", "", []string{"COMMANDER_LLM_API_KEY"}},
 	}
 }
 
@@ -141,14 +141,6 @@ func (c *Client) request(ctx context.Context, method, path string, body any) (*h
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
-		hint := "check the endpoint and model name"
-		switch response.StatusCode {
-		case 401, 403:
-			hint = "check your API key and model access"
-		case 429:
-			hint = "rate or quota limit reached; try again later"
-		}
-		summary := fmt.Sprintf("model API returned HTTP %d: %s", response.StatusCode, hint)
 		const limit = 64 * 1024
 		detail, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		// Never show a partial body: it may end halfway through a credential.
@@ -157,7 +149,19 @@ func (c *Client) request(ctx context.Context, method, path string, body any) (*h
 		} else if len(detail) > limit {
 			detail = []byte("provider error body exceeds 64 KiB")
 		}
-		return nil, c.diagnosticError(summary, detail)
+		authentication := c.authenticationFailure(response.StatusCode, detail)
+		hint := "check the endpoint and model name"
+		if authentication {
+			hint = "check your API key and model access"
+		} else if response.StatusCode == http.StatusTooManyRequests {
+			hint = "rate or quota limit reached; try again later"
+		}
+		summary := fmt.Sprintf("model API returned HTTP %d: %s", response.StatusCode, hint)
+		err := c.diagnosticError(summary, detail)
+		if authentication {
+			return nil, &AuthenticationError{Err: err}
+		}
+		return nil, err
 	}
 	return response, nil
 }

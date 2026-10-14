@@ -39,6 +39,7 @@ type setupState struct {
 	setupCancel context.CancelFunc
 	manual      bool
 	mcpCommand  string
+	setupError  string
 }
 
 type initialProvider string
@@ -63,6 +64,18 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.busy = false
+		m.setupError = ""
+		var authentication *llm.AuthenticationError
+		if errors.As(msg.err, &authentication) {
+			text := "API key rejected. Check the key and its permissions, then try again."
+			if m.config.Debug {
+				text += "\n" + msg.err.Error()
+			}
+			m.add("error", text)
+			m.settings.APIKey = ""
+			m.modelClient = nil
+			return m.needKey(), true
+		}
 		if msg.err != nil || len(msg.names) == 0 {
 			text := "No models found. Enter an API base URL and model name manually."
 			if msg.err != nil {
@@ -84,6 +97,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.busy = false
+		m.setupError = ""
 		if msg.err != nil {
 			var authentication *bridge.AuthenticationError
 			if errors.As(msg.err, &authentication) {
@@ -119,6 +133,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 }
 
 func (m *Model) selectProvider(value string) tea.Cmd {
+	m.setupError = ""
 	for _, preset := range llm.Presets() {
 		if !strings.EqualFold(value, preset.ID) && !strings.EqualFold(value, preset.Name) {
 			continue
@@ -218,6 +233,7 @@ func (m *Model) setStage(stage setupStage, placeholder, value string) {
 	m.input.CursorEnd()
 }
 func (m *Model) submit(value string) tea.Cmd {
+	m.setupError = ""
 	switch m.stage {
 	case stageProvider, stageModel:
 		m.add("error", "Unknown setup command. Use /help, /back, or /exit.")
@@ -273,6 +289,7 @@ func (m *Model) setupInput(value string) tea.Cmd {
 		m.add("notice", help)
 		return nil
 	case "/back":
+		m.setupError = ""
 		if m.setupCancel != nil {
 			m.setupCancel()
 		}

@@ -103,6 +103,13 @@
   revisions when deciding whether a review is new or stale.
 - Show readable errors by default and redacted provider details with `--debug`.
   Keep keys/history in memory and avoid repeating full schemas/results in prompts.
+- Model discovery authentication failures return to an empty, masked key prompt;
+  preserve the provider and base URL, and retry only after explicit submission.
+  Use typed provider errors, including Gemini's structured invalid-key response.
+  Other discovery failures retain manual URL/model setup. Provider key links are
+  predefined preset metadata; never render URLs or recovery commands from errors.
+  Setup errors are transient prompt feedback: show only the current failure and
+  clear it on retry, success or back; never carry it into the chat history.
 - Preserve the DEFOS palette, star loaders, Markdown rendering, keyboard selectors
   and `NO_COLOR`/non-terminal behavior. Use [README.md](README.md) for user commands.
   All-in-one startup shows the provider/model, readiness with two connected agents,

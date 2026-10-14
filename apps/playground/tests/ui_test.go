@@ -204,12 +204,18 @@ func TestMCPAuthenticationDuringSetup(t *testing.T) {
 	if attempts.Load() != 2 || strings.Contains(u.model.View(), wrongToken) {
 		t.Fatal("rejected token was retried automatically or disclosed")
 	}
+	if strings.Contains(u.model.View(), "Enter a valid MCP token.") || strings.Count(u.model.View(), "MCP token rejected. Try again.") != 1 {
+		t.Fatal("token prompt retained resolved validation errors")
+	}
 	u.text(token)
 	if strings.Contains(u.model.View(), token) || attempts.Load() != 2 {
 		t.Fatal("typing the replacement token disclosed it or connected before Enter")
 	}
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("authenticated connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
+	if strings.Contains(u.model.View(), "MCP token rejected") || strings.Contains(u.model.View(), "Enter a valid MCP token.") {
+		t.Fatal("resolved token errors carried into chat")
+	}
 	u.text("Hello")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("chat after token entry", func(view string) bool {
