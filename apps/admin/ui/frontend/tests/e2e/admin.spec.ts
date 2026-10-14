@@ -1,9 +1,60 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
 import type { OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
 import { test, connect, startOperation, publicAPIURL, username, password } from './fixtures';
+
+test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api, website }) => {
+  const operation = await api.post<{ id: string }>('/operations', {
+    operation_id: randomUUID(), mission_name: 'review-website-no-browser', input: { url: website, max_pages: 1 },
+  }, 201);
+  const link = `/#/connect?${new URLSearchParams({ api: publicAPIURL, username, operation: operation.id })}`;
+  await page.goto(link);
+  const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true });
+  await expect(dialog.getByLabel('Password', { exact: true })).toBeFocused();
+  expect(new URL(page.url()).hash).toBe(`#/operations/${operation.id}`);
+  await dialog.getByLabel('Connection name').fill('Operation API');
+  await dialog.getByLabel('Password', { exact: true }).fill(password);
+  await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByRole('heading', { name: operation.id, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Execution graph', exact: true })).toBeVisible();
+  const operationURL = page.url();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Execution graph', exact: true })).toBeVisible();
+  await page.goto(link);
+  await expect(page).toHaveURL(operationURL);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
+  await navigation.getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByText('Not signed in', { exact: true })).toBeVisible();
+  await page.goto(link);
+  const signIn = page.getByRole('dialog', { name: 'Edit connection', exact: true });
+  await expect(signIn.getByLabel('Connection name')).toHaveValue('Operation API');
+  await signIn.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.reload();
+  await expect(page).toHaveURL(operationURL);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await signIn.getByLabel('Username', { exact: true }).fill(username);
+  await signIn.getByLabel('Password', { exact: true }).fill(password);
+  await signIn.getByRole('button', { name: 'Save connection', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Execution graph', exact: true })).toBeVisible();
+
+  await connect(page, { name: 'Other API', url: 'http://api-secondary:4274' });
+  await page.goto(`/#/operations/${operation.id}`);
+  await expect(page.getByText(`Choose or add the API connection for operation ${operation.id}.`, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Other API', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Open Operation API', exact: true }).click();
+  await expect(page).toHaveURL(operationURL);
+  await expect(page.getByRole('button', { name: 'Execution graph', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Connections', exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL(operationURL);
+  expect(page.url()).not.toContain(password);
+});
 
 test('Playground links prefill a connection and reuse its saved session', async ({ page, api }) => {
   await api.ready();

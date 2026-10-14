@@ -28,6 +28,7 @@ export function App() {
   const state = useConnections();
   const { route, navigate } = useRoute();
   const activeID = route.connectionID;
+  const operationLinkID = route.operation;
   const pendingConnectionLink = !route.connectionID && route.connect !== undefined;
   const section = route.connectionID ? route.section : 'overview';
   const selectedID = route.connectionID ? route.itemID : undefined;
@@ -49,7 +50,9 @@ export function App() {
     if (route.connectionID || route.connect === undefined || (route.connect && state.restoring)) return;
     const prefill = route.connect;
     const connection = prefill && state.connections.find(item => item.url === prefill.url);
-    const destination: Route = connection ? { connectionID: connection.id, section: 'overview' } : {};
+    const destination: Route = connection
+      ? { connectionID: connection.id, section: prefill.operation ? 'operations' : 'overview', itemID: prefill.operation }
+      : prefill?.operation ? { operation: prefill.operation } : {};
     // Consume the link once so polling, cancellation and browser history cannot reopen it.
     previousRoute.current = routeHash(destination);
     navigate(destination, { replace: true });
@@ -64,7 +67,7 @@ export function App() {
     focusAfterTransition.current = false;
   }, [route, active, modal]);
 
-  function open(id: string) { navigate({ connectionID: id, section: 'overview' }); }
+  function open(id: string) { navigate({ connectionID: id, section: operationLinkID ? 'operations' : 'overview', itemID: operationLinkID }); }
   function select(itemID?: string) {
     if (activeID) navigate({ connectionID: activeID, section, itemID });
   }
@@ -94,6 +97,7 @@ export function App() {
       onOpen={open} onAdd={() => setModal({ kind: 'connect' })} onEdit={edit} onRemove={remove}>
       {storageNotice}
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
+      {operationLinkID && <p className="notice" role="status">{t($ => $.connections.chooseOperationConnection, { id: operationLinkID })}</p>}
       {activeID && <p className="notice" role="status">{t($ => $.connections.missing)}</p>}
       {local.status === 'checking' && <p className="local-discovery" role="status"><LoaderCircle className="connection-form-spinner" size={14} aria-hidden="true" />{t($ => $.connections.localChecking)}</p>}
       {local.status === 'found' && <div className="local-discovery"><div><span className="status-dot" aria-hidden="true" />{t($ => $.connections.localFound)}<span className="local-url">{local.url}</span></div><Button variant="secondary" onClick={() => setModal({ kind: 'connect', localURL: local.url })}>{t($ => $.connections.localConnect)}</Button></div>}

@@ -79,8 +79,8 @@ function deferredResponse() {
   return { promise, resolve };
 }
 
-function connectionLink(url = localURL, user = 'commander') {
-  return `#/connect?${new URLSearchParams({ api: url, username: user })}`;
+function connectionLink(url = localURL, user = 'commander', operation?: string) {
+  return `#/connect?${new URLSearchParams({ api: url, username: user, ...(operation ? { operation } : {}) })}`;
 }
 
 beforeEach(() => localStorage.clear());
@@ -91,6 +91,95 @@ afterEach(() => {
 });
 
 describe('connection links from Playground', () => {
+  const operationID = 'review-operation';
+  const operation = { id: operationID, mission: { name: 'review-website', objective: 'Review a website', required_actions: [],
+    starting_actions: [], input_schema: {}, output_schema: {} }, input: {}, status: 'completed', tasks: [], questions: [], events: [],
+    created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
+
+  function operationAPI() {
+    const api = mockAPI();
+    api.state.intercept = url => url.endsWith(`/api/v1/operations/${operationID}`)
+      ? Promise.resolve(Response.json(operation)) : undefined;
+    return api;
+  }
+
+  it('opens the linked operation after entering a password for a new local connection', async () => {
+    const api = operationAPI();
+    window.history.replaceState(null, '', connectionLink(localURL, 'commander', operationID));
+    render(<App />);
+    const dialog = await screen.findByRole('dialog', { name: 'Add connection' });
+    expect(window.location.hash).toBe(`#/operations/${operationID}`);
+    expect(stored()).toEqual([]);
+    expect(api.fetch.mock.calls.some(([input]) => upstreamURL(input).endsWith(`/operations/${operationID}`))).toBe(false);
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: password } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByRole('heading', { name: operationID, level: 1 })).toBeVisible();
+    expect(await screen.findByText('review-website')).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${stored()[0]!.id}/operations/${operationID}`);
+    expect(window.location.href).not.toContain(password);
+  });
+
+  it.each([true, false])('keeps the operation destination for a saved connection (signed in: %s)', async signedIn => {
+    const api = operationAPI();
+    persist([savedConnection]);
+    if (signedIn) api.state.sessions.set(remoteURL, { url: remoteURL, username: 'commander' });
+    window.history.replaceState(null, '', connectionLink(remoteURL, 'commander', operationID));
+    const rendered = render(<App />);
+    if (!signedIn) {
+      const dialog = await screen.findByRole('dialog', { name: 'Edit connection' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      rendered.unmount();
+      render(<App />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save connection' }));
+    }
+    expect(await screen.findByRole('heading', { name: operationID, level: 1 })).toBeVisible();
+    expect(await screen.findByText('review-website')).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${savedConnection.id}/operations/${operationID}`);
+    expect(stored()).toEqual([savedConnection]);
+    expect(api.fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(signedIn ? 0 : 1);
+  });
+
+  it('keeps an operation link after cancelling a new connection, and after reload or browser history navigation', async () => {
+    operationAPI();
+    window.history.replaceState(null, '', connectionLink(localURL, 'commander', operationID));
+    const rendered = render(<App />);
+    const dialog = await screen.findByRole('dialog', { name: 'Add connection' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    rendered.unmount();
+    render(<App />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText(`Choose or add the API connection for operation ${operationID}.`)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+    const retry = fillConnection();
+    fireEvent.click(within(retry).getByRole('button', { name: 'Connect' }));
+    await screen.findByText('review-website');
+    act(() => { window.history.back(); });
+    await screen.findByRole('heading', { name: 'Connections' });
+    expect(window.location.hash).toBe(`#/operations/${operationID}`);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    act(() => { window.history.forward(); });
+    expect(await screen.findByRole('heading', { name: operationID, level: 1 })).toBeVisible();
+  });
+
+  it('requires choosing an API for a remote operation link without requesting the operation from other APIs', async () => {
+    const api = operationAPI();
+    const other = { id: 'other', name: 'Other API', url: 'https://other.example.test' };
+    persist([savedConnection, other]);
+    for (const connection of [savedConnection, other]) api.state.sessions.set(connection.url, { url: connection.url, username: 'commander' });
+    window.history.replaceState(null, '', `#/operations/${operationID}`);
+    render(<App />);
+    expect(await screen.findByText(`Choose or add the API connection for operation ${operationID}.`)).toBeVisible();
+    await act(async () => {});
+    expect(api.fetch.mock.calls.some(([input]) => upstreamURL(input).endsWith(`/operations/${operationID}`))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: `Open ${savedConnection.name}` }));
+    expect(await screen.findByText('review-website')).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${savedConnection.id}/operations/${operationID}`);
+    expect(api.fetch.mock.calls.filter(([input]) => upstreamURL(input).endsWith(`/operations/${operationID}`))
+      .every(([input]) => upstreamURL(input).startsWith(remoteURL))).toBe(true);
+  });
+
   it('prefills a local connection and saves only after the user submits a password', async () => {
     const api = mockAPI();
     window.history.replaceState(null, '', connectionLink('http://127.0.0.1:4274', 'local-operator'));

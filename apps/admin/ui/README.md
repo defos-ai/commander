@@ -42,15 +42,17 @@ API, then enter a name, URL and credentials. The UI checks before saving.
 ### All-in-one
 
 [Playground's all-in-one image](../../playground/README.md#docker-recommended)
-includes Admin. Publish `127.0.0.1:4275:4275` and pass
-`--admin-url http://localhost:4275` after the image name. Type `/admin` in Playground
-for a link with the local API URL and username prefilled. Existing saved connections
+includes Admin. Publish `127.0.0.1:4275:4275`; Playground defaults its link to
+`http://localhost:4275`. For another published port or host, pass `--admin-url`
+with the browser address after the image name. Type `/admin` in Playground for a
+link with the local API URL and username prefilled. Existing saved connections
 are reused; enter the password to sign in. The API port need not be published.
 Use `/credentials` in Playground or `docker exec commander commander credentials api`
 for the API login.
 
 Native `--all-in-one` also includes Admin; `/admin` uses its listening address
-automatically. Playground shows the link once after the first completed operation.
+automatically. Each completed operation in Playground has a review link that
+opens its details after sign-in. Remote links ask you to choose the API connection.
 
 ### Native server
 

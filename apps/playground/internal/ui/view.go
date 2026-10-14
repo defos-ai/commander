@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -51,12 +52,15 @@ func (m *Model) refresh() {
 	bottom := m.forceBottom || m.viewport.AtBottom()
 	m.forceBottom = false
 	m.viewport.Width = max(20, m.width-4)
-	activityLines := min(len(m.operations), 4)
+	activityLines := 0
+	for _, line := range m.operationProgress() {
+		activityLines += strings.Count(line, "\n") + 1
+	}
 	questionLines := 0
 	if question := m.questionView(time.Now()); question != "" {
 		questionLines = strings.Count(question, "\n") + 2
 	}
-	m.viewport.Height = max(3, m.height-10-activityLines-questionLines)
+	m.viewport.Height = max(3, m.height-10-activityLines-questionLines-strings.Count(m.footerView(), "\n"))
 	var lines []string
 	for i := range m.entries {
 		item := &m.entries[i]
@@ -172,16 +176,53 @@ func (m *Model) View() string {
 	} else if m.controls > 0 {
 		activity = append(activity, m.color(stars[m.frame%len(stars)], ReticleGreen)+" Loading Commander data")
 	}
+	activity = append(activity, m.operationProgress()...)
+	input := m.input.View()
+	if !m.config.NoColor {
+		input = m.renderer.NewStyle().Background(lipgloss.Color(StealthBlack)).Foreground(lipgloss.Color(SmokeWhite)).Padding(0, 1).Render(input)
+	}
+	if m.selecting() && m.input.Value() == "" {
+		input = m.color("↑/↓ or wheel · Enter select", MutedGray)
+	}
+	question := ""
+	if panel := m.questionView(time.Now()); panel != "" {
+		question = panel + "\n\n"
+	}
+	return header + "\n\n" + content + "\n\n" + strings.Join(activity, "\n") + "\n" + question + input + "\n" + m.color(m.footerView(), MutedGray) + "\n"
+}
+
+func (m *Model) footerView() string {
+	foot := "/help · /exit"
+	if m.stage != stageChat {
+		foot += " · /back"
+	} else if m.busy {
+		foot += " · Ctrl+C stop reply"
+	}
+	return ansi.Wrap(foot, max(20, m.width), "")
+}
+
+func (m *Model) operationProgress() []string {
+	var lines []string
 	ids := make([]string, 0, len(m.operations))
 	for id := range m.operations {
 		ids = append(ids, id)
 	}
-	sort.Strings(ids)
-	for i, id := range ids {
-		if i == 4 {
-			activity = append(activity, fmt.Sprintf("  +%d more · /operations", len(ids)-4))
-			break
+	sort.Slice(ids, func(i, j int) bool {
+		a, b := m.operations[ids[i]], m.operations[ids[j]]
+		if a.UpdatedAt.Equal(b.UpdatedAt) {
+			return ids[i] < ids[j]
 		}
+		return a.UpdatedAt.After(b.UpdatedAt)
+	})
+	// Keep room for chat, input and the wrapped footer before adding whole rows.
+	available := max(0, m.height-13-strings.Count(m.footerView(), "\n"))
+	if question := m.questionView(time.Now()); question != "" {
+		available = max(0, available-strings.Count(question, "\n")-2)
+	}
+	more := func(count int) string {
+		return ansi.Wrap(fmt.Sprintf("  +%d more · /operations", count), max(20, m.width-4), "")
+	}
+	for i, id := range ids[:min(4, len(ids))] {
 		op := m.operations[id]
 		done := 0
 		pending := 0
@@ -210,26 +251,46 @@ func (m *Model) View() string {
 		if pending > 0 {
 			line += fmt.Sprintf(" · %d question(s)", pending)
 		}
-		activity = append(activity, line)
+		if op.Status == "completed" && op.Settled() && m.config.AdminURL != "" {
+			line += " · " + m.operationAdminLink(id)
+		}
+		line = ansi.Wrap(line, max(20, m.width-4), "")
+		required := strings.Count(line, "\n") + 1
+		if remaining := len(ids) - i - 1; remaining > 0 {
+			required += strings.Count(more(remaining), "\n") + 1
+		}
+		if required > available {
+			break
+		}
+		lines = append(lines, line)
+		available -= strings.Count(line, "\n") + 1
 	}
-	input := m.input.View()
-	if !m.config.NoColor {
-		input = m.renderer.NewStyle().Background(lipgloss.Color(StealthBlack)).Foreground(lipgloss.Color(SmokeWhite)).Padding(0, 1).Render(input)
+	if remaining := len(ids) - len(lines); remaining > 0 {
+		line := more(remaining)
+		if strings.Count(line, "\n")+1 <= available {
+			lines = append(lines, line)
+		}
 	}
-	if m.selecting() && m.input.Value() == "" {
-		input = m.color("↑/↓ or wheel · Enter select", MutedGray)
+	return lines
+}
+
+func (m *Model) operationAdminLink(id string) string {
+	base, fragment, _ := strings.Cut(m.config.AdminURL, "#")
+	target := strings.TrimRight(base, "/") + "/#/operations/" + url.PathEscape(id)
+	if query, ok := strings.CutPrefix(fragment, "/connect?"); ok {
+		// Parse the raw fragment so encoded characters in usernames and URLs
+		// survive adding the destination operation.
+		params, err := url.ParseQuery(query)
+		if err == nil {
+			params.Set("operation", id)
+			target = base + "#/connect?" + params.Encode()
+		}
 	}
-	foot := "/help · /exit"
-	if m.stage != stageChat {
-		foot += " · /back"
-	} else if m.busy {
-		foot += " · Ctrl+C stop reply"
+	label := "Review on Admin UI (" + base + ")"
+	if m.config.NoColor {
+		return "Review on Admin UI (" + target + ")"
 	}
-	question := ""
-	if panel := m.questionView(time.Now()); panel != "" {
-		question = panel + "\n\n"
-	}
-	return header + "\n\n" + content + "\n\n" + strings.Join(activity, "\n") + "\n" + question + input + "\n" + m.color(foot, MutedGray) + "\n"
+	return ansi.SetHyperlink(target) + m.color(label, ReticleGreen) + ansi.ResetHyperlink()
 }
 
 func (m *Model) adminLink(label string) string {

@@ -40,6 +40,10 @@
   `commander`; editing an active session retains its supplied username.
   Focus the first empty field when the connection dialog opens.
 - `#/connect?api=...&username=...` accepts only validated, non-secret prefill data.
+  Optional `operation=...` opens that operation after connection/sign-in;
+  `#/operations/<encoded-id>` asks the user to choose or add the API connection.
+  Never guess an API for remote operation links. Keep the intended destination
+  through password entry, cancellation, reload and browser history navigation.
   Prefill `Local connection`, the API URL and username; leave the password empty
   and focus the first empty field. Reuse a saved connection for the same normalized
   API URL. Links must not create or authenticate connections automatically, alter

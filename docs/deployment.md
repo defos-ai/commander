@@ -6,9 +6,11 @@ development setup; production deployment is not yet documented.
 ## All-in-one Docker
 
 [Run Playground's all-in-one image](../apps/playground/README.md#docker-recommended)
-with `-p 127.0.0.1:4275:4275` before the image name and
-`--admin-url http://localhost:4275` after it. Use `/admin` for a prefilled connection
-link and `/credentials` for the API login. Admin reaches the API inside the container;
+with `-p 127.0.0.1:4275:4275` before the image name. Completed operation rows link
+to their details in Admin at `http://localhost:4275`. Use `/admin`
+for the prefilled connection link anytime and `/credentials` for the API login.
+For another published port or host, pass `--admin-url` with the browser address
+after the image name. Admin reaches the API inside the container;
 publish `4274` only if other tools need it. Exiting removes the session's results.
 
 ## Local Compose
@@ -67,11 +69,12 @@ Run a host with `--help` for its flags. Action-specific dependencies belong in t
 [agent guide](../apps/agents/browser/README.md); model settings belong in
 [Playground](../apps/playground/README.md).
 
-Native all-in-one uses its own Admin address; Compose supplies its known published
-address. For other Docker or remote setups, set `COMMANDER_ADMIN_URL` or pass
-`--admin-url` to Playground with an address your browser can reach. This advertises
-the URL; it does not publish a port or start a remote Admin server. Without it,
-remote Playground does not guess an Admin URL or API connection.
+Native all-in-one uses its own Admin address; Docker all-in-one defaults to
+`http://localhost:4275`; Compose supplies its known published address.
+Set `COMMANDER_ADMIN_URL` or pass `--admin-url` to override the link or configure
+an existing remote Admin. This advertises the URL; it does not publish a port or
+start a remote Admin server. Without it, remote Playground does not guess an
+Admin URL or API connection.
 
 ## State
 

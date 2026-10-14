@@ -3,6 +3,7 @@ package playground_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -122,34 +123,37 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	}
 }
 
-func TestAdminCompletionHintOnce(t *testing.T) {
+func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	const adminURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&username=commander"
 	u, publish, reads := adminOperationUI(t, ctx, adminURL, true)
 	defer u.model.Close()
-	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 100})
+	u.model.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
 	command := func(text string) { u.text(text); u.key(tea.KeyMsg{Type: tea.KeyEnter}) }
-	countHint := func(want int) {
+	countLinks := func(want int) {
 		t.Helper()
-		if got := strings.Count(u.model.View(), "View results in Admin: "+adminURL); got != want {
-			t.Fatalf("Admin completion hint appeared %d times, want %d", got, want)
+		if got := strings.Count(u.model.View(), "Review on Admin UI ("); got != want {
+			t.Fatalf("Admin review link appeared %d times, want %d", got, want)
+		}
+		if strings.Contains(u.model.View(), "View results in Admin:") {
+			t.Fatal("completion still adds a separate chat notice")
 		}
 	}
-	command("/admin") // An explicit lookup does not consume the later completion hint.
-	countHint(0)
+	command("/admin")
+	countLinks(0)
 	now := time.Now()
 	for _, status := range []string{"failed", "cancelled"} {
 		publish(bridge.Operation{ID: status, Status: status, UpdatedAt: now})
 		command("/watch " + status)
 		u.wait(status+" operation", func(view string) bool { return strings.Contains(view, status[:min(8, len(status))]+" · "+status) })
-		countHint(0)
+		countLinks(0)
 	}
 	op := bridge.Operation{ID: "target", Status: "running", UpdatedAt: now, Tasks: []bridge.Task{{ID: "task", Status: "succeeded"}}}
 	publish(op)
 	command("/watch target")
 	u.wait("completed task in running operation", func(view string) bool { return strings.Contains(view, "target · running · 1/1 tasks finished") })
-	countHint(0)
+	countLinks(0)
 
 	// Keep the watcher alive while delivering an obsolete terminal snapshot.
 	op.Status, op.Tasks[0].Status = "completed", "running"
@@ -160,12 +164,12 @@ func TestAdminCompletionHintOnce(t *testing.T) {
 	op.Status, op.UpdatedAt = "waiting", now.Add(time.Second)
 	publish(op)
 	u.wait("fresh snapshot after stale completion", func(view string) bool { return strings.Contains(view, "target · waiting") })
-	countHint(0)
+	countLinks(0)
 
 	op.Status, op.UpdatedAt = "completed", now.Add(2*time.Second)
 	publish(op)
-	u.wait("first operation completion hint", func(view string) bool { return strings.Contains(view, "View results in Admin: "+adminURL) })
-	countHint(1)
+	u.wait("completion still draining", func(view string) bool { return strings.Contains(view, "target · completed · 0/1 tasks finished") })
+	countLinks(0)
 	op.UpdatedAt = now.Add(3 * time.Second)
 	publish(op)
 	targetReads = reads.Load() + 2
@@ -175,16 +179,23 @@ func TestAdminCompletionHintOnce(t *testing.T) {
 	u.wait("settled completion", func(view string) bool {
 		return strings.Contains(view, "target · completed · 1/1 tasks finished") && strings.Count(view, "Operation reviewed") == 3 && !strings.Contains(view, "Thinking")
 	})
-	countHint(1)
+	countLinks(1)
+	const targetURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&operation=target&username=commander"
+	if !strings.Contains(u.model.View(), "target · completed · 1/1 tasks finished · Review on Admin UI ("+targetURL+")") {
+		t.Fatal("review link does not appear on its operation's progress row")
+	}
 	command("/clear")
 	u.wait("cleared model history", func(view string) bool { return strings.Contains(view, "Model conversation cleared") })
 	publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now})
 	command("/watch second")
 	u.wait("second completed operation", func(view string) bool { return strings.Contains(view, "second · completed") })
-	countHint(1)
+	countLinks(2)
+	if !strings.Contains(u.model.View(), "operation=second&username=commander") || !strings.Contains(u.model.View(), "operation=target&username=commander") {
+		t.Fatal("completed operations do not have distinct destinations")
+	}
 	command("/admin")
-	if strings.Count(u.model.View(), "Admin: "+adminURL) != 3 { // Two explicit lookups and the automatic hint.
-		t.Fatal("Admin command did not remain available after the completion hint")
+	if strings.Count(u.model.View(), "Admin: "+adminURL) != 2 {
+		t.Fatal("Admin command did not remain available after operation completion")
 	}
 }
 
@@ -197,7 +208,7 @@ func TestAdminCompletionWithoutURLIsSilent(t *testing.T) {
 	u.text("/watch completed")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("completion without Admin", func(view string) bool { return strings.Contains(view, "complete · completed") })
-	if strings.Contains(u.model.View(), "View results in Admin:") || strings.Contains(u.model.View(), "--admin-url") {
+	if strings.Contains(u.model.View(), "Review on Admin UI") || strings.Contains(u.model.View(), "--admin-url") {
 		t.Fatal("completion advertised an unknown Admin address")
 	}
 	u.text("/admin")
@@ -217,17 +228,17 @@ func TestAdminLinkRendering(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			check := func(model *ui.Model) {
+			check := func(model *ui.Model, target string) {
 				t.Helper()
 				for _, width := range []int{80, 40} {
 					model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
 					view := model.View()
 					if noColor {
-						if strings.Contains(view, "\x1b") || !strings.Contains(strings.Join(strings.Fields(view), ""), adminURL) {
+						if strings.Contains(view, "\x1b") || !strings.Contains(strings.Join(strings.Fields(view), ""), target) {
 							t.Fatal("plain output lost the full Admin address or contains terminal controls")
 						}
 					} else {
-						if !strings.Contains(view, ansi.SetHyperlink(adminURL)) || !strings.Contains(view, ansi.ResetHyperlink()) {
+						if !strings.Contains(view, ansi.SetHyperlink(target)) || !strings.Contains(view, ansi.ResetHyperlink()) {
 							t.Fatal("terminal wrapping altered the full Admin hyperlink target")
 						}
 						plain := ansi.Strip(view)
@@ -241,19 +252,133 @@ func TestAdminLinkRendering(t *testing.T) {
 			defer setup.Close()
 			setup.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/admin")})
 			setup.Update(tea.KeyMsg{Type: tea.KeyEnter})
-			check(setup)
+			check(setup, adminURL)
 			u, publish, _ := adminOperationUI(t, ctx, adminURL, noColor)
 			defer u.model.Close()
 			for _, command := range []string{"/admin", "/status"} {
 				u.text(command)
 				u.key(tea.KeyMsg{Type: tea.KeyEnter})
 			}
-			check(u.model)
+			check(u.model, adminURL)
 			publish(bridge.Operation{ID: "done", Status: "completed", UpdatedAt: time.Now()})
 			u.text("/watch done")
 			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("completion link", func(view string) bool { return strings.Contains(ansi.Strip(view), "View results in Admin:") })
-			check(u.model)
+			u.wait("completion link", func(view string) bool { return strings.Contains(ansi.Strip(view), "Review on Admin UI") })
+			check(u.model, "http://localhost:4275/#/connect?api=http%3A%2F%2F127.0.0.1%3A4274&operation=done&username=commander")
+		})
+	}
+}
+
+func TestOperationAdminLinkDestinations(t *testing.T) {
+	const operationID = "result/part?key=%value#detail"
+	for _, test := range []struct{ name, adminURL, target string }{
+		{
+			"remote Admin with a base path",
+			"https://admin.example.test/commander",
+			"https://admin.example.test/commander/#/operations/result%2Fpart%3Fkey=%25value%23detail",
+		},
+		{
+			"local prefill with encoded values",
+			"http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274%2Fapi&username=operator%2Blocal",
+			"http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274%2Fapi&operation=result%2Fpart%3Fkey%3D%25value%23detail&username=operator%2Blocal",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			u, publish, _ := adminOperationUI(t, ctx, test.adminURL, false)
+			defer u.model.Close()
+			publish(bridge.Operation{ID: operationID, Status: "completed", UpdatedAt: time.Now()})
+			u.text("/watch " + operationID)
+			u.key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.wait("operation-specific review link", func(view string) bool {
+				return strings.Contains(view, ansi.SetHyperlink(test.target))
+			})
+			for _, width := range []int{80, 40} {
+				u.model.Update(tea.WindowSizeMsg{Width: width, Height: 50})
+				view := u.model.View()
+				if !strings.Contains(view, ansi.SetHyperlink(test.target)) {
+					t.Fatal("wrapping changed the operation link destination")
+				}
+				for _, line := range strings.Split(view, "\n") {
+					if ansi.StringWidth(line) > width {
+						t.Fatal("operation review link overflows the terminal width")
+					}
+				}
+				if strings.Count(view, "\n") > 50 {
+					t.Fatal("wrapped operation rows push the input outside the terminal")
+				}
+			}
+		})
+	}
+}
+
+func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
+	const adminURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&username=commander"
+	for _, noColor := range []bool{false, true} {
+		t.Run(fmt.Sprintf("no-color=%t", noColor), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			u, publish, _ := adminOperationUI(t, ctx, adminURL, noColor)
+			defer u.model.Close()
+			u.model.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+			now := time.Now()
+			for i, id := range []string{"alpha", "bravo", "charlie", "delta", "zulu"} {
+				// The last two share a timestamp so their order also exercises the ID tie-break.
+				publish(bridge.Operation{ID: id, Status: "completed", UpdatedAt: now.Add(time.Duration(min(i, 3)) * time.Second)})
+				u.text("/watch " + id)
+				u.key(tea.KeyMsg{Type: tea.KeyEnter})
+				u.wait("completed "+id, func(view string) bool {
+					return strings.Contains(ansi.Strip(view), id+" · completed") && !strings.Contains(view, "Thinking")
+				})
+			}
+			view := ansi.Strip(u.model.View())
+			previous := -1
+			for _, id := range []string{"delta", "zulu", "charlie", "bravo"} {
+				position := strings.Index(view, id+" · completed")
+				if position <= previous {
+					t.Fatal("progress does not show the most recent operations first with a stable ID tie-break")
+				}
+				previous = position
+			}
+			if strings.Contains(view, "alpha · completed") || !strings.Contains(view, "+1 more · /operations") {
+				t.Fatal("progress did not keep its four-operation limit and overflow count")
+			}
+			const draft = "Keep this draft"
+			u.text(draft)
+			for _, size := range []tea.WindowSizeMsg{{Width: 40, Height: 20}, {Width: 80, Height: 24}} {
+				u.model.Update(size)
+				view := u.model.View()
+				plain := ansi.Strip(view)
+				if strings.Count(view, "\n") > size.Height {
+					t.Fatalf("operation progress pushes input beyond a %dx%d terminal", size.Width, size.Height)
+				}
+				for _, line := range strings.Split(view, "\n") {
+					if ansi.StringWidth(line) > size.Width {
+						t.Fatal("operation progress exceeds the terminal width")
+					}
+				}
+				if !strings.Contains(plain, "delta · completed") || !strings.Contains(plain, draft) || !strings.Contains(plain, "/help · /exit") {
+					t.Fatal("resizing hid the newest operation, input or footer")
+				}
+				displayed := strings.Count(strings.Join(strings.Fields(plain), " "), "Review on Admin UI")
+				if displayed == 0 || displayed >= 5 || !strings.Contains(plain, fmt.Sprintf("+%d more · /operations", 5-displayed)) {
+					t.Fatal("progress does not account for the operations hidden by its height budget")
+				}
+				for _, id := range []string{"delta", "zulu", "charlie", "bravo"} {
+					if !strings.Contains(plain, id+" · completed") {
+						continue
+					}
+					target := "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&operation=" + id + "&username=commander"
+					if noColor {
+						if !strings.Contains(strings.Join(strings.Fields(view), ""), target) {
+							t.Fatal("height budgeting truncated a displayed operation URL")
+						}
+					} else if !strings.Contains(view, ansi.SetHyperlink(target)) {
+						t.Fatal("height budgeting truncated a displayed operation hyperlink")
+					}
+				}
+			}
 		})
 	}
 }
@@ -299,7 +424,7 @@ func adminOperationUI(t *testing.T, ctx context.Context, adminURL string, noColo
 		if err != nil {
 			t.Error("could not inspect model request")
 		}
-		if strings.Contains(string(body), "View results in Admin") || strings.Contains(string(body), "http://localhost:4275") {
+		if strings.Contains(string(body), "Review on Admin UI") || strings.Contains(string(body), "http://localhost:4275") {
 			t.Error("Admin link reached model history")
 		}
 		writeModelDelta(w, map[string]any{"content": "Operation reviewed"}, "stop")

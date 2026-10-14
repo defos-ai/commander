@@ -1,11 +1,12 @@
-import { parseConnectionPrefill, type ConnectionPrefill } from './connection-link';
+import { parseConnectionPrefill, validOperationID, type ConnectionPrefill } from './connection-link';
 
 export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'controllers' | 'agents' | 'actions' | 'settings';
 export type OperationView = 'details' | 'graph';
 
-export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | null } | {
+export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | null; operation?: string } | {
   connectionID: string;
   connect?: undefined;
+  operation?: undefined;
   section: WorkspaceSection;
   itemID?: string;
   view?: OperationView;
@@ -19,6 +20,8 @@ export function parseRoute(hash: string): Route {
   }
   try {
     const [prefix, collection, connectionID, section, itemID, view, ...extra] = hash.slice(1).split('/').map(decodeURIComponent);
+    if (prefix === '' && collection === 'operations' && connectionID && validOperationID(connectionID)
+      && section === undefined && !/[?#]/u.test(hash.slice(1))) return { operation: connectionID };
     if (prefix !== '' || collection !== 'connections' || !connectionID || !sections.includes(section ?? '') || extra.length) return {};
     if (itemID !== undefined && (!itemID || section === 'overview' || section === 'settings')) return {};
     if (view !== undefined && (view !== 'graph' || section !== 'operations' || !itemID)) return {};
@@ -30,8 +33,10 @@ export function parseRoute(hash: string): Route {
 
 export function routeHash(route: Route): string {
   if (!route.connectionID && route.connect !== undefined) {
-    return route.connect ? `#/connect?${new URLSearchParams({ api: route.connect.url, username: route.connect.username })}` : '#/connect';
+    return route.connect ? `#/connect?${new URLSearchParams({ api: route.connect.url, username: route.connect.username,
+      ...(route.connect.operation ? { operation: route.connect.operation } : {}) })}` : '#/connect';
   }
+  if (!route.connectionID && route.operation) return `#/operations/${encodeURIComponent(route.operation)}`;
   if (!route.connectionID) return '#/';
   const parts = ['connections', route.connectionID, route.section];
   if (route.itemID) {

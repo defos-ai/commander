@@ -30,20 +30,27 @@
   Stop and await Admin before removing session state. Show its ready address in
   `/status`; keep the startup banner short and never put credentials in a URL.
 - `/admin` works during setup and chat without forwarding input to the model.
-  Advertise Admin once per session after the first completed operation, only when
-  its browser-facing URL is known. Never infer Admin's address from a remote MCP
-  endpoint. Native all-in-one can use the ready Admin address; Docker cannot infer
-  published ports. `--admin-url` / `COMMANDER_ADMIN_URL` supplies the public URL,
-  not a listener or port mapping. Do not advertise a disabled or failed local
-  Admin. Without a known URL, `/admin` gives short setup guidance.
+  Add a short Admin review link to each completed, settled operation's progress
+  row; do not add a separate chat notice. Account for wrapped progress rows when
+  sizing the chat viewport. Native
+  all-in-one uses the ready Admin address; Docker all-in-one defaults the link to
+  `http://localhost:4275`. This is a conventional default, not detection of a
+  published port. `--admin-url` / `COMMANDER_ADMIN_URL` optionally overrides the
+  browser address; it does not change listeners or port mappings. Never infer
+  Admin's address from a remote MCP endpoint. Do not advertise a disabled or
+  failed local Admin. Remote mode without a configured URL gives short `/admin`
+  setup guidance and no operation review link.
   Local links use `#/connect?api=...&username=...` with URL-encoded non-secret
-  values. Never include passwords or tokens, log credentials, or send the link
-  through model messages. Keep the completion hint out of the startup banner.
+  values; operation review links add `operation=...`. Preserve encoded query
+  values when adding the destination. Never include passwords or tokens, log
+  credentials, or send the link through model messages. Keep links out of the
+  startup banner.
   Render terminal links with a short label and the full prefill target; retain
   plain URLs for no-color/non-terminal output.
   Compose explicitly supplies the public Admin URL from its known published port,
-  with `COMMANDER_ADMIN_URL` overriding it. Remote mode advertises only this base
-  URL; it has no local API information to prefill a connection.
+  with `COMMANDER_ADMIN_URL` overriding it. Remote review links use
+  `#/operations/<encoded-id>` so Admin can ask which connection to use;
+  remote mode has no local API information to prefill a connection.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
   use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only
@@ -118,8 +125,8 @@
   to `0.0.0.0:4275` and the API to `0.0.0.0:4274`; document host publishing on
   `127.0.0.1` by default. Admin proxies to the API inside the same container, so
   the quick start publishes only `4275`; API publishing stays optional. MCP stays
-  internal. Pass the matching browser address with `--admin-url` after the image
-  name to enable a working advertised link; publishing alone does not establish it.
+  internal. The default advertised link assumes host port `4275`; use optional
+  `--admin-url` after the image name for another published port or host.
   Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
   non-root. State remains temporary; adding image dependencies must not change
   session persistence. Container ports cannot be published after creation.
@@ -150,9 +157,20 @@
   clear it on retry, success or back; never carry it into the chat history.
 - Preserve the DEFOS palette, star loaders, Markdown rendering, keyboard selectors
   and `NO_COLOR`/non-terminal behavior. Use [README.md](README.md) for user commands.
-  Enable mouse reporting in the terminal program. Vertical wheel events scroll
-  chat or move provider/model selection; they never submit input or answers.
-  Keep keyboard scrolling available and preserve drafts and question focus.
+  Keep mouse reporting disabled so plain drag selects through the terminal.
+  For real terminal output, save, enable and restore alternate-scroll mode
+  (DEC 1007); supported terminals translate wheel/trackpad events into Up/Down.
+  Use Up/Down for provider/model selection and focused questions, not chat
+  scrolling; leave the chat keys available for future message history. Chat
+  scrolling uses PgUp/PgDown. Wheel events translated into arrow keys do not
+  scroll chat. Up/Down must never submit input or answers. Preserve drafts and
+  question focus. Do not emit terminal mode controls to files.
+  Leave selection and copying to the terminal. Do not draw an application-owned
+  selection, intercept copy shortcuts or send clipboard control sequences.
+  Ctrl+C retains its stop/quit behavior. Keep selection/copy instructions in
+  `/help`, out of the footer. Explain plain drag and the terminal's normal copy
+  command in help. Live output can change selected cells; do not promise a
+  frozen screen. Do not add a mouse mode command.
   Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
   while a reply is active.
   All-in-one startup shows the provider/model, readiness with two connected agents,
@@ -181,7 +199,7 @@ or host browser. For transport or workflow changes, also use the
 For image changes, build both Dockerfiles from the repository root. Verify the
 all-in-one image starts without a model key, serves Admin assets and `/healthz`
 through published port `4275`, and authenticates/proxies to its API without
-publishing `4274`. Check explicit `--admin-url`, missing public URL guidance,
+publishing `4274`. Check the default Admin link, explicit `--admin-url`,
 `--no-admin`, explicit credential overrides, headless
 Chromium against a local fixture and clean SIGTERM shutdown. Keep Docker lifecycle
 in shell/CI rather than Go test fixtures.

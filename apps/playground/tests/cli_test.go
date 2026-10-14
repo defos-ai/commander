@@ -374,6 +374,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	if apiReport.ID != report.ID || apiReport.OperationID != operationID || !bytes.Contains(apiReport.Output, []byte("operator confirmed intentional noindex")) {
 		t.Fatalf("API did not read the MCP report: %+v", apiReport)
 	}
+	wait("Review on Admin UI")
 	client.Close()
 	if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {
 		t.Fatal(err)

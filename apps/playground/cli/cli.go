@@ -14,6 +14,7 @@ import (
 	"github.com/defos-ai/commander/apps/playground/internal/local"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
 	"github.com/mattn/go-isatty"
+	"github.com/muesli/termenv"
 )
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (result error) {
@@ -53,12 +54,28 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if file, ok := stdout.(*os.File); !ok || !isatty.IsTerminal(file.Fd()) {
 		config.NoColor = true
+	} else {
+		restore, err := termenv.EnableVirtualTerminalProcessing(termenv.NewOutput(file))
+		if err != nil {
+			return err
+		}
+		defer func() { result = errors.Join(result, restore()) }()
+		// Alternate scrolling sends wheel/trackpad movement as arrow keys,
+		// leaving drag selection and copying with the terminal. Restore its mode
+		// on exit so the surrounding shell keeps its original scroll behavior.
+		defer func() {
+			_, err := io.WriteString(stdout, "\x1b[?1007r")
+			result = errors.Join(result, err)
+		}()
+		if _, err := io.WriteString(stdout, "\x1b[?1007s\x1b[?1007h"); err != nil {
+			return err
+		}
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	model := ui.New(ctx, config.Config, stdout)
 	defer model.Close()
-	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout), tea.WithAltScreen())
 	_, err = program.Run()
 	if config.AllInOne && ctx.Err() != nil && caller.Err() == nil {
 		return context.Cause(ctx)

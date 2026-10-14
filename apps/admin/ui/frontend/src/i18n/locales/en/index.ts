@@ -37,6 +37,7 @@ export default {
     localConnect: 'Connect',
     storageError: 'This browser could not save your connections. Changes will last only for this tab.',
     missing: 'This connection is not saved in this browser. Choose or add a connection.',
+    chooseOperationConnection: 'Choose or add the API connection for operation {{id}}.',
     duplicate: 'A connection with this API URL already exists.',
     restoring: 'Restoring connections…',
     restoreError: 'Could not restore sign-ins. Check the UI server and sign in again.',

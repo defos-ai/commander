@@ -50,6 +50,8 @@ beforeEach(() => {
 describe('location navigation', () => {
   it('round-trips entity names and IDs without treating their punctuation as route segments', () => {
     const routes: Route[] = [{}, { connect: { url: 'http://127.0.0.1:4274', username: 'commander' } },
+      { connect: { url: 'http://127.0.0.1:4274', username: 'commander', operation: 'Résumé / a?#b' } },
+      { operation: 'Résumé / a?#b' },
       { connectionID: 'local', section: 'overview' }, { connectionID: 'local', section: 'settings' },
       ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
       { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' }];
@@ -58,7 +60,9 @@ describe('location navigation', () => {
     expect(routeHash({ connectionID: 'local', section: 'operations', itemID: operation.id, view: 'details' }))
       .toBe(`#/connections/local/operations/${operation.id}`);
     for (const hash of ['#/%', '#/connections/id/unknown', '#/connections/id/overview/item', '#/connections/id/operations/',
-      '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra']) {
+      '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra',
+      '#/operations/', '#/operations/id/extra', '#/operations/id?token=secret', '#/operations/id#fragment',
+      '#/operations/%0A', '#/operations/%', '#/operations/' + 'a'.repeat(257)]) {
       expect(parseRoute(hash)).toEqual({});
     }
   });
@@ -70,6 +74,8 @@ describe('location navigation', () => {
     'api=https://api.example.test&username=commander&return=https://other.test',
     'api=https://api.example.test&api=https://other.test&username=commander',
     'api=https://api.example.test&username=one&username=two',
+    'api=https://api.example.test&username=one&operation=a&operation=b',
+    ...['', ' ', '\n', 'a'.repeat(257)].map(operation => new URLSearchParams({ api: 'https://api.example.test', username: 'commander', operation }).toString()),
     'api=https://api.example.test&username=%',
     ...['javascript:alert(1)', '/api', 'https://user:secret@api.example.test',
       'https://api.example.test?token=secret', 'https://api.example.test#secret',

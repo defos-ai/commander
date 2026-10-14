@@ -13,11 +13,13 @@ For a temporary all-in-one session, build and run from the repository root:
 
 ```sh
 docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
-docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio --admin-url http://localhost:4275
+docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
 ```
 
 This image includes Admin, MCP, the API, a controller, a web agent and a browser agent
-with Chromium and fonts. Type `/admin` for a link with the local connection prefilled.
+with Chromium and fonts. Completed operations show a review link to Admin at
+`http://localhost:4275`, with the local connection prefilled.
+Type `/admin` for the general Admin link anytime.
 Use `/credentials` for the API login and MCP token, or use another terminal:
 
 ```sh
@@ -29,9 +31,9 @@ Generated credentials change when the container restarts. Pass `-e API_USERNAME`
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
 
 Admin reaches the API inside the container; publishing API port `4274` is optional.
-Add `-p 127.0.0.1:4274:4274` if other tools need API access. `--admin-url` tells
-Playground the browser address; it cannot discover Docker's published ports.
-To skip Admin, replace `--admin-url http://localhost:4275` with `--no-admin`.
+Add `-p 127.0.0.1:4274:4274` if other tools need API access. For a different
+published port or host, pass `--admin-url http://YOUR_HOST:PORT` after the image
+name to override the default link. To skip Admin, pass `--no-admin`.
 Ports must be published when creating the container.
 `/exit` stops everything and deletes the session's state. Add `-e OPENAI_API_KEY`
 before the image name to use an exported key, or enter your provider's key during setup.
@@ -191,12 +193,17 @@ to include rendered accessibility and screenshots.
 | `/exit` or **Ctrl+D** | Exit chat; all-in-one hosts also stop. |
 
 Messages queue during replies; slash commands and operation updates remain
-responsive. Scroll chat with the mouse wheel, two-finger trackpad gestures or
-**PgUp/PgDown**. Mouse gestures require a terminal that forwards mouse events.
+responsive. Scroll chat with **PgUp/PgDown**. Wheel and trackpad scrolling are
+unavailable in terminals that translate those gestures into arrow keys.
+Drag to select output, then use your terminal's usual copy command:
+**Ctrl+Shift+C** in GNOME Terminal,
+**Cmd+C** in macOS Terminal, or **Copy** from the terminal menu.
+Selection stays in the terminal; **Ctrl+C** still stops the reply.
 
-After the first completed operation, Playground shows the Admin link once per
-session when its address is known. Local all-in-one links prefill the connection
-and reuse an existing saved connection; passwords and tokens never appear in links.
+Completed operation rows include **Review on Admin UI** links to that operation.
+Local all-in-one links prefill the connection or reuse a saved one; sign in if
+needed. Remote sessions need a configured Admin address, then ask you to choose
+the API connection. Passwords and tokens never appear in links.
 
 Questions appear in a selector: use **↑/↓** and **Enter**, type a custom answer,
 or press **Tab** to return to chat. The panel shows the latest question, deadline

@@ -48,11 +48,11 @@ func (c *config) configureLocalAdmin(session *local.Session) {
 	if c.AdminURL == "" {
 		switch env("API_RUNTIME", "native") {
 		case "docker", "docker-compose":
-			// A listener inside a container does not tell us its published host port.
-			c.AdminHint = "Publish Admin port 4275 and set --admin-url to its browser address."
-			return
+			// Match the quick-start port mapping; custom mappings can override it.
+			c.AdminURL = "http://localhost:4275"
+		default:
+			c.AdminURL = session.AdminURL
 		}
-		c.AdminURL = session.AdminURL
 	}
 	// These values only prefill the form; authentication still requires a password.
 	prefill := url.Values{"api": {session.APIURL}, "username": {session.APICredentials.Username}}

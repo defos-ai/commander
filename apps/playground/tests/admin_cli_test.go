@@ -74,7 +74,8 @@ func testAllInOneAdminAddress(t *testing.T) {
 	}{
 		{name: "native default", runtime: "native"},
 		{name: "native override", runtime: "native", publicURL: "https://admin.example.test/commander/"},
-		{name: "Docker unknown mapping", runtime: "docker", hint: "Publish Admin port 4275"},
+		{name: "Docker default", runtime: "docker"},
+		{name: "Docker Compose default", runtime: "docker-compose"},
 		{name: "Docker custom mapping", runtime: "docker", publicURL: "http://localhost:14275"},
 		{name: "disabled", runtime: "native", disabled: true, hint: "Admin is disabled."},
 		{name: "unavailable", runtime: "native", missingAssets: true, publicURL: "https://admin.example.test", hint: "Admin UI is unavailable."},
@@ -127,8 +128,14 @@ func testAllInOneAdminAddress(t *testing.T) {
 			if tc.publicURL != "" && strings.TrimRight(address.String(), "/") != strings.TrimRight(tc.publicURL, "/") {
 				t.Fatal("Admin public address or base path override was lost")
 			}
-			if tc.publicURL == "" && (address.Hostname() != "127.0.0.1" || address.Port() == "") {
-				t.Fatal("native Admin did not use its ready address")
+			if tc.publicURL == "" {
+				if tc.runtime == "native" {
+					if address.Hostname() != "127.0.0.1" || address.Port() == "" {
+						t.Fatal("native Admin did not use its ready address")
+					}
+				} else if address.String() != "http://localhost:4275/" {
+					t.Fatal("Docker Admin did not use its default browser address")
+				}
 			}
 		})
 	}
