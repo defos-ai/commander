@@ -51,6 +51,10 @@
   with `COMMANDER_ADMIN_URL` overriding it. Remote review links use
   `#/operations/<encoded-id>` so Admin can ask which connection to use;
   remote mode has no local API information to prefill a connection.
+- Model guidance directs screenshot/file viewing to Admin's operation artifacts,
+  using a displayed review link or `/admin`. Keep `missions://` URIs for MCP
+  resource access; never present them as browser/download links. Playground has
+  no image preview. Do not assume Admin is running or invent its address.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
   use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only

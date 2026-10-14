@@ -77,9 +77,22 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 		if err != nil {
 			t.Error("could not inspect model request")
 		}
-		for _, private := range []string{adminURL, "/admin", "Usage: /admin", password, token} {
+		for _, private := range []string{adminURL, "Usage: /admin", password, token} {
 			if strings.Contains(string(body), private) {
 				t.Error("local Admin command or credentials reached the model")
+			}
+		}
+		var request struct {
+			Messages []struct{ Role, Content string }
+		}
+		if err := json.Unmarshal(body, &request); err != nil {
+			t.Error(err)
+		}
+		for _, message := range request.Messages {
+			// General system guidance may mention /admin; local command input
+			// and output must still stay out of the conversation.
+			if message.Role != "system" && strings.Contains(message.Content, "/admin") {
+				t.Error("local Admin command reached model history")
 			}
 		}
 		writeModelDelta(w, map[string]any{"content": "Normal chat works"}, "stop")
