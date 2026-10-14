@@ -17,9 +17,12 @@ export function useRoute() {
     };
   }, []);
 
-  const navigate = useCallback((next: Route) => {
+  const navigate = useCallback((next: Route, options?: { replace: boolean }) => {
     const hash = routeHash(next);
-    if (window.location.hash !== hash) window.history.pushState(null, '', hash);
+    if (window.location.hash !== hash) {
+      if (options?.replace) window.history.replaceState(null, '', hash);
+      else window.history.pushState(null, '', hash);
+    }
     setRoute(previous => routeHash(previous) === hash ? previous : next);
   }, []);
 

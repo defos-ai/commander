@@ -6,10 +6,10 @@ development setup; production deployment is not yet documented.
 ## All-in-one Docker
 
 [Run Playground's all-in-one image](../apps/playground/README.md#docker-recommended)
-with `-p 127.0.0.1:4275:4275`, then open **http://localhost:4275** for Admin.
-Connect to `http://localhost:4274` using the API login from `/credentials` in
-Playground. Admin reaches the API inside the container; publish `4274` only if
-other tools need it. Exiting removes the session's results.
+with `-p 127.0.0.1:4275:4275` before the image name and
+`--admin-url http://localhost:4275` after it. Use `/admin` for a prefilled connection
+link and `/credentials` for the API login. Admin reaches the API inside the container;
+publish `4274` only if other tools need it. Exiting removes the session's results.
 
 ## Local Compose
 
@@ -35,6 +35,8 @@ which generates and shares its MCP token automatically.
 The API listens on `4274` and admin UI on `4275`. Compose generates an API password
 on each container start; set `API_PASSWORD` to preserve your own password. The
 [UI quick start](../apps/admin/ui/README.md#quick-start) shows retrieval and port overrides.
+Playground's `/admin` link follows the published `COMMANDER_UI_PORT`; set
+`COMMANDER_ADMIN_URL` when accessing Admin through another host or proxy.
 
 The one-shot `mcp-credentials` initializer saves a shared MCP token in a named
 Docker volume. MCP and Playground mount it read-only and export it to their
@@ -55,6 +57,7 @@ API credentials remain in its process environment.
 | `LOG_FORMAT` | `--log-format` | `text` or `json` logs |
 | `MCP_TOKEN` | — | Required standalone MCP bearer token |
 | `COMMANDER_MCP_TOKEN` | — | Playground token for an existing MCP server |
+| `COMMANDER_ADMIN_URL` | `--admin-url` | Browser-facing Admin URL advertised by Playground |
 
 Flags override environment values. Native hosts default to `./state/bus`,
 `./state/database`, and `./state/storage`. Agents need bus and file storage only.
@@ -63,6 +66,12 @@ Compose supplies backend settings; application images do not choose providers.
 Run a host with `--help` for its flags. Action-specific dependencies belong in the
 [agent guide](../apps/agents/browser/README.md); model settings belong in
 [Playground](../apps/playground/README.md).
+
+Native all-in-one uses its own Admin address; Compose supplies its known published
+address. For other Docker or remote setups, set `COMMANDER_ADMIN_URL` or pass
+`--admin-url` to Playground with an address your browser can reach. This advertises
+the URL; it does not publish a port or start a remote Admin server. Without it,
+remote Playground does not guess an Admin URL or API connection.
 
 ## State
 

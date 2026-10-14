@@ -20,7 +20,7 @@ import (
 
 type Config struct {
 	Provider, Model, BaseURL, MCPURL string
-	AdminURL                         string
+	AdminURL, AdminHint              string
 	Keys                             map[string]string
 	NoColor                          bool
 	Debug                            bool
@@ -64,6 +64,7 @@ type Model struct {
 	controls             int
 	markdown             *glamour.TermRenderer
 	markdownWidth        int
+	adminAnnounced       bool
 }
 
 func New(ctx context.Context, config Config, output io.Writer) *Model {
@@ -252,6 +253,10 @@ func (m *Model) receive(event chat.Event) {
 			if !exists || !event.Operation.UpdatedAt.Before(previous.UpdatedAt) {
 				m.operations[event.ID] = *event.Operation
 				m.syncQuestion(time.Now())
+				if event.Operation.Status == "completed" && m.config.AdminURL != "" && !m.adminAnnounced {
+					m.adminAnnounced = true
+					m.add("admin", "View results in Admin:")
+				}
 				m.refresh()
 			}
 		}

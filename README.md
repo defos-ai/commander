@@ -27,10 +27,10 @@ Each option opens Playground. Choose a model, enter its API key, and ask:
 Run all-in-one (AIO), with agent dependencies included:
 
 ```sh
-docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
+docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable --admin-url http://localhost:4275
 ```
 
-Open **http://localhost:4275** for Admin. Use `/credentials` in Playground for the API login.
+Use `/admin` for the Admin link and `/credentials` for the API login.
 
 ### Binary
 

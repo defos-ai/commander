@@ -283,6 +283,7 @@ func (m *Model) setupInput(value string) tea.Cmd {
 	case "/help":
 		m.input.Reset()
 		help := "Use ↑/↓ and Enter to select a provider and model; mouse wheel, trackpad or PgUp/PgDown scroll longer lists. Choose Enter model name… for an unlisted model. Other supports OpenAI-compatible APIs. /back restarts setup; /exit quits. Override MCP with --mcp-url."
+		help += "\n\n/admin — Show Admin UI link"
 		if m.config.LocalAPI != nil {
 			help += "\n\n/credentials — Show API login and MCP token"
 		}

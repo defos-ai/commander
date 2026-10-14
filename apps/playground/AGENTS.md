@@ -29,6 +29,21 @@
   short notice and host-log details. Optional Admin failures must not fail cleanup.
   Stop and await Admin before removing session state. Show its ready address in
   `/status`; keep the startup banner short and never put credentials in a URL.
+- `/admin` works during setup and chat without forwarding input to the model.
+  Advertise Admin once per session after the first completed operation, only when
+  its browser-facing URL is known. Never infer Admin's address from a remote MCP
+  endpoint. Native all-in-one can use the ready Admin address; Docker cannot infer
+  published ports. `--admin-url` / `COMMANDER_ADMIN_URL` supplies the public URL,
+  not a listener or port mapping. Do not advertise a disabled or failed local
+  Admin. Without a known URL, `/admin` gives short setup guidance.
+  Local links use `#/connect?api=...&username=...` with URL-encoded non-secret
+  values. Never include passwords or tokens, log credentials, or send the link
+  through model messages. Keep the completion hint out of the startup banner.
+  Render terminal links with a short label and the full prefill target; retain
+  plain URLs for no-color/non-terminal output.
+  Compose explicitly supplies the public Admin URL from its known published port,
+  with `COMMANDER_ADMIN_URL` overriding it. Remote mode advertises only this base
+  URL; it has no local API information to prefill a connection.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
   use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only
@@ -103,7 +118,9 @@
   to `0.0.0.0:4275` and the API to `0.0.0.0:4274`; document host publishing on
   `127.0.0.1` by default. Admin proxies to the API inside the same container, so
   the quick start publishes only `4275`; API publishing stays optional. MCP stays
-  internal. Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
+  internal. Pass the matching browser address with `--admin-url` after the image
+  name to enable a working advertised link; publishing alone does not establish it.
+  Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
   non-root. State remains temporary; adding image dependencies must not change
   session persistence. Container ports cannot be published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
@@ -164,7 +181,8 @@ or host browser. For transport or workflow changes, also use the
 For image changes, build both Dockerfiles from the repository root. Verify the
 all-in-one image starts without a model key, serves Admin assets and `/healthz`
 through published port `4275`, and authenticates/proxies to its API without
-publishing `4274`. Check `--no-admin`, explicit credential overrides, headless
+publishing `4274`. Check explicit `--admin-url`, missing public URL guidance,
+`--no-admin`, explicit credential overrides, headless
 Chromium against a local fixture and clean SIGTERM shutdown. Keep Docker lifecycle
 in shell/CI rather than Go test fixtures.
 

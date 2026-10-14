@@ -11,6 +11,7 @@ import { useConnections } from './hooks/useConnections';
 import { useLocalDiscovery } from './hooks/useLocalDiscovery';
 import { useRoute } from './hooks/useRoute';
 import { useTranslation } from './i18n';
+import { routeHash, type Route } from './navigation/routes';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 import { ConnectionSettingsPage } from './pages/ConnectionSettingsPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -20,29 +21,42 @@ import { ControllersPage } from './pages/ControllersPage';
 import { ActionsPage } from './pages/ActionsPage';
 import { OperationsPage } from './pages/OperationsPage';
 
-type Modal = { kind: 'connect'; connection?: Connection; localURL?: string } | { kind: 'remove'; connection: Connection };
+type Modal = { kind: 'connect'; connection?: Connection; localURL?: string; username?: string } | { kind: 'remove'; connection: Connection };
 
 export function App() {
   const { t } = useTranslation();
   const state = useConnections();
   const { route, navigate } = useRoute();
   const activeID = route.connectionID;
+  const pendingConnectionLink = !route.connectionID && route.connect !== undefined;
   const section = route.connectionID ? route.section : 'overview';
   const selectedID = route.connectionID ? route.itemID : undefined;
   const [modal, setModal] = useState<Modal>();
   const [removing, setRemoving] = useState(false);
   const [removeFailed, setRemoveFailed] = useState(false);
   const focusAfterTransition = useRef(false);
-  const previousRoute = useRef(route);
+  const previousRoute = useRef(routeHash(route));
   const active = state.connections.find(connection => connection.id === activeID);
   const local = useLocalDiscovery(state.connections.map(connection => connection.url));
 
   useEffect(() => {
-    if (previousRoute.current === route) return;
-    previousRoute.current = route;
-    focusAfterTransition.current = true;
-    setModal(undefined);
-  }, [route]);
+    const hash = routeHash(route);
+    if (previousRoute.current !== hash) {
+      previousRoute.current = hash;
+      focusAfterTransition.current = true;
+      setModal(undefined);
+    }
+    if (route.connectionID || route.connect === undefined || (route.connect && state.restoring)) return;
+    const prefill = route.connect;
+    const connection = prefill && state.connections.find(item => item.url === prefill.url);
+    const destination: Route = connection ? { connectionID: connection.id, section: 'overview' } : {};
+    // Consume the link once so polling, cancellation and browser history cannot reopen it.
+    previousRoute.current = routeHash(destination);
+    navigate(destination, { replace: true });
+    if (prefill && (!connection || !state.credentials[connection.id])) {
+      setModal({ kind: 'connect', connection: connection || undefined, localURL: prefill.url, username: prefill.username });
+    }
+  }, [route, navigate, state.restoring, state.connections, state.credentials]);
 
   useEffect(() => {
     if (modal || !focusAfterTransition.current) return;
@@ -84,7 +98,8 @@ export function App() {
       {local.status === 'checking' && <p className="local-discovery" role="status"><LoaderCircle className="connection-form-spinner" size={14} aria-hidden="true" />{t($ => $.connections.localChecking)}</p>}
       {local.status === 'found' && <div className="local-discovery"><div><span className="status-dot" aria-hidden="true" />{t($ => $.connections.localFound)}<span className="local-url">{local.url}</span></div><Button variant="secondary" onClick={() => setModal({ kind: 'connect', localURL: local.url })}>{t($ => $.connections.localConnect)}</Button></div>}
     </ConnectionsPage>}
-    {modal?.kind === 'connect' && <ConnectionDialog connection={modal.connection} credentials={modal.connection ? state.credentials[modal.connection.id] : undefined} localURL={modal.localURL}
+    {!pendingConnectionLink && modal?.kind === 'connect' && <ConnectionDialog connection={modal.connection} credentials={modal.connection ? state.credentials[modal.connection.id] : undefined} localURL={modal.localURL}
+      initialUsername={modal.username}
       onClose={() => setModal(undefined)} onConnect={async (values, signal) => {
         const url = normalizeURL(values.url);
         if (state.connections.some(connection => connection.url === url && connection.id !== modal.connection?.id)) return t($ => $.connections.duplicate);

@@ -13,13 +13,12 @@ For a temporary all-in-one session, build and run from the repository root:
 
 ```sh
 docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
-docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
+docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio --admin-url http://localhost:4275
 ```
 
 This image includes Admin, MCP, the API, a controller, a web agent and a browser agent
-with Chromium and fonts. Open **http://localhost:4275** for Admin and connect to
-`http://localhost:4274`. Type `/credentials` in Playground for the API login and
-MCP token, or use another terminal:
+with Chromium and fonts. Type `/admin` for a link with the local connection prefilled.
+Use `/credentials` for the API login and MCP token, or use another terminal:
 
 ```sh
 docker exec commander commander credentials api
@@ -30,8 +29,10 @@ Generated credentials change when the container restarts. Pass `-e API_USERNAME`
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
 
 Admin reaches the API inside the container; publishing API port `4274` is optional.
-Add `-p 127.0.0.1:4274:4274` if other tools need API access. To skip Admin, append
-`--no-admin` after the image name. Ports must be published when creating the container.
+Add `-p 127.0.0.1:4274:4274` if other tools need API access. `--admin-url` tells
+Playground the browser address; it cannot discover Docker's published ports.
+To skip Admin, replace `--admin-url http://localhost:4275` with `--no-admin`.
+Ports must be published when creating the container.
 `/exit` stops everything and deletes the session's state. Add `-e OPENAI_API_KEY`
 before the image name to use an exported key, or enter your provider's key during setup.
 
@@ -54,6 +55,8 @@ docker compose exec mcp commander-mcp credentials
 
 Add `--raw` to print only the token.
 `/exit` closes chat; hosts and saved work remain.
+Compose also configures `/admin` for `http://localhost:4275`, following
+`COMMANDER_UI_PORT` when changed. Set `COMMANDER_ADMIN_URL` for another browser address.
 `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
 
@@ -85,8 +88,9 @@ shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
-Open **http://127.0.0.1:4275** for Admin, connect to `http://127.0.0.1:4274`, and use
-the API login shown by `/credentials`. Use `/status` to see the running addresses.
+Type `/admin` for a link with the local API URL and username prefilled; enter the
+password shown by `/credentials`. Admin defaults to **http://127.0.0.1:4275**.
+Use `/status` to see the running addresses.
 `--no-admin` disables Admin; `UI_LISTEN_ADDRESS` changes its address.
 If Admin cannot start, Playground continues with a notice.
 `API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
@@ -139,6 +143,7 @@ To connect to an existing MCP server, paste its token when prompted or set
 | --- | --- | --- |
 | MCP endpoint | `COMMANDER_MCP_URL` | `--mcp-url` |
 | MCP bearer token | `COMMANDER_MCP_TOKEN` | Hidden setup prompt |
+| Admin browser address | `COMMANDER_ADMIN_URL` | `--admin-url` |
 | Provider | `COMMANDER_LLM_PROVIDER` | `--provider` |
 | Model | `COMMANDER_LLM_MODEL` | `--model` |
 | Model API base URL | `COMMANDER_LLM_BASE_URL` | `--base-url` |
@@ -146,6 +151,8 @@ To connect to an existing MCP server, paste its token when prompted or set
 | Disable colors | `NO_COLOR` | `--no-color` |
 
 Flags override environment values. MCP defaults to `http://localhost:4273/mcp`.
+For existing hosts, add `--admin-url https://YOUR_ADMIN_HOST` to enable `/admin`;
+Playground does not infer Admin's address or API connection from MCP.
 MCP credentials are sent only to the configured endpoint; redirects are not followed.
 An HTTP `401` stops requests until you reconnect with the correct token. During
 setup, paste the token into the hidden input and press **Enter** to reconnect.
@@ -175,6 +182,7 @@ to include rendered accessibility and screenshots.
 | --- | --- |
 | `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
 | `/credentials` | Show the all-in-one API login and MCP token. Also available during model setup. |
+| `/admin` | Show the Admin link. Also available during model setup. |
 | `/watch <operation-id>` | Follow saved work and resume model decisions. |
 | `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Pending questions and action readiness still apply. |
 | `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |
@@ -185,6 +193,10 @@ to include rendered accessibility and screenshots.
 Messages queue during replies; slash commands and operation updates remain
 responsive. Scroll chat with the mouse wheel, two-finger trackpad gestures or
 **PgUp/PgDown**. Mouse gestures require a terminal that forwards mouse events.
+
+After the first completed operation, Playground shows the Admin link once per
+session when its address is known. Local all-in-one links prefill the connection
+and reuse an existing saved connection; passwords and tokens never appear in links.
 
 Questions appear in a selector: use **↑/↓** and **Enter**, type a custom answer,
 or press **Tab** to return to chat. The panel shows the latest question, deadline

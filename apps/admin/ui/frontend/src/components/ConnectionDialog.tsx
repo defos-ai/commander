@@ -10,10 +10,11 @@ import { CredentialHint } from './CredentialHint';
 type ConnectionValues = { name: string; url: string; username: string; password: string };
 type Field = keyof ConnectionValues;
 
-export function ConnectionDialog({ connection, credentials, localURL, onClose, onConnect }: {
+export function ConnectionDialog({ connection, credentials, localURL, initialUsername, onClose, onConnect }: {
   connection?: Connection;
   credentials?: Session;
   localURL?: string;
+  initialUsername?: string;
   onClose: () => void;
   onConnect: (value: ConnectionValues, signal: AbortSignal) => Promise<string | void>;
 }) {
@@ -25,7 +26,7 @@ export function ConnectionDialog({ connection, credentials, localURL, onClose, o
   const [values, setValues] = useState<ConnectionValues>(() => ({
     name: connection?.name ?? t($ => localURL ? $.connectionForm.defaultName : $.connectionForm.newName),
     url: connection?.url ?? localURL ?? '',
-    username: credentials?.username ?? 'commander',
+    username: credentials?.username ?? initialUsername ?? 'commander',
     password: '',
   }));
   const initialField = useRef<Field>(

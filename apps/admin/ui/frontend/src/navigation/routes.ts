@@ -1,8 +1,11 @@
+import { parseConnectionPrefill, type ConnectionPrefill } from './connection-link';
+
 export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'controllers' | 'agents' | 'actions' | 'settings';
 export type OperationView = 'details' | 'graph';
 
-export type Route = { connectionID?: undefined } | {
+export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | null } | {
   connectionID: string;
+  connect?: undefined;
   section: WorkspaceSection;
   itemID?: string;
   view?: OperationView;
@@ -11,6 +14,9 @@ export type Route = { connectionID?: undefined } | {
 const sections: readonly string[] = ['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'settings'];
 
 export function parseRoute(hash: string): Route {
+  if (hash === '#/connect' || hash.startsWith('#/connect?')) {
+    return { connect: parseConnectionPrefill(hash.slice('#/connect?'.length)) };
+  }
   try {
     const [prefix, collection, connectionID, section, itemID, view, ...extra] = hash.slice(1).split('/').map(decodeURIComponent);
     if (prefix !== '' || collection !== 'connections' || !connectionID || !sections.includes(section ?? '') || extra.length) return {};
@@ -23,6 +29,9 @@ export function parseRoute(hash: string): Route {
 }
 
 export function routeHash(route: Route): string {
+  if (!route.connectionID && route.connect !== undefined) {
+    return route.connect ? `#/connect?${new URLSearchParams({ api: route.connect.url, username: route.connect.username })}` : '#/connect';
+  }
   if (!route.connectionID) return '#/';
   const parts = ['connections', route.connectionID, route.section];
   if (route.itemID) {

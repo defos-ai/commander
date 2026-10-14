@@ -79,11 +79,124 @@ function deferredResponse() {
   return { promise, resolve };
 }
 
+function connectionLink(url = localURL, user = 'commander') {
+  return `#/connect?${new URLSearchParams({ api: url, username: user })}`;
+}
+
 beforeEach(() => localStorage.clear());
 afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.useRealTimers();
+});
+
+describe('connection links from Playground', () => {
+  it('prefills a local connection and saves only after the user submits a password', async () => {
+    const api = mockAPI();
+    window.history.replaceState(null, '', connectionLink('http://127.0.0.1:4274', 'local-operator'));
+    render(<App />);
+    const dialog = await screen.findByRole('dialog', { name: 'Add connection' });
+    expect(within(dialog).getByLabelText('Connection name')).toHaveValue('Local connection');
+    expect(within(dialog).getByLabelText('API URL')).toHaveValue('http://127.0.0.1:4274');
+    expect(within(dialog).getByLabelText('Username')).toHaveValue('local-operator');
+    expect(within(dialog).getByLabelText('Password')).toHaveValue('');
+    expect(within(dialog).getByLabelText('Password')).toHaveFocus();
+    expect(window.location.hash).toBe('#/');
+    expect(api.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+    expect(stored()).toEqual([]);
+
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: password } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    expect(stored()).toEqual([{ id: expect.any(String), name: 'Local connection', url: 'http://127.0.0.1:4274' }]);
+    const create = api.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
+    expect(JSON.parse(create?.[1]?.body as string)).toEqual({ url: 'http://127.0.0.1:4274', username: 'local-operator', password });
+    expect(window.location.href).not.toContain(password);
+    expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).not.toContain(password);
+    expect(api.fetch.mock.calls.every(([input]) => String(input).startsWith('/ui/'))).toBe(true);
+  });
+
+  it('waits for session restoration and opens an already signed-in connection without another login', async () => {
+    const api = mockAPI();
+    const restored = deferredResponse();
+    persist([savedConnection]);
+    api.state.sessions.set(remoteURL, { url: remoteURL, username: 'existing-user' });
+    api.state.intercept = url => url === '/ui/connections' ? restored.promise : undefined;
+    window.history.replaceState(null, '', connectionLink(`${remoteURL}/`, 'suggested-user'));
+    render(<App />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await act(async () => restored.resolve(Response.json({ items: [...api.state.sessions.values()] })));
+    expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(window.location.hash).toBe(`#/connections/${savedConnection.id}/overview`);
+    expect(stored()).toEqual([savedConnection]);
+    expect(api.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  });
+
+  it('reuses a signed-out connection, preserving its name and offering the link username', async () => {
+    mockAPI();
+    persist([savedConnection]);
+    window.history.replaceState(null, '', connectionLink(remoteURL, 'local-operator'));
+    render(<App />);
+    const dialog = await screen.findByRole('dialog', { name: 'Edit connection' });
+    expect(within(dialog).getByLabelText('Connection name')).toHaveValue(savedConnection.name);
+    expect(within(dialog).getByLabelText('Username')).toHaveValue('local-operator');
+    expect(within(dialog).getByLabelText('Password')).toHaveValue('');
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: password } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(stored()).toEqual([savedConnection]);
+    expect(window.location.hash).toBe(`#/connections/${savedConnection.id}/overview`);
+  });
+
+  it('consumes hash navigation once without reopening after cancellation or browser history changes', async () => {
+    mockAPI();
+    persist([savedConnection]);
+    render(<App />);
+    await screen.findByRole('button', { name: `Open ${savedConnection.name}` });
+    fireEvent.click(screen.getByRole('button', { name: `Open ${savedConnection.name}` }));
+    const overview = window.location.hash;
+    act(() => { window.location.hash = connectionLink(); });
+    const dialog = await screen.findByRole('dialog', { name: 'Add connection' });
+    expect(window.location.hash).toBe('#/');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    act(() => { window.history.back(); });
+    await waitFor(() => expect(window.location.hash).toBe(overview));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    act(() => { window.history.forward(); });
+    await waitFor(() => expect(window.location.hash).toBe('#/'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(stored()).toEqual([savedConnection]);
+  });
+
+  it('keeps an edited draft while connection health polling refreshes', async () => {
+    vi.useFakeTimers();
+    const api = mockAPI();
+    persist([savedConnection]);
+    window.history.replaceState(null, '', connectionLink(remoteURL));
+    render(<App />);
+    await act(async () => {});
+    const dialog = screen.getByRole('dialog', { name: 'Edit connection' });
+    fireEvent.change(within(dialog).getByLabelText('Connection name'), { target: { value: 'My draft' } });
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: password } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(HEALTH_INTERVAL_MS); });
+    expect(within(dialog).getByLabelText('Connection name')).toHaveValue('My draft');
+    expect(within(dialog).getByLabelText('Password')).toHaveValue(password);
+    expect(api.fetch.mock.calls.filter(([input]) => upstreamURL(input) === `${remoteURL}/healthz`)).toHaveLength(2);
+    expect(api.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  });
+
+  it('discards unknown secret fields without probing or saving the supplied API', async () => {
+    const api = mockAPI();
+    window.history.replaceState(null, '', `${connectionLink(remoteURL)}&password=do-not-use`);
+    render(<App />);
+    await waitFor(() => expect(window.location.hash).toBe('#/'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(stored()).toEqual([]);
+    expect(api.fetch.mock.calls.some(([input]) => upstreamURL(input).startsWith(remoteURL))).toBe(false);
+    expect(api.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+    expect(api.fetch.mock.calls.some(([input]) => String(input).includes('do-not-use'))).toBe(false);
+  });
 });
 
 describe('connection setup and saved metadata', () => {

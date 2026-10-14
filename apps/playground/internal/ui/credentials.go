@@ -24,12 +24,28 @@ func (m *Model) localCommand(value string) bool {
 			m.add("notice", "API: "+m.config.LocalAPI.URL)
 		}
 		if m.config.AdminURL != "" {
-			m.add("notice", "Admin: "+m.config.AdminURL)
+			m.add("admin", "Admin:")
 		}
 		return false
 	}
 	args := strings.Fields(value)
-	if len(args) == 0 || args[0] != "/credentials" {
+	if len(args) == 0 {
+		return false
+	}
+	if args[0] == "/admin" {
+		m.input.Reset()
+		if len(args) != 1 {
+			m.add("notice", "Usage: /admin")
+		} else if m.config.AdminURL != "" {
+			m.add("admin", "Admin:")
+		} else if m.config.AdminHint != "" {
+			m.add("notice", m.config.AdminHint)
+		} else {
+			m.add("notice", "Set --admin-url to the address of your Admin UI.")
+		}
+		return true
+	}
+	if args[0] != "/credentials" {
 		return false
 	}
 	m.input.Reset()

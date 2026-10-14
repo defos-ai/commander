@@ -49,7 +49,8 @@ beforeEach(() => {
 
 describe('location navigation', () => {
   it('round-trips entity names and IDs without treating their punctuation as route segments', () => {
-    const routes: Route[] = [{}, { connectionID: 'local', section: 'overview' }, { connectionID: 'local', section: 'settings' },
+    const routes: Route[] = [{}, { connect: { url: 'http://127.0.0.1:4274', username: 'commander' } },
+      { connectionID: 'local', section: 'overview' }, { connectionID: 'local', section: 'settings' },
       ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
       { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' }];
 
@@ -60,6 +61,24 @@ describe('location navigation', () => {
       '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra']) {
       expect(parseRoute(hash)).toEqual({});
     }
+  });
+
+  it.each([
+    '', 'api=https://api.example.test', 'username=commander',
+    'api=https://api.example.test&username=commander&password=secret',
+    'api=https://api.example.test&username=commander&token=secret',
+    'api=https://api.example.test&username=commander&return=https://other.test',
+    'api=https://api.example.test&api=https://other.test&username=commander',
+    'api=https://api.example.test&username=one&username=two',
+    'api=https://api.example.test&username=%',
+    ...['javascript:alert(1)', '/api', 'https://user:secret@api.example.test',
+      'https://api.example.test?token=secret', 'https://api.example.test#secret',
+      'https://api.example.test\n', 'https://api.example.test\\extra', 'https://api.example.test/' + 'a'.repeat(2048)]
+      .map(api => new URLSearchParams({ api, username: 'commander' }).toString()),
+    ...['', ' ', 'user:secret', 'user\n', '\u007f', 'a'.repeat(257)]
+      .map(username => new URLSearchParams({ api: 'https://api.example.test', username }).toString()),
+  ])('rejects invalid connection link fields: %s', query => {
+    expect(parseRoute(`#/connect?${query}`)).toEqual({ connect: null });
   });
 
   it('restores operation details and graph through browser history and restores the server session after reload', async () => {

@@ -5,6 +5,49 @@ import type { OperationQuestion, OperationTask } from '../../src/api/operation-t
 import type { Report } from '../../src/api/reports';
 import { test, connect, startOperation, publicAPIURL, username, password } from './fixtures';
 
+test('Playground links prefill a connection and reuse its saved session', async ({ page, api }) => {
+  await api.ready();
+  const link = `/#/connect?${new URLSearchParams({ api: publicAPIURL, username })}`;
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  await page.goto(link);
+  const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true });
+  await expect(dialog.getByLabel('Connection name')).toHaveValue('Local connection');
+  await expect(dialog.getByLabel('API URL')).toHaveValue(publicAPIURL);
+  await expect(dialog.getByLabel('Username', { exact: true })).toHaveValue(username);
+  await expect(dialog.getByLabel('Password', { exact: true })).toHaveValue('');
+  await expect(dialog.getByLabel('Password', { exact: true })).toBeFocused();
+  expect(new URL(page.url()).hash).toBe('#/');
+  await dialog.getByLabel('Connection name').fill('My saved API');
+  await dialog.getByLabel('Password', { exact: true }).fill(password);
+  await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+  const overviewURL = page.url();
+
+  await page.goto(link);
+  await expect(page).toHaveURL(overviewURL);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Connection settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByText('Not signed in', { exact: true })).toBeVisible();
+  await page.goto(link);
+  const signIn = page.getByRole('dialog', { name: 'Edit connection', exact: true });
+  await expect(signIn.getByLabel('Connection name')).toHaveValue('My saved API');
+  await expect(signIn.getByLabel('Username', { exact: true })).toHaveValue(username);
+  await expect(signIn.getByLabel('Password', { exact: true })).toHaveValue('');
+  await signIn.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.reload();
+  await expect(page).toHaveURL(overviewURL);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('commander.connections.v1') ?? '[]'));
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({ name: 'My saved API', url: publicAPIURL });
+  expect(JSON.stringify(saved)).not.toContain(password);
+  expect(requests.every(url => !url.includes('#/connect') && !url.includes(encodeURIComponent(password)))).toBe(true);
+  expect(new Set(requests.map(url => new URL(url).origin))).toEqual(new Set([new URL(page.url()).origin]));
+});
+
 test('custom-port API catalogs survive navigation and restore server sign-in across reload', async ({ page, api }) => {
   await api.ready();
   const browserRequests: { url: string; authorization?: string }[] = [];

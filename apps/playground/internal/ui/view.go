@@ -78,12 +78,14 @@ func (m *Model) refresh() {
 			label, color = "✷ Operator input", ReticleGreen
 		case "tool":
 			label = "↳"
-		case "notice":
+		case "notice", "admin":
 			label = "·"
 		}
 		body := clean(item.text)
 		if item.kind == "assistant" {
 			body = m.renderMarkdown(body)
+		} else if item.kind == "admin" {
+			body = m.adminLink(body)
 		}
 		text := m.color(label, color) + "  " + body
 		if item.kind == "notice" && strings.Contains(body, "\n") {
@@ -153,7 +155,11 @@ func (m *Model) View() string {
 			if item.kind == "error" {
 				color = AssaultRed
 			}
-			lines = append(lines, "", m.color(item.text, color))
+			text := item.text
+			if item.kind == "admin" {
+				text = m.adminLink(text)
+			}
+			lines = append(lines, "", m.color(text, color))
 		}
 		if m.setupError != "" {
 			lines = append(lines, "", m.color(m.setupError, AssaultRed))
@@ -224,4 +230,15 @@ func (m *Model) View() string {
 		question = panel + "\n\n"
 	}
 	return header + "\n\n" + content + "\n\n" + strings.Join(activity, "\n") + "\n" + question + input + "\n" + m.color(foot, MutedGray) + "\n"
+}
+
+func (m *Model) adminLink(label string) string {
+	target := clean(m.config.AdminURL)
+	if m.config.NoColor {
+		return label + " " + target
+	}
+	// Keep the prefill fragment in the hyperlink target so wrapping cannot
+	// insert whitespace into the address a terminal opens.
+	base, _, _ := strings.Cut(target, "#")
+	return label + " " + ansi.SetHyperlink(target) + m.color(base, ReticleGreen) + ansi.ResetHyperlink()
 }

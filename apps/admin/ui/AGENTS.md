@@ -39,6 +39,12 @@
   local APIs retain their existing non-secret defaults. Re-login defaults to
   `commander`; editing an active session retains its supplied username.
   Focus the first empty field when the connection dialog opens.
+- `#/connect?api=...&username=...` accepts only validated, non-secret prefill data.
+  Prefill `Local connection`, the API URL and username; leave the password empty
+  and focus the first empty field. Reuse a saved connection for the same normalized
+  API URL. Links must not create or authenticate connections automatically, alter
+  unrelated connections, relax backend upstream policy, or accept credentials in
+  the API URL. Keep manual Add and local discovery behavior intact.
 - The password hint reads public `/aboutz` through the existing proxy before
   sign-in. Keep commands predefined in the frontend; never use commands returned
   by an API. Cancel discovery on URL changes and keep failed hints from blocking

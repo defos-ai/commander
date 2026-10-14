@@ -32,6 +32,7 @@ import (
 func TestAllInOne(t *testing.T) {
 	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
 	t.Run("optional Admin lifecycle", testAllInOneAdmin)
+	t.Run("advertised Admin address", testAllInOneAdminAddress)
 	t.Run("generated API and MCP credentials", testAllInOneGeneratedCredentials)
 	t.Run("API startup failures clean up local hosts", testAllInOneAPIFailure)
 	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
@@ -210,7 +211,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		t.Fatalf("missing local API endpoint: %s", output.String())
 	}
 	apiURL := apiNotice[1]
-	adminNotice := regexp.MustCompile(`Admin: (http://127\.0\.0\.1:\d+)`).FindStringSubmatch(output.String())
+	adminNotice := regexp.MustCompile(`Admin:\s+(http://127\.0\.0\.1:\d+)`).FindStringSubmatch(output.String())
 	if len(adminNotice) != 2 {
 		t.Fatalf("missing local Admin endpoint: %s", output.String())
 	}
@@ -420,6 +421,7 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
 	t.Setenv("COMMANDER_MCP_TOKEN", "invalid remote token") // Local credentials win too.
+	t.Setenv("COMMANDER_ADMIN_URL", "")
 	t.Setenv("MCP_TOKEN", "all-in-one-mcp-secret")
 	t.Setenv("MCP_RUNTIME", "native")
 	t.Setenv("API_USERNAME", "commander")

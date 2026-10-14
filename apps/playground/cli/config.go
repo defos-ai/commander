@@ -26,13 +26,14 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&c.MCPURL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
 	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and agents; credentials are generated when unset; temporary state is removed on exit")
 	flags.BoolVar(&c.NoAdmin, "no-admin", false, "Disable Admin UI in --all-in-one mode")
+	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Browser-facing Admin UI base URL (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
 	flags.StringVar(&c.Model, "model", env("COMMANDER_LLM_MODEL", ""), "Model name; omitted asks interactively (COMMANDER_LLM_MODEL)")
 	flags.StringVar(&c.BaseURL, "base-url", env("COMMANDER_LLM_BASE_URL", ""), "Override the model API base URL (COMMANDER_LLM_BASE_URL)")
 	flags.BoolVar(&c.Debug, "debug", false, "Show redacted model API error details (COMMANDER_DEBUG)")
 	flags.BoolVar(&c.NoColor, "no-color", os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb", "Disable corporate colors (NO_COLOR)")
 	flags.Usage = func() {
-		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\n\nIn chat: /help, /operations, /watch, /cancel, /exit.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
+		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\n\nIn chat: /help, /admin, /operations, /watch, /cancel, /exit.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
 		fmt.Fprintln(stderr, "Paste the MCP token when prompted, or set COMMANDER_MCP_TOKEN. Use /credentials inside all-in-one Playground. commander credentials api|mcp [--raw] reads credentials from the current environment or the running all-in-one container.")
 		flags.PrintDefaults()
 	}
@@ -58,6 +59,15 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	if c.NoAdmin && !c.AllInOne {
 		return c, errors.New("--no-admin requires --all-in-one")
 	}
+	if c.NoAdmin && c.AdminURL != "" {
+		return c, errors.New("--no-admin cannot be combined with --admin-url or COMMANDER_ADMIN_URL")
+	}
+	if c.AdminURL != "" {
+		if err := validateAdminURL(c.AdminURL); err != nil {
+			return c, err
+		}
+	}
+	c.AdminHint = "Set --admin-url or COMMANDER_ADMIN_URL to your Admin UI's browser address."
 	if value := env("COMMANDER_DEBUG", ""); !debugProvided && value != "" {
 		var err error
 		c.Debug, err = strconv.ParseBool(value)
