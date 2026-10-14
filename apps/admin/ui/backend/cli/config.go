@@ -24,7 +24,7 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	flags := flag.NewFlagSet("commander-ui", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (UI_LISTEN_ADDRESS, then :$PORT, then :4275)")
-	flags.StringVar(&result.staticDir, "static-dir", "", "Built frontend directory (UI_STATIC_DIR; default ./frontend/dist)")
+	flags.StringVar(&result.staticDir, "static-dir", "", "Override frontend directory (UI_STATIC_DIR; default bundled frontend, or ./frontend/dist in source builds)")
 	flags.StringVar(&result.connections.PublicOrigin, "public-origin", "", "Public UI origin behind an HTTPS reverse proxy (UI_PUBLIC_ORIGIN; otherwise use request origin)")
 	flags.StringVar(&result.connections.APIUpstreams, "api-upstreams", "", "Backend API routing as host:port=host:port pairs separated by commas (UI_API_UPSTREAMS; default direct)")
 	flags.Usage = func() {
@@ -56,14 +56,11 @@ func parseConfig(args []string, output io.Writer) (config, error) {
 	if err != nil || !validPort(port, true) {
 		return config{}, errors.New("listen-address must be a host:port address with a port between 0 and 65535")
 	}
-	if !provided["static-dir"] {
-		if value, present := os.LookupEnv("UI_STATIC_DIR"); present {
-			result.staticDir = value
-		} else {
-			result.staticDir = "./frontend/dist"
-		}
+	staticDirSet := provided["static-dir"]
+	if !staticDirSet {
+		result.staticDir, staticDirSet = os.LookupEnv("UI_STATIC_DIR")
 	}
-	if strings.TrimSpace(result.staticDir) == "" {
+	if staticDirSet && strings.TrimSpace(result.staticDir) == "" {
 		return config{}, errors.New("static-dir must not be blank")
 	}
 	if !provided["public-origin"] {

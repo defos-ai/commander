@@ -49,11 +49,22 @@ npm --prefix frontend run build
 go run ./backend/cmd/commander-ui
 ```
 
-Start the [API adapter](../../adapters/api/README.md) separately. The UI serves
-`frontend/dist/` on `:4275`; override with `--static-dir` (`UI_STATIC_DIR`) or
-`--listen-address` (`UI_LISTEN_ADDRESS`). Listener precedence is flag, environment,
-`PORT`, then `4275`. `/healthz` checks the UI server. The
-[Dockerfile](docker/Dockerfile) packages the frontend and server in one image.
+Start the [API adapter](../../adapters/api/README.md) separately. Source builds serve
+`frontend/dist/`; packaged builds include the frontend in the Go binary. Override
+the files with `--static-dir` (`UI_STATIC_DIR`). Set the address with
+`--listen-address` (`UI_LISTEN_ADDRESS`); precedence is flag, environment, `PORT`,
+then `4275`. `/healthz` checks the UI server. The
+[Dockerfile](docker/Dockerfile) builds a self-contained server.
+
+To build a portable Admin binary after installing frontend dependencies:
+
+```sh
+npm --prefix frontend run build -- --outDir ../backend/static/dist --emptyOutDir
+go build -tags embed_ui -o bin/commander-ui ./backend/cmd/commander-ui
+```
+
+Run `./bin/commander-ui`, or copy the binary anywhere. On Windows, build with
+`-o bin/commander-ui.exe` and run `.\bin\commander-ui.exe`.
 
 ### Connections and sessions
 

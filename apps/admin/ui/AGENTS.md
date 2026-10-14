@@ -10,10 +10,18 @@
 - Put English copy in `frontend/src/i18n/locales/en/` using typed translation selectors.
 - `backend/cli/` configures the Go host; `backend/static/` serves built assets;
   `backend/connections/` handles sessions, upstream mapping and the API proxy.
-- [docker/Dockerfile](docker/Dockerfile) packages both frontend and Go server.
+- [docker/Dockerfile](docker/Dockerfile) embeds the built frontend in the Go server
+  with `-tags embed_ui`; it needs no separate asset directory at runtime.
 
 ## Behavior to preserve
 
+- Packaged builds embed generated `backend/static/dist/` with the `embed_ui` tag;
+  missing assets must fail the build. Keep generated files ignored. Ordinary Go
+  builds/tests require no frontend build and serve `./frontend/dist` by default.
+  Explicit `--static-dir` / `UI_STATIC_DIR` override bundled assets; flags win,
+  and explicitly blank directories are errors. Directory serving must retain
+  `os.Root` confinement; use the same route, cache and header rules for embedded
+  files. `static.NewHandlerFS` accepts trusted filesystems with seekable files.
 - Support multiple independent API connections. Names/URLs can live in browser
   storage; API passwords stay in backend session memory. Disconnecting one API
   must not sign out another or remove its saved connection.
@@ -59,8 +67,8 @@ npm test
 npm run build
 ```
 
-The Go server requires `frontend/dist/index.html`, so build once before starting
-it. For hot reload, run `go run ./backend/cmd/commander-ui --listen-address 127.0.0.1:4276`
+For ordinary source builds, build `frontend/dist/index.html` before starting
+the server. For hot reload, run `go run ./backend/cmd/commander-ui --listen-address 127.0.0.1:4276`
 from `apps/admin/ui`, then `npm run dev` from `frontend`. Vite serves `4275` and
 proxies `/ui` to `4276`; start a Commander API separately.
 
@@ -70,6 +78,13 @@ From the repository root, check the backend:
 go test -race -count=1 -timeout=1m ./apps/admin/ui/backend/...
 go vet ./apps/admin/ui/backend/...
 ```
+
+For packaging, build assets using the [portable binary instructions](README.md#native-server),
+then run `go test -tags embed_ui -race -count=1 -timeout=1m ./apps/admin/ui/backend/...`
+and `go vet -tags embed_ui ./apps/admin/ui/backend/...` from the repository root.
+The tagged tests start the real server from an unrelated working directory and
+verify bundled assets, override precedence, proxy routing and shutdown. Keep the
+frontend/package CI job selected for backend changes as well as frontend changes.
 
 For browser changes, after installing frontend dependencies, use the isolated stack:
 

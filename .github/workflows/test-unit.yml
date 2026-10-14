@@ -108,7 +108,7 @@ jobs:
           go vet ./...
 
   frontend:
-    name: Frontend
+    name: Frontend and UI package
     if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'frontend') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -118,9 +118,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
       - name: Typecheck
         run: npm run typecheck
       - name: Test UI behavior
         run: npm test
       - name: Build
         run: npm run build
+      - name: Test and build bundled UI
+        working-directory: apps/admin/ui/backend
+        env:
+          GOWORK: 'off'
+        run: |
+          cp -R ../frontend/dist static/dist
+          go test -tags embed_ui -race -count=1 -timeout=1m ./...
+          go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./cmd/commander-ui

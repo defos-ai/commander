@@ -80,11 +80,12 @@ playground:
 ui-backend:
   - *shared
   - &ui-docker 'apps/admin/ui/docker/**'
-  - 'apps/admin/ui/backend/**'
+  - &ui-backend 'apps/admin/ui/backend/**'
 
 frontend:
   - *shared
   - *ui-docker
+  - *ui-backend
   - 'apps/admin/ui/frontend/**'
 
 # Provider integration checks use the mongo, rabbitmq and s3 filters above.

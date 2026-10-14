@@ -14,6 +14,7 @@ state
 **/.DS_Store
 **/node_modules
 apps/admin/ui/frontend/dist
+apps/admin/ui/backend/static/dist
 apps/admin/ui/frontend/coverage
 apps/admin/ui/frontend/playwright-report
 apps/admin/ui/frontend/test-results
