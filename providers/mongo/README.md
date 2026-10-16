@@ -4,17 +4,17 @@
 
 `github.com/defos-ai/commander/providers/mongo` implements database stores for
 missions, actions, agent inventory, controller registrations, executions,
-operations, and accepted artifact metadata.
+operations, encrypted secrets, and accepted artifact metadata.
 Controller and adapter factories select it for `mongodb://` or `mongodb+srv://`
 `DATABASE_URL` values. Artifact bytes and reports use the separate `STORAGE_URL`.
-Operation storage requires a replica set or sharded cluster for transactions.
+Operation and secret writes require a replica set or sharded cluster for transactions.
 
 ## Quick start
 
 From the repository root, start the full local stack:
 
 ```sh
-docker compose -f compose.full.yaml up --build -d
+docker compose up --build -d
 ```
 
 Compose initializes a single-node replica set and persists data in a named
@@ -46,6 +46,15 @@ err = missionStore.Upsert(ctx, mission)
 The repository workspace includes this module. Private projects use
 [local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
 for the framework and this provider.
+
+## Encrypted secrets
+
+[`secrets.NewSecretMongoStore(ctx, database)`](secrets/secret_mongo_store.go) stores
+encrypted records in the `secrets` collection. Encrypt values with
+[`crypto.SecretCipher`](../../framework/crypto/README.md) before saving; the store
+does not need the encryption key. Updates check the saved version, and deletion
+retains the ID to reject delayed writes. Expired secrets remain available for
+inventory. Application integration follows separately.
 
 ## Development and testing
 

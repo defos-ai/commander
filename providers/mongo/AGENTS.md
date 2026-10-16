@@ -26,6 +26,15 @@ artifact bytes and reports belong to the separate storage provider.
 - Keep [`operationWriteError`](operations/operation_mongo_store.go) conservative
   about ambiguous commits. Do not turn an unknown commit outcome into a definite
   rollback or discard `operations.ErrWriteUncertain` while wrapping errors.
+- [`SecretMongoStore`](secrets/secret_mongo_store.go) retains every secret UUID in
+  `secrets`; deletion drops its encrypted payload and marks the identity inactive.
+  A partial unique index reserves scoped names only for active records. Use simple
+  collation for case-sensitive names and never TTL-delete expired or retired IDs.
+  JSON payloads preserve authenticated nanoseconds and uint64 versions; validate
+  their identity against indexed fields. The store never decrypts or loads keys.
+  Preserve transaction error labels and reset attempt state on retries. Retry a
+  duplicate-key abort with a fresh snapshot to recognize identical concurrent
+  requests; failed commit confirmation after a write is `secrets.ErrWriteUncertain`.
 - Test cleanup removes operation records and retires artifacts with private
   deletion markers. Preserve collections, indexes, catalogs and execution records;
   a delayed accepted-result write must not recreate deleted artifact metadata.
