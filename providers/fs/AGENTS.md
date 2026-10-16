@@ -28,6 +28,12 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - Provider roots and their ancestors are trusted host configuration. Scoped roots
   constrain one read or transaction; they do not preserve ancestor identity between
   operations. Keep those directories inaccessible to untrusted local writers.
+- [`SecretFsStore`](secrets/secret_fs_store.go) keeps encrypted secret records and
+  retired IDs in one `secrets.json` collection. One lock protects global IDs and
+  active scoped names; deletion drops ciphertext and retains identity forever.
+  Exact retries must still confirm durability. Translate uncertain publication to
+  `secrets.ErrWriteUncertain`. Preserve timestamp nanoseconds, compare time instants,
+  and never decrypt or load encryption keys here. Secret names never become paths.
 
 ## Bus lifecycle
 

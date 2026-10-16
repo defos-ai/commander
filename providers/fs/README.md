@@ -41,6 +41,18 @@ Other constructors live in their domain directories; see [`comms`](comms/),
 [`artifacts`](artifacts/) and [`reports`](reports/) for bus and file storage.
 Close the bus after consumers stop. Stores need no close.
 
+## Encrypted secrets
+
+[`secrets.NewSecretFsStore(root)`](secrets/secret_fs_store.go) stores encrypted
+records in `root/secrets.json`. Encrypt values with
+[`crypto.SecretCipher`](../../framework/crypto/README.md) before saving them;
+the store does not need the encryption key. Reads preserve timestamp precision
+so records can be authenticated after reopening.
+
+Updates check the saved version. Deletion removes the encrypted value and retains
+its ID to reject delayed writes. These records are independent of operations and
+are preserved by test cleanup. API and agent integration follow separately.
+
 ## Development and testing
 
 See [AGENTS.md](AGENTS.md) for filesystem and message-delivery invariants.
