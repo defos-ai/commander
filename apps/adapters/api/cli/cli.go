@@ -95,7 +95,8 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ControllerStore: deps.ControllerStore,
 		ArtifactStore:   deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
-		TestCleaner: deps.TestCleaner,
+		SecretService: deps.SecretService,
+		TestCleaner:   deps.TestCleaner,
 	})
 	if err != nil {
 		return err

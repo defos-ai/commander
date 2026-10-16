@@ -43,6 +43,15 @@
   errors, HTTP responses or model messages. Missing standalone credentials should
   explain setup with a copyable password-generation command.
   `credentials --raw` prints only the password, preserving normal credential output.
+- Secret management is separately enabled by nonempty `SECRET_ENCRYPTION_KEY`
+  (64 hex characters), parsed before opening listeners/providers. Missing means
+  secret routes return authenticated `503 secrets_unavailable`; malformed means
+  startup fails. No flag, generated fallback, or key/secret output in diagnostics.
+  `cli/secrets.go` selects FS or Mongo via `DATABASE_URL` and injects the framework
+  service. `/api/v1/secrets` accepts write-only values and returns explicit metadata
+  mappings. Replacements/deletions require current ID and version. Preserve
+  `secret_write_uncertain` ahead of timeout errors; never retry automatically.
+  Saving secrets does not yet deliver them to agents or resolve secret requests.
 - `credentials` automatically reads the running container's startup environment
   only when PID 1 uses the same executable; otherwise it reads the current
   environment. Keep this lookup exclusive to explicit retrieval, never server
@@ -74,6 +83,15 @@
   go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host/...
   go vet ./apps/adapters/api/...
   ```
+
+- With the MongoDB provider test service running, verify secret persistence through
+  the API host (CI runs this in the `api-full` provider phase):
+
+  ```sh
+  COMMANDER_TEST_MONGO_URL='mongodb://127.0.0.1:27017/commander_api_secret_tests?replicaSet=rs0&directConnection=true' go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host -run '^TestSecretsWithMongo$'
+  ```
+
+  This test owns only its generated secret; it does not clear shared catalogs.
 
 - Commands run from the repository root. For public behavior, run the full API
   suite against the stack as described in [adapter guidance](../AGENTS.md#validation).

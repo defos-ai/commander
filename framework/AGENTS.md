@@ -25,6 +25,10 @@
   key. Apps load `SECRET_ENCRYPTION_KEY` and inject the cipher; providers receive
   ciphertext only. Preserve all authenticated metadata, including nanosecond
   timestamps, across persistence. Encryption alone does not establish freshness.
+- [`secrets.Service`](secrets/) encrypts before storing values and returns metadata
+  only. It owns creation/version timestamps, requires ID/version for mutations,
+  and preserves uncertain outcomes without automatic retries. Hosts authorize
+  calls; saving a value does not deliver it or fulfill a request.
 - Preserve Commander → Controller → Agent control flow: adapters query saved
   state and send operation commands; only the controller selects agent instances.
 - Mission definitions own rules. Actions may propose schema-valid next

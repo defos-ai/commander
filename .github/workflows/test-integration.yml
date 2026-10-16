@@ -35,7 +35,7 @@ jobs:
       RUN_PROVIDERS: >-
         ${{ inputs.all || contains(fromJSON(inputs.changes), 'mongo') ||
             contains(fromJSON(inputs.changes), 'rabbitmq') || contains(fromJSON(inputs.changes), 's3') ||
-            contains(fromJSON(inputs.changes), 'controller-mongo') }}
+            contains(fromJSON(inputs.changes), 'controller-mongo') || contains(fromJSON(inputs.changes), 'api-full') }}
       RUN_FS: >-
         ${{ inputs.all || contains(fromJSON(inputs.changes), 'api-fs') ||
             contains(fromJSON(inputs.changes), 'mcp-fs') || contains(fromJSON(inputs.changes), 'browser') }}
@@ -68,7 +68,7 @@ jobs:
                 (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}
 
       - name: Start MongoDB provider service
-        if: inputs.all || contains(fromJSON(inputs.changes), 'mongo') || contains(fromJSON(inputs.changes), 'controller-mongo')
+        if: inputs.all || contains(fromJSON(inputs.changes), 'mongo') || contains(fromJSON(inputs.changes), 'controller-mongo') || contains(fromJSON(inputs.changes), 'api-full')
         env:
           COMPOSE_FILE: .github/composes/compose.providers.test.yaml
         run: docker compose up --no-build --wait --wait-timeout 120 mongo
@@ -94,6 +94,11 @@ jobs:
         env:
           COMMANDER_TEST_MONGO_URL: mongodb://127.0.0.1:27017/commander_mongo_tests?replicaSet=rs0&directConnection=true
         run: go test -race -count=1 -timeout=3m -v ./apps/controllers/default/tests -run '^TestCLIStartsWithMongo$'
+      - name: Test API secrets with MongoDB
+        if: inputs.all || contains(fromJSON(inputs.changes), 'api-full')
+        env:
+          COMMANDER_TEST_MONGO_URL: mongodb://127.0.0.1:27017/commander_api_secret_tests?replicaSet=rs0&directConnection=true
+        run: go test -race -count=1 -timeout=3m -v ./apps/adapters/api/tests/host -run '^TestSecretsWithMongo$'
       - name: Test RabbitMQ provider
         if: inputs.all || contains(fromJSON(inputs.changes), 'rabbitmq')
         env:

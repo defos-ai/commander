@@ -18,6 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	secretservice "github.com/defos-ai/commander/framework/secrets"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 	"github.com/defos-ai/commander/providers/fs"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
@@ -54,6 +55,7 @@ type dependencies struct {
 	OperationStore    operations.OperationStore
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
+	SecretService     *secretservice.Service
 	TestCleaner       frameworktesting.TestCleaner
 	mongo             *mongostore.MongoStore
 	s3                *s3store.S3Store
@@ -112,6 +114,16 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	deps.ActionStore, err = deps.createActionStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	if configuration.secretCipher != nil {
+		secretStore, err := deps.createSecretStore(ctx, configuration.databaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("secret database: %w", err)
+		}
+		deps.SecretService, err = secretservice.NewService(secretStore, configuration.secretCipher)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if os.Getenv("ENV") == "tests" {
 		deps.TestCleaner, err = deps.createTestCleaner(ctx, configuration.storageURL, configuration.databaseURL)

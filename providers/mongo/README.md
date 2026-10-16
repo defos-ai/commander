@@ -54,7 +54,8 @@ encrypted records in the `secrets` collection. Encrypt values with
 [`crypto.SecretCipher`](../../framework/crypto/README.md) before saving; the store
 does not need the encryption key. Updates check the saved version, and deletion
 retains the ID to reject delayed writes. Expired secrets remain available for
-inventory. Application integration follows separately.
+inventory. Use the [secret management service](../../framework/secrets/README.md)
+or the authenticated [HTTP API](../../apps/adapters/api/README.md#secrets) to manage values.
 
 ## Development and testing
 

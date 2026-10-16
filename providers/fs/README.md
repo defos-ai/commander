@@ -51,7 +51,8 @@ so records can be authenticated after reopening.
 
 Updates check the saved version. Deletion removes the encrypted value and retains
 its ID to reject delayed writes. These records are independent of operations and
-are preserved by test cleanup. API and agent integration follow separately.
+are preserved by test cleanup. Use the [secret management service](../../framework/secrets/README.md)
+or the authenticated [HTTP API](../../apps/adapters/api/README.md#secrets) to manage values.
 
 ## Development and testing
 

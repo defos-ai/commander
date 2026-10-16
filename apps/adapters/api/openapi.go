@@ -7,6 +7,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
+	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -137,11 +138,14 @@ func openAPIDocument() ([]byte, error) {
 	if err := operationendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
+	if err := secretendpoints.RegisterOpenAPI(paths, components, options); err != nil {
+		return nil, err
+	}
 	return json.Marshal(map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.1.0",
-			"description": "Read Commander catalogs, saved operation state, reports and artifacts, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"description": "Read Commander catalogs, saved operation state, reports and artifacts, manage encrypted secrets when enabled, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},

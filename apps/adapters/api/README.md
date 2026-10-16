@@ -56,6 +56,32 @@ Cancellation and failure stop queued work; dispatched tasks may still finish.
 Completion requires settled tasks, questions and automatic/operator continuations.
 Finished operations are read-only; further work needs a new operation.
 
+## Secrets
+
+Set `SECRET_ENCRYPTION_KEY` to a randomly generated 32-byte key encoded as 64 hex
+characters to enable secret management. Generate it once (`openssl rand -hex 32`),
+keep it separate from the database, and reuse it across restarts and trusted
+encrypting/decrypting hosts. Compose passes this environment variable to the API.
+Without it, the API runs normally and secret routes return `503 secrets_unavailable`.
+A malformed key prevents startup. Changing the key does not re-encrypt old records.
+
+All secret routes require API authentication. Values are encrypted in the selected
+FS or Mongo database; responses contain metadata and availability only.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/secrets?agent_type=builder-agent&profile=default` | List one scope; profile defaults to `default`. |
+| `POST` | `/api/v1/secrets` | Create with `agent_type`, optional `profile`, `name`, `value`, optional `expires_at`. |
+| `GET` | `/api/v1/secrets/{agent_type}/{profile}/{name}` | Read metadata. |
+| `PUT` | Same detail route | Replace with current `id`, `version`, new `value`, optional `expires_at`. |
+| `DELETE` | Same detail route with `?id=…&version=…` | Delete the exact version. |
+
+`value` is a required string, including when intentionally empty. Omitting
+`expires_at` on replacement removes expiration. Stale writes return
+`409 secret_conflict`; query metadata after `503 secret_write_uncertain` before
+retrying. Saving a secret does not yet deliver it to agents or resume waiting work.
+See [key lifecycle](../../../framework/crypto/README.md#key-lifecycle) for key retention.
+
 ## Documentation and configuration
 
 Listener precedence is `--listen-address`, `API_LISTEN_ADDRESS`, `0.0.0.0:$PORT`,
@@ -128,7 +154,7 @@ authentication from its backend and needs no API CORS permission; the upstream
 hostname must still pass `API_ALLOWED_HOSTS`. Other browser clients should send
 an explicit Basic `Authorization` header with `credentials: 'omit'`; cross-origin
 cookies and browser-managed credentials are disabled. CORS permits `GET`, `HEAD`,
-`POST` and the `Authorization`, `Content-Type`, `Accept` headers. Approved
+`POST`, `PUT`, `DELETE` and the `Authorization`, `Content-Type`, `Accept` headers. Approved
 preflights return `204`; actual requests require authentication. Approved origins
 can read `Location`, `Content-Disposition` and `WWW-Authenticate` headers.
 
