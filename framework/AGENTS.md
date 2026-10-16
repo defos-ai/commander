@@ -21,6 +21,10 @@
   records a specific delivery acknowledged by its recipient, never mere availability.
   Historical fulfillment does not establish current readiness. Domain validation
   proves neither encryption nor authorization; both belong above the stores.
+- [`crypto.SecretCipher`](crypto/) encrypts records using an explicitly configured
+  key. Apps load `SECRET_ENCRYPTION_KEY` and inject the cipher; providers receive
+  ciphertext only. Preserve all authenticated metadata, including nanosecond
+  timestamps, across persistence. Encryption alone does not establish freshness.
 - Preserve Commander → Controller → Agent control flow: adapters query saved
   state and send operation commands; only the controller selects agent instances.
 - Mission definitions own rules. Actions may propose schema-valid next

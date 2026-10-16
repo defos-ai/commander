@@ -33,5 +33,6 @@ see [rule selection](../apps/controllers/README.md#rule-selection).
 - [Messaging](comms/README.md): consumers, inbox lifetimes and delivery limits.
 - [Wire contracts](comms/messages/README.md): routes, payloads and result acceptance.
 - [Domain interfaces](domain/): entities and storage contracts.
+- [Cryptography](crypto/README.md): secret encryption and key configuration.
 - [Testing](tests/README.md): unit and integration commands.
 - [Coding guidance](AGENTS.md): framework boundaries and invariants.
