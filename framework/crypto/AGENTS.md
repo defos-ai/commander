@@ -3,6 +3,8 @@
 - [`SecretCipher`](secret_cipher.go) owns key parsing and AES-256-GCM record encryption.
   Applications load `SECRETS_ENCRYPTION_KEY`; never read it or generate a fallback
   in this package. Keep malformed key errors free of supplied values.
+  Hosts use `SecretCipher.Validate` to reject uninitialized injected ciphers
+  before starting providers; validation must not generate a key.
 - Use `crypto/cipher.NewGCMWithRandomNonce`. It prepends a 12-byte nonce; split
   this into the domain envelope on encryption and reconstruct it on decryption.
   Reject bad nonce/tag lengths before calling the standard library. Do not offer

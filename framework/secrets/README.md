@@ -37,10 +37,12 @@ Each action declares its secret names through `Action.RequiredSecrets`, for exam
 `[]string{"GITHUB_TOKEN"}`. The agent's registered type identifies the scope.
 Multiple actions may require the same name.
 
-Configure `AgentConfig.Secrets` with a decryptor using the same encryption key as
-the API. Bundled agent hosts read optional `SECRETS_ENCRYPTION_KEY`; the controller
-needs no key. It reads encrypted records from its configured database and sends
-them only for names declared by the requesting agent's registered type.
+For agents that need managed secrets, configure `AgentConfig.Secrets` with a
+decryptor using the same encryption key as the API. The builder host accepts
+optional `SECRETS_ENCRYPTION_KEY`; the bundled web and browser hosts do not need it.
+The controller needs no key. It reads encrypted records from its configured
+database and sends them only for names declared by the requesting agent's
+registered type.
 
 Read a declared secret inside an action's discovery or run callback:
 

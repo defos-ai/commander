@@ -65,6 +65,10 @@ encrypting/decrypting hosts. Compose passes this environment variable to the API
 Without it, the API runs normally and secret routes return `503 secrets_unavailable`.
 A malformed key prevents startup. Changing the key does not re-encrypt old records.
 
+When embedding the API, pass a cipher created with `crypto.NewSecretCipher` through
+`cli.Options.SecretCipher` to `cli.RunWithOptions`. It takes precedence over the
+environment variable.
+
 All secret routes require API authentication. Values are encrypted in the selected
 FS or Mongo database; responses contain metadata and availability only. Each
 secret belongs to an agent type and is identified by its name.

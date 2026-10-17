@@ -67,6 +67,14 @@ func NewSecretCipher(encodedKey string) (*SecretCipher, error) {
 	return &SecretCipher{aead: aead, keyID: "sha256-" + hex.EncodeToString(fingerprint[:16])}, nil
 }
 
+// Validate lets hosts reject an uninitialized cipher before starting providers.
+func (c *SecretCipher) Validate() error {
+	if c == nil || c.aead == nil {
+		return ErrMissingKey
+	}
+	return nil
+}
+
 // String and GoString prevent ordinary diagnostic formatting from traversing
 // the initialized cipher's private key material. There are no public JSON fields.
 func (SecretCipher) String() string   { return "secret cipher (key redacted)" }

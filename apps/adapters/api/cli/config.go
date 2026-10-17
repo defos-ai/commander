@@ -32,7 +32,7 @@ type config struct {
 	secretCipher  *crypto.SecretCipher
 }
 
-func parseConfig(args []string, output io.Writer, supplied *host.BasicCredentials) (config, error) {
+func parseConfig(args []string, output io.Writer, options Options) (config, error) {
 	var result config
 	var allowedHosts, allowedOrigins, trustedProxies, proxyHeaders string
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)
@@ -91,7 +91,7 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	if err := validateListenAddress(result.listenAddress); err != nil {
 		return config{}, err
 	}
-	credentials, err := resolveCredentials(supplied)
+	credentials, err := resolveCredentials(options.Credentials)
 	if err != nil {
 		return config{}, err
 	}
@@ -105,10 +105,18 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	if err := result.security.Validate(); err != nil {
 		return config{}, err
 	}
-	if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
-		result.secretCipher, err = crypto.NewSecretCipher(key)
-		if err != nil {
-			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+	result.secretCipher = options.SecretCipher
+	if result.secretCipher == nil {
+		if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
+			result.secretCipher, err = crypto.NewSecretCipher(key)
+			if err != nil {
+				return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+			}
+		}
+	}
+	if result.secretCipher != nil {
+		if err := result.secretCipher.Validate(); err != nil {
+			return config{}, fmt.Errorf("secret cipher: %w", err)
 		}
 	}
 	if _, err := host.NewLogger(output, result.logLevel, result.logFormat); err != nil {

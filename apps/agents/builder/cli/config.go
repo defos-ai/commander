@@ -30,7 +30,7 @@ type config struct {
 	secrets           *agents.SecretConfig
 }
 
-func parseConfig(args []string, stderr io.Writer) (config, error) {
+func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
 	knownActions := builder.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
@@ -77,10 +77,18 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		return config{}, errors.New("heartbeat-interval must not be negative")
 	}
 	var err error
-	if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
-		cipher, err := crypto.NewSecretCipher(key)
-		if err != nil {
-			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+	cipher := options.SecretCipher
+	if cipher == nil {
+		if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
+			cipher, err = crypto.NewSecretCipher(key)
+			if err != nil {
+				return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+			}
+		}
+	}
+	if cipher != nil {
+		if err := cipher.Validate(); err != nil {
+			return config{}, fmt.Errorf("secret cipher: %w", err)
 		}
 		result.secrets = &agents.SecretConfig{Decryptor: cipher}
 	}

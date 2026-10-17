@@ -97,6 +97,57 @@ func TestSecretAPILifecyclePersistsOnlyEncryptedValues(t *testing.T) {
 	assertSecretOnDisk(t, fixture.root, reopened, secretTestValue)
 }
 
+func TestInjectedSecretCipherOverridesEnvironment(t *testing.T) {
+	for _, test := range []struct{ name, environment string }{
+		{"missing", ""},
+		{"malformed", "invalid-environment-key"},
+		{"different", strings.Repeat("a", 64)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newFixture(t)
+			t.Setenv("SECRETS_ENCRYPTION_KEY", test.environment)
+			cipher, err := crypto.NewSecretCipher(secretTestKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := startAPI(t, fixture.localArgs(), cli.Options{SecretCipher: cipher})
+			body := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + secretTestValue + `"}`
+			created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath, body), http.StatusCreated)
+			assertSecretOnDisk(t, fixture.root, created, secretTestValue)
+			server.stop(t)
+			if os.Getenv("SECRETS_ENCRYPTION_KEY") != test.environment {
+				t.Fatal("injected cipher changed process environment")
+			}
+		})
+	}
+}
+
+func TestUninitializedInjectedSecretCipherFailsBeforeStartup(t *testing.T) {
+	fixture := newFixture(t)
+	// A supplied cipher must not silently fall back to a different environment key.
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	var diagnostic bytes.Buffer
+	ready := false
+	options := cli.Options{SecretCipher: new(crypto.SecretCipher), Ready: func(net.Addr) { ready = true }}
+	err := cli.RunWithOptions(ctx, fixture.localArgs(), &diagnostic, options)
+	if !errors.Is(err, crypto.ErrMissingKey) || ready || ctx.Err() != nil {
+		t.Fatal("uninitialized injected cipher did not fail before serving requests")
+	}
+	for _, name := range []string{"bus", "storage", "database"} {
+		if _, err := os.Stat(filepath.Join(fixture.root, name)); !os.IsNotExist(err) {
+			t.Fatal("uninitialized injected cipher opened a provider")
+		}
+	}
+	if strings.Contains(err.Error()+diagnostic.String(), secretTestKey) {
+		t.Fatal("cipher validation exposed the environment key")
+	}
+	if err := cli.RunWithOptions(ctx, []string{"--help"}, &diagnostic, options); err != nil {
+		t.Fatal("help required an initialized cipher")
+	}
+}
+
 func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	fixture := newFixture(t)
 	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)

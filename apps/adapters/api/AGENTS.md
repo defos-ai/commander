@@ -53,7 +53,10 @@
 - Secret management is separately enabled by nonempty `SECRETS_ENCRYPTION_KEY`
   (64 hex characters), parsed before opening listeners/providers. Missing means
   secret routes return authenticated `503 secrets_unavailable`; malformed means
-  startup fails. No flag, generated fallback, or key/secret output in diagnostics.
+  startup fails. Embedded callers can supply `Options.SecretCipher`, which takes
+  precedence over the environment without mutating it. Reject uninitialized
+  supplied ciphers before opening listeners/providers. No flag, generated
+  fallback, or key/secret output in diagnostics.
   `cli/secrets.go` selects FS or Mongo via `DATABASE_URL` and injects the framework
   service. `/api/v1/secrets` accepts write-only values and returns explicit metadata
   mappings. Keys contain the agent type and secret name; detail routes are

@@ -21,9 +21,7 @@ x-runtime: &runtime
 x-agent: &agent
   <<: *runtime
   pull_policy: never
-  environment: &agent-environment
-    <<: *environment
-    SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+  environment: *environment
   depends_on:
     controller:
       condition: service_started
@@ -283,7 +281,7 @@ services:
     image: commander-browser-agent:local
     shm_size: 256mb
     environment:
-      <<: *agent-environment
+      <<: *environment
       CHROMIUM_NO_SANDBOX: "true"
     build:
       context: .

@@ -22,6 +22,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
@@ -67,10 +68,25 @@ func TestBuilderConstruction(t *testing.T) {
 }
 
 func TestCLIRegistrationAndCancellation(t *testing.T) {
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
+	cipher, err := crypto.NewSecretCipher(strings.Repeat("a1", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
 	ids := map[string]bool{}
-	for _, empty := range []bool{false, true} {
-		t.Run(map[bool]string{false: "missing git", true: "empty catalog"}[empty], func(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		empty   bool
+		key     string
+		options cli.Options
+	}{
+		{name: "missing git"},
+		{name: "empty catalog", empty: true},
+		{name: "injected overrides malformed environment", empty: true, key: "malformed-private-key", options: cli.Options{SecretCipher: cipher}},
+		{name: "nil uses environment", empty: true, key: strings.Repeat("b2", 32)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
+			empty := test.empty
 			root := t.TempDir()
 			bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
 			if err != nil {
@@ -96,7 +112,7 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 			serving, stop := context.WithCancel(ctx)
 			finished := make(chan struct{})
 			var runErr error
-			go func() { defer close(finished); runErr = cli.Run(serving, args, io.Discard) }()
+			go func() { defer close(finished); runErr = cli.RunWithOptions(serving, args, io.Discard, test.options) }()
 			defer func() {
 				stop()
 				select {
@@ -313,5 +329,87 @@ func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "SECRETS_ENCRYPTION_KEY") || strings.Contains(logs.String(), invalidKey) {
 		t.Fatal("help must describe the encryption setting without exposing its value")
+	}
+}
+
+func TestCLISecretCipherOptions(t *testing.T) {
+	const invalidKey = "private-invalid-encryption-key"
+	validKey := strings.Repeat("02", 32)
+	cipher, err := crypto.NewSecretCipher(validKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name      string
+		key       string
+		cipher    *crypto.SecretCipher
+		extraArg  string
+		wantError string
+		wantCause error
+	}{
+		{name: "nil cipher keeps invalid environment validation", key: invalidKey, wantError: "SECRETS_ENCRYPTION_KEY", wantCause: crypto.ErrInvalidKey},
+		{name: "zero cipher cannot fall back to valid environment", key: validKey, cipher: &crypto.SecretCipher{}, wantError: "secret cipher", wantCause: crypto.ErrMissingKey},
+		{name: "injected cipher preserves action validation", key: invalidKey, cipher: cipher, extraArg: "--actions=unknown-action", wantError: "unknown action"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
+			root := filepath.Join(t.TempDir(), "runtime")
+			args := []string{
+				"--bus-url=nats://127.0.0.1:4222", "--storage-url=" + filepath.Join(root, "storage"),
+				"--log-level=info", "--log-format=json",
+				"--workspace-dir=" + filepath.Join(root, "workspaces"),
+			}
+			if test.extraArg != "" {
+				args = append(args, test.extraArg)
+			}
+			var logs bytes.Buffer
+			err := cli.RunWithOptions(t.Context(), args, &logs, cli.Options{SecretCipher: test.cipher})
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("expected %s, got %v", test.wantError, err)
+			}
+			if test.wantCause != nil && !errors.Is(err, test.wantCause) {
+				t.Fatalf("cipher validation did not preserve its cause: %v", err)
+			}
+			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("invalid configuration created runtime state: %v", err)
+			}
+			if os.Getenv("SECRETS_ENCRYPTION_KEY") != test.key {
+				t.Fatal("host modified the encryption key environment")
+			}
+			for _, key := range []string{invalidKey, validKey} {
+				if strings.Contains(err.Error(), key) || strings.Contains(logs.String(), key) {
+					t.Fatal("encryption key appeared in diagnostics")
+				}
+			}
+		})
+	}
+}
+
+func TestCLISecretCipherOptionsHelpAndCancellation(t *testing.T) {
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "invalid-key")
+	root := filepath.Join(t.TempDir(), "runtime")
+	args := []string{
+		"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"),
+		"--log-level=info", "--log-format=json",
+		"--workspace-dir=" + filepath.Join(root, "workspaces"),
+	}
+	var help bytes.Buffer
+	if err := cli.RunWithOptions(t.Context(), append(args, "--help"), &help, cli.Options{SecretCipher: &crypto.SecretCipher{}}); err != nil {
+		t.Fatalf("help validated the cipher: %v", err)
+	}
+	if !strings.Contains(help.String(), "Usage:") {
+		t.Fatal("help did not describe the CLI")
+	}
+	cipher, err := crypto.NewSecretCipher(strings.Repeat("03", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretCipher: cipher}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-cancelled startup returned %v", err)
+	}
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("help or cancelled startup created runtime state: %v", err)
 	}
 }

@@ -251,6 +251,9 @@ func TestSecretEncryptionCanonicalTimeAndNoFreshnessPolicy(t *testing.T) {
 
 func TestUnconfiguredSecretCipherFailsClosed(t *testing.T) {
 	for _, cipher := range []*crypto.SecretCipher{nil, new(crypto.SecretCipher)} {
+		if err := cipher.Validate(); !errors.Is(err, crypto.ErrMissingKey) {
+			t.Fatal("unconfigured cipher passed startup validation")
+		}
 		if _, err := cipher.Encrypt(secretFixture().Metadata, []byte("test secret")); err == nil {
 			t.Fatal("unconfigured cipher encrypted a value")
 		}
@@ -259,6 +262,9 @@ func TestUnconfiguredSecretCipherFailsClosed(t *testing.T) {
 		}
 	}
 	cipher := newSecretCipher(t)
+	if err := cipher.Validate(); err != nil {
+		t.Fatalf("configured cipher failed startup validation: %v", err)
+	}
 	invalid := secretFixture().Metadata
 	invalid.Version = 0
 	if _, err := cipher.Encrypt(invalid, []byte("test secret")); err == nil {

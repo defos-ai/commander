@@ -30,8 +30,10 @@
 - Declare persistent names in `Action.RequiredSecrets`; do not infer them from
   transient `MissingRequirements`. The registered agent type determines the
   secret scope; a type and secret name identify one shared value.
-  Configure the framework secret runtime with an injected decryptor; bundled
-  hosts read optional `SECRETS_ENCRYPTION_KEY` and validate it before provider startup.
+  Configure the framework secret runtime with an injected decryptor only for
+  hosts that need managed secrets. Of the bundled agents, only the builder has
+  this configuration. Web and browser actions do not need managed secrets; do
+  not load or distribute the encryption key to their hosts.
   Access declared values with `action.Secret(ctx, name)`, never action inputs or
   global `os.Setenv`. Keep returned values out of outputs/logs and clear temporary
   byte copies. Missing values gate the affected action even without a decryptor.

@@ -23,6 +23,16 @@ the fixed public template; it requires no GitHub token. Each call creates a
 separate checkout under `state/builder-workspaces/<workspace_id>/source`.
 Change the root with `--workspace-dir` or `BUILDER_WORKSPACE_DIR`.
 
+## Secrets
+
+The host accepts `SECRETS_ENCRYPTION_KEY` for actions that require managed secrets.
+Use the same key as the API; `checkout-template` does not need it.
+
+When embedding the builder, pass an initialized
+[`crypto.SecretCipher`](../../../framework/crypto/README.md) through
+`cli.Options.SecretCipher` to `cli.RunWithOptions`. It takes precedence over the
+environment key and is validated before providers start.
+
 ## Current scope
 
 Successful workspaces remain on disk for later work; failed or cancelled checkouts

@@ -10,6 +10,10 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - [cli](cli/) owns host configuration, provider factories and lifecycle.
   `--workspace-dir` overrides `BUILDER_WORKSPACE_DIR`; the default is
   `state/builder-workspaces`. Providers follow the web host's existing conventions.
+- `cli.RunWithOptions` accepts an initialized `Options.SecretCipher` for embedding.
+  A non-nil cipher takes precedence over optional `SECRETS_ENCRYPTION_KEY`;
+  validate it before opening providers. Keep `Run` as the wrapper with empty
+  options. Do not mutate process environment or generate keys in this host.
 - [checkout-template](actions/checkout_template.go) is the only action so far.
   Its input is `{}`. The source URL is fixed; do not expose paths or arbitrary
   Git URLs through task input.
