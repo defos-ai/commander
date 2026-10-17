@@ -80,7 +80,9 @@ secret belongs to an agent type and is identified by its name.
 `value` is a required string, including when intentionally empty. Omitting
 `expires_at` on replacement removes expiration. Stale writes return
 `409 secret_conflict`; query metadata after `503 secret_write_uncertain` before
-retrying. Saving a secret does not yet deliver it to agents or resume waiting work.
+retrying. Configured agents receive declared secrets through controller
+reconciliation. Saving confirms storage, not installation; see
+[delivery and refresh](../../../framework/secrets/README.md#agent-requirements).
 See [key lifecycle](../../../framework/crypto/README.md#key-lifecycle) for key retention.
 
 ## Documentation and configuration

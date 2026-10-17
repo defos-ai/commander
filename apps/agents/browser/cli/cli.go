@@ -74,6 +74,7 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 		ArtifactFileStore: dependencies.ArtifactFileStore,
 		Logger:            logger,
 		HeartbeatInterval: &configuration.heartbeatInterval,
+		Secrets:           configuration.secrets,
 	})
 	if err != nil {
 		return err

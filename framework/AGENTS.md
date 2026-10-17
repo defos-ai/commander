@@ -92,8 +92,19 @@
   against the registered agent type. Preserve declarations in snapshots, catalog
   projections and independent copies.
   Use per-agent actions for secret distribution; the global action catalog does
-  not identify the recipient or scope. Declarations alone do not install secrets,
-  authorize access or change readiness.
+  not identify the recipient or scope. Gate declared names in agent snapshots and
+  again before execution; missing secret configuration must not bypass the gate.
+- Agent secret synchronization uses `AgentConfig.Secrets` and the existing event
+  inbox, independently of long action commands. Keep values in memory and expose
+  independent copies through `action.Secret(ctx, name)` only for the current
+  action's declared names. Never use process-wide environment mutation. Reuse
+  request/delivery/acknowledgement identities on retry; refresh with fresh requests
+  and reject inactive or expired deliveries. Clear held values at shutdown.
+- Controller secret synchronization runs in the existing owner loop with paired
+  `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
+  recipient's registered type, declared names and current stored version. The
+  controller never decrypts. Keep trusted-bus and finite-lease revocation limits
+  explicit; historical fulfillment does not authorize dispatch by itself.
 - Preserve schema validation of action input, output and proposed next actions.
   Public snapshots must remain independent.
 

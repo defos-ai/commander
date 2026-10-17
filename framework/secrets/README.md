@@ -28,7 +28,8 @@ next; the service never retries automatically. Attempted metadata returned with
 `ErrWriteUncertain` is useful for reconciliation, not confirmation of persistence.
 
 Hosts own authorization and [encryption key configuration](../crypto/README.md).
-Saving a value does not deliver it to an agent or fulfill a pending secret request.
+Saving a value makes it available for asynchronous delivery; the API response
+does not confirm installation.
 
 ## Agent requirements
 
@@ -36,14 +37,36 @@ Each action declares its secret names through `Action.RequiredSecrets`, for exam
 `[]string{"GITHUB_TOKEN"}`. The agent's registered type identifies the scope.
 Multiple actions may require the same name.
 
-Declarations remain in agent snapshots after discovery succeeds. They identify
-which secrets an agent uses; `MissingRequirements` separately reports what is
-currently unavailable. Declarations do not grant access or change readiness, and
-runtime distribution is not enabled yet.
+Configure `AgentConfig.Secrets` with a decryptor using the same encryption key as
+the API. Bundled agent hosts read optional `SECRET_ENCRYPTION_KEY`; the controller
+needs no key. It reads encrypted records from its configured database and sends
+them only for names declared by the requesting agent's registered type.
 
-The [synchronization contracts](../comms/messages/README.md#secret-synchronization-contracts)
-define requests, encrypted deliveries and installation acknowledgements for the
-next stage.
+Read a declared secret inside an action's discovery or run callback:
+
+```go
+value, err := action.Secret(ctx, "GITHUB_TOKEN")
+if err != nil {
+    return result, err
+}
+defer clear(value)
+```
+
+Values stay in agent memory and are not exported into the process environment.
+Only the current action's declared names are accessible through its context.
+Missing or expired secrets make the affected action unavailable; unrelated
+actions remain usable. Execution checks availability again before calling the action.
+
+By default, agents request fresh values every 30 seconds and retry outstanding
+requests every 5 seconds. Installed values expire after at most one minute, or
+earlier when the secret itself expires. Updates arrive on refresh; deletion or
+loss of the controller blocks new use after the installed value's deadline.
+This does not cancel actions already running or revoke copies they retained.
+
+The bus and agent hosts form a trusted deployment boundary. Type/name checks
+do not authenticate an untrusted bus publisher; restrict broker and filesystem
+access. Cross-type requests, including a builder requesting another agent's
+secrets, are not supported by this runtime policy.
 
 ## Request and delivery tracking
 
@@ -64,6 +87,10 @@ the agent's active request or the latest value in `SecretStore`. Runtime code mu
 check those before using the result for readiness. Requests remain independent:
 one acknowledgement never fulfills another request for the same secret.
 
-Terminal records retain their encrypted delivery snapshots. Deleting the primary
+Each refresh adds a retained request and, when available, an encrypted delivery
+snapshot. Automatic history cleanup is not implemented. Deleting the primary
 secret does not erase these copies or revoke values already installed by an agent.
-The stores are available for integration; runtime distribution is not connected yet.
+The controller reconciles pending records on startup and periodically. Agents
+keep values and active request identities in memory; a fresh agent process starts
+with a new identity and requests its own values. See the
+[wire protocol](../comms/messages/README.md#secret-synchronization-contracts).

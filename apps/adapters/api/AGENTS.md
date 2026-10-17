@@ -54,7 +54,8 @@
   `/api/v1/secrets/{agent_type}/{name}`. Replacements/deletions require current
   ID and version. Preserve
   `secret_write_uncertain` ahead of timeout errors; never retry automatically.
-  Saving secrets does not yet deliver them to agents or resolve secret requests.
+  Saving secrets makes them available to controller reconciliation; API success
+  does not confirm agent installation. Keep distribution outside HTTP handlers.
 - `credentials` automatically reads the running container's startup environment
   only when PID 1 uses the same executable; otherwise it reads the current
   environment. Keep this lookup exclusive to explicit retrieval, never server

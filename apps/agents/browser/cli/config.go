@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	browser "github.com/defos-ai/commander/apps/agents/browser"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 )
 
@@ -24,6 +26,7 @@ type config struct {
 	logFormat         string
 	heartbeatInterval time.Duration
 	scope             *environment.DiscoveryScope
+	secrets           *agents.SecretConfig
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
@@ -45,6 +48,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run one agent independently; connect the default controller to the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created on each start.")
+		fmt.Fprintln(stderr, "Set SECRET_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -67,6 +71,13 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		return config{}, errors.New("heartbeat-interval must not be negative")
 	}
 	var err error
+	if key := os.Getenv("SECRET_ENCRYPTION_KEY"); key != "" {
+		cipher, err := crypto.NewSecretCipher(key)
+		if err != nil {
+			return config{}, fmt.Errorf("SECRET_ENCRYPTION_KEY: %w", err)
+		}
+		result.secrets = &agents.SecretConfig{Decryptor: cipher}
+	}
 	if provided["actions"] {
 		result.actionNames, err = parseList(actionNames)
 	}

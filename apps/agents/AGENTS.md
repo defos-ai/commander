@@ -30,7 +30,11 @@
 - Declare persistent names in `Action.RequiredSecrets`; do not infer them from
   transient `MissingRequirements`. The registered agent type determines the
   secret scope; a type and secret name identify one shared value.
-  This declaration is metadata, not automatic secret delivery or authorization.
+  Configure the framework secret runtime with an injected decryptor; bundled
+  hosts read optional `SECRET_ENCRYPTION_KEY` and validate it before provider startup.
+  Access declared values with `action.Secret(ctx, name)`, never action inputs or
+  global `os.Setenv`. Keep returned values out of outputs/logs and clear temporary
+  byte copies. Missing values gate the affected action even without a decryptor.
 - Catalog entries describe capabilities; per-agent readiness and leases
   determine availability. Do not claim that installing one agent guarantees
   complete required-action coverage for a mission.

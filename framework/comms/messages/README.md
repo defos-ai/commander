@@ -19,8 +19,8 @@ for adapters and agents.
 | Adapter → controller | `controllers.default.cancellations` | `adapter.request.canceled` |
 | Controller → adapter | `adapters.<adapter-id>.replies` | `controller.response`: result or domain error |
 | Controller → agent | `agents.<agent-id>.commands` | `action.run`, `agent.discover`, `agent.stop` |
-| Controller → agent | `agents.<agent-id>.events` | `action.result.accepted` |
-| Agent → controller | `controllers.default.events` | Lifecycle events, `action.succeeded`, `command.failed` |
+| Controller → agent | `agents.<agent-id>.events` | `action.result.accepted`, `secret.delivered` |
+| Agent → controller | `controllers.default.events` | Lifecycle events, action outcomes, secret requests and installation acknowledgements |
 
 Use [`routing.go`](routing.go) to build destinations. Hosts use transient inboxes;
 see [inbox lifetimes](../README.md#delivery-guarantees).
@@ -73,8 +73,9 @@ For changes to these contracts, see [coding guidance](AGENTS.md).
 
 ## Secret synchronization contracts
 
-These contracts prepare encrypted delivery; runtime hosts do not publish or
-consume them yet. Secret declarations alone do not make an action ready.
+Agents request their declared secrets; the controller persists requests and
+encrypted deliveries before publishing. Only successful installation makes
+those secrets available to an action.
 
 | Direction | Message | Correlation |
 | --- | --- | --- |
@@ -89,8 +90,14 @@ version; send it only after successful decryption and installation. These
 messages carry no operation/task work context.
 
 Typed validators match deliveries to requests and acknowledgements to the exact
-delivery. Runtime consumers must additionally authorize the sender and scope,
-check the active request and current stored secret version, and reject expired
-deliveries when received. Broker acknowledgement does not fulfill a secret
-request, and historical installation does not prove ongoing readiness. Refresh
-and revocation reconciliation are not implemented yet.
+delivery. The controller checks live inventory, declared names, the registered
+agent type and current stored version. The agent matches its active request,
+checks receipt-time expiry and authenticates ciphertext before installation.
+Exact delivery retries repeat the original installation acknowledgement.
+
+Broker acknowledgement does not fulfill a secret request, and historical
+installation does not prove ongoing readiness. Periodic refresh uses fresh
+requests; installed values have finite validity. Deletion is not immediate
+revocation. See [runtime limits](../../secrets/README.md#agent-requirements).
+Publishers remain trusted through deployment access to the bus; these messages
+do not independently authenticate a process identity.

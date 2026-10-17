@@ -65,8 +65,9 @@ conflicting delivery or acknowledgement retries. Expiration is explicit.
 
 Terminal requests retain their encrypted delivery snapshots. Deleting a secret
 from the secret store does not erase these copies or revoke values already
-installed in an agent. Automatic distribution and retention cleanup are not yet
-connected to this store.
+installed in an agent. The controller uses this store for
+[delivery recovery](../../framework/secrets/README.md#request-and-delivery-tracking);
+automatic retention cleanup is not implemented.
 
 ## Development and testing
 

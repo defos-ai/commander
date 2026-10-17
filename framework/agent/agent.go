@@ -32,6 +32,8 @@ type AgentConfig struct {
 	Actions          []action.Executor
 	PublicConfig     json.RawMessage
 	Environment      environment.Environment
+	// Secrets enables encrypted synchronization for this agent's declared names.
+	Secrets *SecretConfig
 	// ArtifactFileStore is required and is created by the host.
 	ArtifactFileStore artifacts.ArtifactFileStore
 	// Logger receives runtime events without action inputs or results. Nil is silent.
@@ -47,7 +49,9 @@ type Agent struct {
 	state             atomic.Pointer[agentState]
 	heartbeatInterval time.Duration
 	stateGate         chan struct{}
+	actionGate        chan struct{}
 	outcomes          consumers.Outcomes
+	secrets           *secretRuntime
 }
 
 const DefaultHeartbeatInterval = 30 * time.Second
@@ -121,7 +125,12 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	config.Actions = append([]action.Executor(nil), config.Actions...)
 	config.Responsibilities = append([]string(nil), config.Responsibilities...)
 	config.PublicConfig = append(json.RawMessage(nil), config.PublicConfig...)
-	a := &Agent{config: config, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1)}
+	secretRuntime, err := newSecretRuntime(config.Secrets, config.ID, string(config.Type), config.Actions)
+	if err != nil {
+		return nil, err
+	}
+	config.Secrets = nil
+	a := &Agent{config: config, heartbeatInterval: heartbeatInterval, stateGate: make(chan struct{}, 1), actionGate: make(chan struct{}, 1), secrets: secretRuntime}
 	a.state.Store(&agentState{status: AgentIdle})
 	return a, nil
 }
@@ -147,7 +156,7 @@ func (a *Agent) Describe() AgentSnapshot {
 		Actions: make([]actionmodel.Action, 0, len(a.config.Actions)),
 	}
 	for _, instance := range a.config.Actions {
-		description.Actions = append(description.Actions, instance.Action().Clone())
+		description.Actions = append(description.Actions, a.describeAction(instance.Action()))
 	}
 
 	return description
@@ -159,6 +168,17 @@ func (a *Agent) DiscoverActions(ctx context.Context, scope *environment.Discover
 }
 
 func (a *Agent) discover(ctx context.Context, scope *environment.DiscoveryScope, fromServer bool) (discoveryErr error) {
+	if err := a.claimAction(ctx, fromServer); err != nil {
+		return err
+	}
+	defer func() { <-a.actionGate }()
+	if err := consumers.CheckCommandDeadline(ctx); err != nil {
+		return err
+	}
+	return a.discoverActions(ctx, scope, fromServer)
+}
+
+func (a *Agent) discoverActions(ctx context.Context, scope *environment.DiscoveryScope, fromServer bool) (discoveryErr error) {
 	started := false
 	discoveryErr = a.stateChange(ctx, func(next *agentState) error {
 		if next.status == AgentDiscovering || next.status == AgentWorking || next.serving && !fromServer {
@@ -184,7 +204,12 @@ func (a *Agent) discover(ctx context.Context, scope *environment.DiscoveryScope,
 		if discoveryErr = ctx.Err(); discoveryErr != nil {
 			break
 		}
-		status, err := t.Discover(ctx, a.config.Environment, scope.Clone())
+		status, err := t.Discover(a.secretContext(ctx, t.Action()), a.config.Environment, scope.Clone())
+		if errors.Is(err, action.ErrSecretUnavailable) && a.missingSecrets(t.Action()) {
+			// Missing managed values are an action blocker. Keep serving so the
+			// synchronization request can obtain them and rediscover this action.
+			status, err = action.Unavailable, nil
+		}
 		if err != nil {
 			a.config.Logger.Warn("action discovery failed", "action_name", t.Action().Name, "error_type", fmt.Sprintf("%T", err))
 			discoveryErr = err
@@ -209,6 +234,13 @@ func (a *Agent) Work(ctx context.Context, call ActionCall) (ActionOutput, error)
 }
 
 func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fromServer bool, announce func(context.Context, AgentSnapshot) error) (output ActionOutput, workErr error) {
+	if err := a.claimAction(ctx, fromServer); err != nil {
+		return ActionOutput{}, err
+	}
+	defer func() { <-a.actionGate }()
+	if err := consumers.CheckCommandDeadline(ctx); err != nil {
+		return ActionOutput{}, err
+	}
 	startedAt := time.Now()
 	logger := a.config.Logger.With("action_name", call.ActionName, "command_id", commandID)
 	logger.Info("action started")
@@ -248,7 +280,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 		return ActionOutput{}, err
 	}
 	for _, t := range a.config.Actions {
-		description := t.Action()
+		description := a.describeAction(t.Action())
 		if description.Name == call.ActionName {
 			if description.Status != action.Ready {
 				return ActionOutput{}, fmt.Errorf("action %q is not ready; run discovery first", call.ActionName)
@@ -257,7 +289,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			if len(input) == 0 {
 				input = json.RawMessage(`{}`)
 			}
-			result, err := t.Run(ctx, input)
+			result, err := t.Run(a.secretContext(ctx, description), input)
 			if err != nil {
 				return ActionOutput{}, err
 			}

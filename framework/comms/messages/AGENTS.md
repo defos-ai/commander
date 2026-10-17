@@ -13,11 +13,13 @@
   across commands, outcomes and receipts; replies correlate to the command ID.
 - Result receipts match result ID, command ID and work context and follow durable
   controller persistence. They must never be treated as broker acknowledgements.
-- Secret synchronization contracts are not wired to hosts yet. Keep encrypted
+- Secret synchronization uses the controller owner loop and agent event inbox. Keep encrypted
   deliveries separate from action commands. Match requests, recipients, scoped
   keys, deadlines and exact secret IDs/versions through the typed validators.
-  Consumers must separately verify sender/scope authorization, active requests,
+  Consumers must separately verify scope authorization, active requests,
   receipt-time expiry and current stored versions before installation/fulfillment.
+  Broker/filesystem access is the trusted publisher boundary; envelope fields do
+  not authenticate an untrusted publisher. No cross-type grants are enabled.
   An installation acknowledgement never proves ongoing readiness or revocation.
 - Preserve `expires_at` as a start deadline. Cached outcomes can replay after
   expiry; new command work cannot. No expiry means no admission limit.

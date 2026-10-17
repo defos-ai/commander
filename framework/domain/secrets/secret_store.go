@@ -11,8 +11,8 @@ var (
 	ErrWriteUncertain = errors.New("secret write outcome is uncertain; reread before retrying")
 )
 
-// MetadataStore exposes inventory without giving controllers access to encrypted
-// values. GetMetadata returns ErrUnknownSecret when absent. List returns metadata
+// MetadataStore exposes inventory without giving metadata consumers access to
+// encrypted values. GetMetadata returns ErrUnknownSecret when absent. List returns metadata
 // in the exact scope, sorted by key name, including expired secrets. Callers derive
 // availability using AvailabilityAt; reads never delete expired records.
 type MetadataStore interface {

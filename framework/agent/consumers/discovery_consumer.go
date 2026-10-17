@@ -24,7 +24,7 @@ func (c DiscoveryConsumer) Consume(ctx context.Context, command messages.Message
 		if err := commandAdmissionError(command); err != nil {
 			return reportFailure(ctx, c.Events, c.Logger, c.AgentID, command, err)
 		}
-		commandErr = c.Runtime.Discover(ctx, payload.Scope)
+		commandErr = c.Runtime.Discover(withCommandDeadline(ctx, command), payload.Scope)
 	}
 	correlationID := command.ID
 	if commandErr != nil {

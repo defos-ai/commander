@@ -46,7 +46,9 @@ must never appear in them. Discovery does not install dependencies or configure 
 
 An action's `required_secrets` lists names it uses even when ready. Each secret
 belongs to an agent type and is identified by that type and its name.
-These declarations are metadata; automatic secret delivery is not enabled yet.
+Configured agents receive encrypted values through the controller and expose
+them to declared actions through `action.Secret(ctx, name)`. Missing or expired
+values block those actions. See [secret delivery](../framework/secrets/README.md#agent-requirements).
 
 **Preflight runs on the controller:** it checks the mission's and steps' required
 actions against live inventory. Different agents can satisfy different requirements.

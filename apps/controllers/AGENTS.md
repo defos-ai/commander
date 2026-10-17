@@ -15,6 +15,10 @@
 - Keep the current one-active-controller-per-database assumption explicit.
   Registration and provider support do not implement distributed ownership or
   capacity across controllers.
+- Construct both secret and request stores from the configured database and
+  inject them into coordination. The controller routes ciphertext and must not
+  load `SECRET_ENCRYPTION_KEY`. Framework reconciliation owns delivery retries,
+  pending request recovery and installation acknowledgements.
 
 ## Selection and durable work
 

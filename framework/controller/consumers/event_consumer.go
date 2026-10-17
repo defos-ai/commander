@@ -30,6 +30,7 @@ type EventConsumer struct {
 	Executions executions.ExecutionStore
 	Artifacts  artifacts.ArtifactStore
 	State      *state.State
+	Secrets    *SecretEventConsumer
 }
 
 // Consume is called by the controller loop, together with commands and lease expiry.
@@ -48,6 +49,11 @@ func (c EventConsumer) Consume(ctx context.Context, message messages.Message) er
 		return (AgentEventConsumer{Inventory: c.Inventory, Actions: c.Actions, State: c.State}).Consume(ctx, message)
 	case controllerevents.ActionSucceeded, controllerevents.CommandFailed:
 		return (CommandResultConsumer{Inventory: c.Inventory, Executions: c.Executions, Artifacts: c.Artifacts, Bus: c.Bus, State: c.State}).Consume(ctx, message)
+	case controllerevents.SecretSyncRequested, controllerevents.SecretInstalled:
+		if c.Secrets == nil {
+			return InvalidMessage(errors.New("secret distribution is not configured"))
+		}
+		return c.Secrets.Consume(ctx, message)
 	default:
 		return InvalidMessage(fmt.Errorf("unsupported event type %q", message.Type))
 	}

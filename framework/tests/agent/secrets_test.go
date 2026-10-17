@@ -34,7 +34,7 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 	snapshot := runtime.Describe()
 	want := []string{"CODEX_API_KEY", "GITHUB_TOKEN"}
 	if snapshot.Type != "builder-agent" ||
-		snapshot.Actions[0].Status != actions.Ready || len(snapshot.Actions[0].MissingRequirements) != 0 ||
+		snapshot.Actions[0].Status != actions.Unavailable || len(snapshot.Actions[0].MissingRequirements) != 2 ||
 		!slices.Equal(snapshot.Actions[0].RequiredSecrets, want) {
 		t.Fatalf("discovery lost stable secret declarations: %+v", snapshot)
 	}
@@ -52,6 +52,9 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 	cloned.Actions[0].RequiredSecrets[0] = "CHANGED"
 	if !slices.Equal(record.Actions[0].RequiredSecrets, want) {
 		t.Fatal("cloned inventory shares secret declarations")
+	}
+	if _, err := runtime.Work(t.Context(), actions.ActionCall{ActionName: "build", Input: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("action with required secrets executed without secret configuration")
 	}
 }
 
