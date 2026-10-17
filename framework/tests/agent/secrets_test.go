@@ -18,9 +18,6 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 		InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 	executor := &secretAction{Base: action.NewBase(definition)}
 	definition.RequiredSecrets[0] = "CHANGED"
-	executor.SetUnavailable("Missing configuration", actions.Requirement{
-		Kind: actions.ConfigurationRequirement, Name: "CODEX_API_KEY", Secret: true,
-	})
 	runtime, err := agent.NewAgent(agent.AgentConfig{Type: "builder-agent",
 		Actions: []action.Executor{executor}, ArtifactFileStore: unusedArtifacts{},
 		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"},
@@ -33,8 +30,12 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 	}
 	snapshot := runtime.Describe()
 	want := []string{"CODEX_API_KEY", "GITHUB_TOKEN"}
+	wantMissing := []actions.Requirement{
+		{Kind: actions.SecretRequirement, Name: "CODEX_API_KEY"},
+		{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"},
+	}
 	if snapshot.Type != "builder-agent" ||
-		snapshot.Actions[0].Status != actions.Unavailable || len(snapshot.Actions[0].MissingRequirements) != 2 ||
+		snapshot.Actions[0].Status != actions.Unavailable || !slices.Equal(snapshot.Actions[0].MissingRequirements, wantMissing) ||
 		!slices.Equal(snapshot.Actions[0].RequiredSecrets, want) {
 		t.Fatalf("discovery lost stable secret declarations: %+v", snapshot)
 	}
@@ -53,8 +54,42 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 	if !slices.Equal(record.Actions[0].RequiredSecrets, want) {
 		t.Fatal("cloned inventory shares secret declarations")
 	}
+	// Host configuration and a managed secret can share a name without sharing
+	// a source or resolution path.
+	hostRequirement := actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "CODEX_API_KEY", Secret: true}
+	executor.SetUnavailable("Missing configuration", hostRequirement)
+	mixed := runtime.Describe().Actions[0]
+	if !slices.Equal(mixed.MissingRequirements, append([]actions.Requirement{hostRequirement}, wantMissing...)) {
+		t.Fatalf("sensitive host configuration was conflated with managed secrets: %+v", mixed)
+	}
 	if _, err := runtime.Work(t.Context(), actions.ActionCall{ActionName: "build", Input: json.RawMessage(`{}`)}); err == nil {
 		t.Fatal("action with required secrets executed without secret configuration")
+	}
+}
+
+func TestActionValidatesManagedSecretRequirements(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		requirement actions.Requirement
+		declared    []string
+		valid       bool
+	}{
+		{name: "managed secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN"}, declared: []string{"TOKEN"}, valid: true},
+		{name: "undeclared secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN"}},
+		{name: "invalid secret name", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "../TOKEN"}, declared: []string{"TOKEN"}},
+		{name: "sensitive host configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Secret: true}, valid: true},
+		{name: "sensitivity flag on managed secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN", Secret: true}, declared: []string{"TOKEN"}},
+		{name: "sensitivity flag on executable", requirement: actions.Requirement{Kind: actions.ExecutableRequirement, Name: "git", Secret: true}},
+		{name: "unknown kind", requirement: actions.Requirement{Kind: "other", Name: "TOKEN"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			definition := actions.Action{Name: "build", Status: actions.Unavailable,
+				RequiredSecrets: test.declared, MissingRequirements: []actions.Requirement{test.requirement},
+				InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+			if err := definition.Validate(); (err == nil) != test.valid {
+				t.Fatalf("unexpected requirement validation: %v", err)
+			}
+		})
 	}
 }
 

@@ -50,23 +50,17 @@ func AssessPreflight(mission missions.Mission, records []agents.Agent) *Prefligh
 }
 
 func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness {
-	result := AgentReadiness{AgentID: agent.ID, AgentType: string(agent.Type), MissingRequirements: slices.Clone(action.MissingRequirements)}
+	result := AgentReadiness{AgentID: agent.ID, AgentType: string(agent.Type)}
 	switch {
 	case agent.Stale:
 		result.Reason = "Agent heartbeat has expired"
 	case agent.Status != agents.AgentReady && agent.Status != agents.AgentWorking:
 		result.Reason = "Agent is not ready"
-	case len(result.MissingRequirements) != 0:
+	case len(action.MissingRequirements) != 0:
 		result.Reason = "Action has missing requirements"
-		if result.AgentType != "" {
-			for _, requirement := range result.MissingRequirements {
-				if requirement.Kind == actions.ConfigurationRequirement && requirement.Secret && slices.Contains(action.RequiredSecrets, requirement.Name) {
-					result.MissingSecrets = append(result.MissingSecrets, requirement.Name)
-				}
-			}
-			slices.Sort(result.MissingSecrets)
-			result.MissingSecrets = slices.Compact(result.MissingSecrets)
-		}
+		// Stale and non-ready agents retain their last requirements in inventory,
+		// but those snapshots must not become actionable operation guidance.
+		result.MissingRequirements = slices.Clone(action.MissingRequirements)
 	case action.Status == actions.Unknown || action.Status == "":
 		result.Reason = "Action has not been discovered"
 	case action.Status != actions.Ready:

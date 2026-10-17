@@ -172,7 +172,8 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		t.Fatal("operation did not wait for its required action's managed secret")
 	}
 	blockedAgent := operation.Preflight.Actions[0].UnavailableAgents[0]
-	if blockedAgent.AgentID != worker.ID() || blockedAgent.AgentType != "builder-agent" || !slices.Equal(blockedAgent.MissingSecrets, []string{"GITHUB_TOKEN"}) {
+	if blockedAgent.AgentID != worker.ID() || blockedAgent.AgentType != "builder-agent" ||
+		!slices.Equal(blockedAgent.MissingRequirements, []models.ActionRequirementResponse{{Kind: "secret", Name: "GITHUB_TOKEN"}}) {
 		t.Fatal("public preflight did not identify the waiting agent type and managed secret")
 	}
 	operationPath := "/api/v1/operations/" + operation.ID

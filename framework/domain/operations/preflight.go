@@ -23,9 +23,6 @@ type AgentReadiness struct {
 	AgentType           string                `json:"agent_type,omitempty"`
 	Reason              string                `json:"reason"`
 	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
-	// MissingSecrets identifies managed declarations on a live candidate, not
-	// every sensitive configuration requirement or historical sync request.
-	MissingSecrets []string `json:"missing_secrets,omitempty"`
 }
 
 func (p Preflight) Clone() Preflight {
@@ -36,7 +33,6 @@ func (p Preflight) Clone() Preflight {
 		a.UnavailableAgents = slices.Clone(a.UnavailableAgents)
 		for j := range a.UnavailableAgents {
 			a.UnavailableAgents[j].MissingRequirements = slices.Clone(a.UnavailableAgents[j].MissingRequirements)
-			a.UnavailableAgents[j].MissingSecrets = slices.Clone(a.UnavailableAgents[j].MissingSecrets)
 		}
 	}
 	return p

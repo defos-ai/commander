@@ -15,8 +15,8 @@ const operation: Operation = {
   preflight: {
     ready: false, version: 2, actions: [{
       action_name: 'capture-page', ready_agent_ids: ['agent-1'], unavailable_agents: [{
-        agent_id: 'agent-2', agent_type: 'browser', reason: 'Browser missing', missing_requirements: [{ kind: 'executable', name: 'chromium' }],
-        missing_secrets: ['SCREENSHOT_TOKEN'],
+        agent_id: 'agent-2', agent_type: 'browser', reason: 'Browser missing',
+        missing_requirements: [{ kind: 'executable', name: 'chromium' }, { kind: 'secret', name: 'SCREENSHOT_TOKEN' }],
       }],
     }],
   },
@@ -159,9 +159,11 @@ describe('operations client', () => {
 
   it.each([
     { agent_type: 42 }, { agent_type: '' }, { agent_type: 'Builder' }, { agent_type: 'b'.repeat(64) },
-    { agent_type: 'builder', missing_secrets: 'TOKEN' }, { agent_type: 'builder', missing_secrets: [42] },
-    { agent_type: 'builder', missing_secrets: [''] }, { agent_type: 'builder', missing_secrets: ['token/name'] },
-    { agent_type: 'builder', missing_secrets: ['a'.repeat(129)] }, { missing_secrets: ['TOKEN'] },
+    { agent_type: 'builder', missing_requirements: 'TOKEN' }, { agent_type: 'builder', missing_requirements: [42] },
+    ...['', 'token/name', 'a'.repeat(129), 42].map(name => ({
+      agent_type: 'builder', missing_requirements: [{ kind: 'secret', name }],
+    })),
+    { missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
   ])('rejects malformed managed secret scopes: %j', async patch => {
     respond({ ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build',
       unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', reason: 'Missing', ...patch }],
@@ -173,8 +175,9 @@ describe('operations client', () => {
   it('accepts unavailable candidates without managed secret requirements', async () => {
     const body = { ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build', unavailable_agents: [
       { agent_id: 'agent-1', reason: 'Missing dependency' },
-      { agent_id: 'agent-2', agent_type: 'builder', reason: 'Missing dependency', missing_secrets: null },
-      { agent_id: 'agent-3', agent_type: 'builder', reason: 'Missing dependency', missing_secrets: [] },
+      { agent_id: 'agent-2', agent_type: 'builder', reason: 'Missing dependency', missing_requirements: null },
+      { agent_id: 'agent-3', agent_type: 'builder', reason: 'Missing dependency', missing_requirements: [] },
+      { agent_id: 'agent-4', reason: 'Missing local setting', missing_requirements: [{ kind: 'configuration', name: 'TOKEN', secret: true }] },
     ] }] } };
     respond(body);
 

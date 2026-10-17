@@ -1,12 +1,12 @@
 import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
+import { isActionRequirement } from './actions';
 import { isMission } from './missions';
 import type {
   Operation, OperationActionOutput, OperationActionReadiness, OperationAgentReadiness,
   OperationArtifact, OperationArtifactFile, OperationContinuation, OperationEvent,
   OperationNextAction, OperationPreflight, OperationQuestion, OperationTask,
 } from './operation-types';
-import type { ActionRequirement } from './types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 
 function isNullableArray<T>(value: unknown, isItem: (item: unknown) => item is T): value is T[] | null {
@@ -78,18 +78,11 @@ function isEvent(value: unknown): value is OperationEvent {
     isOptionalString(value.message) && isDate(value.created_at);
 }
 
-function isRequirement(value: unknown): value is ActionRequirement {
-  return isObject(value) && typeof value.kind === 'string' && typeof value.name === 'string' &&
-    (value.secret === undefined || typeof value.secret === 'boolean');
-}
-
 function isAgentReadiness(value: unknown): value is OperationAgentReadiness {
   return isObject(value) && typeof value.agent_id === 'string' && typeof value.reason === 'string' &&
     (value.agent_type === undefined || (typeof value.agent_type === 'string' && value.agent_type.length <= 63 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value.agent_type))) &&
-    (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isRequirement)) &&
-    (value.missing_secrets === undefined || value.missing_secrets === null || (Array.isArray(value.missing_secrets) &&
-      value.missing_secrets.every(name => typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(name)) &&
-      (value.missing_secrets.length === 0 || typeof value.agent_type === 'string')));
+    (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isActionRequirement)) &&
+    (!value.missing_requirements?.some(requirement => requirement.kind === 'secret') || typeof value.agent_type === 'string');
 }
 
 function isActionReadiness(value: unknown): value is OperationActionReadiness {

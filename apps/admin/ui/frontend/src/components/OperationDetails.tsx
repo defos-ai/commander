@@ -24,7 +24,9 @@ export function OperationSecretsNotice({ operation, onManageSecrets }: { operati
     if (action.ready_agent_ids?.length) continue;
     for (const agent of action.unavailable_agents ?? []) {
       if (!agent.agent_type) continue;
-      for (const name of agent.missing_secrets ?? []) scopes.add(`${agent.agent_type} / ${name}`);
+      for (const requirement of agent.missing_requirements ?? []) {
+        if (requirement.kind === 'secret') scopes.add(`${agent.agent_type} / ${requirement.name}`);
+      }
     }
   }
   if (!scopes.size) return null;
@@ -154,7 +156,7 @@ function Preflight({ preflight }: { preflight: OperationPreflight }) {
           {Boolean(agent.missing_requirements?.length) && <div className="operation-nested"><h4>{t($ => $.operations.missingRequirements)}</h4>
             <ul className="catalog-tags">{agent.missing_requirements?.map((requirement, index) => {
               const { kind } = requirement;
-              return <li key={index}>{kind === 'executable' || kind === 'configuration' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>{requirement.secret && <> · {t($ => $.agents.secret)}</>}</li>;
+              return <li key={index}>{kind === 'executable' || kind === 'configuration' || kind === 'secret' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>{kind === 'configuration' && requirement.secret && <> · {t($ => $.agents.secret)}</>}</li>;
             })}</ul>
           </div>}
         </div>)}

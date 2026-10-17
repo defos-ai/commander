@@ -24,8 +24,8 @@ export function ActionDetails({ action }: { action: Action }) {
       {action.missing_requirements?.length ? <dl className="detail-list">{action.missing_requirements.map((requirement, index) => {
         const kind = requirement.kind;
         return <div key={`${kind}:${requirement.name}:${index}`}>
-          <dt>{kind === 'executable' || kind === 'configuration' ? t($ => $.actions.requirementKinds[kind]) : kind}</dt>
-          <dd><code>{requirement.name}</code>{requirement.secret && <span className="catalog-muted"> · {t($ => $.actions.secret)}</span>}</dd>
+          <dt>{kind === 'executable' || kind === 'configuration' || kind === 'secret' ? t($ => $.actions.requirementKinds[kind]) : kind}</dt>
+          <dd><code>{requirement.name}</code>{kind === 'configuration' && requirement.secret && <span className="catalog-muted"> · {t($ => $.actions.secret)}</span>}</dd>
         </div>;
       })}</dl> : <p className="catalog-muted">{t($ => $.actions.noRequirements)}</p>}
     </section>}

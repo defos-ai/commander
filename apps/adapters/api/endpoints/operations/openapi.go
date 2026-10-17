@@ -41,7 +41,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		switch model.name {
 		case "AgentReadiness":
 			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
-			schema.Properties["missing_secrets"].Description = "Missing managed secret names declared by the action, scoped to agent_type. Only assessed live ready/working candidates advertise these names. This excludes ordinary sensitive environment settings and secret lease refresh requests; values are never included."
+			schema.Properties["missing_requirements"].Description = "Missing prerequisites assessed on a live ready/working candidate. Entries with kind=secret identify declared managed secrets scoped to agent_type, distinct from sensitive host configuration. Stale or offline candidates report only their unavailability reason. Values and secret lease refresh requests are never included."
 		case "Preflight":
 			schema.Description = "Saved readiness for the mission's and steps' required actions. A ready alternative agent satisfies coverage. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
 		case "Continuation":

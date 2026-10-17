@@ -16,6 +16,7 @@ const browserAction: Action = {
   missing_requirements: [
     { kind: 'executable', name: 'chromium' },
     { kind: 'configuration', name: 'BROWSER_TOKEN', secret: true },
+    { kind: 'secret', name: 'SCREENSHOT_TOKEN' },
   ],
 };
 const agent: Agent = {
@@ -85,7 +86,8 @@ describe('agents browser', () => {
     expect(screen.getByText('Chromium and browser configuration are missing.')).toBeVisible();
     expect(screen.getByText('chromium')).toBeVisible();
     expect(screen.getByText('BROWSER_TOKEN')).toBeVisible();
-    expect(screen.getByText('BROWSER_TOKEN').closest('li')).toHaveTextContent('Configuration: BROWSER_TOKEN · Secret');
+    expect(screen.getByText('BROWSER_TOKEN').closest('li')).toHaveTextContent('Configuration: BROWSER_TOKEN · Sensitive configuration');
+    expect(screen.getByText('SCREENSHOT_TOKEN').closest('li')).toHaveTextContent('Secret: SCREENSHOT_TOKEN');
     expect(screen.queryByText('DO-NOT-DISPLAY-CONFIG')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /stop agent|run action|discover actions/i })).not.toBeInTheDocument();
   });

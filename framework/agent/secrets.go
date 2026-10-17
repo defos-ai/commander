@@ -158,7 +158,7 @@ func (a *Agent) describeAction(definition actionmodel.Action) actionmodel.Action
 		if definition.StatusReason == "" {
 			definition.StatusReason = "Required secrets are unavailable"
 		}
-		requirement := actionmodel.Requirement{Kind: actionmodel.ConfigurationRequirement, Name: name, Secret: true}
+		requirement := actionmodel.Requirement{Kind: actionmodel.SecretRequirement, Name: name}
 		if !slices.Contains(definition.MissingRequirements, requirement) {
 			definition.MissingRequirements = append(definition.MissingRequirements, requirement)
 		}

@@ -62,7 +62,10 @@ func openAPIDocument() ([]byte, error) {
 		case "Mission":
 			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results or decide-next-actions. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. Failures and empty proposals also require model review."
 		case "ActionRequirement":
-			schema.Properties["kind"].Enum = []any{"executable", "configuration"}
+			schema.Properties["kind"].Enum = []any{"executable", "configuration", "secret"}
+			schema.Properties["kind"].Description = "executable and configuration requirements need host setup. secret identifies an unavailable declared Commander-managed secret, scoped to the agent type."
+			schema.Properties["name"].Description = "Requirement identifier, never its value. Managed secret names match [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}."
+			schema.Properties["secret"].Description = "Marks sensitive host configuration only; it does not identify a Commander-managed secret. Managed secrets use kind=secret without this flag."
 		case "Action":
 			schema.Properties["status"].Description = "Discovered readiness, normally unknown, ready or unavailable. Check the selected agent's action state before dispatch."
 		case "Agent":

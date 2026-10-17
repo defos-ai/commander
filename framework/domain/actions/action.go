@@ -44,6 +44,9 @@ func (a Action) Validate() error {
 		if err := requirement.Validate(); err != nil {
 			return err
 		}
+		if requirement.Kind == SecretRequirement && !slices.Contains(a.RequiredSecrets, requirement.Name) {
+			return errors.New("missing secret must be declared in required secrets")
+		}
 	}
 	if a.Status == Ready && len(a.MissingRequirements) != 0 {
 		return errors.New("ready action cannot have missing requirements")

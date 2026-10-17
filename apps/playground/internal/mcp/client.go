@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/host"
 	protocol "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -184,8 +185,8 @@ type ActionReadiness struct {
 }
 
 type AgentReadiness struct {
-	AgentType      string   `json:"agent_type"`
-	MissingSecrets []string `json:"missing_secrets"`
+	AgentType           string                `json:"agent_type"`
+	MissingRequirements []actions.Requirement `json:"missing_requirements"`
 }
 
 type Task struct {
@@ -239,8 +240,11 @@ func (o Operation) NeedsSecrets() bool {
 			continue
 		}
 		for _, agent := range action.UnavailableAgents {
-			for _, name := range agent.MissingSecrets {
-				key := secrets.Key{Scope: secrets.Scope{AgentType: agent.AgentType}, Name: name}
+			for _, requirement := range agent.MissingRequirements {
+				if requirement.Kind != actions.SecretRequirement {
+					continue
+				}
+				key := secrets.Key{Scope: secrets.Scope{AgentType: agent.AgentType}, Name: requirement.Name}
 				if key.Validate() == nil {
 					return true
 				}

@@ -9,10 +9,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func TestOperationNeedsSecrets(t *testing.T) {
-	const managed = `{"agent_type":"builder-agent","missing_secrets":["GITHUB_TOKEN"]}`
+	const managed = `{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}`
 	for _, test := range []struct {
 		name, status, preflight string
 		want                    bool
@@ -24,12 +25,12 @@ func TestOperationNeedsSecrets(t *testing.T) {
 		{"ready", "planning", `{"ready":true,"actions":[{"unavailable_agents":[` + managed + `]}]}`, false},
 		{"ready candidate", "waiting", `{"actions":[{"ready_agent_ids":["available"],"unavailable_agents":[` + managed + `]}]}`, false},
 		{"mixed actions", "waiting", `{"actions":[{"ready_agent_ids":["available"],"unavailable_agents":[` + managed + `]},{"unavailable_agents":[` + managed + `]}]}`, true},
-		{"mixed requirements", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_secrets":["GITHUB_TOKEN"],"missing_requirements":[{"kind":"executable","name":"git"}]}]}]}`, true},
-		{"legacy sensitive environment", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"configuration","name":"GITHUB_TOKEN","secret":true}]}]}]}`, false},
-		{"stale candidate", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","reason":"Agent heartbeat has expired","missing_requirements":[{"kind":"configuration","name":"GITHUB_TOKEN","secret":true}]}]}]}`, false},
-		{"missing scope", "waiting", `{"actions":[{"unavailable_agents":[{"missing_secrets":["GITHUB_TOKEN"]}]}]}`, false},
-		{"invalid scope", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"../builder","missing_secrets":["GITHUB_TOKEN"]}]}]}`, false},
-		{"invalid name", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_secrets":["../TOKEN",""]}]}]}`, false},
+		{"mixed requirements", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"},{"kind":"executable","name":"git"}]}]}]}`, true},
+		{"sensitive environment", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"configuration","name":"GITHUB_TOKEN","secret":true}]}]}]}`, false},
+		{"stale candidate", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","reason":"Agent heartbeat has expired"}]}]}`, false},
+		{"missing scope", "waiting", `{"actions":[{"unavailable_agents":[{"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
+		{"invalid scope", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"../builder","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
+		{"invalid name", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"../TOKEN"},{"kind":"secret","name":""}]}]}]}`, false},
 		{"completed", "completed", `{"actions":[{"unavailable_agents":[` + managed + `]}]}`, false},
 		{"failed", "failed", `{"actions":[{"unavailable_agents":[` + managed + `]}]}`, false},
 		{"cancelled", "cancelled", `{"actions":[{"unavailable_agents":[` + managed + `]}]}`, false},
@@ -61,7 +62,7 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 			op := bridge.Operation{
 				ID: "blocked-operation", Status: "waiting", UpdatedAt: time.Now(),
 				Preflight: &bridge.Preflight{Version: 1, Actions: []bridge.ActionReadiness{
-					{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingSecrets: []string{"GITHUB_TOKEN"}}}},
+					{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}}}},
 				}},
 			}
 			publish(op)

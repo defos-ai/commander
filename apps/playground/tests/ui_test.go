@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -606,7 +607,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	var reads, requests, eventPages atomic.Int32
 	const eventCursor = "opaque:event-page/token+1="
 	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}, Events: []json.RawMessage{json.RawMessage(`{"sequence":42}`)}}
-	op.Preflight.Actions = []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingSecrets: []string{"GITHUB_TOKEN"}}}}}
+	op.Preflight.Actions = []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}}}}}
 	publish := func() {
 		encoded, err := json.Marshal(op)
 		if err != nil {
@@ -660,7 +661,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 				t.Errorf("model is missing managed secret guidance: %s", guidance)
 			}
 		}
-		if !strings.Contains(last, `"missing_secrets":["GITHUB_TOKEN"]`) || !strings.Contains(last, `"agent_type":"builder-agent"`) {
+		if !strings.Contains(last, `"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]`) || !strings.Contains(last, `"agent_type":"builder-agent"`) {
 			t.Error("managed secret names and scope did not reach the model's preflight evidence")
 		}
 		message := "Requirements need operator attention"

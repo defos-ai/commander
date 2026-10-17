@@ -37,6 +37,7 @@ export interface Action {
 export interface ActionRequirement {
   kind: string;
   name: string;
+  // Sensitivity of local configuration; managed secrets use kind: 'secret'.
   secret?: boolean;
 }
 

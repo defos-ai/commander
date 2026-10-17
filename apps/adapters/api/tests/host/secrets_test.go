@@ -362,10 +362,13 @@ func TestSecretOpenAPIDescribesWriteOnlyValuesAndMetadata(t *testing.T) {
 		}
 	}
 	readiness := properties("AgentReadiness")
-	for _, name := range []string{"agent_type", "missing_secrets"} {
+	for _, name := range []string{"agent_type", "missing_requirements"} {
 		if _, present := readiness[name]; !present {
 			t.Errorf("operation readiness schema is missing %s", name)
 		}
+	}
+	if _, present := readiness["missing_secrets"]; present {
+		t.Error("operation readiness schema duplicates managed secret requirements")
 	}
 }
 

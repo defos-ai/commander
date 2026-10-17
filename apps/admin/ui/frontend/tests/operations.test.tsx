@@ -20,8 +20,8 @@ const operation: Operation = {
 const secretWait: Operation = { ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [
   { action_name: 'build', unavailable_agents: [
     { agent_id: 'builder-agent-1234abcd', agent_type: 'builder', reason: 'Action has missing requirements',
-      missing_requirements: [{ kind: 'configuration', name: 'TOKEN', secret: true }], missing_secrets: ['TOKEN'] },
-    { agent_id: 'builder-agent-2345abcd', agent_type: 'builder', reason: 'Action has missing requirements', missing_secrets: ['TOKEN'] },
+      missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
+    { agent_id: 'builder-agent-2345abcd', agent_type: 'builder', reason: 'Action has missing requirements', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
   ] },
 ] } };
 
@@ -44,6 +44,8 @@ describe('operations browser', () => {
 
     expect(await screen.findByText('Secrets needed')).toBeVisible();
     expect(screen.getAllByText('builder / TOKEN')).toHaveLength(1);
+    fireEvent.click(screen.getByText('build', { selector: 'summary *' }).closest('summary')!);
+    expect(screen.getAllByText('TOKEN')[0].closest('li')).toHaveTextContent('Secret: TOKEN');
     fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
     expect(manage).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Execution graph' }));

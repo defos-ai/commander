@@ -144,7 +144,7 @@ describe('location navigation', () => {
   it('opens Secrets for the operation connection without entering a value or sending a mutation', async () => {
     const fetch = mockAPI({ ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [{
       action_name: 'build', unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', agent_type: 'builder',
-        reason: 'Action has missing requirements', missing_secrets: ['TOKEN'] }],
+        reason: 'Action has missing requirements', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] }],
     }] } });
     localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify([connection, { id: 'other', name: 'Other API', url: 'https://other.example.test' }]));
     visit({ connectionID: connection.id, section: 'operations', itemID: operation.id });

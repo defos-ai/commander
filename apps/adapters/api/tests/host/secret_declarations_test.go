@@ -72,15 +72,19 @@ func TestSecretDeclarationMappingsDoNotAliasSource(t *testing.T) {
 	}
 	preflight := operations.Preflight{Actions: []operations.ActionReadiness{{
 		ActionName: action.Name, UnavailableAgents: []operations.AgentReadiness{{
-			AgentID: "builder-agent-12345678", AgentType: "builder-agent", MissingSecrets: []string{"GITHUB_TOKEN"},
+			AgentID: "builder-agent-12345678", AgentType: "builder-agent",
+			MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}},
 		}},
 	}}}
 	mapped := mappings.ToPreflightResponse(preflight)
 	if mapped.Actions[0].UnavailableAgents[0].AgentType != "builder-agent" {
 		t.Fatal("API preflight lost the managed secret scope")
 	}
-	mapped.Actions[0].UnavailableAgents[0].MissingSecrets[0] = "changed"
-	if preflight.Actions[0].UnavailableAgents[0].MissingSecrets[0] != "GITHUB_TOKEN" {
+	if mapped.Actions[0].UnavailableAgents[0].MissingRequirements[0].Kind != "secret" {
+		t.Fatal("API preflight lost the managed secret kind")
+	}
+	mapped.Actions[0].UnavailableAgents[0].MissingRequirements[0].Name = "changed"
+	if preflight.Actions[0].UnavailableAgents[0].MissingRequirements[0].Name != "GITHUB_TOKEN" {
 		t.Fatal("API response mutation changed source secret requirements")
 	}
 }

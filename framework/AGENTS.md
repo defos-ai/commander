@@ -75,9 +75,10 @@
   eligible candidates. The runner owns readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
-- Operation preflight exposes managed missing-secret names only for live,
-  ready/working candidates, intersecting configuration blockers with the action's
-  declarations and retaining the registered agent type. Sensitive environment
+- Operation preflight exposes missing requirements only for live, ready/working
+  candidates, retaining their registered agent type. Inventory retains the last
+  snapshot for offline candidates. Managed secrets use requirement kind `secret`
+  and must be declared in the action's `RequiredSecrets`. Sensitive environment
   requirements and pending sync requests alone do not establish a secret wait.
   Queued work resumes through normal readiness refresh, never merely because a
   value was saved or a delivery acknowledged.
@@ -94,7 +95,9 @@
   Missing requirements make only the affected action unavailable. Advertise
   secret names, never values, and recheck configuration during execution.
 - `Action.RequiredSecrets` declares names even when discovery succeeds;
-  `MissingRequirements` describes only current blockers. Resolve declarations
+  `MissingRequirements` describes only current blockers. Requirement kind `secret`
+  identifies managed secrets; the `Secret` flag on `configuration` identifies
+  sensitive host configuration and does not imply a managed value. Resolve declarations
   against the registered agent type. Preserve declarations in snapshots, catalog
   projections and independent copies.
   Use per-agent actions for secret distribution; the global action catalog does

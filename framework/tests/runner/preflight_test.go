@@ -121,7 +121,7 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Type: "browser", Status: agents.AgentReady,
 		Actions: []actions.Action{
 			{Name: "inspect", Status: actions.Ready},
-			{Name: "capture", Status: actions.Unavailable, RequiredSecrets: []string{"BROWSER_TOKEN"}, MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "BROWSER_TOKEN", Secret: true}}},
+			{Name: "capture", Status: actions.Unavailable, RequiredSecrets: []string{"BROWSER_TOKEN"}, MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "BROWSER_TOKEN"}}},
 		},
 	}}
 	catalog := &agentCatalog{}
@@ -138,12 +138,13 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 		t.Fatalf("restart lost preflight or dispatched blocked work: %+v, %v", restored, err)
 	}
 	candidate := restored.Preflight.Actions[0].UnavailableAgents[0]
-	if candidate.AgentType != "browser" || !slices.Equal(candidate.MissingSecrets, []string{"BROWSER_TOKEN"}) {
+	wantMissing := []actions.Requirement{{Kind: actions.SecretRequirement, Name: "BROWSER_TOKEN"}}
+	if candidate.AgentType != "browser" || !slices.Equal(candidate.MissingRequirements, wantMissing) {
 		t.Fatalf("restart lost managed secret requirement: %+v", candidate)
 	}
-	candidate.MissingSecrets[0] = "changed snapshot"
+	candidate.MissingRequirements[0].Name = "changed snapshot"
 	saved, err := r.Get(t.Context(), op.ID)
-	if err != nil || !slices.Equal(saved.Preflight.Actions[0].UnavailableAgents[0].MissingSecrets, []string{"BROWSER_TOKEN"}) {
+	if err != nil || !slices.Equal(saved.Preflight.Actions[0].UnavailableAgents[0].MissingRequirements, wantMissing) {
 		t.Fatalf("reading secret requirements changed saved preflight: %+v, %v", saved.Preflight, err)
 	}
 
@@ -159,7 +160,7 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	if blocked.Tasks[0].Status != operations.TaskQueued {
 		t.Fatalf("task did not remain queued: %+v", blocked.Tasks[0])
 	}
-	if len(blocked.Preflight.Actions[0].UnavailableAgents[0].MissingSecrets) != 0 {
+	if !slices.Equal(blocked.Preflight.Actions[0].UnavailableAgents[0].MissingRequirements, record.Actions[1].MissingRequirements) {
 		t.Fatal("a nonsecret requirement retained the previous managed secret wait")
 	}
 
@@ -178,34 +179,35 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	}
 }
 
-func TestPreflightIdentifiesManagedSecretsOnLiveCandidates(t *testing.T) {
+func TestPreflightExposesCurrentRequirementsOnLiveCandidates(t *testing.T) {
 	base := readyAgent(agentID)
 	base.Type = "builder"
 	base.Actions[0].Status = actions.Unavailable
 	base.Actions[0].RequiredSecrets = []string{"TOKEN", "SECOND_TOKEN", "AVAILABLE_TOKEN"}
 	base.Actions[0].MissingRequirements = []actions.Requirement{
-		{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Secret: true},
-		{Kind: actions.ConfigurationRequirement, Name: "SECOND_TOKEN", Secret: true},
-		{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Secret: true},
-		{Kind: actions.ConfigurationRequirement, Name: "LEGACY_ENV_TOKEN", Secret: true},
+		{Kind: actions.SecretRequirement, Name: "TOKEN"},
+		{Kind: actions.SecretRequirement, Name: "SECOND_TOKEN"},
+		{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Secret: true},
 		{Kind: actions.ConfigurationRequirement, Name: "PATH"},
+		{Kind: actions.ExecutableRequirement, Name: "git"},
 	}
 	tests := []struct {
 		name   string
 		change func(*agents.Agent)
-		want   []string
+		live   bool
 	}{
-		{name: "live candidate", want: []string{"SECOND_TOKEN", "TOKEN"}},
-		{name: "working candidate", change: func(a *agents.Agent) { a.Status = agents.AgentWorking }, want: []string{"SECOND_TOKEN", "TOKEN"}},
-		{name: "sensitive environment only", change: func(a *agents.Agent) { a.Actions[0].RequiredSecrets = nil }},
-		{name: "declared but available", change: func(a *agents.Agent) { a.Actions[0].RequiredSecrets = []string{"AVAILABLE_TOKEN"} }},
-		{name: "unmarked configuration", change: func(a *agents.Agent) {
-			a.Actions[0].MissingRequirements = []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "TOKEN"}}
-		}},
+		{name: "live candidate", live: true},
+		{name: "working candidate", change: func(a *agents.Agent) { a.Status = agents.AgentWorking }, live: true},
+		{name: "sensitive environment only", change: func(a *agents.Agent) {
+			a.Actions[0].RequiredSecrets = nil
+			a.Actions[0].MissingRequirements = []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Secret: true}}
+		}, live: true},
+		{name: "declared but no longer missing", change: func(a *agents.Agent) {
+			a.Actions[0].MissingRequirements = nil
+		}, live: true},
 		{name: "stale candidate", change: func(a *agents.Agent) { a.Stale = true }},
 		{name: "stopped candidate", change: func(a *agents.Agent) { a.Status = agents.AgentStopped }},
 		{name: "discovering candidate", change: func(a *agents.Agent) { a.Status = agents.AgentDiscovering }},
-		{name: "unknown agent type", change: func(a *agents.Agent) { a.Type = "" }},
 	}
 	mission := missions.Mission{RequiredActions: []string{"inspect"}}
 	for _, test := range tests {
@@ -214,13 +216,24 @@ func TestPreflightIdentifiesManagedSecretsOnLiveCandidates(t *testing.T) {
 			if test.change != nil {
 				test.change(&candidate)
 			}
+			original := slices.Clone(candidate.Actions[0].MissingRequirements)
 			preflight := operations.AssessPreflight(mission, []agents.Agent{candidate})
 			if preflight.Ready || len(preflight.Actions) != 1 || len(preflight.Actions[0].UnavailableAgents) != 1 {
 				t.Fatalf("missing requirements no longer block preflight: %+v", preflight)
 			}
 			got := preflight.Actions[0].UnavailableAgents[0]
-			if got.AgentType != string(candidate.Type) || !slices.Equal(got.MissingSecrets, test.want) {
-				t.Fatalf("managed secret requirements: got %+v; want type %q, names %v", got, candidate.Type, test.want)
+			var want []actions.Requirement
+			if test.live {
+				want = original
+			}
+			if got.AgentType != string(candidate.Type) || !slices.Equal(got.MissingRequirements, want) {
+				t.Fatalf("current requirements: got %+v; want type %q, requirements %v", got, candidate.Type, want)
+			}
+			if len(got.MissingRequirements) > 0 {
+				got.MissingRequirements[0].Name = "changed snapshot"
+			}
+			if !slices.Equal(candidate.Actions[0].MissingRequirements, original) {
+				t.Fatal("preflight changed the agent's last reported requirements")
 			}
 		})
 	}

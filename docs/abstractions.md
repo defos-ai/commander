@@ -41,8 +41,11 @@ Missions refer to action names. MCP **tools** are client-facing endpoints such a
 
 **Discovery runs on each agent:** actions check their environment and report
 `ready` or `unavailable`, with a reason and structured `missing_requirements`.
-Requirements describe executables or configuration keys; secret values
-must never appear in them. Discovery does not install dependencies or configure credentials.
+Requirements identify executables (`kind: executable`), host configuration keys
+(`kind: configuration`), or managed secrets (`kind: secret`); values never appear
+in them. A configuration requirement's `secret: true` flag marks sensitive host
+configuration, which is still supplied on the host. Discovery does not install
+dependencies or configure credentials.
 
 An action's `required_secrets` lists names it uses even when ready. Each secret
 belongs to an agent type and is identified by that type and its name.
@@ -57,7 +60,9 @@ A busy agent can provide coverage, but dispatch still waits for capacity.
 Missing coverage blocks new dispatch. The operation is `waiting` unless a task
 is still running. Tasks can be queued; updated inventory refreshes preflight and
 lets them resume once ready. Already dispatched tasks continue. For missing managed
-secrets, preflight includes the candidate's `agent_type` and `missing_secrets` names.
+secrets, preflight includes the candidate's `agent_type` and entries with
+`kind: secret` in `missing_requirements`. Only live candidates report actionable
+requirements; offline candidates report their unavailability reason.
 Admin and Playground guide the operator to **Secrets**; never enter values in chat.
 Saving a value starts delivery, and readiness updates after agent installation.
 Other missing dependencies still need host configuration. Background secret

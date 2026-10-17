@@ -24,7 +24,6 @@ func ToPreflightResponse(preflight operations.Preflight) models.PreflightRespons
 						AgentType:           agent.AgentType,
 						Reason:              agent.Reason,
 						MissingRequirements: ToActionRequirementResponses(agent.MissingRequirements),
-						MissingSecrets:      slices.Clone(agent.MissingSecrets),
 					}
 				}
 			}

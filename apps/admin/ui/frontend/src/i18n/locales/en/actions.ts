@@ -32,7 +32,7 @@ export default {
   statuses: { ready: 'Ready', unavailable: 'Unavailable', unknown: 'Unknown' },
   requirements: 'Missing requirements',
   noRequirements: 'No missing requirements reported.',
-  requirementKinds: { executable: 'Executable', configuration: 'Configuration' },
-  secret: 'Secret configuration',
+  requirementKinds: { executable: 'Executable', configuration: 'Configuration', secret: 'Secret' },
+  secret: 'Sensitive configuration',
   updated: 'Checked {{time}} · refreshes every 30 seconds',
 } as const;

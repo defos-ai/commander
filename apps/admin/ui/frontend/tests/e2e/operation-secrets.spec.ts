@@ -20,7 +20,7 @@ test('operation secret guidance stays visible in graph and opens the matching co
     const preflight: OperationPreflight = { ready: !blocked, version: blocked ? 1 : 2, actions: [{
       action_name: 'build', ...(blocked ? { unavailable_agents: [{
         agent_id: 'builder-agent-1234abcd', agent_type: 'builder-agent',
-        reason: 'Action has missing requirements', missing_secrets: ['SOURCE_TOKEN'],
+        reason: 'Action has missing requirements', missing_requirements: [{ kind: 'secret', name: 'SOURCE_TOKEN' }],
       }] } : { ready_agent_ids: ['builder-agent-1234abcd'] }),
     }] };
     await route.fulfill({ response, json: { ...saved, preflight } });

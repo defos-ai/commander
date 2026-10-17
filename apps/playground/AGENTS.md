@@ -56,9 +56,9 @@
   resource access; never present them as browser/download links. Playground has
   no image preview. Do not assume Admin is running or invent its address.
 - Active blocked preflight may identify managed secrets with `agent_type` and
-  `missing_secrets`. Show `secrets needed` only for an action without a ready
-  candidate and a valid scoped name; never infer managed secrets from sensitive
-  environment requirements or pending delivery requests. Reuse that operation's
+  `missing_requirements` of kind `secret`. Show `secrets needed` only for an action
+  without a ready candidate and a valid scoped name; never infer managed secrets
+  from sensitive environment requirements or pending delivery requests. Reuse that operation's
   Admin review link, or show `/admin` setup guidance without a configured URL.
   Model guidance sends users to Admin Secrets and must not solicit values in
   chat, tool inputs or `ask_question`. Saving is not installation/readiness;

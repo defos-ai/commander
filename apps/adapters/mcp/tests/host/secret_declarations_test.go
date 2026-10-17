@@ -58,7 +58,7 @@ func TestMCPQueriesPreserveSecretDeclarations(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	for _, guidance := range []string{"missing_secrets", "Admin UI Secrets for that agent type", "Never request secret values in chat, tool inputs or ask_question", "Saving a secret is not readiness"} {
+	for _, guidance := range []string{"missing_requirements of kind secret", "Admin UI Secrets for that agent type", "Never request secret values in chat, tool inputs or ask_question", "Saving a secret is not readiness"} {
 		if !strings.Contains(session.InitializeResult().Instructions, guidance) {
 			t.Errorf("MCP instructions omit secret handoff guidance: %s", guidance)
 		}
