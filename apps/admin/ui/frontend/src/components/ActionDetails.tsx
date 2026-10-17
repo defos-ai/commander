@@ -25,7 +25,7 @@ export function ActionDetails({ action }: { action: Action }) {
         const kind = requirement.kind;
         return <div key={`${kind}:${requirement.name}:${index}`}>
           <dt>{kind === 'executable' || kind === 'configuration' || kind === 'secret' ? t($ => $.actions.requirementKinds[kind]) : kind}</dt>
-          <dd><code>{requirement.name}</code>{kind === 'configuration' && requirement.secret && <span className="catalog-muted"> · {t($ => $.actions.secret)}</span>}</dd>
+          <dd><code>{requirement.name}</code>{kind === 'configuration' && requirement.sensitive && <span className="catalog-muted"> · {t($ => $.actions.sensitive)}</span>}</dd>
         </div>;
       })}</dl> : <p className="catalog-muted">{t($ => $.actions.noRequirements)}</p>}
     </section>}

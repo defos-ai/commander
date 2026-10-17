@@ -57,7 +57,7 @@
   Managed-secret handoff uses explicit preflight `agent_type` and
   `missing_requirements` of kind `secret` for actions without ready candidates.
   Sensitive host configuration remains kind `configuration`, even with
-  `secret: true`. MCP instructions direct operators to
+  `sensitive: true`. MCP instructions direct operators to
   Admin Secrets; never solicit secret values through chat, tools or questions,
   or equate a saved secret with an agent becoming ready.
 - Continuation decisions must retain the task and business version used to reject

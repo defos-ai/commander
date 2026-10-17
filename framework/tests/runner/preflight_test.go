@@ -54,7 +54,7 @@ func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 		{name: "stopped agent", change: func(a *agents.Agent) { a.Status = agents.AgentStopped }},
 		{name: "undiscovered action", change: func(a *agents.Agent) { a.Actions[0].Status = actions.Unknown }},
 		{name: "missing executable", requirement: actions.Requirement{Kind: actions.ExecutableRequirement, Name: "browser"}},
-		{name: "missing configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "SERVICE_API_KEY", Secret: true}},
+		{name: "missing configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "SERVICE_API_KEY", Sensitive: true}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestPreflightExposesCurrentRequirementsOnLiveCandidates(t *testing.T) {
 	base.Actions[0].MissingRequirements = []actions.Requirement{
 		{Kind: actions.SecretRequirement, Name: "TOKEN"},
 		{Kind: actions.SecretRequirement, Name: "SECOND_TOKEN"},
-		{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Secret: true},
+		{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Sensitive: true},
 		{Kind: actions.ConfigurationRequirement, Name: "PATH"},
 		{Kind: actions.ExecutableRequirement, Name: "git"},
 	}
@@ -200,7 +200,7 @@ func TestPreflightExposesCurrentRequirementsOnLiveCandidates(t *testing.T) {
 		{name: "working candidate", change: func(a *agents.Agent) { a.Status = agents.AgentWorking }, live: true},
 		{name: "sensitive environment only", change: func(a *agents.Agent) {
 			a.Actions[0].RequiredSecrets = nil
-			a.Actions[0].MissingRequirements = []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Secret: true}}
+			a.Actions[0].MissingRequirements = []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Sensitive: true}}
 		}, live: true},
 		{name: "declared but no longer missing", change: func(a *agents.Agent) {
 			a.Actions[0].MissingRequirements = nil

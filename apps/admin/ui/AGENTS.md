@@ -73,7 +73,7 @@
   probes and `/aboutz` remain read-only.
 - Operation secret notices use preflight's explicit `agent_type` and
   `missing_requirements` with `kind: secret` on blocked actions, only while the
-  operation is active. The `secret` boolean marks sensitive local configuration;
+  operation is active. The `sensitive` boolean marks sensitive local configuration;
   never infer managed secrets from it or associate agent lease requests with an
   operation. Preflight includes requirements only for live candidates. Hide notices
   once a ready candidate covers the action. Navigation opens Secrets on the current

@@ -39,9 +39,9 @@ func ToActionRequirementResponses(requirements []actions.Requirement) []models.A
 	responses := make([]models.ActionRequirementResponse, len(requirements))
 	for i, requirement := range requirements {
 		responses[i] = models.ActionRequirementResponse{
-			Kind:   string(requirement.Kind),
-			Name:   requirement.Name,
-			Secret: requirement.Secret,
+			Kind:      string(requirement.Kind),
+			Name:      requirement.Name,
+			Sensitive: requirement.Sensitive,
 		}
 	}
 	return responses

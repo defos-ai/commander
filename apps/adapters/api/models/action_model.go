@@ -14,9 +14,9 @@ type ActionResponse struct {
 }
 
 type ActionRequirementResponse struct {
-	Kind   string `json:"kind"`
-	Name   string `json:"name"`
-	Secret bool   `json:"secret,omitempty"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Sensitive bool   `json:"sensitive,omitempty"`
 }
 
 type ActionOutputResponse struct {

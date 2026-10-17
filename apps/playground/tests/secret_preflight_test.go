@@ -26,7 +26,7 @@ func TestOperationNeedsSecrets(t *testing.T) {
 		{"ready candidate", "waiting", `{"actions":[{"ready_agent_ids":["available"],"unavailable_agents":[` + managed + `]}]}`, false},
 		{"mixed actions", "waiting", `{"actions":[{"ready_agent_ids":["available"],"unavailable_agents":[` + managed + `]},{"unavailable_agents":[` + managed + `]}]}`, true},
 		{"mixed requirements", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"},{"kind":"executable","name":"git"}]}]}]}`, true},
-		{"sensitive environment", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"configuration","name":"GITHUB_TOKEN","secret":true}]}]}]}`, false},
+		{"sensitive environment", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"configuration","name":"GITHUB_TOKEN","sensitive":true}]}]}]}`, false},
 		{"stale candidate", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","reason":"Agent heartbeat has expired"}]}]}`, false},
 		{"missing scope", "waiting", `{"actions":[{"unavailable_agents":[{"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
 		{"invalid scope", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"../builder","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},

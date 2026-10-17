@@ -6,8 +6,8 @@ import { encodeIdentifier, isIdentifier, isObject, isOptionalString } from './va
 export function isActionRequirement(value: unknown): value is ActionRequirement {
   return isObject(value) && typeof value.kind === 'string' && typeof value.name === 'string' &&
     (value.kind !== 'secret' || /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(value.name)) &&
-    (value.secret === undefined || typeof value.secret === 'boolean') &&
-    (value.secret !== true || value.kind === 'configuration');
+    (value.sensitive === undefined || typeof value.sensitive === 'boolean') &&
+    (value.sensitive !== true || value.kind === 'configuration');
 }
 
 export function isAction(value: unknown): value is Action {

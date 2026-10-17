@@ -370,6 +370,13 @@ func TestSecretOpenAPIDescribesWriteOnlyValuesAndMetadata(t *testing.T) {
 	if _, present := readiness["missing_secrets"]; present {
 		t.Error("operation readiness schema duplicates managed secret requirements")
 	}
+	requirement := properties("ActionRequirement")
+	if _, present := requirement["sensitive"]; !present {
+		t.Error("requirement schema is missing the sensitive flag")
+	}
+	if _, present := requirement["secret"]; present {
+		t.Error("requirement schema still exposes the old secret flag")
+	}
 }
 
 func TestSecretsWithMongo(t *testing.T) {

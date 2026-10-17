@@ -30,7 +30,7 @@
 - Operation preflight preserves the controller's saved `agent_type` and
   `missing_requirements` metadata. Requirements with `kind: secret` identify
   managed declarations for assessed live candidates, not sensitive host
-  configuration (`kind: configuration`, `secret: true`) or pending lease requests.
+  configuration (`kind: configuration`, `sensitive: true`) or pending lease requests.
   Keep mappings independent; API reads never infer readiness from secret storage.
 - Artifact downloads first establish file membership and verify saved size and
   SHA-256. Preserve sanitized attachment names, media-type fallback, empty files

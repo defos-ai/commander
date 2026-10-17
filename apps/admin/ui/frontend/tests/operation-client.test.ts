@@ -134,7 +134,7 @@ describe('operations client', () => {
     { tasks: [{ ...operation.tasks![0], continuation: { ...operation.tasks![0].continuation, created_task_ids: [42] } }] },
     { tasks: [{ ...operation.tasks![0], finished_at: 'not a date' }] },
     { questions: [{ ...operation.questions![0], options: [42] }] },
-    { preflight: { ready: false, version: 1, actions: [{ action_name: 'capture-page', unavailable_agents: [{ agent_id: 'agent-1', reason: 'Missing', missing_requirements: [{ kind: 'configuration', name: 'KEY', secret: 'yes' }] }] }] } },
+    { preflight: { ready: false, version: 1, actions: [{ action_name: 'capture-page', unavailable_agents: [{ agent_id: 'agent-1', reason: 'Missing', missing_requirements: [{ kind: 'configuration', name: 'KEY', sensitive: 'yes' }] }] }] } },
     { events: [{ ...operation.events![0], sequence: -1 }] },
     { updated_at: 42 },
     { error: { message: 'failure' } },
@@ -177,7 +177,7 @@ describe('operations client', () => {
       { agent_id: 'agent-1', reason: 'Missing dependency' },
       { agent_id: 'agent-2', agent_type: 'builder', reason: 'Missing dependency', missing_requirements: null },
       { agent_id: 'agent-3', agent_type: 'builder', reason: 'Missing dependency', missing_requirements: [] },
-      { agent_id: 'agent-4', reason: 'Missing local setting', missing_requirements: [{ kind: 'configuration', name: 'TOKEN', secret: true }] },
+      { agent_id: 'agent-4', reason: 'Missing local setting', missing_requirements: [{ kind: 'configuration', name: 'TOKEN', sensitive: true }] },
     ] }] } };
     respond(body);
 

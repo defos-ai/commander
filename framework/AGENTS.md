@@ -96,7 +96,7 @@
   secret names, never values, and recheck configuration during execution.
 - `Action.RequiredSecrets` declares names even when discovery succeeds;
   `MissingRequirements` describes only current blockers. Requirement kind `secret`
-  identifies managed secrets; the `Secret` flag on `configuration` identifies
+  identifies managed secrets; the `Sensitive` flag on `configuration` identifies
   sensitive host configuration and does not imply a managed value. Resolve declarations
   against the registered agent type. Preserve declarations in snapshots, catalog
   projections and independent copies.

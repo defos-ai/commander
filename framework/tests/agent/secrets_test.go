@@ -56,7 +56,7 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 	}
 	// Host configuration and a managed secret can share a name without sharing
 	// a source or resolution path.
-	hostRequirement := actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "CODEX_API_KEY", Secret: true}
+	hostRequirement := actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "CODEX_API_KEY", Sensitive: true}
 	executor.SetUnavailable("Missing configuration", hostRequirement)
 	mixed := runtime.Describe().Actions[0]
 	if !slices.Equal(mixed.MissingRequirements, append([]actions.Requirement{hostRequirement}, wantMissing...)) {
@@ -77,9 +77,9 @@ func TestActionValidatesManagedSecretRequirements(t *testing.T) {
 		{name: "managed secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN"}, declared: []string{"TOKEN"}, valid: true},
 		{name: "undeclared secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN"}},
 		{name: "invalid secret name", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "../TOKEN"}, declared: []string{"TOKEN"}},
-		{name: "sensitive host configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Secret: true}, valid: true},
-		{name: "sensitivity flag on managed secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN", Secret: true}, declared: []string{"TOKEN"}},
-		{name: "sensitivity flag on executable", requirement: actions.Requirement{Kind: actions.ExecutableRequirement, Name: "git", Secret: true}},
+		{name: "sensitive host configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Sensitive: true}, valid: true},
+		{name: "sensitivity flag on managed secret", requirement: actions.Requirement{Kind: actions.SecretRequirement, Name: "TOKEN", Sensitive: true}, declared: []string{"TOKEN"}},
+		{name: "sensitivity flag on executable", requirement: actions.Requirement{Kind: actions.ExecutableRequirement, Name: "git", Sensitive: true}},
 		{name: "unknown kind", requirement: actions.Requirement{Kind: "other", Name: "TOKEN"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

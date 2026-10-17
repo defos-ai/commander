@@ -67,7 +67,7 @@ describe('operations browser', () => {
     { ...secretWait, preflight: { ...secretWait.preflight!, actions: [{ ...secretWait.preflight!.actions![0], ready_agent_ids: ['ready-agent'] }] } },
     { ...secretWait, preflight: { ...secretWait.preflight!, actions: [{ action_name: 'build', unavailable_agents: [
       { agent_id: 'builder-agent-1234abcd', reason: 'Local configuration missing',
-        missing_requirements: [{ kind: 'configuration', name: 'LOCAL_TOKEN', secret: true }] },
+        missing_requirements: [{ kind: 'configuration', name: 'LOCAL_TOKEN', sensitive: true }] },
     ] }] } },
   ])('does not infer a secret wait from unrelated or historical requirements: %j', async snapshot => {
     mockAPI(() => Response.json(snapshot));

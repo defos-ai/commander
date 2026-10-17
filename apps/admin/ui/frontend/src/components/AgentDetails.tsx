@@ -60,7 +60,7 @@ export function AgentDetails({ agent }: { agent: Agent }) {
               const kind = requirement.kind;
               return <li key={`${index}:${kind}:${requirement.name}`}>
               {kind === 'executable' || kind === 'configuration' || kind === 'secret' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>
-              {kind === 'configuration' && requirement.secret && <> · {t($ => $.agents.secret)}</>}
+              {kind === 'configuration' && requirement.sensitive && <> · {t($ => $.agents.sensitive)}</>}
             </li>; })}</ul>
           </div>}
         </details>

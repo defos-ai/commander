@@ -15,7 +15,7 @@ const browserAction: Action = {
   status_reason: 'Chromium and browser configuration are missing.',
   missing_requirements: [
     { kind: 'executable', name: 'chromium' },
-    { kind: 'configuration', name: 'BROWSER_TOKEN', secret: true },
+    { kind: 'configuration', name: 'BROWSER_TOKEN', sensitive: true },
     { kind: 'secret', name: 'SCREENSHOT_TOKEN' },
   ],
 };

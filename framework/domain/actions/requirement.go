@@ -17,10 +17,9 @@ const (
 
 // Requirements describe missing prerequisites, never configuration or secret values.
 type Requirement struct {
-	Kind RequirementKind `json:"kind"`
-	Name string          `json:"name"`
-	// Secret marks sensitive host configuration; managed values use SecretRequirement.
-	Secret bool `json:"secret,omitempty"`
+	Kind      RequirementKind `json:"kind"`
+	Name      string          `json:"name"`
+	Sensitive bool            `json:"sensitive,omitempty"`
 }
 
 func (r Requirement) Validate() error {
@@ -36,7 +35,7 @@ func (r Requirement) Validate() error {
 	default:
 		return errors.New("invalid requirement kind")
 	}
-	if r.Secret && r.Kind != ConfigurationRequirement {
+	if r.Sensitive && r.Kind != ConfigurationRequirement {
 		return errors.New("only configuration requirements can use the sensitivity flag")
 	}
 	return nil

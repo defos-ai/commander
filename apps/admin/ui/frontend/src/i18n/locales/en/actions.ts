@@ -33,6 +33,6 @@ export default {
   requirements: 'Missing requirements',
   noRequirements: 'No missing requirements reported.',
   requirementKinds: { executable: 'Executable', configuration: 'Configuration', secret: 'Secret' },
-  secret: 'Sensitive configuration',
+  sensitive: 'Sensitive configuration',
   updated: 'Checked {{time}} · refreshes every 30 seconds',
 } as const;

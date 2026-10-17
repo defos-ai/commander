@@ -12,7 +12,7 @@ const action: Action = {
   missing_requirements: [
     { kind: 'executable', name: 'chromium' },
     { kind: 'secret', name: 'BROWSER_API_KEY' },
-    { kind: 'configuration', name: 'LOCAL_BROWSER_KEY', secret: true },
+    { kind: 'configuration', name: 'LOCAL_BROWSER_KEY', sensitive: true },
   ],
   input_schema: { type: 'object', properties: { url: { type: 'string' } } }, output_schema: {},
 };
@@ -121,7 +121,7 @@ describe('agent and action catalogs', () => {
   it.each([
     { server: null },
     { work: { action_name: 'check-links', task_id: 42 } },
-    { actions: [{ ...action, missing_requirements: [{ kind: 'executable', name: 'chromium', secret: 'yes' }] }] },
+    { actions: [{ ...action, missing_requirements: [{ kind: 'executable', name: 'chromium', sensitive: 'yes' }] }] },
     { responsibilities: 'review' },
     { discovery_scope: { paths: ['/usr/bin'], services: [42] } },
     { last_heartbeat: 'not a date' },
@@ -138,8 +138,8 @@ describe('agent and action catalogs', () => {
     { required_secrets: [42] },
     { missing_requirements: [{ name: 'chromium' }] },
     { missing_requirements: [{ kind: 'secret', name: 'token/name' }] },
-    { missing_requirements: [{ kind: 'secret', name: 'BROWSER_API_KEY', secret: true }] },
-    { missing_requirements: [{ kind: 'executable', name: 'chromium', secret: true }] },
+    { missing_requirements: [{ kind: 'secret', name: 'BROWSER_API_KEY', sensitive: true }] },
+    { missing_requirements: [{ kind: 'executable', name: 'chromium', sensitive: true }] },
     { input_schema: [] },
     { output_schema: true },
   ])('rejects malformed action fields before rendering: %j', async patch => {

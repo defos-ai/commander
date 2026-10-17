@@ -43,7 +43,7 @@ Missions refer to action names. MCP **tools** are client-facing endpoints such a
 `ready` or `unavailable`, with a reason and structured `missing_requirements`.
 Requirements identify executables (`kind: executable`), host configuration keys
 (`kind: configuration`), or managed secrets (`kind: secret`); values never appear
-in them. A configuration requirement's `secret: true` flag marks sensitive host
+in them. A configuration requirement's `sensitive: true` flag marks sensitive host
 configuration, which is still supplied on the host. Discovery does not install
 dependencies or configure credentials.
 

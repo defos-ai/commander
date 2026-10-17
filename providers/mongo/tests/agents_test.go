@@ -30,7 +30,7 @@ func TestAgentMongoStore(t *testing.T) {
 	original.Config = json.RawMessage(`{"cursor":18446744073709551615,"nested":{"enabled":true}}`)
 	original.Actions = []actions.Action{
 		{Name: "capture-page", Status: actions.Ready, RequiredSecrets: []string{"BROWSER_API_KEY"}, InputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`), OutputSchema: json.RawMessage(`{}`)},
-		{Name: "lookup", Status: actions.Unavailable, StatusReason: "API_KEY missing", MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Secret: true}}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)},
+		{Name: "lookup", Status: actions.Unavailable, StatusReason: "API_KEY missing", MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Sensitive: true}}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)},
 	}
 	original.LeaseExpiresAt = original.LastHeartbeat.Add(45 * time.Second)
 	other := original.Clone()

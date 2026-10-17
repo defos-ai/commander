@@ -64,7 +64,7 @@ export default {
   actionsDescription: 'Readiness reported by this agent, including missing dependencies.',
   noActions: 'No actions reported.',
   missingRequirements: 'Missing requirements',
-  secret: 'Sensitive configuration',
+  sensitive: 'Sensitive configuration',
   requirementKinds: {
     executable: 'Executable',
     configuration: 'Configuration',

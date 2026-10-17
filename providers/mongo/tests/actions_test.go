@@ -21,7 +21,7 @@ func TestActionMongoStore(t *testing.T) {
 		Name: "alpha", Description: "Inspect a page", Status: actions.Unknown,
 		StatusReason:        "Readiness is determined by the agent",
 		RequiredSecrets:     []string{"API_KEY"},
-		MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Secret: true}},
+		MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Sensitive: true}},
 		InputSchema:         json.RawMessage(`{"type":"application-specific","x-example":9007199254740993}`),
 		OutputSchema:        json.RawMessage(`{"type":"object","x-example":18446744073709551615}`),
 	}
