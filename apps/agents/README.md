@@ -11,6 +11,10 @@ technology signals over HTTP. The [browser agent](browser/README.md) adds render
 accessibility checks and screenshots. See the [architecture](../../docs/overview.md) for component
 boundaries and [action contracts](../../framework/README.md) for shared interfaces.
 
+The [builder agent](builder/README.md) starts agent creation by checking out the
+example template into an isolated workspace. Build and deployment actions are
+still to come.
+
 ## Quick start
 
 With Go 1.26.7+, run from the repository root:

@@ -12,7 +12,7 @@ framework: &shared
   - 'providers/!(fs|mongo|rabbitmq|s3)/**'
   - 'apps/!(adapters|admin|agents|controllers|playground)/**'
   - 'apps/adapters/!(api|mcp)/**'
-  - 'apps/agents/!(browser|web)/**'
+  - 'apps/agents/!(browser|builder|web)/**'
   - 'apps/controllers/!(default)/**'
   - 'apps/admin/!(ui)/**'
   - 'apps/admin/ui/!(backend|frontend|docker)/**'
@@ -49,6 +49,13 @@ agent:
   - *rabbitmq
   - *s3
   - &agent 'apps/agents/browser/**'
+
+builder:
+  - *shared
+  - *fs
+  - *rabbitmq
+  - *s3
+  - 'apps/agents/builder/**'
 
 web:
   - *shared

@@ -55,6 +55,12 @@
 
 ## Validation
 
+Keep tests and fixtures in each agent module's `tests/` directory, using external
+test packages to exercise public action and host APIs. Use existing dependency
+injection for local fixtures. Do not place tests in `actions/` or `cli/` merely
+to access private helpers, or export implementation details and add runtime
+settings solely for tests.
+
 Run the affected agent module from the repository root, for example:
 
 ```sh
