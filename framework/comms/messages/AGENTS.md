@@ -13,6 +13,12 @@
   across commands, outcomes and receipts; replies correlate to the command ID.
 - Result receipts match result ID, command ID and work context and follow durable
   controller persistence. They must never be treated as broker acknowledgements.
+- Secret synchronization contracts are not wired to hosts yet. Keep encrypted
+  deliveries separate from action commands. Match requests, recipients, scoped
+  keys, deadlines and exact secret IDs/versions through the typed validators.
+  Consumers must separately verify sender/scope authorization, active requests,
+  receipt-time expiry and current stored versions before installation/fulfillment.
+  An installation acknowledgement never proves ongoing readiness or revocation.
 - Preserve `expires_at` as a start deadline. Cached outcomes can replay after
   expiry; new command work cannot. No expiry means no admission limit.
 - When changing a wire field or message type, update its typed clients, producing

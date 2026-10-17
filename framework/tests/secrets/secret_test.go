@@ -19,7 +19,7 @@ func secretFixture() secrets.Secret {
 		Metadata: secrets.Metadata{
 			ID: "00000000-0000-4000-8000-000000000001",
 			Key: secrets.Key{
-				Scope: secrets.Scope{AgentType: "browser", Profile: secrets.DefaultProfile},
+				Scope: secrets.Scope{AgentType: "browser"},
 				Name:  "API_TOKEN",
 			},
 			Version: 2, CreatedAt: requestedAt.Add(-time.Hour), UpdatedAt: requestedAt,
@@ -40,24 +40,17 @@ func requestFixture() secrets.Request {
 	}
 }
 
-func TestScopeDefaultAndInvalidIdentities(t *testing.T) {
-	omitted, err := secrets.NewScope("browser", "")
-	if err != nil {
-		t.Fatal(err)
+func TestScopeAndInvalidIdentities(t *testing.T) {
+	scope, err := secrets.NewScope("browser")
+	if err != nil || scope.AgentType != "browser" {
+		t.Fatalf("scope = %+v, error = %v", scope, err)
 	}
-	explicit, err := secrets.NewScope("browser", secrets.DefaultProfile)
-	if err != nil || omitted != explicit || omitted.Profile != "default" {
-		t.Fatalf("default scope = %+v, explicit = %+v, error = %v", omitted, explicit, err)
-	}
-	for _, scope := range []secrets.Scope{
-		{AgentType: "browser", Profile: ""},
-		{AgentType: "../browser", Profile: "default"},
-		{AgentType: "browser", Profile: "production/other"},
-	} {
-		if err := scope.Validate(); err == nil {
-			t.Errorf("invalid persisted scope accepted: %+v", scope)
+	for _, agentType := range []string{"", "../browser", "browser/other", "Browser", "browser--agent"} {
+		if _, err := secrets.NewScope(agentType); err == nil {
+			t.Errorf("invalid agent type accepted: %q", agentType)
 		}
 	}
+
 	key := secretFixture().Metadata.Key
 	key.Name = "../API_TOKEN"
 	if err := key.Validate(); err == nil {

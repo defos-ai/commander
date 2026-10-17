@@ -18,14 +18,13 @@ const collection = "secrets"
 type secretDocument struct {
 	ID        string          `bson:"_id"`
 	AgentType string          `bson:"agent_type"`
-	Profile   string          `bson:"profile"`
 	Name      string          `bson:"name"`
 	Active    bool            `bson:"active"`
 	Data      json.RawMessage `bson:"data,omitempty"`
 }
 
 func identityDocument(secretID string, key secretmodel.Key) secretDocument {
-	return secretDocument{ID: secretID, AgentType: key.Scope.AgentType, Profile: key.Scope.Profile, Name: key.Name}
+	return secretDocument{ID: secretID, AgentType: key.Scope.AgentType, Name: key.Name}
 }
 
 func encode(secret secretmodel.Secret) (secretDocument, error) {
@@ -40,7 +39,7 @@ func encode(secret secretmodel.Secret) (secretDocument, error) {
 }
 
 func (d secretDocument) key() secretmodel.Key {
-	return secretmodel.Key{Scope: secretmodel.Scope{AgentType: d.AgentType, Profile: d.Profile}, Name: d.Name}
+	return secretmodel.Key{Scope: secretmodel.Scope{AgentType: d.AgentType}, Name: d.Name}
 }
 
 func (d secretDocument) decode() (secretmodel.Secret, error) {

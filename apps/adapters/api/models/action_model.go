@@ -8,6 +8,7 @@ type ActionResponse struct {
 	StatusReason        string                      `json:"status_reason,omitempty"`
 	Status              string                      `json:"status"`
 	MissingRequirements []ActionRequirementResponse `json:"missing_requirements,omitempty"`
+	RequiredSecrets     []string                    `json:"required_secrets,omitempty"`
 	InputSchema         json.RawMessage             `json:"input_schema"`
 	OutputSchema        json.RawMessage             `json:"output_schema"`
 }

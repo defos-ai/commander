@@ -29,7 +29,7 @@ func TestAgentMongoStore(t *testing.T) {
 	original.DiscoveryScope = &agents.DiscoveryScope{Paths: []string{}, Services: []string{"browser"}}
 	original.Config = json.RawMessage(`{"cursor":18446744073709551615,"nested":{"enabled":true}}`)
 	original.Actions = []actions.Action{
-		{Name: "capture-page", Status: actions.Ready, InputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`), OutputSchema: json.RawMessage(`{}`)},
+		{Name: "capture-page", Status: actions.Ready, RequiredSecrets: []string{"BROWSER_API_KEY"}, InputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`), OutputSchema: json.RawMessage(`{}`)},
 		{Name: "lookup", Status: actions.Unavailable, StatusReason: "API_KEY missing", MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Secret: true}}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)},
 	}
 	original.LeaseExpiresAt = original.LastHeartbeat.Add(45 * time.Second)
@@ -56,6 +56,7 @@ func TestAgentMongoStore(t *testing.T) {
 		t.Fatalf("inventory changed content, status or order: %#v, error = %v", items, err)
 	}
 	stored.Actions[0].InputSchema[0] = '!'
+	stored.Actions[0].RequiredSecrets[0] = "changed"
 	stored.Actions[1].MissingRequirements[0].Name = "changed"
 	stored.DiscoveryScope.Services[0] = "changed"
 	stored.Config[0] = '!'

@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	Format = "aes-256-gcm-v1"
+	Format = "aes-256-gcm-v2"
 
 	keySize             = 32
 	nonceSize           = 12

@@ -2,8 +2,8 @@
 
 `secrets.Service` creates, replaces and deletes named secrets through a
 [`SecretStore`](../domain/secrets/secret_store.go). It encrypts values before
-persistence and returns only metadata. Secrets belong to an agent type and
-profile, independently of operations.
+persistence and returns only metadata. Secrets belong to an agent type,
+independently of operations.
 
 ```go
 cipher, err := crypto.NewSecretCipher(encryptionKey)
@@ -29,3 +29,18 @@ next; the service never retries automatically. Attempted metadata returned with
 
 Hosts own authorization and [encryption key configuration](../crypto/README.md).
 Saving a value does not deliver it to an agent or fulfill a pending secret request.
+
+## Agent requirements
+
+Each action declares its secret names through `Action.RequiredSecrets`, for example
+`[]string{"GITHUB_TOKEN"}`. The agent's registered type identifies the scope.
+Multiple actions may require the same name.
+
+Declarations remain in agent snapshots after discovery succeeds. They identify
+which secrets an agent uses; `MissingRequirements` separately reports what is
+currently unavailable. Declarations do not grant access or change readiness, and
+runtime distribution is not enabled yet.
+
+The [synchronization contracts](../comms/messages/README.md#secret-synchronization-contracts)
+define requests, encrypted deliveries and installation acknowledgements for the
+next stage.

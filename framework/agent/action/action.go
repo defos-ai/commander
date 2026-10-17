@@ -53,8 +53,7 @@ func NewBase(definition actionmodel.Action) *Base {
 	definition.Status = Unknown
 	definition.StatusReason = ""
 	definition.MissingRequirements = nil
-	definition.InputSchema = bytes.Clone(definition.InputSchema)
-	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
+	definition = definition.Clone()
 	return &Base{definition: definition}
 }
 
@@ -66,10 +65,7 @@ func (b *Base) Action() actionmodel.Action {
 		definition.StatusReason = current.reason
 		definition.MissingRequirements = current.requirements
 	}
-	definition.MissingRequirements = slices.Clone(definition.MissingRequirements)
-	definition.InputSchema = bytes.Clone(definition.InputSchema)
-	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
-	return definition
+	return definition.Clone()
 }
 
 func (b *Base) SetStatus(status Status) {

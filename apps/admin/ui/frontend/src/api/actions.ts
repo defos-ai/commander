@@ -11,6 +11,8 @@ function isRequirement(value: unknown): value is ActionRequirement {
 export function isAction(value: unknown): value is Action {
   return isObject(value) && isIdentifier(value.name) && typeof value.description === 'string' &&
     typeof value.status === 'string' && isOptionalString(value.status_reason) &&
+    (value.required_secrets === undefined || (Array.isArray(value.required_secrets) &&
+      value.required_secrets.every(name => typeof name === 'string'))) &&
     (value.missing_requirements === undefined || value.missing_requirements === null ||
       (Array.isArray(value.missing_requirements) && value.missing_requirements.every(isRequirement))) &&
     (value.input_schema === null || isObject(value.input_schema)) &&

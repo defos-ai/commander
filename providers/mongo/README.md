@@ -57,6 +57,10 @@ retains the ID to reject delayed writes. Expired secrets remain available for
 inventory. Use the [secret management service](../../framework/secrets/README.md)
 or the authenticated [HTTP API](../../apps/adapters/api/README.md#secrets) to manage values.
 
+Secrets are identified by agent type and name. Earlier development records and
+indexes with profiles are incompatible; recreate those secrets in a fresh store.
+Existing records are never merged or migrated automatically.
+
 ## Development and testing
 
 See [AGENTS.md](AGENTS.md) for transaction and persistence guidance.

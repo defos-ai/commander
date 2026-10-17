@@ -2,6 +2,7 @@ package mappings
 
 import (
 	"bytes"
+	"slices"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -14,6 +15,7 @@ func ToActionResponse(action actions.Action) models.ActionResponse {
 		StatusReason:        action.StatusReason,
 		Status:              string(action.Status),
 		MissingRequirements: ToActionRequirementResponses(action.MissingRequirements),
+		RequiredSecrets:     slices.Clone(action.RequiredSecrets),
 		InputSchema:         bytes.Clone(action.InputSchema),
 		OutputSchema:        bytes.Clone(action.OutputSchema),
 	}

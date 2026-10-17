@@ -54,6 +54,10 @@ its ID to reject delayed writes. These records are independent of operations and
 are preserved by test cleanup. Use the [secret management service](../../framework/secrets/README.md)
 or the authenticated [HTTP API](../../apps/adapters/api/README.md#secrets) to manage values.
 
+Secrets are identified by agent type and name. Earlier development records with
+profiles are incompatible; recreate those secrets in a fresh store. Existing
+records are never merged or migrated automatically.
+
 ## Development and testing
 
 See [AGENTS.md](AGENTS.md) for filesystem and message-delivery invariants.

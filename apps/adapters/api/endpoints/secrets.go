@@ -22,7 +22,7 @@ import (
 )
 
 const secretsPath = "/api/v1/secrets"
-const secretPath = secretsPath + "/{agent_type}/{profile}/{name}"
+const secretPath = secretsPath + "/{agent_type}/{name}"
 
 func RegisterSecrets(mux *http.ServeMux, service *secretservice.Service) {
 	handlers := &secretHandler{service: service}
@@ -52,11 +52,11 @@ type secretHandler struct {
 }
 
 func (h *secretHandler) list(w http.ResponseWriter, r *http.Request) {
-	query, ok := readSecretQuery(w, r, "agent_type", "profile")
+	query, ok := readSecretQuery(w, r, "agent_type")
 	if !ok {
 		return
 	}
-	scope, err := secretmodel.NewScope(query.Get("agent_type"), query.Get("profile"))
+	scope, err := secretmodel.NewScope(query.Get("agent_type"))
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid_request")
 		return
@@ -76,7 +76,7 @@ func (h *secretHandler) create(w http.ResponseWriter, r *http.Request) {
 	if !ReadJSON(w, r, &request, false) {
 		return
 	}
-	scope, err := secretmodel.NewScope(request.AgentType, request.Profile)
+	scope, err := secretmodel.NewScope(request.AgentType)
 	key := secretmodel.Key{Scope: scope, Name: request.Name}
 	if err != nil || key.Validate() != nil || request.Value == nil || (request.ExpiresAt != nil && request.ExpiresAt.IsZero()) {
 		WriteError(w, http.StatusBadRequest, "invalid_request")
@@ -86,7 +86,7 @@ func (h *secretHandler) create(w http.ResponseWriter, r *http.Request) {
 	if writeSecretError(w, err) {
 		return
 	}
-	w.Header().Set("Location", secretsPath+"/"+key.Scope.AgentType+"/"+key.Scope.Profile+"/"+key.Name)
+	w.Header().Set("Location", secretsPath+"/"+key.Scope.AgentType+"/"+key.Name)
 	WriteJSON(w, http.StatusCreated, mappings.ToSecretResponse(metadata, time.Now()))
 }
 
@@ -165,7 +165,7 @@ func readSecretQuery(w http.ResponseWriter, r *http.Request, allowed ...string) 
 
 func readSecretKey(w http.ResponseWriter, r *http.Request) (secretmodel.Key, bool) {
 	key := secretmodel.Key{
-		Scope: secretmodel.Scope{AgentType: r.PathValue("agent_type"), Profile: r.PathValue("profile")},
+		Scope: secretmodel.Scope{AgentType: r.PathValue("agent_type")},
 		Name:  r.PathValue("name"),
 	}
 	if key.Validate() != nil {
@@ -244,16 +244,10 @@ func RegisterSecretsOpenAPI(paths, components map[string]any, options *jsonschem
 }
 
 func constrainSecretSchema(schema *jsonschema.Schema, model string) {
-	for _, name := range []string{"agent_type", "profile"} {
-		if property := schema.Properties[name]; property != nil {
-			property.Pattern = secretScopePattern
-			maximum := 63
-			property.MaxLength = &maximum
-			if model == "CreateSecretRequest" && name == "profile" {
-				property.Pattern = `^([a-z0-9]+(-[a-z0-9]+)*)?$`
-				property.Description = "Defaults to default when omitted or empty."
-			}
-		}
+	if property := schema.Properties["agent_type"]; property != nil {
+		property.Pattern = secretScopePattern
+		maximum := 63
+		property.MaxLength = &maximum
 	}
 	if property := schema.Properties["name"]; property != nil {
 		property.Pattern = secretNamePattern
@@ -289,13 +283,12 @@ func registerSecretPaths(paths map[string]any) {
 		"type": "object", "required": []string{"items"},
 		"properties": map[string]any{"items": map[string]any{"type": "array", "items": OpenAPIRef("Secret")}},
 	})
-	list["description"] = "Returns metadata from one exact agent-type/profile scope, sorted by name, including expired secrets. Reads project status without changing stored state. No values are returned. Unknown or repeated query parameters and malformed query encoding are rejected."
+	list["description"] = "Returns metadata for one agent type, sorted by name, including expired secrets. Reads project status without changing stored state. No values are returned. Unknown or repeated query parameters and malformed query encoding are rejected."
 	list["parameters"] = []any{
 		secretParameter("agent_type", "query", true, map[string]any{"type": "string", "pattern": secretScopePattern, "maxLength": 63}),
-		secretParameter("profile", "query", false, map[string]any{"type": "string", "pattern": `^([a-z0-9]+(-[a-z0-9]+)*)?$`, "maxLength": 63, "default": "default"}),
 	}
 	create := secretOperation("createSecret", "Create a secret", OpenAPIRef("Secret"))
-	create["description"] = "Encrypts a new secret scoped to an agent type and profile, independent of operations. The server assigns the ID and version 1. Existing keys return secret_conflict. Returns metadata only. Query parameters are not accepted."
+	create["description"] = "Encrypts a new named secret for an agent type, independent of operations. The server assigns the ID and version 1. Existing keys return secret_conflict. Returns metadata only. Query parameters are not accepted."
 	setSecretBody(create, "CreateSecretRequest")
 	responses := create["responses"].(map[string]any)
 	delete(responses, "200")
@@ -323,7 +316,6 @@ func registerSecretPaths(paths map[string]any) {
 	for _, route := range []map[string]any{get, replace, remove} {
 		route["parameters"] = []any{
 			secretParameter("agent_type", "path", true, map[string]any{"type": "string", "pattern": secretScopePattern, "maxLength": 63}),
-			secretParameter("profile", "path", true, map[string]any{"type": "string", "pattern": secretScopePattern, "maxLength": 63}),
 			secretParameter("name", "path", true, map[string]any{"type": "string", "pattern": secretNamePattern}),
 		}
 	}

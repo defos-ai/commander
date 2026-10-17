@@ -71,10 +71,10 @@ func TestSecretFsStoreInventoryScopesAndExpiration(t *testing.T) {
 	first, last := fsSecretFixture(t, "A_TOKEN"), fsSecretFixture(t, "Z_TOKEN")
 	first.Metadata.ExpiresAt = first.Metadata.UpdatedAt.Add(time.Hour)
 	first = encryptFsSecret(t, first.Metadata)
-	profile, agent := fsSecretFixture(t, "B_TOKEN"), fsSecretFixture(t, "C_TOKEN")
-	profile.Metadata.Key.Scope.Profile = "production"
+	agent := fsSecretFixture(t, "A_TOKEN")
 	agent.Metadata.Key.Scope.AgentType = "other-agent"
-	for _, value := range []secrets.Secret{last, first, encryptFsSecret(t, profile.Metadata), encryptFsSecret(t, agent.Metadata)} {
+	agent = encryptFsSecret(t, agent.Metadata)
+	for _, value := range []secrets.Secret{last, first, agent} {
 		if err := store.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
 		}
@@ -92,6 +92,11 @@ func TestSecretFsStoreInventoryScopesAndExpiration(t *testing.T) {
 		t.Fatalf("inventory reader changed stored metadata: %v", err)
 	}
 	assertFsSecret(t, store, first)
+	assertFsSecret(t, store, agent)
+	otherItems, err := store.List(t.Context(), agent.Metadata.Key.Scope)
+	if err != nil || !reflect.DeepEqual(otherItems, []secrets.Metadata{agent.Metadata}) {
+		t.Fatalf("same secret name crossed agent types: count=%d, error=%v", len(otherItems), err)
+	}
 	unknown := first.Metadata.Key
 	unknown.Name = "UNKNOWN"
 	if _, err := store.Get(t.Context(), unknown); !errors.Is(err, secrets.ErrUnknownSecret) {
@@ -395,7 +400,7 @@ func fsSecretFixture(t *testing.T, name string) secrets.Secret {
 	t.Helper()
 	stamp := time.Date(2026, 10, 16, 12, 0, 0, 123456789, time.UTC)
 	return encryptFsSecret(t, secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent", Profile: secrets.DefaultProfile}, Name: name},
+		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: name},
 		Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
 	})
 }

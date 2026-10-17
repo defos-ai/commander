@@ -16,4 +16,7 @@ const (
 	AgentStopped           MessageType = "agent.stopped"
 	ActionSucceeded        MessageType = "action.succeeded"
 	CommandFailed          MessageType = "command.failed"
+	SecretSyncRequested    MessageType = "secret.sync.requested"
+	SecretDelivered        MessageType = "secret.delivered"
+	SecretInstalled        MessageType = "secret.installed"
 )

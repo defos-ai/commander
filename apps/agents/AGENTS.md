@@ -27,6 +27,10 @@
   disabling unrelated actions; report actionable requirement metadata.
 - Advertise secret names, never values. Recheck required configuration during
   execution and invalidate stale discovery state when rediscovering dependencies.
+- Declare persistent names in `Action.RequiredSecrets`; do not infer them from
+  transient `MissingRequirements`. The registered agent type determines the
+  secret scope; a type and secret name identify one shared value.
+  This declaration is metadata, not automatic secret delivery or authorization.
 - Catalog entries describe capabilities; per-agent readiness and leases
   determine availability. Do not claim that installing one agent guarantees
   complete required-action coverage for a mission.

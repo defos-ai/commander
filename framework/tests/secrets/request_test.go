@@ -35,7 +35,6 @@ func TestFulfillmentRecordsMatchingSecretAndDelivery(t *testing.T) {
 		change func(*secrets.Metadata)
 	}{
 		{"different agent type", func(s *secrets.Metadata) { s.Key.Scope.AgentType = "web" }},
-		{"different profile", func(s *secrets.Metadata) { s.Key.Scope.Profile = "production" }},
 		{"different name", func(s *secrets.Metadata) { s.Key.Name = "OTHER_TOKEN" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {

@@ -8,29 +8,20 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const DefaultProfile = "default"
-
 // Scope is independent of an operation or an individual agent process.
 // AgentType uses the registered type, not a prefix extracted from an agent ID.
 type Scope struct {
 	AgentType string `json:"agent_type"`
-	Profile   string `json:"profile"`
 }
 
-func NewScope(agentType, profile string) (Scope, error) {
-	if profile == "" {
-		profile = DefaultProfile
-	}
-	scope := Scope{AgentType: agentType, Profile: profile}
+func NewScope(agentType string) (Scope, error) {
+	scope := Scope{AgentType: agentType}
 	return scope, scope.Validate()
 }
 
 func (scope Scope) Validate() error {
 	if !id.ValidType(scope.AgentType) {
 		return errors.New("secret scope requires a valid agent type")
-	}
-	if !id.ValidType(scope.Profile) {
-		return errors.New("secret scope requires a nonempty profile of lowercase letters, digits and single hyphens")
 	}
 	return nil
 }
@@ -46,10 +37,15 @@ func (key Key) Validate() error {
 	if err := key.Scope.Validate(); err != nil {
 		return err
 	}
-	if len(key.Name) == 0 || len(key.Name) > 128 {
+	return ValidateName(key.Name)
+}
+
+// ValidateName checks a public secret identifier, independently of its scope.
+func ValidateName(name string) error {
+	if len(name) == 0 || len(name) > 128 {
 		return errors.New("secret name must be between 1 and 128 ASCII characters")
 	}
-	for i, c := range key.Name {
+	for i, c := range name {
 		switch {
 		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_':
 		case i > 0 && (c == '-' || c == '.'):

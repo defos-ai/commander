@@ -44,6 +44,10 @@ Missions refer to action names. MCP **tools** are client-facing endpoints such a
 Requirements describe executables or configuration keys; secret values
 must never appear in them. Discovery does not install dependencies or configure credentials.
 
+An action's `required_secrets` lists names it uses even when ready. Each secret
+belongs to an agent type and is identified by that type and its name.
+These declarations are metadata; automatic secret delivery is not enabled yet.
+
 **Preflight runs on the controller:** it checks the mission's and steps' required
 actions against live inventory. Different agents can satisfy different requirements.
 A busy agent can provide coverage, but dispatch still waits for capacity.

@@ -61,6 +61,9 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	if strings.TrimSpace(string(config.Type)) == "" {
 		return nil, errors.New("agent type must not be blank")
 	}
+	if !id.ValidType(string(config.Type)) {
+		return nil, errors.New("agent type must be valid")
+	}
 	if config.ID == "" {
 		var err error
 		config.ID, err = id.AgentID(string(config.Type))
@@ -90,11 +93,15 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 		if t == nil {
 			return nil, errors.New("action must not be nil")
 		}
-		name := t.Action().Name
+		definition := t.Action()
+		name := definition.Name
 		if strings.TrimSpace(name) == "" || seen[name] {
 			return nil, errors.New("action names must be nonblank and unique within an agent")
 		}
 		seen[name] = true
+		if err := definition.ValidateRequiredSecrets(); err != nil {
+			return nil, fmt.Errorf("action %q: %w", name, err)
+		}
 	}
 	if len(config.PublicConfig) == 0 {
 		config.PublicConfig = json.RawMessage(`{}`)
@@ -140,7 +147,7 @@ func (a *Agent) Describe() AgentSnapshot {
 		Actions: make([]actionmodel.Action, 0, len(a.config.Actions)),
 	}
 	for _, instance := range a.config.Actions {
-		description.Actions = append(description.Actions, instance.Action())
+		description.Actions = append(description.Actions, instance.Action().Clone())
 	}
 
 	return description

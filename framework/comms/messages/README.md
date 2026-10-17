@@ -70,3 +70,27 @@ See [consumer behavior](../README.md) and
 on replay and unknown outcomes.
 
 For changes to these contracts, see [coding guidance](AGENTS.md).
+
+## Secret synchronization contracts
+
+These contracts prepare encrypted delivery; runtime hosts do not publish or
+consume them yet. Secret declarations alone do not make an action ready.
+
+| Direction | Message | Correlation |
+| --- | --- | --- |
+| Agent → controller events | `secret.sync.requested` | Message ID is the pending request ID |
+| Controller → agent events | `secret.delivered` | Request ID |
+| Agent → controller events | `secret.installed` | Delivery message ID |
+
+A request identifies one scoped secret and its recipient. Delivery contains an
+encrypted secret and expires at the earlier of the request deadline or secret
+expiry. An installation acknowledgement identifies the request, secret ID and
+version; send it only after successful decryption and installation. These
+messages carry no operation/task work context.
+
+Typed validators match deliveries to requests and acknowledgements to the exact
+delivery. Runtime consumers must additionally authorize the sender and scope,
+check the active request and current stored secret version, and reject expired
+deliveries when received. Broker acknowledgement does not fulfill a secret
+request, and historical installation does not prove ongoing readiness. Refresh
+and revocation reconciliation are not implemented yet.

@@ -4,7 +4,6 @@ import "time"
 
 type CreateSecretRequest struct {
 	AgentType string     `json:"agent_type"`
-	Profile   string     `json:"profile,omitempty"`
 	Name      string     `json:"name"`
 	Value     *string    `json:"value"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -20,7 +19,6 @@ type ReplaceSecretRequest struct {
 type SecretResponse struct {
 	ID        string     `json:"id"`
 	AgentType string     `json:"agent_type"`
-	Profile   string     `json:"profile"`
 	Name      string     `json:"name"`
 	Version   uint64     `json:"version"`
 	CreatedAt time.Time  `json:"created_at"`

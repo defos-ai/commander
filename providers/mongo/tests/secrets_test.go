@@ -68,10 +68,10 @@ func TestSecretMongoStoreScopedInventory(t *testing.T) {
 	first, last, lower := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "Z_TOKEN"), mongoSecretFixture(t, "api_token")
 	first.Metadata.ExpiresAt = first.Metadata.UpdatedAt.Add(time.Hour)
 	first = encryptMongoSecret(t, first.Metadata)
-	profile, agent := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "API_TOKEN")
-	profile.Metadata.Key.Scope.Profile = "production"
+	agent := mongoSecretFixture(t, "API_TOKEN")
 	agent.Metadata.Key.Scope.AgentType = "other-agent"
-	for _, value := range []secrets.Secret{lower, last, first, encryptMongoSecret(t, profile.Metadata), encryptMongoSecret(t, agent.Metadata)} {
+	agent = encryptMongoSecret(t, agent.Metadata)
+	for _, value := range []secrets.Secret{lower, last, first, agent} {
 		if err := catalog.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
 		}
@@ -90,6 +90,11 @@ func TestSecretMongoStoreScopedInventory(t *testing.T) {
 	}
 	assertMongoSecret(t, catalog, first)
 	assertMongoSecret(t, catalog, lower)
+	assertMongoSecret(t, catalog, agent)
+	otherItems, err := catalog.List(t.Context(), agent.Metadata.Key.Scope)
+	if err != nil || !reflect.DeepEqual(otherItems, []secrets.Metadata{agent.Metadata}) {
+		t.Fatalf("same secret name crossed agent types: count=%d, error=%v", len(otherItems), err)
+	}
 	missing := first.Metadata.Key
 	missing.Name = "MISSING"
 	if _, err := catalog.Get(t.Context(), missing); !errors.Is(err, secrets.ErrUnknownSecret) {
@@ -112,7 +117,7 @@ func TestSecretMongoStoreCreateIdentityAndReplay(t *testing.T) {
 	}
 	for _, change := range []func(*secrets.Secret){
 		func(s *secrets.Secret) { s.Metadata.ID = id.New() },
-		func(s *secrets.Secret) { s.Metadata.Key.Scope.Profile = "other" },
+		func(s *secrets.Secret) { s.Metadata.Key.Scope.AgentType = "other-agent" },
 		func(s *secrets.Secret) { s.Value.Ciphertext[0] ^= 1 },
 	} {
 		conflict := initial.Clone()
@@ -488,7 +493,7 @@ func mongoSecretFixture(t *testing.T, name string) secrets.Secret {
 	t.Helper()
 	stamp := time.Date(2026, 10, 16, 12, 0, 0, 123456789, time.UTC)
 	return encryptMongoSecret(t, secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent", Profile: secrets.DefaultProfile}, Name: name},
+		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: name},
 		Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
 	})
 }

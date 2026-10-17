@@ -7,15 +7,14 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 )
 
-// bindingV1 is the fixed authenticated encoding for Format. Do not serialize the
+// bindingV2 is the fixed authenticated encoding for Format. Do not serialize the
 // domain struct directly: adding a domain field must not silently change this
 // format. Changes to authenticated fields require a new envelope format.
-type bindingV1 struct {
+type bindingV2 struct {
 	Format    string `json:"format"`
 	KeyID     string `json:"key_id"`
 	ID        string `json:"id"`
 	AgentType string `json:"agent_type"`
-	Profile   string `json:"profile"`
 	Name      string `json:"name"`
 	Version   uint64 `json:"version"`
 	CreatedAt string `json:"created_at"`
@@ -24,10 +23,10 @@ type bindingV1 struct {
 }
 
 func authenticatedData(metadata secrets.Metadata, format, keyID string) []byte {
-	value := bindingV1{
+	value := bindingV2{
 		Format: format, KeyID: keyID, ID: metadata.ID,
-		AgentType: metadata.Key.Scope.AgentType, Profile: metadata.Key.Scope.Profile,
-		Name: metadata.Key.Name, Version: metadata.Version,
+		AgentType: metadata.Key.Scope.AgentType,
+		Name:      metadata.Key.Name, Version: metadata.Version,
 		CreatedAt: timestamp(metadata.CreatedAt), UpdatedAt: timestamp(metadata.UpdatedAt),
 		ExpiresAt: timestamp(metadata.ExpiresAt),
 	}

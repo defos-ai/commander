@@ -8,6 +8,7 @@ const credentials = { url, username: 'operator' };
 const action: Action = {
   name: 'capture-page', description: 'Capture a page in the browser', status: 'unavailable',
   status_reason: 'Browser and API key are missing',
+  required_secrets: ['BROWSER_API_KEY'],
   missing_requirements: [
     { kind: 'executable', name: 'chromium' },
     { kind: 'configuration', name: 'BROWSER_API_KEY', secret: true },
@@ -132,6 +133,8 @@ describe('agent and action catalogs', () => {
 
   it.each([
     { status_reason: { message: 'missing' } },
+    { required_secrets: 'BROWSER_API_KEY' },
+    { required_secrets: [42] },
     { missing_requirements: [{ name: 'chromium' }] },
     { input_schema: [] },
     { output_schema: true },

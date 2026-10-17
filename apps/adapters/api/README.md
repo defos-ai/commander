@@ -66,13 +66,14 @@ Without it, the API runs normally and secret routes return `503 secrets_unavaila
 A malformed key prevents startup. Changing the key does not re-encrypt old records.
 
 All secret routes require API authentication. Values are encrypted in the selected
-FS or Mongo database; responses contain metadata and availability only.
+FS or Mongo database; responses contain metadata and availability only. Each
+secret belongs to an agent type and is identified by its name.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/v1/secrets?agent_type=builder-agent&profile=default` | List one scope; profile defaults to `default`. |
-| `POST` | `/api/v1/secrets` | Create with `agent_type`, optional `profile`, `name`, `value`, optional `expires_at`. |
-| `GET` | `/api/v1/secrets/{agent_type}/{profile}/{name}` | Read metadata. |
+| `GET` | `/api/v1/secrets?agent_type=builder-agent` | List one agent type's secrets. |
+| `POST` | `/api/v1/secrets` | Create with `agent_type`, `name`, `value`, optional `expires_at`. |
+| `GET` | `/api/v1/secrets/{agent_type}/{name}` | Read metadata. |
 | `PUT` | Same detail route | Replace with current `id`, `version`, new `value`, optional `expires_at`. |
 | `DELETE` | Same detail route with `?id=…&version=…` | Delete the exact version. |
 

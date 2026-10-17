@@ -59,6 +59,12 @@ make an action unavailable; other actions can still serve. See
 readiness affects scheduling. Each host's `--actions` flag selects its exposed
 catalog.
 
+Actions can declare persistent secret names in `Action.RequiredSecrets`.
+Secrets belong to the registered agent type, so its instances share the same
+named secrets. Declarations remain visible when an action is ready.
+Secret delivery is not active yet; continue
+supplying configuration at deployment and checking it during discovery.
+
 ### Return files
 
 Set `Result.Artifacts` to grouped files supplied as bytes or local paths. The

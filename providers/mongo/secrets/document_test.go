@@ -75,7 +75,6 @@ func TestSecretDocumentRejectsInvalidStoredRecords(t *testing.T) {
 	}{
 		{"indexed ID mismatch", func(doc *secretDocument) { doc.ID = "65abdb41-d282-4508-940e-8c01ca480487" }},
 		{"indexed agent type mismatch", func(doc *secretDocument) { doc.AgentType = "another-agent" }},
-		{"indexed profile mismatch", func(doc *secretDocument) { doc.Profile = "another-profile" }},
 		{"indexed name mismatch", func(doc *secretDocument) { doc.Name = "OTHER_TOKEN" }},
 		{"active missing payload", func(doc *secretDocument) { doc.Data = nil }},
 		{"malformed JSON", func(doc *secretDocument) { doc.Data = []byte(`{"metadata":`) }},
@@ -83,7 +82,7 @@ func TestSecretDocumentRejectsInvalidStoredRecords(t *testing.T) {
 		{"multiple JSON values", func(doc *secretDocument) { doc.Data = append(doc.Data, []byte(` {}`)...) }},
 		{"retired with payload", func(doc *secretDocument) { doc.Active = false }},
 		{"retired invalid ID", func(doc *secretDocument) { doc.Active, doc.Data, doc.ID = false, nil, "invalid" }},
-		{"retired invalid key", func(doc *secretDocument) { doc.Active, doc.Data, doc.Profile = false, nil, "" }},
+		{"retired invalid key", func(doc *secretDocument) { doc.Active, doc.Data, doc.AgentType = false, nil, "" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -143,7 +142,7 @@ func encryptedDocumentFixture(t *testing.T, version uint64) (*commandercrypto.Se
 	created := time.Date(2026, time.October, 16, 12, 34, 56, 123456789, time.FixedZone("fixture", 3*60*60))
 	metadata := secretmodel.Metadata{
 		ID:      "6c3e42ae-ebd7-4a76-a8f0-10229d05df62",
-		Key:     secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent", Profile: "default"}, Name: "TOKEN"},
+		Key:     secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: "TOKEN"},
 		Version: version, CreatedAt: created, UpdatedAt: created.Add(113 * time.Nanosecond), ExpiresAt: created.Add(29*time.Minute + 71*time.Nanosecond),
 	}
 	secret, err := cipher.Encrypt(metadata, []byte("test-only-secret-value"))

@@ -50,7 +50,9 @@
   startup fails. No flag, generated fallback, or key/secret output in diagnostics.
   `cli/secrets.go` selects FS or Mongo via `DATABASE_URL` and injects the framework
   service. `/api/v1/secrets` accepts write-only values and returns explicit metadata
-  mappings. Replacements/deletions require current ID and version. Preserve
+  mappings. Keys contain the agent type and secret name; detail routes are
+  `/api/v1/secrets/{agent_type}/{name}`. Replacements/deletions require current
+  ID and version. Preserve
   `secret_write_uncertain` ahead of timeout errors; never retry automatically.
   Saving secrets does not yet deliver them to agents or resolve secret requests.
 - `credentials` automatically reads the running container's startup environment

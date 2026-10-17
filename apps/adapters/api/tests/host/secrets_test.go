@@ -33,13 +33,12 @@ const (
 	secretTestValue       = "host-test-private-token-original"
 	secretTestReplacement = "host-test-private-token-replaced"
 	secretsPath           = "/api/v1/secrets"
-	secretPath            = secretsPath + "/builder-agent/default/GITHUB_TOKEN"
+	secretPath            = secretsPath + "/builder-agent/GITHUB_TOKEN"
 )
 
 type secretMetadata struct {
 	ID        string     `json:"id"`
 	AgentType string     `json:"agent_type"`
-	Profile   string     `json:"profile"`
 	Name      string     `json:"name"`
 	Version   uint64     `json:"version"`
 	CreatedAt time.Time  `json:"created_at"`
@@ -55,7 +54,7 @@ func TestSecretAPILifecyclePersistsOnlyEncryptedValues(t *testing.T) {
 	createBody := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + secretTestValue + `"}`
 	createdResponse := secretRequest(t, server, http.MethodPost, secretsPath, createBody)
 	created := decodeSecretResponse[secretMetadata](t, createdResponse, http.StatusCreated)
-	if createdResponse.header.Get("Location") != secretPath || created.AgentType != "builder-agent" || created.Profile != "default" || created.Name != "GITHUB_TOKEN" || created.Version != 1 || created.Status != "available" || created.ExpiresAt != nil || created.CreatedAt.IsZero() || !created.CreatedAt.Equal(created.UpdatedAt) {
+	if createdResponse.header.Get("Location") != secretPath || created.AgentType != "builder-agent" || created.Name != "GITHUB_TOKEN" || created.Version != 1 || created.Status != "available" || created.ExpiresAt != nil || created.CreatedAt.IsZero() || !created.CreatedAt.Equal(created.UpdatedAt) {
 		t.Fatal("create did not return the new scoped metadata and its resource location")
 	}
 	assertSecretError(t, secretRequest(t, server, http.MethodPost, secretsPath, createBody), http.StatusConflict, "secret_conflict")
@@ -112,7 +111,7 @@ func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	created := time.Date(2000, 1, 1, 0, 0, 0, 123456789, time.UTC)
 	expired, err := cipher.Encrypt(secretmodel.Metadata{
 		ID:      "00000000-0000-4000-8000-000000000001",
-		Key:     secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent", Profile: "default"}, Name: "OLD_TOKEN"},
+		Key:     secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: "OLD_TOKEN"},
 		Version: 1, CreatedAt: created, UpdatedAt: created, ExpiresAt: created.Add(time.Hour),
 	}, []byte(secretTestValue))
 	if err != nil {
@@ -124,8 +123,7 @@ func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	server := startAPI(t, fixture.localArgs())
 	for _, body := range []string{
 		`{"agent_type":"builder-agent","name":"A_TOKEN","value":""}`,
-		`{"agent_type":"builder-agent","profile":"production","name":"OTHER","value":""}`,
-		`{"agent_type":"web-agent","name":"OTHER","value":""}`,
+		`{"agent_type":"web-agent","name":"A_TOKEN","value":""}`,
 	} {
 		decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath, body), http.StatusCreated)
 	}
@@ -133,17 +131,17 @@ func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 		Items []secretMetadata `json:"items"`
 	}](t, secretRequest(t, server, http.MethodGet, secretsPath+"?agent_type=builder-agent", ""), http.StatusOK)
 	if len(list.Items) != 2 || list.Items[0].Name != "A_TOKEN" || list.Items[0].Status != "available" || list.Items[1].Name != "OLD_TOKEN" || list.Items[1].Status != "expired" {
-		t.Fatal("inventory did not sort and restrict metadata to the default scope including expiry")
+		t.Fatal("inventory did not sort and restrict metadata to the agent type including expiry")
 	}
-	old := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodGet, secretsPath+"/builder-agent/default/OLD_TOKEN", ""), http.StatusOK)
+	old := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodGet, secretsPath+"/builder-agent/OLD_TOKEN", ""), http.StatusOK)
 	if old.Status != "expired" || !old.CreatedAt.Equal(created) {
 		t.Fatal("expired secret metadata was changed or timestamp precision was lost")
 	}
 	other := decodeSecretResponse[struct {
 		Items []secretMetadata `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, secretsPath+"?agent_type=builder-agent&profile=production", ""), http.StatusOK)
-	if len(other.Items) != 1 || other.Items[0].Name != "OTHER" {
-		t.Fatal("profile filtering returned another scope")
+	}](t, secretRequest(t, server, http.MethodGet, secretsPath+"?agent_type=web-agent", ""), http.StatusOK)
+	if len(other.Items) != 1 || other.Items[0].Name != "A_TOKEN" || other.Items[0].ID == list.Items[0].ID {
+		t.Fatal("agent-type filtering returned another scope")
 	}
 	empty := decodeSecretResponse[struct {
 		Items []secretMetadata `json:"items"`
@@ -154,7 +152,7 @@ func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	if _, err := store.Get(t.Context(), expired.Metadata.Key); err != nil {
 		t.Fatal("inventory deleted the expired record")
 	}
-	renewed := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, secretsPath+"/builder-agent/default/OLD_TOKEN", fmt.Sprintf(`{"id":%q,"version":1,"value":""}`, old.ID)), http.StatusOK)
+	renewed := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, secretsPath+"/builder-agent/OLD_TOKEN", fmt.Sprintf(`{"id":%q,"version":1,"value":""}`, old.ID)), http.StatusOK)
 	if renewed.ExpiresAt != nil || renewed.Status != "available" || renewed.Version != 2 {
 		t.Fatal("replacement with omitted expiry did not clear the previous expiration")
 	}
@@ -189,6 +187,7 @@ func TestSecretRequestsRejectMalformedAndAmbiguousInput(t *testing.T) {
 		{"null value", "POST", secretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":null}`},
 		{"nonstring value", "POST", secretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":1}`},
 		{"unknown field", "POST", secretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":"","ciphertext":"private-value"}`},
+		{"obsolete profile", "POST", secretsPath, `{"agent_type":"builder-agent","profile":"default","name":"TOKEN","value":""}`},
 		{"multiple bodies", "POST", secretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":""}{}`},
 		{"empty body", "POST", secretsPath, ""},
 		{"null body", "POST", secretsPath, "null"},
@@ -199,13 +198,14 @@ func TestSecretRequestsRejectMalformedAndAmbiguousInput(t *testing.T) {
 		{"unknown list query", "GET", secretsPath + "?agent_type=builder-agent&value=private-query-value", ""},
 		{"missing scope", "GET", secretsPath, ""},
 		{"duplicated scope", "GET", secretsPath + "?agent_type=builder-agent&agent_type=web-agent", ""},
-		{"duplicated profile", "GET", secretsPath + "?agent_type=builder-agent&profile=default&profile=production", ""},
+		{"obsolete profile query", "GET", secretsPath + "?agent_type=builder-agent&profile=default", ""},
 		{"delete missing precondition", "DELETE", secretPath, ""},
 		{"delete malformed id", "DELETE", secretPath + "?id=private-invalid-id&version=1", ""},
 		{"delete zero version", "DELETE", secretPath + "?id=00000000-0000-4000-8000-000000000001&version=0", ""},
 		{"delete duplicate version", "DELETE", secretPath + "?id=00000000-0000-4000-8000-000000000001&version=1&version=2", ""},
 		{"replace missing identity", "PUT", secretPath, `{"version":1,"value":""}`},
 		{"replace missing value", "PUT", secretPath, `{"id":"00000000-0000-4000-8000-000000000001","version":1}`},
+		{"replace obsolete profile", "PUT", secretPath, `{"id":"00000000-0000-4000-8000-000000000001","version":1,"value":"","profile":"default"}`},
 		{"replace zero expiry", "PUT", secretPath, `{"id":"00000000-0000-4000-8000-000000000001","version":1,"value":"","expires_at":"0001-01-01T00:00:00Z"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -321,9 +321,12 @@ func TestSecretOpenAPIDescribesWriteOnlyValuesAndMetadata(t *testing.T) {
 	if result.status != http.StatusOK || json.Unmarshal([]byte(result.body), &document) != nil {
 		t.Fatal("could not read API documentation")
 	}
+	if strings.Contains(result.body, `"profile"`) || strings.Contains(result.body, `"secret_profile"`) || strings.Contains(result.body, "{profile}") {
+		t.Fatal("API documentation still exposes secret profiles")
+	}
 	for path, methods := range map[string][]string{
-		secretsPath: {"get", "post"},
-		secretsPath + "/{agent_type}/{profile}/{name}": {"get", "put", "delete"},
+		secretsPath:                          {"get", "post"},
+		secretsPath + "/{agent_type}/{name}": {"get", "put", "delete"},
 	} {
 		for _, method := range methods {
 			if len(document.Paths[path][method]) == 0 {
@@ -369,7 +372,7 @@ func TestSecretsWithMongo(t *testing.T) {
 	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
 	server := startAPI(t, append(fixture.localArgs(), "--database-url="+uri))
 	name := "HOST_TEST_" + id.New()
-	path := secretsPath + "/builder-agent/default/" + name
+	path := secretsPath + "/builder-agent/" + name
 	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath, fmt.Sprintf(`{"agent_type":"builder-agent","name":%q,"value":%q}`, name, secretTestValue)), http.StatusCreated)
 	defer func() {
 		// Read the current version so failure midway through replacement still
@@ -409,7 +412,7 @@ func TestSecretsWithMongo(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not reopen MongoDB secret store")
 	}
-	stored, err := store.Get(ctx, secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent", Profile: "default"}, Name: name})
+	stored, err := store.Get(ctx, secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: name})
 	if err != nil {
 		t.Fatal("API did not persist secret in MongoDB")
 	}
@@ -482,7 +485,7 @@ func assertSecretOnDisk(t *testing.T, root string, expected secretMetadata, plai
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, err := store.Get(t.Context(), secretmodel.Key{Scope: secretmodel.Scope{AgentType: expected.AgentType, Profile: expected.Profile}, Name: expected.Name})
+	stored, err := store.Get(t.Context(), secretmodel.Key{Scope: secretmodel.Scope{AgentType: expected.AgentType}, Name: expected.Name})
 	if err != nil {
 		t.Fatal(err)
 	}

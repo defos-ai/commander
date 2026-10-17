@@ -29,6 +29,7 @@ export interface Action {
   status: string;
   status_reason?: string;
   missing_requirements?: ActionRequirement[] | null;
+  required_secrets?: string[];
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
 }

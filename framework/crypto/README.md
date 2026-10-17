@@ -21,6 +21,8 @@ Persist `record` through `secrets.SecretStore`; use `record.Metadata` for public
 inventories. `cipher.Decrypt(record)` returns the original bytes after authentication.
 Applications must separately check access, the current secret version and expiry.
 
+The envelope format is `aes-256-gcm-v2`; unsupported formats are rejected.
+
 The [secret management service](../secrets/README.md) handles versioned writes.
 The [HTTP API](../../apps/adapters/api/README.md#secrets) reads this environment
 variable to enable secret management. Agent delivery is separate.

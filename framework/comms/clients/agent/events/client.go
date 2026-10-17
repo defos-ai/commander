@@ -11,28 +11,37 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Client sends receipts through a separate inbox, allowing agents to process
-// confirmations while an action command is running.
+// Client sends receipts and secret deliveries through a separate inbox, allowing
+// agents to process them while an action command is running.
 type Client struct {
 	Bus comms.Bus
 }
 
 func (c Client) Publish(ctx context.Context, message messages.Message) error {
-	if c.Bus == nil {
-		return errors.New("event bus is required")
+	if ctx == nil || c.Bus == nil {
+		return errors.New("agent event client requires a context and bus")
 	}
-	if message.Type != ActionResultAccepted {
-		return fmt.Errorf("unsupported agent event type %q", message.Type)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := message.Validate(); err != nil {
 		return err
 	}
-	if !id.Valid(message.CorrelationID) {
-		return errors.New("result receipt requires a command UUID")
-	}
-	var receipt ResultReceipt
-	if err := domain.Decode(message.Payload, &receipt); err != nil {
-		return err
+	switch message.Type {
+	case ActionResultAccepted:
+		if !id.Valid(message.CorrelationID) {
+			return errors.New("result receipt requires a command UUID")
+		}
+		var receipt ResultReceipt
+		if err := domain.Decode(message.Payload, &receipt); err != nil {
+			return err
+		}
+	case SecretDelivered:
+		if _, err := DecodeSecretDelivery(message); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported agent event type %q", message.Type)
 	}
 	return c.Bus.Publish(ctx, messages.AgentEvents(message.AgentID), message)
 }

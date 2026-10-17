@@ -53,6 +53,9 @@ func NewFunc[I, O any](config FuncConfig[I, O]) (*Func[I, O], error) {
 	if config.Run == nil {
 		return nil, errors.New("action run handler is required")
 	}
+	if err := config.Action.ValidateRequiredSecrets(); err != nil {
+		return nil, err
+	}
 	definition := config.Action
 	input, rawInput, err := funcSchema[I](definition.InputSchema)
 	if err != nil {

@@ -16,11 +16,22 @@ type Client struct {
 }
 
 func (c Client) Publish(ctx context.Context, message messages.Message) error {
-	if c.Bus == nil {
-		return errors.New("event bus is required")
+	if ctx == nil || c.Bus == nil {
+		return errors.New("controller event client requires a context and bus")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	switch message.Type {
 	case AgentStarted, AgentHeartbeat, AgentUpdated, AgentStopped, ActionSucceeded, CommandFailed:
+	case SecretSyncRequested:
+		if _, err := DecodeSecretSyncRequested(message); err != nil {
+			return err
+		}
+	case SecretInstalled:
+		if _, err := DecodeSecretInstalled(message); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported controller event type %q", message.Type)
 	}

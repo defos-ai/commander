@@ -30,7 +30,7 @@ func NewSecretMongoStore(ctx context.Context, database *store.MongoStore) (*Secr
 	// _id is permanent, while only active records reserve the scoped name.
 	// Never expire these documents: tombstones prevent delayed resurrection.
 	index := mongo.IndexModel{
-		Keys: bson.D{{Key: "agent_type", Value: 1}, {Key: "profile", Value: 1}, {Key: "name", Value: 1}},
+		Keys: bson.D{{Key: "agent_type", Value: 1}, {Key: "name", Value: 1}},
 		Options: options.Index().SetName("active_secret_key").SetUnique(true).
 			SetPartialFilterExpression(bson.M{"active": true}).SetCollation(&options.Collation{Locale: "simple"}),
 	}
@@ -98,7 +98,7 @@ func (s *SecretMongoStore) List(ctx context.Context, scope secretmodel.Scope) ([
 		return nil, err
 	}
 	var documents []secretDocument
-	filter := bson.M{"agent_type": scope.AgentType, "profile": scope.Profile, "active": true}
+	filter := bson.M{"agent_type": scope.AgentType, "active": true}
 	err := s.database.Find(ctx, collection, filter, &documents,
 		options.Find().SetSort(bson.D{{Key: "name", Value: 1}}).SetCollation(&options.Collation{Locale: "simple"}))
 	if err != nil {
@@ -182,7 +182,7 @@ func (s *SecretMongoStore) Delete(ctx context.Context, key secretmodel.Key, secr
 }
 
 func activeKey(key secretmodel.Key) bson.M {
-	return bson.M{"agent_type": key.Scope.AgentType, "profile": key.Scope.Profile, "name": key.Name, "active": true}
+	return bson.M{"agent_type": key.Scope.AgentType, "name": key.Name, "active": true}
 }
 
 func (s *SecretMongoStore) find(ctx context.Context, filter bson.M) (secretDocument, secretmodel.Secret, error) {

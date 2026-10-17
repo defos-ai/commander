@@ -2,6 +2,7 @@ package missionsmcp
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -21,6 +22,7 @@ type agentActionSummary struct {
 	Status              actions.Status        `json:"status"`
 	StatusReason        string                `json:"status_reason,omitempty"`
 	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
+	RequiredSecrets     []string              `json:"required_secrets,omitempty"`
 }
 
 type agentSummary struct {
@@ -43,6 +45,7 @@ func summarizeAgent(agent agents.Agent) agentSummary {
 		items = append(items, agentActionSummary{
 			Name: action.Name, Status: action.Status, StatusReason: action.StatusReason,
 			MissingRequirements: action.MissingRequirements,
+			RequiredSecrets:     slices.Clone(action.RequiredSecrets),
 		})
 	}
 	return agentSummary{

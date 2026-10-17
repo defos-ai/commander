@@ -10,7 +10,7 @@ import (
 func ToSecretResponse(metadata secrets.Metadata, now time.Time) models.SecretResponse {
 	response := models.SecretResponse{
 		ID: metadata.ID, AgentType: metadata.Key.Scope.AgentType,
-		Profile: metadata.Key.Scope.Profile, Name: metadata.Key.Name,
+		Name:    metadata.Key.Name,
 		Version: metadata.Version, CreatedAt: metadata.CreatedAt, UpdatedAt: metadata.UpdatedAt,
 		Status: string(secrets.AvailabilityAt(&metadata, now)),
 	}
