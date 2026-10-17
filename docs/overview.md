@@ -1,8 +1,9 @@
 # Architecture overview
 
 **Commander decides what; the controller decides who; agents execute.**
-Commander is usually an LLM in Playground or another AI client, connected through
-MCP. The current controller and agents run without their own LLMs.
+Within a mission, the Commander role is usually filled by an LLM in Playground
+or another AI client, connected through MCP. The current controller and agents
+run without their own LLMs.
 
 ## Execution flow
 
