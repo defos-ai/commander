@@ -34,6 +34,7 @@ func TestAllInOne(t *testing.T) {
 	t.Run("optional Admin lifecycle", testAllInOneAdmin)
 	t.Run("advertised Admin address", testAllInOneAdminAddress)
 	t.Run("generated API and MCP credentials", testAllInOneGeneratedCredentials)
+	t.Run("session secret encryption", testAllInOneSecrets)
 	t.Run("API startup failures clean up local hosts", testAllInOneAPIFailure)
 	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
 }
@@ -429,6 +430,7 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
 	t.Setenv("API_RUNTIME", "native")
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	t.Setenv("UI_LISTEN_ADDRESS", "127.0.0.1:0")
 	t.Setenv("UI_STATIC_DIR", frontend)
 	t.Setenv("UI_PUBLIC_ORIGIN", "")

@@ -32,6 +32,8 @@ docker exec commander commander credentials mcp
 
 Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
+Secret management also works automatically: a separate encryption key stays in
+memory for the temporary session. Pass `-e SECRETS_ENCRYPTION_KEY` to use your own.
 
 Admin reaches the API inside the container; publishing API port `4274` is optional.
 Add `-p 127.0.0.1:4274:4274` if other tools need API access. For a different
@@ -93,6 +95,9 @@ shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
+Secret management uses a separate encryption key generated in memory for each
+session. Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own;
+an invalid key prevents startup. The session's saved secrets are deleted on exit.
 Type `/admin` for a link with the local API URL and username prefilled; enter the
 password shown by `/credentials`. Admin defaults to **http://127.0.0.1:4275**.
 Use `/status` to see the running addresses.

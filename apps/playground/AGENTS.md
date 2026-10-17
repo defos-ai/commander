@@ -79,6 +79,15 @@
 - All-in-one starts temporary state and loopback services, waits for readiness,
   then shuts down hosts before deleting that session's files. It must not use or
   delete the user's configured database/storage or existing Compose state.
+- [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
+  secret cipher before opening providers or creating runtime state. Preserve a
+  nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
+  Inject the cipher into the API, without changing process environment, writing
+  the key to files, or exposing it in logs, credentials output or model messages.
+  Web and browser hosts do not need this key; the builder is not yet bundled.
+  Docker AIO uses this same Go startup path, with no second generator in its
+  entrypoint. The generated key and encrypted state are temporary; persistent
+  deployments must retain their key separately and must not silently replace it.
 - All-in-one defaults an unset or empty `API_USERNAME` to `commander` and
   generates a cryptographically random password when `API_PASSWORD` is unset or
   empty. Preserve explicit nonempty overrides and pass session credentials to

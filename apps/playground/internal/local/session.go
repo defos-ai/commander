@@ -70,6 +70,10 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err != nil {
 		return nil, err
 	}
+	cipher, err := secretCipher()
+	if err != nil {
+		return nil, err
+	}
 	s.Directory, err = os.MkdirTemp("", "commander-playground-*")
 	if err != nil {
 		return nil, err
@@ -118,7 +122,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 			address = "127.0.0.1:4274"
 		}
 		args := append(append([]string{}, common...), database, "--listen-address="+address)
-		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Application: "commander", Credentials: &s.APICredentials, Ready: func(address net.Addr) {
+		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Application: "commander", Credentials: &s.APICredentials, SecretCipher: cipher, Ready: func(address net.Addr) {
 			s.APIURL = localHTTPURL(address)
 			close(apiReady)
 		}})
