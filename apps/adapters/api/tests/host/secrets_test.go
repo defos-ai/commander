@@ -424,8 +424,43 @@ func TestSecretsWithMongo(t *testing.T) {
 	if err != nil || string(plaintext) != secretTestReplacement {
 		t.Fatal("persisted MongoDB secret did not authenticate or decrypt")
 	}
+	requests, err := mongosecrets.NewRequestMongoStore(ctx, database)
+	if err != nil {
+		t.Fatal("could not reopen MongoDB request store")
+	}
+	agentID, err := id.AgentID("builder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	request := secretmodel.Request{
+		ID: id.New(), Key: stored.Metadata.Key, AgentID: agentID,
+		Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(time.Minute),
+	}
+	if err := requests.Create(ctx, request); err != nil {
+		t.Fatal("could not save MongoDB secret request")
+	}
+	defer func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if err := requests.Cancel(cleanup, request.ID, time.Now()); err != nil {
+			t.Error("could not cancel this test's MongoDB request")
+		}
+	}()
+	pending := decodeResponse[struct {
+		Items []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"items"`
+	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secrets/requests?agent_id="+agentID, ""))
+	if len(pending.Items) != 1 || pending.Items[0].ID != request.ID || pending.Items[0].Status != "awaiting_delivery" {
+		t.Fatal("API did not read pending requests and metadata from MongoDB")
+	}
 	if _, err := os.Stat(filepath.Join(fixture.root, "database", "secrets.json")); !os.IsNotExist(err) {
 		t.Fatal("MongoDB configuration also wrote an FS secret store")
+	}
+	if _, err := os.Stat(filepath.Join(fixture.root, "database", "secret-requests.json")); !os.IsNotExist(err) {
+		t.Fatal("MongoDB configuration also wrote an FS request store")
 	}
 }
 

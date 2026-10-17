@@ -76,6 +76,12 @@ secret belongs to an agent type and is identified by its name.
 | `GET` | `/api/v1/secrets/{agent_type}/{name}` | Read metadata. |
 | `PUT` | Same detail route | Replace with current `id`, `version`, new `value`, optional `expires_at`. |
 | `DELETE` | Same detail route with `?id=…&version=…` | Delete the exact version. |
+| `GET` | `/api/v1/secrets/requests` | List pending requests; optionally filter by `agent_type` and/or `agent_id`. |
+
+Pending requests show `needs_value`, `awaiting_delivery` or `awaiting_installation`.
+The last means a delivery is reserved, not confirmed installed. Expired requests
+are omitted. This view tracks requests, not agent readiness; lease refreshes can
+overlap for the same agent and secret.
 
 `value` is a required string, including when intentionally empty. Omitting
 `expires_at` on replacement removes expiration. Stale writes return

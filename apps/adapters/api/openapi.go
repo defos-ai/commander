@@ -140,6 +140,9 @@ func openAPIDocument() ([]byte, error) {
 	if err := endpoints.RegisterSecretsOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
+	if err := endpoints.RegisterSecretRequestsOpenAPI(paths, components, options); err != nil {
+		return nil, err
+	}
 	return json.Marshal(map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{

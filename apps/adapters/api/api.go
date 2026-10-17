@@ -18,6 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	secretservice "github.com/defos-ai/commander/framework/secrets"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 )
@@ -37,7 +38,9 @@ type Config struct {
 	ArtifactFileStore artifacts.ArtifactFileStore
 	// SecretService is optional; secret routes return 503 when it is absent.
 	SecretService *secretservice.Service
-	TestCleaner   frameworktesting.TestCleaner
+	// SecretRequestStore enables pending-request metadata alongside SecretService.
+	SecretRequestStore secrets.RequestStore
+	TestCleaner        frameworktesting.TestCleaner
 }
 
 func NewHandler(config Config) (http.Handler, error) {
@@ -66,6 +69,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
 	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.Operations)
 	endpoints.RegisterSecrets(mux, config.SecretService)
+	endpoints.RegisterSecretRequests(mux, config.SecretService, config.SecretRequestStore)
 	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
 		endpoints.RegisterTestCleanup(mux, config.TestCleaner)
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	secretservice "github.com/defos-ai/commander/framework/secrets"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 	"github.com/defos-ai/commander/providers/fs"
@@ -46,20 +47,21 @@ import (
 )
 
 type dependencies struct {
-	Bus               comms.Bus
-	ArtifactStore     artifacts.ArtifactStore
-	ArtifactFileStore artifacts.ArtifactFileStore
-	AgentStore        agents.AgentStore
-	ControllerStore   controllers.ControllerStore
-	MissionStore      missions.MissionStore
-	OperationStore    operations.OperationStore
-	ActionStore       actions.ActionStore
-	ReportStore       reports.ReportStore
-	SecretService     *secretservice.Service
-	TestCleaner       frameworktesting.TestCleaner
-	mongo             *mongostore.MongoStore
-	s3                *s3store.S3Store
-	closers           []func() error
+	Bus                comms.Bus
+	ArtifactStore      artifacts.ArtifactStore
+	ArtifactFileStore  artifacts.ArtifactFileStore
+	AgentStore         agents.AgentStore
+	ControllerStore    controllers.ControllerStore
+	MissionStore       missions.MissionStore
+	OperationStore     operations.OperationStore
+	ActionStore        actions.ActionStore
+	ReportStore        reports.ReportStore
+	SecretService      *secretservice.Service
+	SecretRequestStore secrets.RequestStore
+	TestCleaner        frameworktesting.TestCleaner
+	mongo              *mongostore.MongoStore
+	s3                 *s3store.S3Store
+	closers            []func() error
 }
 
 func (d *dependencies) Close() error {
@@ -116,7 +118,7 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
 	if configuration.secretCipher != nil {
-		secretStore, err := deps.createSecretStore(ctx, configuration.databaseURL)
+		secretStore, requests, err := deps.createSecretStores(ctx, configuration.databaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("secret database: %w", err)
 		}
@@ -124,6 +126,7 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		if err != nil {
 			return nil, err
 		}
+		deps.SecretRequestStore = requests
 	}
 	if os.Getenv("ENV") == "tests" {
 		deps.TestCleaner, err = deps.createTestCleaner(ctx, configuration.storageURL, configuration.databaseURL)

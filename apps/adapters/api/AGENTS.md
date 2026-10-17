@@ -11,7 +11,8 @@
 - Use plural endpoint names. Operation routes, handlers and their OpenAPI schemas
   belong in [endpoints/operations/](endpoints/operations/). The root
   [openapi.go](openapi.go) assembles the document and catalog schemas. Secret
-  handlers and schemas live together in [endpoints/secrets.go](endpoints/secrets.go).
+  handlers and schemas live together in [endpoints/secrets.go](endpoints/secrets.go)
+  and [endpoints/secret_requests.go](endpoints/secret_requests.go).
 - Derive schemas from API models and update routes, mappings, validation, schemas
   and consumers together when API behavior changes. Keep Swagger assets local and
   documentation disabled unless the host explicitly enables it.
@@ -56,6 +57,15 @@
   `secret_write_uncertain` ahead of timeout errors; never retry automatically.
   Saving secrets makes them available to controller reconciliation; API success
   does not confirm agent installation. Keep distribution outside HTTP handlers.
+- `/api/v1/secrets/requests` shares the secret feature gate and database. It projects
+  pending, unexpired requests into explicit metadata DTOs, sorted by request ID;
+  optional `agent_type` and `agent_id` filters intersect. Reject empty, repeated,
+  unknown or malformed filters. Capture one time per response and never settle or
+  expire requests while reading. Missing/expired values need input; available
+  values await delivery unless a valid reserved delivery matches their ID/version.
+  Reservation does not prove publication. This unpaginated view is eventually
+  consistent across stores, not readiness or authorization evidence; refreshes may
+  overlap. Never return ciphertext, installations, plaintext or key material.
 - `credentials` automatically reads the running container's startup environment
   only when PID 1 uses the same executable; otherwise it reads the current
   environment. Keep this lookup exclusive to explicit retrieval, never server

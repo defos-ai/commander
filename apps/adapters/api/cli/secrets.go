@@ -10,23 +10,33 @@ import (
 	mongosecrets "github.com/defos-ai/commander/providers/mongo/secrets"
 )
 
-func (d *dependencies) createSecretStore(ctx context.Context, rawURL string) (secrets.SecretStore, error) {
+func (d *dependencies) createSecretStores(ctx context.Context, rawURL string) (secrets.SecretStore, secrets.RequestStore, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	switch scheme := connectionScheme(rawURL); scheme {
 	case "file", "fs":
 		path, err := fs.FilesystemPath(rawURL)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return fssecrets.NewSecretFsStore(path)
+		values, err := fssecrets.NewSecretFsStore(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		requests, err := fssecrets.NewRequestFsStore(path)
+		return values, requests, err
 	case "mongodb", "mongodb+srv":
 		if err := d.connectMongo(ctx, rawURL); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return mongosecrets.NewSecretMongoStore(ctx, d.mongo)
+		values, err := mongosecrets.NewSecretMongoStore(ctx, d.mongo)
+		if err != nil {
+			return nil, nil, err
+		}
+		requests, err := mongosecrets.NewRequestMongoStore(ctx, d.mongo)
+		return values, requests, err
 	default:
-		return nil, fmt.Errorf("unsupported secret store scheme %q", scheme)
+		return nil, nil, fmt.Errorf("unsupported secret database scheme %q", scheme)
 	}
 }
