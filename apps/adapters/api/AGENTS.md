@@ -27,6 +27,10 @@
   from client cancellation.
 - Project agent/controller lease expiry when reading without rewriting saved
   records. Keep tasks/events paginated and reports immutable.
+- Operation preflight preserves the controller's saved `agent_type` and
+  `missing_secrets` metadata. Names are managed declarations for assessed live
+  candidates, not every sensitive configuration setting or pending lease request.
+  Keep mappings independent; API reads never infer readiness from secret storage.
 - Artifact downloads first establish file membership and verify saved size and
   SHA-256. Preserve sanitized attachment names, media-type fallback, empty files
   and `HEAD` behavior. Changes to buffering or range support need matching docs.

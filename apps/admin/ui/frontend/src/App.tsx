@@ -89,6 +89,7 @@ export function App() {
         : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
         : section === 'operations' ? <OperationsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           selectedID={selectedID} onSelect={select} view={route.connectionID ? route.view ?? 'details' : 'details'}
+          onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
           onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
           : section === 'controllers' ? <ControllersPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />

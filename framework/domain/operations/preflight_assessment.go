@@ -50,7 +50,7 @@ func AssessPreflight(mission missions.Mission, records []agents.Agent) *Prefligh
 }
 
 func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness {
-	result := AgentReadiness{AgentID: agent.ID, MissingRequirements: slices.Clone(action.MissingRequirements)}
+	result := AgentReadiness{AgentID: agent.ID, AgentType: string(agent.Type), MissingRequirements: slices.Clone(action.MissingRequirements)}
 	switch {
 	case agent.Stale:
 		result.Reason = "Agent heartbeat has expired"
@@ -58,6 +58,15 @@ func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness
 		result.Reason = "Agent is not ready"
 	case len(result.MissingRequirements) != 0:
 		result.Reason = "Action has missing requirements"
+		if result.AgentType != "" {
+			for _, requirement := range result.MissingRequirements {
+				if requirement.Kind == actions.ConfigurationRequirement && requirement.Secret && slices.Contains(action.RequiredSecrets, requirement.Name) {
+					result.MissingSecrets = append(result.MissingSecrets, requirement.Name)
+				}
+			}
+			slices.Sort(result.MissingSecrets)
+			result.MissingSecrets = slices.Compact(result.MissingSecrets)
+		}
 	case action.Status == actions.Unknown || action.Status == "":
 		result.Reason = "Action has not been discovered"
 	case action.Status != actions.Ready:

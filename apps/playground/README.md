@@ -20,6 +20,9 @@ This image includes Admin, MCP, the API, a controller, a web agent and a browser
 with Chromium and fonts. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
+If an operation shows **secrets needed**, open its Admin link and provide the
+requested values under **Secrets**. Without a link, use `/admin` for setup help.
+Keep secret values out of chat; work waits for agents to report ready.
 Use `/credentials` for the API login and MCP token, or use another terminal:
 
 ```sh

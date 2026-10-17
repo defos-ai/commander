@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	actionfs "github.com/defos-ai/commander/providers/fs/actions"
 	agentfs "github.com/defos-ai/commander/providers/fs/agents"
 )
@@ -68,5 +69,18 @@ func TestSecretDeclarationMappingsDoNotAliasSource(t *testing.T) {
 	agentResponse.Actions[0].RequiredSecrets[0] = "changed"
 	if action.RequiredSecrets[0] != "GITHUB_TOKEN" || record.Actions[0].RequiredSecrets[0] != "GITHUB_TOKEN" {
 		t.Fatal("API response mutation changed source declarations")
+	}
+	preflight := operations.Preflight{Actions: []operations.ActionReadiness{{
+		ActionName: action.Name, UnavailableAgents: []operations.AgentReadiness{{
+			AgentID: "builder-agent-12345678", AgentType: "builder-agent", MissingSecrets: []string{"GITHUB_TOKEN"},
+		}},
+	}}}
+	mapped := mappings.ToPreflightResponse(preflight)
+	if mapped.Actions[0].UnavailableAgents[0].AgentType != "builder-agent" {
+		t.Fatal("API preflight lost the managed secret scope")
+	}
+	mapped.Actions[0].UnavailableAgents[0].MissingSecrets[0] = "changed"
+	if preflight.Actions[0].UnavailableAgents[0].MissingSecrets[0] != "GITHUB_TOKEN" {
+		t.Fatal("API response mutation changed source secret requirements")
 	}
 }

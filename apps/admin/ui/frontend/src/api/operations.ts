@@ -85,7 +85,11 @@ function isRequirement(value: unknown): value is ActionRequirement {
 
 function isAgentReadiness(value: unknown): value is OperationAgentReadiness {
   return isObject(value) && typeof value.agent_id === 'string' && typeof value.reason === 'string' &&
-    (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isRequirement));
+    (value.agent_type === undefined || (typeof value.agent_type === 'string' && value.agent_type.length <= 63 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value.agent_type))) &&
+    (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isRequirement)) &&
+    (value.missing_secrets === undefined || value.missing_secrets === null || (Array.isArray(value.missing_secrets) &&
+      value.missing_secrets.every(name => typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(name)) &&
+      (value.missing_secrets.length === 0 || typeof value.agent_type === 'string')));
 }
 
 function isActionReadiness(value: unknown): value is OperationActionReadiness {

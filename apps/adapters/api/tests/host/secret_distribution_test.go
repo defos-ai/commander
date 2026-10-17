@@ -6,27 +6,37 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
+	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
+	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 	fsexecutions "github.com/defos-ai/commander/providers/fs/executions"
+	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
+	fsoperations "github.com/defos-ai/commander/providers/fs/operations"
+	fsreports "github.com/defos-ai/commander/providers/fs/reports"
 	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
 )
 
@@ -155,9 +165,45 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	// restart, without restarting the agent or supplying a value through its env.
 	closeSecretController(t, coordinator)
 	coordinator = startController()
+	stopOperations := startSecretOperationRunner(t, coordinator, observedBus, database)
+	operation := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodPost, "/api/v1/operations",
+		`{"mission_name":"secret-distribution","input":{}}`), http.StatusCreated)
+	if operation.Status != "waiting" || operation.Preflight == nil || operation.Preflight.Ready || len(operation.Preflight.Actions) != 1 || len(operation.Preflight.Actions[0].UnavailableAgents) != 1 {
+		t.Fatal("operation did not wait for its required action's managed secret")
+	}
+	blockedAgent := operation.Preflight.Actions[0].UnavailableAgents[0]
+	if blockedAgent.AgentID != worker.ID() || blockedAgent.AgentType != "builder-agent" || !slices.Equal(blockedAgent.MissingSecrets, []string{"GITHUB_TOKEN"}) {
+		t.Fatal("public preflight did not identify the waiting agent type and managed secret")
+	}
+	operationPath := "/api/v1/operations/" + operation.ID
+	queued := decodeResponse[models.TaskResponse](t, secretRequest(t, server, http.MethodPost, operationPath+"/tasks",
+		`{"action_name":"use-secret","input":{"version":1}}`), http.StatusCreated)
+	if queued.Status != "queued" || queued.AgentID != "" {
+		t.Fatal("task dispatched before its secret was available")
+	}
+	waiting := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, operationPath, ""))
+	if waiting.Status != "waiting" || len(waiting.Tasks) != 1 || waiting.Tasks[0].ID != queued.ID || waiting.Tasks[0].Status != "queued" {
+		t.Fatal("API did not retain the accepted task while waiting for its secret")
+	}
 	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath,
 		`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+secretTestValue+`"}`), http.StatusCreated)
 	awaitSecretInstallation(t, config.SecretRequestStore, deliveries, created.ID, 1)
+	var resumed models.OperationResponse
+	awaitSecretCondition(t, "queued operation task resuming after secret installation", func() bool {
+		resumed = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, operationPath, ""))
+		return len(resumed.Tasks) == 1 && resumed.Tasks[0].Status == "succeeded"
+	})
+	task := resumed.Tasks[0]
+	var result output
+	if resumed.Preflight == nil || !resumed.Preflight.Ready || len(resumed.Preflight.Actions) != 1 || len(resumed.Preflight.Actions[0].UnavailableAgents) != 0 ||
+		task.ID != queued.ID || task.CommandID != queued.CommandID || task.AgentID != worker.ID() || task.Result == nil ||
+		json.Unmarshal(task.Result.Output, &result) != nil || !result.Matched {
+		t.Fatal("secret installation did not resume the original task with correct scoped access")
+	}
+	cancelled := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodPost, operationPath+"/cancel", ""))
+	if cancelled.Status != "cancelled" || len(cancelled.Tasks) != 1 || cancelled.Tasks[0].Status != "succeeded" {
+		t.Fatal("operation cancellation did not retain the finished secret-backed task")
+	}
 	run := func(name string, version int) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -175,7 +221,6 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 			t.Fatal("action did not receive the expected scoped secret access")
 		}
 	}
-	run("use-secret", 1)
 	run("public", 0)
 
 	replace := fmt.Sprintf(`{"id":%q,"version":1,"value":%q}`, created.ID, secretTestReplacement)
@@ -197,9 +242,74 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	}
 	run("public", 0)
 	stopAgent()
+	stopOperations()
 	closeSecretController(t, coordinator)
 	server.stop(t)
 	assertNoDistributedPlaintext(t, fixture.root)
+}
+
+func startSecretOperationRunner(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string) func() {
+	t.Helper()
+	missionStore, err := fsmissions.NewMissionFsStore(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := missionStore.Upsert(t.Context(), missions.Mission{
+		Name: "secret-distribution", Objective: "Use an agent's managed secret",
+		RequiredActions: []string{"use-secret"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	operationStore, err := fsoperations.NewOperationFsStore(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reportStore, err := fsreports.NewReportFsStore(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution, err := runner.NewRunner(t.Context(), coordinator, runner.Config{
+		MissionStore: missionStore, OperationStore: operationStore, ReportStore: reportStore, AgentCatalog: coordinator,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var commands *adapterconsumer.Consumer
+	var done chan error
+	stopped := false
+	stop := func() {
+		t.Helper()
+		if stopped {
+			return
+		}
+		stopped = true
+		if commands != nil {
+			if err := commands.Close(); err != nil {
+				t.Errorf("operation command consumer shutdown: %v", err)
+			}
+			select {
+			case err := <-done:
+				if err != nil && !errors.Is(err, context.Canceled) {
+					t.Errorf("operation command consumer: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Error("operation command consumer shutdown timed out")
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := execution.Close(ctx); err != nil {
+			t.Errorf("operation runner shutdown: %v", err)
+		}
+	}
+	t.Cleanup(stop)
+	commands, err = adapterconsumer.NewConsumer(t.Context(), bus, messages.DefaultControllerType, coordinator.ID(), coordinator, execution, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done = make(chan error, 1)
+	go func() { done <- commands.Consume(t.Context()) }()
+	return stop
 }
 
 type secretObservingBus struct {

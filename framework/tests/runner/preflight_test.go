@@ -3,12 +3,14 @@ package runner_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sync/atomic"
 	"testing"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -116,10 +118,10 @@ func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.RequiredActions = []string{"inspect", "capture"}
-	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Status: agents.AgentReady,
+	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Type: "browser", Status: agents.AgentReady,
 		Actions: []actions.Action{
 			{Name: "inspect", Status: actions.Ready},
-			{Name: "capture", Status: actions.Unavailable, MissingRequirements: []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "browser"}}},
+			{Name: "capture", Status: actions.Unavailable, RequiredSecrets: []string{"BROWSER_TOKEN"}, MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "BROWSER_TOKEN", Secret: true}}},
 		},
 	}}
 	catalog := &agentCatalog{}
@@ -135,6 +137,15 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	if err != nil || restored.Status != operations.Waiting || restored.Preflight.Ready || restored.Tasks[0].Status != operations.TaskQueued {
 		t.Fatalf("restart lost preflight or dispatched blocked work: %+v, %v", restored, err)
 	}
+	candidate := restored.Preflight.Actions[0].UnavailableAgents[0]
+	if candidate.AgentType != "browser" || !slices.Equal(candidate.MissingSecrets, []string{"BROWSER_TOKEN"}) {
+		t.Fatalf("restart lost managed secret requirement: %+v", candidate)
+	}
+	candidate.MissingSecrets[0] = "changed snapshot"
+	saved, err := r.Get(t.Context(), op.ID)
+	if err != nil || !slices.Equal(saved.Preflight.Actions[0].UnavailableAgents[0].MissingSecrets, []string{"BROWSER_TOKEN"}) {
+		t.Fatalf("reading secret requirements changed saved preflight: %+v, %v", saved.Preflight, err)
+	}
 
 	// Changing the gap proves the scheduler processed this inventory while blocked.
 	record.Actions[1].MissingRequirements[0] = actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "BROWSER_PATH"}
@@ -147,6 +158,9 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	}
 	if blocked.Tasks[0].Status != operations.TaskQueued {
 		t.Fatalf("task did not remain queued: %+v", blocked.Tasks[0])
+	}
+	if len(blocked.Preflight.Actions[0].UnavailableAgents[0].MissingSecrets) != 0 {
+		t.Fatal("a nonsecret requirement retained the previous managed secret wait")
 	}
 
 	record.Actions[1].Status, record.Actions[1].MissingRequirements = actions.Ready, nil
@@ -162,4 +176,60 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestPreflightIdentifiesManagedSecretsOnLiveCandidates(t *testing.T) {
+	base := readyAgent(agentID)
+	base.Type = "builder"
+	base.Actions[0].Status = actions.Unavailable
+	base.Actions[0].RequiredSecrets = []string{"TOKEN", "SECOND_TOKEN", "AVAILABLE_TOKEN"}
+	base.Actions[0].MissingRequirements = []actions.Requirement{
+		{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Secret: true},
+		{Kind: actions.ConfigurationRequirement, Name: "SECOND_TOKEN", Secret: true},
+		{Kind: actions.ConfigurationRequirement, Name: "TOKEN", Secret: true},
+		{Kind: actions.ConfigurationRequirement, Name: "LEGACY_ENV_TOKEN", Secret: true},
+		{Kind: actions.ConfigurationRequirement, Name: "PATH"},
+	}
+	tests := []struct {
+		name   string
+		change func(*agents.Agent)
+		want   []string
+	}{
+		{name: "live candidate", want: []string{"SECOND_TOKEN", "TOKEN"}},
+		{name: "working candidate", change: func(a *agents.Agent) { a.Status = agents.AgentWorking }, want: []string{"SECOND_TOKEN", "TOKEN"}},
+		{name: "sensitive environment only", change: func(a *agents.Agent) { a.Actions[0].RequiredSecrets = nil }},
+		{name: "declared but available", change: func(a *agents.Agent) { a.Actions[0].RequiredSecrets = []string{"AVAILABLE_TOKEN"} }},
+		{name: "unmarked configuration", change: func(a *agents.Agent) {
+			a.Actions[0].MissingRequirements = []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "TOKEN"}}
+		}},
+		{name: "stale candidate", change: func(a *agents.Agent) { a.Stale = true }},
+		{name: "stopped candidate", change: func(a *agents.Agent) { a.Status = agents.AgentStopped }},
+		{name: "discovering candidate", change: func(a *agents.Agent) { a.Status = agents.AgentDiscovering }},
+		{name: "unknown agent type", change: func(a *agents.Agent) { a.Type = "" }},
+	}
+	mission := missions.Mission{RequiredActions: []string{"inspect"}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := base.Clone()
+			if test.change != nil {
+				test.change(&candidate)
+			}
+			preflight := operations.AssessPreflight(mission, []agents.Agent{candidate})
+			if preflight.Ready || len(preflight.Actions) != 1 || len(preflight.Actions[0].UnavailableAgents) != 1 {
+				t.Fatalf("missing requirements no longer block preflight: %+v", preflight)
+			}
+			got := preflight.Actions[0].UnavailableAgents[0]
+			if got.AgentType != string(candidate.Type) || !slices.Equal(got.MissingSecrets, test.want) {
+				t.Fatalf("managed secret requirements: got %+v; want type %q, names %v", got, candidate.Type, test.want)
+			}
+		})
+	}
+
+	t.Run("another ready agent covers the action", func(t *testing.T) {
+		ready := readyAgent("review-agent-00000002")
+		preflight := operations.AssessPreflight(mission, []agents.Agent{base, ready})
+		if !preflight.Ready || len(preflight.Actions[0].UnavailableAgents) != 0 || !slices.Equal(preflight.Actions[0].ReadyAgentIDs, []string{ready.ID}) {
+			t.Fatalf("an available candidate did not clear the action's wait: %+v", preflight)
+		}
+	})
 }

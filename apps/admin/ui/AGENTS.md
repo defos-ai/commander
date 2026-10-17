@@ -71,6 +71,13 @@
   when their connection/session changes and ignore stale responses. The proxy
   supports PUT and DELETE with the same session/origin checks as POST; public
   probes and `/aboutz` remain read-only.
+- Operation secret notices use preflight's explicit `agent_type` and
+  `missing_secrets` on blocked actions, only while the operation is active. A
+  generic `missing_requirements.secret` flag can describe local configuration;
+  never infer managed secrets from it or associate agent lease requests with an
+  operation. Hide notices once a ready candidate covers the action. Navigation
+  opens Secrets on the current connection without submitting values or opening
+  a write dialog automatically.
 - Preserve routes across reload/back/forward, stale-request cancellation and
   per-connection state. Keep expired questions unanswerable and handle conflicts.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning

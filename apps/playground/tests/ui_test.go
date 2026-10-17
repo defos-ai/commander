@@ -606,6 +606,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	var reads, requests, eventPages atomic.Int32
 	const eventCursor = "opaque:event-page/token+1="
 	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}, Events: []json.RawMessage{json.RawMessage(`{"sequence":42}`)}}
+	op.Preflight.Actions = []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingSecrets: []string{"GITHUB_TOKEN"}}}}}
 	publish := func() {
 		encoded, err := json.Marshal(op)
 		if err != nil {
@@ -654,6 +655,14 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 		if !strings.Contains(last, `"preflight":`) {
 			t.Errorf("model did not receive preflight: %s", last)
 		}
+		for _, guidance := range []string{"Admin's Secrets page", "Do not ask for secret values in chat, tool inputs or ask_question", "wait for a ready preflight update"} {
+			if !strings.Contains(body.Messages[0].Content, guidance) {
+				t.Errorf("model is missing managed secret guidance: %s", guidance)
+			}
+		}
+		if !strings.Contains(last, `"missing_secrets":["GITHUB_TOKEN"]`) || !strings.Contains(last, `"agent_type":"builder-agent"`) {
+			t.Error("managed secret names and scope did not reach the model's preflight evidence")
+		}
 		message := "Requirements need operator attention"
 		if requests.Add(1) > 1 {
 			message = "Environment ready to run"
@@ -667,7 +676,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	u.text("/watch operation-1")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("blocked preflight", func(view string) bool {
-		return strings.Contains(view, "requirements missing") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
+		return strings.Contains(view, "secrets needed") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
 	})
 	op.UpdatedAt = time.Now()
 	publish()

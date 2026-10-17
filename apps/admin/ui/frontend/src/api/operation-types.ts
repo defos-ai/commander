@@ -94,8 +94,10 @@ export interface OperationActionReadiness {
 
 export interface OperationAgentReadiness {
   agent_id: string;
+  agent_type?: string;
   reason: string;
   missing_requirements?: ActionRequirement[] | null;
+  missing_secrets?: string[] | null;
 }
 
 export interface OperationArtifact {

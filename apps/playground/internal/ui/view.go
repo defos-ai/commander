@@ -245,14 +245,19 @@ func (m *Model) operationProgress() []string {
 			label = label[:8]
 		}
 		line := fmt.Sprintf("%s %s · %s · %d/%d tasks finished", m.color(marker, color), label, op.Status, done, len(op.Tasks))
-		if !op.Terminal() && op.Preflight != nil && !op.Preflight.Ready {
+		needsSecrets := op.NeedsSecrets()
+		if needsSecrets {
+			line += " · secrets needed"
+		} else if !op.Terminal() && op.Preflight != nil && !op.Preflight.Ready {
 			line += " · requirements missing"
 		}
 		if pending > 0 {
 			line += fmt.Sprintf(" · %d question(s)", pending)
 		}
-		if op.Status == "completed" && op.Settled() && m.config.AdminURL != "" {
+		if (needsSecrets || op.Status == "completed" && op.Settled()) && m.config.AdminURL != "" {
 			line += " · " + m.operationAdminLink(id)
+		} else if needsSecrets {
+			line += " · /admin for setup"
 		}
 		line = ansi.Wrap(line, max(20, m.width-4), "")
 		required := strings.Count(line, "\n") + 1

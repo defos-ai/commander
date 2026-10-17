@@ -361,6 +361,12 @@ func TestSecretOpenAPIDescribesWriteOnlyValuesAndMetadata(t *testing.T) {
 			t.Errorf("secret response schema contains sensitive field %s", name)
 		}
 	}
+	readiness := properties("AgentReadiness")
+	for _, name := range []string{"agent_type", "missing_secrets"} {
+		if _, present := readiness[name]; !present {
+			t.Errorf("operation readiness schema is missing %s", name)
+		}
+	}
 }
 
 func TestSecretsWithMongo(t *testing.T) {

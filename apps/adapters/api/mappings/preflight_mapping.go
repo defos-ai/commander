@@ -21,8 +21,10 @@ func ToPreflightResponse(preflight operations.Preflight) models.PreflightRespons
 				for j, agent := range action.UnavailableAgents {
 					mapped.UnavailableAgents[j] = models.AgentReadinessResponse{
 						AgentID:             agent.AgentID,
+						AgentType:           agent.AgentType,
 						Reason:              agent.Reason,
 						MissingRequirements: ToActionRequirementResponses(agent.MissingRequirements),
+						MissingSecrets:      slices.Clone(agent.MissingSecrets),
 					}
 				}
 			}

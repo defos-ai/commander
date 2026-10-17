@@ -54,6 +54,10 @@
 - Keep summaries small and use detail tools for schemas, task input and results.
   Readiness reflects the selected agent's advertisement and current lease; catalog
   metadata alone does not establish an available executor.
+  Managed-secret handoff uses explicit preflight `agent_type` and `missing_secrets`
+  for actions without ready candidates. MCP instructions direct operators to
+  Admin Secrets; never solicit secret values through chat, tools or questions,
+  or equate a saved secret with an agent becoming ready.
 - Continuation decisions must retain the task and business version used to reject
   stale choices. Questions record actual operator answers; expiry is not approval.
 - Keep pagination cursors bound to the resource and operation. Bound event waits

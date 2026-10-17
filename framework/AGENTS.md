@@ -75,6 +75,12 @@
   eligible candidates. The runner owns readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
+- Operation preflight exposes managed missing-secret names only for live,
+  ready/working candidates, intersecting configuration blockers with the action's
+  declarations and retaining the registered agent type. Sensitive environment
+  requirements and pending sync requests alone do not establish a secret wait.
+  Queued work resumes through normal readiness refresh, never merely because a
+  value was saved or a delivery acknowledged.
 - Keep registration ready only after recovery and consumers start. During
   shutdown, await runner and consumer termination before closing registration.
   Hosts register both selectors' `Name()` values with the same implementations

@@ -18,6 +18,8 @@ or drag and zoom to explore. Artifact details offer image/text previews (up to
 
 Open **Secrets** to supply values requested by agents, or add secrets for an agent
 type. You can replace or delete saved secrets and set an optional expiration.
+Operations waiting for declared secrets show **Manage secrets** in their details
+and execution graph. Work resumes when all requirements are ready.
 Values are write-only and are never saved in browser storage.
 
 Secret management requires `SECRET_ENCRYPTION_KEY` on the API and participating

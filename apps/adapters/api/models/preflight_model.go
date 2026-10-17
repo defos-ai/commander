@@ -14,6 +14,8 @@ type ActionReadinessResponse struct {
 
 type AgentReadinessResponse struct {
 	AgentID             string                      `json:"agent_id"`
+	AgentType           string                      `json:"agent_type,omitempty"`
 	Reason              string                      `json:"reason"`
 	MissingRequirements []ActionRequirementResponse `json:"missing_requirements,omitempty"`
+	MissingSecrets      []string                    `json:"missing_secrets,omitempty"`
 }

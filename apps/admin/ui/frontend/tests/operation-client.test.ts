@@ -15,7 +15,8 @@ const operation: Operation = {
   preflight: {
     ready: false, version: 2, actions: [{
       action_name: 'capture-page', ready_agent_ids: ['agent-1'], unavailable_agents: [{
-        agent_id: 'agent-2', reason: 'Browser missing', missing_requirements: [{ kind: 'executable', name: 'chromium' }],
+        agent_id: 'agent-2', agent_type: 'browser', reason: 'Browser missing', missing_requirements: [{ kind: 'executable', name: 'chromium' }],
+        missing_secrets: ['SCREENSHOT_TOKEN'],
       }],
     }],
   },
@@ -154,6 +155,30 @@ describe('operations client', () => {
     respond(invalid);
 
     await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
+  it.each([
+    { agent_type: 42 }, { agent_type: '' }, { agent_type: 'Builder' }, { agent_type: 'b'.repeat(64) },
+    { agent_type: 'builder', missing_secrets: 'TOKEN' }, { agent_type: 'builder', missing_secrets: [42] },
+    { agent_type: 'builder', missing_secrets: [''] }, { agent_type: 'builder', missing_secrets: ['token/name'] },
+    { agent_type: 'builder', missing_secrets: ['a'.repeat(129)] }, { missing_secrets: ['TOKEN'] },
+  ])('rejects malformed managed secret scopes: %j', async patch => {
+    respond({ ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build',
+      unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', reason: 'Missing', ...patch }],
+    }] } });
+
+    await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
+  it('accepts unavailable candidates without managed secret requirements', async () => {
+    const body = { ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build', unavailable_agents: [
+      { agent_id: 'agent-1', reason: 'Missing dependency' },
+      { agent_id: 'agent-2', agent_type: 'builder', reason: 'Missing dependency', missing_secrets: null },
+      { agent_id: 'agent-3', agent_type: 'builder', reason: 'Missing dependency', missing_secrets: [] },
+    ] }] } };
+    respond(body);
+
+    expect(await getOperation(url, credentials, operation.id)).toEqual(body);
   });
 
   it.each([null, {}, { items: null }, { items: [null] }])('rejects a malformed list envelope: %j', async body => {

@@ -19,6 +19,9 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		name   string
 		typeOf reflect.Type
 	}{
+		{"AgentReadiness", reflect.TypeFor[models.AgentReadinessResponse]()},
+		{"ActionReadiness", reflect.TypeFor[models.ActionReadinessResponse]()},
+		{"Preflight", reflect.TypeFor[models.PreflightResponse]()},
 		{"Continuation", reflect.TypeFor[models.ContinuationResponse]()},
 		{"Task", reflect.TypeFor[models.TaskResponse]()},
 		{"Event", reflect.TypeFor[models.EventResponse]()},
@@ -36,6 +39,11 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			return fmt.Errorf("describe API %s: %w", model.name, err)
 		}
 		switch model.name {
+		case "AgentReadiness":
+			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
+			schema.Properties["missing_secrets"].Description = "Missing managed secret names declared by the action, scoped to agent_type. Only assessed live ready/working candidates advertise these names. This excludes ordinary sensitive environment settings and secret lease refresh requests; values are never included."
+		case "Preflight":
+			schema.Description = "Saved readiness for the mission's and steps' required actions. A ready alternative agent satisfies coverage. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
 		case "Continuation":
 			schema.Properties["status"].Enum = []any{"pending", "waiting", "resolved"}
 			schema.Properties["decision_by"].Enum = []any{"code", "model", "user"}

@@ -56,9 +56,12 @@ A busy agent can provide coverage, but dispatch still waits for capacity.
 
 Missing coverage blocks new dispatch. The operation is `waiting` unless a task
 is still running. Tasks can be queued; updated inventory refreshes preflight and
-lets them resume once ready. Already dispatched tasks continue. MCP exposes the missing requirements so Commander can explain the
-blocker or ask the operator. Installation and credential configuration remain host
-operations, followed by rediscovery.
+lets them resume once ready. Already dispatched tasks continue. For missing managed
+secrets, preflight includes the candidate's `agent_type` and `missing_secrets` names.
+Admin and Playground guide the operator to **Secrets**; never enter values in chat.
+Saving a value starts delivery, and readiness updates after agent installation.
+Other missing dependencies still need host configuration. Background secret
+refresh requests alone do not mean an operation is blocked.
 
 ## Next actions and continuations
 

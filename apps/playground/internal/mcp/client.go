@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/host"
 	protocol "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -172,8 +173,19 @@ type Operation struct {
 }
 
 type Preflight struct {
-	Ready   bool   `json:"ready"`
-	Version uint64 `json:"version"`
+	Ready   bool              `json:"ready"`
+	Version uint64            `json:"version"`
+	Actions []ActionReadiness `json:"actions"`
+}
+
+type ActionReadiness struct {
+	ReadyAgentIDs     []string         `json:"ready_agent_ids"`
+	UnavailableAgents []AgentReadiness `json:"unavailable_agents"`
+}
+
+type AgentReadiness struct {
+	AgentType      string   `json:"agent_type"`
+	MissingSecrets []string `json:"missing_secrets"`
 }
 
 type Task struct {
@@ -212,6 +224,32 @@ func (q Question) Pending(now time.Time) bool {
 func (o Operation) Terminal() bool {
 	return o.Status == "completed" || o.Status == "failed" || o.Status == "cancelled"
 }
+
+// NeedsSecrets uses current managed-secret evidence, never generic sensitive
+// requirements or pending sync requests, which may describe unrelated work.
+func (o Operation) NeedsSecrets() bool {
+	if o.Status != "planning" && o.Status != "running" && o.Status != "waiting" {
+		return false
+	}
+	if o.Preflight == nil || o.Preflight.Ready {
+		return false
+	}
+	for _, action := range o.Preflight.Actions {
+		if len(action.ReadyAgentIDs) != 0 {
+			continue
+		}
+		for _, agent := range action.UnavailableAgents {
+			for _, name := range agent.MissingSecrets {
+				key := secrets.Key{Scope: secrets.Scope{AgentType: agent.AgentType}, Name: name}
+				if key.Validate() == nil {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func (o Operation) Settled() bool {
 	if !o.Terminal() {
 		return false

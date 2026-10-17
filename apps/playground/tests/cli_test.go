@@ -547,7 +547,8 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 				t.Fatalf("generated or overridden MCP credentials did not authenticate: %v", err)
 			}
 			mcpClient.Close()
-			httpClient := &http.Client{Timeout: 3 * time.Second}
+			transport := http.DefaultTransport.(*http.Transport).Clone()
+			httpClient := &http.Client{Timeout: 3 * time.Second, Transport: transport}
 			defer httpClient.CloseIdleConnections()
 			for _, attempt := range []struct {
 				password string
@@ -568,11 +569,18 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				_, readErr := io.Copy(io.Discard, response.Body)
 				response.Body.Close()
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
 				if response.StatusCode != attempt.status {
 					t.Errorf("API credential authentication status=%d, want %d", response.StatusCode, attempt.status)
 				}
 			}
+			// Close this fixture's unused connections before stopping API: a
+			// speculative dial may still be waiting to send its first request.
+			httpClient.CloseIdleConnections()
 			logs, err := filepath.Glob(filepath.Join(temporary, "commander-playground-*", "hosts.log"))
 			if err != nil || len(logs) != 1 {
 				t.Fatalf("expected one local host log, found %d (%v)", len(logs), err)

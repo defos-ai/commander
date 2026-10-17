@@ -55,6 +55,14 @@
   using a displayed review link or `/admin`. Keep `missions://` URIs for MCP
   resource access; never present them as browser/download links. Playground has
   no image preview. Do not assume Admin is running or invent its address.
+- Active blocked preflight may identify managed secrets with `agent_type` and
+  `missing_secrets`. Show `secrets needed` only for an action without a ready
+  candidate and a valid scoped name; never infer managed secrets from sensitive
+  environment requirements or pending delivery requests. Reuse that operation's
+  Admin review link, or show `/admin` setup guidance without a configured URL.
+  Model guidance sends users to Admin Secrets and must not solicit values in
+  chat, tool inputs or `ask_question`. Saving is not installation/readiness;
+  preserve existing preflight review scheduling and wait for fresh readiness.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
   use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only

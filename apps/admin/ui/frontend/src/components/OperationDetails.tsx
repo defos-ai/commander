@@ -16,6 +16,26 @@ export function isActiveOperation(status: string) {
   return status === 'planning' || status === 'running' || status === 'waiting';
 }
 
+export function OperationSecretsNotice({ operation, onManageSecrets }: { operation: Operation; onManageSecrets?: () => void }) {
+  const { t } = useTranslation();
+  if (!isActiveOperation(operation.status) || !operation.preflight || operation.preflight.ready) return null;
+  const scopes = new Set<string>();
+  for (const action of operation.preflight.actions ?? []) {
+    if (action.ready_agent_ids?.length) continue;
+    for (const agent of action.unavailable_agents ?? []) {
+      if (!agent.agent_type) continue;
+      for (const name of agent.missing_secrets ?? []) scopes.add(`${agent.agent_type} / ${name}`);
+    }
+  }
+  if (!scopes.size) return null;
+  return <div className="notice operation-secrets" role="status">
+    <strong>{t($ => $.operations.secretsNeeded)}</strong>
+    <p>{t($ => $.operations.secretsNeededDescription)}</p>
+    <ul className="catalog-tags">{[...scopes].sort().map(scope => <li key={scope}><code>{scope}</code></li>)}</ul>
+    {onManageSecrets && <Button variant="secondary" onClick={onManageSecrets}>{t($ => $.operations.manageSecrets)}</Button>}
+  </div>;
+}
+
 export function OperationStatus({ status }: { status: string }) {
   const { t } = useTranslation();
   const label = status === 'planning' || status === 'running' || status === 'waiting' || status === 'completed' || status === 'failed' || status === 'cancelled'

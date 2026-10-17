@@ -11,7 +11,7 @@ const mission = { name: 'review-website-with-browser', objective: 'Review websit
 const operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'running',
   tasks: [], questions: [], events: [], created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
 
-function mockAPI() {
+function mockAPI(snapshot: typeof operation & { preflight?: unknown } = operation) {
   let session: { url: string; username: string } | undefined;
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = upstreamURL(input);
@@ -22,8 +22,9 @@ function mockAPI() {
     if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
     if (!session) return new Response(null, { status: 401 });
     if (url.endsWith('/missions')) return Response.json({ items: [mission] });
-    if (url.endsWith('/operations')) return Response.json({ items: [operation] });
-    if (url.endsWith(`/operations/${operation.id}`)) return Response.json(operation);
+    if (url.endsWith('/operations')) return Response.json({ items: [snapshot] });
+    if (url.endsWith(`/operations/${operation.id}`)) return Response.json(snapshot);
+    if (url.endsWith('/secrets/requests') || url.endsWith('/agents')) return Response.json({ items: [] });
     if (url.endsWith('/graph')) return Response.json({ operation_id: operation.id, status: operation.status, updated_at: operation.updated_at, nodes: [], edges: [] });
     return new Response(null, { status: 404 });
   });
@@ -138,6 +139,27 @@ describe('location navigation', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Skip to content' }));
     expect(screen.getByRole('main')).toHaveFocus();
     expect(window.location.hash).toBe(hash);
+  });
+
+  it('opens Secrets for the operation connection without entering a value or sending a mutation', async () => {
+    const fetch = mockAPI({ ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [{
+      action_name: 'build', unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', agent_type: 'builder',
+        reason: 'Action has missing requirements', missing_secrets: ['TOKEN'] }],
+    }] } });
+    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify([connection, { id: 'other', name: 'Other API', url: 'https://other.example.test' }]));
+    visit({ connectionID: connection.id, section: 'operations', itemID: operation.id });
+    render(<App />);
+    await screen.findByRole('button', { name: 'Sign in' });
+    await signIn();
+
+    const manage = await screen.findByRole('button', { name: 'Manage secrets' });
+    fetch.mockClear();
+    fireEvent.click(manage);
+
+    expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${connection.id}/secrets`);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });
 
   it('falls back to connections when a saved connection is missing, without calling a URL from the location', async () => {
