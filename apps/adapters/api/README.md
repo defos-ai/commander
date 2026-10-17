@@ -58,10 +58,13 @@ Finished operations are read-only; further work needs a new operation.
 
 ## Secrets
 
-Set `SECRETS_ENCRYPTION_KEY` to a randomly generated 32-byte key encoded as 64 hex
-characters to enable secret management. Generate it once (`openssl rand -hex 32`),
+Compose configures a persistent encryption key automatically; Playground
+all-in-one generates a temporary session key. See [deployment](../../../docs/deployment.md#secret-encryption).
+
+For a standalone API, set `SECRETS_ENCRYPTION_KEY` to a randomly generated 32-byte
+key encoded as 64 hex characters. Generate it once (`openssl rand -hex 32`),
 keep it separate from the database, and reuse it across restarts and trusted
-encrypting/decrypting hosts. Compose passes this environment variable to the API.
+encrypting/decrypting hosts.
 Without it, the API runs normally and secret routes return `503 secrets_unavailable`.
 A malformed key prevents startup. Changing the key does not re-encrypt old records.
 

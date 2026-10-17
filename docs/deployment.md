@@ -48,6 +48,20 @@ restarts. Set `MCP_TOKEN` before starting Compose to replace it;
 `docker compose exec mcp commander-mcp credentials`; add `--raw` for only the token.
 API credentials remain in its process environment.
 
+### Secret encryption
+
+Compose enables secret management automatically. The `secrets-key` initializer
+saves one encryption key in its own volume; the API mounts it read-only and loads
+it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
+the first start to supply your own 64-character hex key; a later conflicting value
+fails startup instead of replacing the saved key.
+
+Back up this key volume with MongoDB and restore them together. Do not delete the
+key volume while keeping the database: a new key cannot decrypt existing secrets.
+Web/browser agents, MCP, Playground and the controller do not receive this key.
+The builder is not yet included in Compose; separately deployed builders need
+the same key configured explicitly.
+
 ## Configuration
 
 | Environment variable | CLI flag | Purpose |
@@ -60,6 +74,7 @@ API credentials remain in its process environment.
 | `MCP_TOKEN` | — | Required standalone MCP bearer token |
 | `COMMANDER_MCP_TOKEN` | — | Playground token for an existing MCP server |
 | `COMMANDER_ADMIN_URL` | `--admin-url` | Browser-facing Admin URL advertised by Playground |
+| `SECRETS_ENCRYPTION_KEY` | — | Encryption key for the API and agents using managed secrets; generated once by Compose |
 
 Flags override environment values. Native hosts default to `./state/bus`,
 `./state/database`, and `./state/storage`. Agents need bus and file storage only.
@@ -79,8 +94,8 @@ Admin URL or API connection.
 ## State
 
 Compose creates named Docker volumes; no host `state/` directory is needed.
-It persists RabbitMQ, MongoDB, and MinIO data in their own volumes;
-the only shared application volume holds the MCP credential, separate from data.
+It persists RabbitMQ, MongoDB, and MinIO data in their own volumes.
+Separate volumes hold the shared MCP token and the secrets encryption key.
 Host inboxes remain transient: broker persistence does not preserve a replaced
 host's inbox.
 

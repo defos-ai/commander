@@ -57,6 +57,9 @@
   precedence over the environment without mutating it. Reject uninitialized
   supplied ciphers before opening listeners/providers. No flag, generated
   fallback, or key/secret output in diagnostics.
+  Compose's `secrets-key` initializer persists the key separately; its API wrapper
+  reads the read-only mount into the environment before exec. Keep file loading
+  and generation outside the standalone API host.
   `cli/secrets.go` selects FS or Mongo via `DATABASE_URL` and injects the framework
   service. `/api/v1/secrets` accepts write-only values and returns explicit metadata
   mappings. Keys contain the agent type and secret name; detail routes are

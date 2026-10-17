@@ -19,8 +19,10 @@ type credentialComposeService struct {
 	ReadOnly    bool     `yaml:"read_only"`
 	CapDrop     []string `yaml:"cap_drop"`
 	SecurityOpt []string `yaml:"security_opt"`
+	NetworkMode string   `yaml:"network_mode"`
 	Entrypoint  []string
 	Command     []string
+	Environment map[string]string
 	Volumes     []string
 	DependsOn   map[string]struct{ Condition string } `yaml:"depends_on"`
 }

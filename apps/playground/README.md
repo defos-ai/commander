@@ -64,6 +64,8 @@ Add `--raw` to print only the token.
 `/exit` closes chat; hosts and saved work remain.
 Compose also configures `/admin` for `http://localhost:4275`, following
 `COMMANDER_UI_PORT` when changed. Set `COMMANDER_ADMIN_URL` for another browser address.
+API secret management is configured automatically with a separate persistent
+[encryption key](../../docs/deployment.md#secret-encryption).
 `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
 

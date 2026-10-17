@@ -57,6 +57,12 @@ The user's current instructions take precedence over repository guidance.
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.
 - [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO.
+  Its `secrets-key` initializer persists the encryption key in a dedicated volume;
+  only the API currently mounts it, read-only, and exports it before exec. Retain
+  saved keys across restarts and reject invalid state or conflicting overrides.
+  Keep this volume separate from `mcp-credentials` and database storage; restoring
+  encrypted data requires its original key. Builder deployment will opt in when
+  bundled; do not distribute the key through the shared agent environment.
   Test stacks in [.github/composes](.github/composes/)
   have separate projects and state.
   See [setup](docs/deployment.md) and the relevant component README for usage.
