@@ -57,6 +57,20 @@
   names and normalized URLs without credentials, query strings or fragments.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
+- The Secrets page uses authenticated `/api/v1/secrets` metadata and
+  `/api/v1/secrets/requests`. Group refresh requests by agent type/name; their
+  progress is not agent readiness or proof of installation. Inventory requires an
+  explicit agent type, including types with no live agent. Provide-value actions
+  read current metadata before choosing create or replace; only a confirmed 404
+  permits create. Replacement/deletion use the saved ID and version.
+  Keep values in temporary form/request memory; mask by default and require an
+  explicit switch for visible multiline input. Clear fields on submission/close,
+  never write values to browser storage, URLs, diagnostics or result views.
+  Writes must not retry automatically;
+  conflicts and uncertain outcomes require a fresh metadata read. Clear dialogs
+  when their connection/session changes and ignore stale responses. The proxy
+  supports PUT and DELETE with the same session/origin checks as POST; public
+  probes and `/aboutz` remain read-only.
 - Preserve routes across reload/back/forward, stale-request cancellation and
   per-connection state. Keep expired questions unanswerable and handle conflicts.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning

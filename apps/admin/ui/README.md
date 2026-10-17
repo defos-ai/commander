@@ -14,6 +14,17 @@ Operation details refresh every 10 seconds. Select graph nodes to inspect work,
 or drag and zoom to explore. Artifact details offer image/text previews (up to
 2 MiB) and downloads (up to 100 MiB); completed reports download as JSON.
 
+## Secrets
+
+Open **Secrets** to supply values requested by agents, or add secrets for an agent
+type. You can replace or delete saved secrets and set an optional expiration.
+Values are write-only and are never saved in browser storage.
+
+Secret management requires `SECRET_ENCRYPTION_KEY` on the API and participating
+agents; see [setup and encryption](../../adapters/api/README.md#secrets).
+Saving confirms storage; delivery and agent installation happen asynchronously.
+After an uncertain write, refresh metadata before trying again.
+
 ## Quick start
 
 From the repository root:

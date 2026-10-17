@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowLeft, Bot, ClipboardList, Compass, LayoutDashboard, Menu, Server, Settings2, Workflow, X } from 'lucide-react';
+import { ArrowLeft, Bot, ClipboardList, Compass, KeyRound, LayoutDashboard, Menu, Server, Settings2, Workflow, X } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { useSidebar } from '../hooks/useSidebar';
 import { Brand } from './Brand';
@@ -28,6 +28,7 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
     { section: 'controllers' as const, label: t($ => $.shell.nav.controllers), Icon: Server },
     { section: 'agents' as const, label: t($ => $.shell.nav.agents), Icon: Bot },
     { section: 'actions' as const, label: t($ => $.shell.nav.actions), Icon: ClipboardList },
+    { section: 'secrets' as const, label: t($ => $.shell.nav.secrets), Icon: KeyRound },
   ];
 
   return <div className="platform-layout">

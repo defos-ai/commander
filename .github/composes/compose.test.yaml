@@ -119,6 +119,8 @@ services:
       API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api,api-secondary
       API_ALLOWED_ORIGINS: http://localhost:14275,http://127.0.0.1:14275
       API_SWAGGER_ENABLED: "true"
+      # Fixed fixture key, only for the isolated test stack.
+      SECRET_ENCRYPTION_KEY: 014ac583269fe047014ac583269fe047014ac583269fe047014ac583269fe047
     networks:
       default:
         aliases: [api-secondary]

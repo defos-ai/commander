@@ -41,7 +41,7 @@ describe('workspace navigation', () => {
     expect(screen.getByText(connection.url)).toBeVisible();
     const navigation = screen.getByRole('navigation', { name: 'Workspace navigation' });
     expect(within(navigation).getAllByRole('button').map(button => button.textContent)).toEqual([
-      'Overview', 'Operations', 'Missions', 'Controllers', 'Agents', 'Actions', 'Connection settings', 'All connections',
+      'Overview', 'Operations', 'Missions', 'Controllers', 'Agents', 'Actions', 'Secrets', 'Connection settings', 'All connections',
     ]);
     expect(screen.getByRole('complementary')).toContainElement(screen.getByText(connection.name));
     expect(screen.getByRole('main')).not.toContainElement(screen.getByText(connection.name));

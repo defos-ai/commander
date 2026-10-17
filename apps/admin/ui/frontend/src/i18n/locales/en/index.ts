@@ -8,6 +8,7 @@ import operationCommands from './operationCommands';
 import operationGraph from './operationGraph';
 import missionRules from './missionRules';
 import artifacts from './artifacts';
+import secrets from './secrets';
 
 export default {
   brand: 'COMMANDER',
@@ -21,6 +22,7 @@ export default {
   operationGraph,
   missionRules,
   artifacts,
+  secrets,
   connections: {
     introduction: 'Administration of yours Command Centers',
     title: 'Connections',
@@ -103,6 +105,7 @@ export default {
       controllers: 'Controllers',
       agents: 'Agents',
       actions: 'Actions',
+      secrets: 'Secrets',
       settings: 'Connection settings',
     },
   },

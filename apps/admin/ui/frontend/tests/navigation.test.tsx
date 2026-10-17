@@ -53,13 +53,14 @@ describe('location navigation', () => {
       { connect: { url: 'http://127.0.0.1:4274', username: 'commander', operation: 'Résumé / a?#b' } },
       { operation: 'Résumé / a?#b' },
       { connectionID: 'local', section: 'overview' }, { connectionID: 'local', section: 'settings' },
+      { connectionID: 'local', section: 'secrets' },
       ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
       { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' }];
 
     for (const route of routes) expect(parseRoute(routeHash(route))).toEqual(route);
     expect(routeHash({ connectionID: 'local', section: 'operations', itemID: operation.id, view: 'details' }))
       .toBe(`#/connections/local/operations/${operation.id}`);
-    for (const hash of ['#/%', '#/connections/id/unknown', '#/connections/id/overview/item', '#/connections/id/operations/',
+    for (const hash of ['#/%', '#/connections/id/unknown', '#/connections/id/overview/item', '#/connections/id/secrets/item', '#/connections/id/operations/',
       '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra',
       '#/operations/', '#/operations/id/extra', '#/operations/id?token=secret', '#/operations/id#fragment',
       '#/operations/%0A', '#/operations/%', '#/operations/' + 'a'.repeat(257)]) {

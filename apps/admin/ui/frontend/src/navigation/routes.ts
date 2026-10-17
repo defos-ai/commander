@@ -1,6 +1,6 @@
 import { parseConnectionPrefill, validOperationID, type ConnectionPrefill } from './connection-link';
 
-export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'controllers' | 'agents' | 'actions' | 'settings';
+export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'controllers' | 'agents' | 'actions' | 'secrets' | 'settings';
 export type OperationView = 'details' | 'graph';
 
 export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | null; operation?: string } | {
@@ -12,7 +12,7 @@ export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | nu
   view?: OperationView;
 };
 
-const sections: readonly string[] = ['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'settings'];
+const sections: readonly string[] = ['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'secrets', 'settings'];
 
 export function parseRoute(hash: string): Route {
   if (hash === '#/connect' || hash.startsWith('#/connect?')) {
@@ -23,7 +23,7 @@ export function parseRoute(hash: string): Route {
     if (prefix === '' && collection === 'operations' && connectionID && validOperationID(connectionID)
       && section === undefined && !/[?#]/u.test(hash.slice(1))) return { operation: connectionID };
     if (prefix !== '' || collection !== 'connections' || !connectionID || !sections.includes(section ?? '') || extra.length) return {};
-    if (itemID !== undefined && (!itemID || section === 'overview' || section === 'settings')) return {};
+    if (itemID !== undefined && (!itemID || section === 'overview' || section === 'settings' || section === 'secrets')) return {};
     if (view !== undefined && (view !== 'graph' || section !== 'operations' || !itemID)) return {};
     return { connectionID, section: section as WorkspaceSection, ...(itemID ? { itemID } : {}), ...(view ? { view: 'graph' as const } : {}) };
   } catch {
