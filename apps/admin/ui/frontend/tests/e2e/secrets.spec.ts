@@ -18,8 +18,12 @@ test('manage write-only secrets through the signed-in Admin connection', async (
   });
   try {
     await connect(page);
-    await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Secrets', exact: true }).click();
+    const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
+    await expect(navigation.getByRole('button', { name: 'Secrets', exact: true })).toHaveCount(0);
+    await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
+    await page.getByRole('button', { name: 'Manage secrets', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
+    await expect(navigation.getByRole('button', { name: 'Agents', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.getByRole('button', { name: 'Add secret', exact: true }).click();
     const create = page.getByRole('dialog', { name: 'Add secret', exact: true });
     await create.getByLabel('Agent type', { exact: true }).fill(agentType);

@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowLeft, Bot, ClipboardList, Compass, KeyRound, LayoutDashboard, Menu, Server, Settings2, Workflow, X } from 'lucide-react';
+import { ArrowLeft, Bot, ClipboardList, Compass, LayoutDashboard, Menu, Server, Settings2, Workflow, X } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { useSidebar } from '../hooks/useSidebar';
 import { Brand } from './Brand';
@@ -21,6 +21,7 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
   const identity = useId();
   const sidebarId = `${identity}-sidebar`;
   const contentId = `${identity}-content`;
+  const activeSection = section === 'secrets' ? 'agents' : section;
   const navigation = [
     { section: 'overview' as const, label: t($ => $.shell.nav.overview), Icon: LayoutDashboard },
     { section: 'operations' as const, label: t($ => $.shell.nav.operations), Icon: Workflow },
@@ -28,7 +29,6 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
     { section: 'controllers' as const, label: t($ => $.shell.nav.controllers), Icon: Server },
     { section: 'agents' as const, label: t($ => $.shell.nav.agents), Icon: Bot },
     { section: 'actions' as const, label: t($ => $.shell.nav.actions), Icon: ClipboardList },
-    { section: 'secrets' as const, label: t($ => $.shell.nav.secrets), Icon: KeyRound },
   ];
 
   return <div className="platform-layout">
@@ -55,10 +55,10 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
       <nav aria-label={t($ => $.shell.navigation)}>
         <div className="sidebar-primary">
           {navigation.filter(item => !sections || sections.includes(item.section)).map(({ section: destination, label, Icon }) => <button key={destination} type="button" className="sidebar-command"
-            aria-current={section === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
+            aria-current={activeSection === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
             <Icon size={15} strokeWidth={1.4} aria-hidden="true" />
             <span>{label}</span>
-            {section === destination && <span className="nav-marker" aria-hidden="true" />}
+            {activeSection === destination && <span className="nav-marker" aria-hidden="true" />}
           </button>)}
         </div>
         <div className="sidebar-footer">

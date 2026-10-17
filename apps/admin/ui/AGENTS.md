@@ -57,7 +57,10 @@
   names and normalized URLs without credentials, query strings or fragments.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
-- The Secrets page uses authenticated `/api/v1/secrets` metadata and
+- Open the dedicated Secrets page from Agents via **Manage secrets**, with
+  **All agents** returning to the catalog. Keep Secrets out of the sidebar and
+  highlight Agents while it is open. Preserve its route and operation shortcuts.
+  The Secrets page uses authenticated `/api/v1/secrets` metadata and
   `/api/v1/secrets/requests`. Group refresh requests by agent type/name; their
   progress is not agent readiness or proof of installation. Inventory requires an
   explicit agent type, including types with no live agent. Provide-value actions

@@ -8,6 +8,7 @@ export default {
   filtered: '{{count}} of {{total}} agents',
   open: 'View agent {{id}}',
   back: 'All agents',
+  manageSecrets: 'Manage secrets',
   refresh: 'Refresh',
   refreshing: 'Refreshing…',
   polling: 'Snapshots refresh every 30 seconds.',

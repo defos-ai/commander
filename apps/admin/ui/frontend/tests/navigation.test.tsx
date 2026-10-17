@@ -141,7 +141,7 @@ describe('location navigation', () => {
     expect(window.location.hash).toBe(hash);
   });
 
-  it('opens Secrets for the operation connection without entering a value or sending a mutation', async () => {
+  it('opens Secrets from operations and Agents on the same connection without sending a mutation', async () => {
     const fetch = mockAPI({ ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [{
       action_name: 'build', unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', agent_type: 'builder',
         reason: 'Action has missing requirements', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] }],
@@ -158,6 +158,19 @@ describe('location navigation', () => {
 
     expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
     expect(window.location.hash).toBe(`#/connections/${connection.id}/secrets`);
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
+    expect(navigation.queryByRole('button', { name: 'Secrets' })).not.toBeInTheDocument();
+    expect(navigation.getByRole('button', { name: 'Agents' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: 'All agents' }));
+    expect(await screen.findByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${connection.id}/agents`);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
+    expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${connection.id}/secrets`);
+    act(() => { window.history.back(); });
+    expect(await screen.findByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
+    act(() => { window.history.forward(); });
+    expect(await screen.findByRole('heading', { name: 'Secrets', level: 1 })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });

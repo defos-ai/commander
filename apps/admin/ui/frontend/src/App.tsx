@@ -80,20 +80,22 @@ export function App() {
   const storageNotice = !state.storageAvailable && <p className="notice" role="alert">{t($ => $.connections.storageError)}</p>;
 
   return <>
-    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'secrets', 'settings']}
+    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'settings']}
       onNavigate={destination => navigate({ connectionID: active.id, section: destination })} onBack={() => navigate({})}>
       {storageNotice}
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
       {state.restoring ? <p role="status">{t($ => $.connections.restoring)}</p> : section === 'settings' ? <ConnectionSettingsPage connection={active} signedIn={Boolean(state.credentials[active.id])}
         onEdit={() => edit(active.id)} onForget={() => state.forgetSession(active.id)} onRemove={() => remove(active.id)} />
-        : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
+        : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
+          onBack={() => navigate({ connectionID: active.id, section: 'agents' })} />
         : section === 'operations' ? <OperationsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           selectedID={selectedID} onSelect={select} view={route.connectionID ? route.view ?? 'details' : 'details'}
           onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
           onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
           : section === 'controllers' ? <ControllersPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
-          : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
+          : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}
+            onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })} />
             : section === 'actions' ? <ActionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
               : <OverviewPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}
     </WorkspaceLayout> : <ConnectionsPage connections={state.connections} statuses={Object.fromEntries(Object.entries(state.checks).map(([id, check]) => [id, check.status]))}

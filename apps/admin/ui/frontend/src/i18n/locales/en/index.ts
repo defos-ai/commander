@@ -105,7 +105,6 @@ export default {
       controllers: 'Controllers',
       agents: 'Agents',
       actions: 'Actions',
-      secrets: 'Secrets',
       settings: 'Connection settings',
     },
   },
