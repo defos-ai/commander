@@ -28,7 +28,7 @@
   SecretStore's latest value or a live agent's readiness; hosts own those checks.
   Delivery history retains encrypted copies even after deleting the primary secret.
 - [`crypto.SecretCipher`](crypto/) encrypts records using an explicitly configured
-  key. Apps load `SECRET_ENCRYPTION_KEY` and inject the cipher; providers receive
+  key. Apps load `SECRETS_ENCRYPTION_KEY` and inject the cipher; providers receive
   ciphertext only. Preserve all authenticated metadata, including nanosecond
   timestamps, across persistence. Encryption alone does not establish freshness.
 - [`secrets.Service`](secrets/) encrypts before storing values and returns metadata

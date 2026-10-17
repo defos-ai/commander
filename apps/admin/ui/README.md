@@ -23,7 +23,7 @@ Operations waiting for declared secrets show **Manage secrets** in their details
 and execution graph. Work resumes when all requirements are ready.
 Values are write-only and are never saved in browser storage.
 
-Secret management requires `SECRET_ENCRYPTION_KEY` on the API and participating
+Secret management requires `SECRETS_ENCRYPTION_KEY` on the API and participating
 agents; see [setup and encryption](../../adapters/api/README.md#secrets).
 Saving confirms storage; delivery and agent installation happen asynchronously.
 After an uncertain write, refresh metadata before trying again.

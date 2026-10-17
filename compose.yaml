@@ -23,7 +23,7 @@ x-agent: &agent
   pull_policy: never
   environment: &agent-environment
     <<: *environment
-    SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-}
+    SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
   depends_on:
     controller:
       condition: service_started
@@ -231,7 +231,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       API_USERNAME: ${API_USERNAME:-commander}
       API_PASSWORD: ${API_PASSWORD:-}
-      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-}
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
       API_RUNTIME: docker-compose
       API_LISTEN_ADDRESS: 0.0.0.0:4274
       API_ALLOWED_HOSTS: ${API_ALLOWED_HOSTS:-localhost,127.0.0.1,::1,api}

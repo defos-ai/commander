@@ -44,7 +44,7 @@ import (
 // not share a plaintext cache or a request store instance with the agent.
 func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	server := startAPI(t, fixture.localArgs())
 	database := filepath.Join(fixture.root, "database")
 	config := controller.ControllerConfig{LeaseSweepInterval: 100 * time.Millisecond}

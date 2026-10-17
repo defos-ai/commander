@@ -17,7 +17,7 @@
   capacity across controllers.
 - Construct both secret and request stores from the configured database and
   inject them into coordination. The controller routes ciphertext and must not
-  load `SECRET_ENCRYPTION_KEY`. Framework reconciliation owns delivery retries,
+  load `SECRETS_ENCRYPTION_KEY`. Framework reconciliation owns delivery retries,
   pending request recovery and installation acknowledgements.
 
 ## Selection and durable work

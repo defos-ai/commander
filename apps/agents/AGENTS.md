@@ -31,7 +31,7 @@
   transient `MissingRequirements`. The registered agent type determines the
   secret scope; a type and secret name identify one shared value.
   Configure the framework secret runtime with an injected decryptor; bundled
-  hosts read optional `SECRET_ENCRYPTION_KEY` and validate it before provider startup.
+  hosts read optional `SECRETS_ENCRYPTION_KEY` and validate it before provider startup.
   Access declared values with `action.Secret(ctx, name)`, never action inputs or
   global `os.Setenv`. Keep returned values out of outputs/logs and clear temporary
   byte copies. Missing values gate the affected action even without a decryptor.

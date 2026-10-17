@@ -58,7 +58,7 @@ Finished operations are read-only; further work needs a new operation.
 
 ## Secrets
 
-Set `SECRET_ENCRYPTION_KEY` to a randomly generated 32-byte key encoded as 64 hex
+Set `SECRETS_ENCRYPTION_KEY` to a randomly generated 32-byte key encoded as 64 hex
 characters to enable secret management. Generate it once (`openssl rand -hex 32`),
 keep it separate from the database, and reuse it across restarts and trusted
 encrypting/decrypting hosts. Compose passes this environment variable to the API.

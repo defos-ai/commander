@@ -39,7 +39,7 @@ type SecretCipher struct {
 
 // NewSecretCipher accepts an explicitly configured 256-bit key encoded as hex. It never
 // generates a replacement key or reads the environment. Hosts choose when the
-// feature is enabled and supply SECRET_ENCRYPTION_KEY; keep that key across
+// feature is enabled and supply SECRETS_ENCRYPTION_KEY; keep that key across
 // restarts and use the same value in every trusted encrypting/decrypting process.
 func NewSecretCipher(encodedKey string) (*SecretCipher, error) {
 	if encodedKey == "" {

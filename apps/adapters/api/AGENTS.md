@@ -50,7 +50,7 @@
   errors, HTTP responses or model messages. Missing standalone credentials should
   explain setup with a copyable password-generation command.
   `credentials --raw` prints only the password, preserving normal credential output.
-- Secret management is separately enabled by nonempty `SECRET_ENCRYPTION_KEY`
+- Secret management is separately enabled by nonempty `SECRETS_ENCRYPTION_KEY`
   (64 hex characters), parsed before opening listeners/providers. Missing means
   secret routes return authenticated `503 secrets_unavailable`; malformed means
   startup fails. No flag, generated fallback, or key/secret output in diagnostics.

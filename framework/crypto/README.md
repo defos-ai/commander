@@ -4,13 +4,13 @@
 identity, scope, version and timestamps. It uses Go's
 [random-nonce implementation](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce).
 
-Applications pass the same `SECRET_ENCRYPTION_KEY` to `crypto.NewSecretCipher` in every
+Applications pass the same `SECRETS_ENCRYPTION_KEY` to `crypto.NewSecretCipher` in every
 trusted process that encrypts or decrypts secrets. Use a randomly generated
 32-byte key encoded as 64 hex characters, and retain it across restarts.
 Missing or malformed keys return an error; no replacement key is generated.
 
 ```go
-cipher, err := crypto.NewSecretCipher(os.Getenv("SECRET_ENCRYPTION_KEY"))
+cipher, err := crypto.NewSecretCipher(os.Getenv("SECRETS_ENCRYPTION_KEY"))
 if err != nil {
     return err
 }

@@ -141,7 +141,7 @@ func TestCheckoutRechecksRemovedGit(t *testing.T) {
 func TestGitSubprocessProtectsCredentialsAndDiagnostics(t *testing.T) {
 	source, revision := templateFixture(t)
 	t.Setenv("GITHUB_TOKEN", "fixture-github-token")
-	t.Setenv("SECRET_ENCRYPTION_KEY", "fixture-encryption-key")
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "fixture-encryption-key")
 	for _, test := range []struct {
 		name    string
 		mode    string

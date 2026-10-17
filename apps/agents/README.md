@@ -67,7 +67,7 @@ Actions can declare persistent secret names in `Action.RequiredSecrets`.
 Secrets belong to the registered agent type, so its instances share the same
 named secrets. Declarations remain visible when an action is ready.
 Configure `AgentConfig.Secrets` with a decryptor; the bundled hosts read
-`SECRET_ENCRYPTION_KEY`. Use `action.Secret(ctx, name)` in discovery or execution
+`SECRETS_ENCRYPTION_KEY`. Use `action.Secret(ctx, name)` in discovery or execution
 to obtain a declared value. Missing or expired values block only the affected
 actions. See [secret delivery and refresh](../../framework/secrets/README.md#agent-requirements).
 

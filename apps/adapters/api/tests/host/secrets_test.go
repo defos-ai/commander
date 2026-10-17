@@ -49,7 +49,7 @@ type secretMetadata struct {
 
 func TestSecretAPILifecyclePersistsOnlyEncryptedValues(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	server := startAPI(t, fixture.localArgs())
 	createBody := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + secretTestValue + `"}`
 	createdResponse := secretRequest(t, server, http.MethodPost, secretsPath, createBody)
@@ -99,7 +99,7 @@ func TestSecretAPILifecyclePersistsOnlyEncryptedValues(t *testing.T) {
 
 func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	store, err := fssecrets.NewSecretFsStore(filepath.Join(fixture.root, "database"))
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestSecretRoutesRequireAuthenticationAndExplicitEncryptionKey(t *testing.T)
 
 func TestSecretRequestsRejectMalformedAndAmbiguousInput(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	server := startAPI(t, fixture.localArgs())
 	for _, tc := range []struct{ name, method, path, body string }{
 		{"missing value", "POST", secretsPath, `{"agent_type":"builder-agent","name":"TOKEN"}`},
@@ -229,7 +229,7 @@ func TestSecretRequestsRejectMalformedAndAmbiguousInput(t *testing.T) {
 func TestSecretEncryptionKeyFailsBeforeStartupAndNeverAppearsInHelp(t *testing.T) {
 	fixture := newFixture(t)
 	const invalid = "private-invalid-encryption-key"
-	t.Setenv("SECRET_ENCRYPTION_KEY", invalid)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", invalid)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	var diagnostic bytes.Buffer
@@ -238,13 +238,13 @@ func TestSecretEncryptionKeyFailsBeforeStartupAndNeverAppearsInHelp(t *testing.T
 	if err == nil || ctx.Err() != nil || ready {
 		t.Fatal("invalid encryption key did not fail before serving requests")
 	}
-	if !strings.Contains(err.Error(), "SECRET_ENCRYPTION_KEY") || strings.Contains(err.Error()+diagnostic.String(), invalid) {
+	if !strings.Contains(err.Error(), "SECRETS_ENCRYPTION_KEY") || strings.Contains(err.Error()+diagnostic.String(), invalid) {
 		t.Fatal("invalid key diagnostic must name its environment variable without its value")
 	}
 	if _, err := os.Stat(filepath.Join(fixture.root, "database")); !os.IsNotExist(err) {
 		t.Fatal("invalid encryption key opened the database")
 	}
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	diagnostic.Reset()
 	if code := cli.Main([]string{"--help"}, &diagnostic, &diagnostic); code != 0 {
 		t.Fatal("help failed with configured secret encryption")
@@ -385,7 +385,7 @@ func TestSecretsWithMongo(t *testing.T) {
 		t.Skip("set COMMANDER_TEST_MONGO_URL to test MongoDB-backed API secrets")
 	}
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	server := startAPI(t, append(fixture.localArgs(), "--database-url="+uri))
 	name := "HOST_TEST_" + id.New()
 	path := secretsPath + "/builder-agent/" + name

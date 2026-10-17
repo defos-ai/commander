@@ -38,7 +38,7 @@ Each action declares its secret names through `Action.RequiredSecrets`, for exam
 Multiple actions may require the same name.
 
 Configure `AgentConfig.Secrets` with a decryptor using the same encryption key as
-the API. Bundled agent hosts read optional `SECRET_ENCRYPTION_KEY`; the controller
+the API. Bundled agent hosts read optional `SECRETS_ENCRYPTION_KEY`; the controller
 needs no key. It reads encrypted records from its configured database and sends
 them only for names declared by the requesting agent's registered type.
 

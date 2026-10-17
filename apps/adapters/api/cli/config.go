@@ -53,7 +53,7 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 		fmt.Fprintln(output, "Usage: commander-api [flags]")
 		fmt.Fprintln(output, "Commander catalogs, operation commands and optional secret management; Swagger at /docs/.")
 		fmt.Fprintln(output, "API_USERNAME and API_PASSWORD must be supplied through the environment.")
-		fmt.Fprintln(output, "Set SECRET_ENCRYPTION_KEY to enable encrypted secret management.")
+		fmt.Fprintln(output, "Set SECRETS_ENCRYPTION_KEY to enable encrypted secret management.")
 		fmt.Fprintln(output, "Use 'commander-api credentials' to display configured credentials locally.")
 		flags.PrintDefaults()
 	}
@@ -105,10 +105,10 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	if err := result.security.Validate(); err != nil {
 		return config{}, err
 	}
-	if key := os.Getenv("SECRET_ENCRYPTION_KEY"); key != "" {
+	if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
 		result.secretCipher, err = crypto.NewSecretCipher(key)
 		if err != nil {
-			return config{}, fmt.Errorf("SECRET_ENCRYPTION_KEY: %w", err)
+			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
 		}
 	}
 	if _, err := host.NewLogger(output, result.logLevel, result.logFormat); err != nil {

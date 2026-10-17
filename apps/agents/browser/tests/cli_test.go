@@ -17,7 +17,7 @@ import (
 )
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {
-	t.Setenv("SECRET_ENCRYPTION_KEY", "")
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	const secret = "provider-test-secret"
 	for _, test := range []struct {
 		name, flag, url string
@@ -94,14 +94,14 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 
 func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
 	const invalidKey = "private-invalid-encryption-key"
-	t.Setenv("SECRET_ENCRYPTION_KEY", invalidKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", invalidKey)
 	root := filepath.Join(t.TempDir(), "unused")
 	var logs bytes.Buffer
 	err := cli.Run(t.Context(), []string{
 		"--bus-url=" + filepath.Join(root, "bus"),
 		"--storage-url=" + filepath.Join(root, "storage"),
 	}, &logs)
-	if err == nil || !strings.Contains(err.Error(), "SECRET_ENCRYPTION_KEY") {
+	if err == nil || !strings.Contains(err.Error(), "SECRETS_ENCRYPTION_KEY") {
 		t.Fatal("invalid encryption key did not fail configuration")
 	}
 	if strings.Contains(err.Error(), invalidKey) || strings.Contains(logs.String(), invalidKey) {
@@ -114,7 +114,7 @@ func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
 	if err := cli.Run(t.Context(), []string{"--help"}, &logs); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(logs.String(), "SECRET_ENCRYPTION_KEY") || strings.Contains(logs.String(), invalidKey) {
+	if !strings.Contains(logs.String(), "SECRETS_ENCRYPTION_KEY") || strings.Contains(logs.String(), invalidKey) {
 		t.Fatal("help must describe the encryption setting without exposing its value")
 	}
 }

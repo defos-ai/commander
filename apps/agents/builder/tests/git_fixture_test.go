@@ -144,7 +144,7 @@ func executeGitFixture() error {
 	switch config.Mode {
 	case "", "check-secrets":
 		if config.Mode == "check-secrets" {
-			for _, key := range []string{"GITHUB_TOKEN", "SECRET_ENCRYPTION_KEY"} {
+			for _, key := range []string{"GITHUB_TOKEN", "SECRETS_ENCRYPTION_KEY"} {
 				if _, exists := os.LookupEnv(key); exists {
 					return fmt.Errorf("inherited host secret %s", key)
 				}

@@ -67,7 +67,7 @@ export default {
     unavailable: 'Could not reach the secrets service. Check the connection and refresh.',
     invalid_response: 'The API returned an unexpected response. Refresh to check the current state.',
     timeout: 'The request timed out. Refresh to check the current state.',
-    disabled: 'Secrets are not configured. Set SECRET_ENCRYPTION_KEY on the API and participating agents, then restart them.',
+    disabled: 'Secrets are not configured. Set SECRETS_ENCRYPTION_KEY on the API and participating agents, then restart them.',
     invalid_input: 'The API rejected these details. Check the agent type, name and expiry.',
     conflict: 'This secret changed. Refresh its metadata before making another change.',
     unknown: 'The result of this change is unknown. Refresh and inspect the metadata before trying again.',

@@ -33,7 +33,7 @@ type pendingSecretView struct {
 
 func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	requests, values := secretRequestStores(t, fixture)
 	request := pendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
 	request.OperationID = id.New()
@@ -105,7 +105,7 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 
 func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	requests, _ := secretRequestStores(t, fixture)
 	one := pendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
 	two := pendingSecretRequest("builder-agent", "BUILD_TOKEN", "builder-agent-00000002")
@@ -177,7 +177,7 @@ func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *
 
 func TestPendingSecretRequestsRespectSecretAndDeliveryTimeBounds(t *testing.T) {
 	fixture := newFixture(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	requests, values := secretRequestStores(t, fixture)
 	cipher, err := crypto.NewSecretCipher(secretTestKey)
 	if err != nil {
@@ -241,7 +241,7 @@ func TestPendingSecretRequestsRequireAuthenticationAndEnabledSecrets(t *testing.
 		}
 	}
 	server.stop(t)
-	t.Setenv("SECRET_ENCRYPTION_KEY", secretTestKey)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	server = startAPI(t, fixture.localArgs())
 	if items := listSecretRequests(t, server, ""); len(items) != 0 {
 		t.Fatal("empty database had pending requests")

@@ -26,7 +26,7 @@ import (
 
 func TestCLITransfersSavedEncryptedSecretsWithoutEncryptionKey(t *testing.T) {
 	// The controller only handles ciphertext; it must not parse or require this key.
-	t.Setenv("SECRET_ENCRYPTION_KEY", "controller-does-not-decrypt")
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "controller-does-not-decrypt")
 	t.Setenv("ENV", "")
 	root := t.TempDir()
 	database := filepath.Join(root, "database")
