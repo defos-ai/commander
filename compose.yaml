@@ -350,6 +350,32 @@ services:
     <<: *agent
     image: commander-web-agent:local
 
+  builder-agent:
+    <<: *agent
+    image: commander-builder-agent:local
+    build:
+      context: .
+      dockerfile: apps/agents/builder/docker/Dockerfile
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        export SECRETS_ENCRYPTION_KEY
+        exec commander-builder-agent "$$@"
+      - commander-builder-agent
+    volumes:
+      - secrets-key:/run/commander-secrets:ro
+      - builder-workspaces:/home/commander/workspaces
+    depends_on:
+      secrets-key:
+        condition: service_completed_successfully
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
   playground:
     profiles: [playground]
     build:
@@ -398,9 +424,12 @@ services:
         condition: service_started
       web-agent-2:
         condition: service_started
+      builder-agent:
+        condition: service_started
 
 volumes:
   secrets-key:
+  builder-workspaces:
   mcp-credentials:
   rabbitmq:
   minio:

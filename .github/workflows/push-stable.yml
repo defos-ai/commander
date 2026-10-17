@@ -35,7 +35,7 @@ jobs:
           [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
           jq -e '
             keys == ["commander-admin", "commander-aio", "commander-api",
-                     "commander-browser-agent", "commander-controller", "commander-mcp",
+                     "commander-browser-agent", "commander-builder-agent", "commander-controller", "commander-mcp",
                      "commander-playground", "commander-web-agent"]
             and all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))
           ' <<< "$IMAGES" > /dev/null

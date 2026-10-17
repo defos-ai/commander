@@ -14,6 +14,7 @@ import (
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
 	browsercli "github.com/defos-ai/commander/apps/agents/browser/cli"
+	buildercli "github.com/defos-ai/commander/apps/agents/builder/cli"
 	webcli "github.com/defos-ai/commander/apps/agents/web/cli"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
@@ -104,6 +105,10 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	}
 	s.start("web agent", func(ctx context.Context) error { return webcli.Run(ctx, common, s.log) })
 	s.start("browser agent", func(ctx context.Context) error { return browsercli.Run(ctx, common, s.log) })
+	s.start("builder agent", func(ctx context.Context) error {
+		args := append(append([]string{}, common...), "--workspace-dir="+filepath.Join(s.Directory, "builder-workspaces"))
+		return buildercli.RunWithOptions(ctx, args, s.log, buildercli.Options{SecretCipher: cipher})
+	})
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
@@ -218,15 +223,16 @@ func (s *Session) awaitAgents(ctx context.Context) error {
 		if err := json.Unmarshal(result.Data, &inventory); err != nil {
 			return err
 		}
-		var webReady, browserReady bool
+		var webReady, browserReady, builderReady bool
 		for _, agent := range inventory.Agents {
 			if agent.Status != "ready" {
 				continue
 			}
 			webReady = webReady || agent.Type == "web-agent"
 			browserReady = browserReady || agent.Type == "browser-agent"
+			builderReady = builderReady || agent.Type == "builder-agent"
 		}
-		if webReady && browserReady {
+		if webReady && browserReady && builderReady {
 			return nil
 		}
 		select {

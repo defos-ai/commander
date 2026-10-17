@@ -729,7 +729,7 @@ func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDri
 	u.run(u.model.Init())
 	ready := "Commander connected"
 	if config.LocalAPI != nil {
-		ready = "Commander ready · all-in-one · 2 agents connected"
+		ready = "Commander ready · all-in-one · 3 agents connected"
 	}
 	u.wait("connection", func(view string) bool { return strings.Contains(view, ready) })
 	return u

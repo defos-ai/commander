@@ -12,6 +12,7 @@ require (
 	github.com/defos-ai/commander/apps/adapters/mcp v0.1.0
 	github.com/defos-ai/commander/apps/admin/ui/backend v0.1.0
 	github.com/defos-ai/commander/apps/agents/browser v0.1.0
+	github.com/defos-ai/commander/apps/agents/builder v0.1.0
 	github.com/defos-ai/commander/apps/agents/web v0.1.0
 	github.com/defos-ai/commander/apps/controllers/default v0.1.0
 	github.com/mattn/go-isatty v0.0.20

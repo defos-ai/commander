@@ -4,7 +4,7 @@
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
-  Admin, MCP, API, controller, web and browser agent hosts for `--all-in-one`.
+  Admin, MCP, API, controller, web, browser and builder agent hosts for `--all-in-one`.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
@@ -14,7 +14,7 @@
 - [`internal/ui/`](internal/ui/) owns Bubble Tea state, selectors and rendering.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
-  embeds Admin, includes Chromium/fonts and uses a real non-root user's home plus
+  embeds Admin, includes Chromium/fonts and Git, and uses a real non-root user's home plus
   an init process for browser children. Keep browser packages aligned with the
   browser image.
 
@@ -79,12 +79,14 @@
 - All-in-one starts temporary state and loopback services, waits for readiness,
   then shuts down hosts before deleting that session's files. It must not use or
   delete the user's configured database/storage or existing Compose state.
+  Pass the builder workspace directory explicitly beneath the session directory;
+  never use `BUILDER_WORKSPACE_DIR` or leave generated source behind on exit.
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
-  Inject the cipher into the API, without changing process environment, writing
+  Inject the same cipher into API and builder, without changing process environment, writing
   the key to files, or exposing it in logs, credentials output or model messages.
-  Web and browser hosts do not need this key; the builder is not yet bundled.
+  Web and browser hosts do not need this key.
   Docker AIO uses this same Go startup path, with no second generator in its
   entrypoint. The generated key and encrypted state are temporary; persistent
   deployments must retain their key separately and must not silently replace it.
@@ -156,8 +158,10 @@
   Embed both website missions: native quick start uses `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.
-  Wait for both agent types to register. The web agent owns HTTP work and remains
-  ready without Chromium; the browser agent advertises rendering requirements.
+  Wait for web, browser and builder agents to register. The web agent owns HTTP
+  work and remains ready without Chromium; the browser advertises rendering
+  requirements. Missing Git makes `checkout-template` unavailable without blocking
+  all-in-one startup or website missions. Keep builder readiness in its discovery.
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.
@@ -194,7 +198,7 @@
   frozen screen. Do not add a mouse mode command.
   Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
   while a reply is active.
-  All-in-one startup shows the provider/model, readiness with two connected agents,
+  All-in-one startup shows the provider/model, readiness with three connected agents,
   one review prompt and the temporary-state note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 

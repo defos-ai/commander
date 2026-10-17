@@ -55,7 +55,7 @@ builder:
   - *fs
   - *rabbitmq
   - *s3
-  - 'apps/agents/builder/**'
+  - &builder 'apps/agents/builder/**'
 
 web:
   - *shared
@@ -90,6 +90,7 @@ playground:
   - *providers
   - *controller
   - *agent
+  - *builder
   - *web
   - *api
   - *mcp

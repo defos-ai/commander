@@ -22,8 +22,9 @@ docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and admin UI, one controller, two web agents and one
-browser agent. Web agents run HTTP checks; the browser agent runs rendering checks.
+Compose runs MCP, the API and admin UI, one controller, two web agents, one browser
+agent and one builder agent. Web agents run HTTP checks; the browser renders pages;
+the builder checks out the agent template.
 It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
 storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
 [MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
@@ -51,16 +52,15 @@ API credentials remain in its process environment.
 ### Secret encryption
 
 Compose enables secret management automatically. The `secrets-key` initializer
-saves one encryption key in its own volume; the API mounts it read-only and loads
-it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
+saves one encryption key in its own volume; API and builder mount it read-only and
+load it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
 the first start to supply your own 64-character hex key; a later conflicting value
 fails startup instead of replacing the saved key.
 
 Back up this key volume with MongoDB and restore them together. Do not delete the
 key volume while keeping the database: a new key cannot decrypt existing secrets.
 Web/browser agents, MCP, Playground and the controller do not receive this key.
-The builder is not yet included in Compose; separately deployed builders need
-the same key configured explicitly.
+Separately deployed builders need the same key configured explicitly.
 
 ## Configuration
 
@@ -96,6 +96,8 @@ Admin URL or API connection.
 Compose creates named Docker volumes; no host `state/` directory is needed.
 It persists RabbitMQ, MongoDB, and MinIO data in their own volumes.
 Separate volumes hold the shared MCP token and the secrets encryption key.
+Builder workspaces have their own persistent volume; stopping or recreating the
+builder keeps checked-out source available.
 Host inboxes remain transient: broker persistence does not preserve a replaced
 host's inbox.
 

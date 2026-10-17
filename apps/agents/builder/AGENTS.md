@@ -39,6 +39,20 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   workspace affinity yet. Add explicit ownership/routing or source transfer before
   proposing multi-step work across builder instances.
 
+## Deployment
+
+- [Dockerfile](docker/Dockerfile) includes Git and CA certificates, runs as
+  UID/GID 1000, and creates `/home/commander/workspaces` with matching ownership.
+  Keep `BUILDER_WORKSPACE_DIR` aligned with the Compose volume target so a new
+  named volume is writable without another initialization service.
+- [Compose](../../../compose.yaml) reuses the existing secrets-key initializer.
+  The builder mounts the key read-only, exports it before exec, preserves command
+  arguments and retains `init: true` for child-process cleanup. Never add the key
+  to the shared agent environment.
+- Playground's all-in-one host injects its existing cipher and keeps builder
+  workspaces inside session state. Native users supply Git; its Docker image
+  includes Git. The builder remains limited to checkout in either deployment.
+
 ## Validation
 
 Read [shared test guidance](../../../framework/tests/AGENTS.md) for new tests.
@@ -55,5 +69,9 @@ go vet ./apps/agents/builder/...
 ```
 
 Keep the builder owner filter and unit step in `.github` aligned with provider
-imports. CI and release runs include this module; images and native release
-assets are not wired for the builder yet.
+imports, including the downstream Playground filter. Release image publication
+uses `push-agents.yml`; the native Commander binary embeds this host.
+For deployment changes, run the Compose and release wiring checks from
+`.github/tests` with `GOWORK=off go test -run '^TestCI' ./...` and validate
+`docker compose config --quiet`. Test the builder image as its configured
+non-root user, including workspace creation and `git --version`.

@@ -118,7 +118,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		m.add("success", m.provider.Name+" · "+m.settings.Model)
 		connection := "Commander connected · " + m.config.MCPURL
 		if m.config.LocalAPI != nil {
-			connection = "Commander ready · all-in-one · 2 agents connected"
+			connection = "Commander ready · all-in-one · 3 agents connected"
 		}
 		m.add("success", connection)
 		for _, notice := range m.config.Notices {

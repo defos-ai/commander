@@ -74,6 +74,7 @@ run `chmod +x commander`, then `./commander --all-in-one`; on Windows, run
 the generated API login and temporary-state behavior. Native users can run
 `review-website-no-browser` immediately; the with-browser mission also needs
 Chromium or Chrome.
+The bundled builder's `checkout-template` action needs Git on the host.
 
 Use `/releases/latest/download/<file-name>` for a
 [versionless download](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases#linking-to-the-latest-release).
@@ -98,12 +99,14 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
 | `ghcr.io/defos-ai/commander-controller` | [push-controllers.yml](../.github/workflows/push-controllers.yml) |
 | `ghcr.io/defos-ai/commander-browser-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
+| `ghcr.io/defos-ai/commander-builder-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 | `ghcr.io/defos-ai/commander-web-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
 The all-in-one image starts Playground with its local hosts, embeds Admin in the
-Commander binary and includes Chromium. Publish `127.0.0.1:4275:4275` to use Admin;
+Commander binary and includes Chromium and Git for the bundled builder.
+Publish `127.0.0.1:4275:4275` to use Admin;
 its API connection stays inside the container.
 The lightweight Playground image connects to an existing MCP service.
 There are no automatic pushes from pull requests or ordinary branch updates.

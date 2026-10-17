@@ -16,8 +16,8 @@ docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
 ```
 
-This image includes Admin, MCP, the API, a controller, a web agent and a browser agent
-with Chromium and fonts. Completed operations show a review link to Admin at
+This image includes Admin, MCP, the API, a controller, and web, browser and builder
+agents, with Chromium, fonts and Git. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
 If an operation shows **secrets needed**, open its Admin link and provide the
@@ -90,14 +90,14 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts Admin, MCP, the HTTP API, one controller, one web agent and one browser agent using
+This starts Admin, MCP, the HTTP API, one controller, and web, browser and builder agents using
 temporary FS state. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
-Secret management uses a separate encryption key generated in memory for each
+API and builder share a separate encryption key generated in memory for each
 session. Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own;
 an invalid key prevents startup. The session's saved secrets are deleted on exit.
 Type `/admin` for a link with the local API URL and username prefilled; enter the
@@ -112,7 +112,9 @@ or Go installation. For a Go-only source build, omit `-tags embed_ui` and use
 Start with `review-website-no-browser` for links, SEO and technology checks.
 `review-website-with-browser` adds screenshots and rendered accessibility, requiring
 [Chromium](../agents/browser/README.md#native-agent).
-**Exiting stops these hosts and deletes the session's operations, reports and artifacts.**
+The builder's `checkout-template` action requires Git on `PATH`; without it,
+website missions still work. See the [builder guide](../agents/builder/README.md).
+**Exiting stops these hosts and deletes operations, reports, artifacts and builder workspaces.**
 Use Compose to retain work.
 
 `--all-in-one` chooses its own connections, ignoring `COMMANDER_MCP_URL`,

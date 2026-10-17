@@ -23,6 +23,22 @@ the fixed public template; it requires no GitHub token. Each call creates a
 separate checkout under `state/builder-workspaces/<workspace_id>/source`.
 Change the root with `--workspace-dir` or `BUILDER_WORKSPACE_DIR`.
 
+## Bundled deployment
+
+The repository [Compose stack](../../../compose.yaml) starts one builder with Git
+installed. It uses the shared bus and artifact storage, and saves checkouts in
+the `builder-workspaces` volume at `/home/commander/workspaces`.
+
+The builder and API read the same persisted encryption key from the `secrets-key`
+volume. Only the initializer writes that volume; the builder mounts it read-only
+and loads the key before starting. Keep this key with any backups of encrypted
+secrets. See [deployment](../../../docs/deployment.md#secret-encryption).
+
+[Playground all-in-one](../../playground/README.md#native-one-executable) also
+includes the builder, with workspaces under the session's local state directory.
+Its Docker image includes Git; native installations use Git from the host and
+report it as a missing requirement if unavailable.
+
 ## Secrets
 
 The host accepts `SECRETS_ENCRYPTION_KEY` for actions that require managed secrets.
@@ -44,7 +60,7 @@ host credentials, hooks, proxies or submodule checkout. It needs direct HTTPS
 access to GitHub.
 
 Codex builds, source artifacts, GitHub publication and generated-agent startup
-are the next stages. The builder is not yet bundled in Compose or all-in-one.
+are the next stages.
 
 ## Development
 

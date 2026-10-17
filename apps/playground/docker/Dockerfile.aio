@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation openssl tini \
+    && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation git openssl tini \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1000 commander \
     && useradd --uid 1000 --gid 1000 --create-home commander
