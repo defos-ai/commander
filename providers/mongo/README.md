@@ -61,6 +61,13 @@ Secrets are identified by agent type and name. Earlier development records and
 indexes with profiles are incompatible; recreate those secrets in a fresh store.
 Existing records are never merged or migrated automatically.
 
+[`secrets.NewRequestMongoStore(ctx, database)`](secrets/request_mongo_store.go)
+tracks pending requests, their immutable encrypted deliveries and installation
+acknowledgements in `secret_requests`. It preserves terminal records for safe
+retries; expiration is explicit. Deleting a primary secret does not erase these
+delivery snapshots or copies already installed on agents. The store does not
+publish deliveries or establish an agent's current readiness.
+
 ## Development and testing
 
 See [AGENTS.md](AGENTS.md) for transaction and persistence guidance.

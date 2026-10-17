@@ -35,6 +35,14 @@ artifact bytes and reports belong to the separate storage provider.
   Preserve transaction error labels and reset attempt state on retries. Retry a
   duplicate-key abort with a fresh snapshot to recognize identical concurrent
   requests; failed commit confirmation after a write is `secrets.ErrWriteUncertain`.
+- [`RequestMongoStore`](secrets/request_mongo_store.go) stores one JSON aggregate
+  per request in `secret_requests`, validating indexed ID/status/delivery ID
+  against its payload. Keep request and delivery IDs permanent; the partial unique
+  delivery index spans terminal records too. Mutations use domain record helpers
+  inside a transaction over the latest record. Pending recovery includes overdue
+  requests until explicitly expired. Preserve ciphertext after settlement and
+  primary-secret deletion; historical installation evidence is not readiness.
+  Never decrypt, publish, or read the primary secret store to settle a request.
 - Test cleanup removes operation records and retires artifacts with private
   deletion markers. Preserve collections, indexes, catalogs and execution records;
   a delayed accepted-result write must not recreate deleted artifact metadata.

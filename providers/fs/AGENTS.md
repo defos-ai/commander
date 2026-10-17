@@ -34,6 +34,15 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   Exact retries must still confirm durability. Translate uncertain publication to
   `secrets.ErrWriteUncertain`. Preserve timestamp nanoseconds, compare time instants,
   and never decrypt or load encryption keys here. Secret names never become paths.
+- [`RequestFsStore`](secrets/request_fs_store.go) saves request lifecycles in a
+  separate `secret-requests.json` collection. One lock protects request IDs,
+  globally unique delivery IDs, immutable encrypted delivery snapshots and exact
+  installation evidence. Use domain `RequestRecord` transitions; exact retries
+  still publish/sync, and initial request retries never reset progress. Pending
+  lists include overdue requests until explicit expiration. Terminal records and
+  their encrypted deliveries remain retained; deleting a current secret does not
+  erase these copies or revoke installed plaintext. This store neither checks the
+  current `SecretStore` nor distributes values or performs retention cleanup.
 
 ## Bus lifecycle
 

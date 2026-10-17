@@ -44,3 +44,26 @@ runtime distribution is not enabled yet.
 The [synchronization contracts](../comms/messages/README.md#secret-synchronization-contracts)
 define requests, encrypted deliveries and installation acknowledgements for the
 next stage.
+
+## Request and delivery tracking
+
+[`RequestStore`](../domain/secrets/request_store.go) stores each pending request
+with one immutable encrypted delivery and its installation acknowledgement.
+Both FS and Mongo implementations preserve this record across restarts.
+
+Save the request and delivery before publishing. Recovery reads `ListPending`,
+then reuses the saved delivery ID, timestamps and ciphertext. A changed version
+needs a fresh request; cancel the previous pending request first. Acknowledgements
+must match the request, recipient, delivery, secret ID and version, and arrive
+before the deadline. Exact replays preserve the original settlement time.
+Cancellation and expiration are explicit; listing overdue requests does not
+change them.
+
+The store records installation history. It does not check sender authorization,
+the agent's active request or the latest value in `SecretStore`. Runtime code must
+check those before using the result for readiness. Requests remain independent:
+one acknowledgement never fulfills another request for the same secret.
+
+Terminal records retain their encrypted delivery snapshots. Deleting the primary
+secret does not erase these copies or revoke values already installed by an agent.
+The stores are available for integration; runtime distribution is not connected yet.

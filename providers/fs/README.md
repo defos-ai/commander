@@ -58,6 +58,16 @@ Secrets are identified by agent type and name. Earlier development records with
 profiles are incompatible; recreate those secrets in a fresh store. Existing
 records are never merged or migrated automatically.
 
+[`secrets.NewRequestFsStore(root)`](secrets/request_fs_store.go) saves requests,
+their encrypted deliveries and installation acknowledgements in
+`root/secret-requests.json`. It preserves progress across restarts and rejects
+conflicting delivery or acknowledgement retries. Expiration is explicit.
+
+Terminal requests retain their encrypted delivery snapshots. Deleting a secret
+from the secret store does not erase these copies or revoke values already
+installed in an agent. Automatic distribution and retention cleanup are not yet
+connected to this store.
+
 ## Development and testing
 
 See [AGENTS.md](AGENTS.md) for filesystem and message-delivery invariants.

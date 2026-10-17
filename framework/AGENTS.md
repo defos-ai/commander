@@ -20,6 +20,13 @@
   records a specific delivery acknowledged by its recipient, never mere availability.
   Historical fulfillment does not establish current readiness. Domain validation
   proves neither encryption nor authorization; both belong above the stores.
+- [`secrets.RequestStore`](domain/secrets/request_store.go) persists a request,
+  its one immutable encrypted delivery and installation acknowledgement together.
+  Reserve before publishing; retries reuse the saved ID, timestamps and ciphertext.
+  New versions use fresh requests. Keep exact replays idempotent and preserve
+  terminal records. Fulfillment matches saved delivery evidence, not a separate
+  SecretStore's latest value or a live agent's readiness; hosts own those checks.
+  Delivery history retains encrypted copies even after deleting the primary secret.
 - [`crypto.SecretCipher`](crypto/) encrypts records using an explicitly configured
   key. Apps load `SECRET_ENCRYPTION_KEY` and inject the cipher; providers receive
   ciphertext only. Preserve all authenticated metadata, including nanosecond
