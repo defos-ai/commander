@@ -10,7 +10,8 @@
   embedding or JSON round trips to bypass the API boundary.
 - Use plural endpoint names. Operation routes, handlers and their OpenAPI schemas
   belong in [endpoints/operations/](endpoints/operations/). The root
-  [openapi.go](openapi.go) assembles the document and catalog schemas.
+  [openapi.go](openapi.go) assembles the document and catalog schemas. Secret
+  handlers and schemas live together in [endpoints/secrets.go](endpoints/secrets.go).
 - Derive schemas from API models and update routes, mappings, validation, schemas
   and consumers together when API behavior changes. Keep Swagger assets local and
   documentation disabled unless the host explicitly enables it.

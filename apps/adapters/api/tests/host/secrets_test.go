@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
-	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
+	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	"github.com/defos-ai/commander/framework/crypto"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
@@ -278,7 +278,7 @@ func TestSecretFailuresAreSanitizedAndNeverRetried(t *testing.T) {
 				t.Fatal(err)
 			}
 			mux := http.NewServeMux()
-			secretendpoints.Register(mux, service)
+			endpoints.RegisterSecrets(mux, service)
 			request := httptest.NewRequest(http.MethodPost, secretsPath, strings.NewReader(`{"agent_type":"builder-agent","name":"TOKEN","value":"`+secretTestValue+`"}`))
 			request.Header.Set("Content-Type", "application/json")
 			recorder := httptest.NewRecorder()
