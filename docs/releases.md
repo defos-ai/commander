@@ -88,7 +88,8 @@ the repository's `GITHUB_TOKEN` with `contents: write`.
 
 ## Docker images
 
-Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
+Commander publishes the following images with a version tag, such as `v0.1.0`,
+and a moving `stable` tag:
 
 | Image | Workflow |
 | --- | --- |
@@ -98,9 +99,7 @@ Each image has a version tag, such as `v0.1.0`, and a moving `stable` tag:
 | `ghcr.io/defos-ai/commander-admin` | [push-admin.yml](../.github/workflows/push-admin.yml) |
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
 | `ghcr.io/defos-ai/commander-controller` | [push-controllers.yml](../.github/workflows/push-controllers.yml) |
-| `ghcr.io/defos-ai/commander-browser-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 | `ghcr.io/defos-ai/commander-builder-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
-| `ghcr.io/defos-ai/commander-web-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
@@ -119,6 +118,13 @@ to that run's image digest without rebuilding, then marks the GitHub Release as
 `Latest`. Only the highest published stable release advances these pointers;
 publishing an older maintenance version leaves them unchanged.
 The all-in-one image remains `ghcr.io/defos-ai/commander-aio:stable`.
+
+The [web agent](https://github.com/defos-ai/commander-web-agent) and
+[browser agent](https://github.com/defos-ai/commander-browser-agent) publish and
+promote their images from their own repositories. Their image names remain
+`ghcr.io/defos-ai/commander-web-agent` and
+`ghcr.io/defos-ai/commander-browser-agent`; their versions are independent of
+Commander releases. **Make release** must not publish or promote these images.
 
 Tags update individually. If promotion fails partway through, rerun failed jobs
 in the same release run. Pin version tags or digests when deploying several

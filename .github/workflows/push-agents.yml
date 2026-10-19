@@ -8,12 +8,6 @@ on:
         type: string
         required: true
     outputs:
-      browser-digest:
-        description: Published browser-agent image digest
-        value: ${{ jobs.push.outputs.browser-digest }}
-      web-digest:
-        description: Published web-agent image digest
-        value: ${{ jobs.push.outputs.web-digest }}
       builder-digest:
         description: Published builder-agent image digest
         value: ${{ jobs.push.outputs.builder-digest }}
@@ -28,8 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      browser-digest: ${{ steps.browser.outputs.digest }}
-      web-digest: ${{ steps.web.outputs.digest }}
       builder-digest: ${{ steps.builder.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
@@ -42,32 +34,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish browser agent
-        uses: docker/build-push-action@v7
-        id: browser
-        with:
-          context: .
-          file: apps/agents/browser/docker/Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: ghcr.io/defos-ai/commander-browser-agent:${{ inputs.version }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ inputs.version }}
-      - name: Publish web agent
-        uses: docker/build-push-action@v7
-        id: web
-        with:
-          context: .
-          file: apps/agents/web/docker/Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: ghcr.io/defos-ai/commander-web-agent:${{ inputs.version }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ inputs.version }}
       - name: Publish builder agent
         uses: docker/build-push-action@v7
         id: builder

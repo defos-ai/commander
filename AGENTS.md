@@ -53,6 +53,8 @@ The user's current instructions take precedence over repository guidance.
   newer-release check and serialized release concurrency so maintenance releases
   cannot move these pointers backward. Native asset names omit the version;
   use `releases/latest/download` for quick start and version URLs for pinning.
+  Web/browser images are released by their standalone repositories; keep them
+  out of Commander's image publishing and `stable` promotion.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.

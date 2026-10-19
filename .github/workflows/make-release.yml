@@ -153,8 +153,6 @@ jobs:
           "commander-admin": "${{ needs.admin.outputs.digest }}",
           "commander-mcp": "${{ needs.mcp.outputs.digest }}",
           "commander-controller": "${{ needs.controllers.outputs.digest }}",
-          "commander-browser-agent": "${{ needs.agents.outputs.browser-digest }}",
-          "commander-web-agent": "${{ needs.agents.outputs.web-digest }}",
           "commander-builder-agent": "${{ needs.agents.outputs.builder-digest }}",
           "commander-aio": "${{ needs.aio.outputs.digest }}",
           "commander-playground": "${{ needs.playground.outputs.digest }}"
