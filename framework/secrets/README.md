@@ -41,8 +41,8 @@ For agents that need managed secrets, configure `AgentConfig.Secrets` with a
 decryptor using the same encryption key as the API. The builder host accepts
 optional `SECRETS_ENCRYPTION_KEY`; the standalone web and browser hosts do not need it.
 The controller needs no key. It reads encrypted records from its configured
-database and sends them only for names declared by the requesting agent's
-registered type.
+database and sends them only within the requesting agent's registered type.
+Static declarations govern action readiness; they are not access permissions.
 
 Read a declared secret inside an action's discovery or run callback:
 
@@ -55,11 +55,11 @@ defer clear(value)
 ```
 
 Values stay in agent memory and are not exported into the process environment.
-Only the current action's declared names are accessible through its context.
+`action.Secret` reads only the current action's declared names.
 Missing or expired secrets make the affected action unavailable; unrelated
 actions remain usable. Execution checks availability again before calling the action.
 
-By default, agents request fresh values every 30 seconds and retry outstanding
+By default, agents request fresh declared values every 30 seconds and retry outstanding
 requests every 5 seconds. Installed values expire after at most one minute, or
 earlier when the secret itself expires. Updates arrive on refresh; deletion or
 loss of the controller blocks new use after the installed value's deadline.
@@ -69,6 +69,35 @@ The bus and agent hosts form a trusted deployment boundary. Type/name checks
 do not authenticate an untrusted bus publisher; restrict broker and filesystem
 access. Cross-type requests, including a builder requesting another agent's
 secrets, are not supported by this runtime policy.
+
+### Request a secret during execution
+
+When the need for a secret depends on the work, the action decides when to request
+it. For example, check the agent's configured environment token first, then call:
+
+```go
+value, err := action.RequestSecret(ctx, "GITHUB_TOKEN")
+if err != nil {
+    return result, err
+}
+defer clear(value)
+```
+
+This requires a running `Agent.Serve` with `AgentConfig.Secrets` configured. It
+returns a valid cached value or requests one through the existing encrypted
+exchange and waits for installation. The name does not need `RequiredSecrets`;
+putting it there would require it before the action starts. Requests stay scoped
+to the agent type and contain no secret value.
+
+The wait ends on delivery, caller cancellation or agent shutdown. Use a context
+deadline to bound it. The action remains in flight; this does not pause the
+controller's task timeout or add automatic task retries. When the last waiter
+leaves, unused on-demand requests stop refreshing; already-published requests
+expire normally. Cached values remain usable only within their lease.
+
+Pending requests appear in the API and Admin Secrets page. Playground's automatic
+form currently follows preflight blockers; opening it for a running action's
+on-demand request is a separate integration step.
 
 ## Request and delivery tracking
 

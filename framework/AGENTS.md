@@ -135,10 +135,18 @@
   action's declared names. Never use process-wide environment mutation. Reuse
   request/delivery/acknowledgement identities on retry; refresh with fresh requests
   and reject inactive or expired deliveries. Clear held values at shutdown.
+  `action.RequestSecret(ctx, name)` lets a running action request a valid name
+  on demand within its agent type. Keep that decision in action code; do not add
+  input-condition rules to action metadata or controller preflight. Restrict the
+  request capability to active execution in `Serve`, and end waits on caller or
+  host cancellation. Wake waiters directly on installation, independently of
+  rediscovery and the action gate. Stop refreshing unused dynamic requests;
+  preserve installation acknowledgement retries and finite cached leases.
 - Controller secret synchronization runs in the existing owner loop with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
-  recipient's registered type, declared names and current stored version. The
-  controller never decrypts. Keep trusted-bus and finite-lease revocation limits
+  recipient's registered type and current stored version. Agents may request any
+  valid name within that type; static declarations govern readiness, not access.
+  The controller never decrypts. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
 - Preserve schema validation of action input, output and proposed next actions.
   Public snapshots must remain independent.

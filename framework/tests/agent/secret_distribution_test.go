@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 	"sync"
@@ -145,6 +146,14 @@ func TestSecretContextAndConfigurationValidation(t *testing.T) {
 	if _, err := action.Secret(t.Context(), "TOKEN"); !errors.Is(err, action.ErrSecretUnavailable) {
 		t.Fatal("context without provider returned a value")
 	}
+	if _, err := action.RequestSecret(t.Context(), "TOKEN"); !errors.Is(err, action.ErrSecretUnavailable) {
+		t.Fatal("context without a requester accepted a secret request")
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := action.RequestSecret(canceled, "TOKEN"); !errors.Is(err, context.Canceled) {
+		t.Fatal("canceled secret request lost its cancellation")
+	}
 	cipher, err := crypto.NewSecretCipher(strings.Repeat("27", 32))
 	if err != nil {
 		t.Fatal(err)
@@ -242,6 +251,213 @@ func TestAgentWaitsForSecretRediscoveryBeforeStartingQueuedWork(t *testing.T) {
 	}
 }
 
+func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testing.T) {
+	const plaintext = "dynamic-secret-value-sentinel"
+	type input struct {
+		Private bool `json:"private"`
+	}
+	type output struct {
+		Matched bool `json:"matched"`
+	}
+	var privateCalls atomic.Int32
+	executor, err := action.NewFunc(action.FuncConfig[input, output]{
+		Action: actions.Action{Name: "inspect"},
+		Run: func(ctx context.Context, in input) (output, error) {
+			if !in.Private {
+				return output{Matched: true}, nil
+			}
+			privateCalls.Add(1)
+			value, err := action.RequestSecret(ctx, "TOKEN")
+			defer clear(value)
+			if err == nil {
+				undeclared, lookupErr := action.Secret(ctx, "TOKEN")
+				clear(undeclared)
+				if !errors.Is(lookupErr, action.ErrSecretUnavailable) {
+					return output{}, errors.New("dynamic request granted undeclared static lookup")
+				}
+			}
+			return output{Matched: bytes.Equal(value, []byte(plaintext))}, err
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := startSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
+	if snapshot := fixture.runtime.Describe(); snapshot.Actions[0].Status != action.Ready || len(snapshot.Actions[0].RequiredSecrets) != 0 {
+		t.Fatal("on-demand secret changed startup readiness or declarations")
+	}
+	public := fixture.command(t, "inspect", `{"private":false}`)
+	fixture.outcome(t, public, controllerevents.ActionSucceeded)
+	for _, message := range fixture.bus.history() {
+		if message.Type == controllerevents.SecretSyncRequested {
+			t.Fatal("startup or public work requested a dynamic secret")
+		}
+	}
+	command := fixture.command(t, "inspect", `{"private":true}`)
+	request := fixture.request(t, "")
+	if request.Key.Scope.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.runtime.ID() || request.OperationID != "" {
+		t.Fatal("dynamic request lost its agent scope")
+	}
+	if fixture.runtime.Status() != agent.AgentWorking || privateCalls.Load() != 1 {
+		t.Fatal("request did not suspend the active action")
+	}
+	for _, message := range fixture.bus.history() {
+		if message.CorrelationID == command && (message.Type == controllerevents.ActionSucceeded || message.Type == controllerevents.CommandFailed) {
+			t.Fatal("action finished before receiving the requested secret")
+		}
+	}
+	delivery, err := agentevents.NewSecretDelivery(request, fixture.secret(t, request, time.Time{}, plaintext))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.deliver(t, delivery)
+	result := fixture.outcome(t, command, controllerevents.ActionSucceeded)
+	var accepted actions.ActionOutput
+	var decoded output
+	if json.Unmarshal(result.Payload, &accepted) != nil || json.Unmarshal(accepted.Output, &decoded) != nil || !decoded.Matched {
+		t.Fatal("encrypted delivery did not resume the original action with its value")
+	}
+	// Installation acknowledgement must survive the last waiter returning.
+	acknowledged := false
+	for !acknowledged {
+		for _, message := range fixture.bus.history() {
+			if message.Type == controllerevents.SecretInstalled && message.CorrelationID == delivery.ID {
+				if err := controllerevents.ValidateSecretInstalledDelivery(message, delivery); err != nil {
+					t.Fatal(err)
+				}
+				acknowledged = true
+			}
+		}
+		if !acknowledged {
+			fixture.next(t, controllerevents.SecretInstalled)
+		}
+	}
+	second := fixture.command(t, "inspect", `{"private":true}`)
+	result = fixture.outcome(t, second, controllerevents.ActionSucceeded)
+	if json.Unmarshal(result.Payload, &accepted) != nil || json.Unmarshal(accepted.Output, &decoded) != nil || !decoded.Matched {
+		t.Fatal("cached secret reuse returned a different value")
+	}
+	if privateCalls.Load() != 2 {
+		t.Fatal("secret delivery repeated an execution or prevented cached reuse")
+	}
+	for _, message := range fixture.bus.history() {
+		if message.Type == controllerevents.SecretSyncRequested {
+			payload, err := controllerevents.DecodeSecretSyncRequested(message)
+			if err != nil || payload.Request.ID != request.ID {
+				t.Fatal("cached secret lookup created another request")
+			}
+		}
+	}
+	fixture.stop(t)
+	if strings.Contains(fixture.logs.String(), plaintext) {
+		t.Fatal("agent logged the requested secret")
+	}
+	for _, message := range fixture.bus.history() {
+		if bytes.Contains(message.Payload, []byte(plaintext)) {
+			t.Fatal("agent published the requested secret in metadata or output")
+		}
+	}
+}
+
+func TestAgentDynamicSecretWaitEndsOnCancellation(t *testing.T) {
+	for _, stopHost := range []bool{false, true} {
+		t.Run(map[bool]string{false: "request", true: "host"}[stopHost], func(t *testing.T) {
+			cancelRequest := make(chan context.CancelFunc, 1)
+			returned := make(chan error, 1)
+			executor, err := action.NewFunc(action.FuncConfig[struct{}, struct{}]{
+				Action: actions.Action{Name: "wait"},
+				Run: func(ctx context.Context, _ struct{}) (struct{}, error) {
+					ctx, cancel := context.WithCancel(ctx)
+					defer cancel()
+					cancelRequest <- cancel
+					value, err := action.RequestSecret(ctx, "TOKEN")
+					clear(value)
+					returned <- err
+					return struct{}{}, err
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := startSecretAgentActions(t, time.Second, 100*time.Millisecond, executor)
+			command := fixture.command(t, "wait", `{}`)
+			request := fixture.request(t, "")
+			if stopHost {
+				fixture.stop(t)
+			} else {
+				(<-cancelRequest)()
+				fixture.outcome(t, command, controllerevents.CommandFailed)
+				if fixture.runtime.Status() != agent.AgentReady {
+					t.Fatal("canceling the request did not release the agent for other work")
+				}
+			}
+			select {
+			case err := <-returned:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("canceled secret wait returned %v", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("canceled secret waiter did not return")
+			}
+			if stopHost {
+				return
+			}
+			// Observe beyond the refresh interval: a canceled last waiter must not
+			// keep requesting fresh leases for an unused dynamic secret.
+			quiet := time.NewTimer(250 * time.Millisecond)
+			defer quiet.Stop()
+			for {
+				select {
+				case message := <-fixture.bus.outgoing:
+					if message.Type == controllerevents.SecretSyncRequested {
+						payload, err := controllerevents.DecodeSecretSyncRequested(message)
+						if err != nil || payload.Request.ID != request.ID {
+							t.Fatal("canceled last waiter kept refreshing its request")
+						}
+					}
+				case <-quiet.C:
+					return
+				case <-fixture.ctx.Done():
+					t.Fatal("agent stopped after canceling only the request")
+				}
+			}
+		})
+	}
+}
+
+func (f *secretFixture) command(t *testing.T, name, input string) string {
+	t.Helper()
+	message, err := agentcommands.NewRunAction(f.runtime.ID(), actions.ActionCall{ActionName: name, Input: json.RawMessage(input)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case f.bus.commands <- &secretTestDelivery{message: message, acknowledged: make(chan struct{})}:
+	case <-f.ctx.Done():
+		t.Fatal("agent stopped before accepting command")
+	}
+	return message.ID
+}
+
+func (f *secretFixture) outcome(t *testing.T, commandID string, kind messages.MessageType) messages.Message {
+	t.Helper()
+	for {
+		select {
+		case message := <-f.bus.outgoing:
+			if message.CorrelationID != commandID || (message.Type != controllerevents.ActionSucceeded && message.Type != controllerevents.CommandFailed) {
+				continue
+			}
+			if message.Type != kind {
+				t.Fatalf("unexpected command outcome: %s", message.Type)
+			}
+			return message
+		case <-f.ctx.Done():
+			t.Fatal("agent did not finish command")
+			return messages.Message{}
+		}
+	}
+}
+
 type secretFixture struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -251,29 +467,39 @@ type secretFixture struct {
 	cipher   *crypto.SecretCipher
 	bus      *secretBus
 	stopped  bool
+	logs     bytes.Buffer
 }
 
 func startSecretAgent(t *testing.T, ttl, refresh time.Duration, requireOnDiscovery ...bool) *secretFixture {
+	t.Helper()
+	executor := &contextSecretAction{Base: action.NewBase(actions.Action{Name: "build", RequiredSecrets: []string{"TOKEN"}, InputSchema: []byte(`{}`), OutputSchema: []byte(`{}`)})}
+	if len(requireOnDiscovery) > 0 {
+		executor.requireOnDiscovery = requireOnDiscovery[0]
+	}
+	unrelated := &secretAction{Base: action.NewBase(actions.Action{Name: "ping", InputSchema: []byte(`{}`), OutputSchema: []byte(`{}`)})}
+	fixture := startSecretAgentActions(t, ttl, refresh, executor, unrelated)
+	fixture.executor = executor
+	return fixture
+}
+
+func startSecretAgentActions(t *testing.T, ttl, refresh time.Duration, executors ...action.Executor) *secretFixture {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	cipher, err := crypto.NewSecretCipher(strings.Repeat("27", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	executor := &contextSecretAction{Base: action.NewBase(actions.Action{Name: "build", RequiredSecrets: []string{"TOKEN"}, InputSchema: []byte(`{}`), OutputSchema: []byte(`{}`)})}
-	if len(requireOnDiscovery) > 0 {
-		executor.requireOnDiscovery = requireOnDiscovery[0]
-	}
-	unrelated := &secretAction{Base: action.NewBase(actions.Action{Name: "ping", InputSchema: []byte(`{}`), OutputSchema: []byte(`{}`)})}
+	fixture := &secretFixture{ctx: ctx, cancel: cancel, cipher: cipher,
+		bus: &secretBus{outgoing: make(chan messages.Message, 256), incoming: make(chan *secretTestDelivery, 32), commands: make(chan *secretTestDelivery, 8)}, done: make(chan error, 1)}
 	noHeartbeat := time.Duration(0)
-	runtime, err := agent.NewAgent(agent.AgentConfig{Type: "fixture", Actions: []action.Executor{executor, unrelated}, ArtifactFileStore: unusedArtifacts{},
+	runtime, err := agent.NewAgent(agent.AgentConfig{Type: "fixture", Actions: executors, ArtifactFileStore: unusedArtifacts{},
 		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"}, HeartbeatInterval: &noHeartbeat,
+		Logger:  slog.New(slog.NewTextHandler(&fixture.logs, nil)),
 		Secrets: &agent.SecretConfig{Decryptor: cipher, RequestTTL: ttl, RefreshInterval: refresh, RetryInterval: 20 * time.Millisecond}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := &secretFixture{ctx: ctx, cancel: cancel, runtime: runtime, executor: executor, cipher: cipher,
-		bus: &secretBus{outgoing: make(chan messages.Message, 256), incoming: make(chan *secretTestDelivery, 32), commands: make(chan *secretTestDelivery, 8)}, done: make(chan error, 1)}
+	fixture.runtime = runtime
 	go func() { fixture.done <- runtime.Serve(ctx, fixture.bus, nil) }()
 	t.Cleanup(func() { fixture.stop(t) })
 	fixture.next(t, controllerevents.AgentStarted)
@@ -421,9 +647,16 @@ type secretBus struct {
 	incoming            chan *secretTestDelivery
 	commands            chan *secretTestDelivery
 	failAcknowledgement atomic.Bool
+	mu                  sync.Mutex
+	published           []messages.Message
 }
 
 func (b *secretBus) Publish(ctx context.Context, _ string, message messages.Message) error {
+	b.mu.Lock()
+	observed := message
+	observed.Payload = bytes.Clone(message.Payload)
+	b.published = append(b.published, observed)
+	b.mu.Unlock()
 	select {
 	case b.outgoing <- message:
 		if message.Type == controllerevents.SecretInstalled && b.failAcknowledgement.CompareAndSwap(true, false) {
@@ -433,6 +666,12 @@ func (b *secretBus) Publish(ctx context.Context, _ string, message messages.Mess
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (b *secretBus) history() []messages.Message {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]messages.Message{}, b.published...)
 }
 func (b *secretBus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subscription, error) {
 	if strings.HasSuffix(inbox.Topic, ".events") {

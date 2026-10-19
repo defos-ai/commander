@@ -170,6 +170,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		return err
 	}
 	if a.secrets != nil {
+		a.secrets.start(workersCtx)
 		secretsDone = make(chan struct{})
 		go func() {
 			defer close(secretsDone)

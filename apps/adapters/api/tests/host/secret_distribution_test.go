@@ -123,9 +123,22 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	onDemand, err := action.NewFunc(action.FuncConfig[struct{}, output]{
+		Action: actionmodel.Action{Name: "on-demand"},
+		Run: func(ctx context.Context, _ struct{}) (output, error) {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			value, err := action.RequestSecret(ctx, "RUNTIME_TOKEN")
+			defer clear(value)
+			return output{Matched: bytes.Equal(value, []byte(secretTestValue))}, err
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	heartbeat := 100 * time.Millisecond
 	worker, err := agent.NewAgent(agent.AgentConfig{
-		Type: "builder-agent", Actions: []action.Executor{private, public}, ArtifactFileStore: files,
+		Type: "builder-agent", Actions: []action.Executor{private, public, onDemand}, ArtifactFileStore: files,
 		HeartbeatInterval: &heartbeat,
 		Secrets: &agent.SecretConfig{Decryptor: cipher, RequestTTL: 2 * time.Second,
 			RefreshInterval: 600 * time.Millisecond, RetryInterval: 100 * time.Millisecond},
@@ -242,6 +255,54 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		t.Fatal("new action execution used a deleted secret after its lease expired")
 	}
 	run("public", 0)
+
+	// The action decides at run time that it needs a secret. It has no static
+	// requirement, and uses the same API, saved request and encrypted delivery.
+	pending, err := config.SecretRequestStore.ListPending(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range pending {
+		if request.Request.Key.Name == "RUNTIME_TOKEN" {
+			t.Fatal("on-demand secret was requested before the action asked for it")
+		}
+	}
+	type outcome struct {
+		result actionmodel.ActionOutput
+		err    error
+	}
+	finished := make(chan outcome, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		result, err := coordinator.RunAction(ctx, worker.ID(), actionmodel.ActionCall{ActionName: "on-demand", Input: json.RawMessage(`{}`)})
+		finished <- outcome{result: result, err: err}
+	}()
+	awaitSecretCondition(t, "on-demand request visible through API", func() bool {
+		for _, request := range listSecretRequests(t, server, "") {
+			if request.AgentID == worker.ID() && request.Name == "RUNTIME_TOKEN" && request.Status == "needs_value" {
+				return true
+			}
+		}
+		return false
+	})
+	select {
+	case <-finished:
+		t.Fatal("action returned before its requested secret was supplied")
+	default:
+	}
+	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath,
+		`{"agent_type":"builder-agent","name":"RUNTIME_TOKEN","value":"`+secretTestValue+`"}`), http.StatusCreated)
+	select {
+	case completed := <-finished:
+		var result output
+		if completed.err != nil || json.Unmarshal(completed.result.Output, &result) != nil || !result.Matched {
+			t.Fatal("on-demand action did not resume with the API-supplied secret")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("on-demand action did not resume after secret submission")
+	}
+	run("on-demand", 0)
 	stopAgent()
 	stopOperations()
 	closeSecretController(t, coordinator)

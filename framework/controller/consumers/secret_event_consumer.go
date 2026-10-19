@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms"
@@ -18,8 +17,8 @@ import (
 
 // SecretEventConsumer transfers encrypted values only. Its caller serializes
 // Consume and Reconcile with inventory observations on the controller owner loop.
-// The bus remains a trusted deployment boundary; declarations are not proof of
-// a publisher's identity, and cross-type access is not granted here.
+// The bus remains a trusted deployment boundary. Agents may request any name in
+// their registered type; declarations are readiness metadata, not authorization.
 type SecretEventConsumer struct {
 	Bus       comms.Bus
 	Inventory agents.AgentStore
@@ -52,7 +51,7 @@ func (c SecretEventConsumer) request(ctx context.Context, message messages.Messa
 		return err
 	}
 	if !allowed {
-		return InvalidMessage(errors.New("secret request must match a live agent's declared secret"))
+		return InvalidMessage(errors.New("secret request must match a live agent's registered type"))
 	}
 	if err := c.Requests.Create(ctx, request); err != nil {
 		return secretTransitionError(err)
@@ -182,7 +181,7 @@ func (c SecretEventConsumer) installed(ctx context.Context, message messages.Mes
 		return err
 	}
 	if !allowed {
-		return InvalidMessage(errors.New("secret installation must match a live agent's declared secret"))
+		return InvalidMessage(errors.New("secret installation must match a live agent's registered type"))
 	}
 	secret, available, err := c.current(ctx, record.Request.Key, now)
 	if err != nil {
@@ -214,12 +213,7 @@ func (c SecretEventConsumer) allowed(ctx context.Context, request secrets.Reques
 	if record.ID != request.AgentID || record.Stale || record.Status == agents.AgentStopped || string(record.Type) != request.Key.Scope.AgentType {
 		return false, nil
 	}
-	for _, action := range record.Actions {
-		if slices.Contains(action.RequiredSecrets, request.Key.Name) {
-			return true, nil
-		}
-	}
-	return false, nil
+	return true, nil
 }
 
 func (c SecretEventConsumer) current(ctx context.Context, key secrets.Key, now time.Time) (secrets.Secret, bool, error) {

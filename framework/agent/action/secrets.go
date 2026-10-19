@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+
+	"github.com/defos-ai/commander/framework/domain/secrets"
 )
 
 // ErrSecretUnavailable also covers undeclared names; errors never include values.
@@ -13,6 +15,12 @@ var ErrSecretUnavailable = errors.New("required secret is unavailable")
 // Agent runtimes scope providers to the current action's RequiredSecrets.
 type SecretProvider interface {
 	Secret(string) ([]byte, error)
+}
+
+// SecretRequester optionally supports requesting a value through the agent's
+// encrypted secret exchange. Requesting waits for delivery or cancellation.
+type SecretRequester interface {
+	RequestSecret(context.Context, string) ([]byte, error)
 }
 
 type secretContextKey struct{}
@@ -36,6 +44,43 @@ func Secret(ctx context.Context, name string) ([]byte, error) {
 	value, err := provider.Secret(name)
 	if err != nil {
 		clear(value)
+		return nil, ErrSecretUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		clear(value)
+		return nil, err
+	}
+	copy := bytes.Clone(value)
+	clear(value)
+	return copy, nil
+}
+
+// RequestSecret obtains a named secret for the running agent type. It requires a
+// serving agent with secret synchronization configured and may wait for operator
+// input. Clear returned bytes when finished; never include them in results or logs.
+func RequestSecret(ctx context.Context, name string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := secrets.ValidateName(name); err != nil {
+		return nil, err
+	}
+	provider, ok := ctx.Value(secretContextKey{}).(SecretRequester)
+	if !ok || provider == nil {
+		return nil, ErrSecretUnavailable
+	}
+	value, err := provider.RequestSecret(ctx, name)
+	if err != nil {
+		clear(value)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
 		return nil, ErrSecretUnavailable
 	}
 	if err := ctx.Err(); err != nil {

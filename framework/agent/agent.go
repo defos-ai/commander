@@ -32,7 +32,7 @@ type AgentConfig struct {
 	Actions          []action.Executor
 	PublicConfig     json.RawMessage
 	Environment      environment.Environment
-	// Secrets enables encrypted synchronization for this agent's declared names.
+	// Secrets enables encrypted synchronization of declared and requested names.
 	Secrets *SecretConfig
 	// ArtifactFileStore is required and is created by the host.
 	ArtifactFileStore artifacts.ArtifactFileStore
@@ -204,7 +204,7 @@ func (a *Agent) discoverActions(ctx context.Context, scope *environment.Discover
 		if discoveryErr = ctx.Err(); discoveryErr != nil {
 			break
 		}
-		status, err := t.Discover(a.secretContext(ctx, t.Action()), a.config.Environment, scope.Clone())
+		status, err := t.Discover(a.secretContext(ctx, t.Action(), false), a.config.Environment, scope.Clone())
 		if errors.Is(err, action.ErrSecretUnavailable) && a.missingSecrets(t.Action()) {
 			// Missing managed values are an action blocker. Keep serving so the
 			// synchronization request can obtain them and rediscover this action.
@@ -290,7 +290,10 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 				input = json.RawMessage(`{}`)
 			}
 			executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
-			result, err := t.Run(a.secretContext(executionContext, description), input)
+			executionContext, endExecution := context.WithCancel(executionContext)
+			defer endExecution()
+			result, err := t.Run(a.secretContext(executionContext, description, fromServer), input)
+			endExecution()
 			if err != nil {
 				return ActionOutput{}, err
 			}

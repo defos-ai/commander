@@ -23,7 +23,7 @@ type SecretDecryptor interface {
 	Decrypt(secretmodel.Secret) ([]byte, error)
 }
 
-// SecretConfig enables synchronization of declared secrets for this agent type.
+// SecretConfig enables declared and on-demand secrets for this agent type.
 // Zero durations use a one-minute lease, thirty-second refresh and five-second retry.
 type SecretConfig struct {
 	Decryptor       SecretDecryptor
@@ -41,9 +41,13 @@ type secretRuntime struct {
 	dirty    uint64
 	updated  uint64
 	wake     chan struct{}
+	changed  chan struct{}
+	service  context.Context
 }
 
 type secretEntry struct {
+	declared  bool
+	waiters   int
 	request   secretmodel.Request
 	message   messages.Message
 	delivery  messages.Message
@@ -74,10 +78,11 @@ func newSecretRuntime(config *SecretConfig, agentID, typeName string, actions []
 	if settings.RequestTTL <= 0 || settings.RefreshInterval <= 0 || settings.RetryInterval <= 0 || settings.RefreshInterval >= settings.RequestTTL {
 		return nil, errors.New("secret synchronization intervals must be positive and refresh must precede request expiry")
 	}
-	runtime := &secretRuntime{config: settings, agentID: agentID, typeName: typeName, entries: make(map[string]*secretEntry), wake: make(chan struct{}, 1)}
+	runtime := &secretRuntime{config: settings, agentID: agentID, typeName: typeName,
+		entries: make(map[string]*secretEntry), wake: make(chan struct{}, 1), changed: make(chan struct{})}
 	for _, executor := range actions {
 		for _, name := range executor.Action().RequiredSecrets {
-			runtime.entries[name] = &secretEntry{}
+			runtime.entries[name] = &secretEntry{declared: true}
 		}
 	}
 	return runtime, nil
@@ -95,9 +100,101 @@ func (r *secretRuntime) clear() {
 	defer r.mu.Unlock()
 	for name, entry := range r.entries {
 		clear(entry.value)
-		r.entries[name] = &secretEntry{}
+		if entry.declared {
+			r.entries[name] = &secretEntry{declared: true}
+		} else {
+			delete(r.entries, name)
+		}
 	}
 	r.dirty, r.updated = 0, 0
+	r.service = nil
+	r.broadcast()
+}
+
+func (r *secretRuntime) start(ctx context.Context) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.service = ctx
+}
+
+func (r *secretRuntime) request(ctx, execution context.Context, name string) ([]byte, error) {
+	if r == nil || execution == nil {
+		return nil, action.ErrSecretUnavailable
+	}
+	if err := secretmodel.ValidateName(name); err != nil {
+		return nil, action.ErrSecretUnavailable
+	}
+	r.mu.Lock()
+	service := r.service
+	if service == nil || service.Err() != nil || execution.Err() != nil || ctx.Err() != nil {
+		r.mu.Unlock()
+		if err := requestCanceled(ctx, execution, service); err != nil {
+			return nil, err
+		}
+		return nil, action.ErrSecretUnavailable
+	}
+	entry := r.entries[name]
+	if entry == nil {
+		entry = &secretEntry{}
+		r.entries[name] = entry
+	}
+	if entry.installed && time.Now().Before(entry.lease) {
+		value := bytes.Clone(entry.value)
+		r.mu.Unlock()
+		if err := requestCanceled(ctx, execution, service); err != nil {
+			clear(value)
+			return nil, err
+		}
+		return value, nil
+	}
+	entry.waiters++
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		entry.waiters--
+		r.mu.Unlock()
+	}()
+	r.notify()
+	for {
+		r.mu.Lock()
+		if err := requestCanceled(ctx, execution, service); err != nil {
+			r.mu.Unlock()
+			return nil, err
+		}
+		if entry.installed && time.Now().Before(entry.lease) {
+			value := bytes.Clone(entry.value)
+			r.mu.Unlock()
+			if err := requestCanceled(ctx, execution, service); err != nil {
+				clear(value)
+				return nil, err
+			}
+			return value, nil
+		}
+		changed := r.changed
+		r.mu.Unlock()
+		select {
+		case <-ctx.Done():
+		case <-execution.Done():
+		case <-service.Done():
+		case <-changed:
+		}
+	}
+}
+
+func requestCanceled(contexts ...context.Context) error {
+	for _, ctx := range contexts {
+		if ctx != nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+// broadcast wakes every waiter without stealing the synchronization loop's wake.
+// The caller holds mu so checking a value and subscribing cannot miss a delivery.
+func (r *secretRuntime) broadcast() {
+	close(r.changed)
+	r.changed = make(chan struct{})
 }
 
 func (r *secretRuntime) value(name string) ([]byte, error) {
@@ -133,8 +230,9 @@ func (a *Agent) missingSecrets(definition actionmodel.Action) bool {
 }
 
 type scopedSecrets struct {
-	runtime *secretRuntime
-	names   []string
+	runtime   *secretRuntime
+	names     []string
+	execution context.Context
 }
 
 func (provider scopedSecrets) Secret(name string) ([]byte, error) {
@@ -144,8 +242,16 @@ func (provider scopedSecrets) Secret(name string) ([]byte, error) {
 	return provider.runtime.value(name)
 }
 
-func (a *Agent) secretContext(ctx context.Context, definition actionmodel.Action) context.Context {
-	return action.WithSecrets(ctx, scopedSecrets{runtime: a.secrets, names: slices.Clone(definition.RequiredSecrets)})
+func (provider scopedSecrets) RequestSecret(ctx context.Context, name string) ([]byte, error) {
+	return provider.runtime.request(ctx, provider.execution, name)
+}
+
+func (a *Agent) secretContext(ctx context.Context, definition actionmodel.Action, requesting bool) context.Context {
+	provider := scopedSecrets{runtime: a.secrets, names: slices.Clone(definition.RequiredSecrets)}
+	if requesting {
+		provider.execution = ctx
+	}
+	return action.WithSecrets(ctx, provider)
 }
 
 func (a *Agent) describeAction(definition actionmodel.Action) actionmodel.Action {
@@ -176,7 +282,22 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 		if entry.installed && !now.Before(entry.lease) {
 			clear(entry.value)
 			entry.value, entry.installed = nil, false
-			r.dirty++
+			if entry.declared {
+				r.dirty++
+			}
+		}
+		if !entry.declared && (entry.waiters == 0 || entry.installed) {
+			// Delivery acknowledgements outlive the caller that received a value.
+			// Keep the installed request while its waiters wake; refreshing it here
+			// could discard the acknowledgement before its first publication.
+			if entry.ack.ID != "" && now.Before(entry.request.ExpiresAt) {
+				outgoing = append(outgoing, entry.ack)
+			}
+			if !now.Before(entry.request.ExpiresAt) && !now.Before(entry.lease) {
+				clear(entry.value)
+				delete(r.entries, name)
+			}
+			continue
 		}
 		if entry.request.ID == "" || !now.Before(entry.request.ExpiresAt) || !now.Before(entry.request.RequestedAt.Add(r.config.RefreshInterval)) {
 			request := secretmodel.Request{ID: id.New(), AgentID: r.agentID, Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: r.typeName}, Name: name}, Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(r.config.RequestTTL)}
@@ -232,9 +353,10 @@ func (r *secretRuntime) install(message messages.Message, now time.Time) error {
 	entry.value, entry.metadata, entry.installed, entry.lease = bytes.Clone(value), payload.Secret.Metadata, true, message.ExpiresAt
 	message.Payload = bytes.Clone(message.Payload)
 	entry.delivery, entry.ack = message, ack
-	if changed {
+	if changed && entry.declared {
 		r.dirty++
 	}
+	r.broadcast()
 	r.notify()
 	return nil
 }

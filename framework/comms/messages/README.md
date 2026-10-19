@@ -73,7 +73,8 @@ For changes to these contracts, see [coding guidance](AGENTS.md).
 
 ## Secret synchronization contracts
 
-Agents request their declared secrets; the controller persists requests and
+Agents request declared secrets automatically or request names on demand during
+execution; the controller persists requests and
 encrypted deliveries before publishing. Only successful installation makes
 those secrets available to an action.
 
@@ -90,7 +91,7 @@ version; send it only after successful decryption and installation. These
 messages carry no operation/task work context.
 
 Typed validators match deliveries to requests and acknowledgements to the exact
-delivery. The controller checks live inventory, declared names, the registered
+delivery. The controller checks live inventory, the registered
 agent type and current stored version. The agent matches its active request,
 checks receipt-time expiry and authenticates ciphertext before installation.
 Exact delivery retries repeat the original installation acknowledgement.

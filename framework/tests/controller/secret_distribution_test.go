@@ -116,16 +116,14 @@ func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testi
 	}
 }
 
-func TestSecretRequestsRequireLiveDeclaredOwnType(t *testing.T) {
-	for _, name := range []string{"wrong type", "undeclared", "unknown recipient", "stale agent", "operation", "future"} {
+func TestSecretRequestsRequireLiveOwnType(t *testing.T) {
+	for _, name := range []string{"wrong type", "unknown recipient", "stale agent", "stopped agent", "operation", "future"} {
 		t.Run(name, func(t *testing.T) {
 			consumer, requests, _, bus := secretConsumerFixture(t)
 			request := secretSyncRequest()
 			switch name {
 			case "wrong type":
 				request.Key.Scope.AgentType = "other"
-			case "undeclared":
-				request.Key.Name = "OTHER_TOKEN"
 			case "unknown recipient":
 				request.AgentID = "fixture-agent-ffffffff"
 			case "stale agent":
@@ -133,6 +131,11 @@ func TestSecretRequestsRequireLiveDeclaredOwnType(t *testing.T) {
 				stale := store.record.Load().Clone()
 				stale.LeaseExpiresAt = time.Now().Add(-time.Second)
 				store.record.Store(&stale)
+			case "stopped agent":
+				store := consumer.Inventory.(*inventory)
+				stopped := store.record.Load().Clone()
+				stopped.Status = agents.AgentStopped
+				store.record.Store(&stopped)
 			case "operation":
 				request.OperationID = id.OperationID()
 			case "future":
@@ -147,6 +150,33 @@ func TestSecretRequestsRequireLiveDeclaredOwnType(t *testing.T) {
 				t.Fatal("invalid request reached persistence or publication")
 			}
 		})
+	}
+}
+
+func TestSecretRequestsAllowOnDemandNamesWithinRegisteredType(t *testing.T) {
+	consumer, requests, _, bus := secretConsumerFixture(t)
+	inventory := consumer.Inventory.(*inventory)
+	record := inventory.record.Load().Clone()
+	record.Actions[0].RequiredSecrets = nil
+	record.Status = agents.AgentWorking
+	inventory.record.Store(&record)
+	request := secretSyncRequest()
+	if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); err != nil {
+		t.Fatal(err)
+	}
+	if len(bus.messages) != 1 || bus.messages[0].AgentID != request.AgentID {
+		t.Fatal("on-demand request did not deliver to its registered recipient")
+	}
+	ack, err := controllerevents.NewSecretInstalled(bus.messages[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := consumer.Consume(t.Context(), ack); err != nil {
+		t.Fatal(err)
+	}
+	settled, err := requests.Get(t.Context(), request.ID)
+	if err != nil || settled.Request.Status != secrets.Fulfilled {
+		t.Fatalf("on-demand installation was not acknowledged: status=%s err=%v", settled.Request.Status, err)
 	}
 }
 
