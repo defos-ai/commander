@@ -99,11 +99,11 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	}))
 	defer provider.Close()
 	u := newUIWithConfig(t, ctx, ui.Config{
-		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL,
+		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: host.BearerCredentials{Token: token}},
 		Keys: map[string]string{"other": "test-only"}, NoColor: true, AdminURL: adminURL,
 		LocalAgentCount: 4,
-		LocalAPI:        &ui.LocalAPI{URL: "http://localhost:4274", Username: "commander", Password: password},
-		MCPCredentials:  host.BearerCredentials{Token: token},
+		AllInOne:        true,
+		API:             ui.Connection[host.BasicCredentials]{URL: "http://localhost:4274", Credentials: host.BasicCredentials{Username: "commander", Password: password}},
 	})
 	defer u.model.Close()
 	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 80})
@@ -445,7 +445,7 @@ func adminOperationUI(t *testing.T, ctx context.Context, adminURL string, noColo
 	}))
 	t.Cleanup(provider.Close)
 	u := newUIWithConfig(t, ctx, ui.Config{
-		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL,
+		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL},
 		Keys: map[string]string{"other": "test-only"}, NoColor: noColor, AdminURL: adminURL,
 	})
 	return u, publish, reads

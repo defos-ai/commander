@@ -233,6 +233,7 @@ const Help = `/help — Show this help
 /status — Show connection and queue status
 /admin — Show Admin UI link
 /credentials — Show API login and MCP token (all-in-one)
+/secrets — Provide secrets needed by watched operations
 /operations — List saved operations
 /watch <operation-id> — Follow an operation and resume model review
 /run <operation-id> <action> <json-input> — Queue an action directly through MCP

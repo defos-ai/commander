@@ -3,6 +3,7 @@ package playground_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 )
 
 func TestOperationNeedsSecrets(t *testing.T) {
@@ -43,7 +45,37 @@ func TestOperationNeedsSecrets(t *testing.T) {
 			if got := operation.NeedsSecrets(); got != test.want {
 				t.Fatalf("NeedsSecrets() = %v, want %v", got, test.want)
 			}
+			var want []secrets.Key
+			if test.want {
+				want = []secrets.Key{{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"}}
+			}
+			if got := operation.MissingSecrets(); !slices.Equal(got, want) {
+				t.Fatalf("MissingSecrets() = %v, want %v", got, want)
+			}
 		})
+	}
+}
+
+func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
+	var operation bridge.Operation
+	err := json.Unmarshal([]byte(`{"status":"waiting","preflight":{"actions":[
+		{"unavailable_agents":[
+			{"agent_type":"spawner-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]},
+			{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"},{"kind":"secret","name":"CODEX_API_KEY"},{"kind":"secret","name":"../invalid"}]}
+		]},
+		{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]},
+		{"ready_agent_ids":["ready-agent"],"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"NOT_NEEDED"}]}]}
+	]}}`), &operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []secrets.Key{
+		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "CODEX_API_KEY"},
+		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"},
+		{Scope: secrets.Scope{AgentType: "spawner-agent"}, Name: "GITHUB_TOKEN"},
+	}
+	if got := operation.MissingSecrets(); !slices.Equal(got, want) {
+		t.Fatalf("missing secrets = %v, want ordered unique scoped keys %v", got, want)
 	}
 }
 
@@ -68,6 +100,8 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 			publish(op)
 			u.text("/watch " + op.ID)
 			u.key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.wait("automatic secret form", func(view string) bool { return strings.Contains(view, "Connect to API") })
+			u.key(tea.KeyMsg{Type: tea.KeyEsc})
 			u.wait("secret wait progress", func(view string) bool {
 				return strings.Contains(view, "secrets needed") && strings.Contains(view, "Operation reviewed") && !strings.Contains(view, "Thinking")
 			})
@@ -79,7 +113,7 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 				if strings.Count(view, "Review on Admin UI ("+test.destination+")") != 1 {
 					t.Fatal("secret wait did not preserve its operation-specific Admin destination")
 				}
-			} else if !strings.Contains(view, "secrets needed · /admin for setup") || strings.Contains(view, "Review on Admin UI") || strings.Contains(view, "4275") {
+			} else if !strings.Contains(view, "secrets needed · /secrets · /admin for setup") || strings.Contains(view, "Review on Admin UI") || strings.Contains(view, "4275") {
 				t.Fatal("unconfigured Admin hint invented a destination or omitted setup guidance")
 			}
 

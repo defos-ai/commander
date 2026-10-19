@@ -103,22 +103,22 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			var authentication *bridge.AuthenticationError
 			if errors.As(msg.err, &authentication) {
 				m.mcpCommand = authentication.Command
-				if m.config.MCPCredentials.Token != "" {
+				if m.config.MCP.Credentials.Token != "" {
 					m.add("error", "MCP token rejected. Try again.")
 				}
 				m.setStage(stageMCPToken, "MCP token (hidden)", "")
 				return nil, true
 			}
 			m.add("error", msg.err.Error())
-			m.setStage(stageMCP, "MCP URL", m.config.MCPURL)
+			m.setStage(stageMCP, "MCP URL", m.config.MCP.URL)
 			return nil, true
 		}
 		m.commander = msg.client
 		m.engine = chat.New(m.ctx, m.modelClient, m.commander)
 		m.setStage(stageChat, "Ask about missions, agents, or an objective…", "")
 		m.add("success", m.provider.Name+" · "+m.settings.Model)
-		connection := "Commander connected · " + m.config.MCPURL
-		if m.config.LocalAPI != nil {
+		connection := "Commander connected · " + m.config.MCP.URL
+		if m.config.AllInOne {
 			agents := "agents"
 			if m.config.LocalAgentCount == 1 {
 				agents = "agent"
@@ -129,7 +129,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		for _, notice := range m.config.Notices {
 			m.add("notice", notice)
 		}
-		if m.config.LocalAPI == nil {
+		if !m.config.AllInOne {
 			m.add("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
 		}
 		return waitEvent(m.engine), true
@@ -202,8 +202,8 @@ func (m *Model) connect() tea.Cmd {
 	m.busy = true
 	m.activity = "Connecting to Commander"
 	ctx, generation := m.setupContext()
-	endpoint := m.config.MCPURL
-	credentials := m.config.MCPCredentials
+	endpoint := m.config.MCP.URL
+	credentials := m.config.MCP.Credentials
 	return func() tea.Msg {
 		client, err := bridge.Connect(ctx, endpoint, credentials)
 		return connected{generation, client, err}
@@ -269,7 +269,7 @@ func (m *Model) submit(value string) tea.Cmd {
 			m.add("error", err.Error())
 			return nil
 		}
-		m.config.MCPURL = value
+		m.config.MCP.URL = value
 		return m.connect()
 	case stageMCPToken:
 		credentials := host.BearerCredentials{Token: value}
@@ -277,7 +277,7 @@ func (m *Model) submit(value string) tea.Cmd {
 			m.add("error", "Enter a valid MCP token.")
 			return nil
 		}
-		m.config.MCPCredentials = credentials
+		m.config.MCP.Credentials = credentials
 		return m.connect()
 	}
 	return nil
@@ -290,7 +290,7 @@ func (m *Model) setupInput(value string) tea.Cmd {
 		help := "Use ↑/↓ and Enter to select a provider and model; mouse wheel or trackpad scroll where supported, and PgUp/PgDown also work. Choose Enter model name… for an unlisted model. Other supports OpenAI-compatible APIs. /back restarts setup; /exit quits. Override MCP with --mcp-url."
 		help += "\n\n/admin — Show Admin UI link"
 		help += "\n\nDrag to select, then copy normally: Ctrl+Shift+C in GNOME Terminal, Cmd+C in macOS Terminal, or the Copy menu."
-		if m.config.LocalAPI != nil {
+		if m.config.AllInOne {
 			help += "\n\n/credentials — Show API login and MCP token"
 		}
 		m.add("notice", help)
@@ -303,7 +303,7 @@ func (m *Model) setupInput(value string) tea.Cmd {
 		m.generation++
 		m.busy = false
 		if m.stage == stageMCPToken {
-			m.setStage(stageMCP, "MCP URL", m.config.MCPURL)
+			m.setStage(stageMCP, "MCP URL", m.config.MCP.URL)
 			return nil
 		}
 		m.manual = false

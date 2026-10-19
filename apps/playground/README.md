@@ -24,9 +24,11 @@ inside the container; the spawner needs no Docker socket. See
 requirements. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
-If an operation shows **secrets needed**, open its Admin link and provide the
-requested values under **Secrets**. Without a link, use `/admin` for setup help.
-Keep secret values out of chat; work waits for agents to report ready.
+When an operation needs managed secrets, Playground opens a masked form. Enter
+the values there; **Tab** moves between fields and **Enter** advances or saves.
+**Esc** postpones it; `/secrets` reopens it. Values go directly to the API,
+outside chat and the model. Admin's **Agents → Secrets** page remains available.
+Work waits for agents to report ready after saving.
 Use `/credentials` for the API login and MCP token, or use another terminal:
 
 ```sh
@@ -73,6 +75,8 @@ Compose also configures `/admin` for `http://localhost:4275`, following
 `COMMANDER_UI_PORT` when changed. Set `COMMANDER_ADMIN_URL` for another browser address.
 API secret management is configured automatically with a separate persistent
 [encryption key](../../docs/deployment.md#secret-encryption).
+Compose supplies the API address for the secret form. Enter the API login when
+asked, or set `COMMANDER_API_USERNAME` and `COMMANDER_API_PASSWORD` before launch.
 `docker compose down` stops the hosts. See
 [deployment](../../docs/deployment.md) for connections and state.
 
@@ -196,6 +200,8 @@ To connect to an existing MCP server, paste its token when prompted or set
 | --- | --- | --- |
 | MCP endpoint | `COMMANDER_MCP_URL` | `--mcp-url` |
 | MCP bearer token | `COMMANDER_MCP_TOKEN` | Hidden setup prompt |
+| API endpoint for agent secrets | `COMMANDER_API_URL` | `--api-url` or local form |
+| API username / password | `COMMANDER_API_USERNAME` / `COMMANDER_API_PASSWORD` | Local form; password is masked |
 | Admin browser address | `COMMANDER_ADMIN_URL` | `--admin-url` |
 | Provider | `COMMANDER_LLM_PROVIDER` | `--provider` |
 | Model | `COMMANDER_LLM_MODEL` | `--model` |
@@ -206,6 +212,9 @@ To connect to an existing MCP server, paste its token when prompted or set
 Flags override environment values. MCP defaults to `http://localhost:4273/mcp`.
 For existing hosts, add `--admin-url https://YOUR_ADMIN_HOST` to enable `/admin`;
 Playground does not infer Admin's address or API connection from MCP.
+When a secret form opens, enter the API URL and login if they are not configured.
+All-in-one reuses its existing API connection automatically. The connection and
+entered values stay in session memory; API requests do not follow redirects.
 MCP credentials are sent only to the configured endpoint; redirects are not followed.
 An HTTP `401` stops requests until you reconnect with the correct token. During
 setup, paste the token into the hidden input and press **Enter** to reconnect.
@@ -236,6 +245,7 @@ to include rendered accessibility and screenshots.
 | `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
 | `/credentials` | Show the all-in-one API login and MCP token. Also available during model setup. |
 | `/admin` | Show the Admin link. Also available during model setup. |
+| `/secrets` | Reopen the local form for secrets required by watched operations. Values bypass the model. |
 | `/watch <operation-id>` | Follow saved work and resume model decisions. |
 | `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Pending questions and action readiness still apply. |
 | `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |

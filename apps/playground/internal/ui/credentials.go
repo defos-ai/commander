@@ -19,9 +19,9 @@ func tokenEnvironmentCommand(command string) string {
 
 func (m *Model) localCommand(value string) bool {
 	if value == "/status" && m.stage == stageChat {
-		m.add("notice", "MCP: "+m.config.MCPURL)
-		if m.config.LocalAPI != nil {
-			m.add("notice", "API: "+m.config.LocalAPI.URL)
+		m.add("notice", "MCP: "+m.config.MCP.URL)
+		if m.config.API.URL != "" {
+			m.add("notice", "API: "+m.config.API.URL)
 		}
 		if m.config.AdminURL != "" {
 			m.add("admin", "Admin:")
@@ -53,11 +53,11 @@ func (m *Model) localCommand(value string) bool {
 		m.add("notice", "Usage: /credentials")
 		return true
 	}
-	api := m.config.LocalAPI
-	if api == nil {
+	if !m.config.AllInOne {
 		m.add("notice", "Local credentials are available only with --all-in-one.")
 		return true
 	}
-	m.add("notice", fmt.Sprintf("API: %s\nUsername: %s\nPassword: %s\n\nMCP: %s\nToken: %s", api.URL, api.Username, api.Password, m.config.MCPURL, m.config.MCPCredentials.Token))
+	api, mcp := m.config.API, m.config.MCP
+	m.add("notice", fmt.Sprintf("API: %s\nUsername: %s\nPassword: %s\n\nMCP: %s\nToken: %s", api.URL, api.Credentials.Username, api.Credentials.Password, mcp.URL, mcp.Credentials.Token))
 	return true
 }

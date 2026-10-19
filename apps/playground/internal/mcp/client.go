@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -226,15 +227,17 @@ func (o Operation) Terminal() bool {
 	return o.Status == "completed" || o.Status == "failed" || o.Status == "cancelled"
 }
 
-// NeedsSecrets uses current managed-secret evidence, never generic sensitive
+// MissingSecrets uses current managed-secret evidence, never generic sensitive
 // requirements or pending sync requests, which may describe unrelated work.
-func (o Operation) NeedsSecrets() bool {
+func (o Operation) MissingSecrets() []secrets.Key {
 	if o.Status != "planning" && o.Status != "running" && o.Status != "waiting" {
-		return false
+		return nil
 	}
 	if o.Preflight == nil || o.Preflight.Ready {
-		return false
+		return nil
 	}
+	var missing []secrets.Key
+	seen := map[secrets.Key]bool{}
 	for _, action := range o.Preflight.Actions {
 		if len(action.ReadyAgentIDs) != 0 {
 			continue
@@ -245,13 +248,24 @@ func (o Operation) NeedsSecrets() bool {
 					continue
 				}
 				key := secrets.Key{Scope: secrets.Scope{AgentType: agent.AgentType}, Name: requirement.Name}
-				if key.Validate() == nil {
-					return true
+				if key.Validate() == nil && !seen[key] {
+					seen[key] = true
+					missing = append(missing, key)
 				}
 			}
 		}
 	}
-	return false
+	slices.SortFunc(missing, func(a, b secrets.Key) int {
+		if order := strings.Compare(a.Scope.AgentType, b.Scope.AgentType); order != 0 {
+			return order
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	return missing
+}
+
+func (o Operation) NeedsSecrets() bool {
+	return len(o.MissingSecrets()) != 0
 }
 
 func (o Operation) Settled() bool {

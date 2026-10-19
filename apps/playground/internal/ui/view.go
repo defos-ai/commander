@@ -119,6 +119,9 @@ func (m *Model) View() string {
 	} else {
 		header = ansi.Truncate(header, m.width, "…")
 	}
+	if m.secrets.open {
+		return header + "\n\n" + m.secretView() + "\n"
+	}
 	var content string
 	if m.stage == stageChat {
 		content = m.viewport.View()
@@ -247,7 +250,7 @@ func (m *Model) operationProgress() []string {
 		line := fmt.Sprintf("%s %s · %s · %d/%d tasks finished", m.color(marker, color), label, op.Status, done, len(op.Tasks))
 		needsSecrets := op.NeedsSecrets()
 		if needsSecrets {
-			line += " · secrets needed"
+			line += " · secrets needed · /secrets"
 		} else if !op.Terminal() && op.Preflight != nil && !op.Preflight.Ready {
 			line += " · requirements missing"
 		}

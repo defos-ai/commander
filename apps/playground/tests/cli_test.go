@@ -536,6 +536,9 @@ func allInOneEnvironment(t *testing.T) string {
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
 	t.Setenv("COMMANDER_MCP_TOKEN", "invalid remote token") // Local credentials win too.
 	t.Setenv("COMMANDER_ADMIN_URL", "")
+	t.Setenv("COMMANDER_API_URL", "invalid remote API URL") // Embedded credentials and URL win.
+	t.Setenv("COMMANDER_API_USERNAME", "remote-operator")
+	t.Setenv("COMMANDER_API_PASSWORD", "remote-password")
 	t.Setenv("MCP_TOKEN", "all-in-one-mcp-secret")
 	t.Setenv("MCP_RUNTIME", "native")
 	t.Setenv("API_USERNAME", "commander")

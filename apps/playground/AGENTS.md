@@ -8,11 +8,16 @@
   The spawner launches requested agent packages as native children.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
+- [`internal/api/secrets.go`](internal/api/secrets.go) supplies the local secret
+  form's authenticated API transport. Keep values outside chat and MCP.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
   replies and operation snapshots. Keep the chat engine behind its interfaces.
 - [`internal/chat/`](internal/chat/) owns conversation turns, queued input,
   watched operations, continuation review and operator commands.
 - [`internal/ui/`](internal/ui/) owns Bubble Tea state, selectors and rendering.
+  Its API and MCP configuration use the same typed `Connection` shape: URL and
+  credentials. Keep one connection per service; `AllInOne` identifies session
+  ownership without duplicating a local API connection.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
   embeds Admin, includes Chromium/fonts and Git, and uses a real non-root user's home plus
@@ -67,9 +72,20 @@
   without a ready candidate and a valid scoped name; never infer managed secrets
   from sensitive environment requirements or pending delivery requests. Reuse that operation's
   Admin review link, or show `/admin` setup guidance without a configured URL.
-  Model guidance sends users to Admin Secrets and must not solicit values in
-  chat, tool inputs or `ask_question`. Saving is not installation/readiness;
-  preserve existing preflight review scheduling and wait for fresh readiness.
+  Automatically open a local masked form for these scoped requirements; `/secrets`
+  reopens dismissed requirements. Never infer the API connection from MCP or
+  model/operation content. All-in-one reuses its API connection; remote mode uses
+  `--api-url` / `COMMANDER_API_URL`, `COMMANDER_API_USERNAME` and
+  `COMMANDER_API_PASSWORD`, or asks locally. Keep API login and secret values out
+  of model history, MCP arguments, logs and rendered transcripts. Submit directly
+  to the authenticated API without redirects or automatic write retries.
+  Preserve chat/question drafts; the secret form owns keyboard focus while open.
+  Dismissal must survive repeated snapshots of the same requirements. Clear
+  values when requirements disappear; require Enter/Esc to return to chat so
+  queued keystrokes cannot submit a secret as a message. Saving is not
+  installation/readiness: wait for fresh preflight. Model guidance may point to
+  `/secrets` or Admin Secrets but must not solicit values in chat, tool inputs or
+  `ask_question`. Preserve existing preflight review scheduling.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
   use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only

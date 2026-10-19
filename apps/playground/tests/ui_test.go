@@ -43,9 +43,10 @@ func TestProviderSelector(t *testing.T) {
 }
 
 func TestHelpLayout(t *testing.T) {
-	for _, local := range []*ui.LocalAPI{nil, {URL: "http://127.0.0.1:4274", Username: "commander", Password: "local-only-fixture-password"}} {
+	for _, allInOne := range []bool{false, true} {
+		local := ui.Connection[host.BasicCredentials]{URL: "http://127.0.0.1:4274", Credentials: host.BasicCredentials{Username: "commander", Password: "local-only-fixture-password"}}
 		mode := "all-in-one"
-		if local == nil {
+		if !allInOne {
 			mode = "remote"
 		}
 		for _, noColor := range []bool{true, false} {
@@ -60,7 +61,7 @@ func TestHelpLayout(t *testing.T) {
 					http.Error(w, "unexpected model request", http.StatusBadRequest)
 				}))
 				defer provider.Close()
-				u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAgentCount: 4, LocalAPI: local})
+				u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAgentCount: 4, AllInOne: allInOne, API: local})
 				defer u.model.Close()
 				u.model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
 				u.text("/help")
@@ -91,7 +92,7 @@ func TestHelpLayout(t *testing.T) {
 					if strings.Contains(view[:start], "/credentials") || strings.Contains(view, "/credentials api") || strings.Contains(view, "/credentials mcp") {
 						t.Fatal("credential guidance appeared outside the help command rows")
 					}
-					if local != nil && strings.Contains(view, local.Password) {
+					if strings.Contains(view, local.Credentials.Password) {
 						t.Fatal("help disclosed local credentials")
 					}
 					for _, line := range strings.Split(help, "\n") {
@@ -99,7 +100,7 @@ func TestHelpLayout(t *testing.T) {
 							t.Fatalf("help exceeds the viewport at width %d", width)
 						}
 					}
-					if local == nil && !strings.Contains(view, "·  Try:") {
+					if !allInOne && !strings.Contains(view, "·  Try:") {
 						t.Fatal("single-line notices lost their marker")
 					}
 				}
@@ -154,7 +155,7 @@ func TestMCPAuthenticationDuringSetup(t *testing.T) {
 	defer provider.Close()
 	var output bytes.Buffer
 	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{
-		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL + "/mcp",
+		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL + "/mcp"},
 		Keys: map[string]string{"other": "fixture-key"}, NoColor: true,
 	}, &output)}
 	defer u.model.Close()
@@ -251,7 +252,7 @@ func TestMCPTokenInputWithoutDeploymentHintAndBack(t *testing.T) {
 	}))
 	defer endpoint.Close()
 	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{
-		Provider: "other", Model: "fixture", BaseURL: endpoint.URL, MCPURL: endpoint.URL + "/mcp",
+		Provider: "other", Model: "fixture", BaseURL: endpoint.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL + "/mcp"},
 		Keys: map[string]string{"other": "fixture-key"}, NoColor: true,
 	}, io.Discard)}
 	defer u.model.Close()
@@ -292,20 +293,21 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 		{command: "/credentials other", invalid: true},
 		{command: "/credentials api extra", invalid: true},
 	} {
-		for _, local := range []*ui.LocalAPI{nil, {URL: "http://127.0.0.1:4274", Username: "commander", Password: "local-only-fixture-password"}} {
+		for _, allInOne := range []bool{false, true} {
+			local := ui.Connection[host.BasicCredentials]{URL: "http://127.0.0.1:4274", Credentials: host.BasicCredentials{Username: "commander", Password: "local-only-fixture-password"}}
 			mode := "all-in-one"
-			if local == nil {
+			if !allInOne {
 				mode = "remote"
 			}
 			t.Run(mode+"/"+tc.command, func(t *testing.T) {
-				model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAgentCount: 4, LocalAPI: local, MCPURL: "http://127.0.0.1:4273/mcp", MCPCredentials: credentials}, io.Discard)
+				model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAgentCount: 4, AllInOne: allInOne, API: local, MCP: ui.Connection[host.BearerCredentials]{URL: "http://127.0.0.1:4273/mcp", Credentials: credentials}}, io.Discard)
 				defer model.Close()
 				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
 				model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				if local != nil && (!strings.Contains(model.View(), "/credentials") || strings.Contains(model.View(), "/credentials api") || strings.Contains(model.View(), "/credentials mcp") || strings.Contains(model.View(), local.Password) || strings.Contains(model.View(), credentials.Token)) {
+				if allInOne && (!strings.Contains(model.View(), "/credentials") || strings.Contains(model.View(), "/credentials api") || strings.Contains(model.View(), "/credentials mcp") || strings.Contains(model.View(), local.Credentials.Password) || strings.Contains(model.View(), credentials.Token)) {
 					t.Fatal("local help must advertise credential lookup without revealing secrets")
 				}
-				if local == nil && strings.Contains(model.View(), "/credentials") {
+				if !allInOne && strings.Contains(model.View(), "/credentials") {
 					t.Fatal("remote setup help advertised local credential lookup")
 				}
 				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.command)})
@@ -317,14 +319,14 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 				if tc.invalid && !strings.Contains(view, "Usage: /credentials") {
 					t.Fatal("invalid credential command did not show usage")
 				}
-				if local == nil && !tc.invalid && !strings.Contains(view, "only with --all-in-one") {
+				if !allInOne && !tc.invalid && !strings.Contains(view, "only with --all-in-one") {
 					t.Fatal("remote session did not explain unavailable local credentials")
 				}
-				wantAPI, wantMCP := local != nil && tc.api, local != nil && tc.mcp
+				wantAPI, wantMCP := allInOne && tc.api, allInOne && tc.mcp
 				if strings.Contains(view, "Password: local-only-fixture-password") != wantAPI || strings.Contains(view, "Token: "+credentials.Token) != wantMCP {
 					t.Fatal("credential command did not show both local credentials only for a valid request")
 				}
-				if wantAPI && (!strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "Username: "+local.Username)) {
+				if wantAPI && (!strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "Username: "+local.Credentials.Username)) {
 					t.Fatal("API lookup did not display its endpoint and username")
 				}
 			})
@@ -335,7 +337,7 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	local := &ui.LocalAPI{URL: "http://127.0.0.1:4274", Username: "local-api-user", Password: "local-only-fixture-password"}
+	local := ui.Connection[host.BasicCredentials]{URL: "http://127.0.0.1:4274", Credentials: host.BasicCredentials{Username: "local-api-user", Password: "local-only-fixture-password"}}
 	const adminURL = "http://127.0.0.1:4275"
 	credentials := host.BearerCredentials{Token: "local-only-fixture-token"}
 	var requests, calls atomic.Int32
@@ -352,7 +354,7 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		if err != nil {
 			t.Error("could not inspect model request")
 		}
-		for _, private := range []string{local.Password, local.Username, local.URL, adminURL, "/credentials", credentials.Token} {
+		for _, private := range []string{local.Credentials.Password, local.Credentials.Username, local.URL, adminURL, "/credentials", credentials.Token} {
 			if strings.Contains(string(body), private) {
 				t.Error("local credential lookup leaked into a model request")
 			}
@@ -360,9 +362,9 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		writeModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
 	}))
 	defer provider.Close()
-	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, MCPCredentials: credentials, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAgentCount: 4, LocalAPI: local, AdminURL: adminURL})
+	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: credentials}, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAgentCount: 4, AllInOne: true, API: local, AdminURL: adminURL})
 	defer u.model.Close()
-	if strings.Contains(u.model.View(), local.Password) || strings.Contains(u.model.View(), credentials.Token) {
+	if strings.Contains(u.model.View(), local.Credentials.Password) || strings.Contains(u.model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")
 	}
 	if strings.Contains(u.model.View(), local.URL) || strings.Contains(u.model.View(), endpoint.URL) || strings.Contains(u.model.View(), adminURL) {
@@ -374,19 +376,19 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		return strings.Contains(view, "MCP connected · watching 0 operations · 0 queued messages")
 	})
 	view := u.model.View()
-	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || !strings.Contains(view, "Admin: "+adminURL) || strings.Contains(view, local.Password) || strings.Contains(view, credentials.Token) {
+	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || !strings.Contains(view, "Admin: "+adminURL) || strings.Contains(view, local.Credentials.Password) || strings.Contains(view, credentials.Token) {
 		t.Fatal("status did not show endpoints without credentials")
 	}
 	for _, command := range []string{"/credentials api", "/credentials mcp", "/credentials invalid", "/credentials api extra"} {
 		u.text(command)
 		u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	}
-	if strings.Contains(u.model.View(), "Password: "+local.Password) || strings.Contains(u.model.View(), "Token: "+credentials.Token) {
+	if strings.Contains(u.model.View(), "Password: "+local.Credentials.Password) || strings.Contains(u.model.View(), "Token: "+credentials.Token) {
 		t.Fatal("invalid credential arguments disclosed local credentials")
 	}
 	u.text("/credentials")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), "Password: "+local.Password) || !strings.Contains(u.model.View(), "Token: "+credentials.Token) {
+	if !strings.Contains(u.model.View(), "Password: "+local.Credentials.Password) || !strings.Contains(u.model.View(), "Token: "+credentials.Token) {
 		t.Fatal("explicit credential lookup did not display local credentials")
 	}
 	u.text("Hello")
@@ -681,6 +683,8 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 
 	u.text("/watch operation-1")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("automatic secret form", func(view string) bool { return strings.Contains(view, "Connect to API") })
+	u.key(tea.KeyMsg{Type: tea.KeyEsc})
 	u.wait("blocked preflight", func(view string) bool {
 		return strings.Contains(view, "secrets needed") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
 	})
@@ -723,7 +727,7 @@ type uiDriver struct {
 
 func newUI(t *testing.T, ctx context.Context, endpoint, provider string) *uiDriver {
 	t.Helper()
-	return newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider, MCPURL: endpoint, Keys: map[string]string{"other": "test-only"}, NoColor: true})
+	return newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint}, Keys: map[string]string{"other": "test-only"}, NoColor: true})
 }
 
 func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDriver {
@@ -733,7 +737,7 @@ func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDri
 	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	u.run(u.model.Init())
 	ready := "Commander connected"
-	if config.LocalAPI != nil {
+	if config.AllInOne {
 		ready = fmt.Sprintf("Commander ready · all-in-one · %d agents connected", config.LocalAgentCount)
 	}
 	u.wait("connection", func(view string) bool { return strings.Contains(view, ready) })
