@@ -133,6 +133,8 @@ func TestSpawnerCLIRegistersCatalogAndStopsStartupChildren(t *testing.T) {
 
 func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
+	t.Setenv("SPAWNER_RUNTIME", "")
+	t.Setenv("SPAWNER_DOCKER_NETWORK", "")
 	for _, test := range []struct{ name, argument, expected string }{
 		{"empty state", "--state-dir=", "state-dir"},
 		{"unknown action", "--actions=checkout-template", "unknown action"},
@@ -143,6 +145,10 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 		{"unpinned package", "--spawn-agents=github.com/defos-ai/fixture-agent@latest", "stable version"},
 		{"invalid bus", "--bus-url=https://example.invalid", "bus"},
 		{"invalid storage", "--storage-url=https://example.invalid", "storage"},
+		{"unknown runtime", "--runtime=containerd", "runtime"},
+		{"docker without network", "--runtime=docker", "docker-network"},
+		{"native with docker network", "--docker-network=commander_default", "docker-network"},
+		{"native with empty docker network flag", "--docker-network=", "docker-network"},
 		{"positional argument", "unexpected", "positional"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -172,6 +178,76 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 	}
 }
 
+func TestSpawnerCLIDockerRequiresRemoteProvidersBeforeStartup(t *testing.T) {
+	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
+	t.Setenv("SPAWNER_RUNTIME", "docker")
+	t.Setenv("SPAWNER_DOCKER_NETWORK", "commander_default")
+	for _, test := range []struct {
+		name, busURL, storageURL, expected string
+	}{
+		{"filesystem bus", "./state/bus", "s3://artifacts", "amqp or amqps"},
+		{"filesystem storage", "amqp://example.invalid/", "./state/storage", "s3 storage-url"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "unused")
+			err := cli.Run(t.Context(), []string{
+				"--state-dir=" + root, "--bus-url=" + test.busURL, "--storage-url=" + test.storageURL,
+			}, io.Discard)
+			if err == nil || !strings.Contains(err.Error(), test.expected) {
+				t.Fatalf("invalid Docker providers returned %v", err)
+			}
+			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("invalid Docker settings created state")
+			}
+		})
+	}
+	// Flags override the runtime from the environment, after clearing the
+	// Docker network. A canceled native host must never contact Docker.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	t.Setenv("SPAWNER_DOCKER_NETWORK", "")
+	if err := cli.Run(ctx, []string{"--runtime=native"}, io.Discard); !errors.Is(err, context.Canceled) {
+		t.Fatalf("runtime flag did not override environment: %v", err)
+	}
+}
+
+func TestSpawnerCLIDockerValidatesNetworkAndExplicitTimeoutBeforeProviders(t *testing.T) {
+	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
+	t.Setenv("SPAWNER_RUNTIME", "docker")
+	t.Setenv("SPAWNER_DOCKER_NETWORK", "commander_default")
+	for _, network := range []string{"host", "none", "bridge", "default", "bad/network", "commander default", "../network", strings.Repeat("n", 129)} {
+		t.Run(network, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "unused")
+			err := cli.Run(t.Context(), []string{
+				"--docker-network=" + network, "--state-dir=" + filepath.Join(root, "spawner"),
+				"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"),
+			}, io.Discard)
+			if err == nil || !strings.Contains(err.Error(), "docker-network") {
+				t.Fatalf("invalid Docker network reached providers: %v", err)
+			}
+			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("invalid Docker network created provider state")
+			}
+		})
+	}
+	// The Docker default must not overwrite an explicit timeout. Zero and
+	// negative durations remain invalid, while a positive override is accepted.
+	for _, timeout := range []string{"0s", "-1s", "5s"} {
+		t.Run("timeout "+timeout, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			err := cli.Run(ctx, []string{"--bus-url=amqp://example.invalid/", "--storage-url=s3://artifacts", "--registration-timeout=" + timeout}, io.Discard)
+			if timeout == "5s" {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("valid explicit timeout was rejected: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "registration-timeout") {
+				t.Fatalf("invalid explicit timeout was overwritten by default: %v", err)
+			}
+		})
+	}
+}
+
 func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	t.Setenv("BUS_URL", "amqp://user:private-bus-sentinel@example.invalid")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "private-storage-sentinel")
@@ -182,7 +258,7 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	if err := cli.Run(t.Context(), append(args, "--help"), &output); err != nil {
 		t.Fatal(err)
 	}
-	for _, word := range []string{"spawn-agent", "spawn-agents", "state-dir", "registration-timeout"} {
+	for _, word := range []string{"spawn-agent", "spawn-agents", "state-dir", "registration-timeout", "runtime", "docker-network"} {
 		if !strings.Contains(output.String(), word) {
 			t.Errorf("help omits %s", word)
 		}

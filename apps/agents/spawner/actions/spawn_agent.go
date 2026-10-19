@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/native"
+	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/agent/action"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -15,10 +15,10 @@ import (
 
 const SpawnAgentName = "spawn-agent"
 
-// Spawner owns launch records and processes. A retry observes the saved launch
-// for the same request rather than starting another process with the same ID.
+// Spawner owns launch records. A retry observes the saved launch for the same
+// request rather than starting another agent with the same ID.
 type Spawner interface {
-	Spawn(ctx context.Context, requestID, reference string) (native.Result, error)
+	Spawn(ctx context.Context, requestID, reference string) (launch.Result, error)
 }
 
 type SpawnAgentInput struct {
@@ -30,11 +30,11 @@ func (input SpawnAgentInput) Validate() error {
 	return err
 }
 
-func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, native.Result], error) {
+func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, launch.Result], error) {
 	if launcher == nil {
 		return nil, errors.New("agent launcher is required")
 	}
-	return action.NewFunc(action.FuncConfig[SpawnAgentInput, native.Result]{
+	return action.NewFunc(action.FuncConfig[SpawnAgentInput, launch.Result]{
 		Action: actionmodel.Action{
 			Name:        SpawnAgentName,
 			Description: "Launch a versioned agent package and wait for its exact agent ID and type to announce registration. Returns its actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host.",
@@ -45,17 +45,23 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, native.Resul
 					"agent_id":{"type":"string"},
 					"agent_type":{"type":"string"},
 					"package":{"type":"string"},
+					"runtime":{"type":"string","enum":["native","docker"]},
 					"pid":{"type":"integer","minimum":1},
+					"container_id":{"type":"string","minLength":1},
 					"actions":{"type":"array","items":{"type":"object"}}
 				},
-				"required":["agent_id","agent_type","package","pid","actions"],
+				"required":["agent_id","agent_type","package","runtime","actions"],
+				"oneOf":[
+					{"properties":{"runtime":{"const":"native"}},"required":["pid"],"not":{"required":["container_id"]}},
+					{"properties":{"runtime":{"const":"docker"}},"required":["container_id"],"not":{"required":["pid"]}}
+				],
 				"additionalProperties":false
 			}`),
 		},
-		Run: func(ctx context.Context, input SpawnAgentInput) (native.Result, error) {
+		Run: func(ctx context.Context, input SpawnAgentInput) (launch.Result, error) {
 			requestID, err := spawnRequestID(ctx)
 			if err != nil {
-				return native.Result{}, err
+				return launch.Result{}, err
 			}
 			return launcher.Spawn(ctx, requestID, input.Package)
 		},

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/framework/comms"
 )
 
@@ -15,7 +16,7 @@ type child struct {
 	command          *exec.Cmd
 	done             chan struct{}
 	download         string
-	result           Result
+	result           launch.Result
 	registrationDone chan struct{}
 	registrationErr  error
 	subscription     comms.Subscription

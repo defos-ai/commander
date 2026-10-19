@@ -12,6 +12,8 @@ import (
 	"syscall"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
+	"github.com/defos-ai/commander/apps/agents/spawner/containers"
+	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/native"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/agent"
@@ -25,6 +27,8 @@ const serviceName = "commander-" + string(spawner.SpawnerAgentType)
 // Options supplies dependencies for an embedded host.
 type Options struct {
 	Resolver *packages.Resolver
+	// Engine is used only with the docker runtime and remains caller-owned.
+	Engine containers.Engine
 }
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
@@ -76,19 +80,35 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		resolver = packages.NewResolver(nil)
 		defer resolver.CloseIdleConnections()
 	}
-	manager, err := native.NewManager(ctx, native.Config{
-		Directory:           configuration.stateDir,
-		Bus:                 dependencies.Bus,
-		BusURL:              configuration.busURL,
-		StorageURL:          configuration.storageURL,
-		Environment:         childEnvironment(configuration.storageURL),
-		Resolver:            resolver,
-		RegistrationTimeout: configuration.registrationTimeout,
-	})
+	var manager launch.Manager
+	if configuration.runtime == "docker" {
+		engine := options.Engine
+		if engine == nil {
+			engine, err = containers.NewEngine()
+			if err != nil {
+				return err
+			}
+			defer func() { result = errors.Join(result, engine.Close()) }()
+		}
+		manager, err = containers.NewManager(ctx, containers.Config{
+			Directory: configuration.stateDir, Bus: dependencies.Bus,
+			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
+			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
+			Resolver:    resolver, Engine: engine, Network: configuration.dockerNetwork,
+			RegistrationTimeout: configuration.registrationTimeout,
+		})
+	} else {
+		manager, err = native.NewManager(ctx, native.Config{
+			Directory: configuration.stateDir, Bus: dependencies.Bus,
+			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
+			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
+			Resolver:    resolver, RegistrationTimeout: configuration.registrationTimeout,
+		})
+	}
 	if err != nil {
 		return err
 	}
-	// Manager shutdown awaits its children while their bus is still open.
+	// Stop registration observers and await native children before closing the bus.
 	defer func() { result = errors.Join(result, manager.Close()) }()
 	selected := []action.Executor{}
 	if configuration.actionNames == nil || len(configuration.actionNames) > 0 {

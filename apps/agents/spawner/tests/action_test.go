@@ -10,7 +10,7 @@ import (
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
 	spawneractions "github.com/defos-ai/commander/apps/agents/spawner/actions"
-	"github.com/defos-ai/commander/apps/agents/spawner/native"
+	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
@@ -70,8 +70,8 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 }
 
 func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
-	launcher := &actionLauncher{result: native.Result{
-		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage, PID: 42,
+	launcher := &actionLauncher{result: launch.Result{
+		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage, Runtime: "native", PID: 42,
 		Actions: []actionmodel.Action{{Name: "inspect", Description: "Inspect a local target", Status: action.Unavailable,
 			MissingRequirements: []actionmodel.Requirement{{Kind: actionmodel.ExecutableRequirement, Name: "example-tool"}},
 			InputSchema:         json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}},
@@ -84,7 +84,7 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var actual native.Result
+		var actual launch.Result
 		if err := json.Unmarshal(result.Output, &actual); err != nil {
 			t.Fatal(err)
 		}
@@ -139,6 +139,45 @@ func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 	}
 }
 
+func TestSpawnAgentOutputIdentifiesLaunchRuntime(t *testing.T) {
+	for _, test := range []struct {
+		name, runtime, containerID string
+		pid                        int
+		valid                      bool
+	}{
+		{name: "native process", runtime: "native", pid: 42, valid: true},
+		{name: "docker container", runtime: "docker", containerID: "fixture-container", valid: true},
+		{name: "missing runtime", pid: 42},
+		{name: "native without pid", runtime: "native"},
+		{name: "native with container", runtime: "native", pid: 42, containerID: "fixture-container"},
+		{name: "docker without container", runtime: "docker"},
+		{name: "docker with pid", runtime: "docker", pid: 42, containerID: "fixture-container"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			launcher := &actionLauncher{result: launch.Result{
+				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
+				Runtime: test.runtime, PID: test.pid, ContainerID: test.containerID, Actions: []actionmodel.Action{},
+			}}
+			executor := newSpawnAction(t, launcher)
+			ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
+			output, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`"}`))
+			if (err == nil) != test.valid {
+				t.Fatalf("runtime result validity: got %v, want valid=%t", err, test.valid)
+			}
+			if !test.valid {
+				return
+			}
+			var properties map[string]json.RawMessage
+			if err := json.Unmarshal(output.Output, &properties); err != nil {
+				t.Fatal(err)
+			}
+			if test.runtime == "native" && properties["container_id"] != nil || test.runtime == "docker" && properties["pid"] != nil {
+				t.Fatal("result exposed the other runtime's process identifier")
+			}
+		})
+	}
+}
+
 func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 	failure := errors.New("launch outcome is uncertain")
 	launcher := &actionLauncher{err: failure}
@@ -165,8 +204,8 @@ func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 }
 
 func TestSpawnerAgentWorkUsesTaskIdentity(t *testing.T) {
-	launcher := &actionLauncher{result: native.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
-		Package: actionPackage, PID: 42, Actions: []actionmodel.Action{}}}
+	launcher := &actionLauncher{result: launch.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
+		Package: actionPackage, Runtime: "native", PID: 42, Actions: []actionmodel.Action{}}}
 	runtime, err := spawner.NewSpawnerAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}, launcher)
 	if err != nil {
@@ -202,11 +241,11 @@ type spawnInvocation struct{ requestID, reference string }
 
 type actionLauncher struct {
 	calls  []spawnInvocation
-	result native.Result
+	result launch.Result
 	err    error
 }
 
-func (launcher *actionLauncher) Spawn(_ context.Context, requestID, reference string) (native.Result, error) {
+func (launcher *actionLauncher) Spawn(_ context.Context, requestID, reference string) (launch.Result, error) {
 	launcher.calls = append(launcher.calls, spawnInvocation{requestID: requestID, reference: reference})
 	return launcher.result, launcher.err
 }

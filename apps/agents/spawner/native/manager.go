@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -25,16 +26,6 @@ type Config struct {
 	Environment         map[string]string
 	Resolver            *packages.Resolver
 	RegistrationTimeout time.Duration
-}
-
-// Result reports an observed registration announcement. It does not promise
-// controller persistence, readiness of every action, or future availability.
-type Result struct {
-	AgentID   string           `json:"agent_id"`
-	AgentType string           `json:"agent_type"`
-	Package   string           `json:"package"`
-	PID       int              `json:"pid"`
-	Actions   []actions.Action `json:"actions"`
 }
 
 type Manager struct {
@@ -121,7 +112,7 @@ func (m *Manager) Close() error {
 	return m.closeErr
 }
 
-func cloneResult(result Result) Result {
+func cloneResult(result launch.Result) launch.Result {
 	result.Actions = append([]actions.Action{}, result.Actions...)
 	for i := range result.Actions {
 		result.Actions[i] = result.Actions[i].Clone()

@@ -64,6 +64,19 @@ Separately deployed builders need the same key configured explicitly.
 
 ## Configuration
 
+### Optional spawner
+
+Use `docker compose --profile spawner up --build --wait` to enable the
+[spawner agent](../apps/agents/spawner/README.md#docker). It starts published agent
+images as sibling containers on the Compose network. This opt-in service has
+Docker daemon access; its children receive only bus/storage bootstrap settings.
+
+Spawned containers outlive the spawner and are not managed by `docker compose
+down`. Remove them by their returned container IDs before removing the network.
+The `spawner-state` volume retains launch records for retries across restarts.
+
+### Shared settings
+
 | Environment variable | CLI flag | Purpose |
 | --- | --- | --- |
 | `BUS_URL` | `--bus-url` | Messaging |

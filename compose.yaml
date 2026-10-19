@@ -376,6 +376,32 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  spawner-agent:
+    <<: *agent
+    profiles: [spawner]
+    image: commander-spawner-agent:local
+    build:
+      context: .
+      dockerfile: apps/agents/spawner/docker/Dockerfile
+    # Opt-in host Docker access; never pass this socket to spawned agents.
+    user: "0:0"
+    environment:
+      <<: *environment
+      SPAWNER_RUNTIME: docker
+      SPAWNER_STATE_DIR: /var/lib/commander/spawner
+      SPAWNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-commander}_default
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - spawner-state:/var/lib/commander/spawner
+    depends_on:
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
   playground:
     profiles: [playground]
     build:
@@ -430,6 +456,7 @@ services:
 volumes:
   secrets-key:
   builder-workspaces:
+  spawner-state:
   mcp-credentials:
   rabbitmq:
   minio:

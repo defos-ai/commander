@@ -1,11 +1,12 @@
 # Agent packages and bootstrap
 
-This contract defines agent packaging, native spawning and planned deployment
+This contract defines agent packaging, native/Docker spawning and planned deployment
 integrations. The `commander-example-agent` template supports preassigned agent
 IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
-resolves public packages, verifies native downloads and runs a regular agent
-host with `spawn-agent` and repeatable `--spawn-agents`. Docker spawning and
-integration into Playground/AIO/Compose are planned next.
+resolves public packages and runs a regular agent host with `spawn-agent` and
+repeatable `--spawn-agents`. Native and Docker modes are implemented; Compose
+enables Docker mode with its optional `spawner` profile. Playground/AIO
+integration remains planned.
 
 An agent repository publishes runnable packages; the spawner starts a selected
 package using the deployment's connection settings. Builder produces source and
@@ -82,17 +83,20 @@ manifest, not the trustworthiness of its author. Package sources must be trusted
 by the operator. Fetching metadata or binaries must not forward deployment
 credentials to the download host or its redirects.
 
-The planned deployment integration selects the execution mode explicitly:
+Deployment selects the execution mode explicitly:
 
 | Deployment | Launch behavior |
 | --- | --- |
-| Native `commander --all-in-one` | Child executable using the session's FS bus and artifact directories. |
-| Docker AIO | Child executable inside the AIO container, using the same FS directories. |
-| Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. |
+| Standalone spawner | Native by default; `--runtime docker --docker-network <network>` selects Docker. |
+| Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. Enable with `--profile spawner`. |
+| Native `commander --all-in-one` (planned) | Child executable using the session's FS bus and artifact directories. |
+| Docker AIO (planned) | Child executable inside the AIO container, using the same FS directories. |
 
 Docker AIO continues to include its default agents' native prerequisites. A
-Compose spawner needs access to the host's Docker Engine; spawned containers
-receive no Docker socket or host-control privileges by default.
+Compose spawner needs access to the host's Docker Engine. Spawned containers use
+the image's entrypoint, no mounts or published ports, dropped capabilities and
+`no-new-privileges`. An image that declares volumes is rejected. Docker settings
+come from the operator; packages cannot supply privileged deployment arguments.
 
 ## Bootstrap and registration
 
@@ -108,7 +112,7 @@ own credentials into the new agent or accept deployment settings from a manifest
 
 Keep ordinary process settings such as executable search paths explicit too.
 Spawned workload agents connect to the bus and artifact storage; this bootstrap
-supplies no controller-database connection or API/MCP login. The current native
+supplies no controller-database connection or API/MCP login. The current
 spawner does not distribute `SECRETS_ENCRYPTION_KEY`. Future managed-secret
 bootstrap must be configured by the operator; a manifest cannot grant this
 access. Secret values stay out of package files, action inputs,
@@ -124,8 +128,8 @@ Registration and saved launch records still contain the complete ID; only the
 suffix crosses the process bootstrap boundary. No additional public configuration
 field is needed.
 
-The native spawner matches the assigned ID and expected type to the child's
-registration announcement before returning the agent ID and process reference.
+The spawner matches the assigned ID and expected type to the child's registration
+announcement before returning the agent ID, runtime and PID or container ID.
 This observes the shared bus, not confirmation of the controller's database write.
 The controller independently persists registration and evaluates eligibility.
 Another running agent of the same type cannot satisfy this check. The spawner
@@ -141,8 +145,8 @@ required actions are ready.
 
 The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
 instance, including repeated references when two instances of a type are needed.
-Planned integration passes this list from Compose and native/AIO Commander to
-their spawner. Defaults will use pinned packages. Startup and the controller-dispatched
+Compose can pass this list as its spawner service's command. Native/AIO Commander
+integration is planned. Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
 A stable launch request identifies an instance across retries; its agent ID must
@@ -161,7 +165,16 @@ memory. Its create-only launch intents survive every restart, including clean
 shutdown; encountering an old intent reports uncertainty instead of adopting a
 PID or launching a replacement. Inspect the old instance before requesting
 replacements with a new state directory.
-Automatic restart recovery is not implemented.
+Native restart recovery is not implemented.
+
+Docker records also hold the image digest, network and a random ownership label.
+Retries inspect the recorded container and verify its launch configuration before
+reusing it, including after a spawner restart. A fresh host then waits for a fresh
+agent announcement. Lost Create/Start responses keep the intent for reconciliation;
+they never trigger a second Create. A missing container reports uncertainty; an
+exited container requires a new launch request. Only a never-started container may
+start under its saved identity. An OS lock permits one active Docker spawner per
+state directory, preventing concurrent Start calls from racing across hosts.
 
 Reconcile uncertain launches before trying again. Retain enough ownership
 information to identify the exact instance; a PID or agent type alone is not
@@ -170,8 +183,8 @@ pull and registration waits; task cancellation must not cause a blind second lau
 
 The spawn action finishes after bootstrap and leaves the agent running. Native
 and AIO sessions own child shutdown and must await it before deleting shared FS
-state. Docker containers have an operator-configured lifetime and survive a
-spawner restart. They are not Compose services: deployment teardown must remove
+state. Docker containers survive a spawner restart, with automatic container
+restarts disabled. They are not Compose services: deployment teardown must remove
 owned containers before removing their network or data. Continuous monitoring,
 scaling, automatic upgrades and replacement are outside the spawner's role.
 

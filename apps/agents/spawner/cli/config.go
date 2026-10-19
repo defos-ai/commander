@@ -12,6 +12,7 @@ import (
 	"time"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
+	"github.com/defos-ai/commander/apps/agents/spawner/containers"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/environment"
@@ -25,6 +26,8 @@ type config struct {
 	busURL              string
 	storageURL          string
 	stateDir            string
+	runtime             string
+	dockerNetwork       string
 	spawnAgents         []string
 	registrationTimeout time.Duration
 	logLevel            string
@@ -45,6 +48,8 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
 	flags.StringVar(&result.stateDir, "state-dir", "", "Launch records and downloaded packages; overrides SPAWNER_STATE_DIR; defaults to ./state/spawner")
+	flags.StringVar(&result.runtime, "runtime", "", "Agent launch runtime: native or docker; overrides SPAWNER_RUNTIME; defaults to native")
+	flags.StringVar(&result.dockerNetwork, "docker-network", "", "Existing Docker network for spawned agents; required with the docker runtime; overrides SPAWNER_DOCKER_NETWORK")
 	flags.Func("spawn-agents", "Public GitHub agent package to start; repeat for multiple agents: github.com/owner/repository@vMAJOR.MINOR.PATCH", func(value string) error {
 		if _, err := packages.ParseReference(value); err != nil {
 			return err
@@ -52,14 +57,14 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		result.spawnAgents = append(result.spawnAgents, value)
 		return nil
 	})
-	flags.DurationVar(&result.registrationTimeout, "registration-timeout", 30*time.Second, "Maximum wait for each spawned agent to register")
+	flags.DurationVar(&result.registrationTimeout, "registration-timeout", 30*time.Second, "Maximum wait for each spawned agent to register; Docker defaults to 45s to allow the next heartbeat")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Log level: debug, info, warn, error; overrides LOG_LEVEL")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Log format: json or text; overrides LOG_FORMAT; logs are written to stderr")
 	flags.DurationVar(&result.heartbeatInterval, "heartbeat-interval", agent.DefaultHeartbeatInterval, "Heartbeat interval; zero disables heartbeats and prevents a later controller from discovering this agent")
 	flags.StringVar(&searchPaths, "search-paths", "", "Executable discovery paths separated by the OS path separator; omitted uses PATH, explicit empty searches nowhere")
 	flags.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
-		fmt.Fprintln(stderr, "Run a spawner agent and launch native agent packages on the same bus and artifact storage.")
+		fmt.Fprintln(stderr, "Run a spawner agent and launch agent packages on the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created unless COMMANDER_AGENT_ID_SUFFIX supplies eight lowercase hex characters.")
 		flags.PrintDefaults()
 	}
@@ -74,6 +79,25 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	result.busURL = host.Value(busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
 	result.storageURL = host.Value(storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
 	result.stateDir = host.Value(result.stateDir, provided["state-dir"], "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
+	result.runtime = host.Value(result.runtime, provided["runtime"], "SPAWNER_RUNTIME", "native")
+	result.dockerNetwork = host.Value(result.dockerNetwork, provided["docker-network"], "SPAWNER_DOCKER_NETWORK", "")
+	if result.runtime != "native" && result.runtime != "docker" {
+		return config{}, errors.New("runtime must be native or docker")
+	}
+	if result.runtime == "docker" && strings.TrimSpace(result.dockerNetwork) == "" {
+		return config{}, errors.New("docker-network is required for the docker runtime")
+	}
+	if result.runtime == "docker" {
+		if err := containers.ValidateNetwork(result.dockerNetwork); err != nil {
+			return config{}, fmt.Errorf("docker-network: %w", err)
+		}
+		if !provided["registration-timeout"] {
+			result.registrationTimeout = 45 * time.Second
+		}
+	}
+	if result.runtime == "native" && (result.dockerNetwork != "" || provided["docker-network"]) {
+		return config{}, errors.New("docker-network requires the docker runtime")
+	}
 	if strings.TrimSpace(result.stateDir) == "" {
 		return config{}, errors.New("state-dir must not be blank")
 	}
@@ -121,6 +145,14 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	if err != nil {
 		return config{}, err
 	}
+	if result.runtime == "docker" {
+		if scheme := connectionScheme(result.busURL); scheme != "amqp" && scheme != "amqps" {
+			return config{}, errors.New("docker runtime requires an amqp or amqps bus-url reachable from spawned containers")
+		}
+		if connectionScheme(result.storageURL) != "s3" {
+			return config{}, errors.New("docker runtime requires an s3 storage-url reachable from spawned containers")
+		}
+	}
 	return result, nil
 }
 
@@ -144,8 +176,11 @@ func parseList(value string) ([]string, error) {
 	return items, nil
 }
 
-func childEnvironment(storageURL string) map[string]string {
-	names := []string{"PATH", "SystemRoot", "WINDIR", "TMPDIR", "TEMP", "TMP"}
+func childEnvironment(storageURL, runtime string) map[string]string {
+	var names []string
+	if runtime == "native" {
+		names = []string{"PATH", "SystemRoot", "WINDIR", "TMPDIR", "TEMP", "TMP"}
+	}
 	if connectionScheme(storageURL) == "s3" {
 		names = append(names, "AWS_ENDPOINT_URL_S3", "AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "S3_USE_PATH_STYLE")
 	}

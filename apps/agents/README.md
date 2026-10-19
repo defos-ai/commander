@@ -18,8 +18,8 @@ still to come.
 The [agent package contract](../../docs/agent-packages.md) describes
 versioned binaries/images and bootstrap for agents created from
 `commander-example-agent`. The [spawner module](spawner/README.md) resolves these
-packages, verifies downloads and starts native agents through its `spawn-agent`
-action or repeatable `--spawn-agents` startup flag. Docker spawning is planned next.
+packages and starts native processes or Docker containers through `spawn-agent`
+or repeatable `--spawn-agents` flags. Compose enables it with the `spawner` profile.
 
 ## Quick start
 

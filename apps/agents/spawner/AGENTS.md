@@ -6,9 +6,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 ## Current boundary
 
 - `spawner_agent.go` constructs a regular framework agent. The `spawn-agent`
-  action and repeatable CLI `--spawn-agents` share `native.Manager`. Keep provider
-  construction in `cli/factory.go`. Docker spawning and inclusion in Playground,
-  Compose and release images are separate steps.
+  action and repeatable CLI `--spawn-agents` share `launch.Manager`, implemented
+  by `native.Manager` and `containers.Manager`. Keep provider construction in
+  `cli/factory.go`. Compose has an opt-in `spawner` profile; inclusion in Playground,
+  AIO and release images remains separate work.
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
@@ -61,6 +62,31 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   child output or persist bootstrap credentials. CLI resolves FS paths before
   children switch to their private working directories.
 
+## Docker ownership
+
+- `containers/sdk.go` wraps the official Docker Engine SDK. Operator settings
+  choose the daemon and explicit network; images must be pinned by digest. Pulls
+  do not forward registry authentication. Bound requests and omit raw daemon
+  errors, response bodies and environment values from diagnostics.
+- Inspect actual container configuration before starting or adopting it. Require
+  the recorded name, ownership labels, image, network and bootstrap settings,
+  plus the constrained host configuration. An image's inherited volumes must not
+  bypass the no-mount policy. Never grant socket access to a child.
+- Durable create-only intents precede Create. Reconcile lost Create/Start
+  responses by inspecting the owned container; a missing container is uncertain,
+  not permission to create again. Only a never-started `created` container may
+  start. Exited instances need a new request/ID; no automatic restart policy.
+- Native and Docker intents share `records/`: changing runtime must not repeat an
+  existing request. Docker observation survives action cancellation. A new host
+  requires a fresh announcement; cached readiness is an observed snapshot only.
+- Hold an OS lock on the Docker state directory for the manager's lifetime.
+  Checking `created` and then starting it is not atomic across hosts: two owners
+  could restart a quickly exiting container under the same ID. A crash releases
+  the lock; never use a stale create-only lock file for host ownership.
+- Docker `Close` ends observers, leaving containers and records intact. The caller
+  closes Engine and providers afterward. Containers are not Compose-owned services;
+  operators remove them before removing the deployment network/state.
+
 ## Validation
 
 Keep public API tests in `tests/`, using an external package and deterministic
@@ -68,6 +94,8 @@ HTTP transports. Read the [shared test guide](../../../framework/tests/AGENTS.md
 Cover strict manifest validation, redirect restrictions, cancellation, checksum
 failures, real native registration, identity conflicts and host cleanup without
 public network or paid model calls. Keep the child executable fixture under tests.
+Use fake Engine/HTTP transports for Docker outcomes and safety checks; keep live
+Docker resource lifecycle in external setup, outside Go tests.
 
 ```sh
 go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
