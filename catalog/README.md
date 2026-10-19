@@ -17,9 +17,9 @@ agents:
 
 Visibility describes the GitHub repository. Package trust remains the operator's
 decision, and Docker image visibility is separate. All official entries are public.
-Private entries pass schema validation, but the current metadata client and
-spawner make anonymous requests; authenticated private installation is not yet
-implemented.
+Catalog lookup belongs to the Commander client. Installation calls pass a pinned
+package reference and visibility to `spawn-agent`; the spawner does not read the
+catalog. Client lookup integration is still pending.
 
 Descriptions cover implemented capabilities. In particular, the builder currently
 checks out a template; build, publication and deployment actions are future work.
@@ -55,13 +55,14 @@ explicit pinned package references there. Catalog inclusion does not prove that
 the selected release already publishes a runnable package. See the
 [package contract](../docs/agent-packages.md#catalog-and-stable-references).
 
-## Planned private installations
+## Private installations
 
-The next implementation step will resolve private `stable` references and
-download private packages on the spawner. It will use `GITHUB_TOKEN` from the
-spawner's environment first, then a managed secret scoped to `spawner-agent`.
-A missing token will use the existing Admin secret exchange. Public installations
-will remain token-free.
+For a pinned private package, pass `"visibility":"private"` to the install
+mission and `spawn-agent`. The spawner uses its environment `GITHUB_TOKEN` first,
+then requests a managed secret scoped to `spawner-agent` through the existing
+Playground/Admin flow. Public or omitted visibility stays token-free.
+The metadata client remains anonymous; catalog lookup in Commander, private
+`stable` resolution and private Docker image pulls are not integrated yet.
 
 ## Maintenance
 

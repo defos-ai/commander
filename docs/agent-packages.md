@@ -3,7 +3,7 @@
 This contract defines agent packaging, native/Docker spawning and deployment
 integrations. The `commander-example-agent` template supports preassigned agent
 IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
-resolves public packages and runs a regular agent host with `spawn-agent` and
+resolves agent packages and runs a regular agent host with `spawn-agent` and
 repeatable `--spawn-agents`. Compose starts the spawner in Docker mode by default. Playground and Docker AIO
 embed the spawner in native mode.
 
@@ -23,13 +23,16 @@ capabilities, not live readiness or complete mission coverage. The catalog is no
 installation allowlist; an operator must trust any selected package author.
 See the [catalog guide](../catalog/README.md).
 
-Private entries pass schema validation. The package downloader supports explicit
-per-call tokens, while the shared metadata client and spawner host remain anonymous.
-Private installation is planned next: the spawner will resolve
-private `stable` references and download packages, using its environment
-`GITHUB_TOKEN` first, then a managed secret scoped to `spawner-agent`. Missing tokens
-will use the existing Admin secret exchange; public installations will remain
-token-free.
+Catalog lookup belongs to the Commander client. Installation calls pass a pinned
+`package` and `visibility` to the install mission and `spawn-agent`. The spawner does not
+load a catalog. With `visibility: private`, it uses environment `GITHUB_TOKEN`
+first, otherwise requests the managed secret scoped to `spawner-agent`. Supply it
+through the existing Playground/Admin secret form, outside chat. The same task
+waits and resumes within its existing timeout. Public or omitted visibility
+keeps downloads anonymous. Visibility is an authentication hint, not an access
+grant; the GitHub token's permissions determine access. Catalog lookup in
+Commander, private `stable` resolution and private Docker pulls remain separate
+integration steps. The shared metadata client remains anonymous.
 
 [`framework/agent/packages`](../framework/agent/packages/) owns shared reference
 parsing, strict catalog parsing, bounded remote loading and resolution of `stable`
@@ -199,7 +202,9 @@ prerelease, selects the asset by name, and downloads its content by ID. It ignor
 asset URLs from the response. Metadata is limited to 2 MiB and 30 seconds; native
 checksum verification is unchanged. Clear the token after the calls finish.
 Neither the resolver nor the returned package retains credentials. The caller
-owns token acquisition; environment and managed-secret integration come next.
+owns token acquisition. The `spawn-agent` action acquires it only for private
+input and clears its temporary bytes after the runtime call returns. Startup
+`--spawn-agents` has no visibility input and continues to use anonymous downloads.
 
 Deployment selects the execution mode explicitly:
 

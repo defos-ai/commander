@@ -78,10 +78,6 @@ type Config struct {
 	TestCleaner frameworktesting.TestCleaner
 }
 
-const installAgentInstructions = `Default all-in-one and Compose deployments start with only the spawner agent. Check list_agents and action readiness before planning work. To install a missing agent, read describe_mission for install-agent and describe_action for spawn-agent, start a separate install-agent operation with {"package":"<pinned reference>"}, then use assign_task for spawn-agent with the same input. The controller dispatches the task; never bypass it or queue provisioning inside a mission blocked on the missing actions.
-Known packages: web HTTP/HTML checks use github.com/defos-ai/commander-web-agent@v0.2.0; browser screenshots/rendering use github.com/defos-ai/commander-browser-agent@v0.2.0. For other agents, obtain an explicit pinned package from the operator; do not invent a reference or assume it is published. Install only the agents needed for the requested work. Package installation does not install host dependencies or grant managed secrets or Docker privileges.
-Review the saved spawn result, resolve its model continuation with no follow-up actions, and complete the installation operation using its output schema. Recheck list_agents and the target mission's preflight before running work; registration alone does not mean every action is ready. Inspect an uncertain launch before retrying; a new task may create another instance.`
-
 func NewServer(config Config) (*mcp.Server, error) {
 	if config.Operations == nil || config.AgentStore == nil ||
 		config.MissionStore == nil || config.OperationStore == nil || config.ReportStore == nil ||
@@ -96,7 +92,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 		}},
 	}, &mcp.ServerOptions{
 		Logger:       config.Logger,
-		Instructions: "Find a mission with list_missions; read describe_mission and relevant action schemas before starting. Use tracked operations; specify actions and input, the controller selects agents. Check preflight, follow mission rules, and resolve pending model continuations using current versions. Review failed-task recovery before ending the operation; ask before changing scope. ask_question is for active-operation decisions; general clarifications belong in chat. Only record real operator answers; expiry is not approval. Finish with complete_operation using output_schema; report limitations. Finished operations are read-only: get_report reads reports; new work needs a new operation. Inspect saved state before retrying an ambiguous failure. When active preflight has no ready candidate and lists agent_type and missing_requirements of kind secret, direct the operator to Admin UI Secrets for that agent type. Never request secret values in chat, tool inputs or ask_question. Running tasks may also expose agent_type and missing_requirements from their live exact execution; use the same Admin Secrets handoff or Playground masked form. Task waits retain their execution deadline. Saving a secret is not readiness; check preflight or task requirements before assuming work can proceed. Read artifacts with resources/read.\n" + installAgentInstructions,
+		Instructions: "Check list_agents and action readiness before planning work. Read relevant agents' responsibilities with describe_agent and action schemas with describe_action; follow the mission and agent guidance when capabilities are missing. Find a mission with list_missions; read describe_mission and relevant action schemas before starting. Use tracked operations; specify actions and input, the controller selects agents. Check preflight, follow mission rules, and resolve pending model continuations using current versions. Review failed-task recovery before ending the operation; ask before changing scope. ask_question is for active-operation decisions; general clarifications belong in chat. Only record real operator answers; expiry is not approval. Finish with complete_operation using output_schema; report limitations. Finished operations are read-only: get_report reads reports; new work needs a new operation. Inspect saved state before retrying an ambiguous failure. When active preflight has no ready candidate and lists agent_type and missing_requirements of kind secret, direct the operator to Admin UI Secrets for that agent type. Never request secret values in chat, tool inputs or ask_question. Running tasks may also expose agent_type and missing_requirements from their live exact execution; use the same Admin Secrets handoff or Playground masked form. Task waits retain their execution deadline. Saving a secret is not readiness; check preflight or task requirements before assuming work can proceed. Read artifacts with resources/read.",
 	})
 	if config.Logger != nil {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
@@ -136,7 +132,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			}
 			return actionmodel.Action{}, fmt.Errorf("%w: %s on agent %s", actionmodel.ErrUnknownAction, request.ActionName, request.AgentID)
 		})
-	addTool(server, "list_agents", "List agent IDs, current work, hosts, freshness and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details.", emptySchema,
+	addTool(server, "list_agents", "List agent IDs, responsibilities, current work, hosts, freshness and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details.", emptySchema,
 		func(ctx context.Context, _ struct{}) (agentList, error) {
 			agents, err := config.AgentStore.List(ctx)
 			if err != nil {
@@ -150,7 +146,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			}
 			return agentList{Agents: summaries}, nil
 		})
-	addTool(server, "describe_agent", "Inspect one announced agent, its current work, freshness and complete action catalog.", agentSchema,
+	addTool(server, "describe_agent", "Inspect one announced agent, its responsibilities and usage guidance, current work, freshness and complete action catalog.", agentSchema,
 		func(ctx context.Context, request AgentRequest) (agentmodel.Agent, error) {
 			record, err := config.AgentStore.Get(ctx, request.AgentID)
 			if err != nil {

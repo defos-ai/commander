@@ -3,6 +3,11 @@
 The spawner starts published agents as native processes or Docker containers.
 It exposes `spawn-agent` and can also start packages on launch.
 
+Any compatible GitHub release package can be installed, including packages
+outside Commander's discovery catalog. Read the spawner's registered
+responsibilities through `list_agents` or `describe_agent` for installation
+guidance, and `describe_action` for the `spawn-agent` input schema.
+
 ## Run
 
 From the repository root, using the same bus and artifact storage as your controller:
@@ -97,7 +102,7 @@ schemas through MCP. Start an `install-agent` operation, then assign its
 `spawn-agent` task with the same input:
 
 ```json
-{"package":"github.com/defos-ai/commander-example-agent@v0.2.0"}
+{"package":"github.com/defos-ai/commander-example-agent@v0.2.0","visibility":"public"}
 ```
 
 It verifies the package, assigns an agent ID, starts the instance and waits for
@@ -117,12 +122,26 @@ preflight before assigning dependent work.
 Use packages from authors you trust. A checksum verifies downloaded bytes against
 the manifest; it does not establish whether the program is safe to run.
 
+### Private GitHub packages
+
+Pass the pinned package reference and `"visibility":"private"` from the catalog
+or operator to the install mission and `spawn-agent`. The spawner does not load
+the catalog. It uses its environment `GITHUB_TOKEN` first; otherwise it requests
+the managed `GITHUB_TOKEN` secret for `spawner-agent`. Supply the value through
+the Playground secret form or Admin. The same task waits and resumes when the
+token arrives, within its existing execution timeout. Never paste a token into chat.
+
+Compose forwards an optional host `GITHUB_TOKEN` to the spawner only. Native and
+Docker AIO can receive it through their environment too. Public or omitted
+visibility uses anonymous downloads, even when a token is configured. Tokens
+are never saved in launch records or passed to spawned agents.
+
 ## Current scope
 
-The host supports public GitHub releases and public Docker images. The package
-downloader supports explicit, per-call GitHub authentication; connecting it to
-private catalog entries and secret prompts is the next step. Private installation
-through chat/CLI and moving tags such as `stable` are not available yet.
+The action supports public and private pinned GitHub releases. Docker image pulls
+remain anonymous; private registry authentication is a separate step. Startup
+`--spawn-agents` remains public-only. Catalog lookup in Commander and moving tags
+such as `stable` in installation inputs are not integrated yet.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.
 
@@ -166,8 +185,9 @@ Registration waits default to 30 seconds for native mode and 45 seconds for
 Docker (`--registration-timeout`). A timed-out or canceled wait can be retried
 without launching a duplicate. Docker pulls have a ten-minute deadline.
 
-Downloads use HTTPS to GitHub release hosts without environment proxies or
-deployment credentials. Manifests are limited to 64 KiB and native executables to
+Downloads use HTTPS to GitHub release hosts without environment proxies. Private
+downloads send their token only to GitHub's API; redirects carry no credentials.
+Manifests are limited to 64 KiB and native executables to
 512 MiB. The native host removes its downloads after child shutdown and retains
 launch records and private child working directories.
 

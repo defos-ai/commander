@@ -88,6 +88,8 @@ func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
 	for _, input := range []string{
 		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0"}`,
 		`{"package":"github.com/defos-ai/commander/apps/agents/builder@v0.2.0"}`,
+		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0","visibility":"public"}`,
+		`{"package":"github.com/example/private-agent@v0.2.0","visibility":"private"}`,
 	} {
 		if err := mission.ValidateInput(json.RawMessage(input)); err != nil {
 			t.Fatalf("pinned package rejected: %v", err)
@@ -100,6 +102,8 @@ func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
 		`{}`,
 		`{"package":"github.com/defos-ai/commander-web-agent@latest"}`,
 		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0","environment":{"KEY":"value"}}`,
+		`{"package":"github.com/example/private-agent@v0.2.0","visibility":"internal"}`,
+		`{"package":"github.com/example/private-agent@v0.2.0","visibility":""}`,
 	} {
 		if err := mission.ValidateInput(json.RawMessage(input)); err == nil {
 			t.Fatalf("invalid installation input accepted: %s", input)

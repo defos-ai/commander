@@ -64,6 +64,8 @@
   its model review rule: the client must inspect launch results and current
   readiness before completing provisioning. A mission waiting on the new
   actions cannot dispatch its own provisioning task.
+  Its optional `visibility` input is `public` or `private`, defaulting to public;
+  clients preserve it when assigning `spawn-agent`. Never accept tokens in mission input.
 
 ## Validation
 

@@ -203,6 +203,7 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	t.Setenv("BUS_URL", "amqp://user:private-bus-sentinel@example.invalid")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "private-storage-sentinel")
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "private-encryption-sentinel")
+	t.Setenv("GITHUB_TOKEN", "private-github-sentinel")
 	root := filepath.Join(t.TempDir(), "unused")
 	t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))
 	args := []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage")}

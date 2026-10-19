@@ -13,6 +13,12 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [runtimes/result.go](runtimes/result.go) holds their shared result;
   [native.Manager](runtimes/native/manager.go) and
   [docker.Manager](runtimes/docker/manager.go) implement the interface.
+- Default registered `Responsibilities` in `agent.go` own installation guidance;
+  action descriptions own their input behavior. MCP and Playground discover this
+  metadata instead of maintaining a package list or installation instructions.
+  Accept any compatible pinned GitHub package, including packages outside the
+  discovery catalog. Preserve caller-supplied responsibilities. Keep mission
+  rules in `install-agent`; agent guidance must not bypass controller dispatch.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
   resources and closes them in reverse order. `cli.Run` uses deployment
   configuration. `cli.RunWithOptions` accepts production runtime/state-directory
@@ -42,9 +48,17 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
+- Catalog lookup belongs to the Commander client. `spawn-agent` accepts the
+  pinned `package` and optional `visibility` (`public` by default). Never load a
+  catalog in the spawner or add catalog configuration to its host. Private input
+  uses environment `GITHUB_TOKEN` first, otherwise `action.RequestSecret` within
+  the current execution. Keep discovery ready without a token; do not declare
+  it as a static requirement for public installs. Clear temporary token bytes
+  after spawning. Public input must remain anonymous even with an inherited
+  download token. Visibility selects authentication, not authorization or trust.
 - The shared [package metadata](../../../framework/agent/packages/) package owns
   GitHub reference parsing, discovery catalogs and `stable` resolution. The
-  spawner currently accepts only explicit public GitHub releases as
+  spawner action accepts only explicit GitHub releases as
   `github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH`. A module path
   selects the `module/path/vMAJOR.MINOR.PATCH` release tag; a standalone package
   selects `vMAJOR.MINOR.PATCH`. Fetch `agent.yaml` and its native assets from that
@@ -53,6 +67,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   components; do not accept arbitrary URLs, fragments or moving aliases in task
   input. Preserve the module path in launch records and request comparisons.
   Catalog aliases and `@stable` are not yet integrated into action or CLI inputs.
+  Startup `--spawn-agents` remains anonymous; it has no visibility setting or
+  serving execution through which to request a managed secret.
   Manifest and executable downloads remain in this module; shared metadata code
   must not import the spawner or require a local Commander checkout.
 - The shared [manifest package](../../../framework/agent/manifest/) validates the
@@ -79,7 +95,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   authorization. All redirects strip credentials and require HTTPS
   on the explicit GitHub release host list; do not log signed redirect URLs or
   raw HTTP errors/bodies or downloaded manifest parser details. Preserve context
-  cancellation in errors. Agent/CLI token acquisition is a separate integration;
+  cancellation in errors. The action owns token acquisition;
   the resolver never reads environment variables or requests managed secrets.
 - Bound manifest size/time and executable size/time. `DownloadNative` writes into
   a unique private child directory under the caller's directory. Files remain

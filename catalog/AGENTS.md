@@ -10,12 +10,13 @@ Read the [root guide](../AGENTS.md) and
   [`framework/agent/packages`](../framework/agent/packages/) package owns strict
   parsing, remote loading and package-reference validation.
 - Visibility describes the GitHub repository; package trust and Docker image
-  visibility are separate. Private entries are valid schema data, but the current
-  metadata client and spawner remain anonymous. Do not claim private installation
-  is implemented. The next step resolves private `stable` references and downloads
-  on the spawner, using its environment `GITHUB_TOKEN` first, then a managed secret
-  scoped to `spawner-agent`. Missing tokens use the existing Admin secret exchange;
-  public installations remain token-free.
+  visibility are separate. Commander client integration owns catalog lookup and
+  passes the pinned package and visibility to `spawn-agent`; never load the
+  catalog in spawner. Private actions use environment `GITHUB_TOKEN` first,
+  then a managed secret scoped to `spawner-agent` through the existing
+  Playground/Admin exchange. Public or omitted visibility stays anonymous.
+  The metadata client remains anonymous; private `stable` resolution and Docker
+  registry authentication are not integrated yet.
 - Describe implemented capabilities. Builder currently prepares source through
   `checkout-template`; do not advertise coding, builds or publication as complete.
   Catalog aliases are separate from registered agent types and action names.
