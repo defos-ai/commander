@@ -52,6 +52,98 @@
       "mode": "local",
       "processId": "${command:pickGoProcess}",
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Commander Docker: Controller",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2345,
+      "substitutePath": [
+        { "from": "${workspaceFolder}", "to": "/src" }
+      ]
+    },
+    {
+      "name": "Commander Docker: API",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2346,
+      "substitutePath": [
+        { "from": "${workspaceFolder}", "to": "/src" }
+      ]
+    },
+    {
+      "name": "Commander Docker: MCP",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2347,
+      "substitutePath": [
+        { "from": "${workspaceFolder}", "to": "/src" }
+      ]
+    },
+    {
+      "name": "Commander Docker: Browser Agent",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2348,
+      "substitutePath": [
+        { "from": "${workspaceFolder}", "to": "/src" }
+      ]
+    },
+    {
+      "name": "Commander Docker: Web Agent 1",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2349,
+      "substitutePath": [
+        { "from": "${workspaceFolder}", "to": "/src" }
+      ]
+    },
+    {
+      "name": "Commander Docker: Web Agent 2",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2350,
+      "substitutePath": [
+        { "from": "${workspaceFolder}", "to": "/src" }
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Commander Docker: All Services",
+      "configurations": [
+        "Commander Docker: Controller",
+        "Commander Docker: API",
+        "Commander Docker: MCP",
+        "Commander Docker: Browser Agent",
+        "Commander Docker: Web Agent 1",
+        "Commander Docker: Web Agent 2"
+      ]
+    },
+    {
+      "name": "Commander Docker: Both Web Agents",
+      "configurations": [
+        "Commander Docker: Web Agent 1",
+        "Commander Docker: Web Agent 2"
+      ]
     }
   ]
 }
