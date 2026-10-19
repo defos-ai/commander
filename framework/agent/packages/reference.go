@@ -1,9 +1,8 @@
-// Package packages resolves versioned agent packages without executing them.
+// Package packages defines agent package references and catalog metadata.
 package packages
 
 import (
 	"errors"
-	"net/url"
 	"regexp"
 	"strings"
 
@@ -22,10 +21,23 @@ type Reference struct {
 
 // ParseReference accepts an exact public GitHub release, without URL parameters.
 func ParseReference(value string) (Reference, error) {
+	return parseReference(value, false)
+}
+
+// ParseSelector also accepts @stable for a package whose release is selected later.
+func ParseSelector(value string) (Reference, error) {
+	return parseReference(value, true)
+}
+
+func parseReference(value string, allowStable bool) (Reference, error) {
 	path, version, ok := strings.Cut(strings.TrimPrefix(value, "github.com/"), "@")
 	owner, remainder, _ := strings.Cut(path, "/")
 	name, modulePath, hasModule := strings.Cut(remainder, "/")
-	if !strings.HasPrefix(value, "github.com/") || !ok || !repositoryPattern.MatchString(owner+"/"+name) || !manifest.ValidVersion(version) {
+	validVersion := manifest.ValidVersion(version) || allowStable && version == "stable"
+	if !strings.HasPrefix(value, "github.com/") || !ok || !repositoryPattern.MatchString(owner+"/"+name) || !validVersion {
+		if allowStable {
+			return Reference{}, errors.New("agent package must be github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH with a nonzero stable version, or @stable")
+		}
 		return Reference{}, errors.New("agent package must be github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH with a nonzero stable version")
 	}
 	if hasModule {
@@ -46,10 +58,9 @@ func (r Reference) String() string {
 	return path + "@" + r.Version
 }
 
-func (r Reference) assetURL(asset string) string {
-	tag := r.Version
+func (r Reference) ReleaseTag() string {
 	if r.ModulePath != "" {
-		tag = r.ModulePath + "/" + tag
+		return r.ModulePath + "/" + r.Version
 	}
-	return "https://github.com/" + r.Owner + "/" + r.Repository + "/releases/download/" + url.PathEscape(tag) + "/" + url.PathEscape(asset)
+	return r.Version
 }

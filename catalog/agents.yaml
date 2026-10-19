@@ -1,0 +1,14 @@
+schema_version: 1
+agents:
+  builder:
+    description: Prepares source workspaces by checking out the Commander example agent template.
+    package: github.com/defos-ai/commander/apps/agents/builder@stable
+  web:
+    description: Discovers web pages and checks links, SEO, and technology signals over HTTP.
+    package: github.com/defos-ai/commander-web-agent@stable
+  browser:
+    description: Inspects rendered web pages, checks accessibility, and captures screenshots.
+    package: github.com/defos-ai/commander-browser-agent@stable
+  example:
+    description: Demonstrates Commander agent actions as a template for developing custom agents.
+    package: github.com/defos-ai/commander-example-agent@stable

@@ -16,6 +16,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
 )
 
 const (
@@ -53,7 +54,7 @@ func TestParsePackageReference(t *testing.T) {
 			input += "/" + modulePath
 		}
 		input += "@v0.1.0"
-		ref, err := packages.ParseReference(input)
+		ref, err := agentpackages.ParseReference(input)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +82,7 @@ func TestParsePackageReference(t *testing.T) {
 		" " + packageReference, packageReference + " ",
 	} {
 		t.Run(input, func(t *testing.T) {
-			if _, err := packages.ParseReference(input); err == nil {
+			if _, err := agentpackages.ParseReference(input); err == nil {
 				t.Fatalf("accepted invalid package reference %q", input)
 			}
 			resolver := packages.NewResolver(transportFunc(func(*http.Request) (*http.Response, error) {
@@ -113,6 +114,61 @@ func TestResolvePackage(t *testing.T) {
 			}
 			if pkg.Reference.String() != tc.reference || pkg.Manifest.Type != "example-agent" || pkg.Manifest.Version != "v0.1.0" || pkg.Manifest.Native["linux/amd64"].Asset != binaryAsset {
 				t.Fatalf("unexpected package: %#v", pkg)
+			}
+		})
+	}
+}
+
+func TestStableSelectionPinsNativeAndDockerPackages(t *testing.T) {
+	for _, reference := range []string{packageReference, moduleReference} {
+		t.Run(reference, func(t *testing.T) {
+			const binary = "native fixture bytes"
+			var requests []string
+			transport := transportFunc(func(request *http.Request) (*http.Response, error) {
+				requests = append(requests, request.URL.String())
+				switch request.URL.String() {
+				case "https://api.github.com/repos/defos-ai/example-agent/releases/latest":
+					return response(request, http.StatusOK, `{"tag_name":"v0.1.0","draft":false,"prerelease":false}`), nil
+				case releaseURL + "agent.yaml", moduleReleaseURL + "agent.yaml":
+					body := packageManifest(binary) + "docker:\n  image: ghcr.io/defos-ai/example-agent@sha256:" + strings.Repeat("a", 64) + "\n"
+					return response(request, http.StatusOK, body), nil
+				case releaseURL + binaryAsset, moduleReleaseURL + binaryAsset:
+					return response(request, http.StatusOK, binary), nil
+				default:
+					t.Fatalf("unexpected request: %s", request.URL)
+					return nil, errors.New("unexpected request")
+				}
+			})
+			metadata := agentpackages.NewClient(transport)
+			t.Cleanup(metadata.CloseIdleConnections)
+			pinned, err := metadata.Resolve(context.Background(), strings.TrimSuffix(reference, "@v0.1.0")+"@stable")
+			if err != nil || pinned.String() != reference {
+				t.Fatalf("stable reference: %s, %v", pinned.String(), err)
+			}
+			resolver := packages.NewResolver(transport)
+			t.Cleanup(resolver.CloseIdleConnections)
+			pkg, err := resolver.Resolve(context.Background(), pinned.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			image, err := pkg.Manifest.DockerImage()
+			if err != nil || image != "ghcr.io/defos-ai/example-agent@sha256:"+strings.Repeat("a", 64) {
+				t.Fatalf("Docker image: %s, %v", image, err)
+			}
+			path, err := resolver.DownloadNative(context.Background(), pkg, "linux", "amd64", t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			contents, err := os.ReadFile(path)
+			if err != nil || string(contents) != binary {
+				t.Fatalf("native binary: %q, %v", contents, err)
+			}
+			base := releaseURL
+			if pinned.ModulePath != "" {
+				base = moduleReleaseURL
+			}
+			if len(requests) != 3 || requests[1] != base+"agent.yaml" || requests[2] != base+binaryAsset {
+				t.Fatalf("downloads must stay on the selected release: %v", requests)
 			}
 		})
 	}
@@ -415,7 +471,7 @@ func TestDownloadNativeRejectsUnsupportedAndForgedPackages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ref := range []packages.Reference{
+	for _, ref := range []agentpackages.Reference{
 		{Owner: "defos-ai", Repository: "example-agent", ModulePath: "apps/../agent", Version: "v0.1.0"},
 		{Owner: "defos-ai", Repository: "example-agent/apps", ModulePath: "agent", Version: "v0.1.0"},
 		{Owner: "defos-ai", Repository: "example-agent", ModulePath: "apps%2Fagent", Version: "v0.1.0"},

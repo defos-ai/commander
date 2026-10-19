@@ -14,11 +14,11 @@ import (
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
 	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/host"
 )
 

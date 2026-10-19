@@ -37,7 +37,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
-- `packages/reference.go` accepts explicit public GitHub releases as
+- The shared [package metadata](../../../framework/agent/packages/) package owns
+  GitHub reference parsing, discovery catalogs and `stable` resolution. The
+  spawner currently accepts only explicit public GitHub releases as
   `github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH`. A module path
   selects the `module/path/vMAJOR.MINOR.PATCH` release tag; a standalone package
   selects `vMAJOR.MINOR.PATCH`. Fetch `agent.yaml` and its native assets from that
@@ -45,6 +47,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   version remains `vMAJOR.MINOR.PATCH`. Build download URLs from validated
   components; do not accept arbitrary URLs, fragments or moving aliases in task
   input. Preserve the module path in launch records and request comparisons.
+  Catalog aliases and `@stable` are not yet integrated into action or CLI inputs.
+  Manifest and executable downloads remain in this module; shared metadata code
+  must not import the spawner or require a local Commander checkout.
 - The shared [manifest package](../../../framework/agent/manifest/) validates the
   complete manifest, including unused modes. Keep release version validation in
   that package and use it when parsing package references.

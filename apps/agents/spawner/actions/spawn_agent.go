@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/agent/packages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 )

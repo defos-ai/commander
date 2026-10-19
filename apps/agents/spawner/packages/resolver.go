@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
 )
 
 type Package struct {
-	Reference Reference
+	Reference agentpackages.Reference
 	Manifest  manifest.Manifest
 }
 
@@ -52,13 +53,13 @@ func NewResolver(transport http.RoundTripper) *Resolver {
 func (r *Resolver) CloseIdleConnections() { r.client.CloseIdleConnections() }
 
 func (r *Resolver) Resolve(ctx context.Context, reference string) (Package, error) {
-	ref, err := ParseReference(reference)
+	ref, err := agentpackages.ParseReference(reference)
 	if err != nil {
 		return Package{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	response, err := r.get(ctx, ref.assetURL("agent.yaml"))
+	response, err := r.get(ctx, assetURL(ref, "agent.yaml"))
 	if err != nil {
 		return Package{}, err
 	}
@@ -112,4 +113,8 @@ func downloadError(ctx context.Context, action string) error {
 		return fmt.Errorf("%s: %w", action, err)
 	}
 	return fmt.Errorf("%s failed", action)
+}
+
+func assetURL(ref agentpackages.Reference, asset string) string {
+	return "https://github.com/" + ref.Owner + "/" + ref.Repository + "/releases/download/" + url.PathEscape(ref.ReleaseTag()) + "/" + url.PathEscape(asset)
 }

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
+	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )

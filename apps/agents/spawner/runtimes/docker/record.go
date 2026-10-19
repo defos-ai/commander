@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/id"
 )
 

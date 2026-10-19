@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/framework/agent/packages"
 )
 
 type config struct {

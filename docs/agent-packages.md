@@ -8,8 +8,53 @@ repeatable `--spawn-agents`. Compose starts the spawner in Docker mode by defaul
 embed the spawner in native mode.
 
 An agent repository publishes runnable packages; the spawner starts a selected
-package using the deployment's connection settings. Builder produces source and
-artifacts, and the repository's release workflow publishes packages in this format.
+package using the deployment's connection settings. Builder currently prepares
+source workspaces by checking out the example template. The repository's release
+workflow publishes packages in this format.
+
+## Catalog and stable references
+
+The root [`catalog/agents.yaml`](../catalog/agents.yaml) is the official curated
+discovery catalog. Schema version `1` contains an `agents` map: each alias has a
+`description` and a `package` reference. Entries describe implemented capabilities,
+not live readiness or complete mission coverage. The catalog is not an enforced
+installation allowlist; an operator must trust any selected package author.
+See the [catalog guide](../catalog/README.md).
+
+[`framework/agent/packages`](../framework/agent/packages/) owns shared reference
+parsing, strict catalog parsing, bounded remote loading and resolution of `stable`
+to a pinned reference. `Client.LoadCatalog(ctx, source)` accepts an explicitly
+configured public HTTPS URL, so metadata loading needs no source checkout. The
+official source URL for application integration is
+`https://raw.githubusercontent.com/defos-ai/commander/main/catalog/agents.yaml`,
+available once published; the framework does not hardcode it. Catalog loads have
+a 64 KiB limit and a 30-second deadline. Source URLs must have no credentials,
+query or fragment, and redirects are rejected. The default client uses no
+environment proxies, cookies or credentials. The spawner continues to own release
+manifest lookup, native downloads and launch behavior.
+
+Catalog references use
+`github.com/<owner>/<repository>[/<module-path>]@<version>`, with an explicit
+`vMAJOR.MINOR.PATCH` or `stable`. To resolve `stable`, read that repository's promoted
+GitHub **Latest** release and require its tag to be a root stable semantic version.
+For example, Latest `v0.2.0` resolves
+`github.com/defos-ai/commander/apps/agents/builder@stable` to
+`github.com/defos-ai/commander/apps/agents/builder@v0.2.0`; the spawner then looks
+up `apps/agents/builder/v0.2.0`. Standalone repository references use the same
+version directly as their release tag. `Client.Resolve(ctx, selector)` returns a
+validated pinned reference without a network request when given an explicit
+version. Resolving `stable` reads the GitHub API's latest-release metadata with a
+1 MiB limit and a 30-second deadline.
+
+Missing, draft, prerelease or non-version Latest releases are errors. Resolution
+does not search other tags or fall back to another package version. A pinned
+reference does not prove the release contains `agent.yaml`: the existing spawner
+resolver checks that when fetching the package. Catalog inclusion also does not
+make packages available before their release workflows publish them.
+
+This first integration step supplies catalog data and shared metadata APIs.
+Current MCP, CLI and `spawn-agent` installation inputs still require explicit
+pinned references. Catalog aliases and `@stable` are not yet accepted there.
 
 ## Release manifest
 
@@ -107,11 +152,12 @@ existing releases are unchanged. See [release publication](releases.md#agent-pac
 ## Resolving a package
 
 A reference has the form
-`github.com/<owner>/<repository>[/<module-path>]@<version>`. Use explicit
-`vMAJOR.MINOR.PATCH` versions; moving aliases such as `stable` and `latest` are
-outside this contract. A repository package uses the root version tag; a module
-package uses `<module-path>/<version>`. Every package resolves `agent.yaml` from
-that tag's release in the same repository.
+`github.com/<owner>/<repository>[/<module-path>]@<version>`. The current spawner
+requires explicit `vMAJOR.MINOR.PATCH` versions. Resolve catalog `stable`
+references through the shared metadata API before submitting a package to it;
+`latest` is not a supported reference version. A repository package uses the root
+version tag; a module package uses `<module-path>/<version>`. Every package
+resolves `agent.yaml` from that tag's release in the same repository.
 
 For `github.com/defos-ai/commander-example-agent@v0.1.0`:
 

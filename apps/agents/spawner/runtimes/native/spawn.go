@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actions "github.com/defos-ai/commander/framework/domain/actions"

@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
 )
 
 const MaxDownloadBytes = 512 << 20
@@ -18,7 +20,7 @@ const MaxDownloadBytes = 512 << 20
 // an executable only after verifying all bytes; the caller owns successful output.
 // Failed downloads remove only their own directory, leaving prior downloads intact.
 func (r *Resolver) DownloadNative(ctx context.Context, pkg Package, goos, goarch, directory string) (path string, result error) {
-	ref, err := ParseReference(pkg.Reference.String())
+	ref, err := agentpackages.ParseReference(pkg.Reference.String())
 	if err != nil || ref != pkg.Reference {
 		return "", errors.New("invalid package reference")
 	}
@@ -31,7 +33,7 @@ func (r *Resolver) DownloadNative(ctx context.Context, pkg Package, goos, goarch
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	response, err := r.get(ctx, ref.assetURL(asset.Asset))
+	response, err := r.get(ctx, assetURL(ref, asset.Asset))
 	if err != nil {
 		return "", err
 	}
