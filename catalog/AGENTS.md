@@ -5,9 +5,17 @@ Read the [root guide](../AGENTS.md) and
 
 - [`agents.yaml`](agents.yaml) is the official curated discovery source. Keep
   `schema_version: 1` and an `agents` map keyed by aliases. Each entry contains
-  only `description` and `package`; the shared
+  required `description`, `package` and `visibility` fields only. Visibility is
+  exactly `public` or `private`; all official entries are public. The shared
   [`framework/agent/packages`](../framework/agent/packages/) package owns strict
   parsing, remote loading and package-reference validation.
+- Visibility describes the GitHub repository; package trust and Docker image
+  visibility are separate. Private entries are valid schema data, but the current
+  metadata client and spawner remain anonymous. Do not claim private installation
+  is implemented. The next step resolves private `stable` references and downloads
+  on the spawner, using its environment `GITHUB_TOKEN` first, then a managed secret
+  scoped to `spawner-agent`. Missing tokens use the existing Admin secret exchange;
+  public installations remain token-free.
 - Describe implemented capabilities. Builder currently prepares source through
   `checkout-template`; do not advertise coding, builds or publication as complete.
   Catalog aliases are separate from registered agent types and action names.

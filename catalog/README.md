@@ -1,8 +1,9 @@
 # Agent catalog
 
 [`agents.yaml`](agents.yaml) is Commander's curated discovery catalog. Each alias
-has a short capability description and a public GitHub package reference. The
-catalog helps identify agents; it is not an enforced allowlist for installation.
+has a short capability description, a GitHub package reference and a required
+`visibility` value of `public` or `private`. The catalog helps identify agents;
+it is not an enforced allowlist for installation.
 Operators remain responsible for trusting package authors.
 
 ```yaml
@@ -11,7 +12,14 @@ agents:
   builder:
     description: Prepares source workspaces by checking out the Commander example agent template.
     package: github.com/defos-ai/commander/apps/agents/builder@stable
+    visibility: public
 ```
+
+Visibility describes the GitHub repository. Package trust remains the operator's
+decision, and Docker image visibility is separate. All official entries are public.
+Private entries pass schema validation, but the current metadata client and
+spawner make anonymous requests; authenticated private installation is not yet
+implemented.
 
 Descriptions cover implemented capabilities. In particular, the builder currently
 checks out a template; build, publication and deployment actions are future work.
@@ -46,6 +54,14 @@ The catalog and shared metadata APIs are the first integration step. MCP, CLI an
 explicit pinned package references there. Catalog inclusion does not prove that
 the selected release already publishes a runnable package. See the
 [package contract](../docs/agent-packages.md#catalog-and-stable-references).
+
+## Planned private installations
+
+The next implementation step will resolve private `stable` references and
+download private packages on the spawner. It will use `GITHUB_TOKEN` from the
+spawner's environment first, then a managed secret scoped to `spawner-agent`.
+A missing token will use the existing Admin secret exchange. Public installations
+will remain token-free.
 
 ## Maintenance
 

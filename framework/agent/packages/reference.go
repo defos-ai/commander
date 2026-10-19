@@ -19,7 +19,7 @@ type Reference struct {
 	Version    string
 }
 
-// ParseReference accepts an exact public GitHub release, without URL parameters.
+// ParseReference accepts an exact GitHub release, without URL parameters.
 func ParseReference(value string) (Reference, error) {
 	return parseReference(value, false)
 }

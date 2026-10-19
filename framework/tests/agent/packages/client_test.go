@@ -12,7 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/packages"
 )
 
-const clientCatalog = "schema_version: 1\nagents:\n  builder:\n    description: Build an agent\n    package: github.com/acme/agents/apps/agents/builder@stable\n"
+const clientCatalog = "schema_version: 1\nagents:\n  builder:\n    description: Build an agent\n    package: github.com/acme/agents/apps/agents/builder@stable\n    visibility: public\n"
 const clientRelease = `{"tag_name":"v1.2.3","draft":false,"prerelease":false}`
 
 type metadataTransport func(*http.Request) (*http.Response, error)

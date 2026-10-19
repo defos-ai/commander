@@ -20,9 +20,18 @@ type Catalog struct {
 }
 
 type Entry struct {
-	Description string `yaml:"description"`
-	Package     string `yaml:"package"`
+	Description string     `yaml:"description"`
+	Package     string     `yaml:"package"`
+	Visibility  Visibility `yaml:"visibility"`
 }
+
+// Visibility describes repository access, not package trust or image visibility.
+type Visibility string
+
+const (
+	Public  Visibility = "public"
+	Private Visibility = "private"
+)
 
 var aliasPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
@@ -115,6 +124,9 @@ func (c Catalog) Validate() error {
 		}
 		if entry.Description == "" || strings.TrimSpace(entry.Description) != entry.Description {
 			return fmt.Errorf("agent alias %q needs a nonempty trimmed description", name)
+		}
+		if entry.Visibility != Public && entry.Visibility != Private {
+			return fmt.Errorf("agent alias %q visibility must be public or private", name)
 		}
 		if _, err := ParseSelector(entry.Package); err != nil {
 			return fmt.Errorf("agent alias %q: %w", name, err)

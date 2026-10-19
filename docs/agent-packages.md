@@ -15,11 +15,20 @@ workflow publishes packages in this format.
 ## Catalog and stable references
 
 The root [`catalog/agents.yaml`](../catalog/agents.yaml) is the official curated
-discovery catalog. Schema version `1` contains an `agents` map: each alias has a
-`description` and a `package` reference. Entries describe implemented capabilities,
-not live readiness or complete mission coverage. The catalog is not an enforced
+discovery catalog. Schema version `1` contains an `agents` map: each alias requires
+`description`, `package` and `visibility` fields. Visibility is `public` or `private`
+and describes the GitHub repository; package trust and Docker image visibility
+are separate. All official entries are public. Entries describe implemented
+capabilities, not live readiness or complete mission coverage. The catalog is not an enforced
 installation allowlist; an operator must trust any selected package author.
 See the [catalog guide](../catalog/README.md).
+
+Private entries pass schema validation, but the current metadata client and spawner
+remain anonymous. Private installation is planned next: the spawner will resolve
+private `stable` references and download packages, using its environment
+`GITHUB_TOKEN` first, then a managed secret scoped to `spawner-agent`. Missing tokens
+will use the existing Admin secret exchange; public installations will remain
+token-free.
 
 [`framework/agent/packages`](../framework/agent/packages/) owns shared reference
 parsing, strict catalog parsing, bounded remote loading and resolution of `stable`

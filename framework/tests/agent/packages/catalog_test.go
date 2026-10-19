@@ -16,9 +16,11 @@ agents:
   web:
     description: Fetch web pages
     package: github.com/defos-ai/web-agent@stable
+    visibility: public
   builder-2:
     description: Build agents
     package: github.com/defos-ai/commander/apps/agents/builder@v0.1.0
+    visibility: private
 `
 
 func TestRepositoryCatalog(t *testing.T) {
@@ -92,9 +94,13 @@ func TestCatalogLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry, err := catalog.Lookup("builder-2")
-	want := packages.Entry{Description: "Build agents", Package: "github.com/defos-ai/commander/apps/agents/builder@v0.1.0"}
+	want := packages.Entry{Description: "Build agents", Package: "github.com/defos-ai/commander/apps/agents/builder@v0.1.0", Visibility: packages.Private}
 	if err != nil || entry != want {
 		t.Fatalf("catalog lookup: %#v, %v", entry, err)
+	}
+	public, err := catalog.Lookup("web")
+	if err != nil || public.Visibility != packages.Public {
+		t.Fatalf("public catalog lookup: %#v, %v", public, err)
 	}
 	for _, missing := range []string{"unknown", "Builder-2", " builder-2"} {
 		if _, err := catalog.Lookup(missing); err == nil {
@@ -157,6 +163,10 @@ func TestCatalogRejectsInvalidDocuments(t *testing.T) {
 		{"null description", strings.Replace(catalogSource, "Fetch web pages", "null", 1)},
 		{"numeric package", strings.Replace(catalogSource, "github.com/defos-ai/web-agent@stable", "123", 1)},
 		{"invalid package", strings.Replace(catalogSource, "@stable", "@latest", 1)},
+		{"missing visibility", strings.Replace(catalogSource, "    visibility: public\n", "", 1)},
+		{"unknown visibility", strings.Replace(catalogSource, "visibility: public", "visibility: internal", 1)},
+		{"boolean visibility", strings.Replace(catalogSource, "visibility: public", "visibility: true", 1)},
+		{"null visibility", strings.Replace(catalogSource, "visibility: public", "visibility: null", 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := packages.ParseCatalog([]byte(tc.data)); err == nil {

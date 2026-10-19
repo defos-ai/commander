@@ -98,11 +98,14 @@
   and secrets out of manifests.
   See the [package contract](../docs/agent-packages.md#source-template).
   Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
-- [`agent/packages`](agent/packages/) owns public GitHub package references,
+- [`agent/packages`](agent/packages/) owns GitHub package references,
   strict discovery-catalog parsing, bounded remote catalog loading and resolution
   of `stable` to a pinned version. The official source is
   [`catalog/agents.yaml`](../catalog/agents.yaml); runtime readers fetch a configured
-  remote source without requiring a checkout. Catalog entries support discovery,
+  remote source without requiring a checkout. Catalog entries require repository
+  `visibility: public | private`; this describes access, not trust or image
+  visibility. Metadata and package download clients currently remain anonymous;
+  private authentication is a separate integration step. Catalog entries support discovery,
   not an enforced installation allowlist. Resolve `stable` from the repository's
   promoted root GitHub Latest release, require a stable semantic version and map
   module references to that version's module tag. Never guess or fall back to
