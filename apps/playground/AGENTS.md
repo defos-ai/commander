@@ -125,9 +125,9 @@
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
-  Inject the cipher into API, without changing process environment, writing
+  Inject the same cipher into API and spawner, without changing process environment, writing
   the key to files, or exposing it in logs, credentials output or model messages.
-  The spawner and its child agents must not receive this key.
+  Spawned child agents must not receive this key or cipher.
   Docker AIO uses this same Go startup path, with no second generator in its
   entrypoint. The generated key and encrypted state are temporary; persistent
   deployments must retain their key separately and must not silently replace it.

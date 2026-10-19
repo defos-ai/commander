@@ -66,8 +66,8 @@
   transient `MissingRequirements`. The registered agent type determines the
   secret scope; a type and secret name identify one shared value.
   Configure the framework secret runtime with an injected decryptor only for
-  hosts that need managed secrets. Of the Commander-owned agents, only the builder has
-  this configuration. Web and browser actions do not need managed secrets; do
+  hosts that need managed secrets. Builder and spawner support this configuration.
+  Web and browser actions do not need managed secrets; do
   not load or distribute the encryption key to their hosts.
   Access declared values with `action.Secret(ctx, name)`, never action inputs or
   global `os.Setenv`. Keep returned values out of outputs/logs and clear temporary

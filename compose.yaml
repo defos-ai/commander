@@ -330,6 +330,15 @@ services:
 
   spawner-agent:
     <<: *agent
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        export SECRETS_ENCRYPTION_KEY
+        exec commander-spawner-agent "$$@"
+      - commander-spawner-agent
     image: commander-spawner-agent:local
     build:
       context: .
@@ -345,7 +354,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - spawner-state:/var/lib/commander/spawner
+      - secrets-key:/run/commander-secrets:ro
     depends_on:
+      secrets-key:
+        condition: service_completed_successfully
       controller:
         condition: service_started
       rabbitmq:

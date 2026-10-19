@@ -41,7 +41,7 @@ docker exec commander commander credentials mcp
 
 Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
-The API's secret encryption key stays in memory for the temporary session.
+The API and spawner share a secret encryption key in memory for the temporary session.
 Pass `-e SECRETS_ENCRYPTION_KEY` to use your own. Spawned agents do not receive
 this key; actions requiring managed secrets need operator-provisioned access.
 
@@ -112,7 +112,7 @@ shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
-The API uses a separate encryption key generated in memory for each session.
+The API and spawner share a separate encryption key generated in memory for each session.
 Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own; an invalid
 key prevents startup. Spawned agents do not receive the key. The session's saved
 secrets are deleted on exit.

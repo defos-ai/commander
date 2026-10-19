@@ -29,6 +29,11 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   to `native` and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
   unsupported runtimes explicitly. Do not reintroduce flags for these settings.
+- Optional `SECRETS_ENCRYPTION_KEY` configures this host's managed secret exchange.
+  Embedded hosts pass `Options.SecretCipher`, which takes precedence over the
+  environment. Validate keys and supplied ciphers before opening providers.
+  Compose mounts the existing key volume read-only; all-in-one injects the API's
+  session cipher. Never forward the key or cipher to spawned agents.
 - `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an
   explicitly empty flag. Validate nonempty values with `id.AgentIDFromSuffix`
   before opening providers; empty values generate a fresh host ID. This setting

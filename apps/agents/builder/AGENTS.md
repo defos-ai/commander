@@ -53,7 +53,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   spawner among agents. Builder starts on demand through `spawn-agent`: Docker
   for Compose and native for all-in-one. Keep checkout workspaces local to the
   spawned builder; package spawning does not provision persistent mounts.
-- Compose's secrets-key initializer supplies only API. Spawning a builder does
+- Compose's secrets-key initializer supplies API and spawner. Spawning a builder does
   not inject that key or Playground's cipher. Never add the key to the shared
   agent environment. Native users supply Git; both the builder and all-in-one
   Docker images include Git.

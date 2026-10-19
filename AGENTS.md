@@ -63,7 +63,7 @@ The user's current instructions take precedence over repository guidance.
   chat/MCP as sibling containers. Keep launch records while children exist and scope teardown
   by deployment network plus the spawn ownership label.
   Its `secrets-key` initializer persists the encryption key in a dedicated volume;
-  only API mounts it, read-only, and exports it before exec. Retain
+  API and spawner mount it read-only and export it before exec. Retain
   saved keys across restarts and reject invalid state or conflicting overrides.
   Keep this volume separate from `mcp-credentials` and database storage; restoring
   encrypted data requires its original key. Do not distribute the key through

@@ -53,15 +53,15 @@ API credentials remain in its process environment.
 ### Secret encryption
 
 Compose enables secret management automatically. The `secrets-key` initializer
-saves one encryption key in its own volume; the API mounts it read-only and
-loads it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
+saves one encryption key in its own volume; API and spawner mount it read-only and
+load it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
 the first start to supply your own 64-character hex key; a later conflicting value
 fails startup instead of replacing the saved key.
 
 Back up this key volume with MongoDB and restore them together. Do not delete the
 key volume while keeping the database: a new key cannot decrypt existing secrets.
-The spawner, its children, MCP, Playground and the controller do not receive this
-key. Builders need the same key configured explicitly only for actions that use
+Spawned children, MCP, Playground and the controller do not receive this key.
+Builders need the same key configured explicitly only for actions that use
 managed secrets; `checkout-template` does not need it.
 
 ## Configuration

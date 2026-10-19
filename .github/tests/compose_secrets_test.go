@@ -30,20 +30,28 @@ set -eu
 printf '%s' "$SECRETS_ENCRYPTION_KEY" > "$FIXTURE_DIR/observed-key"
 printf '%s' "$API_PASSWORD" > "$FIXTURE_DIR/observed-password"
 printf '%s' "$$" > "$FIXTURE_DIR/after-pid"
+printf '%s\n' "$@" > "$FIXTURE_DIR/observed-arguments"
 `
-	if err := os.WriteFile(filepath.Join(f.dir, "commander-api"), []byte(mock), 0700); err != nil {
-		t.Fatal(err)
+	for _, binary := range []string{"commander-api", "commander-spawner-agent"} {
+		if err := os.WriteFile(filepath.Join(f.dir, binary), []byte(mock), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return f
 }
 
-func (f *composeSecretsFixture) run(t *testing.T, service, key string) error {
+func (f *composeSecretsFixture) run(t *testing.T, service, key string, arguments ...string) error {
 	t.Helper()
 	spec := f.services[service]
-	if !slices.Equal(spec.Entrypoint, []string{"/bin/sh", "-ec"}) || len(spec.Command) != 1 {
-		t.Fatal("secrets initialization and API startup must define one shell command")
+	var script string
+	if slices.Equal(spec.Entrypoint, []string{"/bin/sh", "-ec"}) && len(spec.Command) == 1 {
+		script = spec.Command[0]
+	} else if len(spec.Entrypoint) == 4 && slices.Equal(spec.Entrypoint[:2], []string{"/bin/sh", "-ec"}) {
+		script = spec.Entrypoint[2]
+	} else {
+		t.Fatal("secrets initialization and consumer startup must define one shell command")
 	}
-	script := strings.ReplaceAll(spec.Command[0], "$$", "$")
+	script = strings.ReplaceAll(script, "$$", "$")
 	script = strings.ReplaceAll(script, "/run/commander-secrets", f.state)
 	// The local fixture uses the runner's group instead of the container group.
 	script = strings.ReplaceAll(script, "chgrp 1000", "chgrp "+strconv.Itoa(os.Getgid()))
@@ -52,7 +60,7 @@ func (f *composeSecretsFixture) run(t *testing.T, service, key string) error {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "/bin/sh", "-ec", script, service)
+	command := exec.CommandContext(ctx, "/bin/sh", append([]string{"-ec", script, service}, arguments...)...)
 	command.Env = []string{
 		"PATH=" + f.dir + ":/usr/bin:/bin", "FIXTURE_DIR=" + f.dir,
 		"SECRETS_ENCRYPTION_KEY=" + key, "API_PASSWORD=configured-api-password",
@@ -190,12 +198,25 @@ func TestCIComposeSecretsRejectsInvalidState(t *testing.T) {
 }
 
 func TestCIComposeSecretsConsumer(t *testing.T) {
+	for _, service := range []string{"api", "spawner-agent"} {
+		t.Run(service, func(t *testing.T) { testComposeSecretsConsumer(t, service) })
+	}
+}
+
+func testComposeSecretsConsumer(t *testing.T, service string) {
 	f := newComposeSecretsFixture(t)
 	if err := f.run(t, "secrets-key", strings.Repeat("ab", 32)); err != nil {
 		t.Fatalf("key initialization failed: %v", err)
 	}
-	if err := f.run(t, "api", strings.Repeat("cd", 32)); err != nil {
+	var arguments []string
+	if service == "spawner-agent" {
+		arguments = []string{"--spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0"}
+	}
+	if err := f.run(t, service, strings.Repeat("cd", 32), arguments...); err != nil {
 		t.Fatalf("consumer startup failed: %v", err)
+	}
+	if service == "spawner-agent" && f.read(t, "observed-arguments") != strings.Join(arguments, "\n")+"\n" {
+		t.Fatal("spawner key initialization dropped startup arguments")
 	}
 	if f.read(t, "observed-key") != strings.TrimSpace(f.read(t, "secrets/key")) {
 		t.Fatal("consumer must load the persisted key even when its environment contains an override")
@@ -214,7 +235,7 @@ func TestCIComposeSecretsConsumer(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := f.run(t, "api", strings.Repeat("ab", 32)); err == nil {
+			if err := f.run(t, service, strings.Repeat("ab", 32)); err == nil {
 				t.Fatal("consumer started without a nonempty persisted key")
 			}
 			if _, err := os.Stat(filepath.Join(f.dir, "observed-key")); !os.IsNotExist(err) {
@@ -240,9 +261,12 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if api.Init == nil || *api.Init {
 		t.Fatal("API must remain PID 1")
 	}
-	if !slices.Contains(api.Volumes, "secrets-key:/run/commander-secrets:ro") ||
-		api.DependsOn["secrets-key"].Condition != "service_completed_successfully" {
-		t.Fatal("API must wait for key initialization and mount its key read-only")
+	for _, name := range []string{"api", "spawner-agent"} {
+		service := services[name]
+		if !slices.Contains(service.Volumes, "secrets-key:/run/commander-secrets:ro") ||
+			service.DependsOn["secrets-key"].Condition != "service_completed_successfully" {
+			t.Fatalf("%s must wait for key initialization and mount its key read-only", name)
+		}
 	}
 	for name, service := range services {
 		if name == "secrets-key" {
@@ -251,7 +275,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 		if _, exists := service.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
 			t.Fatalf("%s must not receive the key through Compose environment configuration", name)
 		}
-		if name == "api" {
+		if name == "api" || name == "spawner-agent" {
 			continue
 		}
 		for _, volume := range service.Volumes {

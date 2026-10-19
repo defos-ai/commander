@@ -124,6 +124,11 @@ packages and moving tags such as `stable` are not implemented.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.
 
+Compose and all-in-one configure spawner's managed secret exchange with the same
+encryption key as the API. For a standalone spawner, set `SECRETS_ENCRYPTION_KEY`
+to that API's 64-character hex key. An invalid key prevents startup; leaving it
+unset disables managed secret exchange. The key is never passed to spawned agents.
+
 [Playground all-in-one](../../playground/README.md#startup-agents) embeds the
 spawner in native mode, including inside Docker AIO. It starts no other agents
 by default; install them through chat/MCP or opt into `--spawn-agents`. Its state,

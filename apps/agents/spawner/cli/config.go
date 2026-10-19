@@ -15,6 +15,7 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/packages"
+	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -32,6 +33,7 @@ type config struct {
 	logLevel            string
 	logFormat           string
 	heartbeatInterval   time.Duration
+	secrets             *agent.SecretConfig
 }
 
 func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
@@ -61,6 +63,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run a spawner agent and launch agent packages on the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
+		fmt.Fprintln(stderr, "Set SECRETS_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -143,6 +146,21 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		if connectionScheme(result.storageURL) != "s3" {
 			return config{}, errors.New("docker runtime requires an s3 storage-url reachable from spawned containers")
 		}
+	}
+	cipher := options.SecretCipher
+	if cipher == nil {
+		if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
+			cipher, err = crypto.NewSecretCipher(key)
+			if err != nil {
+				return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+			}
+		}
+	}
+	if cipher != nil {
+		if err := cipher.Validate(); err != nil {
+			return config{}, fmt.Errorf("secret cipher: %w", err)
+		}
+		result.secrets = &agent.SecretConfig{Decryptor: cipher}
 	}
 	return result, nil
 }
