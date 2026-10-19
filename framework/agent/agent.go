@@ -289,7 +289,8 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			if len(input) == 0 {
 				input = json.RawMessage(`{}`)
 			}
-			result, err := t.Run(a.secretContext(ctx, description), input)
+			executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
+			result, err := t.Run(a.secretContext(executionContext, description), input)
 			if err != nil {
 				return ActionOutput{}, err
 			}

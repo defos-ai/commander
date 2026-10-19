@@ -116,6 +116,10 @@
   explicit; historical fulfillment does not authorize dispatch by itself.
 - Preserve schema validation of action input, output and proposed next actions.
   Public snapshots must remain independent.
+- `action.ExecutionFromContext` exposes the current command/work identity for
+  executors that need to correlate external side effects. `Agent.work` supplies
+  this context and overrides caller metadata; identity is not action input or an
+  authorization grant. Executors still own durable side-effect reconciliation.
 
 ## Validation
 

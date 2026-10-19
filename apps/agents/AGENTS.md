@@ -20,7 +20,9 @@
 
 - [Agent packages and bootstrap](../../docs/agent-packages.md) defines the release
   manifest and planned spawner behavior. The [spawner module](spawner/AGENTS.md)
-  implements package resolution and verified downloads; there is no host CLI yet.
+  implements package resolution, verified downloads and a regular native spawner
+  host with `spawn-agent` and repeatable `--spawn-agents`. Docker spawning and
+  Playground/Compose integration remain separate steps.
 - Adopt the contract in `commander-example-agent` before extracting web/browser.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.

@@ -59,6 +59,9 @@ builder:
 
 spawner:
   - *shared
+  - *fs
+  - *rabbitmq
+  - *s3
   - 'apps/agents/spawner/**'
 
 web:

@@ -1,10 +1,11 @@
 # Agent packages and bootstrap
 
-This contract defines agent packaging and the planned spawner. The
-`commander-example-agent` template supports preassigned agent IDs and generates
-release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
-resolves public packages and verifies native downloads. Launching agents,
-`spawn-agent` and `--spawn-agents` are not implemented yet.
+This contract defines agent packaging, native spawning and planned deployment
+integrations. The `commander-example-agent` template supports preassigned agent
+IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
+resolves public packages, verifies native downloads and runs a regular agent
+host with `spawn-agent` and repeatable `--spawn-agents`. Docker spawning and
+integration into Playground/AIO/Compose are planned next.
 
 An agent repository publishes runnable packages; the spawner starts a selected
 package using the deployment's connection settings. Builder produces source and
@@ -81,7 +82,7 @@ manifest, not the trustworthiness of its author. Package sources must be trusted
 by the operator. Fetching metadata or binaries must not forward deployment
 credentials to the download host or its redirects.
 
-The deployment selects the execution mode explicitly:
+The planned deployment integration selects the execution mode explicitly:
 
 | Deployment | Launch behavior |
 | --- | --- |
@@ -102,14 +103,15 @@ own credentials into the new agent or accept deployment settings from a manifest
 | --- | --- |
 | `BUS_URL` | Shared absolute FS path or RabbitMQ URL. |
 | `STORAGE_URL` | Shared absolute FS path or S3 artifact store URL. |
-| S3 settings | The deployment's applicable `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `S3_USE_PATH_STYLE`. |
+| S3 settings | The deployment's applicable `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `S3_USE_PATH_STYLE`. |
 | `COMMANDER_AGENT_ID` | Agent instance ID assigned and saved by the spawner before launch. |
 
 Keep ordinary process settings such as executable search paths explicit too.
 Spawned workload agents connect to the bus and artifact storage; this bootstrap
-supplies no controller-database connection or API/MCP login. Only an agent configured
-by the operator to receive managed secrets gets `SECRETS_ENCRYPTION_KEY`; a manifest
-cannot grant this access. Secret values stay out of package files, action inputs,
+supplies no controller-database connection or API/MCP login. The current native
+spawner does not distribute `SECRETS_ENCRYPTION_KEY`. Future managed-secret
+bootstrap must be configured by the operator; a manifest cannot grant this
+access. Secret values stay out of package files, action inputs,
 results and logs. Existing encrypted secret delivery remains responsible for
 action secrets after registration.
 
@@ -119,8 +121,10 @@ match the framework's agent ID format for the package type (for example,
 When unset or empty, the host generates a fresh ID. The ID is already part of
 registration and needs no additional public configuration field.
 
-The spawner matches the assigned ID and expected type to a live controller
-registration before returning the agent ID and process/container reference.
+The native spawner matches the assigned ID and expected type to the child's
+registration announcement before returning the agent ID and process reference.
+This observes the shared bus, not confirmation of the controller's database write.
+The controller independently persists registration and evaluates eligibility.
 Another running agent of the same type cannot satisfy this check. The spawner
 must prevent two processes from using the same ID; registration does not prove
 exclusive process ownership. The identifier is not an authentication credential.
@@ -132,10 +136,10 @@ required actions are ready.
 
 ## Startup, retries and lifetime
 
-`--spawn-agents` is repeatable. Each occurrence requests one instance, including
-repeated references when two instances of a type are needed. Compose passes the
-list to its spawner service; native/AIO Commander passes it to its embedded
-spawner. Defaults use pinned packages. Startup and the controller-dispatched
+The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
+instance, including repeated references when two instances of a type are needed.
+Planned integration passes this list from Compose and native/AIO Commander to
+their spawner. Defaults will use pinned packages. Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
 A stable launch request identifies an instance across retries; its agent ID must
@@ -148,6 +152,13 @@ request fails explicitly instead of silently replacing the agent.
 Retries reuse the saved launch record and agent ID to find the existing instance.
 They must not start a second process with that ID. A new or replacement launch
 gets a fresh agent ID; the ID alone does not provide idempotency.
+
+The initial native implementation reconciles only processes it still owns in
+memory. Its create-only launch intents survive every restart, including clean
+shutdown; encountering an old intent reports uncertainty instead of adopting a
+PID or launching a replacement. Inspect the old instance before requesting
+replacements with a new state directory.
+Automatic restart recovery is not implemented.
 
 Reconcile uncertain launches before trying again. Retain enough ownership
 information to identify the exact instance; a PID or agent type alone is not

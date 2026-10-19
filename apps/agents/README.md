@@ -15,10 +15,11 @@ The [builder agent](builder/README.md) starts agent creation by checking out the
 example template into an isolated workspace. Build and deployment actions are
 still to come.
 
-The planned [agent package contract](../../docs/agent-packages.md) describes
+The [agent package contract](../../docs/agent-packages.md) describes
 versioned binaries/images and bootstrap for agents created from
 `commander-example-agent`. The [spawner module](spawner/README.md) resolves these
-packages and verifies downloads; agent launching is still to come.
+packages, verifies downloads and starts native agents through its `spawn-agent`
+action or repeatable `--spawn-agents` startup flag. Docker spawning is planned next.
 
 ## Quick start
 
