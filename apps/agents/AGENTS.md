@@ -23,8 +23,11 @@
 - Adopt the contract in `commander-example-agent` before extracting web/browser.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.
-- Planned `COMMANDER_SPAWN_ID` maps to `PublicConfig.spawn_id`, preserving fresh
-  per-process agent IDs. It identifies a launched instance, not authorization.
+- Planned `COMMANDER_AGENT_ID` sets `AgentConfig.ID` directly; the example
+  template supports it. Unset/empty values generate fresh IDs. The spawner saves
+  an ID before launch and reconciles retries against that instance; a new or
+  replacement launch needs a fresh ID. Never start two processes with the same
+  ID. This is instance correlation, not authorization or duplicate prevention.
   Keep provider settings, secrets and launch permissions under deployment control.
 
 ## Actions and readiness

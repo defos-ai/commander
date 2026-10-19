@@ -1,8 +1,8 @@
 # Agent packages and bootstrap
 
-This contract defines the planned spawner and the packaging changes for
-`commander-example-agent`. Package resolution, `spawn-agent`, `--spawn-agents`
-and the bootstrap variable below are not implemented yet.
+This contract defines the planned spawner. The `commander-example-agent` template
+supports preassigned agent IDs and generates release packages in this format.
+Package resolution, `spawn-agent` and `--spawn-agents` are not implemented yet.
 
 An agent repository publishes runnable packages; the spawner starts a selected
 package using the deployment's connection settings. Builder produces source and
@@ -96,7 +96,7 @@ own credentials into the new agent or accept deployment settings from a manifest
 | `BUS_URL` | Shared absolute FS path or RabbitMQ URL. |
 | `STORAGE_URL` | Shared absolute FS path or S3 artifact store URL. |
 | S3 settings | The deployment's applicable `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `S3_USE_PATH_STYLE`. |
-| `COMMANDER_SPAWN_ID` | Non-secret instance identifier supplied by the spawner. |
+| `COMMANDER_AGENT_ID` | Agent instance ID assigned and saved by the spawner before launch. |
 
 Keep ordinary process settings such as executable search paths explicit too.
 Spawned workload agents connect to the bus and artifact storage; this bootstrap
@@ -106,16 +106,17 @@ cannot grant this access. Secret values stay out of package files, action inputs
 results and logs. Existing encrypted secret delivery remains responsible for
 action secrets after registration.
 
-The agent host copies `COMMANDER_SPAWN_ID`, when present, into the existing
-`AgentConfig.PublicConfig` as `spawn_id`, preserving its other public settings.
-It still generates a fresh agent ID for each process. Manually started agents
-may omit the spawn ID.
+The agent host uses nonempty `COMMANDER_AGENT_ID` as `AgentConfig.ID`. It must
+match the framework's agent ID format for the package type (for example,
+`example-agent-0123abcd`). Reject invalid values before opening providers.
+When unset or empty, the host generates a fresh ID. The ID is already part of
+registration and needs no additional public configuration field.
 
-The spawner matches the expected type and spawn ID to a live controller
+The spawner matches the assigned ID and expected type to a live controller
 registration before returning the agent ID and process/container reference.
-Another running agent of the same type cannot satisfy this check. Conflicting
-live registrations with the same spawn ID are an error. The identifier correlates
-instances; it is not an authentication credential.
+Another running agent of the same type cannot satisfy this check. The spawner
+must prevent two processes from using the same ID; registration does not prove
+exclusive process ownership. The identifier is not an authentication credential.
 
 Registration and action readiness are separate results. Report missing
 requirements, including secrets or Chromium, without removing an otherwise
@@ -130,12 +131,16 @@ list to its spawner service; native/AIO Commander passes it to its embedded
 spawner. Defaults use pinned packages. Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
-A stable launch request identifies an instance across retries; its spawn ID must
+A stable launch request identifies an instance across retries; its agent ID must
 be allocated and recorded before starting the process/container. Startup requests
 are scoped to a deployment and configured instance; runtime requests are tied to
 their saved task identity. Repeating a package reference in two startup slots
 creates two identities, not a retry. A conflicting package for an existing launch
 request fails explicitly instead of silently replacing the agent.
+
+Retries reuse the saved launch record and agent ID to find the existing instance.
+They must not start a second process with that ID. A new or replacement launch
+gets a fresh agent ID; the ID alone does not provide idempotency.
 
 Reconcile uncertain launches before trying again. Retain enough ownership
 information to identify the exact instance; a PID or agent type alone is not
@@ -156,7 +161,7 @@ that would spawn the missing agent.
 
 ## Adoption order
 
-1. Update `commander-example-agent` to carry the spawn ID into public registration,
+1. Update `commander-example-agent` to accept a preassigned agent ID,
    keep bus/storage bootstrap settings consistent, and include a manifest template.
 2. Add its binary/image release workflow. Validate and publish native assets,
    image digest and generated `agent.yaml` from the same tested revision. Keep the
