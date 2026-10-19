@@ -30,37 +30,36 @@ Change the root with `--workspace-dir` or `BUILDER_WORKSPACE_DIR`.
 
 ## Bundled deployment
 
-The repository [Compose stack](../../../compose.yaml) starts one builder with Git
-installed. It uses the shared bus and artifact storage, and saves checkouts in
-the `builder-workspaces` volume at `/home/commander/workspaces`.
+The repository [Compose stack](../../../compose.yaml) and
+[Playground all-in-one](../../playground/README.md#native-one-executable) start
+the spawner agent. Request the builder package through chat or MCP when needed,
+or run the source command above against the same bus and artifact storage.
 
-The builder and API read the same persisted encryption key from the `secrets-key`
-volume. Only the initializer writes that volume; the builder mounts it read-only
-and loads the key before starting. Keep this key with any backups of encrypted
-secrets. See [deployment](../../../docs/deployment.md#secret-encryption).
-
-[Playground all-in-one](../../playground/README.md#native-one-executable) also
-includes the builder, with workspaces under the session's local state directory.
-Its Docker image includes Git; native installations use Git from the host and
-report it as a missing requirement if unavailable.
+Compose spawns the builder in Docker, with Git installed and workspaces inside
+its container at `/home/commander/workspaces`. Playground all-in-one spawns its
+native executable; the all-in-one Docker image includes Git, while native
+installations use Git from the host. Missing Git makes `checkout-template`
+unavailable until it is installed.
 
 ## Release package
 
 The next Commander release will publish `agent.yaml` on the builder's module-tag
-release, such as `apps/agents/builder/v0.2.0`. Once published, a spawner configured
-for Docker can use:
+release, such as `apps/agents/builder/v0.2.0`. Once published, ask chat or MCP to
+run `spawn-agent` with:
 
-```sh
---spawn-agents github.com/defos-ai/commander/apps/agents/builder@v0.2.0
+```json
+{"package":"github.com/defos-ai/commander/apps/agents/builder@v0.2.0"}
 ```
 
-This package provides the `linux/amd64` image
+This package provides native executables for Linux, macOS and Windows on
+amd64/arm64, plus the `linux/amd64` image
 `ghcr.io/defos-ai/commander-builder-agent`, pinned by digest in the manifest.
-It includes Git and offers no standalone native executable. Existing releases
-are unchanged; use source or the bundled deployment until publication.
+The builder image includes Git; native executables require Git on the host.
+Existing releases are unchanged; use the source command until publication.
 See [agent packages](../../../docs/agent-packages.md).
 
-The spawner does not supply a managed-secrets encryption key. The spawned
+The spawner does not supply a managed-secrets encryption key or a persistent
+workspace volume. The spawned
 builder can run `checkout-template` without it; actions requiring managed
 secrets need operator-provisioned access. Package metadata cannot grant access
 to the key or add mounts.

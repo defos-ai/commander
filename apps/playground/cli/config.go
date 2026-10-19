@@ -26,9 +26,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags := flag.NewFlagSet("commander", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&c.MCPURL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
-	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and agents; credentials are generated when unset; temporary state is removed on exit")
+	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and spawner; credentials are generated when unset; temporary state is removed on exit")
 	flags.BoolVar(&c.NoAdmin, "no-admin", false, "Disable Admin UI in --all-in-one mode")
-	flags.Func("spawn-agents", "All-in-one startup package; repeat to replace the default web/browser v0.2.0 agents; use an empty value to start no packages", func(value string) error {
+	flags.Func("spawn-agents", "Optional all-in-one startup package; repeat to start multiple agents; no packages start by default; an empty value clears the list", func(value string) error {
 		if value == "" {
 			c.SpawnAgents = []string{}
 			return nil

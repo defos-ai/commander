@@ -48,18 +48,18 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 
 - [Dockerfile](docker/Dockerfile) includes Git and CA certificates, runs as
   UID/GID 1000, and creates `/home/commander/workspaces` with matching ownership.
-  Keep `BUILDER_WORKSPACE_DIR` aligned with the Compose volume target so a new
-  named volume is writable without another initialization service.
-- [Compose](../../../compose.yaml) reuses the existing secrets-key initializer.
-  The builder mounts the key read-only, exports it before exec, preserves command
-  arguments and retains `init: true` for child-process cleanup. Never add the key
-  to the shared agent environment.
-- Playground's all-in-one host injects its existing cipher and keeps builder
-  workspaces inside session state. Native users supply Git; its Docker image
-  includes Git. The builder remains limited to checkout in either deployment.
+  Keep `BUILDER_WORKSPACE_DIR` aligned with this writable directory.
+- [Compose](../../../compose.yaml) and Playground all-in-one start only the
+  spawner among agents. Builder starts on demand through `spawn-agent`: Docker
+  for Compose and native for all-in-one. Keep checkout workspaces local to the
+  spawned builder; package spawning does not provision persistent mounts.
+- Compose's secrets-key initializer supplies only API. Spawning a builder does
+  not inject that key or Playground's cipher. Never add the key to the shared
+  agent environment. Native users supply Git; both the builder and all-in-one
+  Docker images include Git.
 - The release package uses `apps/agents/builder/<version>` in this repository
   with `agent.yaml`; its reference includes `apps/agents/builder` before
-  `@<version>`. Keep it Docker-only while no standalone native binary is built.
+  `@<version>`. It provides six native platforms and Docker.
   The shared manifest renderer must receive the builder image digest from the
   same release run. Package spawning does not provision a secrets key or mounts;
   preserve the existing operator-controlled secret boundary.
@@ -82,8 +82,8 @@ go vet ./apps/agents/builder/...
 Keep the builder owner filter and unit step in `.github` aligned with provider
 imports, including the downstream Playground filter. Release image publication
 uses `push-agents.yml`; `push-binaries.yml` publishes its module-tag package with
-`Latest` disabled before the root release and stable promotion. The native
-Commander binary embeds this host.
+`Latest` disabled before the root release and stable promotion. Keep native
+builder assets and their manifest checksums tied to the same tested revision.
 For deployment changes, run the Compose and release wiring checks from
 `.github/tests` with `GOWORK=off go test -run '^TestCI' ./...` and validate
 `docker compose config --quiet`. Test the builder image as its configured

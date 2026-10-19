@@ -54,7 +54,6 @@ jobs:
           [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
           test "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$GITHUB_SHA"
       - uses: actions/download-artifact@v4
-        if: matrix.agent == 'spawner'
         with:
           pattern: commander-native-*
           merge-multiple: true
@@ -68,20 +67,19 @@ jobs:
         shell: bash
         run: |
           mkdir package
-          if [[ "$AGENT" == spawner ]]; then
-            for os in linux darwin windows; do
-              extension=
-              if [[ "$os" == windows ]]; then extension=.exe; fi
-              for arch in amd64 arm64; do
-                binary="commander-spawner-agent_${os}_${arch}${extension}"
-                if [[ ! -s "artifacts/$binary" || ! -f "artifacts/$binary" || -L "artifacts/$binary" ]]; then
-                  echo "Missing native binary: $binary" >&2
-                  exit 1
-                fi
-                cp "artifacts/$binary" package/
-              done
+          [[ "$AGENT" == builder || "$AGENT" == spawner ]]
+          for os in linux darwin windows; do
+            extension=
+            if [[ "$os" == windows ]]; then extension=.exe; fi
+            for arch in amd64 arm64; do
+              binary="commander-${AGENT}-agent_${os}_${arch}${extension}"
+              if [[ ! -s "artifacts/$binary" || ! -f "artifacts/$binary" || -L "artifacts/$binary" ]]; then
+                echo "Missing native binary: $binary" >&2
+                exit 1
+              fi
+              cp "artifacts/$binary" package/
             done
-          fi
+          done
           cp LICENSE package/LICENSE
       - name: Generate agent manifest
         id: manifest
@@ -99,19 +97,14 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           assets=(agent.yaml LICENSE)
-          case "$AGENT" in
-            builder) ;;
-            spawner)
-              for os in linux darwin windows; do
-                extension=
-                if [[ "$os" == windows ]]; then extension=.exe; fi
-                for arch in amd64 arm64; do
-                  assets+=("commander-spawner-agent_${os}_${arch}${extension}")
-                done
-              done
-              ;;
-            *) exit 1 ;;
-          esac
+          [[ "$AGENT" == builder || "$AGENT" == spawner ]]
+          for os in linux darwin windows; do
+            extension=
+            if [[ "$os" == windows ]]; then extension=.exe; fi
+            for arch in amd64 arm64; do
+              assets+=("commander-${AGENT}-agent_${os}_${arch}${extension}")
+            done
+          done
           shopt -s nullglob dotglob
           staged=(*)
           if (( ${#staged[@]} != ${#assets[@]} )); then
@@ -195,13 +188,13 @@ jobs:
         run: |
           shopt -s nullglob dotglob
           downloaded=(*)
-          if (( ${#downloaded[@]} != 12 )); then
-            echo "Expected exactly twelve native binaries; refusing an incomplete release." >&2
+          if (( ${#downloaded[@]} != 18 )); then
+            echo "Expected exactly eighteen native binaries; refusing an incomplete release." >&2
             exit 1
           fi
 
           binaries=()
-          for name in commander commander-spawner-agent; do
+          for name in commander commander-spawner-agent commander-builder-agent; do
             for os in linux darwin windows; do
               extension=
               if [[ "$os" == windows ]]; then extension=.exe; fi

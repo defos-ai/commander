@@ -21,24 +21,13 @@ func TestCIComposeDockerSpawner(t *testing.T) {
 	if !ok || len(spawner.Profiles) != 0 {
 		t.Fatal("Docker spawner must start with the default Compose services")
 	}
-	var packages []string
-	for _, argument := range spawner.Command {
-		if strings.HasPrefix(argument, "--spawn-agents=") {
-			packages = append(packages, strings.TrimPrefix(argument, "--spawn-agents="))
-		}
-	}
-	slices.Sort(packages)
-	if !slices.Equal(packages, []string{
-		"github.com/defos-ai/commander-browser-agent@v0.2.0",
-		"github.com/defos-ai/commander-web-agent@v0.2.0",
-		"github.com/defos-ai/commander-web-agent@v0.2.0",
-	}) {
-		t.Fatal("Compose must spawn one released browser and two released web agents")
+	if len(spawner.Command) != 0 {
+		t.Fatal("Compose spawner must start without automatic package launches")
 	}
 	if compose.Services["playground"].DependsOn["spawner-agent"].Condition != "service_started" {
 		t.Fatal("Playground must start after the spawner")
 	}
-	for _, name := range []string{"browser-agent", "web-agent-1", "web-agent-2"} {
+	for _, name := range []string{"builder-agent", "browser-agent", "web-agent-1", "web-agent-2"} {
 		if _, exists := compose.Services[name]; exists {
 			t.Errorf("%s must be launched by the spawner instead of Compose", name)
 		}

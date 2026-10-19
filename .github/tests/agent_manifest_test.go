@@ -39,18 +39,13 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 	for _, name := range []string{"builder", "spawner"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			if name == "spawner" {
-				for _, asset := range nativeBinaryNames[6:] {
-					if err := os.WriteFile(filepath.Join(dir, asset), []byte(asset), 0600); err != nil {
-						t.Fatal(err)
-					}
+			for _, asset := range agentNativeBinaryNames(name) {
+				if err := os.WriteFile(filepath.Join(dir, asset), []byte(asset), 0600); err != nil {
+					t.Fatal(err)
 				}
 			}
 			path := filepath.Join(dir, "agent.yaml")
-			args := []string{"--agent", name, "--version", "v0.2.0", "--digest", digest, "--output", path}
-			if name == "spawner" {
-				args = append(args, "--artifacts", dir)
-			}
+			args := []string{"--agent", name, "--version", "v0.2.0", "--digest", digest, "--output", path, "--artifacts", dir}
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			if output, err := exec.CommandContext(ctx, generator, args...).CombinedOutput(); err != nil {
@@ -75,17 +70,11 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 			if want := "ghcr.io/defos-ai/commander-" + name + "-agent@" + digest; definition.Docker.Image != want {
 				t.Fatalf("image = %q, want %q", definition.Docker.Image, want)
 			}
-			if name == "builder" {
-				if definition.Native != nil {
-					t.Fatal("builder must only advertise its published Docker delivery")
-				}
-				return
-			}
 			if len(definition.Native) != 6 {
 				t.Fatalf("expected six native platforms, got %d", len(definition.Native))
 			}
-			for _, asset := range nativeBinaryNames[6:] {
-				platform := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(asset, "commander-spawner-agent_"), ".exe"), "_", "/")
+			for _, asset := range agentNativeBinaryNames(name) {
+				platform := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(asset, "commander-"+name+"-agent_"), ".exe"), "_", "/")
 				got := definition.Native[platform]
 				if got.Asset != asset || got.SHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(asset))) {
 					t.Errorf("%s does not reference and hash the release bytes: %+v", platform, got)
@@ -98,7 +87,7 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			agent, version, imageDigest := "spawner", "v0.2.0", digest
-			for _, asset := range nativeBinaryNames[6:] {
+			for _, asset := range agentNativeBinaryNames("spawner") {
 				if err := os.WriteFile(filepath.Join(dir, asset), []byte(asset), 0600); err != nil {
 					t.Fatal(err)
 				}

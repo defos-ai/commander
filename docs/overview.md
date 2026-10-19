@@ -53,9 +53,9 @@ flowchart TD
 
 Hosts construct providers and inject interfaces. The framework imports no providers
 or applications. Runtimes communicate through shared contracts without importing
-each other. Playground embeds Commander hosts and spawns released web/browser
-executables in all-in-one mode. Compose uses the same package contract to start
-web/browser containers through its Docker spawner. Those agents are developed
+each other. All-in-one and Compose start with only the spawner agent. Chat uses
+the `install-agent` mission to add agents when needed: native child processes in
+all-in-one, sibling containers in Compose. Web and browser agents are developed
 in [separate repositories](../apps/agents/README.md).
 
 | Area | Responsibility | Details |

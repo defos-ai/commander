@@ -59,6 +59,11 @@
   The no-browser review uses `discover-pages-no-browser` and three HTTP checks;
   the with-browser review uses `discover-pages` and five checks. Keep starting
   actions, requirements and rules aligned with each discovery's proposals.
+- The bundled `install-agent` mission requires only `spawn-agent`, so a fresh
+  deployment can install packages before business actions are available. Keep
+  its model review rule: the client must inspect launch results and current
+  readiness before completing provisioning. A mission waiting on the new
+  actions cannot dispatch its own provisioning task.
 
 ## Validation
 

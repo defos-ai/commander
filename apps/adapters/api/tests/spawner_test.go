@@ -14,7 +14,7 @@ import (
 func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	a := connect(t)
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
-	provision, spawn := runFixtureAction(t, a, "fixture-spawn-agent", "spawn-agent", object{"package": reference})
+	provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", object{"package": reference})
 	var launched struct {
 		AgentID     string                  `json:"agent_id"`
 		AgentType   string                  `json:"agent_type"`
@@ -61,7 +61,22 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 			t.Fatalf("controller did not accept registration for %s: %s: %v", launched.AgentID, result.body, err)
 		}
 	}
-	post[models.OperationResponse](a, operationPath(provision.ID)+"/complete", object{"output": object{}}, http.StatusOK)
+	decision := modelDecision(a.wait(provision.ID, func(op models.OperationResponse) bool { return modelDecision(op) != nil }))
+	if decision.ID != spawn.ID {
+		t.Fatalf("install mission requested a decision for a different task: %+v", decision)
+	}
+	a.resolve(provision.ID, *decision, []object{})
+	post[models.OperationResponse](a, operationPath(provision.ID)+"/complete", object{"output": object{"agent_id": launched.AgentID}}, http.StatusOK)
+	installed := read[models.OperationResponse](a, operationPath(provision.ID))
+	var installedOutput struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(installed.Output, &installedOutput); err != nil {
+		t.Fatal(err)
+	}
+	if installed.Status != "completed" || installed.ReportID == "" || installedOutput.AgentID != launched.AgentID || modelDecision(installed) != nil {
+		t.Fatalf("install mission did not save the reviewed agent identity: %+v", installed)
+	}
 
 	const message = "Executed through the API on a dynamically spawned agent"
 	op := post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "fixture-use-agent", "input": object{"message": message}}, http.StatusCreated)

@@ -22,10 +22,10 @@ docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and Admin, one controller, builder and spawner agents.
-The spawner starts two web agents and one browser agent from their standalone
-`v0.2.0` releases. Web agents run HTTP checks; the browser renders pages;
-the builder checks out the agent template.
+Compose runs MCP, the API and Admin, one controller, and the spawner agent.
+Use Playground or another connected MCP client to request additional agents
+before starting work that needs their actions. Web agents run HTTP checks,
+the browser renders pages, and the builder checks out the agent template.
 It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
 storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
 [MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
@@ -53,27 +53,30 @@ API credentials remain in its process environment.
 ### Secret encryption
 
 Compose enables secret management automatically. The `secrets-key` initializer
-saves one encryption key in its own volume; API and builder mount it read-only and
-load it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
+saves one encryption key in its own volume; the API mounts it read-only and
+loads it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
 the first start to supply your own 64-character hex key; a later conflicting value
 fails startup instead of replacing the saved key.
 
 Back up this key volume with MongoDB and restore them together. Do not delete the
 key volume while keeping the database: a new key cannot decrypt existing secrets.
-Web/browser agents, MCP, Playground and the controller do not receive this key.
-Separately deployed builders need the same key configured explicitly.
+The spawner, its children, MCP, Playground and the controller do not receive this
+key. Builders need the same key configured explicitly only for actions that use
+managed secrets; `checkout-template` does not need it.
 
 ## Configuration
 
 ### Spawned agents
 
 The [spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket
-to start released images as sibling containers on the Compose network. Startup
-needs Internet access for GitHub package manifests and uncached image pulls. Children
-receive bus/storage settings, without the socket or secrets encryption key.
-Change the spawner service's repeated `--spawn-agents` entries to choose packages.
-After an initial launch, remove its children and reset launch records before
-changing those entries; existing startup slots retain their package and identity.
+to start released images as sibling containers on the Compose network. It starts
+without child agents. Through chat or MCP, request `spawn-agent` with an exact
+package reference, such as `github.com/defos-ai/commander-web-agent@v0.2.0`,
+then start the mission after the new agent is ready. See the
+[runtime spawning example](../apps/agents/spawner/README.md#during-a-mission).
+Launching packages needs Internet access for GitHub manifests and uncached image
+pulls. Children receive bus/storage settings, without the socket or secrets
+encryption key.
 
 `docker compose restart spawner-agent` reuses live children and their saved launch
 records in `spawner-state`. Spawned containers have no automatic restart policy:
@@ -114,8 +117,8 @@ Admin URL or API connection.
 Compose creates named Docker volumes; no host `state/` directory is needed.
 It persists RabbitMQ, MongoDB, and MinIO data in their own volumes.
 Separate volumes hold the shared MCP token and the secrets encryption key.
-Builder workspaces have their own persistent volume; stopping or recreating the
-builder keeps checked-out source available.
+The `spawner-state` volume retains launch records. Each spawned builder owns its
+workspaces; Docker package workspaces live inside that builder's container.
 Host inboxes remain transient: broker persistence does not preserve a replaced
 host's inbox.
 
@@ -142,6 +145,7 @@ docker compose down
 For a custom Compose project name, replace `commander_default` and
 `commander_spawner-state` with that project's network and volume names. Removing
 launch records is deliberate here, after the spawner and its children stop; it
-lets the next `up` create fresh agents. MongoDB, artifacts, credentials and builder
-workspaces remain. **`docker compose down --volumes` deletes all saved state.**
+lets later spawn requests create fresh agents. MongoDB, artifacts and credentials
+remain; removing a spawned builder's container also removes its workspaces.
+**`docker compose down --volumes` deletes the Compose stack's saved state.**
 For restart behavior and scaling limits, see [architecture](overview.md#state-and-restart-recovery).

@@ -241,7 +241,7 @@ const Help = `/help — Show this help
 /clear — Clear model conversation; keep saved operations
 /exit — Exit; server-side work keeps running
 
-Try: "List missions and available agents."
+Try: "Install the web agent, then review defos.ai."
 Use PgUp/PgDown to scroll chat.
 Drag to select, then copy normally: Ctrl+Shift+C in GNOME Terminal, Cmd+C in macOS Terminal, or the Copy menu.
 Ctrl+C stops a reply; Ctrl+D exits.`

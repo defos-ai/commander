@@ -26,9 +26,9 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[summary["name"]] = summary
 	}
-	for _, name := range []string{"fixture-spawn-agent", "fixture-use-agent"} {
+	for _, name := range []string{"fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
-			t.Fatalf("missing spawner fixture mission: %s", name)
+			t.Fatalf("missing agent mission: %s", name)
 		}
 	}
 	for _, expected := range []struct {

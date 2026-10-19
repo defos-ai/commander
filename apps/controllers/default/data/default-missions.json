@@ -1,5 +1,63 @@
 [
   {
+    "name": "install-agent",
+    "objective": "Install one agent from an explicit public GitHub release. Read spawn-agent's schema and readiness, then assign spawn-agent with the mission input. Review its saved result and resolve the continuation with no follow-up actions. Recheck the registered agent's action readiness before completing with its agent_id and any limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready.",
+    "required_actions": [
+      "spawn-agent"
+    ],
+    "starting_actions": [
+      "spawn-agent"
+    ],
+    "rules": {
+      "decide-next-actions": {
+        "for_actions": [
+          "spawn-agent"
+        ],
+        "params": {
+          "decision_by": "model"
+        }
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "package": {
+          "type": "string",
+          "pattern": "^github\\.com/[^/@?#\\s]+/[^@?#\\s]+@v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+          "description": "Exact public GitHub release with optional module path: github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH."
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        }
+      },
+      "required": [
+        "agent_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "review-website-no-browser",
     "objective": "Review a website without a browser. Start discover-pages-no-browser with mission input; let the controller run link, SEO and technology checks. Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages-no-browser at the destination, preserving max_pages; document the scope change. Review grouped results and resolve the continuation before completing. Report prioritized findings and coverage. Include limitations: no rendered accessibility or screenshots; JavaScript-generated content is not assessed. Technology versions are indicators, not vulnerability proof; SEO checks are partial. Do not modify the site.",
     "required_actions": [

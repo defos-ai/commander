@@ -16,11 +16,12 @@ docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
 ```
 
-This image includes Admin, MCP, the API, a controller, builder and spawner agents,
-with Chromium, fonts and Git. At startup, the spawner downloads and starts the
-web and browser agents as native processes inside the container; it needs no
-Docker socket. See [startup agents](#startup-agents) for package selection and
-Internet requirements. Completed operations show a review link to Admin at
+This image includes Admin, MCP, the API, a controller and the spawner agent,
+with Chromium, fonts and Git. Ask in chat: **Install the web agent, then review
+defos.ai.** Agents are downloaded when requested and run as native processes
+inside the container; the spawner needs no Docker socket. See
+[startup agents](#startup-agents) for optional startup packages and Internet
+requirements. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
 If an operation shows **secrets needed**, open its Admin link and provide the
@@ -35,8 +36,9 @@ docker exec commander commander credentials mcp
 
 Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
-Secret management also works automatically: a separate encryption key stays in
-memory for the temporary session. Pass `-e SECRETS_ENCRYPTION_KEY` to use your own.
+The API's secret encryption key stays in memory for the temporary session.
+Pass `-e SECRETS_ENCRYPTION_KEY` to use your own. Spawned agents do not receive
+this key; actions requiring managed secrets need operator-provisioned access.
 
 Admin reaches the API inside the container; publishing API port `4274` is optional.
 Add `-p 127.0.0.1:4274:4274` if other tools need API access. For a different
@@ -65,6 +67,8 @@ docker compose exec mcp commander-mcp credentials
 
 Add `--raw` to print only the token.
 `/exit` closes chat; hosts and saved work remain.
+Compose also starts with only the spawner agent. Ask in chat to install agents;
+it starts them as sibling containers sharing the deployment's bus and storage.
 Compose also configures `/admin` for `http://localhost:4275`, following
 `COMMANDER_UI_PORT` when changed. Set `COMMANDER_ADMIN_URL` for another browser address.
 API secret management is configured automatically with a separate persistent
@@ -93,31 +97,33 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts Admin, MCP, the HTTP API, one controller, builder and spawner agents
-using temporary FS state. The spawner downloads and starts web and browser agents
-as child processes. The API listens at `http://127.0.0.1:4274` with username
+This starts Admin, MCP, the HTTP API, one controller and the spawner agent using
+temporary FS state. Ask in chat to install other agents as child processes when
+needed. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
-API and builder share a separate encryption key generated in memory for each
-session. Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own;
-an invalid key prevents startup. The session's saved secrets are deleted on exit.
+The API uses a separate encryption key generated in memory for each session.
+Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own; an invalid
+key prevents startup. Spawned agents do not receive the key. The session's saved
+secrets are deleted on exit.
 Type `/admin` for a link with the local API URL and username prefilled; enter the
 password shown by `/credentials`. Admin defaults to **http://127.0.0.1:4275**.
 Use `/status` to see the running addresses.
 `--no-admin` disables Admin; `UI_LISTEN_ADDRESS` changes its address.
 If Admin cannot start, Playground continues with a notice.
 `API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
-The packaged executable embeds Admin and both website missions and needs no checkout
+The packaged executable embeds Admin and the bundled missions and needs no checkout
 or Go installation. For a Go-only source build, omit `-tags embed_ui` and use
 `--no-admin`, or set `UI_STATIC_DIR` to a built frontend directory.
-Start with `review-website-no-browser` for links, SEO and technology checks.
-`review-website-with-browser` adds screenshots and rendered accessibility, requiring
+Install the web agent for `review-website-no-browser` links, SEO and technology
+checks. `review-website-with-browser` also needs the browser agent and adds
+screenshots and rendered accessibility, requiring
 [Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander).
-The builder's `checkout-template` action requires Git on `PATH`; without it,
-website missions still work. See the [builder guide](../agents/builder/README.md).
+If you install the builder, its `checkout-template` action requires Git on `PATH`.
+See the [builder guide](../agents/builder/README.md).
 **Exiting stops these hosts and child agents, then deletes operations, reports,
 artifacts, builder workspaces and downloaded executables.**
 Use Compose to retain work.
@@ -129,27 +135,30 @@ shows the temporary host log location, which is also deleted on exit.
 
 ### Startup agents
 
-Native and Docker all-in-one sessions start these packages by default:
+Native and Docker all-in-one sessions start only the spawner. There are no
+default package downloads. Ask in chat to install the agents your mission needs.
+Known web/browser packages are pinned to:
 
 - `github.com/defos-ai/commander-web-agent@v0.2.0`
 - `github.com/defos-ai/commander-browser-agent@v0.2.0`
 
-Each temporary session downloads the release manifests and native executables
-from GitHub, requiring Internet access. The spawner verifies checksums before
-launching; a failed download or launch prevents startup. Downloads and child
-working directories stay within the temporary session and are removed after
-child shutdown.
+Installing an agent downloads its release manifest and native executable from
+GitHub, requiring Internet access. The spawner verifies its checksum before
+launching. Downloads and child working directories stay within the temporary
+session and are removed after child shutdown. Installing a package does not
+install host dependencies or guarantee that all its actions are ready.
 
-Repeat `--spawn-agents` to replace the default package list with explicit public
-GitHub releases, for example:
+For an explicit startup package, use `--spawn-agents`; repeat it for additional
+instances, for example:
 
 ```sh
 ./commander --all-in-one --spawn-agents github.com/defos-ai/commander-web-agent@v0.2.0
 ```
 
-Use `--spawn-agents=` to start without package downloads. The embedded builder
-and spawner remain available; website missions require the corresponding agents.
-The flag is all-in-one only. For Docker AIO, place it after the image name.
+An explicitly requested startup package must download and launch successfully
+before startup completes. `--spawn-agents=` clears the explicit package list;
+the spawner remains available. The flag is all-in-one only. For Docker AIO, place
+it after the image name.
 Use packages from authors you trust; native agents run as the current OS user.
 
 ### Credentials

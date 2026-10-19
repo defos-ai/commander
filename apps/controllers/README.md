@@ -22,9 +22,11 @@ go run ./apps/controllers/default/cmd --with-missions ./apps/controllers/default
 
 `--with-missions` upserts definitions at each startup: matching names are updated,
 other missions are preserved. Without it, the host loads no mission file. Compose
-supplies the [website missions](default/data/default-missions.json) automatically:
+supplies the [bundled missions](default/data/default-missions.json) automatically:
+`install-agent` uses the spawner to install a pinned package;
 `review-website-no-browser` uses HTTP checks; `review-website-with-browser` also
-requires rendering and screenshots.
+requires rendering and screenshots. Install missing agents in a separate
+operation before running a website review.
 Existing operations retain their saved mission definition.
 
 Start the [MCP adapter](../adapters/README.md#quick-start) and

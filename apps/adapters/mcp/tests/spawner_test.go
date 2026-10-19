@@ -19,7 +19,7 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
 	var provision operations.Operation
 	input := object{"package": reference}
-	a.call("start_operation", object{"mission_name": "fixture-spawn-agent", "input": input}, &provision)
+	a.call("start_operation", object{"mission_name": "install-agent", "input": input}, &provision)
 	if provision.Preflight == nil || !provision.Preflight.Ready {
 		t.Fatalf("spawner is not ready: %+v", provision.Preflight)
 	}
@@ -52,7 +52,22 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 		t.Fatalf("spawned with runtime %q, expected %q", spawned.Runtime, expectedRuntime)
 	}
 	waitFixtureAgent(t, a, spawned.AgentID)
+	decision := modelDecision(a.wait(provision.ID, func(op operationDetail) bool { return modelDecision(op) != nil }))
+	if decision.ID != assigned.ID {
+		t.Fatalf("install mission requested a decision for a different task: %+v", decision)
+	}
+	a.resolve(provision.ID, *decision, []object{})
 	a.call("complete_operation", object{"operation_id": provision.ID, "output": object{"agent_id": spawned.AgentID}}, nil)
+	installed := a.get(provision.ID)
+	var installedOutput struct {
+		AgentID string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(installed.Output, &installedOutput); err != nil {
+		t.Fatal(err)
+	}
+	if installed.Status != operations.Completed || installed.ReportID == "" || installedOutput.AgentID != spawned.AgentID || modelDecision(installed) != nil {
+		t.Fatalf("install mission did not save the reviewed agent identity: %+v", installed)
+	}
 
 	// A separate mission can now use the capability. Previous API/MCP scenarios
 	// may have spawned another instance; the controller chooses the executor.

@@ -44,16 +44,14 @@ func generate(agent, version, digest, artifacts, output string) error {
 	if err := definition.Validate(); err != nil {
 		return err
 	}
-	if agent == "spawner" {
-		if artifacts == "" {
-			return fmt.Errorf("spawner requires the native artifacts directory")
-		}
-		assets, err := nativeAssets(artifacts)
-		if err != nil {
-			return err
-		}
-		definition.Native = assets
+	if artifacts == "" {
+		return fmt.Errorf("native artifacts directory is required")
 	}
+	assets, err := nativeAssets(agent, artifacts)
+	if err != nil {
+		return err
+	}
+	definition.Native = assets
 	data, err := manifest.Render(definition)
 	if err != nil {
 		return err
@@ -61,11 +59,11 @@ func generate(agent, version, digest, artifacts, output string) error {
 	return os.WriteFile(output, data, 0644)
 }
 
-func nativeAssets(directory string) (map[string]manifest.NativeAsset, error) {
+func nativeAssets(agent, directory string) (map[string]manifest.NativeAsset, error) {
 	assets := make(map[string]manifest.NativeAsset, 6)
 	for _, goos := range []string{"linux", "darwin", "windows"} {
 		for _, goarch := range []string{"amd64", "arm64"} {
-			name := "commander-spawner-agent_" + goos + "_" + goarch
+			name := "commander-" + agent + "-agent_" + goos + "_" + goarch
 			if goos == "windows" {
 				name += ".exe"
 			}

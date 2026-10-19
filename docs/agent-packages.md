@@ -97,7 +97,7 @@ built-in agent, using its existing module tag. Both releases contain `agent.yaml
 
 | Package | Release tag for `v0.2.0` | Delivery modes |
 | --- | --- | --- |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` | Docker, `linux/amd64` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` | Native Linux/macOS/Windows on amd64/arm64; Docker, `linux/amd64` |
 | `github.com/defos-ai/commander/apps/agents/spawner@v0.2.0` | `apps/agents/spawner/v0.2.0` | Native Linux/macOS/Windows on amd64/arm64; Docker, `linux/amd64` |
 
 Their manifests use the actual native checksums and image digests from the same
@@ -143,7 +143,7 @@ Deployment selects the execution mode explicitly:
 | Native `commander --all-in-one` | Child executable using the session's FS bus and artifact directories. |
 | Docker AIO | Child executable inside the AIO container, using the same FS directories; no Docker socket. |
 
-Docker AIO continues to include its default agents' native prerequisites. A
+Docker AIO includes Chromium, fonts and Git for agents requested later. A
 Compose spawner needs access to the host's Docker Engine. Spawned containers use
 the image's entrypoint, no mounts or published ports, dropped capabilities and
 `no-new-privileges`. An image that declares volumes is rejected. Docker settings
@@ -197,13 +197,11 @@ required actions are ready.
 
 The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
 instance, including repeated references when two instances of a type are needed.
-Compose passes one browser and two web `v0.2.0` references as its spawner service's
-command. Native/AIO Commander
-defaults to `github.com/defos-ai/commander-web-agent@v0.2.0` and
-`github.com/defos-ai/commander-browser-agent@v0.2.0`. Its repeatable `--spawn-agents`
-replaces those defaults; `--spawn-agents=` skips startup packages while keeping
-the embedded builder and spawner. Each temporary session needs Internet access
-for its configured package downloads. See [Playground](../apps/playground/README.md#startup-agents).
+Compose and native/Docker AIO start only the spawner by default. Other agents are
+installed through chat/MCP when needed. Repeatable `--spawn-agents` opts into
+startup packages; `--spawn-agents=` clears that list while keeping the spawner.
+Package downloads need Internet access, whether requested during startup or
+later through chat. See [Playground](../apps/playground/README.md#startup-agents).
 Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
@@ -247,7 +245,13 @@ owned containers before removing their network or data. See the
 [Compose teardown commands](deployment.md#stopping-and-resetting-agents). Continuous monitoring,
 scaling, automatic upgrades and replacement are outside the spawner's role.
 
-Initially, runtime spawning uses a separate provisioning operation. Current
+Runtime spawning uses the bundled `install-agent` mission in a separate
+provisioning operation. Its only required action is `spawn-agent`, so it is ready
+with only the spawner registered. Start it with `{"package":"<pinned reference>"}`,
+then assign `spawn-agent` with the same input. Review the saved result, resolve
+its model continuation with no follow-up actions, and complete provisioning.
+Recheck the agent's readiness and the target mission's preflight before work.
+Current
 [mission preflight](../framework/controller/runner/scheduler.go) blocks all
 dispatch in a mission whose required actions are unavailable, including a task
 that would spawn the missing agent.
@@ -263,7 +267,7 @@ that would spawn the missing agent.
 3. Verify that an agent built from the template can be spawned natively and through
    Docker, including exact-instance registration and repeat-request behavior.
 4. Keep the separate web/browser repositories on the same package contract.
-   Commander startup uses their `v0.2.0` packages. Their source and action tests
+   Commander installation guidance pins their `v0.2.0` packages. Their source and action tests
    stay in those repositories; Commander tests consume pinned release images or
    Go modules for cross-host integration.
 

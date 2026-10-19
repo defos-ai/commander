@@ -46,9 +46,7 @@ func TestCIAgentPackagePublication(t *testing.T) {
 					t.Errorf("create release = %t, existing draft = %t", got, draft)
 				}
 				assets := []string{"agent.yaml", "LICENSE"}
-				if agent == "spawner" {
-					assets = append(assets, nativeBinaryNames[6:]...)
-				}
+				assets = append(assets, agentNativeBinaryNames(agent)...)
 				var checksums strings.Builder
 				for _, name := range assets {
 					got, want := f.read(t, "uploaded/"+name), f.read(t, "package/"+name)
@@ -317,8 +315,8 @@ func TestCIAgentPackageReleaseWiring(t *testing.T) {
 				t.Error("agent publisher must check out the tested SHA with its module tags")
 			}
 		case strings.HasPrefix(step.Uses, "actions/download-artifact@"):
-			if step.If != "matrix.agent == 'spawner'" || step.With["pattern"] != "commander-native-*" || step.With["run-id"] != "" {
-				t.Error("spawner must use native artifacts from this release run")
+			if step.If != "" || step.With["pattern"] != "commander-native-*" || step.With["run-id"] != "" {
+				t.Error("agent packages must use native artifacts from this release run")
 			}
 		case step.ID == "manifest":
 			if step.If != "" || step.Directory != "" || !strings.Contains(step.Run, "go run ./.github/scripts/agent-manifest.go") || !strings.Contains(step.Run, "--artifacts package --output package/agent.yaml") {

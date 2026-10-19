@@ -33,8 +33,8 @@ import (
 )
 
 func TestAllInOne(t *testing.T) {
+	t.Run("spawner-only startup", testAllInOneSpawnerOnly)
 	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
-	t.Run("session builder workspace", testAllInOneBuilderWorkspace)
 	t.Run("optional Admin lifecycle", testAllInOneAdmin)
 	t.Run("advertised Admin address", testAllInOneAdminAddress)
 	t.Run("generated API and MCP credentials", testAllInOneGeneratedCredentials)
@@ -79,7 +79,7 @@ func TestSpawnAgentsArguments(t *testing.T) {
 
 func testAllInOneWorkflow(t *testing.T) {
 	temporary := allInOneEnvironment(t)
-	t.Setenv("PATH", t.TempDir()) // Missing Git must not block the web workflow or agent registration.
+	t.Setenv("PATH", t.TempDir()) // Startup and explicit web fixtures need no Git or browser.
 	t.Setenv("CHROMIUM_PATH", filepath.Join(t.TempDir(), "missing-browser"))
 	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
 	website := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -110,7 +110,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		expected := map[int32][]string{
 			2: {"review-website-no-browser", "review-website-with-browser"},
 			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
-			4: {"web-agent-", "browser-agent-", "builder-agent-", "spawner-agent-", "checkout-template", "spawn-agent"},
+			4: {"web-agent-", "browser-agent-", "spawner-agent-", "spawn-agent"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -202,7 +202,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- cli.Run(cliContext, []string{"--all-in-one", "--spawn-agents=", "--provider=other", "--model=fixture", "--base-url=" + model.URL + "/v1", "--no-color", "--debug=false"}, input, &output, &output)
+		done <- cli.Run(cliContext, []string{"--all-in-one", "--provider=other", "--model=fixture", "--base-url=" + model.URL + "/v1", "--no-color", "--debug=false"}, input, &output, &output)
 	}()
 	wait := func(text string) {
 		t.Helper()
@@ -231,7 +231,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	})
 	wait("Temporary session · results deleted on exit")
 	welcome := output.String()
-	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try: Review defos.ai"} {
+	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 1 agent connected", "Try: Install the web agent, then review defos.ai"} {
 		if !strings.Contains(welcome, want) {
 			t.Fatalf("missing startup message %q: %s", want, welcome)
 		}
@@ -324,7 +324,7 @@ func testAllInOneWorkflow(t *testing.T) {
 				ready++
 			}
 		}
-		if ready == 4 {
+		if ready == 3 {
 			break
 		}
 		select {
@@ -333,12 +333,12 @@ func testAllInOneWorkflow(t *testing.T) {
 		case <-tick.C:
 		}
 	}
-	if len(agents.Items) != 4 {
+	if len(agents.Items) != 3 {
 		t.Fatalf("unexpected local agents: %+v", agents.Items)
 	}
-	var webChecks, browserChecks, builderChecks, spawnerChecks int
+	var webChecks, browserChecks, spawnerChecks int
 	for _, agent := range agents.Items {
-		if !regexp.MustCompile(`^(web|browser|builder|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
+		if !regexp.MustCompile(`^(web|browser|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
 			t.Fatalf("unexpected bundled agent identity: %+v", agent)
 		}
 		for _, action := range agent.Actions {
@@ -353,11 +353,6 @@ func testAllInOneWorkflow(t *testing.T) {
 					t.Fatalf("HTTP action depends on Chromium: %+v", action)
 				}
 				webChecks++
-			case "builder-agent":
-				if action.Name != "checkout-template" || action.Status != "unavailable" || len(action.MissingRequirements) != 1 || action.MissingRequirements[0].Kind != "executable" || action.MissingRequirements[0].Name != "git" {
-					t.Fatalf("unexpected builder action without Git: %+v", action)
-				}
-				builderChecks++
 			case "spawner-agent":
 				if action.Name != "spawn-agent" || action.Status != "ready" {
 					t.Fatalf("unexpected spawner action: %+v", action)
@@ -368,8 +363,8 @@ func testAllInOneWorkflow(t *testing.T) {
 			}
 		}
 	}
-	if webChecks != 5 || browserChecks != 2 || builderChecks != 1 || spawnerChecks != 1 {
-		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, builder=%d, spawner=%d", webChecks, browserChecks, builderChecks, spawnerChecks)
+	if webChecks != 5 || browserChecks != 2 || spawnerChecks != 1 {
+		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, spawner=%d", webChecks, browserChecks, spawnerChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))

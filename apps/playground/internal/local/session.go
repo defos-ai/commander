@@ -13,7 +13,6 @@ import (
 
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
-	buildercli "github.com/defos-ai/commander/apps/agents/builder/cli"
 	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
@@ -33,7 +32,7 @@ type runningHost struct {
 
 type Options struct {
 	DisableAdmin bool
-	// Nil uses released web/browser packages; an empty slice starts no packages.
+	// Optional packages to launch in addition to the embedded spawner.
 	SpawnAgents []string
 }
 
@@ -60,12 +59,6 @@ func Start(ctx context.Context) (session *Session, err error) {
 }
 
 func StartWithOptions(ctx context.Context, options Options) (session *Session, err error) {
-	if options.SpawnAgents == nil {
-		options.SpawnAgents = []string{
-			"github.com/defos-ai/commander-web-agent@v0.2.0",
-			"github.com/defos-ai/commander-browser-agent@v0.2.0",
-		}
-	}
 	for _, reference := range options.SpawnAgents {
 		if _, err := packages.ParseReference(reference); err != nil {
 			return nil, fmt.Errorf("spawn-agents: %w", err)
@@ -119,10 +112,6 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = awaitReady(startup, controllerReady); err != nil {
 		return nil, err
 	}
-	s.start("builder agent", func(ctx context.Context) error {
-		args := append(append([]string{}, common...), "--workspace-dir="+filepath.Join(s.Directory, "builder-workspaces"))
-		return buildercli.RunWithOptions(ctx, args, s.log, buildercli.Options{SecretCipher: cipher})
-	})
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
@@ -180,7 +169,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 		return nil, context.Cause(s.Context)
 	}
 	s.Notices = append(s.Notices,
-		"\nTry: Review defos.ai\n\nTemporary session · results deleted on exit",
+		"\nTry: Install the web agent, then review defos.ai\n\nTemporary session · results deleted on exit",
 	)
 	return s, nil
 }
@@ -260,7 +249,6 @@ func (s *Session) awaitAgents(ctx context.Context, expected map[string]string) e
 		if err := json.Unmarshal(result.Data, &inventory); err != nil {
 			return err
 		}
-		var builderReady bool
 		matched, connected := 0, 0
 		for _, agent := range inventory.Agents {
 			if agent.Status != "ready" || agent.Stale {
@@ -271,12 +259,9 @@ func (s *Session) awaitAgents(ctx context.Context, expected map[string]string) e
 				if expectedType == agent.Type {
 					matched++
 				}
-			} else if agent.Type == "builder-agent" {
-				// A custom startup package must not stand in for the embedded builder.
-				builderReady = true
 			}
 		}
-		if matched == len(expected) && builderReady {
+		if matched == len(expected) {
 			s.AgentCount = connected
 			return nil
 		}

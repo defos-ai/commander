@@ -119,14 +119,18 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		m.add("success", m.provider.Name+" · "+m.settings.Model)
 		connection := "Commander connected · " + m.config.MCPURL
 		if m.config.LocalAPI != nil {
-			connection = fmt.Sprintf("Commander ready · all-in-one · %d agents connected", m.config.LocalAgentCount)
+			agents := "agents"
+			if m.config.LocalAgentCount == 1 {
+				agents = "agent"
+			}
+			connection = fmt.Sprintf("Commander ready · all-in-one · %d %s connected", m.config.LocalAgentCount, agents)
 		}
 		m.add("success", connection)
 		for _, notice := range m.config.Notices {
 			m.add("notice", notice)
 		}
 		if m.config.LocalAPI == nil {
-			m.add("notice", "Try: List missions and available agents. Type /help for commands.")
+			m.add("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
 		}
 		return waitEvent(m.engine), true
 	}

@@ -54,6 +54,10 @@
 - Keep summaries small and use detail tools for schemas, task input and results.
   Readiness reflects the selected agent's advertisement and current lease; catalog
   metadata alone does not establish an available executor.
+  MCP installation guidance uses the bundled `install-agent` mission and
+  controller-dispatched `spawn-agent` action before a mission needing the new
+  agent. Keep known web/browser package references pinned; never promise unknown
+  releases, host dependency installation or automatic secret/privilege access.
   Managed-secret handoff uses explicit preflight `agent_type` and
   `missing_requirements` of kind `secret` for actions without ready candidates.
   Sensitive host configuration remains kind `configuration`, even with

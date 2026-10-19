@@ -55,17 +55,18 @@ Use the separate release-test workflow for validation without publication.
 
 ## Native binaries
 
-[build-binaries.yml](../.github/workflows/build-binaries.yml) builds `commander`
-and `commander-spawner-agent` for Linux, macOS and Windows on amd64 and arm64
+[build-binaries.yml](../.github/workflows/build-binaries.yml) builds `commander`,
+`commander-spawner-agent` and `commander-builder-agent` for Linux, macOS and Windows on amd64 and arm64
 runners. Each runner builds and embeds the Admin frontend in Commander, checks
 environment discovery, runs the all-in-one smoke tests (including Admin), and
-checks both executables' `--help` before uploading them.
+checks all three executables' `--help` before uploading them.
 
 After every image and both agent package releases publish,
 [push-binaries.yml](../.github/workflows/push-binaries.yml)
-attaches all twelve executables, `LICENSE` and `checksums.txt` to the root-version
-GitHub Release. File names are `commander_<os>_<arch>` and
-`commander-spawner-agent_<os>_<arch>` (`.exe` for Windows); OS names are `linux`,
+attaches all eighteen executables, `LICENSE` and `checksums.txt` to the root-version
+GitHub Release. File names are `commander_<os>_<arch>`,
+`commander-spawner-agent_<os>_<arch>` and `commander-builder-agent_<os>_<arch>`
+(`.exe` for Windows); OS names are `linux`,
 `darwin` and `windows`. SHA-256 checksums cover every binary and the license.
 Binaries are unsigned; macOS builds are not notarized.
 
@@ -73,13 +74,11 @@ Download the binary as `commander` (`commander.exe` on Windows). On Linux/macOS,
 run `chmod +x commander`, then `./commander --all-in-one`; on Windows, run
 `.\commander.exe --all-in-one`. See
 [native setup](../apps/playground/README.md#native-one-executable) for model setup,
-the generated API login and temporary-state behavior. All-in-one startup downloads
-web/browser `v0.2.0` native packages from GitHub for each temporary session;
-Internet access is required. Use [startup package overrides](../apps/playground/README.md#startup-agents)
-to change or skip those downloads. With the default agents,
-`review-website-no-browser` needs no browser; the with-browser mission also needs
-Chromium or Chrome.
-The bundled builder's `checkout-template` action needs Git on the host.
+the generated API login and temporary-state behavior. All-in-one starts only the
+spawner agent and downloads no packages by default. Add agents through chat, or
+use explicit [startup packages](../apps/playground/README.md#startup-agents).
+Package downloads require Internet access. Native browser actions need Chromium
+or Chrome; the builder's `checkout-template` action needs Git on the host.
 
 The standalone spawner runs with the controller's bus and artifact storage; see
 its [run instructions](../apps/agents/spawner/README.md#run). Its assets are added
@@ -105,11 +104,11 @@ module tags. For a `v0.2.0` release:
 
 | Release tag | Assets |
 | --- | --- |
-| `apps/agents/builder/v0.2.0` | `agent.yaml`, `LICENSE`, `checksums.txt` |
+| `apps/agents/builder/v0.2.0` | Six `commander-builder-agent_<os>_<arch>` executables, `agent.yaml`, `LICENSE`, `checksums.txt` |
 | `apps/agents/spawner/v0.2.0` | Six `commander-spawner-agent_<os>_<arch>` executables, `agent.yaml`, `LICENSE`, `checksums.txt` |
 
-The builder manifest provides Docker only; the spawner manifest provides all six
-native platforms and Docker. Both images are `linux/amd64`, using the existing
+Both manifests provide all six native platforms and Docker.
+Both images are `linux/amd64`, using the existing
 `ghcr.io/defos-ai/commander-builder-agent` and
 `ghcr.io/defos-ai/commander-spawner-agent` image names.
 The [manifest generator](../.github/scripts/agent-manifest.go) calls the shared
@@ -128,7 +127,7 @@ tags and `agent.yaml`.
 
 Both package releases remain drafts until their complete assets are attached and
 are published with `Latest` disabled. Retry failures in the same workflow run;
-never overwrite published assets. The root release still contains all twelve
+never overwrite published assets. The root release contains all eighteen
 native binaries and publishes only after both package releases succeed. Docker
 `stable` and the root release's `Latest` promotion wait for all three releases.
 
@@ -151,8 +150,9 @@ and a moving `stable` tag:
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
 The all-in-one image starts Playground with its local hosts, embeds Admin in the
-Commander binary and includes Chromium and Git. Its native spawner downloads the
-web/browser packages inside the container, without a Docker socket.
+Commander binary and includes Chromium and Git. Only the spawner agent starts
+by default; it downloads requested packages inside the container, without a
+Docker socket.
 Publish `127.0.0.1:4275:4275` to use Admin;
 its API connection stays inside the container.
 The lightweight Playground image connects to an existing MCP service.

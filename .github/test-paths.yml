@@ -82,7 +82,6 @@ playground:
   - *shared
   - *providers
   - *controller
-  - *builder
   - *spawner
   - *api
   - *mcp

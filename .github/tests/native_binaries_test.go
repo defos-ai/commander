@@ -19,6 +19,19 @@ var nativeBinaryNames = []string{
 	"commander-spawner-agent_linux_amd64", "commander-spawner-agent_linux_arm64",
 	"commander-spawner-agent_darwin_amd64", "commander-spawner-agent_darwin_arm64",
 	"commander-spawner-agent_windows_amd64.exe", "commander-spawner-agent_windows_arm64.exe",
+	"commander-builder-agent_linux_amd64", "commander-builder-agent_linux_arm64",
+	"commander-builder-agent_darwin_amd64", "commander-builder-agent_darwin_arm64",
+	"commander-builder-agent_windows_amd64.exe", "commander-builder-agent_windows_arm64.exe",
+}
+
+func agentNativeBinaryNames(agent string) []string {
+	var names []string
+	for _, name := range nativeBinaryNames {
+		if strings.HasPrefix(name, "commander-"+agent+"-agent_") {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 type nativeFixture struct {
@@ -154,7 +167,7 @@ func TestCINativeBinaryPublication(t *testing.T) {
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "uploaded"))
 			if err != nil || len(entries) != len(nativeBinaryNames)+2 {
-				t.Fatalf("release must contain twelve binaries, license and checksums: %v, %v", entries, err)
+				t.Fatalf("release must contain eighteen binaries, license and checksums: %v, %v", entries, err)
 			}
 			if !strings.HasSuffix(log, "release edit v0.1.0 --draft=false --latest=false\n") {
 				t.Errorf("release must await final latest promotion: %s", log)
@@ -315,6 +328,7 @@ case "${@: -1}" in
     prefix=commander
     ;;
   ./apps/agents/spawner/cmd) prefix=commander-spawner-agent ;;
+  ./apps/agents/builder/cmd) prefix=commander-builder-agent ;;
   *) exit 1 ;;
 esac
 while [[ "$1" != '-o' ]]; do shift; done
@@ -330,10 +344,10 @@ chmod +x "$2"
 				t.Fatalf("build failed: %v: %s", err, output)
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "dist"))
-			if err != nil || len(entries) != 2 {
-				t.Fatalf("build must produce Commander and spawner binaries: %v, %v", entries, err)
+			if err != nil || len(entries) != 3 {
+				t.Fatalf("build must produce Commander, spawner and builder binaries: %v, %v", entries, err)
 			}
-			for _, prefix := range []string{"commander", "commander-spawner-agent"} {
+			for _, prefix := range []string{"commander", "commander-spawner-agent", "commander-builder-agent"} {
 				name := prefix + "_" + platform
 				if goos == "windows" {
 					name += ".exe"

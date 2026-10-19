@@ -661,6 +661,11 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 				t.Errorf("model is missing managed secret guidance: %s", guidance)
 			}
 		}
+		for _, guidance := range []string{"only the spawner agent", "install-agent workflow in separate provisioning operations", "recheck action readiness", "never invent package references"} {
+			if !strings.Contains(body.Messages[0].Content, guidance) {
+				t.Errorf("model is missing agent installation guidance: %s", guidance)
+			}
+		}
 		if !strings.Contains(last, `"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]`) || !strings.Contains(last, `"agent_type":"builder-agent"`) {
 			t.Error("managed secret names and scope did not reach the model's preflight evidence")
 		}

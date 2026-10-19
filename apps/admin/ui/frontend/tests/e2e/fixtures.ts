@@ -63,7 +63,7 @@ export class CommanderAPI {
         ...Array(2).fill({ type: 'web-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
       ], spawnedReady: true, spawnedCatalog: true,
       actions: ['capture-page', 'check-accessibility', 'check-links', 'check-seo', 'detect-technologies', 'discover-pages', 'discover-pages-no-browser', 'spawn-agent'],
-      missions: ['fixture-spawn-agent', 'fixture-use-agent', 'review-website-no-browser', 'review-website-with-browser'], controller: true,
+      missions: ['fixture-use-agent', 'install-agent', 'review-website-no-browser', 'review-website-with-browser'], controller: true,
     });
   }
 

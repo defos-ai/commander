@@ -25,9 +25,10 @@
 - [Agent packages and bootstrap](../../docs/agent-packages.md) defines the release
   manifest and spawner behavior. The [spawner module](spawner/AGENTS.md)
   implements native/Docker spawning with `spawn-agent` and repeatable
-  `--spawn-agents`. Compose uses Docker mode by default for one browser and two
-  web instances from their standalone `v0.2.0` releases. Playground and Docker AIO
-  embed the spawner in native mode and launch one of each. Web/browser source,
+  `--spawn-agents`. Compose uses Docker mode; Playground and Docker AIO embed
+  the spawner in native mode. Fresh deployments start only the spawner; other
+  agents are requested through the `install-agent` mission or explicit startup
+  packages. Keep web/browser examples pinned to `v0.2.0`. Web/browser source,
   unit tests and releases belong to their standalone repositories.
 - Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
@@ -35,8 +36,8 @@
 - Built-in packages use their module-path references and existing module tags:
   `github.com/defos-ai/commander/apps/agents/<name>@<version>` resolves
   `agent.yaml` from `apps/agents/<name>/<version>` in the Commander repository.
-  The manifest version remains the bare version. Builder provides Docker only;
-  spawner provides its six native assets and Docker. Keep standalone repository
+  The manifest version remains the bare version. Builder and spawner each
+  provide six native assets and Docker. Keep standalone repository
   references resolving `agent.yaml` from the root version tag. Agent releases
   never become `Latest`; root publication and stable promotion wait for them.
 - `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an explicit

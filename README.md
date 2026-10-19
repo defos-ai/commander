@@ -20,11 +20,14 @@ Use Commander for complex workflows that a single AI cannot reliably coordinate 
 
 Each option opens Playground. Choose a model, enter its API key, and ask:
 
-> Review defos.ai and summarize what should be fixed before release.
+> Install the web agent, then review defos.ai and summarize what should be fixed before release.
+
+Fresh sessions start with the spawner agent. Ask in chat to install the agents
+needed for your work; Commander checks their readiness before running a mission.
 
 ### Docker
 
-Run all-in-one (AIO), with agent dependencies included:
+Run all-in-one (AIO), with Chromium and Git available for agents you install:
 
 ```sh
 docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable

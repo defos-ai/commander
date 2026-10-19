@@ -49,24 +49,7 @@ func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testin
 }
 
 func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
-	var definitions []json.RawMessage
-	if err := json.Unmarshal(data.DefaultMissions, &definitions); err != nil {
-		t.Fatal(err)
-	}
-	websites := map[string]missions.Mission{}
-	for _, raw := range definitions {
-		mission, err := missions.LoadMission(raw)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, exists := websites[mission.Name]; exists {
-			t.Fatalf("duplicate mission %q", mission.Name)
-		}
-		websites[mission.Name] = mission
-	}
-	if len(websites) != 2 {
-		t.Fatalf("expected two website review missions, got %d", len(websites))
-	}
+	websites := defaultMissions(t)
 	for _, test := range []struct {
 		name      string
 		discovery string
@@ -91,6 +74,57 @@ func TestWebsiteMissionCollectsAutomaticChecksBeforeModelReview(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
+	mission := defaultMissions(t)["install-agent"]
+	if !slices.Equal(mission.RequiredActions, []string{"spawn-agent"}) || !slices.Equal(mission.StartingActions, []string{"spawn-agent"}) || len(mission.Steps) != 0 {
+		t.Fatalf("agent installation must work before business agents register: %+v", mission)
+	}
+	decision := mission.Rules[missions.DecideNextActions]
+	if len(mission.Rules) != 1 || !slices.Equal(decision.ForActions, []string{"spawn-agent"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("spawn completion must trigger result and readiness review: %+v", mission.Rules)
+	}
+	for _, input := range []string{
+		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0"}`,
+		`{"package":"github.com/defos-ai/commander/apps/agents/builder@v0.2.0"}`,
+	} {
+		if err := mission.ValidateInput(json.RawMessage(input)); err != nil {
+			t.Fatalf("pinned package rejected: %v", err)
+		}
+		if err := mission.ValidateOutput(json.RawMessage(input), json.RawMessage(`{"agent_id":"web-agent-1234abcd","limitations":["Actions still need configuration"]}`)); err != nil {
+			t.Fatalf("registration with readiness limitations rejected: %v", err)
+		}
+	}
+	for _, input := range []string{
+		`{}`,
+		`{"package":"github.com/defos-ai/commander-web-agent@latest"}`,
+		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0","environment":{"KEY":"value"}}`,
+	} {
+		if err := mission.ValidateInput(json.RawMessage(input)); err == nil {
+			t.Fatalf("invalid installation input accepted: %s", input)
+		}
+	}
+}
+
+func defaultMissions(t *testing.T) map[string]missions.Mission {
+	t.Helper()
+	var definitions []json.RawMessage
+	if err := json.Unmarshal(data.DefaultMissions, &definitions); err != nil {
+		t.Fatal(err)
+	}
+	websites := map[string]missions.Mission{}
+	for _, raw := range definitions {
+		mission, err := missions.LoadMission(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := websites[mission.Name]; exists {
+			t.Fatalf("duplicate mission %q", mission.Name)
+		}
+		websites[mission.Name] = mission
+	}
+	return websites
 }
 
 type missionStore map[string]missions.Mission

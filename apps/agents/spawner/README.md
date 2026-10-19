@@ -59,9 +59,10 @@ Start Compose with its default spawner:
 docker compose up --build --wait
 ```
 
-It launches two web agents and one browser agent from their `v0.2.0` packages as
-sibling containers on Commander's network, sharing RabbitMQ and S3. To replace
-that list, change `command` under `spawner-agent` in `compose.yaml`:
+It starts only the spawner agent. Ask in Playground to install the web agent,
+or use the `install-agent` mission through MCP. Requested agents run as sibling
+containers on Commander's network, sharing RabbitMQ and S3. To opt into a startup
+package, set `command` under `spawner-agent` in `compose.yaml`:
 
 ```yaml
 command: ["--spawn-agents", "github.com/defos-ai/commander-example-agent@v0.2.0"]
@@ -91,7 +92,9 @@ capabilities. Package files cannot request these privileges.
 
 ### During a mission
 
-For runtime spawning, have the controller dispatch `spawn-agent` with:
+For runtime spawning, read the `install-agent` mission and `spawn-agent` action
+schemas through MCP. Start an `install-agent` operation, then assign its
+`spawn-agent` task with the same input:
 
 ```json
 {"package":"github.com/defos-ai/commander-example-agent@v0.2.0"}
@@ -107,6 +110,9 @@ for work.
 Native children stop during spawner shutdown. Linux also stops their process
 group; other platforms stop the direct child only. Docker containers keep running.
 Use a separate provisioning operation before a mission that needs the new actions.
+Review the spawn result, resolve its model continuation with no follow-up actions,
+and complete provisioning. Recheck agent readiness and the target mission's
+preflight before assigning dependent work.
 
 Use packages from authors you trust. A checksum verifies downloaded bytes against
 the manifest; it does not establish whether the program is safe to run.
@@ -119,8 +125,8 @@ packages and moving tags such as `stable` are not implemented.
 the Compose service explicitly selects Docker mode.
 
 [Playground all-in-one](../../playground/README.md#startup-agents) embeds the
-spawner in native mode, including inside Docker AIO. It downloads web/browser
-`v0.2.0` packages by default and accepts `--spawn-agents` overrides. Its state,
+spawner in native mode, including inside Docker AIO. It starts no other agents
+by default; install them through chat/MCP or opt into `--spawn-agents`. Its state,
 downloads and child working directories are temporary; shutdown awaits child
 processes before removing them.
 

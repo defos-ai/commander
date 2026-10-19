@@ -58,12 +58,12 @@ The user's current instructions take precedence over repository guidance.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.
-- [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO. Its Docker
-  spawner starts pinned external web/browser packages; they are sibling containers,
-  not Compose services. Keep launch records while children exist and scope teardown
+- [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO. Only the Docker
+  spawner starts by default among agents; other agents launch on demand through
+  chat/MCP as sibling containers. Keep launch records while children exist and scope teardown
   by deployment network plus the spawn ownership label.
   Its `secrets-key` initializer persists the encryption key in a dedicated volume;
-  only API and builder mount it, read-only, and export it before exec. Retain
+  only API mounts it, read-only, and exports it before exec. Retain
   saved keys across restarts and reject invalid state or conflicting overrides.
   Keep this volume separate from `mcp-credentials` and database storage; restoring
   encrypted data requires its original key. Do not distribute the key through

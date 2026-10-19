@@ -21,8 +21,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   injection in runtime constructors; do not add resolver options to the host.
   Injected runtime clients remain caller-owned; a manager closes its resolver
   only when it created it. Keep concrete runtime
-  imports out of `cli/cli.go`. Compose starts this service in Docker mode by default,
-  with one browser and two web package entries pinned to `v0.2.0`.
+  imports out of `cli/cli.go`. Compose starts only this agent in Docker mode by
+  default. Playground/AIO embed only this agent in native mode. Other agents
+  start through the bundled `install-agent` mission or explicit `--spawn-agents`
+  entries; never add implicit builder/web/browser packages.
 - Standalone runtime settings are environment-only: `SPAWNER_RUNTIME` defaults
   to `native` and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
@@ -144,7 +146,7 @@ aligned with dependencies. Release module tagging discovers this module through
 the workspace. The spawner is embedded in Commander and also ships standalone:
 [push-agents.yml](../../../.github/workflows/push-agents.yml) publishes
 `commander-spawner-agent`, and [build-binaries.yml](../../../.github/workflows/build-binaries.yml)
-builds its six native assets alongside Commander's six. Keep both executables in
+builds its six native assets alongside Commander and builder. Keep all three executables in
 the same native build artifacts and checksum list. Agent package publication
 attaches `agent.yaml` and native assets to `apps/agents/spawner/vMAJOR.MINOR.PATCH`,
 using the image digest and native checksums from the same tested revision.

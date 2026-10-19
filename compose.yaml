@@ -328,32 +328,6 @@ services:
       retries: 12
       start_period: 5s
 
-  builder-agent:
-    <<: *agent
-    image: commander-builder-agent:local
-    build:
-      context: .
-      dockerfile: apps/agents/builder/docker/Dockerfile
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
-        test -n "$$SECRETS_ENCRYPTION_KEY"
-        export SECRETS_ENCRYPTION_KEY
-        exec commander-builder-agent "$$@"
-      - commander-builder-agent
-    volumes:
-      - secrets-key:/run/commander-secrets:ro
-      - builder-workspaces:/home/commander/workspaces
-    depends_on:
-      secrets-key:
-        condition: service_completed_successfully
-      controller:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy
-
   spawner-agent:
     <<: *agent
     image: commander-spawner-agent:local
@@ -362,10 +336,6 @@ services:
       dockerfile: apps/agents/spawner/docker/Dockerfile
     # Host Docker access belongs only to the spawner, never its child agents.
     user: "0:0"
-    command:
-      - --spawn-agents=github.com/defos-ai/commander-browser-agent@v0.2.0
-      - --spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0
-      - --spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0
     environment:
       <<: *environment
       SPAWNER_RUNTIME: docker
@@ -427,12 +397,9 @@ services:
         condition: service_healthy
       spawner-agent:
         condition: service_started
-      builder-agent:
-        condition: service_started
 
 volumes:
   secrets-key:
-  builder-workspaces:
   spawner-state:
   mcp-credentials:
   rabbitmq:
