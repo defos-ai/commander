@@ -14,6 +14,14 @@ never falls back to another agent. A new create request is rejected if the scope
 has a live reservation, and queued/running creation reserves the scope until its
 first snapshot arrives. Explicitly close before replacing.
 
+This reservation also applies to automatic follow-up proposals. Accepted session
+results reserve their scope until inventory publishes that exact reference,
+including across controller restart after the operation has ended. An interrupted
+creation without a result remains uncertain until recovery obtains its outcome.
+The contract cannot associate that task with an arbitrary closed session in the
+same scope; closing an older session is not evidence that the pending creation
+was stopped.
+
 Mission and action input schemas may publish `x-commander-session-mode` with the
 same values. A trusted chat host injects its chat UUID as `session_scope`, verifies
 the session binding, and supplies the existing session ID for a use action. This
@@ -43,6 +51,7 @@ owner cannot confirm closure; clients retain that uncertainty. Session snapshots
 expire with the existing agent inventory retention policy, so chat hosts must
 persist their binding and refuse silent replacement if that record disappears.
 
-The cross-repository real-process E2E is in the external agent repository at
-`tests/remote_shell_e2e_test.go`. Its `scripts/test-remote-sessions.sh` builds these
-local Commander hosts and tests public HTTP/MCP behavior with two agents.
+`go test ./apps/adapters/api/tests/e2e -run '^TestE2E'` exercises automatic
+creation reservations with real API/controller/worker processes. Cross-repository
+shell E2Es live in the external agent repository; its `scripts/test-remote-sessions.sh`
+uses caller-provided compatible Commander binaries to test public HTTP/MCP behavior.

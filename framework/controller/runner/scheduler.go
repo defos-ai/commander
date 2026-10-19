@@ -56,6 +56,9 @@ func (r *Runner) dispatchQueued() {
 			if task.Status != operations.TaskQueued || s.operation.BlockedByQuestion(task) {
 				continue
 			}
+			if err := r.checkSessionCreation(task, records, false); err != nil {
+				continue
+			}
 			agentID, err := r.selectAgent(ctx, task, records, used)
 			if err != nil && r.ctx.Err() == nil {
 				r.logger.Warn("Agent selection failed", "operation_id", s.operation.ID, "task_id", task.ID, "selector", r.selector.Name(), "error", err)

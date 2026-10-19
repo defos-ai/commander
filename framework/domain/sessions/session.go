@@ -98,6 +98,9 @@ func (r Control) Validate() error {
 // Provider belongs to one process. Snapshots must be quick, concurrency-safe,
 // independent copies. Control runs independently of the action command inbox.
 // Changes coalesces notifications; every notification publishes a full snapshot.
+// An optional Close() error releases transports during owner shutdown, before
+// the final inventory announcement. It must retain Lost references; Closed is
+// reserved for an explicit close control, which authorizes replacement.
 type Provider interface {
 	Snapshot() []Session
 	Control(context.Context, Control) (Session, error)

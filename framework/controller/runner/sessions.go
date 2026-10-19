@@ -79,14 +79,16 @@ func sessionOwner(task operations.Task, records []agents.Agent) (string, error) 
 
 // The runner serializes admissions. Reserve the scope while listener creation
 // is queued/running, before its first inventory snapshot can reach the controller.
-func (r *Runner) checkSessionCreation(task operations.Task, records []agents.Agent) error {
+// Admissions include queued work. Dispatch ignores queued rivals so the first
+// eligible task can run; its saved running state then reserves all later work.
+func (r *Runner) checkSessionCreation(task operations.Task, records []agents.Agent, includeQueued bool) error {
 	scope, err := creationScope(task, records)
 	if err != nil || scope == "" {
 		return err
 	}
 	for _, state := range r.states {
 		for _, other := range state.operation.Tasks {
-			if other.ID == task.ID || other.Status != operations.TaskQueued && other.Status != operations.TaskRunning {
+			if other.ID == task.ID || !reservesSessionCreation(other, records, includeQueued) {
 				continue
 			}
 			otherScope, err := creationScope(other, records)
@@ -100,6 +102,35 @@ func (r *Runner) checkSessionCreation(task operations.Task, records []agents.Age
 		}
 	}
 	return nil
+}
+
+func reservesSessionCreation(task operations.Task, records []agents.Agent, includeQueued bool) bool {
+	if task.NeedsRecovery() || includeQueued && task.Status == operations.TaskQueued {
+		return true
+	}
+	return unpublishedSession(task, records)
+}
+
+func unpublishedSession(task operations.Task, records []agents.Agent) bool {
+	if task.Result == nil || task.Result.Session == nil {
+		return false
+	}
+	result := task.Result.Session
+	if result.State == "closed" || result.State == "failed" {
+		return false
+	}
+	for _, record := range records {
+		for _, current := range record.Sessions {
+			if current.Reference == result.Reference {
+				// Published inventory takes over ownership checks, including
+				// explicit closure and owner loss, in sessionOwner.
+				return false
+			}
+		}
+	}
+	// A successful result may arrive before the first session announcement.
+	// Keep its reservation until inventory establishes the resource's state.
+	return true
 }
 
 func creationScope(task operations.Task, records []agents.Agent) (string, error) {

@@ -14,6 +14,10 @@ import (
 // recover restores state before the runner becomes available to callers. It
 // never dispatches commands. Stored results and questions remain authoritative.
 func (r *Runner) recover(ctx context.Context) error {
+	agents, err := r.catalog.Agents(ctx)
+	if err != nil {
+		return fmt.Errorf("load session inventory for recovery: %w", err)
+	}
 	records, err := r.store.List(ctx)
 	if err != nil {
 		return fmt.Errorf("load operations for recovery: %w", err)
@@ -23,7 +27,8 @@ func (r *Runner) recover(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("recover operation %s: %w", record.ID, err)
 		}
-		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) || pendingQuestionDeadline(operation) {
+		unpublished := slices.ContainsFunc(operation.Tasks, func(task operations.Task) bool { return unpublishedSession(task, agents) })
+		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) || unpublished || pendingQuestionDeadline(operation) {
 			r.states[operation.ID] = &operationState{operation: operation.Clone(), changed: make(chan struct{})}
 		}
 	}

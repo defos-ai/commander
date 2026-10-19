@@ -48,7 +48,7 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 				return operations.Operation{}, fmt.Errorf("%w: multiple session creations for one scope", domain.ErrInvalidInput)
 			}
 			creationScopes[scope] = true
-			if err := r.checkSessionCreation(task, records); err != nil {
+			if err := r.checkSessionCreation(task, records, true); err != nil {
 				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 			}
 			if _, err := sessionOwner(task, records); err != nil {

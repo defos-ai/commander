@@ -29,7 +29,7 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		if err != nil {
 			return operations.Task{}, err
 		}
-		if err := r.checkSessionCreation(task, records); err != nil {
+		if err := r.checkSessionCreation(task, records, true); err != nil {
 			return operations.Task{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 		}
 		if _, err := sessionOwner(task, records); err != nil {

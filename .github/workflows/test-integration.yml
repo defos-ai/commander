@@ -47,6 +47,9 @@ jobs:
       - uses: actions/checkout@v7
         id: checkout
       - uses: ./.github/actions/setup-go
+      - name: Test session creation through native hosts
+        if: inputs.all || contains(fromJSON(inputs.changes), 'api-fs')
+        run: go test -race -count=1 -timeout=3m -v ./apps/adapters/api/tests/e2e -run '^TestE2E'
       - uses: ./.github/actions/setup-node
         if: env.RUN_BROWSER == 'true'
       - name: Install Chromium
