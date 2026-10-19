@@ -126,5 +126,11 @@ go vet ./apps/agents/spawner/...
 The `spawner` owner filter in `.github/test-paths.yml` selects its unit check.
 Playground's filter also includes spawner changes. Keep `go.work` and CI coverage
 aligned with dependencies. Release module tagging discovers this module through
-the workspace. The spawner is embedded in Commander; standalone image/native
-asset publication has not yet been added to the release chain.
+the workspace. The spawner is embedded in Commander and also ships standalone:
+[push-agents.yml](../../../.github/workflows/push-agents.yml) publishes
+`commander-spawner-agent`, and [build-binaries.yml](../../../.github/workflows/build-binaries.yml)
+builds its six native assets alongside Commander's six. Keep both executables in
+the same native build artifacts and checksum list. Image publication returns its
+digest to the release parent; `stable` promotion must use that digest only after
+every image and native asset has published. Keep these workflows reusable-only;
+adding publication support does not make artifacts available in older releases.

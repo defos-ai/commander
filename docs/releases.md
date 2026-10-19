@@ -56,16 +56,16 @@ Use the separate release-test workflow for validation without publication.
 ## Native binaries
 
 [build-binaries.yml](../.github/workflows/build-binaries.yml) builds `commander`
-for Linux, macOS and Windows on amd64 and arm64 runners. Each runner builds and
-embeds the Admin frontend, checks environment discovery, runs the all-in-one smoke
-tests (including Admin), and checks the executable's
-`--help` before uploading it.
+and `commander-spawner-agent` for Linux, macOS and Windows on amd64 and arm64
+runners. Each runner builds and embeds the Admin frontend in Commander, checks
+environment discovery, runs the all-in-one smoke tests (including Admin), and
+checks both executables' `--help` before uploading them.
 
 After every image publishes, [push-binaries.yml](../.github/workflows/push-binaries.yml)
-attaches all six executables, `LICENSE` and `checksums.txt` to the root-version
-GitHub Release. File names are `commander_<os>_<arch>` (`.exe` for Windows);
-OS names are `linux`, `darwin` and `windows`. SHA-256 checksums cover the binaries
-and license.
+attaches all twelve executables, `LICENSE` and `checksums.txt` to the root-version
+GitHub Release. File names are `commander_<os>_<arch>` and
+`commander-spawner-agent_<os>_<arch>` (`.exe` for Windows); OS names are `linux`,
+`darwin` and `windows`. SHA-256 checksums cover every binary and the license.
 Binaries are unsigned; macOS builds are not notarized.
 
 Download the binary as `commander` (`commander.exe` on Windows). On Linux/macOS,
@@ -79,6 +79,10 @@ to change or skip those downloads. With the default agents,
 `review-website-no-browser` needs no browser; the with-browser mission also needs
 Chromium or Chrome.
 The bundled builder's `checkout-template` action needs Git on the host.
+
+The standalone spawner runs with the controller's bus and artifact storage; see
+its [run instructions](../apps/agents/spawner/README.md#run). Its assets are added
+by the next release using this workflow; existing releases are unchanged.
 
 Use `/releases/latest/download/<file-name>` for a
 [versionless download](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases#linking-to-the-latest-release).
@@ -104,6 +108,7 @@ and a moving `stable` tag:
 | `ghcr.io/defos-ai/commander-mcp` | [push-mcp.yml](../.github/workflows/push-mcp.yml) |
 | `ghcr.io/defos-ai/commander-controller` | [push-controllers.yml](../.github/workflows/push-controllers.yml) |
 | `ghcr.io/defos-ai/commander-builder-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
+| `ghcr.io/defos-ai/commander-spawner-agent` | [push-agents.yml](../.github/workflows/push-agents.yml) |
 
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
@@ -113,6 +118,10 @@ web/browser packages inside the container, without a Docker socket.
 Publish `127.0.0.1:4275:4275` to use Admin;
 its API connection stays inside the container.
 The lightweight Playground image connects to an existing MCP service.
+The standalone spawner image defaults to native mode; Docker mode needs the
+deployment's Engine access, network and shared providers. See its
+[Docker setup](../apps/agents/spawner/README.md#docker). This image will first be
+published by the next release using this workflow.
 There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.
 Git tags and images are separate publication steps; image failures do not undo tags.

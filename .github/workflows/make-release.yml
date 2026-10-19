@@ -154,6 +154,7 @@ jobs:
           "commander-mcp": "${{ needs.mcp.outputs.digest }}",
           "commander-controller": "${{ needs.controllers.outputs.digest }}",
           "commander-builder-agent": "${{ needs.agents.outputs.builder-digest }}",
+          "commander-spawner-agent": "${{ needs.agents.outputs.spawner-digest }}",
           "commander-aio": "${{ needs.aio.outputs.digest }}",
           "commander-playground": "${{ needs.playground.outputs.digest }}"
         }

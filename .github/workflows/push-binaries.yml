@@ -46,22 +46,24 @@ jobs:
         run: |
           shopt -s nullglob dotglob
           downloaded=(*)
-          if (( ${#downloaded[@]} != 6 )); then
-            echo "Expected exactly six native binaries; refusing an incomplete release." >&2
+          if (( ${#downloaded[@]} != 12 )); then
+            echo "Expected exactly twelve native binaries; refusing an incomplete release." >&2
             exit 1
           fi
 
           binaries=()
-          for os in linux darwin windows; do
-            extension=
-            if [[ "$os" == windows ]]; then extension=.exe; fi
-            for arch in amd64 arm64; do
-              binary="commander_${os}_${arch}${extension}"
-              if [[ ! -s "$binary" || ! -f "$binary" || -L "$binary" ]]; then
-                echo "Missing native binary: $binary" >&2
-                exit 1
-              fi
-              binaries+=("$binary")
+          for name in commander commander-spawner-agent; do
+            for os in linux darwin windows; do
+              extension=
+              if [[ "$os" == windows ]]; then extension=.exe; fi
+              for arch in amd64 arm64; do
+                binary="${name}_${os}_${arch}${extension}"
+                if [[ ! -s "$binary" || ! -f "$binary" || -L "$binary" ]]; then
+                  echo "Missing native binary: $binary" >&2
+                  exit 1
+                fi
+                binaries+=("$binary")
+              done
             done
           done
           cp ../LICENSE LICENSE

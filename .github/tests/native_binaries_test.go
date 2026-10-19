@@ -16,6 +16,9 @@ var nativeBinaryNames = []string{
 	"commander_linux_amd64", "commander_linux_arm64",
 	"commander_darwin_amd64", "commander_darwin_arm64",
 	"commander_windows_amd64.exe", "commander_windows_arm64.exe",
+	"commander-spawner-agent_linux_amd64", "commander-spawner-agent_linux_arm64",
+	"commander-spawner-agent_darwin_amd64", "commander-spawner-agent_darwin_arm64",
+	"commander-spawner-agent_windows_amd64.exe", "commander-spawner-agent_windows_arm64.exe",
 }
 
 type nativeFixture struct {
@@ -144,8 +147,8 @@ func TestCINativeBinaryPublication(t *testing.T) {
 				t.Errorf("checksums = %q, want %q", got, checksums.String())
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "uploaded"))
-			if err != nil || len(entries) != 8 {
-				t.Fatalf("release must contain six binaries, license and checksums: %v, %v", entries, err)
+			if err != nil || len(entries) != len(nativeBinaryNames)+2 {
+				t.Fatalf("release must contain twelve binaries, license and checksums: %v, %v", entries, err)
 			}
 			if !strings.HasSuffix(log, "release edit v0.1.0 --draft=false --latest=false\n") {
 				t.Errorf("release must await final latest promotion: %s", log)
@@ -155,10 +158,13 @@ func TestCINativeBinaryPublication(t *testing.T) {
 }
 
 func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
-	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "hidden extra", "wrong name"} {
+	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "hidden extra", "wrong name", "wrong spawner name"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newNativeFixture(t)
 			path := filepath.Join(f.artifacts, nativeBinaryNames[0])
+			if mode == "wrong spawner name" {
+				path = filepath.Join(f.artifacts, "commander-spawner-agent_linux_amd64")
+			}
 			if mode != "extra" && mode != "hidden extra" {
 				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
@@ -178,6 +184,8 @@ func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
 				f.write(t, "artifacts/.extra", "unexpected")
 			case "wrong name":
 				f.write(t, "artifacts/commander_v0.1.0_linux_amd64", "old name")
+			case "wrong spawner name":
+				f.write(t, "artifacts/commander-spawner-agent_v0.1.0_linux_amd64", "wrong name")
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -219,25 +227,33 @@ func TestCINativeBinaryPublicationFailures(t *testing.T) {
 }
 
 func TestCINativeBinaryBuildNames(t *testing.T) {
-	for _, name := range nativeBinaryNames {
-		t.Run(name, func(t *testing.T) {
+	for _, platform := range []string{"linux_amd64", "linux_arm64", "darwin_amd64", "darwin_arm64", "windows_amd64", "windows_arm64"} {
+		t.Run(platform, func(t *testing.T) {
 			f := &nativeFixture{dir: t.TempDir()}
 			f.artifacts = f.dir
 			f.script = nativeWorkflowScript(t, "build-binaries.yml", "build", "build")
-			platform := strings.Split(strings.TrimSuffix(strings.TrimPrefix(name, "commander_"), ".exe"), "_")
+			goos, goarch, _ := strings.Cut(platform, "_")
 			f.env = map[string]string{
 				"PATH": f.dir + ":/usr/bin:/bin", "STATE": f.dir,
-				"GOOS": platform[0], "GOARCH": platform[1], "VERSION": "v0.1.0",
+				"GOOS": goos, "GOARCH": goarch, "VERSION": "v0.1.0",
 			}
 			f.write(t, "go", `#!/bin/bash
 set -euo pipefail
 [[ "$1" == build ]]
-[[ " $* " == *' -tags embed_ui '* ]]
+case "${@: -1}" in
+  ./apps/playground/cmd/commander)
+    [[ " $* " == *' -tags embed_ui '* ]]
+    prefix=commander
+    ;;
+  ./apps/agents/spawner/cmd) prefix=commander-spawner-agent ;;
+  *) exit 1 ;;
+esac
 while [[ "$1" != '-o' ]]; do shift; done
+[[ "$2" == "dist/${prefix}_${GOOS}_${GOARCH}"* ]]
 cat > "$2" <<'BINARY'
 #!/bin/bash
 [[ "$*" == '--help' ]]
-printf 'help called\n' > "$STATE/help"
+printf 'help called\n' > "$STATE/help-${0##*/}"
 BINARY
 chmod +x "$2"
 `)
@@ -245,11 +261,20 @@ chmod +x "$2"
 				t.Fatalf("build failed: %v: %s", err, output)
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "dist"))
-			if err != nil || len(entries) != 1 || entries[0].Name() != name {
-				t.Fatalf("build must produce one directly downloadable %s: %v, %v", name, entries, err)
+			if err != nil || len(entries) != 2 {
+				t.Fatalf("build must produce Commander and spawner binaries: %v, %v", entries, err)
 			}
-			if got := f.read(t, "help"); got != "help called\n" {
-				t.Errorf("native executable smoke check did not run: %q", got)
+			for _, prefix := range []string{"commander", "commander-spawner-agent"} {
+				name := prefix + "_" + platform
+				if goos == "windows" {
+					name += ".exe"
+				}
+				if info, err := os.Stat(filepath.Join(f.dir, "dist", name)); err != nil || !info.Mode().IsRegular() {
+					t.Errorf("missing directly downloadable %s: %v", name, err)
+				}
+				if got := f.read(t, "help-"+name); got != "help called\n" {
+					t.Errorf("%s native executable smoke check did not run: %q", name, got)
+				}
 			}
 		})
 	}

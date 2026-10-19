@@ -18,6 +18,7 @@ import (
 var stableImageNames = []string{
 	"commander-admin", "commander-aio", "commander-api",
 	"commander-builder-agent", "commander-controller", "commander-mcp", "commander-playground",
+	"commander-spawner-agent",
 }
 
 type stableFixture struct {

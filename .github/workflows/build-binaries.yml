@@ -52,15 +52,18 @@ jobs:
       - name: Test native environment and all-in-one hosts
         run: |
           go test -count=1 -timeout=3m ./framework/tests/agent/environment
+          go test -count=1 -timeout=3m ./apps/agents/spawner/...
           go test -tags embed_ui -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne'
-      - name: Build Commander
+      - name: Build Commander and spawner
         id: build
         run: |
-          binary="commander_${GOOS}_${GOARCH}"
-          if [[ "$GOOS" == windows ]]; then binary+=.exe; fi
+          suffix="${GOOS}_${GOARCH}"
+          if [[ "$GOOS" == windows ]]; then suffix+=.exe; fi
           mkdir -p dist
-          go build -tags embed_ui -trimpath -buildvcs=false -ldflags='-s -w' -o "dist/$binary" ./apps/playground/cmd/commander
-          "./dist/$binary" --help
+          go build -tags embed_ui -trimpath -buildvcs=false -ldflags='-s -w' -o "dist/commander_$suffix" ./apps/playground/cmd/commander
+          go build -trimpath -buildvcs=false -ldflags='-s -w' -o "dist/commander-spawner-agent_$suffix" ./apps/agents/spawner/cmd
+          "./dist/commander_$suffix" --help
+          "./dist/commander-spawner-agent_$suffix" --help
       - uses: actions/upload-artifact@v4
         with:
           name: commander-native-${{ matrix.goos }}-${{ matrix.goarch }}

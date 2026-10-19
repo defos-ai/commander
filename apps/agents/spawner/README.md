@@ -20,6 +20,19 @@ To start a published package immediately, add:
 Repeat the flag for multiple instances. The release must contain `agent.yaml`
 and a native executable for your OS and architecture.
 
+The next Commander release will include `commander-spawner-agent_<os>_<arch>`
+executables for Linux, macOS and Windows on amd64/arm64 (`.exe` for Windows).
+After downloading one as `commander-spawner-agent` and making it executable on
+Linux/macOS, run it with the same settings:
+
+```sh
+./commander-spawner-agent --bus-url ./state/bus --storage-url ./state/storage \
+  --spawn-agents github.com/defos-ai/commander-example-agent@v0.2.0
+```
+
+On Windows, use `.\commander-spawner-agent.exe`. Until that release is published,
+use the source command above. See [release artifacts](../../../docs/releases.md#native-binaries).
+
 ### Docker
 
 Start Compose with its default spawner:
@@ -43,6 +56,12 @@ The package must publish a `docker.image` digest in `agent.yaml`. Standalone
 hosts set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` with
 reachable AMQP/S3 settings. Docker must be running Linux containers. The spawner
 uses the Docker Engine API; no Docker CLI is needed inside its image.
+
+The next Commander release also publishes
+`ghcr.io/defos-ai/commander-spawner-agent:<version>` and promotes `:stable` only
+after the complete release succeeds. The image defaults to native mode; Compose
+sets Docker mode and supplies its network, socket access and persistent launch
+state. Until that release is published, Compose builds the image locally.
 
 The Compose spawner has control of the host Docker daemon through its socket.
 Spawned agents receive no Docker socket, host mounts, published ports or elevated
