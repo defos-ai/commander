@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -93,6 +94,51 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), secret) || strings.Contains(logs.String(), secret) {
 				t.Error("startup exposed credentials from the connection URL")
+			}
+		})
+	}
+}
+
+func TestCLICatalogConfiguration(t *testing.T) {
+	t.Setenv("MCP_TOKEN", "mcp-fixture-token")
+	for _, tc := range []struct {
+		name, source string
+		valid        bool
+	}{
+		{name: "default", valid: true},
+		{name: "HTTPS override", source: "https://example.invalid/agents.yaml", valid: true},
+		{name: "HTTP", source: "http://example.invalid/agents.yaml"},
+		{name: "credentials", source: "https://user:catalog-secret-sentinel@example.invalid/agents.yaml"},
+		{name: "query", source: "https://example.invalid/agents.yaml?token=catalog-secret-sentinel"},
+		{name: "fragment", source: "https://example.invalid/agents.yaml#fragment"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("AGENT_CATALOG_URL", tc.source)
+			root := filepath.Join(t.TempDir(), "unused")
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+			if tc.valid {
+				cancel()
+			}
+			var logs bytes.Buffer
+			err := cli.Run(ctx, []string{
+				"--bus-url=" + filepath.Join(root, "bus"),
+				"--storage-url=" + filepath.Join(root, "storage"),
+				"--database-url=" + filepath.Join(root, "database"),
+				"--listen-address=127.0.0.1:0",
+			}, &logs)
+			if tc.valid {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("valid catalog configuration failed before cancellation: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "AGENT_CATALOG_URL") {
+				t.Fatalf("invalid catalog URL was not rejected before startup: %v", err)
+			}
+			if strings.Contains(err.Error(), "catalog-secret-sentinel") || strings.Contains(logs.String(), "catalog-secret-sentinel") {
+				t.Fatal("catalog validation disclosed URL credentials")
+			}
+			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("catalog validation or pre-canceled startup created state")
 			}
 		})
 	}

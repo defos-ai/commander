@@ -28,8 +28,12 @@ Read the [root guide](../AGENTS.md) and
   Keep deployment settings, credentials, action schemas and readiness out of it.
   The spawner owns manifest and executable downloads. Shared metadata code must
   remain independent of the spawner and must not require this checkout at runtime.
-- MCP/CLI alias integration is a later step. Do not document aliases or `@stable`
-  as accepted by current installation inputs.
+- MCP exposes `list_agent_packages` and `resolve_agent_package`; the latter
+  accepts references, not aliases, and returns a pin plus supplied visibility.
+  Public channels resolve before installation; exact private references need no
+  metadata request. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading is
+  lazy and catalog failure must not prevent direct pinned installs. Spawner
+  action and CLI inputs continue to require pins, not aliases or `@stable`.
 
 ## Validation
 

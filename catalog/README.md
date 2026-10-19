@@ -19,7 +19,7 @@ Visibility describes the GitHub repository. Package trust remains the operator's
 decision, and Docker image visibility is separate. All official entries are public.
 Catalog lookup belongs to the Commander client. Installation calls pass a pinned
 package reference and visibility to `spawn-agent`; the spawner does not read the
-catalog. Client lookup integration is still pending.
+catalog. MCP exposes it through `list_agent_packages`.
 
 Descriptions cover implemented capabilities. In particular, the builder currently
 checks out a template; build, publication and deployment actions are future work.
@@ -34,9 +34,11 @@ an explicit `vMAJOR.MINOR.PATCH` or `stable`. The shared
 [`framework/agent/packages`](../framework/agent/packages/) package validates the
 catalog and resolves `stable` to a pinned reference. Its `Client.LoadCatalog`
 accepts a configured public HTTPS source URL without requiring a Commander source
-checkout. The official source URL for application integration is
+checkout. MCP defaults to
 `https://raw.githubusercontent.com/defos-ai/commander/main/catalog/agents.yaml`,
-available once this catalog is published. The framework has no built-in source URL.
+with `AGENT_CATALOG_URL` as a deployment override. It fetches metadata only when
+a tool is called; startup needs no catalog access. The framework has no built-in
+source URL.
 
 Loading is limited to 64 KiB and 30 seconds. Source URLs cannot contain credentials,
 a query or a fragment; redirects are rejected. The default client sends no
@@ -49,10 +51,13 @@ Resolution never searches for another version if the selected release lacks an
 agent package. The existing spawner reports missing `agent.yaml` or native assets
 when it loads the pinned package.
 
-The catalog and shared metadata APIs are the first integration step. MCP, CLI and
-`spawn-agent` do not yet accept catalog aliases or `@stable`; continue supplying
-explicit pinned package references there. Catalog inclusion does not prove that
-the selected release already publishes a runnable package. See the
+Use `list_agent_packages` to choose an entry, then pass its `package` and
+`visibility` to `resolve_agent_package`. It accepts a public `@stable` reference
+or any pinned GitHub reference, including packages outside the catalog. It
+returns the pinned package and visibility for installation. Reuse that result
+on retries. `spawn-agent` and startup flags still require exact versions; aliases
+are names for discovery, not installation inputs. Catalog inclusion does not
+prove that the selected release already publishes a runnable package. See the
 [package contract](../docs/agent-packages.md#catalog-and-stable-references).
 
 ## Private installations
@@ -61,8 +66,8 @@ For a pinned private package, pass `"visibility":"private"` to the install
 mission and `spawn-agent`. The spawner uses its environment `GITHUB_TOKEN` first,
 then requests a managed secret scoped to `spawner-agent` through the existing
 Playground/Admin flow. Public or omitted visibility stays token-free.
-The metadata client remains anonymous; catalog lookup in Commander, private
-`stable` resolution and private Docker image pulls are not integrated yet.
+The metadata client remains anonymous; private `stable` resolution and private
+Docker image pulls are not integrated yet.
 
 ## Maintenance
 

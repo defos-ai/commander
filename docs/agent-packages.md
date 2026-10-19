@@ -30,9 +30,9 @@ first, otherwise requests the managed secret scoped to `spawner-agent`. Supply i
 through the existing Playground/Admin secret form, outside chat. The same task
 waits and resumes within its existing timeout. Public or omitted visibility
 keeps downloads anonymous. Visibility is an authentication hint, not an access
-grant; the GitHub token's permissions determine access. Catalog lookup in
-Commander, private `stable` resolution and private Docker pulls remain separate
-integration steps. The shared metadata client remains anonymous.
+grant; the GitHub token's permissions determine access. Private `stable`
+resolution and private Docker pulls remain separate integration steps. The
+shared metadata client remains anonymous.
 
 [`framework/agent/packages`](../framework/agent/packages/) owns shared reference
 parsing, strict catalog parsing, bounded remote loading and resolution of `stable`
@@ -40,7 +40,7 @@ to a pinned reference. `Client.LoadCatalog(ctx, source)` accepts an explicitly
 configured public HTTPS URL, so metadata loading needs no source checkout. The
 official source URL for application integration is
 `https://raw.githubusercontent.com/defos-ai/commander/main/catalog/agents.yaml`,
-available once published; the framework does not hardcode it. Catalog loads have
+used by MCP unless `AGENT_CATALOG_URL` overrides it; the framework does not hardcode it. Catalog loads have
 a 64 KiB limit and a 30-second deadline. Source URLs must have no credentials,
 query or fragment, and redirects are rejected. The default client uses no
 environment proxies, cookies or credentials. The spawner continues to own release
@@ -65,9 +65,13 @@ reference does not prove the release contains `agent.yaml`: the existing spawner
 resolver checks that when fetching the package. Catalog inclusion also does not
 make packages available before their release workflows publish them.
 
-This first integration step supplies catalog data and shared metadata APIs.
-Current MCP, CLI and `spawn-agent` installation inputs still require explicit
-pinned references. Catalog aliases and `@stable` are not yet accepted there.
+MCP exposes `list_agent_packages` to list candidates and `resolve_agent_package`
+to pin a selected `package` with its `visibility`. The resolver accepts any
+compatible reference, without requiring catalog membership. Public `@stable`
+references resolve through GitHub; private references must already name an exact
+version. Both tools are read-only, and the host makes no startup metadata request.
+Save the returned pin and visibility as installation input; do not resolve again
+on a retry. The spawner action and CLI still accept only exact versions.
 
 ## Release manifest
 

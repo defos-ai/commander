@@ -66,7 +66,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   version remains `vMAJOR.MINOR.PATCH`. Build download URLs from validated
   components; do not accept arbitrary URLs, fragments or moving aliases in task
   input. Preserve the module path in launch records and request comparisons.
-  Catalog aliases and `@stable` are not yet integrated into action or CLI inputs.
+  Action and CLI inputs require pins, not catalog aliases or `@stable`.
+  Clients can use MCP's `list_agent_packages` and `resolve_agent_package` to
+  discover entries and pin public channels before dispatch. Never resolve a
+  moving channel again during a launch retry.
   Startup `--spawn-agents` remains anonymous; it has no visibility setting or
   serving execution through which to request a managed secret.
   Manifest and executable downloads remain in this module; shared metadata code

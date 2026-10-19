@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
@@ -51,6 +52,7 @@ type dependencies struct {
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
 	TestCleaner       frameworktesting.TestCleaner
+	PackageClient     *packages.Client
 	mongo             *mongostore.MongoStore
 	s3                *s3store.S3Store
 	closers           []func() error
@@ -72,6 +74,11 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 			err = errors.Join(err, deps.Close())
 		}
 	}()
+	deps.PackageClient = packages.NewClient(nil)
+	deps.closers = append(deps.closers, func() error {
+		deps.PackageClient.CloseIdleConnections()
+		return nil
+	})
 	deps.Bus, err = createBus(ctx, configuration.busURL)
 	if err != nil {
 		return nil, fmt.Errorf("bus-url: %w", err)

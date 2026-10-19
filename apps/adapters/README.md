@@ -44,6 +44,25 @@ files. Tokens are never written to logs. This is shared-token authentication: cl
 need custom-header support, and remote access needs HTTPS. OAuth sign-in and
 per-user permissions are not provided.
 
+### Discover agent packages
+
+Use `list_agent_packages` to find packages in Commander's discovery catalog.
+Pass a selected entry's `package` and `visibility` to `resolve_agent_package`;
+it resolves public `@stable` references to exact release versions. Supply that
+result to the installation workflow described by the spawner's responsibilities.
+Reuse the saved version on retries. Discovery does not launch an agent or confirm
+its runtime compatibility or readiness.
+
+Direct GitHub references work without catalog membership. Private repositories
+currently require an exact version and `visibility: private`; spawner obtains the
+token through its environment or managed secrets, never through MCP inputs.
+
+MCP fetches the [official catalog](../../catalog/README.md) on demand. Set
+`AGENT_CATALOG_URL` on MCP to use another public HTTPS catalog. Compose forwards
+this variable to MCP; native/Docker all-in-one read it from their environment.
+No catalog request is made during startup, and a catalog failure does not block
+installation from a known pinned reference.
+
 ### Operation workflow
 
 1. Use `list_missions` and `describe_mission` to choose a mission and read its

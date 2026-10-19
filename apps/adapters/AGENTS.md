@@ -59,7 +59,18 @@
   the `install-agent` mission, not in adapter constants or known-package lists.
   Preserve responsibilities in both `list_agents` and `describe_agent` so any
   client can discover an agent's usage guidance.
-  Managed-secret handoff uses explicit preflight `agent_type` and
+- MCP package discovery lives in `mcp/packages.go`: `list_agent_packages` reads
+  the configured catalog; `resolve_agent_package` returns a pin and the supplied
+  visibility. The factory owns `PackageClient` and closes idle connections.
+  `AGENT_CATALOG_URL` defaults to the official HTTPS source; never accept it as
+  tool input or fetch metadata during startup. Catalog fetch/parse errors stay tool-local.
+  Resolution accepts external references without checking catalog membership.
+  Copy visibility explicitly; private `@stable` must request an exact version
+  instead of making anonymous requests or acquiring spawner tokens in MCP.
+  Save the resolved pin before dispatch and reuse it on retries. Readiness and
+  manifest/asset validation remain in agent registration and spawning.
+  Metadata clients must remain anonymous, with no environment token forwarding.
+  Existing managed-secret handoff uses explicit preflight `agent_type` and
   `missing_requirements` of kind `secret` for actions without ready candidates.
   Sensitive host configuration remains kind `configuration`, even with
   `sensitive: true`. MCP instructions direct operators to

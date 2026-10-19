@@ -7,6 +7,8 @@ Any compatible GitHub release package can be installed, including packages
 outside Commander's discovery catalog. Read the spawner's registered
 responsibilities through `list_agents` or `describe_agent` for installation
 guidance, and `describe_action` for the `spawn-agent` input schema.
+MCP's `list_agent_packages` discovers catalog entries; `resolve_agent_package`
+pins a public `@stable` reference before submitting it to the spawner.
 
 ## Run
 
@@ -140,8 +142,9 @@ are never saved in launch records or passed to spawned agents.
 
 The action supports public and private pinned GitHub releases. Docker image pulls
 remain anonymous; private registry authentication is a separate step. Startup
-`--spawn-agents` remains public-only. Catalog lookup in Commander and moving tags
-such as `stable` in installation inputs are not integrated yet.
+`--spawn-agents` remains public-only. The action and startup flag require pinned
+versions; resolve public `@stable` references through MCP first. Private
+`@stable` resolution is not supported yet.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.
 
