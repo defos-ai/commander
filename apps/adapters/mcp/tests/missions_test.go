@@ -16,19 +16,31 @@ func TestMissions(t *testing.T) {
 		Missions []map[string]string `json:"missions"`
 	}
 	a.call("list_missions", object{}, &catalog)
-	if len(catalog.Missions) != 2 {
+	if len(catalog.Missions) != 4 {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
-	for i, expected := range []struct {
+	summaries := make(map[string]map[string]string, len(catalog.Missions))
+	for _, summary := range catalog.Missions {
+		if len(summary) != 2 || summary["name"] == "" || summary["objective"] == "" {
+			t.Fatalf("expected mission name and objective only: %+v", summary)
+		}
+		summaries[summary["name"]] = summary
+	}
+	for _, name := range []string{"fixture-spawn-agent", "fixture-use-agent"} {
+		if summaries[name] == nil {
+			t.Fatalf("missing spawner fixture mission: %s", name)
+		}
+	}
+	for _, expected := range []struct {
 		name, discovery string
 		checks          []string
 	}{
 		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
 		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
 	} {
-		summary := catalog.Missions[i]
-		if summary["name"] != expected.name || len(summary) != 2 || summary["objective"] == "" {
-			t.Fatalf("expected mission name and objective only: %+v", summary)
+		summary := summaries[expected.name]
+		if summary == nil {
+			t.Fatalf("missing website mission: %s", expected.name)
 		}
 		var raw json.RawMessage
 		a.call("describe_mission", object{"mission_name": summary["name"]}, &raw)

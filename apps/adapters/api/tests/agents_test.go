@@ -15,8 +15,8 @@ import (
 func TestAgentsTrackDispatchedWorkUntilCancelledTaskFinishes(t *testing.T) {
 	a := connect(t)
 	initial := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-	if len(initial.Items) != 3 || !slices.IsSortedFunc(initial.Items, func(left, right models.AgentResponse) int { return strings.Compare(left.ID, right.ID) }) {
-		t.Fatalf("inventory should contain three sorted agents: %+v", initial)
+	if !slices.IsSortedFunc(initial.Items, func(left, right models.AgentResponse) int { return strings.Compare(left.ID, right.ID) }) {
+		t.Fatalf("agent inventory is not sorted: %+v", initial)
 	}
 	for _, agent := range initial.Items {
 		result := a.request(http.MethodGet, "/api/v1/agents/"+agent.ID, nil)

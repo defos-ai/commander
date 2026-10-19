@@ -121,10 +121,11 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-    command: ["--with-missions=/data/default-missions.json"]
-    configs:
-      - source: default-missions
-        target: /data/default-missions.json
+      fixture-releases:
+        condition: service_healthy
+    command: ["--with-missions=/fixtures/missions.json"]
+    volumes:
+      - fixture-data:/fixtures:ro
     environment:
       <<: *environment
       DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
@@ -247,11 +248,69 @@ services:
     <<: *agent
     image: commander-web-agent:test
 
+  spawner-agent:
+    <<: *agent
+    image: commander-spawner-agent:test
+    command: ["--heartbeat-interval=1s", "--spawn-agents=github.com/defos-ai/fixture-agent@v0.1.0"]
+    user: "0:0"
+    build:
+      context: ../..
+      dockerfile: apps/agents/spawner/docker/Dockerfile
+    environment:
+      <<: *environment
+      SPAWNER_RUNTIME: docker
+      SPAWNER_DOCKER_NETWORK: commander-full-test_default
+      SPAWNER_STATE_DIR: /var/lib/commander/spawner
+      SSL_CERT_FILE: /fixtures/ca.pem
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - fixture-data:/fixtures:ro
+
+  fixture-releases:
+    <<: *runtime
+    image: commander-fixture-releases:test
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/agents/spawner/tests/e2e/Dockerfile
+      target: releases
+    environment:
+      FIXTURE_REGISTRY_URL: http://registry:5000
+      FIXTURE_IMAGE: localhost:15000/fixture-agent
+    volumes:
+      - fixture-data:/tls
+    networks:
+      default:
+        aliases: [github.com]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/healthz"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  registry:
+    image: registry:2
+    ports:
+      - "127.0.0.1:15000:5000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5000/v2/"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  # Built once, then pushed to the loopback-only registry by setup/CI. The
+  # spawner owns launch; Compose must not start an extra instance of this agent.
+  fixture-agent:
+    profiles: [fixtures]
+    image: commander-fixture-agent:test
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/agents/spawner/tests/e2e/Dockerfile
+      target: agent
+
 volumes:
   rabbitmq:
   minio:
   mongo:
-
-configs:
-  default-missions:
-    file: ../../apps/controllers/default/data/default-missions.json
+  fixture-data:

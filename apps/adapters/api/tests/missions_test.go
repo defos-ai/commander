@@ -3,6 +3,7 @@ package api_test
 import (
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
@@ -11,10 +12,10 @@ import (
 func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	a := connect(t)
 	catalog := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-	if len(catalog.Items) != 2 {
-		t.Fatalf("unexpected default missions: %+v", catalog)
+	if !slices.Equal(missionNames(catalog.Items), expectedMissions) {
+		t.Fatalf("unexpected stack missions: %+v", catalog)
 	}
-	for i, expected := range []struct {
+	for _, expected := range []struct {
 		name, discovery string
 		checks          []string
 	}{
@@ -23,9 +24,10 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	} {
 		path := "/api/v1/missions/" + expected.name
 		mission := read[models.MissionResponse](a, path)
+		index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == expected.name })
 		aggregate := mission.Rules["aggregate-results"]
 		decision := mission.Rules["decide-next-actions"]
-		if !reflect.DeepEqual(catalog.Items[i], mission) || mission.Objective == "" || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
+		if !reflect.DeepEqual(catalog.Items[index], mission) || mission.Objective == "" || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
 			t.Fatalf("default mission catalog lost schemas or actions: %+v", mission)
 		}
 		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != "model" {

@@ -62,7 +62,7 @@ spawner:
   - *fs
   - *rabbitmq
   - *s3
-  - 'apps/agents/spawner/**'
+  - &spawner 'apps/agents/spawner/**'
 
 web:
   - *shared
@@ -117,6 +117,7 @@ api-fs:
   - *controller
   - *agent
   - *web
+  - *spawner
   - *fs
 
 api-full:
@@ -125,6 +126,7 @@ api-full:
   - *controller
   - *agent
   - *web
+  - *spawner
   - *mongo
   - *rabbitmq
   - *s3
@@ -135,6 +137,7 @@ mcp-fs:
   - *controller
   - *agent
   - *web
+  - *spawner
   - *fs
 
 mcp-full:
@@ -143,6 +146,7 @@ mcp-full:
   - *controller
   - *agent
   - *web
+  - *spawner
   - *mongo
   - *rabbitmq
   - *s3

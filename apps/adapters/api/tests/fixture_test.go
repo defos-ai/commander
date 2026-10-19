@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -77,19 +78,20 @@ func connect(t *testing.T) *api {
 	}
 	for {
 		catalog := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-		ready := len(catalog.Items) == 3
+		ready := true
 		types := map[string]int{}
 		for _, agent := range catalog.Items {
 			types[agent.Type]++
-			ready = ready && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == len(expectedAgentActions(agent.Type))
+			expected := expectedAgentActions(agent.Type)
+			ready = ready && len(expected) > 0 && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == len(expected)
 			for _, action := range agent.Actions {
 				ready = ready && action.Status == "ready"
 			}
 		}
-		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1
+		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["spawner-agent"] == 1 && types["fixture-agent"] >= 1
 		actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 		missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-		if ready && len(actions.Items) == 7 && len(missions.Items) == 2 && missions.Items[0].Name == "review-website-no-browser" && missions.Items[1].Name == "review-website-with-browser" {
+		if ready && slices.Equal(actionNames(actions.Items), expectedCatalogActions(catalog.Items)) && slices.Equal(missionNames(missions.Items), expectedMissions) {
 			break
 		}
 		if err := pause(ctx); err != nil {
@@ -108,9 +110,40 @@ func expectedAgentActions(agentType string) []string {
 		return []string{"check-links", "check-seo", "detect-technologies", "discover-pages", "discover-pages-no-browser"}
 	case "browser-agent":
 		return []string{"capture-page", "check-accessibility"}
+	case "spawner-agent":
+		return []string{"spawn-agent"}
+	case "fixture-agent":
+		return []string{"fixture-echo"}
 	default:
 		return nil
 	}
+}
+
+var expectedMissions = []string{"fixture-spawn-agent", "fixture-use-agent", "review-website-no-browser", "review-website-with-browser"}
+
+func expectedCatalogActions(agents []models.AgentResponse) []string {
+	var names []string
+	for _, agent := range agents {
+		names = append(names, expectedAgentActions(agent.Type)...)
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
+func actionNames(actions []models.ActionResponse) []string {
+	var names []string
+	for _, action := range actions {
+		names = append(names, action.Name)
+	}
+	return names
+}
+
+func missionNames(missions []models.MissionResponse) []string {
+	var names []string
+	for _, mission := range missions {
+		names = append(names, mission.Name)
+	}
+	return names
 }
 
 func expectedExecutorType(action string) string {

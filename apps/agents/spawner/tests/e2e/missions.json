@@ -1,0 +1,28 @@
+[
+  {
+    "name": "fixture-spawn-agent",
+    "objective": "Spawn the local fixture package through the controller.",
+    "required_actions": ["spawn-agent"],
+    "starting_actions": ["spawn-agent"],
+    "input_schema": {
+      "type": "object",
+      "properties": {"package": {"type": "string"}},
+      "required": ["package"],
+      "additionalProperties": false
+    },
+    "output_schema": {"type": "object"}
+  },
+  {
+    "name": "fixture-use-agent",
+    "objective": "Execute an action on a dynamically spawned agent and retrieve its artifact.",
+    "required_actions": ["fixture-echo"],
+    "starting_actions": ["fixture-echo"],
+    "input_schema": {
+      "type": "object",
+      "properties": {"message": {"type": "string"}},
+      "required": ["message"],
+      "additionalProperties": false
+    },
+    "output_schema": {"type": "object"}
+  }
+]

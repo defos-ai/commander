@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/comms"
@@ -16,6 +17,7 @@ type subscription struct {
 	bus            *RabbitMQBus
 	inbox          comms.Inbox
 	connection     *connection
+	channel        *amqp.Channel
 	deliveries     <-chan amqp.Delivery
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -72,7 +74,7 @@ func (b *RabbitMQBus) Subscribe(ctx context.Context, inbox comms.Inbox) (comms.S
 		return nil, transportError(setup, "subscribe", err)
 	}
 	lifetime, close := context.WithCancel(context.Background())
-	sub := &subscription{bus: b, inbox: inbox, connection: conn, deliveries: deliveries, ctx: lifetime, cancel: close}
+	sub := &subscription{bus: b, inbox: inbox, connection: conn, channel: channel, deliveries: deliveries, ctx: lifetime, cancel: close}
 	b.mu.Lock()
 	closed := b.ctx.Err() != nil
 	if !closed {
@@ -148,7 +150,23 @@ func (s *subscription) rejectInvalid(ctx context.Context) error {
 func (s *subscription) Close() error {
 	s.closeOnce.Do(func() {
 		s.cancel()
-		s.closeErr = s.connection.close()
+		if s.inbox.Mode == comms.TransientExclusive && !s.connection.IsClosed() {
+			// Remove the route while its queue is alive. Closing an exclusive
+			// queue first can make later publishers receive negative confirms
+			// even when the topic still has a durable destination.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			stop := abortOnCancel(ctx, s.connection.socket)
+			err := s.channel.QueueUnbind(QueueName(s.inbox), s.inbox.Topic, Exchange, nil)
+			stop()
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			}
+			if err != nil && !errors.Is(err, amqp.ErrClosed) {
+				s.closeErr = transportError(ctx, "unbind inbox", err)
+			}
+			cancel()
+		}
+		s.closeErr = errors.Join(s.closeErr, s.connection.close())
 		s.bus.mu.Lock()
 		delete(s.bus.subs, s)
 		s.bus.mu.Unlock()

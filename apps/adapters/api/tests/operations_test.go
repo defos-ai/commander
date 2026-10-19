@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,8 @@ func TestOperationWebsiteWorkflow(t *testing.T) {
 
 func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, checks []string) {
 	a := connect(t)
+	initialAgents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
+	initialActions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 	url := website(t)
 	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": mission, "input": object{"url": url, "max_pages": 2}})
 	op := decode[models.OperationResponse](t, created, http.StatusCreated)
@@ -153,13 +156,13 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	for _, tc := range removed {
 		assertError(t, a.request(http.MethodGet, tc.path, nil), http.StatusNotFound, tc.code)
 	}
-	if missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); len(missions.Items) != 2 || missions.Items[0].Name != "review-website-no-browser" || missions.Items[1].Name != "review-website-with-browser" {
+	if missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); !slices.Equal(missionNames(missions.Items), expectedMissions) {
 		t.Fatalf("cleanup changed the mission catalog: %+v", missions)
 	}
-	if actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions"); len(actions.Items) != 7 {
+	if actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions"); !reflect.DeepEqual(actions, initialActions) {
 		t.Fatalf("cleanup changed the action catalog: %+v", actions)
 	}
-	if agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents"); len(agents.Items) != 3 {
+	if agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents"); !slices.EqualFunc(agents.Items, initialAgents.Items, func(left, right models.AgentResponse) bool { return left.ID == right.ID }) {
 		t.Fatalf("cleanup changed the agent catalog: %+v", agents)
 	}
 }

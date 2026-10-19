@@ -22,9 +22,7 @@ func TestAgentsAndActions(t *testing.T) {
 		Actions []actions.Action `json:"actions"`
 	}
 	a.call("list_actions", object{}, &catalog)
-	if len(catalog.Actions) != 7 {
-		t.Fatalf("actions=%+v", catalog)
-	}
+	expectedCatalog := map[string]bool{}
 	var webID string
 	for _, agent := range list.Agents {
 		if agent.Stale {
@@ -33,6 +31,7 @@ func TestAgentsAndActions(t *testing.T) {
 		var names []string
 		for _, action := range agent.Actions {
 			names = append(names, action.Name)
+			expectedCatalog[action.Name] = true
 			if action.Status != actions.Ready {
 				t.Fatalf("Compose must prepare dependencies: %s: %+v", agent.ID, action)
 			}
@@ -43,6 +42,14 @@ func TestAgentsAndActions(t *testing.T) {
 		}
 		if agent.Type == "web-agent" {
 			webID = agent.ID
+		}
+	}
+	if len(catalog.Actions) != len(expectedCatalog) {
+		t.Fatalf("catalog does not match registered capabilities: %+v", catalog)
+	}
+	for _, action := range catalog.Actions {
+		if !expectedCatalog[action.Name] {
+			t.Fatalf("catalog contains unadvertised action: %+v", action)
 		}
 	}
 	var detail agents.Agent

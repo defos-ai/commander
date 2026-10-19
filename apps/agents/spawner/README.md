@@ -114,5 +114,9 @@ go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
 go vet ./apps/agents/spawner/...
 ```
 
-Tests use in-memory HTTP fixtures and a locally built child agent. They need no
-GitHub credentials, Docker or external services.
+These focused tests use local fixtures for package validation, uncertain launches
+and cleanup. They need no GitHub credentials, Docker or external services.
+
+The [API/MCP scenarios](../../../framework/tests/README.md#mcp-api-tests) cover
+spawning, controller registration, action execution and artifact retrieval with
+real providers. They use a local release endpoint and Docker registry.

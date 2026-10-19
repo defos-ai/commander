@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
 import type { OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
+import type { Action, Agent } from '../../src/api/types';
 import { test, connect, startOperation, publicAPIURL, username, password } from './fixtures';
 
 test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api, website }) => {
@@ -101,6 +102,9 @@ test('Playground links prefill a connection and reuse its saved session', async 
 
 test('custom-port API catalogs survive navigation and restore server sign-in across reload', async ({ page, api }) => {
   await api.ready();
+  const [agents, actions] = await Promise.all([
+    api.get<{ items: Agent[] }>('/agents'), api.get<{ items: Action[] }>('/actions'),
+  ]);
   const browserRequests: { url: string; authorization?: string }[] = [];
   page.on('request', request => browserRequests.push({ url: request.url(), authorization: request.headers().authorization }));
   const localAPIURL = 'http://localhost:4274';
@@ -167,12 +171,12 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(decisions.getByRole('cell', { name: 'Model', exact: true })).toBeVisible();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(agents.items.length);
   await page.goBack();
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
   await page.goForward();
-  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(agents.items.length);
   await page.goBack();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
@@ -224,7 +228,7 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await navigation.getByRole('button', { name: 'Actions', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^View action / })).toHaveCount(7);
+  await expect(page.getByRole('button', { name: /^View action / })).toHaveCount(actions.items.length);
   await page.getByRole('button', { name: 'View action capture-page', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

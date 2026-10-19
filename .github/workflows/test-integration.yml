@@ -62,7 +62,7 @@ jobs:
           compose-file: .github/composes/compose.full.test.yaml
           targets: >-
             ${{ format('{0}{1}{2}',
-                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,browser-agent,web-agent-1' || 'minio,minio-init',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,browser-agent,web-agent-1,spawner-agent,fixture-releases,fixture-agent' || 'minio,minio-init',
                 env.RUN_BROWSER == 'true' && ',ui' || '',
                 (env.RUN_FS == 'true' || env.RUN_FULL == 'true') &&
                 (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}
@@ -158,6 +158,14 @@ jobs:
           COMPOSE_PROFILES: ui
         run: docker compose down --volumes
 
+      - name: Publish agent fixture to the local test registry
+        if: env.RUN_FULL == 'true'
+        env:
+          COMPOSE_FILE: .github/composes/compose.full.test.yaml
+        run: |
+          docker compose up --no-build --wait --wait-timeout 120 registry
+          docker tag commander-fixture-agent:test localhost:15000/fixture-agent:fixture
+          docker push localhost:15000/fixture-agent:fixture
       - name: Start full stack
         if: env.RUN_FULL == 'true'
         env:
@@ -165,9 +173,13 @@ jobs:
         run: docker compose up --no-build --wait --wait-timeout 180
       - name: Test API with full providers
         if: inputs.all || contains(fromJSON(inputs.changes), 'api-full')
+        env:
+          COMMANDER_TEST_SPAWNER_RUNTIME: docker
         run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/api/tests
       - name: Test MCP with full providers
         if: inputs.all || contains(fromJSON(inputs.changes), 'mcp-full')
+        env:
+          COMMANDER_TEST_SPAWNER_RUNTIME: docker
         run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
       - name: Collect full stack logs
         if: (failure() || cancelled()) && env.RUN_FULL == 'true' && steps.checkout.outcome == 'success'
@@ -180,6 +192,16 @@ jobs:
         if: always() && steps.checkout.outcome == 'success'
         run: |
           status=0
+          # Stop new launches, then remove only this test network's spawned agents.
+          docker compose -f .github/composes/compose.full.test.yaml stop spawner-agent || status=$?
+          containers=$(docker ps --all --quiet \
+            --filter network=commander-full-test_default \
+            --filter label=ai.defos.commander.spawn-owner) || status=$?
+          while IFS= read -r container; do
+            if [ -n "$container" ]; then
+              docker rm --force "$container" || status=$?
+            fi
+          done <<< "$containers"
           for compose_file in .github/composes/compose.providers.test.yaml \
                               .github/composes/compose.test.yaml \
                               .github/composes/compose.full.test.yaml; do

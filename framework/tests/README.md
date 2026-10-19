@@ -31,15 +31,39 @@ Mongo, S3 and RabbitMQ suites use real local services. Follow their setup/test c
 ## MCP API tests
 
 ```sh
-export COMPOSE_FILE=.github/composes/compose.test.yaml # or .github/composes/compose.full.test.yaml
+export COMPOSE_FILE=.github/composes/compose.test.yaml
 docker compose up --build --wait
 go test -race -count=1 -failfast -p 1 -timeout=5m -v ./apps/adapters/api/... ./apps/adapters/mcp/...
 docker compose down --volumes
 ```
 
-Choose the FS stack (`commander-test`) or MongoDB/RabbitMQ/MinIO stack
-(`commander-full-test`). Each has isolated volumes, two web agents and one
-browser agent with Chromium.
+The FS stack (`commander-test`) has isolated volumes, two web agents, one
+browser agent with Chromium, and a native spawner. Startup provisions one fixture
+through `--spawn-agents`; API/MCP scenarios provision another through an operation,
+run an action and retrieve its artifact. A local HTTPS release server supplies the
+manifest and binary; no public release is needed.
+
+For MongoDB/RabbitMQ/MinIO and Docker spawning (`commander-full-test`):
+
+```sh
+export COMPOSE_FILE=.github/composes/compose.full.test.yaml
+docker compose build
+docker compose build fixture-agent
+docker compose up --wait registry
+docker tag commander-fixture-agent:test localhost:15000/fixture-agent:fixture
+docker push localhost:15000/fixture-agent:fixture
+docker compose up --no-build --wait
+COMMANDER_TEST_SPAWNER_RUNTIME=docker go test -race -count=1 -failfast -p 1 -timeout=5m -v ./apps/adapters/api/... ./apps/adapters/mcp/...
+docker compose stop spawner-agent
+docker ps -aq --filter network=commander-full-test_default --filter label=ai.defos.commander.spawn-owner | xargs -r docker rm -f
+docker compose down --volumes
+```
+
+The registry is bound to loopback. Setup publishes only the fixture image there;
+the spawner pulls its digest and launches a sibling container. Docker spawning
+requires the host Docker socket. Its containers outlive the spawner, so remove
+those on the test network before taking the stack down, including after failures.
+
 Run only one stack locally at a time: both expose MCP on `14273` and HTTP API on
 `14274`. Keep `-p 1` so the two adapter suites use the stack sequentially.
 

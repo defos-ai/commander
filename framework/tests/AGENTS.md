@@ -23,6 +23,12 @@
 
 - Stack-backed API and MCP packages share state. Run them sequentially (`-p 1`
   when combined), and run browser suites separately against the same stack.
+- The API/MCP stacks include a spawner and local HTTPS package fixture. FS uses
+  native child processes; full-provider tests use a loopback registry and Docker
+  sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;
+  do not introduce resolver injection or deployment flags solely for these tests.
+  Fixture missions are merged with bundled missions at fixture startup. Catalog
+  checks must permit fixture agents left running by the preceding suite.
 - Fixtures must settle active work before calling test-only cleanup (`ENV=tests`).
   Terminal operation status alone is insufficient if tasks or agent work remain.
 - Preserve [`TestCleaner`](../testing/test_cleaner.go) and
@@ -76,3 +82,6 @@ Use `.github/composes/compose.test.yaml` for FS or
 run one stack at a time because their ports overlap. Always run the corresponding
 `docker compose down --volumes` afterward, including on failure. Match affected
 [CI workflows](../../.github/workflows/) and report suites not verified.
+For the full stack, set `COMMANDER_TEST_SPAWNER_RUNTIME=docker` and remove spawned
+containers before teardown, scoped by both the test network and ownership label;
+see the testing guide for registry setup and cleanup commands.

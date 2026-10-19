@@ -23,13 +23,6 @@ import (
 	s3store "github.com/defos-ai/commander/providers/s3/store"
 )
 
-// Options supplies caller-owned dependencies for an embedded host.
-type Options struct {
-	Resolver *packages.Resolver
-	// Engine is used only with the docker runtime.
-	Engine docker.Engine
-}
-
 type dependencies struct {
 	Bus               comms.Bus
 	ArtifactFileStore artifacts.ArtifactFileStore
@@ -45,7 +38,7 @@ func (d *dependencies) Close() (err error) {
 	return err
 }
 
-func openDependencies(ctx context.Context, configuration config, options Options) (result *dependencies, err error) {
+func openDependencies(ctx context.Context, configuration config) (result *dependencies, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -66,7 +59,7 @@ func openDependencies(ctx context.Context, configuration config, options Options
 	}
 	d.Bus = bus
 	d.closers = append(d.closers, bus.Close)
-	if err := d.openRuntime(ctx, configuration, options); err != nil {
+	if err := d.openRuntime(ctx, configuration); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -75,15 +68,12 @@ func openDependencies(ctx context.Context, configuration config, options Options
 	return d, nil
 }
 
-func (d *dependencies) openRuntime(ctx context.Context, configuration config, options Options) (err error) {
-	resolver := options.Resolver
-	if resolver == nil {
-		resolver = packages.NewResolver(nil)
-		d.closers = append(d.closers, func() error {
-			resolver.CloseIdleConnections()
-			return nil
-		})
-	}
+func (d *dependencies) openRuntime(ctx context.Context, configuration config) (err error) {
+	resolver := packages.NewResolver(nil)
+	d.closers = append(d.closers, func() error {
+		resolver.CloseIdleConnections()
+		return nil
+	})
 	switch configuration.runtime {
 	case "native":
 		d.Runtime, err = native.NewManager(ctx, native.Config{
@@ -93,14 +83,11 @@ func (d *dependencies) openRuntime(ctx context.Context, configuration config, op
 			Resolver:    resolver, RegistrationTimeout: configuration.registrationTimeout,
 		})
 	case "docker":
-		engine := options.Engine
-		if engine == nil {
-			engine, err = docker.NewEngine()
-			if err != nil {
-				return err
-			}
-			d.closers = append(d.closers, engine.Close)
+		engine, engineErr := docker.NewEngine()
+		if engineErr != nil {
+			return engineErr
 		}
+		d.closers = append(d.closers, engine.Close)
 		d.Runtime, err = docker.NewManager(ctx, docker.Config{
 			Directory: configuration.stateDir, Bus: d.Bus,
 			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
@@ -115,7 +102,7 @@ func (d *dependencies) openRuntime(ctx context.Context, configuration config, op
 		return err
 	}
 	// Stop runtime work before closing its clients and shared bus, including
-	// when later host construction fails. Injected clients remain caller-owned.
+	// when later host construction fails.
 	d.closers = append(d.closers, d.Runtime.Close)
 	return nil
 }

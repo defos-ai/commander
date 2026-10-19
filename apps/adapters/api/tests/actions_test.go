@@ -14,8 +14,8 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 	a := connect(t)
 	catalog := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 	agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-	if len(catalog.Items) != 7 {
-		t.Fatalf("expected seven combined web/browser actions: %+v", catalog)
+	if !slices.Equal(actionNames(catalog.Items), expectedCatalogActions(agents.Items)) {
+		t.Fatalf("catalog differs from the registered agents' capabilities: %+v", catalog)
 	}
 	for i, action := range catalog.Items {
 		if i > 0 && catalog.Items[i-1].Name >= action.Name {

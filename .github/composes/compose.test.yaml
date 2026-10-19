@@ -53,14 +53,14 @@ services:
     depends_on:
       volume-init:
         condition: service_completed_successfully
-    command: ["--with-missions=/data/default-missions.json"]
+      fixture-releases:
+        condition: service_healthy
+    command: ["--with-missions=/fixtures/missions.json"]
     volumes:
       - bus:/state/bus
       - storage:/state/storage
       - database:/state/database
-    configs:
-      - source: default-missions
-        target: /data/default-missions.json
+      - fixture-data:/fixtures:ro
     environment:
       <<: *environment
       DATABASE_URL: file:///state/database
@@ -181,11 +181,45 @@ services:
     <<: *agent
     image: commander-web-agent:test
 
+  spawner-agent:
+    <<: *agent
+    image: commander-spawner-agent:test
+    command: ["--heartbeat-interval=1s", "--spawn-agents=github.com/defos-ai/fixture-agent@v0.1.0"]
+    build:
+      context: ../..
+      dockerfile: apps/agents/spawner/docker/Dockerfile
+    environment:
+      <<: *environment
+      SPAWNER_RUNTIME: native
+      SSL_CERT_FILE: /fixtures/ca.pem
+    volumes:
+      - bus:/state/bus
+      - storage:/state/storage
+      - fixture-data:/fixtures:ro
+
+  # An isolated release endpoint exercises normal TLS, download and checksum
+  # validation without a public GitHub release or resolver injection.
+  fixture-releases:
+    <<: *runtime
+    image: commander-fixture-releases:test
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/agents/spawner/tests/e2e/Dockerfile
+      target: releases
+    volumes:
+      - fixture-data:/tls
+    networks:
+      default:
+        aliases: [github.com]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/healthz"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
 volumes:
   bus:
   storage:
   database:
-
-configs:
-  default-missions:
-    file: ../../apps/controllers/default/data/default-missions.json
+  fixture-data:

@@ -27,7 +27,7 @@ runs:
           echo 'settings<<EOF'
           for target in "${targets[@]}"; do
             case "$target" in
-              controller|api|mcp|minio) scope="test-$target" ;;
+              controller|api|mcp|minio|spawner-agent|fixture-releases|fixture-agent) scope="test-$target" ;;
               browser-agent) scope=test-browser-agent ;;
               web-agent-1) scope=test-web-agent ;;
               ui) scope=test-admin-ui ;;

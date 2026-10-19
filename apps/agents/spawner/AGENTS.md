@@ -12,8 +12,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [native.Manager](runtimes/native/manager.go) and
   [docker.Manager](runtimes/docker/manager.go) implement the interface.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
-  resources and closes them in reverse order. Injected clients remain caller-owned;
-  a manager closes its resolver only when it created it. Keep concrete runtime
+  resources and closes them in reverse order. `cli.Run` uses deployment
+  configuration; keep injection in runtime constructors for focused tests.
+  Injected runtime clients remain caller-owned; a manager closes its resolver
+  only when it created it. Keep concrete runtime
   imports out of `cli/cli.go`. Compose has an opt-in `spawner` profile; inclusion in
   Playground, AIO and release images remains separate work.
 - Runtime settings are environment-only: `SPAWNER_RUNTIME` defaults to `native`
@@ -102,8 +104,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 Keep public API tests in `tests/`, using an external package and deterministic
 HTTP transports. Read the [shared test guide](../../../framework/tests/AGENTS.md).
 Cover strict manifest validation, redirect restrictions, cancellation, checksum
-failures, real native registration, identity conflicts and host cleanup without
-public network or paid model calls. Keep the child executable fixture under tests.
+failures, identity conflicts and runtime cleanup without public network or paid
+model calls. Keep CLI tests focused on configuration and help; exercise host
+startup, registration and spawned-agent execution through API/MCP stack scenarios.
+Keep the child executable fixture under tests for native runtime edge cases.
 Use fake Engine/HTTP transports for Docker outcomes and safety checks; keep live
 Docker resource lifecycle in external setup, outside Go tests.
 

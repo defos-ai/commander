@@ -68,6 +68,29 @@ func TestRabbitMQDurableInboxSharesWorkAcrossConsumers(t *testing.T) {
 	f.empty(second)
 }
 
+func TestRabbitMQClosedObserverDoesNotRejectPublicationToRemainingInbox(t *testing.T) {
+	f := newFixture(t)
+	observerBus, publisher := f.bus(1), f.bus(1)
+	inbox := f.inbox(comms.DurableShared)
+	destination := f.subscribe(publisher, inbox)
+	observerInbox := inbox
+	observerInbox.Name += "-observer"
+	observerInbox.Mode = comms.TransientExclusive
+	observer := f.subscribe(observerBus, observerInbox)
+	registration := message(t)
+	f.publish(publisher, inbox.Topic, registration)
+	ack(t, f.ctx, f.next(observer, registration))
+	ack(t, f.ctx, f.next(destination, registration))
+
+	closeSubscription(t, observer)
+
+	// A host that observed a child may publish its own registration next.
+	// Removing the observer must not poison routing to the controller inbox.
+	ready := message(t)
+	f.publish(observerBus, inbox.Topic, ready)
+	ack(t, f.ctx, f.next(destination, ready))
+}
+
 func TestRabbitMQDurableInboxRedeliversAndRetainsWorkDuringDowntime(t *testing.T) {
 	f := newFixture(t)
 	owner, publisher := f.bus(1), f.bus(1)

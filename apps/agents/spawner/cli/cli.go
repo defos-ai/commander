@@ -21,12 +21,7 @@ import (
 const serviceName = "commander-" + string(spawner.SpawnerAgentType)
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
-func Run(ctx context.Context, args []string, stderr io.Writer) error {
-	return RunWithOptions(ctx, args, stderr, Options{})
-}
-
-// RunWithOptions runs the host with injected dependencies and no signal handlers.
-func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
+func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
 	}
@@ -59,7 +54,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 			logger.Info("agent stopped")
 		}
 	}()
-	dependencies, err := openDependencies(ctx, configuration, options)
+	dependencies, err := openDependencies(ctx, configuration)
 	if err != nil {
 		return err
 	}
