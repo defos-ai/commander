@@ -235,8 +235,8 @@ and `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
 Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
 behavior changes. The suite includes all-in-one coverage without a paid model
 or host browser. Keep tests offline with explicit startup-package overrides and
-local fixtures; retained web/browser test hosts still require their CI dependency
-filters. For transport or workflow changes, also use the
+pinned standalone web/browser modules as local fixture hosts. These imports are
+only for tests; production launches released executables through the spawner. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
 
 For image changes, build both Dockerfiles from the repository root. Verify the

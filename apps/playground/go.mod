@@ -8,13 +8,13 @@ require (
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.10.1
+	github.com/defos-ai/commander-browser-agent v0.2.0
+	github.com/defos-ai/commander-web-agent v0.2.0
 	github.com/defos-ai/commander/apps/adapters/api v0.1.0
 	github.com/defos-ai/commander/apps/adapters/mcp v0.1.0
 	github.com/defos-ai/commander/apps/admin/ui/backend v0.1.0
-	github.com/defos-ai/commander/apps/agents/browser v0.1.0
 	github.com/defos-ai/commander/apps/agents/builder v0.1.0
 	github.com/defos-ai/commander/apps/agents/spawner v0.1.0
-	github.com/defos-ai/commander/apps/agents/web v0.1.0
 	github.com/defos-ai/commander/apps/controllers/default v0.1.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/modelcontextprotocol/go-sdk v1.7.0

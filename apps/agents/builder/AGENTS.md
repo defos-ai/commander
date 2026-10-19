@@ -9,7 +9,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   empty catalog stays empty.
 - [cli](cli/) owns host configuration, provider factories and lifecycle.
   `--workspace-dir` overrides `BUILDER_WORKSPACE_DIR`; the default is
-  `state/builder-workspaces`. Providers follow the web host's existing conventions.
+  `state/builder-workspaces`. Providers follow the example-agent template's conventions.
 - `cli.RunWithOptions` accepts an initialized `Options.SecretCipher` for embedding.
   A non-nil cipher takes precedence over optional `SECRETS_ENCRYPTION_KEY`;
   validate it before opening providers. Keep `Run` as the wrapper with empty

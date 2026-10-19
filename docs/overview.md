@@ -53,7 +53,10 @@ flowchart TD
 
 Hosts construct providers and inject interfaces. The framework imports no providers
 or applications. Runtimes communicate through shared contracts without importing
-each other; Playground can compose the hosts in all-in-one mode.
+each other. Playground embeds Commander hosts and spawns released web/browser
+executables in all-in-one mode. Compose uses the same package contract to start
+web/browser containers through its Docker spawner. Those agents are developed
+in [separate repositories](../apps/agents/README.md).
 
 | Area | Responsibility | Details |
 | --- | --- | --- |
@@ -71,6 +74,7 @@ scheduling state: they are not entirely stateless.
 | --- | --- |
 | MCP restarts | Coordination continues. Saved data remains queryable; a lost command reply does not prove the command failed. |
 | Controller restarts | It reloads operations, reconciles saved outcomes and resumes queued work. A saved dispatch may be replayed only to its original live agent using the same command ID. |
+| Docker spawner restarts | It adopts matching live containers using saved launch records. Children outlive the spawner; stopped or missing children require a new launch. |
 | Agent dies | Its heartbeat expires. Undispatched tasks can use other ready agents; an unknown outcome from dispatched work is not silently rerun on a replacement. |
 
 The agent's command deduplication and pending result cache last for that process's

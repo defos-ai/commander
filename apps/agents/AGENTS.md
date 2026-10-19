@@ -2,9 +2,10 @@
 
 ## Construction and lifecycle
 
-- Use the [web constructor](web/web_agent.go),
-  [host](web/cli/cli.go) and [factory](web/cli/factory.go) as the
-  extension points for an agent module. Add new modules to [go.work](../../go.work).
+- Use [commander-example-agent](https://github.com/defos-ai/commander-example-agent)
+  as the reference for new standalone agents. Its `agent.go`, `actions/`, `cli/`
+  and `tests/` separate construction, capabilities, providers and validation.
+  Only Commander-owned modules belong in [go.work](../../go.work).
 - Give each agent a fixed type and a fresh ID per process. Construct fresh action
   instances for every agent so discovery state is never shared between hosts.
   Propagate constructor failures instead of starting a partial runtime.
@@ -21,10 +22,10 @@
 - [Agent packages and bootstrap](../../docs/agent-packages.md) defines the release
   manifest and spawner behavior. The [spawner module](spawner/AGENTS.md)
   implements native/Docker spawning with `spawn-agent` and repeatable
-  `--spawn-agents`. Compose opts into Docker mode with the `spawner` profile;
-  Playground and Docker AIO embed the spawner in native mode and launch external
-  web/browser packages by default. Bundled web/browser modules remain for tests
-  until their separate removal.
+  `--spawn-agents`. Compose uses Docker mode by default for one browser and two
+  web instances from their standalone `v0.2.0` releases. Playground and Docker AIO
+  embed the spawner in native mode and launch one of each. Web/browser source,
+  unit tests and releases belong to their standalone repositories.
 - Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.
@@ -53,7 +54,7 @@
   transient `MissingRequirements`. The registered agent type determines the
   secret scope; a type and secret name identify one shared value.
   Configure the framework secret runtime with an injected decryptor only for
-  hosts that need managed secrets. Of the bundled agents, only the builder has
+  hosts that need managed secrets. Of the Commander-owned agents, only the builder has
   this configuration. Web and browser actions do not need managed secrets; do
   not load or distribute the encryption key to their hosts.
   Access declared values with `action.Secret(ctx, name)`, never action inputs or
@@ -62,7 +63,8 @@
 - Catalog entries describe capabilities; per-agent readiness and leases
   determine availability. Do not claim that installing one agent guarantees
   complete required-action coverage for a mission.
-- Keep HTTP/HTML actions in `web` and rendering actions in `browser`. Discovery
+- Keep HTTP/HTML actions in `commander-web-agent` and rendering actions in
+  `commander-browser-agent`. Discovery
   can propose another agent type's actions by name; it must not import or call
   that agent's runtime.
 
@@ -88,11 +90,11 @@ settings solely for tests.
 Run the affected agent module from the repository root, for example:
 
 ```sh
-go test -race -count=1 -timeout=3m ./apps/agents/browser/...
-go vet ./apps/agents/browser/...
+go test -race -count=1 -timeout=3m ./apps/agents/builder/...
+go vet ./apps/agents/builder/...
 ```
 
-[Unit CI](../../.github/workflows/test-unit.yml) covers the bundled host. Test
+[Unit CI](../../.github/workflows/test-unit.yml) covers Commander-owned hosts. Test
 discovery failures, readiness and local fixtures without paid models
 or public websites. Use [adapter scenarios](../../framework/tests/README.md#mcp-api-tests)
 for behavior spanning agents, controller persistence and mission automation.

@@ -19,7 +19,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   injection in runtime constructors; do not add resolver options to the host.
   Injected runtime clients remain caller-owned; a manager closes its resolver
   only when it created it. Keep concrete runtime
-  imports out of `cli/cli.go`. Compose has an opt-in `spawner` profile.
+  imports out of `cli/cli.go`. Compose starts this service in Docker mode by default,
+  with one browser and two web package entries pinned to `v0.2.0`.
 - Standalone runtime settings are environment-only: `SPAWNER_RUNTIME` defaults
   to `native` and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
@@ -101,7 +102,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   the lock; never use a stale create-only lock file for host ownership.
 - Docker `Close` ends observers, leaving containers and records intact. The factory
   closes Engine and providers afterward. Containers are not Compose-owned services;
-  operators remove them before removing the deployment network/state.
+  operators stop the spawner, remove only children on that deployment network
+  carrying `ai.defos.commander.spawn-owner`, then remove launch state before
+  requesting a fresh startup. Never reset records while owned children exist.
 
 ## Validation
 

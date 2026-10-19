@@ -62,10 +62,14 @@ jobs:
           compose-file: .github/composes/compose.full.test.yaml
           targets: >-
             ${{ format('{0}{1}{2}',
-                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,browser-agent,web-agent-1,spawner-agent,fixture-releases,fixture-agent' || 'minio,minio-init',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,spawner-agent,fixture-releases,fixture-agent' || 'minio,minio-init',
                 env.RUN_BROWSER == 'true' && ',ui' || '',
                 (env.RUN_FS == 'true' || env.RUN_FULL == 'true') &&
                 (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}
+
+      - name: Pull released agents once for both stacks
+        if: env.RUN_FS == 'true' || env.RUN_FULL == 'true'
+        run: docker compose -f .github/composes/compose.full.test.yaml pull --policy missing browser-agent web-agent-1
 
       - name: Start MongoDB provider service
         if: inputs.all || contains(fromJSON(inputs.changes), 'mongo') || contains(fromJSON(inputs.changes), 'controller-mongo') || contains(fromJSON(inputs.changes), 'api-full')

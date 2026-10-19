@@ -115,7 +115,7 @@ or Go installation. For a Go-only source build, omit `-tags embed_ui` and use
 `--no-admin`, or set `UI_STATIC_DIR` to a built frontend directory.
 Start with `review-website-no-browser` for links, SEO and technology checks.
 `review-website-with-browser` adds screenshots and rendered accessibility, requiring
-[Chromium](../agents/browser/README.md#native-agent).
+[Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander).
 The builder's `checkout-template` action requires Git on `PATH`; without it,
 website missions still work. See the [builder guide](../agents/builder/README.md).
 **Exiting stops these hosts and child agents, then deletes operations, reports,
@@ -253,7 +253,7 @@ and count of others waiting. Only operator input records an answer; expiry retur
 the decision to model review without approving work. With separate hosts, exiting
 leaves operations running, but model decisions wait for a session to follow them.
 
-See [website scenarios](../agents/web/README.md#try-these-in-playground)
+See [web agent quick start](https://github.com/defos-ai/commander-web-agent#quick-start)
 and the [MCP workflow](../adapters/README.md#operation-workflow).
 
 ## Development and testing

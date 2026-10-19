@@ -39,7 +39,7 @@ Multiple actions may require the same name.
 
 For agents that need managed secrets, configure `AgentConfig.Secrets` with a
 decryptor using the same encryption key as the API. The builder host accepts
-optional `SECRETS_ENCRYPTION_KEY`; the bundled web and browser hosts do not need it.
+optional `SECRETS_ENCRYPTION_KEY`; the standalone web and browser hosts do not need it.
 The controller needs no key. It reads encrypted records from its configured
 database and sends them only for names declared by the requesting agent's
 registered type.

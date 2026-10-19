@@ -22,8 +22,9 @@ docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and admin UI, one controller, two web agents, one browser
-agent and one builder agent. Web agents run HTTP checks; the browser renders pages;
+Compose runs MCP, the API and Admin, one controller, builder and spawner agents.
+The spawner starts two web agents and one browser agent from their standalone
+`v0.2.0` releases. Web agents run HTTP checks; the browser renders pages;
 the builder checks out the agent template.
 It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
 storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
@@ -64,16 +65,20 @@ Separately deployed builders need the same key configured explicitly.
 
 ## Configuration
 
-### Optional spawner
+### Spawned agents
 
-Use `docker compose --profile spawner up --build --wait` to enable the
-[spawner agent](../apps/agents/spawner/README.md#docker). It starts published agent
-images as sibling containers on the Compose network. This opt-in service has
-Docker daemon access; its children receive only bus/storage bootstrap settings.
+The [spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket
+to start released images as sibling containers on the Compose network. Startup
+needs Internet access for GitHub package manifests and uncached image pulls. Children
+receive bus/storage settings, without the socket or secrets encryption key.
+Change the spawner service's repeated `--spawn-agents` entries to choose packages.
+After an initial launch, remove its children and reset launch records before
+changing those entries; existing startup slots retain their package and identity.
 
-Spawned containers outlive the spawner and are not managed by `docker compose
-down`. Remove them by their returned container IDs before removing the network.
-The `spawner-state` volume retains launch records for retries across restarts.
+`docker compose restart spawner-agent` reuses live children and their saved launch
+records in `spawner-state`. Spawned containers have no automatic restart policy:
+stopped or missing children require a new launch, not a retry of their old record.
+See [stopping and resetting agents](#stopping-and-resetting-agents) before teardown.
 
 ### Shared settings
 
@@ -94,7 +99,7 @@ Flags override environment values. Native hosts default to `./state/bus`,
 Compose supplies backend settings; application images do not choose providers.
 `COMMANDER_MCP_PORT` changes the published Compose port (default `4273`).
 Run a host with `--help` for its flags. Action-specific dependencies belong in the
-[agent guide](../apps/agents/browser/README.md); model settings belong in
+[browser agent guide](https://github.com/defos-ai/commander-browser-agent); model settings belong in
 [Playground](../apps/playground/README.md).
 
 Native all-in-one uses its own Admin address; Docker all-in-one defaults to
@@ -118,6 +123,25 @@ Compose passes `--with-missions` to load both website missions. This upserts sup
 missions without removing others; without the flag the controller loads none.
 See [mission configuration](../apps/controllers/README.md#quick-start).
 
-Use `docker compose logs -f` for logs and `docker compose down` to stop.
-**`docker compose down --volumes` deletes saved state.**
+Use `docker compose logs -f` for service logs. Spawned agents have their own
+containers: use `docker logs <container-id>` for those.
+
+### Stopping and resetting agents
+
+Spawned containers are not Compose services: `docker compose down` does not stop
+them. To stop the default deployment and reset only agent launch records:
+
+```sh
+docker compose stop spawner-agent
+for container in $(docker ps -aq --filter network=commander_default --filter label=ai.defos.commander.spawn-owner); do docker rm -f "$container"; done
+docker compose rm -f spawner-agent
+docker volume rm commander_spawner-state
+docker compose down
+```
+
+For a custom Compose project name, replace `commander_default` and
+`commander_spawner-state` with that project's network and volume names. Removing
+launch records is deliberate here, after the spawner and its children stop; it
+lets the next `up` create fresh agents. MongoDB, artifacts, credentials and builder
+workspaces remain. **`docker compose down --volumes` deletes all saved state.**
 For restart behavior and scaling limits, see [architecture](overview.md#state-and-restart-recovery).

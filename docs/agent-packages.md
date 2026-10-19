@@ -4,8 +4,7 @@ This contract defines agent packaging, native/Docker spawning and deployment
 integrations. The `commander-example-agent` template supports preassigned agent
 IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
 resolves public packages and runs a regular agent host with `spawn-agent` and
-repeatable `--spawn-agents`. Native and Docker modes are implemented; Compose
-enables Docker mode with its optional `spawner` profile. Playground and Docker AIO
+repeatable `--spawn-agents`. Compose starts the spawner in Docker mode by default. Playground and Docker AIO
 embed the spawner in native mode.
 
 An agent repository publishes runnable packages; the spawner starts a selected
@@ -88,7 +87,7 @@ Deployment selects the execution mode explicitly:
 | Deployment | Launch behavior |
 | --- | --- |
 | Standalone spawner | Native by default; set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` for Docker. |
-| Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. Enable with `--profile spawner`. |
+| Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. Starts by default. |
 | Native `commander --all-in-one` | Child executable using the session's FS bus and artifact directories. |
 | Docker AIO | Child executable inside the AIO container, using the same FS directories; no Docker socket. |
 
@@ -146,7 +145,8 @@ required actions are ready.
 
 The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
 instance, including repeated references when two instances of a type are needed.
-Compose can pass this list as its spawner service's command. Native/AIO Commander
+Compose passes one browser and two web `v0.2.0` references as its spawner service's
+command. Native/AIO Commander
 defaults to `github.com/defos-ai/commander-web-agent@v0.2.0` and
 `github.com/defos-ai/commander-browser-agent@v0.2.0`. Its repeatable `--spawn-agents`
 replaces those defaults; `--spawn-agents=` skips startup packages while keeping
@@ -191,7 +191,8 @@ The spawn action finishes after bootstrap and leaves the agent running. Native
 and AIO sessions own child shutdown and must await it before deleting shared FS
 state. Docker containers survive a spawner restart, with automatic container
 restarts disabled. They are not Compose services: deployment teardown must remove
-owned containers before removing their network or data. Continuous monitoring,
+owned containers before removing their network or data. See the
+[Compose teardown commands](deployment.md#stopping-and-resetting-agents). Continuous monitoring,
 scaling, automatic upgrades and replacement are outside the spawner's role.
 
 Initially, runtime spawning uses a separate provisioning operation. Current
@@ -210,8 +211,9 @@ that would spawn the missing agent.
 3. Verify that an agent built from the template can be spawned natively and through
    Docker, including exact-instance registration and repeat-request behavior.
 4. Keep the separate web/browser repositories on the same package contract.
-   Commander startup uses their `v0.2.0` native packages; bundled code remains
-   available for offline test scenarios until its separate removal.
+   Commander startup uses their `v0.2.0` packages. Their source and action tests
+   stay in those repositories; Commander tests consume pinned release images or
+   Go modules for cross-host integration.
 
 The template remains the reference for manually developed and builder-generated
 agents. Its demo Compose remains useful for development; the spawner consumes

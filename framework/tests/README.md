@@ -11,8 +11,8 @@ Choose the affected module:
 ```sh
 go test -race -count=1 -timeout=3m ./framework/...
 go test -race -count=1 -timeout=3m ./apps/controllers/default/...
-go test -race -count=1 -timeout=3m ./apps/agents/browser/...
-go test -race -count=1 -timeout=3m ./apps/agents/web/...
+go test -race -count=1 -timeout=3m ./apps/agents/builder/...
+go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
 go test -race -count=1 -timeout=3m ./apps/playground/...
 go vet ./framework/...
 ```
@@ -38,10 +38,11 @@ docker compose down --volumes
 ```
 
 The FS stack (`commander-test`) has isolated volumes, two web agents, one
-browser agent with Chromium, and a native spawner. Startup provisions one fixture
+browser agent with Chromium from pinned standalone release images, and a native
+spawner. Startup provisions one fixture
 through `--spawn-agents`; API/MCP scenarios provision another through an operation,
 run an action and retrieve its artifact. A local HTTPS release server supplies the
-manifest and binary; no public release is needed.
+fixture manifest and binary. Web/browser images are pulled from GHCR during setup.
 
 For MongoDB/RabbitMQ/MinIO and Docker spawning (`commander-full-test`):
 
@@ -89,6 +90,7 @@ workspace registration, a path filter or a selected test command. Run it locally
 Selected [unit checks](../../.github/workflows/test-unit.yml) must pass before
 [integration checks](../../.github/workflows/test-integration.yml) start.
 One Docker runner reuses images across provider, FS and full-stack tests. Each
-phase has separate state; API, MCP and browser suites run sequentially.
-Failures retain logs and browser traces. Use **Tests passed** as the required
+phase has separate state; API and MCP suites run sequentially.
+Web/browser unit and browser end-to-end suites run in their own repositories.
+Failures retain stack logs. Use **Tests passed** as the required
 check so intentionally skipped suites do not block documentation-only changes.

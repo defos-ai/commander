@@ -22,7 +22,8 @@
 ## Shared stack and cleanup
 
 - Stack-backed API and MCP packages share state. Run them sequentially (`-p 1`
-  when combined), and run browser suites separately against the same stack.
+  when combined). Web/browser images come from pinned standalone releases; their
+  own repositories run action and browser-specific suites.
 - The API/MCP stacks include a spawner and local HTTPS package fixture. FS uses
   native child processes; full-provider tests use a loopback registry and Docker
   sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;

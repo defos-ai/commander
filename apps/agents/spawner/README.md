@@ -14,7 +14,7 @@ go run ./apps/agents/spawner/cmd --bus-url ./state/bus --storage-url ./state/sto
 To start a published package immediately, add:
 
 ```sh
---spawn-agents github.com/defos-ai/commander-example-agent@v0.1.0
+--spawn-agents github.com/defos-ai/commander-example-agent@v0.2.0
 ```
 
 Repeat the flag for multiple instances. The release must contain `agent.yaml`
@@ -22,26 +22,29 @@ and a native executable for your OS and architecture.
 
 ### Docker
 
-Enable the optional Compose spawner:
+Start Compose with its default spawner:
 
 ```sh
-docker compose --profile spawner up --build --wait
+docker compose up --build --wait
 ```
 
-It launches sibling containers on Commander's network with the shared RabbitMQ
-and S3 settings. To start a package with the service, add this under
-`spawner-agent` in `compose.yaml`, then run the command above:
+It launches two web agents and one browser agent from their `v0.2.0` packages as
+sibling containers on Commander's network, sharing RabbitMQ and S3. To replace
+that list, change `command` under `spawner-agent` in `compose.yaml`:
 
 ```yaml
-command: ["--spawn-agents", "github.com/defos-ai/commander-example-agent@v0.1.0"]
+command: ["--spawn-agents", "github.com/defos-ai/commander-example-agent@v0.2.0"]
 ```
+
+For an existing deployment, [remove its children and reset launch records](../../../docs/deployment.md#stopping-and-resetting-agents)
+before changing startup entries. Existing slots cannot switch packages.
 
 The package must publish a `docker.image` digest in `agent.yaml`. Standalone
 hosts set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` with
 reachable AMQP/S3 settings. Docker must be running Linux containers. The spawner
 uses the Docker Engine API; no Docker CLI is needed inside its image.
 
-Enabling this profile gives the spawner control of the host Docker daemon.
+The Compose spawner has control of the host Docker daemon through its socket.
 Spawned agents receive no Docker socket, host mounts, published ports or elevated
 capabilities. Package files cannot request these privileges.
 
@@ -50,7 +53,7 @@ capabilities. Package files cannot request these privileges.
 For runtime spawning, have the controller dispatch `spawn-agent` with:
 
 ```json
-{"package":"github.com/defos-ai/commander-example-agent@v0.1.0"}
+{"package":"github.com/defos-ai/commander-example-agent@v0.2.0"}
 ```
 
 It verifies the package, assigns an agent ID, starts the instance and waits for
@@ -72,7 +75,7 @@ the manifest; it does not establish whether the program is safe to run.
 The host supports public GitHub releases and public Docker images. Private
 packages and moving tags such as `stable` are not implemented.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
-the optional Compose service explicitly selects Docker mode.
+the Compose service explicitly selects Docker mode.
 
 [Playground all-in-one](../../playground/README.md#startup-agents) embeds the
 spawner in native mode, including inside Docker AIO. It downloads web/browser
@@ -98,9 +101,11 @@ Docker retries also work after a spawner restart: they verify the saved ownershi
 labels, image, network and bootstrap configuration, then await registration.
 Missing or stopped containers are never recreated or restarted by a retry;
 request a replacement with a new task or startup slot. Containers use no automatic
-restart policy. Remove them explicitly with `docker rm -f <container-id>` before
-`docker compose down`; they are separate containers, not Compose services.
-Keep `spawner-state` while these containers exist. Only one Docker spawner may
+restart policy. `docker compose restart spawner-agent` reuses live children.
+They are separate containers, not Compose services; follow the
+[scoped teardown](../../../docs/deployment.md#stopping-and-resetting-agents) to
+remove children and reset launch records before `docker compose down`. Keep
+`spawner-state` while these containers exist. Only one Docker spawner may
 use a state directory at a time; a second host fails startup.
 
 Registration waits default to 30 seconds for native mode and 45 seconds for

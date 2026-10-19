@@ -12,7 +12,7 @@ framework: &shared
   - 'providers/!(fs|mongo|rabbitmq|s3)/**'
   - 'apps/!(adapters|admin|agents|controllers|playground)/**'
   - 'apps/adapters/!(api|mcp)/**'
-  - 'apps/agents/!(browser|builder|spawner|web)/**'
+  - 'apps/agents/!(builder|spawner)/**'
   - 'apps/controllers/!(default)/**'
   - 'apps/admin/!(ui)/**'
   - 'apps/admin/ui/!(backend|frontend|docker)/**'
@@ -43,13 +43,6 @@ controller:
     - *s3
   - &controller 'apps/controllers/default/**'
 
-agent:
-  - *shared
-  - *fs
-  - *rabbitmq
-  - *s3
-  - &agent 'apps/agents/browser/**'
-
 builder:
   - *shared
   - *fs
@@ -63,13 +56,6 @@ spawner:
   - *rabbitmq
   - *s3
   - &spawner 'apps/agents/spawner/**'
-
-web:
-  - *shared
-  - *fs
-  - *rabbitmq
-  - *s3
-  - &web 'apps/agents/web/**'
 
 api:
   - *shared
@@ -96,10 +82,8 @@ playground:
   - *shared
   - *providers
   - *controller
-  - *agent
   - *builder
   - *spawner
-  - *web
   - *api
   - *mcp
   - *ui-backend
@@ -116,8 +100,6 @@ api-fs:
   - *shared
   - *api
   - *controller
-  - *agent
-  - *web
   - *spawner
   - *fs
 
@@ -125,8 +107,6 @@ api-full:
   - *shared
   - *api
   - *controller
-  - *agent
-  - *web
   - *spawner
   - *mongo
   - *rabbitmq
@@ -136,8 +116,6 @@ mcp-fs:
   - *shared
   - *mcp
   - *controller
-  - *agent
-  - *web
   - *spawner
   - *fs
 
@@ -145,8 +123,6 @@ mcp-full:
   - *shared
   - *mcp
   - *controller
-  - *agent
-  - *web
   - *spawner
   - *mongo
   - *rabbitmq
@@ -157,6 +133,4 @@ browser:
   - 'apps/admin/ui/**'
   - *api
   - *controller
-  - *agent
-  - *web
   - *fs

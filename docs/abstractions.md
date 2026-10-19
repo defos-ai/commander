@@ -126,7 +126,7 @@ from its mission and input. The selected set replaces the rules in that operatio
 saved mission without changing the catalog. Selection happens once at start;
 recovery keeps the saved rules.
 
-See the complete [website workflow](../apps/agents/web/README.md#workflow),
+See the complete [website missions](../apps/controllers/default/data/default-missions.json),
 [authoring follow-ups](../apps/agents/README.md#propose-follow-up-work), and
 [loading missions](../apps/controllers/README.md#quick-start).
 

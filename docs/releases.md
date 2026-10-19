@@ -36,7 +36,8 @@ It validates the workspace, not standalone module archives or remote availabilit
 
 The release-test workflow then calls the [test pipeline](../.github/workflows/test.yml)
 for the same commit. All basic checks must pass before provider, FS/full-stack
-API/MCP and browser integration tests begin. Release validation always runs the
+API/MCP integration tests begin. Web/browser repositories validate their own
+agent-specific suites. Release validation always runs the
 complete pipeline using `all: true`, bypassing changed-path selection.
 
 ## Publish

@@ -328,28 +328,6 @@ services:
       retries: 12
       start_period: 5s
 
-  browser-agent:
-    <<: *agent
-    image: commander-browser-agent:local
-    shm_size: 256mb
-    environment:
-      <<: *environment
-      CHROMIUM_NO_SANDBOX: "true"
-    build:
-      context: .
-      dockerfile: apps/agents/browser/docker/Dockerfile
-
-  web-agent-1:
-    <<: *agent
-    image: commander-web-agent:local
-    build:
-      context: .
-      dockerfile: apps/agents/web/docker/Dockerfile
-
-  web-agent-2:
-    <<: *agent
-    image: commander-web-agent:local
-
   builder-agent:
     <<: *agent
     image: commander-builder-agent:local
@@ -378,13 +356,16 @@ services:
 
   spawner-agent:
     <<: *agent
-    profiles: [spawner]
     image: commander-spawner-agent:local
     build:
       context: .
       dockerfile: apps/agents/spawner/docker/Dockerfile
-    # Opt-in host Docker access; never pass this socket to spawned agents.
+    # Host Docker access belongs only to the spawner, never its child agents.
     user: "0:0"
+    command:
+      - --spawn-agents=github.com/defos-ai/commander-browser-agent@v0.2.0
+      - --spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0
+      - --spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0
     environment:
       <<: *environment
       SPAWNER_RUNTIME: docker
@@ -444,11 +425,7 @@ services:
         condition: service_completed_successfully
       mcp:
         condition: service_healthy
-      browser-agent:
-        condition: service_started
-      web-agent-1:
-        condition: service_started
-      web-agent-2:
+      spawner-agent:
         condition: service_started
       builder-agent:
         condition: service_started

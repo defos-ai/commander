@@ -59,7 +59,7 @@ Other architectures: [Releases](https://github.com/defos-ai/commander/releases/l
 
 ### Source
 
-Docker Compose:
+Docker Compose ([setup and teardown](docs/deployment.md#local-compose)):
 
 ```sh
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground

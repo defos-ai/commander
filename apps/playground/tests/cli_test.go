@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	browsercli "github.com/defos-ai/commander-browser-agent/cli"
+	webcli "github.com/defos-ai/commander-web-agent/cli"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
-	browsercli "github.com/defos-ai/commander/apps/agents/browser/cli"
-	webcli "github.com/defos-ai/commander/apps/agents/web/cli"
 	"github.com/defos-ai/commander/apps/playground/cli"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -485,8 +485,8 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 }
 
-// The workflow uses real hosts with local fixtures; package downloading and child
-// ownership are exercised by the spawner suites and native/image smoke checks.
+// The workflow uses released agent hosts with local fixtures. Spawner suites and
+// native/image smoke checks exercise package downloading and child ownership.
 func startLocalWebHosts(t *testing.T, directory string) func() {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))
