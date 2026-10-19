@@ -1,8 +1,10 @@
 # Agent packages and bootstrap
 
-This contract defines the planned spawner. The `commander-example-agent` template
-supports preassigned agent IDs and generates release packages in this format.
-Package resolution, `spawn-agent` and `--spawn-agents` are not implemented yet.
+This contract defines agent packaging and the planned spawner. The
+`commander-example-agent` template supports preassigned agent IDs and generates
+release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
+resolves public packages and verifies native downloads. Launching agents,
+`spawn-agent` and `--spawn-agents` are not implemented yet.
 
 An agent repository publishes runnable packages; the spawner starts a selected
 package using the deployment's connection settings. Builder produces source and
@@ -46,6 +48,11 @@ keys, multiple YAML documents and incomplete entries. Native checksums and image
 digests contain exactly 64 lowercase hexadecimal characters. An asset is a file
 name in the same GitHub release, never a URL, path or archive. Native executables
 run directly; Docker images supply their own entrypoint.
+
+The resolver accepts manifests up to 64 KiB and native downloads up to 512 MiB,
+with 30-second and five-minute deadlines respectively. YAML aliases and anchors
+are unsupported. Downloads stay on HTTPS GitHub release hosts and use no
+deployment credentials or environment proxies.
 
 The package advertises only platforms it actually publishes. An unavailable
 mode or platform is an explicit error. The spawner does not build source or run

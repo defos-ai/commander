@@ -58,7 +58,7 @@ jobs:
     if: >-
       ${{ inputs.all || contains(fromJSON(inputs.changes), 'controller') ||
           contains(fromJSON(inputs.changes), 'agent') || contains(fromJSON(inputs.changes), 'web') ||
-          contains(fromJSON(inputs.changes), 'builder') ||
+          contains(fromJSON(inputs.changes), 'builder') || contains(fromJSON(inputs.changes), 'spawner') ||
           contains(fromJSON(inputs.changes), 'playground') ||
           contains(fromJSON(inputs.changes), 'api') || contains(fromJSON(inputs.changes), 'mcp') ||
           contains(fromJSON(inputs.changes), 'ui-backend') }}
@@ -89,6 +89,11 @@ jobs:
         run: |
           go test -race -count=1 -timeout=3m ./apps/agents/builder/...
           go vet ./apps/agents/builder/...
+      - name: Test and vet spawner packages
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'spawner') }}
+        run: |
+          go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
+          go vet ./apps/agents/spawner/...
       - name: Test and vet Playground, including all-in-one
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'playground') }}
         run: |

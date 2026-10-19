@@ -17,7 +17,8 @@ still to come.
 
 The planned [agent package contract](../../docs/agent-packages.md) describes
 versioned binaries/images and bootstrap for agents created from
-`commander-example-agent`. Spawner support is not implemented yet.
+`commander-example-agent`. The [spawner module](spawner/README.md) resolves these
+packages and verifies downloads; agent launching is still to come.
 
 ## Quick start
 
