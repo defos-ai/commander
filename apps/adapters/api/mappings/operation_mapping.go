@@ -2,9 +2,11 @@ package mappings
 
 import (
 	"bytes"
+	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -65,4 +67,16 @@ func ToOperationResponses(operations []operations.Operation) []models.OperationR
 		responses[i] = ToOperationResponse(operation)
 	}
 	return responses
+}
+
+func ToOperationResponseWithRequirements(operation operations.Operation, records map[string]agents.Agent, now time.Time) models.OperationResponse {
+	response := ToOperationResponse(operation)
+	if !operation.Status.Terminal() {
+		for i, task := range operation.Tasks {
+			if task.OperationID == operation.ID {
+				response.Tasks[i] = ToTaskResponseWithRequirements(task, records[task.AgentID], now)
+			}
+		}
+	}
+	return response
 }

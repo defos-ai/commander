@@ -81,6 +81,11 @@
   operation. Preflight includes requirements only for live candidates. Hide notices
   once a ready candidate covers the action. Navigation opens Secrets on the current
   connection without submitting values or opening a write dialog automatically.
+  Merge execution-scoped task `agent_type`/`missing_requirements` into the same
+  notice for running tasks with future deadlines. These are live API projections,
+  not persisted task state; refresh even when the operation timestamp is unchanged.
+  Ignore terminal operations and interrupted/expired tasks. Deduplicate type/name
+  pairs across preflight and runtime waits; installation, not storage, clears a wait.
 - Preserve routes across reload/back/forward, stale-request cancellation and
   per-connection state. Keep expired questions unanswerable and handle conflicts.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning

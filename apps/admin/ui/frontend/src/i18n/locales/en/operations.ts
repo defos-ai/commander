@@ -108,6 +108,6 @@ export default {
   noReadyAgents: 'No ready agents',
   missingRequirements: 'Missing requirements',
   secretsNeeded: 'Secrets needed',
-  secretsNeededDescription: 'Candidate agents need these secrets. Work resumes when all requirements are ready.',
+  secretsNeededDescription: 'Provide these secrets to let the requesting agents continue.',
   manageSecrets: 'Manage secrets',
 } as const;

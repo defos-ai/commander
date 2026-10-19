@@ -60,6 +60,14 @@ function respond(...bodies: unknown[]) {
 }
 
 describe('operations client', () => {
+  it('requires a valid secret scope for runtime task requirements', async () => {
+    const task = { ...operation.tasks![0], status: 'running', agent_type: 'web-agent', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] };
+    const waiting = { ...operation, tasks: [task] };
+    respond(waiting, { ...operation, tasks: [{ ...task, agent_type: undefined }] });
+    expect((await getOperation(url, credentials, operation.id)).tasks![0].missing_requirements).toEqual(task.missing_requirements);
+    await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
   it('preserves hydrated tasks, decisions, dependencies and artifact metadata through authenticated GETs', async () => {
     const fetch = respond({ items: [operation] }, operation);
 

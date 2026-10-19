@@ -267,17 +267,11 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 			t.Fatal("on-demand secret was requested before the action asked for it")
 		}
 	}
-	type outcome struct {
-		result actionmodel.ActionOutput
-		err    error
-	}
-	finished := make(chan outcome, 1)
-	go func() {
-		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-		defer cancel()
-		result, err := coordinator.RunAction(ctx, worker.ID(), actionmodel.ActionCall{ActionName: "on-demand", Input: json.RawMessage(`{}`)})
-		finished <- outcome{result: result, err: err}
-	}()
+	runtimeOperation := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodPost, "/api/v1/operations",
+		`{"mission_name":"on-demand-secret","input":{}}`), http.StatusCreated)
+	runtimePath := "/api/v1/operations/" + runtimeOperation.ID
+	runtimeTask := decodeResponse[models.TaskResponse](t, secretRequest(t, server, http.MethodPost, runtimePath+"/tasks",
+		`{"action_name":"on-demand","input":{}}`), http.StatusCreated)
 	awaitSecretCondition(t, "on-demand request visible through API", func() bool {
 		for _, request := range listSecretRequests(t, server, "") {
 			if request.AgentID == worker.ID() && request.Name == "RUNTIME_TOKEN" && request.Status == "needs_value" {
@@ -286,22 +280,39 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		}
 		return false
 	})
-	select {
-	case <-finished:
-		t.Fatal("action returned before its requested secret was supplied")
-	default:
+	var runtimeWaiting models.OperationResponse
+	awaitSecretCondition(t, "execution-scoped requirements visible through API", func() bool {
+		runtimeWaiting = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, runtimePath, ""))
+		return len(runtimeWaiting.Tasks) == 1 && len(runtimeWaiting.Tasks[0].MissingRequirements) == 1
+	})
+	waitingTask := runtimeWaiting.Tasks[0]
+	if waitingTask.Status != "running" || waitingTask.ID != runtimeTask.ID || waitingTask.CommandID != runtimeTask.CommandID ||
+		waitingTask.AgentType != "builder-agent" || !slices.Equal(waitingTask.MissingRequirements, []models.ActionRequirementResponse{{Kind: "secret", Name: "RUNTIME_TOKEN"}}) ||
+		runtimeWaiting.Preflight == nil || !runtimeWaiting.Preflight.Ready {
+		t.Fatal("runtime wait must affect the assigned execution, not action preflight")
+	}
+	detail := decodeResponse[models.TaskResponse](t, secretRequest(t, server, http.MethodGet, runtimePath+"/tasks/"+runtimeTask.ID, ""))
+	if !slices.Equal(detail.MissingRequirements, waitingTask.MissingRequirements) || detail.AgentType != waitingTask.AgentType {
+		t.Fatal("task detail lost execution requirements")
+	}
+	// Another operation on the same agent type must not inherit this wait.
+	previous := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, operationPath, ""))
+	if len(previous.Tasks[0].MissingRequirements) != 0 {
+		t.Fatal("runtime wait leaked into another operation")
 	}
 	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath,
 		`{"agent_type":"builder-agent","name":"RUNTIME_TOKEN","value":"`+secretTestValue+`"}`), http.StatusCreated)
-	select {
-	case completed := <-finished:
-		var result output
-		if completed.err != nil || json.Unmarshal(completed.result.Output, &result) != nil || !result.Matched {
-			t.Fatal("on-demand action did not resume with the API-supplied secret")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("on-demand action did not resume after secret submission")
+	var runtimeResumed models.OperationResponse
+	awaitSecretCondition(t, "same execution resumes after on-demand secret submission", func() bool {
+		runtimeResumed = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, runtimePath, ""))
+		return len(runtimeResumed.Tasks) == 1 && runtimeResumed.Tasks[0].Status == "succeeded"
+	})
+	completed := runtimeResumed.Tasks[0]
+	if completed.ID != runtimeTask.ID || completed.CommandID != runtimeTask.CommandID || completed.Result == nil ||
+		json.Unmarshal(completed.Result.Output, &result) != nil || !result.Matched || len(completed.MissingRequirements) != 0 {
+		t.Fatal("on-demand execution did not finish with cleared requirements")
 	}
+	decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodPost, runtimePath+"/cancel", ""))
 	run("on-demand", 0)
 	stopAgent()
 	stopOperations()
@@ -319,6 +330,12 @@ func startSecretOperationRunner(t *testing.T, coordinator *controller.Controller
 	if err := missionStore.Upsert(t.Context(), missions.Mission{
 		Name: "secret-distribution", Objective: "Use an agent's managed secret",
 		RequiredActions: []string{"use-secret"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := missionStore.Upsert(t.Context(), missions.Mission{
+		Name: "on-demand-secret", Objective: "Request a secret during execution",
+		RequiredActions: []string{"on-demand"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 	}); err != nil {
 		t.Fatal(err)
 	}

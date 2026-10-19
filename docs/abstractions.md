@@ -68,6 +68,13 @@ Saving a value starts delivery, and readiness updates after agent installation.
 Other missing dependencies still need host configuration. Background secret
 refresh requests alone do not mean an operation is blocked.
 
+An action can also discover a need during execution and call
+`action.RequestSecret(ctx, name)`. Its agent reports the same requirement shape
+on the current work, leaving the action's general readiness unchanged. API/MCP
+task views include this evidence only for the matching live, running execution.
+Playground and Admin reuse their secret entry flow. These waits keep the existing
+task deadline; they do not durably pause execution or cause automatic retries.
+
 ## Next actions and continuations
 
 An action's optional `next_actions` proposes follow-up work as `action_name`,

@@ -32,6 +32,10 @@
   managed declarations for assessed live candidates, not sensitive host
   configuration (`kind: configuration`, `sensitive: true`) or pending lease requests.
   Keep mappings independent; API reads never infer readiness from secret storage.
+- Operation/task query DTOs add live `agent_type` and `missing_requirements` only
+  for an exact current running execution. Keep this projection separate from
+  persisted tasks, status and deadlines. Missing inventory omits the observation;
+  cancellation still ends reads. Agent work DTOs retain their public requirements.
 - Artifact downloads first establish file membership and verify saved size and
   SHA-256. Preserve sanitized attachment names, media-type fallback, empty files
   and `HEAD` behavior. Changes to buffering or range support need matching docs.

@@ -3,12 +3,17 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
+	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
+	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 )
@@ -122,4 +127,222 @@ type secretAction struct{ *action.Base }
 
 func (*secretAction) Run(context.Context, json.RawMessage) (action.Result, error) {
 	return action.JSONResult(struct{}{})
+}
+
+func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
+	type waiter struct {
+		name    string
+		start   chan struct{}
+		cancel  chan context.CancelFunc
+		outcome chan error
+	}
+	waiters := []waiter{
+		{name: "TOKEN"}, {name: "TOKEN"}, {name: "OTHER_TOKEN"},
+	}
+	for i := range waiters {
+		waiters[i].start = make(chan struct{})
+		waiters[i].cancel = make(chan context.CancelFunc, 1)
+		waiters[i].outcome = make(chan error, 1)
+	}
+	finish := make(chan struct{})
+	executor, err := action.NewFunc(action.FuncConfig[struct{}, struct{}]{
+		Action: actions.Action{Name: "wait"},
+		Run: func(ctx context.Context, _ struct{}) (struct{}, error) {
+			var workers sync.WaitGroup
+			defer workers.Wait()
+			for _, waiter := range waiters {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					select {
+					case <-waiter.start:
+					case <-ctx.Done():
+						waiter.outcome <- ctx.Err()
+						return
+					}
+					requestCtx, cancel := context.WithCancel(ctx)
+					defer cancel()
+					waiter.cancel <- cancel
+					value, err := action.RequestSecret(requestCtx, waiter.name)
+					clear(value)
+					waiter.outcome <- err
+				}()
+			}
+			select {
+			case <-finish:
+				return struct{}{}, nil
+			case <-ctx.Done():
+				return struct{}{}, ctx.Err()
+			}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := startSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
+	command := fixture.command(t, "wait", `{}`)
+	waitSecretWorkRequirements(t, fixture, command)
+	close(waiters[0].start)
+	waitSecretWorkRequirements(t, fixture, command, "TOKEN")
+	request := fixture.request(t, "")
+	close(waiters[1].start)
+	waitSecretWorkRequirements(t, fixture, command, "TOKEN")
+	(<-waiters[0].cancel)()
+	waitSecretWorkRequirements(t, fixture, command, "TOKEN")
+	select {
+	case err := <-waiters[0].outcome:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled overlapping waiter returned %v", err)
+		}
+	case <-fixture.ctx.Done():
+		t.Fatal("canceled overlapping waiter did not return")
+	}
+	close(waiters[2].start)
+	waitSecretWorkRequirements(t, fixture, command, "OTHER_TOKEN", "TOKEN")
+	if request.Key.Name != "TOKEN" {
+		t.Fatal("first request was not for the shared waiter name")
+	}
+	delivery, err := agentevents.NewSecretDelivery(request, fixture.secret(t, request, time.Time{}, "fixture-value"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.deliver(t, delivery)
+	waitSecretWorkRequirements(t, fixture, command, "OTHER_TOKEN")
+	select {
+	case err := <-waiters[1].outcome:
+		if err != nil {
+			t.Fatalf("remaining overlapping waiter did not receive the value: %v", err)
+		}
+	case <-fixture.ctx.Done():
+		t.Fatal("remaining overlapping waiter did not return")
+	}
+	(<-waiters[2].cancel)()
+	waitSecretWorkRequirements(t, fixture, command)
+	select {
+	case err := <-waiters[2].outcome:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("last canceled waiter returned %v", err)
+		}
+	case <-fixture.ctx.Done():
+		t.Fatal("last canceled waiter did not return")
+	}
+	close(finish)
+	fixture.outcome(t, command, controllerevents.ActionSucceeded)
+}
+
+func TestAgentFinishedExecutionCannotReportSecretWaits(t *testing.T) {
+	contexts := make(chan context.Context, 1)
+	finish := make(chan struct{}, 1)
+	executor, err := action.NewFunc(action.FuncConfig[struct{}, struct{}]{
+		Action: actions.Action{Name: "wait"},
+		Run: func(ctx context.Context, _ struct{}) (struct{}, error) {
+			contexts <- context.WithoutCancel(ctx)
+			select {
+			case <-finish:
+				return struct{}{}, nil
+			case <-ctx.Done():
+				return struct{}{}, ctx.Err()
+			}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := startSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
+	first := fixture.command(t, "wait", `{}`)
+	var detached context.Context
+	select {
+	case detached = <-contexts:
+	case <-fixture.ctx.Done():
+		t.Fatal("first execution did not start")
+	}
+	returned := make(chan error, 1)
+	go func() {
+		value, err := action.RequestSecret(detached, "TOKEN")
+		clear(value)
+		returned <- err
+	}()
+	waitSecretWorkRequirements(t, fixture, first, "TOKEN")
+	finish <- struct{}{}
+	fixture.outcome(t, first, controllerevents.ActionSucceeded)
+	select {
+	case err := <-returned:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("finished execution's detached waiter returned %v", err)
+		}
+	case <-fixture.ctx.Done():
+		t.Fatal("finished execution retained its detached waiter")
+	}
+	second := fixture.command(t, "wait", `{}`)
+	waitSecretWorkRequirements(t, fixture, second)
+	if value, err := action.RequestSecret(detached, "OTHER_TOKEN"); !errors.Is(err, context.Canceled) || len(value) != 0 {
+		clear(value)
+		t.Fatalf("finished execution accepted another request: %v", err)
+	}
+	assertSecretWorkRequirements(t, fixture, second)
+	finish <- struct{}{}
+	fixture.outcome(t, second, controllerevents.ActionSucceeded)
+	if fixture.runtime.Describe().Work != nil {
+		t.Fatal("finished execution retained missing requirements")
+	}
+}
+
+func waitSecretWorkRequirements(t *testing.T, fixture *secretFixture, commandID string, names ...string) {
+	t.Helper()
+	for {
+		message := fixture.next(t, controllerevents.AgentUpdated)
+		var snapshot agents.AgentSnapshot
+		if err := json.Unmarshal(message.Payload, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Work == nil || snapshot.Work.CommandID != commandID || !slices.Equal(snapshot.Work.MissingRequirements, secretRequirements(names)) {
+			continue
+		}
+		assertSecretWorkRequirements(t, fixture, commandID, names...)
+		return
+	}
+}
+
+func assertSecretWorkRequirements(t *testing.T, fixture *secretFixture, commandID string, names ...string) {
+	t.Helper()
+	want := secretRequirements(names)
+	snapshot := fixture.runtime.Describe()
+	if snapshot.Status != agents.AgentWorking || snapshot.Work == nil || snapshot.Work.CommandID != commandID || !slices.Equal(snapshot.Work.MissingRequirements, want) {
+		t.Fatalf("unexpected execution requirements: %+v; want %v", snapshot.Work, want)
+	}
+	if snapshot.Actions[0].Status != actions.Ready || len(snapshot.Actions[0].RequiredSecrets) != 0 || len(snapshot.Actions[0].MissingRequirements) != 0 {
+		t.Fatal("execution secret wait changed the action's readiness or declarations")
+	}
+	if len(want) > 0 {
+		record := agents.Agent{AgentSnapshot: snapshot}
+		cloned := record.Clone()
+		cloned.Work.MissingRequirements[0].Name = "CHANGED"
+		if !slices.Equal(record.Work.MissingRequirements, want) {
+			t.Fatal("inventory clone shared execution missing requirements")
+		}
+	}
+	for _, message := range fixture.bus.history() {
+		if message.Type != controllerevents.AgentUpdated {
+			continue
+		}
+		var announced agents.AgentSnapshot
+		if err := json.Unmarshal(message.Payload, &announced); err != nil {
+			t.Fatal(err)
+		}
+		if announced.Work != nil && announced.Work.CommandID == commandID && slices.Equal(announced.Work.MissingRequirements, want) {
+			if message.CorrelationID != "" {
+				t.Fatal("secret wait announcement claimed a command outcome")
+			}
+			return
+		}
+	}
+	t.Fatalf("execution requirements were not announced: %v", want)
+}
+
+func secretRequirements(names []string) []actions.Requirement {
+	var requirements []actions.Requirement
+	for _, name := range names {
+		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
+	}
+	return requirements
 }

@@ -64,6 +64,11 @@
   `sensitive: true`. MCP instructions direct operators to
   Admin Secrets; never solicit secret values through chat, tools or questions,
   or equate a saved secret with an agent becoming ready.
+- Running task queries also project `agent_type` and `missing_requirements` from
+  the assigned agent's live work, using `operations.AssessTaskRequirements`.
+  Match the saved execution identity and retain its deadline; suppress waits for
+  terminal operations. Inventory failures omit this optional observation while
+  keeping saved results readable. Never infer a task wait from sync requests.
 - Continuation decisions must retain the task and business version used to reject
   stale choices. Questions record actual operator answers; expiry is not approval.
 - Keep pagination cursors bound to the resource and operation. Bound event waits

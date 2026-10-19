@@ -22,6 +22,8 @@ export interface OperationTask {
   parent_task_id?: string;
   step_id?: string;
   agent_id: string;
+  agent_type?: string;
+  missing_requirements?: ActionRequirement[] | null;
   action_name: string;
   command_id?: string;
   deadline_at?: string | null;

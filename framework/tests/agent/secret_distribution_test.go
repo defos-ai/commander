@@ -260,6 +260,7 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 		Matched bool `json:"matched"`
 	}
 	var privateCalls atomic.Int32
+	resumed, release := make(chan struct{}), make(chan struct{})
 	executor, err := action.NewFunc(action.FuncConfig[input, output]{
 		Action: actions.Action{Name: "inspect"},
 		Run: func(ctx context.Context, in input) (output, error) {
@@ -274,6 +275,14 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 				clear(undeclared)
 				if !errors.Is(lookupErr, action.ErrSecretUnavailable) {
 					return output{}, errors.New("dynamic request granted undeclared static lookup")
+				}
+				if privateCalls.Load() == 1 {
+					close(resumed)
+					select {
+					case <-release:
+					case <-ctx.Done():
+						return output{}, ctx.Err()
+					}
 				}
 			}
 			return output{Matched: bytes.Equal(value, []byte(plaintext))}, err
@@ -293,7 +302,8 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 			t.Fatal("startup or public work requested a dynamic secret")
 		}
 	}
-	command := fixture.command(t, "inspect", `{"private":true}`)
+	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-private"}
+	command := fixture.command(t, "inspect", `{"private":true}`, work)
 	request := fixture.request(t, "")
 	if request.Key.Scope.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.runtime.ID() || request.OperationID != "" {
 		t.Fatal("dynamic request lost its agent scope")
@@ -301,6 +311,13 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 	if fixture.runtime.Status() != agent.AgentWorking || privateCalls.Load() != 1 {
 		t.Fatal("request did not suspend the active action")
 	}
+	assertSecretWorkRequirements(t, fixture, command, "TOKEN")
+	snapshot := fixture.runtime.Describe()
+	if snapshot.Work.OperationID != work.OperationID || snapshot.Work.TaskID != work.TaskID || snapshot.Work.StepID != work.StepID {
+		t.Fatal("secret wait lost the active operation work identity")
+	}
+	snapshot.Work.MissingRequirements[0].Name = "CHANGED"
+	assertSecretWorkRequirements(t, fixture, command, "TOKEN")
 	for _, message := range fixture.bus.history() {
 		if message.CorrelationID == command && (message.Type == controllerevents.ActionSucceeded || message.Type == controllerevents.CommandFailed) {
 			t.Fatal("action finished before receiving the requested secret")
@@ -311,6 +328,13 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 		t.Fatal(err)
 	}
 	fixture.deliver(t, delivery)
+	select {
+	case <-resumed:
+	case <-fixture.ctx.Done():
+		t.Fatal("installed secret did not wake the active action")
+	}
+	assertSecretWorkRequirements(t, fixture, command)
+	close(release)
 	result := fixture.outcome(t, command, controllerevents.ActionSucceeded)
 	var accepted actions.ActionOutput
 	var decoded output
@@ -345,6 +369,15 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 			payload, err := controllerevents.DecodeSecretSyncRequested(message)
 			if err != nil || payload.Request.ID != request.ID {
 				t.Fatal("cached secret lookup created another request")
+			}
+		}
+		if message.Type == controllerevents.AgentUpdated {
+			var snapshot agent.AgentSnapshot
+			if err := json.Unmarshal(message.Payload, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			if snapshot.Work != nil && (snapshot.Work.CommandID == public || snapshot.Work.CommandID == second) && len(snapshot.Work.MissingRequirements) != 0 {
+				t.Fatal("public work or cached secret reuse advertised a wait")
 			}
 		}
 	}
@@ -382,6 +415,7 @@ func TestAgentDynamicSecretWaitEndsOnCancellation(t *testing.T) {
 			fixture := startSecretAgentActions(t, time.Second, 100*time.Millisecond, executor)
 			command := fixture.command(t, "wait", `{}`)
 			request := fixture.request(t, "")
+			assertSecretWorkRequirements(t, fixture, command, "TOKEN")
 			if stopHost {
 				fixture.stop(t)
 			} else {
@@ -398,6 +432,9 @@ func TestAgentDynamicSecretWaitEndsOnCancellation(t *testing.T) {
 				}
 			case <-time.After(time.Second):
 				t.Fatal("canceled secret waiter did not return")
+			}
+			if snapshot := fixture.runtime.Describe(); snapshot.Work != nil {
+				t.Fatal("canceled execution retained a runtime secret requirement")
 			}
 			if stopHost {
 				return
@@ -425,9 +462,13 @@ func TestAgentDynamicSecretWaitEndsOnCancellation(t *testing.T) {
 	}
 }
 
-func (f *secretFixture) command(t *testing.T, name, input string) string {
+func (f *secretFixture) command(t *testing.T, name, input string, work ...messages.WorkContext) string {
 	t.Helper()
-	message, err := agentcommands.NewRunAction(f.runtime.ID(), actions.ActionCall{ActionName: name, Input: json.RawMessage(input)})
+	call := actions.ActionCall{ActionName: name, Input: json.RawMessage(input)}
+	if len(work) > 0 {
+		call.Work = work[0]
+	}
+	message, err := agentcommands.NewRunAction(f.runtime.ID(), call)
 	if err != nil {
 		t.Fatal(err)
 	}

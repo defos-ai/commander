@@ -2,6 +2,7 @@ import type {
   Operation, OperationArtifact, OperationContinuation, OperationNextAction,
   OperationPreflight, OperationQuestion, OperationTask,
 } from '../api/operation-types';
+import type { ActionRequirement } from '../api/types';
 import { useTranslation } from '../i18n';
 import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
 import { Button } from './Button';
@@ -18,16 +19,23 @@ export function isActiveOperation(status: string) {
 
 export function OperationSecretsNotice({ operation, onManageSecrets }: { operation: Operation; onManageSecrets?: () => void }) {
   const { t } = useTranslation();
-  if (!isActiveOperation(operation.status) || !operation.preflight || operation.preflight.ready) return null;
+  if (!isActiveOperation(operation.status)) return null;
   const scopes = new Set<string>();
-  for (const action of operation.preflight.actions ?? []) {
+  const addRequirements = (type: string | undefined, requirements?: ActionRequirement[] | null) => {
+    if (!type) return;
+    for (const requirement of requirements ?? []) {
+      if (requirement.kind === 'secret') scopes.add(`${type} / ${requirement.name}`);
+    }
+  };
+  for (const action of operation.preflight?.ready ? [] : operation.preflight?.actions ?? []) {
     if (action.ready_agent_ids?.length) continue;
     for (const agent of action.unavailable_agents ?? []) {
-      if (!agent.agent_type) continue;
-      for (const requirement of agent.missing_requirements ?? []) {
-        if (requirement.kind === 'secret') scopes.add(`${agent.agent_type} / ${requirement.name}`);
-      }
+      addRequirements(agent.agent_type, agent.missing_requirements);
     }
+  }
+  for (const task of operation.tasks ?? []) {
+    if (task.status !== 'running' || !task.deadline_at || Date.parse(task.deadline_at) <= Date.now()) continue;
+    addRequirements(task.agent_type, task.missing_requirements);
   }
   if (!scopes.size) return null;
   return <div className="notice operation-secrets" role="status">

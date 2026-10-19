@@ -136,7 +136,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tick:
 		m.frame++
-		return m, nextTick()
+		return m, tea.Batch(nextTick(), m.syncSecrets())
 	case tea.WindowSizeMsg:
 		m.width, m.height = max(24, msg.Width), max(12, msg.Height)
 		m.input.Width = max(12, m.width-8)

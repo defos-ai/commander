@@ -95,9 +95,17 @@ controller's task timeout or add automatic task retries. When the last waiter
 leaves, unused on-demand requests stop refreshing; already-published requests
 expire normally. Cached values remain usable only within their lease.
 
-Pending requests appear in the API and Admin Secrets page. Playground's automatic
-form currently follows preflight blockers; opening it for a running action's
-on-demand request is a separate integration step.
+While waiting, the agent reports `work.missing_requirements` with `kind: secret`
+and the requested name. API/MCP task reads attach these requirements only to the
+matching running task while its agent is live and its deadline has not passed.
+This is a current observation; it does not change saved task status or preflight.
+Playground opens the same masked form used for preflight blockers, and Admin
+shows the same **Manage secrets** notice. Values go directly to the API, outside
+chat and MCP. Saving a value does not clear the wait; installation does.
+
+Completed, cancelled, interrupted and expired work does not prompt for secrets.
+Pending synchronization records remain visible in API/Admin Secrets independently;
+they do not identify waiting work by themselves.
 
 ## Request and delivery tracking
 

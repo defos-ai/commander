@@ -56,6 +56,60 @@ func TestOperationNeedsSecrets(t *testing.T) {
 	}
 }
 
+func TestOperationNeedsRuntimeSecrets(t *testing.T) {
+	for _, test := range []struct {
+		name, operationStatus, taskStatus, agentType, kind, secretName string
+		want                                                           bool
+	}{
+		{"running", "running", "running", "builder-agent", "secret", "GITHUB_TOKEN", true},
+		{"queued", "running", "queued", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"succeeded", "planning", "succeeded", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"failed task", "planning", "failed", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"interrupted", "planning", "interrupted", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"cancelled task", "planning", "cancelled", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"completed operation", "completed", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"failed operation", "failed", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"cancelled operation", "cancelled", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"unknown operation", "unknown", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
+		{"missing scope", "running", "running", "", "secret", "GITHUB_TOKEN", false},
+		{"invalid scope", "running", "running", "../builder", "secret", "GITHUB_TOKEN", false},
+		{"invalid name", "running", "running", "builder-agent", "secret", "../TOKEN", false},
+		{"host configuration", "running", "running", "builder-agent", "configuration", "GITHUB_TOKEN", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload, err := json.Marshal(map[string]any{
+				"status": test.operationStatus,
+				"tasks": []map[string]any{{"status": test.taskStatus, "agent_type": test.agentType, "deadline_at": time.Now().Add(time.Minute),
+					"missing_requirements": []map[string]any{{"kind": test.kind, "name": test.secretName, "sensitive": true}}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var operation bridge.Operation
+			if err := json.Unmarshal(payload, &operation); err != nil {
+				t.Fatal(err)
+			}
+			for _, preflight := range []*bridge.Preflight{nil, {Ready: true}} {
+				operation.Preflight = preflight
+				if operation.NeedsSecrets() != test.want {
+					t.Fatalf("NeedsSecrets() = %v, want %v with preflight %+v", operation.NeedsSecrets(), test.want, preflight)
+				}
+			}
+		})
+	}
+}
+
+func TestOperationRuntimeSecretDeadline(t *testing.T) {
+	expired := time.Now().Add(-time.Second)
+	for _, deadline := range []*time.Time{nil, &expired} {
+		operation := runtimeSecretFormOperation("GITHUB_TOKEN")
+		operation.Tasks[0].DeadlineAt = deadline
+		if operation.NeedsSecrets() {
+			t.Fatal("runtime secret prompt survived a missing or expired observation deadline")
+		}
+	}
+}
+
 func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
 	var operation bridge.Operation
 	err := json.Unmarshal([]byte(`{"status":"waiting","preflight":{"actions":[
@@ -69,9 +123,18 @@ func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	deadline := time.Now().Add(time.Minute)
+	operation.Tasks = []bridge.Task{
+		{Status: "running", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: []actions.Requirement{
+			{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"},
+			{Kind: actions.SecretRequirement, Name: "RUNTIME_TOKEN"},
+		}},
+		{Status: "running", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "RUNTIME_TOKEN"}}},
+	}
 	want := []secrets.Key{
 		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "CODEX_API_KEY"},
 		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"},
+		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "RUNTIME_TOKEN"},
 		{Scope: secrets.Scope{AgentType: "spawner-agent"}, Name: "GITHUB_TOKEN"},
 	}
 	if got := operation.MissingSecrets(); !slices.Equal(got, want) {

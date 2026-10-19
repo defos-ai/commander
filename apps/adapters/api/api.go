@@ -67,7 +67,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterControllers(mux, config.ControllerStore)
 	endpoints.RegisterReports(mux, config.ReportStore)
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
-	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.Operations)
+	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.AgentStore, config.Operations)
 	endpoints.RegisterSecrets(mux, config.SecretService)
 	endpoints.RegisterSecretRequests(mux, config.SecretService, config.SecretRequestStore)
 	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {

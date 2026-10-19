@@ -19,8 +19,9 @@ or drag and zoom to explore. Artifact details offer image/text previews (up to
 Open **Agents → Manage secrets** to supply values requested by agents, or add
 secrets for an agent type. You can replace or delete saved secrets and set an
 optional expiration.
-Operations waiting for declared secrets show **Manage secrets** in their details
-and execution graph. Work resumes when all requirements are ready.
+Operations waiting for declared secrets or a running action's secret request show
+**Manage secrets** in their details and execution graph. Runtime requests retain
+the task's existing deadline and disappear after installation or execution ends.
 Values are write-only and are never saved in browser storage.
 
 Secret management requires `SECRETS_ENCRYPTION_KEY` on the API and participating

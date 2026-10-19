@@ -6,6 +6,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -54,6 +55,15 @@ func ToTaskResponses(tasks []operations.Task) []models.TaskResponse {
 		responses[i] = ToTaskResponse(task)
 	}
 	return responses
+}
+
+func ToTaskResponseWithRequirements(task operations.Task, record agents.Agent, now time.Time) models.TaskResponse {
+	response := ToTaskResponse(task)
+	if requirements := operations.AssessTaskRequirements(task, record, now); len(requirements) != 0 {
+		response.AgentType = string(record.Type)
+		response.MissingRequirements = ToActionRequirementResponses(requirements)
+	}
+	return response
 }
 
 func cloneTime(value *time.Time) *time.Time {

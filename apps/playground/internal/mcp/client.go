@@ -191,10 +191,13 @@ type AgentReadiness struct {
 }
 
 type Task struct {
-	ID           string `json:"id"`
-	Status       string `json:"status"`
-	ActionName   string `json:"action_name"`
-	Continuation *struct {
+	ID                  string                `json:"id"`
+	Status              string                `json:"status"`
+	ActionName          string                `json:"action_name"`
+	DeadlineAt          *time.Time            `json:"deadline_at"`
+	AgentType           string                `json:"agent_type"`
+	MissingRequirements []actions.Requirement `json:"missing_requirements"`
+	Continuation        *struct {
 		Status     string `json:"status"`
 		DecisionBy string `json:"decision_by"`
 		Version    uint64 `json:"version"`
@@ -233,26 +236,36 @@ func (o Operation) MissingSecrets() []secrets.Key {
 	if o.Status != "planning" && o.Status != "running" && o.Status != "waiting" {
 		return nil
 	}
-	if o.Preflight == nil || o.Preflight.Ready {
-		return nil
-	}
 	var missing []secrets.Key
 	seen := map[secrets.Key]bool{}
-	for _, action := range o.Preflight.Actions {
-		if len(action.ReadyAgentIDs) != 0 {
-			continue
-		}
-		for _, agent := range action.UnavailableAgents {
-			for _, requirement := range agent.MissingRequirements {
-				if requirement.Kind != actions.SecretRequirement {
-					continue
-				}
-				key := secrets.Key{Scope: secrets.Scope{AgentType: agent.AgentType}, Name: requirement.Name}
-				if key.Validate() == nil && !seen[key] {
-					seen[key] = true
-					missing = append(missing, key)
-				}
+	collect := func(agentType string, requirements []actions.Requirement) {
+		for _, requirement := range requirements {
+			if requirement.Kind != actions.SecretRequirement {
+				continue
 			}
+			key := secrets.Key{Scope: secrets.Scope{AgentType: agentType}, Name: requirement.Name}
+			if key.Validate() == nil && !seen[key] {
+				seen[key] = true
+				missing = append(missing, key)
+			}
+		}
+	}
+	if o.Preflight != nil && !o.Preflight.Ready {
+		for _, action := range o.Preflight.Actions {
+			if len(action.ReadyAgentIDs) != 0 {
+				continue
+			}
+			for _, agent := range action.UnavailableAgents {
+				collect(agent.AgentType, agent.MissingRequirements)
+			}
+		}
+	}
+	// MCP supplies requirements only for matching live work before the task's
+	// observation deadline. Finished and interrupted tasks cannot prompt here.
+	now := time.Now()
+	for _, task := range o.Tasks {
+		if task.Status == "running" && task.DeadlineAt != nil && now.Before(*task.DeadlineAt) {
+			collect(task.AgentType, task.MissingRequirements)
 		}
 	}
 	slices.SortFunc(missing, func(a, b secrets.Key) int {

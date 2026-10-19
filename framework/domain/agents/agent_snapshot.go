@@ -2,6 +2,7 @@ package agents
 
 import (
 	"encoding/json"
+	"slices"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
@@ -29,6 +30,8 @@ type Work struct {
 	StepID      string `json:"step_id,omitempty"`
 	ActionName  string `json:"action_name"`
 	CommandID   string `json:"command_id,omitempty"`
+	// MissingRequirements describes blockers encountered by this execution.
+	MissingRequirements []actionmodel.Requirement `json:"missing_requirements,omitempty"`
 }
 
 func (work *Work) Clone() *Work {
@@ -36,6 +39,7 @@ func (work *Work) Clone() *Work {
 		return nil
 	}
 	copy := *work
+	copy.MissingRequirements = slices.Clone(work.MissingRequirements)
 	return &copy
 }
 

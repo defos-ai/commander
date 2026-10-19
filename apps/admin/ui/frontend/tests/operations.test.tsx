@@ -33,6 +33,27 @@ function mockAPI(respond?: (url: string, options: RequestInit) => Response | Pro
 }
 
 describe('operations browser', () => {
+  it('reuses the secret notice for running work and clears it without a saved timestamp change', async () => {
+    let snapshot: Operation = { ...operation, status: 'running', preflight: { ready: true, version: 1, actions: [] }, tasks: [
+      { ...task, status: 'running', finished_at: undefined, result: undefined, agent_type: 'web-agent',
+        deadline_at: new Date(Date.now() + 60_000).toISOString(), missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
+    ] };
+    mockAPI(() => Response.json(snapshot));
+    const manage = vi.fn();
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={operation.id}
+      onSelect={vi.fn()} onManageSecrets={manage} />);
+
+    expect(await screen.findByText('Secrets needed')).toBeVisible();
+    expect(screen.getAllByText('web-agent / TOKEN')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
+    expect(manage).toHaveBeenCalledTimes(1);
+
+    snapshot = { ...snapshot, tasks: [{ ...snapshot.tasks![0], missing_requirements: [] }] };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {});
+    expect(screen.queryByText('Secrets needed')).not.toBeInTheDocument();
+  });
+
   it('shows managed secrets in details and graph, then clears the notice when readiness recovers', async () => {
     let snapshot = secretWait;
     const fetch = mockAPI(url => url.endsWith('/graph')

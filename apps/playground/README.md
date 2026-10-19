@@ -24,11 +24,14 @@ inside the container; the spawner needs no Docker socket. See
 requirements. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
-When an operation needs managed secrets, Playground opens a masked form. Enter
-the values there; **Tab** moves between fields and **Enter** advances or saves.
+When operation preflight or a running action needs managed secrets, Playground
+opens the same masked form. Enter the values there; **Tab** moves between fields
+and **Enter** advances or saves.
 **Esc** postpones it; `/secrets` reopens it. Values go directly to the API,
 outside chat and the model. Admin's **Agents → Secrets** page remains available.
-Work waits for agents to report ready after saving.
+Saving a value does not confirm installation: the prompt clears when the agent
+reports that the requirement is satisfied. Running actions keep their existing
+task timeout while waiting; interrupted tasks require outcome review.
 Use `/credentials` for the API login and MCP token, or use another terminal:
 
 ```sh

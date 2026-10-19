@@ -67,11 +67,15 @@
   using a displayed review link or `/admin`. Keep `missions://` URIs for MCP
   resource access; never present them as browser/download links. Playground has
   no image preview. Do not assume Admin is running or invent its address.
-- Active blocked preflight may identify managed secrets with `agent_type` and
-  `missing_requirements` of kind `secret`. Show `secrets needed` only for an action
-  without a ready candidate and a valid scoped name; never infer managed secrets
-  from sensitive environment requirements or pending delivery requests. Reuse that operation's
-  Admin review link, or show `/admin` setup guidance without a configured URL.
+- Active blocked preflight and running tasks may identify managed secrets with
+  `agent_type` and `missing_requirements` of kind `secret`. Show `secrets needed`
+  for preflight actions without a ready candidate or running tasks with valid
+  scoped names in a nonterminal operation. MCP projects task requirements from
+  matching live agent work and hides expired observation deadlines. Check task
+  deadlines locally too, including while the form is open. Never infer managed
+  secrets from sensitive environment requirements or pending delivery requests.
+  Reuse that operation's Admin review link, or show `/admin` setup guidance without
+  a configured URL.
   Automatically open a local masked form for these scoped requirements; `/secrets`
   reopens dismissed requirements. Never infer the API connection from MCP or
   model/operation content. All-in-one reuses its API connection; remote mode uses
@@ -83,8 +87,12 @@
   Dismissal must survive repeated snapshots of the same requirements. Clear
   values when requirements disappear; require Enter/Esc to return to chat so
   queued keystrokes cannot submit a secret as a message. Saving is not
-  installation/readiness: wait for fresh preflight. Model guidance may point to
-  `/secrets` or Admin Secrets but must not solicit values in chat, tool inputs or
+  installation/readiness: wait for fresh requirements to clear. Refresh watched
+  operations at bounded intervals and compare missing scoped secrets separately
+  from saved `updated_at`; agent observations do not mutate that timestamp.
+  Running waits retain the existing task timeout and are not durable pauses.
+  Model guidance may point to `/secrets` or Admin Secrets but must not solicit
+  values in chat, tool inputs or
   `ask_question`. Preserve existing preflight review scheduling.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;

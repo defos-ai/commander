@@ -64,6 +64,7 @@ export interface AgentWork {
   step_id?: string;
   action_name: string;
   command_id?: string;
+  missing_requirements?: ActionRequirement[] | null;
 }
 
 export interface Controller {

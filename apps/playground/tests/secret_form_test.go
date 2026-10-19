@@ -22,6 +22,12 @@ import (
 )
 
 func TestSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T) {
+	for _, source := range []string{"preflight", "running task"} {
+		t.Run(source, func(t *testing.T) { testSecretFormSavesOutsideChatAndPreservesDraft(t, source == "running task") })
+	}
+}
+
+func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	const password = "private-api-login-password"
@@ -61,6 +67,9 @@ func TestSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T) {
 	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: password}}, password, values["GITHUB_TOKEN"], values["OPENAI_API_KEY"])
 	defer u.model.Close()
 	op := secretFormOperation("GITHUB_TOKEN", "OPENAI_API_KEY")
+	if runtime {
+		op = runtimeSecretFormOperation("GITHUB_TOKEN", "OPENAI_API_KEY")
+	}
 	publish(op)
 	u.text("/watch " + op.ID)
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
@@ -91,13 +100,25 @@ func TestSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T) {
 	u.text("Normal message after secret entry")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("chat after secret form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
-	op.Status, op.UpdatedAt, op.Preflight.Ready = "planning", op.UpdatedAt.Add(time.Second), true
-	op.Preflight.Version++
+	if runtime {
+		// Installation updates the agent observation without changing the saved
+		// operation timestamp. The watcher must still clear the local prompt.
+		op.Tasks[0].MissingRequirements = nil
+	} else {
+		op.Status, op.UpdatedAt, op.Preflight.Ready = "planning", op.UpdatedAt.Add(time.Second), true
+		op.Preflight.Version++
+	}
 	publish(op)
 	u.wait("fresh agent readiness", func(view string) bool { return !strings.Contains(view, "secrets needed") })
 }
 
 func TestSecretFormDismissalAndManualReopen(t *testing.T) {
+	for _, source := range []string{"preflight", "running task"} {
+		t.Run(source, func(t *testing.T) { testSecretFormDismissalAndManualReopen(t, source == "running task") })
+	}
+}
+
+func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	var writes atomic.Int32
@@ -111,19 +132,32 @@ func TestSecretFormDismissalAndManualReopen(t *testing.T) {
 	u, publish, reads := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "discarded-private-token")
 	defer u.model.Close()
 	op := secretFormOperation("GITHUB_TOKEN")
+	if runtime {
+		op = runtimeSecretFormOperation()
+	}
 	publish(op)
 	u.text("/watch " + op.ID)
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if runtime {
+		u.wait("running task before secret request", func(string) bool { return reads.Load() >= 1 })
+		op.Tasks[0].MissingRequirements = []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}
+		publish(op)
+	}
 	u.wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
 	u.text("discarded-private-token")
 	u.key(tea.KeyMsg{Type: tea.KeyEsc})
-	op.UpdatedAt = op.UpdatedAt.Add(time.Second)
-	op.Preflight.Version++
+	if !runtime {
+		op.UpdatedAt = op.UpdatedAt.Add(time.Second)
+		op.Preflight.Version++
+	}
 	publish(op)
 	target := reads.Load() + 2
 	u.wait("repeated requirement snapshots", func(string) bool { return reads.Load() >= target })
 	if strings.Contains(u.model.View(), "Agent secrets") || writes.Load() != 0 {
 		t.Fatal("dismissed requirement reopened or saved itself")
+	}
+	if runtime && strings.Contains(u.model.View(), "Operation reviewed") {
+		t.Fatal("runtime requirement snapshots triggered model review")
 	}
 	u.text("/secrets")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
@@ -131,8 +165,13 @@ func TestSecretFormDismissalAndManualReopen(t *testing.T) {
 	if strings.Contains(u.model.View(), strings.Repeat("•", len("discarded-private-token"))) {
 		t.Fatal("dismissed value was retained when the form reopened")
 	}
-	op.UpdatedAt, op.Preflight.Ready = op.UpdatedAt.Add(time.Second), true
-	op.Preflight.Version++
+	if runtime {
+		op.Tasks[0].Status = "succeeded"
+		op.Status, op.UpdatedAt = "completed", op.UpdatedAt.Add(time.Second)
+	} else {
+		op.UpdatedAt, op.Preflight.Ready = op.UpdatedAt.Add(time.Second), true
+		op.Preflight.Version++
+	}
 	publish(op)
 	u.wait("requirement cleared while editing", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
@@ -154,7 +193,7 @@ func TestSecretFormDoesNotOverwriteAvailableValues(t *testing.T) {
 	defer api.Close()
 	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}})
 	defer u.model.Close()
-	op := secretFormOperation("GITHUB_TOKEN")
+	op := runtimeSecretFormOperation("GITHUB_TOKEN")
 	publish(op)
 	u.text("/watch " + op.ID)
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
@@ -162,6 +201,35 @@ func TestSecretFormDoesNotOverwriteAvailableValues(t *testing.T) {
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	if writes.Load() != 0 || !strings.Contains(u.model.View(), "secrets needed") {
 		t.Fatal("available metadata caused an overwrite or claimed agent readiness")
+	}
+}
+
+func TestSecretFormClearsExpiredTaskWait(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var writes atomic.Int32
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writes.Add(1)
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer api.Close()
+	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "expired-private-token")
+	defer u.model.Close()
+	op := runtimeSecretFormOperation("GITHUB_TOKEN")
+	deadline := time.Now().Add(time.Second)
+	op.Tasks[0].DeadlineAt = &deadline
+	publish(op)
+	u.text("/watch " + op.ID)
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("secret field before task timeout", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.text("expired-private-token")
+	// The server keeps returning this same snapshot, including its old wait.
+	u.wait("expired task wait cleared", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if writes.Load() != 0 || strings.Contains(u.model.View(), "secrets needed") {
+		t.Fatal("expired runtime wait prompted for or saved a value")
 	}
 }
 
@@ -272,6 +340,17 @@ func secretFormOperation(names ...string) bridge.Operation {
 		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
 	}
 	return bridge.Operation{ID: "secret-form-operation", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Version: 1, Actions: []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: requirements}}}}}}
+}
+
+func runtimeSecretFormOperation(names ...string) bridge.Operation {
+	var requirements []actions.Requirement
+	for _, name := range names {
+		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
+	}
+	deadline := time.Now().Add(time.Minute)
+	return bridge.Operation{ID: "secret-form-operation", Status: "running", UpdatedAt: time.Now(), Tasks: []bridge.Task{{
+		ID: "running-task", Status: "running", ActionName: "build", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: requirements,
+	}}}
 }
 
 func writeSecretFormMetadata(w http.ResponseWriter, name string) {

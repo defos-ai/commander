@@ -630,7 +630,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 				if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
 					return nil, err
 				}
-				wantCursor, wantWait := eventCursor, 25
+				wantCursor, wantWait := eventCursor, 2
 				if eventPages.Add(1) == 1 {
 					wantCursor, wantWait = "", 0
 				}
@@ -658,7 +658,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 		if !strings.Contains(last, `"preflight":`) {
 			t.Errorf("model did not receive preflight: %s", last)
 		}
-		for _, guidance := range []string{"Admin's Secrets page", "Do not ask for secret values in chat, tool inputs or ask_question", "wait for a ready preflight update"} {
+		for _, guidance := range []string{"Admin's Secrets page", "Do not ask for secret values in chat, tool inputs or ask_question", "wait for a ready preflight update", "for running-task requirements to clear", "Runtime secret waits keep the existing task timeout"} {
 			if !strings.Contains(body.Messages[0].Content, guidance) {
 				t.Errorf("model is missing managed secret guidance: %s", guidance)
 			}

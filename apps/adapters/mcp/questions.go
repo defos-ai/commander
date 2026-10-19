@@ -3,18 +3,28 @@ package missionsmcp
 import (
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 type operationDetail struct {
 	operations.Operation
+	Tasks              []taskDetail         `json:"tasks"`
 	LastQuestion       *operations.Question `json:"last_question"`
 	RemainingQuestions int                  `json:"remaining_questions"`
 }
 
-func describeOperation(operation operations.Operation) operationDetail {
-	question, remaining := pendingQuestions(operation, time.Now())
-	return operationDetail{Operation: operation, LastQuestion: question, RemainingQuestions: remaining}
+func describeOperation(operation operations.Operation, records map[string]agents.Agent, now time.Time) operationDetail {
+	question, remaining := pendingQuestions(operation, now)
+	tasks := make([]taskDetail, len(operation.Tasks))
+	for i, task := range operation.Tasks {
+		var record agents.Agent
+		if !operation.Status.Terminal() && task.OperationID == operation.ID {
+			record = records[task.AgentID]
+		}
+		tasks[i] = describeTask(task, record, now)
+	}
+	return operationDetail{Operation: operation, Tasks: tasks, LastQuestion: question, RemainingQuestions: remaining}
 }
 
 // Remaining excludes the displayed question. A passed deadline also hides the

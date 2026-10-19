@@ -55,7 +55,7 @@ function isContinuation(value: unknown): value is OperationContinuation {
 function isTask(value: unknown): value is OperationTask {
   return isObject(value) && isIdentifier(value.id) && typeof value.operation_id === 'string' &&
     isOptionalString(value.parent_task_id) && isOptionalString(value.step_id) &&
-    typeof value.agent_id === 'string' && typeof value.action_name === 'string' &&
+    typeof value.agent_id === 'string' && typeof value.action_name === 'string' && hasScopedRequirements(value) &&
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
     isDate(value.started_at) && isOptionalDate(value.finished_at) &&
@@ -80,9 +80,15 @@ function isEvent(value: unknown): value is OperationEvent {
 
 function isAgentReadiness(value: unknown): value is OperationAgentReadiness {
   return isObject(value) && typeof value.agent_id === 'string' && typeof value.reason === 'string' &&
+    hasScopedRequirements(value);
+}
+
+function hasScopedRequirements(value: Record<string, unknown>): boolean {
+  return (
     (value.agent_type === undefined || (typeof value.agent_type === 'string' && value.agent_type.length <= 63 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value.agent_type))) &&
     (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isActionRequirement)) &&
-    (!value.missing_requirements?.some(requirement => requirement.kind === 'secret') || typeof value.agent_type === 'string');
+    (!value.missing_requirements?.some(requirement => requirement.kind === 'secret') || typeof value.agent_type === 'string')
+  );
 }
 
 function isActionReadiness(value: unknown): value is OperationActionReadiness {

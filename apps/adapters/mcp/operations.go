@@ -10,6 +10,7 @@ import (
 	"time"
 
 	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -112,25 +113,43 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Operations []operationSummary `json:"operations"`
 			}{summaries}, err
 		})
-	addTool(server, "get_operation", "Read status, preflight, tasks, results, continuations and question history. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
+	addTool(server, "get_operation", "Read status, preflight, tasks, results, continuations and question history. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
 			operation, err := config.OperationStore.Get(ctx, request.OperationID)
-			return describeOperation(operation), err
+			var records map[string]agents.Agent
+			if err == nil && !operation.Status.Terminal() {
+				records, err = readTaskAgents(ctx, config.AgentStore)
+			}
+			return describeOperation(operation, records, time.Now().UTC()), err
 		})
 	addTool(server, "operation_tasks", "Read task summaries in assignment order, up to limit (default 100, max 1000). Pass next_cursor as cursor for the next page; an empty page keeps the cursor unchanged. Use get_task for input, results and proposed next actions.", operationPageSchema(false),
 		func(ctx context.Context, request OperationPageRequest) (OperationTasksResult, error) {
 			tasks, err := config.OperationStore.ListTasks(ctx, request.OperationID, request.Cursor, request.pageLimit())
+			var records map[string]agents.Agent
+			if err == nil && len(tasks) != 0 {
+				records, err = readOperationTaskAgents(ctx, config, request.OperationID)
+			}
+			now := time.Now().UTC()
 			summaries := make([]taskSummary, 0, len(tasks))
 			nextCursor := request.Cursor
 			for _, task := range tasks {
-				summaries = append(summaries, summarizeTask(task))
+				var record agents.Agent
+				if task.OperationID == request.OperationID {
+					record = records[task.AgentID]
+				}
+				summaries = append(summaries, summarizeTask(task, record, now))
 				nextCursor = task.ID
 			}
 			return OperationTasksResult{Tasks: summaries, NextCursor: nextCursor}, err
 		})
 	addTool(server, "get_task", "Read one task's input, result, artifacts, error and full continuation. Requires both operation_id and task_id; use the continuation version when resolving its decision.", objectSchema(map[string]any{"operation_id": stringProperty, "task_id": stringProperty}, "operation_id", "task_id"),
-		func(ctx context.Context, request TaskRequest) (operations.Task, error) {
-			return config.OperationStore.GetTask(ctx, request.OperationID, request.TaskID)
+		func(ctx context.Context, request TaskRequest) (taskDetail, error) {
+			task, err := config.OperationStore.GetTask(ctx, request.OperationID, request.TaskID)
+			var records map[string]agents.Agent
+			if err == nil && task.OperationID == request.OperationID {
+				records, err = readOperationTaskAgents(ctx, config, request.OperationID)
+			}
+			return describeTask(task, records[task.AgentID], time.Now().UTC()), err
 		})
 	addTool(server, "get_report", "Read a completed operation's report by operation_id. Use list_operations to find the ID; no operator question is needed.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {

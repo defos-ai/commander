@@ -66,23 +66,31 @@ type continuationSummary struct {
 }
 
 type taskSummary struct {
-	ID           string                `json:"id"`
-	ParentTaskID string                `json:"parent_task_id,omitempty"`
-	StepID       string                `json:"step_id,omitempty"`
-	AgentID      string                `json:"agent_id"`
-	ActionName   string                `json:"action_name"`
-	Status       operations.TaskStatus `json:"status"`
-	Continuation *continuationSummary  `json:"continuation,omitempty"`
-	Error        string                `json:"error,omitempty"`
-	StartedAt    time.Time             `json:"started_at"`
-	FinishedAt   *time.Time            `json:"finished_at,omitempty"`
+	ID                  string                `json:"id"`
+	ParentTaskID        string                `json:"parent_task_id,omitempty"`
+	StepID              string                `json:"step_id,omitempty"`
+	AgentID             string                `json:"agent_id"`
+	AgentType           string                `json:"agent_type,omitempty"`
+	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
+	ActionName          string                `json:"action_name"`
+	DeadlineAt          *time.Time            `json:"deadline_at,omitempty"`
+	Status              operations.TaskStatus `json:"status"`
+	Continuation        *continuationSummary  `json:"continuation,omitempty"`
+	Error               string                `json:"error,omitempty"`
+	StartedAt           time.Time             `json:"started_at"`
+	FinishedAt          *time.Time            `json:"finished_at,omitempty"`
 }
 
-func summarizeTask(task operations.Task) taskSummary {
+func summarizeTask(task operations.Task, record agents.Agent, now time.Time) taskSummary {
 	summary := taskSummary{
 		ID: task.ID, ParentTaskID: task.ParentTaskID, StepID: task.StepID,
 		AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
-		Error: task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+		DeadlineAt: task.DeadlineAt,
+		Error:      task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+	}
+	if requirements := operations.AssessTaskRequirements(task, record, now); len(requirements) != 0 {
+		summary.AgentType = string(record.Type)
+		summary.MissingRequirements = requirements
 	}
 	if c := task.Continuation; c != nil {
 		summary.Continuation = &continuationSummary{Status: c.Status, DecisionBy: c.DecisionBy, Version: c.Version}

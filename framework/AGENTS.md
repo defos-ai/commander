@@ -142,6 +142,13 @@
   host cancellation. Wake waiters directly on installation, independently of
   rediscovery and the action gate. Stop refreshing unused dynamic requests;
   preserve installation acknowledgement retries and finite cached leases.
+  Report active runtime waits through the existing work snapshot's
+  `MissingRequirements`, using the same requirement shape as discovery. Keep
+  counts local to each execution, independent of the shared secret delivery/cache.
+  Clear evidence on installation, cancellation and execution end. API/MCP task
+  reads use `operations.AssessTaskRequirements` to match live work to its saved
+  assignment and deadline; this projection does not change task state, suspend
+  timeouts, or authorize retries. Static action readiness remains unchanged.
 - Controller secret synchronization runs in the existing owner loop with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any

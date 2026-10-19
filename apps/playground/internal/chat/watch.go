@@ -4,18 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 )
 
 func (e *Engine) watch(id string) {
 	var cursor string
 	var updatedAt time.Time
+	var missing []secrets.Key
 	first, failed := true, false
 	for e.ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(e.ctx, 40*time.Second)
-		waitSeconds := 25
+		// Agent-reported waits can change without a saved operation event.
+		waitSeconds := 2
 		if first {
 			waitSeconds = 0
 		}
@@ -37,7 +41,8 @@ func (e *Engine) watch(id string) {
 			var operation bridge.Operation
 			operation, err = e.commander.Operation(ctx, id)
 			if err == nil {
-				if first || !operation.UpdatedAt.Equal(updatedAt) || failed {
+				currentMissing := operation.MissingSecrets()
+				if first || !operation.UpdatedAt.Equal(updatedAt) || !slices.Equal(currentMissing, missing) || failed {
 					select {
 					case e.updates <- operation:
 					case <-e.ctx.Done():
@@ -46,6 +51,7 @@ func (e *Engine) watch(id string) {
 					}
 				}
 				updatedAt = operation.UpdatedAt
+				missing = currentMissing
 				first = false
 				if failed {
 					e.emit(Event{Kind: "success", Text: "Operation updates resumed: " + id})

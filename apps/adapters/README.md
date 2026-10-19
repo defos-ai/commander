@@ -66,6 +66,13 @@ See [preflight](../../docs/abstractions.md#discovery-and-preflight) and
 [continuations](../../docs/abstractions.md#next-actions-and-continuations) for the
 decision rules. Finished operations are read-only; new work needs a new operation.
 
+A running task may expose `agent_type` and `missing_requirements` of kind `secret`
+when its assigned agent requests a secret during execution. These names reflect
+live matching work, separate from mission preflight. Use Playground's masked form
+or Admin Secrets to supply values; never put them in chat, tools or questions.
+The task remains running with its existing deadline. Saved secret values do not
+confirm delivery; refresh the operation to observe the wait clearing.
+
 ### Queries and artifacts
 
 Use `list_agents` / `list_actions` for discovery, `describe_agent` for readiness

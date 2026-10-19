@@ -49,6 +49,10 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["decision_by"].Enum = []any{"code", "model", "user"}
 		case "Task", "GraphTask":
 			schema.Properties["status"].Enum = []any{"queued", "running", "succeeded", "failed", "cancelled", "interrupted"}
+			if model.name == "Task" {
+				schema.Properties["agent_type"].Description = "Registered type of the assigned agent reporting this live execution wait; present only with missing_requirements."
+				schema.Properties["missing_requirements"].Description = "Current secret names reported by matching live running work before its saved deadline. Values are never included. These read-only requirements may change without updated_at changing; they neither alter mission preflight nor extend the task deadline."
+			}
 		case "Question":
 			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
 		case "Operation", "Event", "OperationGraph":
@@ -93,12 +97,12 @@ func openAPIOperationPaths(paths map[string]any) {
 	}{
 		{
 			path: root, id: "listOperations", summary: "List operations",
-			description: "Returns all full saved operation records without pagination, ordered by created_at descending, then ID ascending for ties.",
+			description: "Returns all full saved operation records without pagination, ordered by created_at descending, then ID ascending for ties. Active running tasks may include live agent_type and missing_requirements for their exact execution; this read-only observation does not extend deadlines.",
 			schema:      openAPIItems("Operation"),
 		},
 		{
 			path: operation, id: "getOperation", summary: "Get an operation",
-			description: "Returns the full saved operation, including its mission, preflight assessment, tasks, questions, output and events.",
+			description: "Returns the full saved operation, including its mission, preflight assessment, tasks, questions, output and events. Active running tasks may include live agent_type and missing_requirements for their exact execution; this read-only observation does not extend deadlines.",
 			schema:      endpoints.OpenAPIRef("Operation"), parameters: []any{openAPIUUIDParameter("operation_id")},
 			invalid: "invalid_operation_id", missing: "operation_not_found",
 		},

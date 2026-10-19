@@ -31,6 +31,10 @@ Find typed payloads under [`clients`](../clients/), grouped by recipient. The
 [`Message`](message.go) envelope carries identity, correlation, routing and time.
 Agent snapshots describe readiness and current work; action results carry
 structured output and artifact metadata, never file bytes.
+An executing work snapshot may include `missing_requirements`, using discovery's
+requirement shape. These are execution-scoped observations, not action readiness
+changes or secret values; match the saved command and work identity before
+presenting them as a task's current wait.
 
 Adapter requests include a deadline. Controller-to-agent commands carry
 `expires_at`, the latest time new work can start. Cached outcomes remain

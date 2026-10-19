@@ -117,10 +117,11 @@ func (r *secretRuntime) start(ctx context.Context) {
 	r.service = ctx
 }
 
-func (r *secretRuntime) request(ctx, execution context.Context, name string) ([]byte, error) {
-	if r == nil || execution == nil {
+func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, name string) ([]byte, error) {
+	if r == nil || waits == nil {
 		return nil, action.ErrSecretUnavailable
 	}
+	execution := waits.context
 	if err := secretmodel.ValidateName(name); err != nil {
 		return nil, action.ErrSecretUnavailable
 	}
@@ -154,6 +155,12 @@ func (r *secretRuntime) request(ctx, execution context.Context, name string) ([]
 		entry.waiters--
 		r.mu.Unlock()
 	}()
+	// Publishing a snapshot reads the secret cache; release its mutex first.
+	done, err := waits.begin(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	r.notify()
 	for {
 		r.mu.Lock()
@@ -232,7 +239,7 @@ func (a *Agent) missingSecrets(definition actionmodel.Action) bool {
 type scopedSecrets struct {
 	runtime   *secretRuntime
 	names     []string
-	execution context.Context
+	execution *workSecretWaits
 }
 
 func (provider scopedSecrets) Secret(name string) ([]byte, error) {
@@ -246,11 +253,8 @@ func (provider scopedSecrets) RequestSecret(ctx context.Context, name string) ([
 	return provider.runtime.request(ctx, provider.execution, name)
 }
 
-func (a *Agent) secretContext(ctx context.Context, definition actionmodel.Action, requesting bool) context.Context {
-	provider := scopedSecrets{runtime: a.secrets, names: slices.Clone(definition.RequiredSecrets)}
-	if requesting {
-		provider.execution = ctx
-	}
+func (a *Agent) secretContext(ctx context.Context, definition actionmodel.Action, waits *workSecretWaits) context.Context {
+	provider := scopedSecrets{runtime: a.secrets, names: slices.Clone(definition.RequiredSecrets), execution: waits}
 	return action.WithSecrets(ctx, provider)
 }
 

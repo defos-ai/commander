@@ -204,7 +204,7 @@ func (a *Agent) discoverActions(ctx context.Context, scope *environment.Discover
 		if discoveryErr = ctx.Err(); discoveryErr != nil {
 			break
 		}
-		status, err := t.Discover(a.secretContext(ctx, t.Action(), false), a.config.Environment, scope.Clone())
+		status, err := t.Discover(a.secretContext(ctx, t.Action(), nil), a.config.Environment, scope.Clone())
 		if errors.Is(err, action.ErrSecretUnavailable) && a.missingSecrets(t.Action()) {
 			// Missing managed values are an action blocker. Keep serving so the
 			// synchronization request can obtain them and rediscover this action.
@@ -290,9 +290,18 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 				input = json.RawMessage(`{}`)
 			}
 			executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
-			executionContext, endExecution := context.WithCancel(executionContext)
+			executionContext, cancelExecution := context.WithCancel(executionContext)
+			var waits *workSecretWaits
+			if fromServer {
+				waits = &workSecretWaits{agent: a, context: executionContext, commandID: commandID,
+					announce: announce, counts: make(map[string]int)}
+			}
+			endExecution := func() {
+				cancelExecution()
+				waits.finish()
+			}
 			defer endExecution()
-			result, err := t.Run(a.secretContext(executionContext, description, fromServer), input)
+			result, err := t.Run(a.secretContext(executionContext, description, waits), input)
 			endExecution()
 			if err != nil {
 				return ActionOutput{}, err
