@@ -23,8 +23,9 @@ capabilities, not live readiness or complete mission coverage. The catalog is no
 installation allowlist; an operator must trust any selected package author.
 See the [catalog guide](../catalog/README.md).
 
-Private entries pass schema validation, but the current metadata client and spawner
-remain anonymous. Private installation is planned next: the spawner will resolve
+Private entries pass schema validation. The package downloader supports explicit
+per-call tokens, while the shared metadata client and spawner host remain anonymous.
+Private installation is planned next: the spawner will resolve
 private `stable` references and download packages, using its environment
 `GITHUB_TOKEN` first, then a managed secret scoped to `spawner-agent`. Missing tokens
 will use the existing Admin secret exchange; public installations will remain
@@ -106,8 +107,9 @@ run directly; Docker images supply their own entrypoint.
 
 The resolver accepts manifests up to 64 KiB and native downloads up to 512 MiB,
 with 30-second and five-minute deadlines respectively. YAML aliases and anchors
-are unsupported. Downloads stay on HTTPS GitHub release hosts and use no
-deployment credentials or environment proxies.
+are unsupported. Downloads stay on HTTPS GitHub release hosts without environment
+proxies. Private assets use an explicit token only on initial GitHub API requests;
+redirects never carry credentials.
 
 The package advertises only platforms it actually publishes. An unavailable
 mode or platform is an explicit error. The spawner does not build source or run
@@ -187,7 +189,17 @@ Verify downloaded bytes before using or caching them; an incomplete download
 must not become an executable. Checksums pin the downloaded content to the
 manifest, not the trustworthiness of its author. Package sources must be trusted
 by the operator. Fetching metadata or binaries must not forward deployment
-credentials to the download host or its redirects.
+credentials beyond explicitly authenticated GitHub API requests or into redirects.
+
+For authenticated downloads, attach a caller-owned token with
+`packages.WithGitHubToken(ctx, token)` from the spawner's `packages` package, and
+use that context for both `Resolve` and `DownloadNative`. The downloader reads
+the exact release tag through GitHub's API, checks it is published and not a
+prerelease, selects the asset by name, and downloads its content by ID. It ignores
+asset URLs from the response. Metadata is limited to 2 MiB and 30 seconds; native
+checksum verification is unchanged. Clear the token after the calls finish.
+Neither the resolver nor the returned package retains credentials. The caller
+owns token acquisition; environment and managed-secret integration come next.
 
 Deployment selects the execution mode explicitly:
 

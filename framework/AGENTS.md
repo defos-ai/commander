@@ -104,8 +104,9 @@
   [`catalog/agents.yaml`](../catalog/agents.yaml); runtime readers fetch a configured
   remote source without requiring a checkout. Catalog entries require repository
   `visibility: public | private`; this describes access, not trust or image
-  visibility. Metadata and package download clients currently remain anonymous;
-  private authentication is a separate integration step. Catalog entries support discovery,
+  visibility. The shared metadata client remains anonymous. Spawner's package
+  downloader supports explicit per-call authentication; private catalog integration
+  remains separate. Catalog entries support discovery,
   not an enforced installation allowlist. Resolve `stable` from the repository's
   promoted root GitHub Latest release, require a stable semantic version and map
   module references to that version's module tag. Never guess or fall back to

@@ -70,9 +70,17 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 - `packages/resolver.go` uses a dedicated HTTP client. The default transport does
   not inherit proxies, cookies or credentials. Injected transports are trusted
-  deployment configuration and must not add credentials. Redirects require HTTPS
+  deployment configuration and must not add credentials. `packages.WithGitHubToken`
+  supplies a caller-owned token for one download context; keep its bytes intact
+  until downloads finish, then clear them. Never retain it in the resolver,
+  package metadata, launch records or child environment. Authenticated downloads
+  use GitHub's fixed API endpoints to select a named asset from the exact published
+  release; ignore URLs in metadata. Only initial `api.github.com` requests carry
+  authorization. All redirects strip credentials and require HTTPS
   on the explicit GitHub release host list; do not log signed redirect URLs or
-  raw HTTP errors/bodies. Preserve context cancellation in errors.
+  raw HTTP errors/bodies or downloaded manifest parser details. Preserve context
+  cancellation in errors. Agent/CLI token acquisition is a separate integration;
+  the resolver never reads environment variables or requests managed secrets.
 - Bound manifest size/time and executable size/time. `DownloadNative` writes into
   a unique private child directory under the caller's directory. Files remain
   non-executable until their checksum matches and all writes have succeeded.

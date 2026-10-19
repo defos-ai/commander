@@ -33,7 +33,7 @@ func (r *Resolver) DownloadNative(ctx context.Context, pkg Package, goos, goarch
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	response, err := r.get(ctx, assetURL(ref, asset.Asset))
+	response, err := r.getAsset(ctx, ref, asset.Asset)
 	if err != nil {
 		return "", err
 	}

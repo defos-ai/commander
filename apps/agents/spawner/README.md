@@ -119,8 +119,10 @@ the manifest; it does not establish whether the program is safe to run.
 
 ## Current scope
 
-The host supports public GitHub releases and public Docker images. Private
-packages and moving tags such as `stable` are not implemented.
+The host supports public GitHub releases and public Docker images. The package
+downloader supports explicit, per-call GitHub authentication; connecting it to
+private catalog entries and secret prompts is the next step. Private installation
+through chat/CLI and moving tags such as `stable` are not available yet.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.
 

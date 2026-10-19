@@ -25,7 +25,8 @@ type Resolver struct {
 
 // NewResolver uses a dedicated transport without environment proxies or cookies.
 // A supplied transport is trusted deployment configuration (for example, custom
-// TLS roots); it must not add credentials to these public download requests.
+// TLS roots); it must not add credentials. Private requests receive only the
+// token explicitly attached to their context, and only on api.github.com.
 func NewResolver(transport http.RoundTripper) *Resolver {
 	if transport == nil {
 		transport = &http.Transport{
@@ -59,7 +60,7 @@ func (r *Resolver) Resolve(ctx context.Context, reference string) (Package, erro
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	response, err := r.get(ctx, assetURL(ref, "agent.yaml"))
+	response, err := r.getAsset(ctx, ref, "agent.yaml")
 	if err != nil {
 		return Package{}, err
 	}
@@ -68,9 +69,12 @@ func (r *Resolver) Resolve(ctx context.Context, reference string) (Package, erro
 	if err != nil {
 		return Package{}, downloadError(ctx, "read package manifest")
 	}
+	if err := ctx.Err(); err != nil {
+		return Package{}, err
+	}
 	parsed, err := manifest.Parse(data, ref.Version)
 	if err != nil {
-		return Package{}, err
+		return Package{}, errors.New("invalid package manifest")
 	}
 	return Package{Reference: ref, Manifest: parsed}, nil
 }
@@ -83,11 +87,15 @@ func (r *Resolver) get(ctx context.Context, target string) (*http.Response, erro
 	if err := validateDownloadURL(request.URL); err != nil {
 		return nil, err
 	}
+	return r.do(request)
+}
+
+func (r *Resolver) do(request *http.Request) (*http.Response, error) {
 	request.Header.Set("User-Agent", "Commander-Spawner")
 	response, err := r.client.Do(request)
 	if err != nil {
 		// http.Client errors include redirect URLs and possibly signed queries.
-		return nil, downloadError(ctx, "download package asset")
+		return nil, downloadError(request.Context(), "download package asset")
 	}
 	if response.StatusCode != http.StatusOK {
 		response.Body.Close()
