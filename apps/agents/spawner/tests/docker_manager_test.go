@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/containers"
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -30,9 +30,9 @@ const dockerFixtureImage = "ghcr.io/defos-ai/fixture-agent@sha256:aaaaaaaaaaaaaa
 
 type fakeDockerEngine struct {
 	mu        sync.Mutex
-	current   map[string]containers.Container
-	created   chan containers.Spec
-	onStart   func(context.Context, containers.Container) error
+	current   map[string]docker.Container
+	created   chan docker.Spec
+	onStart   func(context.Context, docker.Container) error
 	createErr error
 	startErr  error
 	pulls     int
@@ -51,31 +51,31 @@ func (e *fakeDockerEngine) Pull(ctx context.Context, image string) error {
 	return ctx.Err()
 }
 
-func (e *fakeDockerEngine) Inspect(ctx context.Context, name string) (containers.Container, error) {
+func (e *fakeDockerEngine) Inspect(ctx context.Context, name string) (docker.Container, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return containers.Container{}, err
+		return docker.Container{}, err
 	}
 	for _, current := range e.current {
 		if current.Name == name || current.ID == name {
 			return copyDockerContainer(current), nil
 		}
 	}
-	return containers.Container{}, containers.ErrNotFound
+	return docker.Container{}, docker.ErrNotFound
 }
 
-func (e *fakeDockerEngine) Create(ctx context.Context, spec containers.Spec) (containers.Container, error) {
+func (e *fakeDockerEngine) Create(ctx context.Context, spec docker.Spec) (docker.Container, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return containers.Container{}, err
+		return docker.Container{}, err
 	}
 	e.creates++
 	if _, exists := e.current[spec.Name]; exists {
-		return containers.Container{}, errors.New("fixture container name already exists")
+		return docker.Container{}, errors.New("fixture container name already exists")
 	}
-	current := containers.Container{
+	current := docker.Container{
 		ID: fmt.Sprintf("%064x", e.creates), Name: spec.Name, Image: spec.Image,
 		Labels: maps.Clone(spec.Labels), Environment: maps.Clone(spec.Environment),
 		Networks: []string{spec.Network}, Status: "created", Safe: true,
@@ -86,14 +86,14 @@ func (e *fakeDockerEngine) Create(ctx context.Context, spec containers.Spec) (co
 	err := e.createErr
 	e.createErr = nil
 	if err != nil {
-		return containers.Container{}, err
+		return docker.Container{}, err
 	}
 	return copyDockerContainer(current), nil
 }
 
 func (e *fakeDockerEngine) Start(ctx context.Context, containerID string) error {
 	e.mu.Lock()
-	var current containers.Container
+	var current docker.Container
 	for name, candidate := range e.current {
 		if candidate.ID == containerID {
 			candidate.Status = "running"
@@ -103,7 +103,7 @@ func (e *fakeDockerEngine) Start(ctx context.Context, containerID string) error 
 	}
 	if current.ID == "" {
 		e.mu.Unlock()
-		return containers.ErrNotFound
+		return docker.ErrNotFound
 	}
 	e.starts++
 	callback, err := e.onStart, e.startErr
@@ -124,7 +124,7 @@ func (e *fakeDockerEngine) Close() error {
 	return nil
 }
 
-func (e *fakeDockerEngine) change(change func(*containers.Container)) {
+func (e *fakeDockerEngine) change(change func(*docker.Container)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for name, current := range e.current {
@@ -139,7 +139,7 @@ func (e *fakeDockerEngine) counts() (creates, starts, closes int) {
 	return e.creates, e.starts, e.closes
 }
 
-func copyDockerContainer(current containers.Container) containers.Container {
+func copyDockerContainer(current docker.Container) docker.Container {
 	current.Labels = maps.Clone(current.Labels)
 	current.Environment = maps.Clone(current.Environment)
 	current.Networks = append([]string(nil), current.Networks...)
@@ -147,8 +147,8 @@ func copyDockerContainer(current containers.Container) containers.Container {
 }
 
 type dockerManagerFixture struct {
-	manager *containers.Manager
-	config  containers.Config
+	manager *docker.Manager
+	config  docker.Config
 	engine  *fakeDockerEngine
 	bus     *fscomms.FsBus
 }
@@ -165,8 +165,8 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 			t.Error(err)
 		}
 	})
-	engine := &fakeDockerEngine{current: make(map[string]containers.Container), created: make(chan containers.Spec, 10)}
-	engine.onStart = func(ctx context.Context, current containers.Container) error {
+	engine := &fakeDockerEngine{current: make(map[string]docker.Container), created: make(chan docker.Spec, 10)}
+	engine.onStart = func(ctx context.Context, current docker.Container) error {
 		return publishDockerRegistration(ctx, bus, current, nil)
 	}
 	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
@@ -177,13 +177,13 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 		return response(request, http.StatusOK, manifest), nil
 	}))
 	t.Cleanup(resolver.CloseIdleConnections)
-	config := containers.Config{
+	config := docker.Config{
 		Directory: filepath.Join(root, "spawner"), Bus: bus,
 		BusURL: "amqp://fixture/", StorageURL: "s3://fixture", Network: "fixture-network",
 		Engine: engine, Resolver: resolver, RegistrationTimeout: time.Second,
 		Environment: map[string]string{"AWS_REGION": "fixture-region", "AWS_SECRET_ACCESS_KEY": "private-storage-sentinel"},
 	}
-	manager, err := containers.NewManager(t.Context(), config)
+	manager, err := docker.NewManager(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 	return dockerManagerFixture{manager: manager, config: config, engine: engine, bus: bus}
 }
 
-func publishDockerRegistration(ctx context.Context, bus *fscomms.FsBus, current containers.Container, change func(*agent.AgentSnapshot)) error {
+func publishDockerRegistration(ctx context.Context, bus *fscomms.FsBus, current docker.Container, change func(*agent.AgentSnapshot)) error {
 	snapshot := agent.AgentSnapshot{
 		ID: "fixture-agent-" + current.Environment["COMMANDER_AGENT_ID_SUFFIX"], Type: "fixture-agent", Status: agent.AgentReady,
 		Server:  agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"},
@@ -211,12 +211,12 @@ func publishDockerRegistration(ctx context.Context, bus *fscomms.FsBus, current 
 	return bus.Publish(ctx, messages.ControllerEvents(messages.DefaultControllerType), message)
 }
 
-func restartDockerManager(t *testing.T, fixture dockerManagerFixture) *containers.Manager {
+func restartDockerManager(t *testing.T, fixture dockerManagerFixture) *docker.Manager {
 	t.Helper()
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := containers.NewManager(t.Context(), fixture.config)
+	manager, err := docker.NewManager(t.Context(), fixture.config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func restartDockerManager(t *testing.T, fixture dockerManagerFixture) *container
 
 func TestDockerManagerOwnsStateDirectoryUntilClose(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
-	second, err := containers.NewManager(t.Context(), fixture.config)
+	second, err := docker.NewManager(t.Context(), fixture.config)
 	if err == nil {
 		_ = second.Close()
 		t.Fatal("two Docker spawner hosts acquired the same state directory")
@@ -241,7 +241,7 @@ func TestDockerManagerOwnsStateDirectoryUntilClose(t *testing.T) {
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	second, err = containers.NewManager(t.Context(), fixture.config)
+	second, err = docker.NewManager(t.Context(), fixture.config)
 	if err != nil {
 		t.Fatalf("closed manager left a stale state lock: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestDockerManagerOwnsStateDirectoryUntilClose(t *testing.T) {
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	third, err := containers.NewManager(t.Context(), fixture.config)
+	third, err := docker.NewManager(t.Context(), fixture.config)
 	if err == nil {
 		_ = third.Close()
 		t.Fatal("closed manager released a later host's state lock")
@@ -261,23 +261,23 @@ func TestDockerManagerRejectsInvalidConfigurationBeforeState(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
 	for _, test := range []struct {
 		name   string
-		change func(*containers.Config)
+		change func(*docker.Config)
 	}{
-		{"missing bus", func(c *containers.Config) { c.Bus = nil }},
-		{"missing engine", func(c *containers.Config) { c.Engine = nil }},
-		{"blank directory", func(c *containers.Config) { c.Directory = " " }},
-		{"host network", func(c *containers.Config) { c.Network = "host" }},
-		{"filesystem bus", func(c *containers.Config) { c.BusURL = "file:///state/bus" }},
-		{"filesystem storage", func(c *containers.Config) { c.StorageURL = "file:///state/storage" }},
-		{"missing bus host", func(c *containers.Config) { c.BusURL = "amqp:" }},
-		{"missing storage bucket", func(c *containers.Config) { c.StorageURL = "s3:" }},
-		{"invalid URL", func(c *containers.Config) { c.BusURL = "amqp://private-config-sentinel@host%/" }},
-		{"negative timeout", func(c *containers.Config) { c.RegistrationTimeout = -time.Second }},
-		{"inherited key", func(c *containers.Config) {
+		{"missing bus", func(c *docker.Config) { c.Bus = nil }},
+		{"missing engine", func(c *docker.Config) { c.Engine = nil }},
+		{"blank directory", func(c *docker.Config) { c.Directory = " " }},
+		{"host network", func(c *docker.Config) { c.Network = "host" }},
+		{"filesystem bus", func(c *docker.Config) { c.BusURL = "file:///state/bus" }},
+		{"filesystem storage", func(c *docker.Config) { c.StorageURL = "file:///state/storage" }},
+		{"missing bus host", func(c *docker.Config) { c.BusURL = "amqp:" }},
+		{"missing storage bucket", func(c *docker.Config) { c.StorageURL = "s3:" }},
+		{"invalid URL", func(c *docker.Config) { c.BusURL = "amqp://private-config-sentinel@host%/" }},
+		{"negative timeout", func(c *docker.Config) { c.RegistrationTimeout = -time.Second }},
+		{"inherited key", func(c *docker.Config) {
 			c.Environment = map[string]string{"SECRETS_ENCRYPTION_KEY": "private-config-sentinel"}
 		}},
-		{"inherited home", func(c *containers.Config) { c.Environment = map[string]string{"HOME": "private-config-sentinel"} }},
-		{"invalid environment", func(c *containers.Config) {
+		{"inherited home", func(c *docker.Config) { c.Environment = map[string]string{"HOME": "private-config-sentinel"} }},
+		{"invalid environment", func(c *docker.Config) {
 			c.Environment = map[string]string{"AWS_REGION": "private-config-sentinel\x00"}
 		}},
 	} {
@@ -286,7 +286,7 @@ func TestDockerManagerRejectsInvalidConfigurationBeforeState(t *testing.T) {
 			directory := filepath.Join(t.TempDir(), "unused")
 			config.Directory = directory
 			test.change(&config)
-			manager, err := containers.NewManager(t.Context(), config)
+			manager, err := docker.NewManager(t.Context(), config)
 			if err == nil {
 				_ = manager.Close()
 				t.Fatal("invalid Docker launch configuration was accepted")
@@ -429,19 +429,19 @@ func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
 			clear(engine.current)
 			engine.mu.Unlock()
 		},
-		"exited": func(engine *fakeDockerEngine) { engine.change(func(c *containers.Container) { c.Status = "exited" }) },
-		"unsafe": func(engine *fakeDockerEngine) { engine.change(func(c *containers.Container) { c.Safe = false }) },
+		"exited": func(engine *fakeDockerEngine) { engine.change(func(c *docker.Container) { c.Status = "exited" }) },
+		"unsafe": func(engine *fakeDockerEngine) { engine.change(func(c *docker.Container) { c.Safe = false }) },
 		"changed image": func(engine *fakeDockerEngine) {
-			engine.change(func(c *containers.Container) { c.Image = strings.Replace(c.Image, "aaaa", "bbbb", 1) })
+			engine.change(func(c *docker.Container) { c.Image = strings.Replace(c.Image, "aaaa", "bbbb", 1) })
 		},
 		"changed network": func(engine *fakeDockerEngine) {
-			engine.change(func(c *containers.Container) { c.Networks = []string{"different-network"} })
+			engine.change(func(c *docker.Container) { c.Networks = []string{"different-network"} })
 		},
 		"changed ownership": func(engine *fakeDockerEngine) {
-			engine.change(func(c *containers.Container) { c.Labels = map[string]string{} })
+			engine.change(func(c *docker.Container) { c.Labels = map[string]string{} })
 		},
 		"changed suffix": func(engine *fakeDockerEngine) {
-			engine.change(func(c *containers.Container) { c.Environment["COMMANDER_AGENT_ID_SUFFIX"] = "invalid" })
+			engine.change(func(c *docker.Container) { c.Environment["COMMANDER_AGENT_ID_SUFFIX"] = "invalid" })
 		},
 	}
 	for name, change := range cases {
@@ -475,7 +475,7 @@ func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
 		_, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
 		finished <- err
 	}()
-	var spec containers.Spec
+	var spec docker.Spec
 	select {
 	case spec = <-fixture.engine.created:
 	case <-time.After(2 * time.Second):
@@ -554,7 +554,7 @@ func TestDockerManagerRejectsInvalidRegistration(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			fixture := newDockerManagerFixture(t)
-			fixture.engine.onStart = func(ctx context.Context, current containers.Container) error {
+			fixture.engine.onStart = func(ctx context.Context, current docker.Container) error {
 				return publishDockerRegistration(ctx, fixture.bus, current, change)
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
@@ -566,4 +566,4 @@ func TestDockerManagerRejectsInvalidRegistration(t *testing.T) {
 	}
 }
 
-var _ launch.Manager = (*containers.Manager)(nil)
+var _ runtimes.Runtime = (*docker.Manager)(nil)

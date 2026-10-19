@@ -12,10 +12,6 @@ import (
 	"syscall"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
-	"github.com/defos-ai/commander/apps/agents/spawner/containers"
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
-	"github.com/defos-ai/commander/apps/agents/spawner/native"
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/host"
@@ -23,13 +19,6 @@ import (
 )
 
 const serviceName = "commander-" + string(spawner.SpawnerAgentType)
-
-// Options supplies dependencies for an embedded host.
-type Options struct {
-	Resolver *packages.Resolver
-	// Engine is used only with the docker runtime and remains caller-owned.
-	Engine containers.Engine
-}
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
@@ -70,49 +59,14 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 			logger.Info("agent stopped")
 		}
 	}()
-	dependencies, err := openDependencies(ctx, configuration)
+	dependencies, err := openDependencies(ctx, configuration, options)
 	if err != nil {
 		return err
 	}
 	defer func() { result = errors.Join(result, dependencies.Close()) }()
-	resolver := options.Resolver
-	if resolver == nil {
-		resolver = packages.NewResolver(nil)
-		defer resolver.CloseIdleConnections()
-	}
-	var manager launch.Manager
-	if configuration.runtime == "docker" {
-		engine := options.Engine
-		if engine == nil {
-			engine, err = containers.NewEngine()
-			if err != nil {
-				return err
-			}
-			defer func() { result = errors.Join(result, engine.Close()) }()
-		}
-		manager, err = containers.NewManager(ctx, containers.Config{
-			Directory: configuration.stateDir, Bus: dependencies.Bus,
-			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
-			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
-			Resolver:    resolver, Engine: engine, Network: configuration.dockerNetwork,
-			RegistrationTimeout: configuration.registrationTimeout,
-		})
-	} else {
-		manager, err = native.NewManager(ctx, native.Config{
-			Directory: configuration.stateDir, Bus: dependencies.Bus,
-			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
-			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
-			Resolver:    resolver, RegistrationTimeout: configuration.registrationTimeout,
-		})
-	}
-	if err != nil {
-		return err
-	}
-	// Stop registration observers and await native children before closing the bus.
-	defer func() { result = errors.Join(result, manager.Close()) }()
 	selected := []action.Executor{}
 	if configuration.actionNames == nil || len(configuration.actionNames) > 0 {
-		selected, err = spawner.NewActions(manager)
+		selected, err = spawner.NewActions(dependencies.Runtime)
 		if err != nil {
 			return err
 		}
@@ -135,12 +89,12 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		ArtifactFileStore: dependencies.ArtifactFileStore,
 		Logger:            logger,
 		HeartbeatInterval: &configuration.heartbeatInterval,
-	}, manager)
+	}, dependencies.Runtime)
 	if err != nil {
 		return err
 	}
 	for index, reference := range configuration.spawnAgents {
-		if _, err := manager.Spawn(ctx, "startup:"+strconv.Itoa(index), reference); err != nil {
+		if _, err := dependencies.Runtime.Spawn(ctx, "startup:"+strconv.Itoa(index), reference); err != nil {
 			return fmt.Errorf("spawn startup agent %d: %w", index+1, err)
 		}
 	}

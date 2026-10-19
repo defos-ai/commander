@@ -1,4 +1,4 @@
-package containers
+package docker
 
 import (
 	"context"
@@ -31,14 +31,15 @@ type Config struct {
 }
 
 type Manager struct {
-	config       Config
-	ctx          context.Context
-	cancel       context.CancelFunc
-	mu           sync.Mutex
-	observations map[string]*observation
-	once         sync.Once
-	releaseLock  func() error
-	closeErr     error
+	config        Config
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mu            sync.Mutex
+	observations  map[string]*observation
+	once          sync.Once
+	releaseLock   func() error
+	closeErr      error
+	ownedResolver bool
 }
 
 func NewManager(ctx context.Context, config Config) (*Manager, error) {
@@ -88,11 +89,12 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	if config.Resolver == nil {
+	ownedResolver := config.Resolver == nil
+	if ownedResolver {
 		config.Resolver = packages.NewResolver(nil)
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	m := &Manager{config: config, ctx: ctx, cancel: cancel, observations: make(map[string]*observation), releaseLock: release}
+	m := &Manager{config: config, ctx: ctx, cancel: cancel, observations: make(map[string]*observation), releaseLock: release, ownedResolver: ownedResolver}
 	go func() { <-ctx.Done(); _ = m.Close() }()
 	return m, nil
 }
@@ -107,7 +109,9 @@ func (m *Manager) Close() error {
 		for _, current := range m.observations {
 			<-current.done
 		}
-		m.config.Resolver.CloseIdleConnections()
+		if m.ownedResolver {
+			m.config.Resolver.CloseIdleConnections()
+		}
 		if err := m.releaseLock(); err != nil {
 			m.closeErr = fmt.Errorf("release Docker state lock: %w", err)
 		}

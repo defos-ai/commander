@@ -6,10 +6,20 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 ## Current boundary
 
 - `spawner_agent.go` constructs a regular framework agent. The `spawn-agent`
-  action and repeatable CLI `--spawn-agents` share `launch.Manager`, implemented
-  by `native.Manager` and `containers.Manager`. Keep provider construction in
-  `cli/factory.go`. Compose has an opt-in `spawner` profile; inclusion in Playground,
-  AIO and release images remains separate work.
+  action and repeatable CLI `--spawn-agents` share `runtimes.Runtime`
+  (`Spawn`/`Close`), defined in [runtimes/runtime.go](runtimes/runtime.go).
+  [runtimes/result.go](runtimes/result.go) holds their shared result;
+  [native.Manager](runtimes/native/manager.go) and
+  [docker.Manager](runtimes/docker/manager.go) implement the interface.
+- `cli/factory.go` selects and constructs the runtime and providers, owns created
+  resources and closes them in reverse order. Injected clients remain caller-owned;
+  a manager closes its resolver only when it created it. Keep concrete runtime
+  imports out of `cli/cli.go`. Compose has an opt-in `spawner` profile; inclusion in
+  Playground, AIO and release images remains separate work.
+- Runtime settings are environment-only: `SPAWNER_RUNTIME` defaults to `native`
+  and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
+  `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
+  unsupported runtimes explicitly. Do not reintroduce flags for these settings.
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
@@ -64,7 +74,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 ## Docker ownership
 
-- `containers/sdk.go` wraps the official Docker Engine SDK. Operator settings
+- `runtimes/docker/sdk.go` wraps the official Docker Engine SDK. Operator settings
   choose the daemon and explicit network; images must be pinned by digest. Pulls
   do not forward registry authentication. Bound requests and omit raw daemon
   errors, response bodies and environment values from diagnostics.
@@ -83,7 +93,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   Checking `created` and then starting it is not atomic across hosts: two owners
   could restart a quickly exiting container under the same ID. A crash releases
   the lock; never use a stale create-only lock file for host ownership.
-- Docker `Close` ends observers, leaving containers and records intact. The caller
+- Docker `Close` ends observers, leaving containers and records intact. The factory
   closes Engine and providers afterward. Containers are not Compose-owned services;
   operators remove them before removing the deployment network/state.
 

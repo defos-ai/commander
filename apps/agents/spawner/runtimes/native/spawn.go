@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actions "github.com/defos-ai/commander/framework/domain/actions"
@@ -24,12 +24,12 @@ import (
 // Spawn uses a host-generated request identity (task/command or startup slot),
 // never an identifier supplied by a model in action input. Each new request
 // gets its own agent ID; a retry can only observe that same child.
-func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (launch.Result, error) {
+func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
 	if strings.TrimSpace(requestID) == "" || len(requestID) > 1024 {
-		return launch.Result{}, errors.New("launch request identity is required and must be at most 1024 bytes")
+		return runtimes.Result{}, errors.New("launch request identity is required and must be at most 1024 bytes")
 	}
 	if _, err := packages.ParseReference(reference); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	stopForwarding := context.AfterFunc(m.ctx, cancel)
@@ -39,37 +39,37 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (launc
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ctx.Err(); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	if m.closed {
-		return launch.Result{}, errors.New("native spawner is closed")
+		return runtimes.Result{}, errors.New("native spawner is closed")
 	}
 	if err := ctx.Err(); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	if current := m.children[requestID]; current != nil {
 		if current.result.Package != reference {
-			return launch.Result{}, errors.New("launch request already belongs to a different package")
+			return runtimes.Result{}, errors.New("launch request already belongs to a different package")
 		}
 		if current.exited() {
-			return launch.Result{}, fmt.Errorf("agent %s has exited; a replacement requires a new task or startup slot", current.result.AgentID)
+			return runtimes.Result{}, fmt.Errorf("agent %s has exited; a replacement requires a new task or startup slot", current.result.AgentID)
 		}
 		return m.awaitRegistration(ctx, current)
 	}
 	if err := m.existingRecord(requestID, reference); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	return m.launch(ctx, requestID, reference)
 }
 
-func (m *Manager) launch(ctx context.Context, requestID, reference string) (launch.Result, error) {
+func (m *Manager) launch(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
 	pkg, err := m.config.Resolver.Resolve(ctx, reference)
 	if err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	path, err := m.config.Resolver.DownloadNative(ctx, pkg, runtime.GOOS, runtime.GOARCH, filepath.Join(m.config.Directory, "downloads"))
 	if err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	started := false
 	defer func() {
@@ -79,15 +79,15 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (laun
 	}()
 	agentID, err := id.AgentID(pkg.Manifest.Type)
 	if err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	directory := filepath.Join(m.config.Directory, "agents", agentID)
 	if err := os.Mkdir(directory, 0700); err != nil {
-		return launch.Result{}, fmt.Errorf("create child working directory: %w", err)
+		return runtimes.Result{}, fmt.Errorf("create child working directory: %w", err)
 	}
 	subscription, err := m.subscribe(ctx)
 	if err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	defer func() {
 		if !started {
@@ -95,13 +95,13 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (laun
 		}
 	}()
 	if err := ctx.Err(); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	if err := m.reserve(record{RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type}); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return launch.Result{}, err
+		return runtimes.Result{}, err
 	}
 	command := exec.Command(path)
 	command.Dir = directory
@@ -109,13 +109,13 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (laun
 	// Child output can contain secrets. Do not put it in action errors or logs.
 	configureCommand(command)
 	if err := command.Start(); err != nil {
-		return launch.Result{}, fmt.Errorf("start agent %s: %w", agentID, err)
+		return runtimes.Result{}, fmt.Errorf("start agent %s: %w", agentID, err)
 	}
 	started = true
 	current := &child{
 		command: command, done: make(chan struct{}), download: filepath.Dir(path), subscription: subscription,
 		registrationDone: make(chan struct{}),
-		result:           launch.Result{AgentID: agentID, AgentType: pkg.Manifest.Type, Package: reference, Runtime: "native", PID: command.Process.Pid},
+		result:           runtimes.Result{AgentID: agentID, AgentType: pkg.Manifest.Type, Package: reference, Runtime: "native", PID: command.Process.Pid},
 	}
 	m.children[requestID] = current
 	go current.wait()
@@ -133,18 +133,18 @@ func (m *Manager) subscribe(ctx context.Context) (comms.Subscription, error) {
 	})
 }
 
-func (m *Manager) awaitRegistration(ctx context.Context, current *child) (launch.Result, error) {
+func (m *Manager) awaitRegistration(ctx context.Context, current *child) (runtimes.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, m.config.RegistrationTimeout)
 	defer cancel()
 	select {
 	case <-ctx.Done():
-		return launch.Result{}, fmt.Errorf("waiting for agent %s registration (retry observes this instance): %w", current.result.AgentID, ctx.Err())
+		return runtimes.Result{}, fmt.Errorf("waiting for agent %s registration (retry observes this instance): %w", current.result.AgentID, ctx.Err())
 	case <-current.registrationDone:
 		if current.registrationErr != nil {
-			return launch.Result{}, current.registrationErr
+			return runtimes.Result{}, current.registrationErr
 		}
 		if current.exited() {
-			return launch.Result{}, fmt.Errorf("agent %s exited during registration", current.result.AgentID)
+			return runtimes.Result{}, fmt.Errorf("agent %s exited during registration", current.result.AgentID)
 		}
 		return cloneResult(current.result), nil
 	}

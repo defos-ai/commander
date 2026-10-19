@@ -37,7 +37,7 @@ command: ["--spawn-agents", "github.com/defos-ai/commander-example-agent@v0.1.0"
 ```
 
 The package must publish a `docker.image` digest in `agent.yaml`. Standalone
-hosts select this mode with `--runtime docker --docker-network <network>` and
+hosts set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` with
 reachable AMQP/S3 settings. Docker must be running Linux containers. The spawner
 uses the Docker Engine API; no Docker CLI is needed inside its image.
 
@@ -71,7 +71,7 @@ the manifest; it does not establish whether the program is safe to run.
 
 The host supports public GitHub releases and public Docker images. Private
 packages, moving tags such as `stable`, and Playground/AIO integration are not
-implemented. The default runtime is native, including in its Dockerfile;
+implemented. `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the optional Compose service explicitly selects Docker mode.
 
 `BUS_URL` and `STORAGE_URL` configure the shared providers. Children receive those
@@ -79,7 +79,7 @@ settings and explicit process/S3 settings, without inheriting API, MCP or model
 credentials. S3 credentials must be available as environment settings; host profile
 files are not shared. Native processes run as the spawner's OS user, not in a sandbox.
 
-Launch records live in `./state/spawner` (`--state-dir` or `SPAWNER_STATE_DIR`).
+Launch records live in `./state/spawner`; set `SPAWNER_STATE_DIR` to change it.
 Native retries reuse the live child in the same host. After a native host restart,
 existing requests report uncertainty; inspect old processes before requesting
 replacements with a new state directory.

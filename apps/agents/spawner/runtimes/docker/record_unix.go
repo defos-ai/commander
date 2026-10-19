@@ -1,6 +1,6 @@
 //go:build unix
 
-package containers
+package docker
 
 import "os"
 

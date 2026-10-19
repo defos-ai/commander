@@ -12,8 +12,8 @@ import (
 	"time"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
-	"github.com/defos-ai/commander/apps/agents/spawner/containers"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/host"
@@ -47,9 +47,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
-	flags.StringVar(&result.stateDir, "state-dir", "", "Launch records and downloaded packages; overrides SPAWNER_STATE_DIR; defaults to ./state/spawner")
-	flags.StringVar(&result.runtime, "runtime", "", "Agent launch runtime: native or docker; overrides SPAWNER_RUNTIME; defaults to native")
-	flags.StringVar(&result.dockerNetwork, "docker-network", "", "Existing Docker network for spawned agents; required with the docker runtime; overrides SPAWNER_DOCKER_NETWORK")
 	flags.Func("spawn-agents", "Public GitHub agent package to start; repeat for multiple agents: github.com/owner/repository@vMAJOR.MINOR.PATCH", func(value string) error {
 		if _, err := packages.ParseReference(value); err != nil {
 			return err
@@ -78,28 +75,25 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.Visit(func(f *flag.Flag) { provided[f.Name] = true })
 	result.busURL = host.Value(busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
 	result.storageURL = host.Value(storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
-	result.stateDir = host.Value(result.stateDir, provided["state-dir"], "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
-	result.runtime = host.Value(result.runtime, provided["runtime"], "SPAWNER_RUNTIME", "native")
-	result.dockerNetwork = host.Value(result.dockerNetwork, provided["docker-network"], "SPAWNER_DOCKER_NETWORK", "")
+	result.stateDir = host.Value("", false, "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
+	result.runtime = host.Value("", false, "SPAWNER_RUNTIME", "native")
 	if result.runtime != "native" && result.runtime != "docker" {
-		return config{}, errors.New("runtime must be native or docker")
-	}
-	if result.runtime == "docker" && strings.TrimSpace(result.dockerNetwork) == "" {
-		return config{}, errors.New("docker-network is required for the docker runtime")
+		return config{}, errors.New("SPAWNER_RUNTIME must be native or docker")
 	}
 	if result.runtime == "docker" {
-		if err := containers.ValidateNetwork(result.dockerNetwork); err != nil {
-			return config{}, fmt.Errorf("docker-network: %w", err)
+		result.dockerNetwork = os.Getenv("SPAWNER_DOCKER_NETWORK")
+		if strings.TrimSpace(result.dockerNetwork) == "" {
+			return config{}, errors.New("SPAWNER_DOCKER_NETWORK is required for the docker runtime")
+		}
+		if err := docker.ValidateNetwork(result.dockerNetwork); err != nil {
+			return config{}, fmt.Errorf("SPAWNER_DOCKER_NETWORK: %w", err)
 		}
 		if !provided["registration-timeout"] {
 			result.registrationTimeout = 45 * time.Second
 		}
 	}
-	if result.runtime == "native" && (result.dockerNetwork != "" || provided["docker-network"]) {
-		return config{}, errors.New("docker-network requires the docker runtime")
-	}
 	if strings.TrimSpace(result.stateDir) == "" {
-		return config{}, errors.New("state-dir must not be blank")
+		return config{}, errors.New("SPAWNER_STATE_DIR must not be blank")
 	}
 	result.logLevel = host.Value(result.logLevel, provided["log-level"], "LOG_LEVEL", "info")
 	result.logFormat = host.Value(result.logFormat, provided["log-format"], "LOG_FORMAT", "json")

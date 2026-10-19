@@ -1,4 +1,6 @@
-package containers
+//go:build unix && !aix
+
+package docker
 
 import (
 	"errors"
@@ -6,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/sys/windows"
+	"golang.org/x/sys/unix"
 )
 
 func lockState(directory string) (func() error, error) {
@@ -14,14 +16,14 @@ func lockState(directory string) (func() error, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open Docker state lock: %w", err)
 	}
-	if err := windows.LockFileEx(windows.Handle(file.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,
-		0, 1, 0, &windows.Overlapped{}); err != nil {
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		_ = file.Close()
-		if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+		if errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EAGAIN) {
 			return nil, errors.New("another Docker spawner already uses this state directory")
 		}
 		return nil, fmt.Errorf("lock Docker state directory: %w", err)
 	}
-	// The OS releases the lock when this handle closes or the process exits.
+	// Closing the descriptor releases the lock, including after a process crash.
+	// Keep the file: removing it would allow another process to lock a new inode.
 	return file.Close, nil
 }

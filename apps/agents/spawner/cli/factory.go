@@ -9,6 +9,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/providers/fs"
@@ -19,9 +23,17 @@ import (
 	s3store "github.com/defos-ai/commander/providers/s3/store"
 )
 
+// Options supplies caller-owned dependencies for an embedded host.
+type Options struct {
+	Resolver *packages.Resolver
+	// Engine is used only with the docker runtime.
+	Engine docker.Engine
+}
+
 type dependencies struct {
 	Bus               comms.Bus
 	ArtifactFileStore artifacts.ArtifactFileStore
+	Runtime           runtimes.Runtime
 	closers           []func() error
 }
 
@@ -33,7 +45,7 @@ func (d *dependencies) Close() (err error) {
 	return err
 }
 
-func openDependencies(ctx context.Context, configuration config) (result *dependencies, err error) {
+func openDependencies(ctx context.Context, configuration config, options Options) (result *dependencies, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -54,10 +66,58 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	}
 	d.Bus = bus
 	d.closers = append(d.closers, bus.Close)
+	if err := d.openRuntime(ctx, configuration, options); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return d, nil
+}
+
+func (d *dependencies) openRuntime(ctx context.Context, configuration config, options Options) (err error) {
+	resolver := options.Resolver
+	if resolver == nil {
+		resolver = packages.NewResolver(nil)
+		d.closers = append(d.closers, func() error {
+			resolver.CloseIdleConnections()
+			return nil
+		})
+	}
+	switch configuration.runtime {
+	case "native":
+		d.Runtime, err = native.NewManager(ctx, native.Config{
+			Directory: configuration.stateDir, Bus: d.Bus,
+			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
+			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
+			Resolver:    resolver, RegistrationTimeout: configuration.registrationTimeout,
+		})
+	case "docker":
+		engine := options.Engine
+		if engine == nil {
+			engine, err = docker.NewEngine()
+			if err != nil {
+				return err
+			}
+			d.closers = append(d.closers, engine.Close)
+		}
+		d.Runtime, err = docker.NewManager(ctx, docker.Config{
+			Directory: configuration.stateDir, Bus: d.Bus,
+			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
+			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
+			Resolver:    resolver, Engine: engine, Network: configuration.dockerNetwork,
+			RegistrationTimeout: configuration.registrationTimeout,
+		})
+	default:
+		return fmt.Errorf("unsupported spawner runtime %q", configuration.runtime)
+	}
+	if err != nil {
+		return err
+	}
+	// Stop runtime work before closing its clients and shared bus, including
+	// when later host construction fails. Injected clients remain caller-owned.
+	d.closers = append(d.closers, d.Runtime.Close)
+	return nil
 }
 
 func createBus(ctx context.Context, busURL string) (comms.Bus, error) {

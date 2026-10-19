@@ -10,7 +10,7 @@ import (
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
 	spawneractions "github.com/defos-ai/commander/apps/agents/spawner/actions"
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
@@ -70,7 +70,7 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 }
 
 func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
-	launcher := &actionLauncher{result: launch.Result{
+	launcher := &actionLauncher{result: runtimes.Result{
 		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage, Runtime: "native", PID: 42,
 		Actions: []actionmodel.Action{{Name: "inspect", Description: "Inspect a local target", Status: action.Unavailable,
 			MissingRequirements: []actionmodel.Requirement{{Kind: actionmodel.ExecutableRequirement, Name: "example-tool"}},
@@ -84,7 +84,7 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var actual launch.Result
+		var actual runtimes.Result
 		if err := json.Unmarshal(result.Output, &actual); err != nil {
 			t.Fatal(err)
 		}
@@ -154,7 +154,7 @@ func TestSpawnAgentOutputIdentifiesLaunchRuntime(t *testing.T) {
 		{name: "docker with pid", runtime: "docker", pid: 42, containerID: "fixture-container"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			launcher := &actionLauncher{result: launch.Result{
+			launcher := &actionLauncher{result: runtimes.Result{
 				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
 				Runtime: test.runtime, PID: test.pid, ContainerID: test.containerID, Actions: []actionmodel.Action{},
 			}}
@@ -204,7 +204,7 @@ func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 }
 
 func TestSpawnerAgentWorkUsesTaskIdentity(t *testing.T) {
-	launcher := &actionLauncher{result: launch.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
+	launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
 		Package: actionPackage, Runtime: "native", PID: 42, Actions: []actionmodel.Action{}}}
 	runtime, err := spawner.NewSpawnerAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}, launcher)
@@ -241,11 +241,11 @@ type spawnInvocation struct{ requestID, reference string }
 
 type actionLauncher struct {
 	calls  []spawnInvocation
-	result launch.Result
+	result runtimes.Result
 	err    error
 }
 
-func (launcher *actionLauncher) Spawn(_ context.Context, requestID, reference string) (launch.Result, error) {
+func (launcher *actionLauncher) Spawn(_ context.Context, requestID, reference string) (runtimes.Result, error) {
 	launcher.calls = append(launcher.calls, spawnInvocation{requestID: requestID, reference: reference})
 	return launcher.result, launcher.err
 }

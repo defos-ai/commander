@@ -1,9 +1,6 @@
-// Package launch defines the result shared by agent launch runtimes.
-package launch
+package runtimes
 
 import (
-	"context"
-
 	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
@@ -17,11 +14,4 @@ type Result struct {
 	PID         int              `json:"pid,omitempty"`
 	ContainerID string           `json:"container_id,omitempty"`
 	Actions     []actions.Action `json:"actions"`
-}
-
-// Manager tracks launches and registration. Close releases host resources;
-// each runtime defines whether launched agents also stop with the host.
-type Manager interface {
-	Spawn(ctx context.Context, requestID, reference string) (Result, error)
-	Close() error
 }

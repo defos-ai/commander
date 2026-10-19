@@ -1,4 +1,4 @@
-package containers
+package docker
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -18,7 +18,7 @@ import (
 type observation struct {
 	agentID string
 	done    chan struct{}
-	result  launch.Result
+	result  runtimes.Result
 	err     error
 }
 
@@ -44,15 +44,15 @@ func (m *Manager) observe(saved record) (*observation, error) {
 	return current, nil
 }
 
-func (m *Manager) awaitRegistration(ctx context.Context, current *observation) (launch.Result, error) {
+func (m *Manager) awaitRegistration(ctx context.Context, current *observation) (runtimes.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, m.config.RegistrationTimeout)
 	defer cancel()
 	select {
 	case <-ctx.Done():
-		return launch.Result{}, fmt.Errorf("waiting for agent %s registration (retry observes this instance): %w", current.agentID, ctx.Err())
+		return runtimes.Result{}, fmt.Errorf("waiting for agent %s registration (retry observes this instance): %w", current.agentID, ctx.Err())
 	case <-current.done:
 		if current.err != nil {
-			return launch.Result{}, current.err
+			return runtimes.Result{}, current.err
 		}
 		result := current.result
 		result.Actions = append([]actions.Action{}, result.Actions...)
@@ -63,15 +63,15 @@ func (m *Manager) awaitRegistration(ctx context.Context, current *observation) (
 	}
 }
 
-func (m *Manager) readRegistration(subscription comms.Subscription, saved record) (launch.Result, error) {
+func (m *Manager) readRegistration(subscription comms.Subscription, saved record) (runtimes.Result, error) {
 	for {
 		delivery, err := subscription.Next(m.ctx)
 		if err != nil {
-			return launch.Result{}, fmt.Errorf("observe agent %s registration: %w", saved.AgentID, err)
+			return runtimes.Result{}, fmt.Errorf("observe agent %s registration: %w", saved.AgentID, err)
 		}
 		message := delivery.Message()
 		if err := delivery.Ack(m.ctx); err != nil {
-			return launch.Result{}, fmt.Errorf("acknowledge registration observation: %w", err)
+			return runtimes.Result{}, fmt.Errorf("acknowledge registration observation: %w", err)
 		}
 		if message.AgentID != saved.AgentID || (message.Type != messages.AgentStarted && message.Type != messages.AgentHeartbeat) {
 			continue
@@ -81,24 +81,24 @@ func (m *Manager) readRegistration(subscription comms.Subscription, saved record
 		}
 		var snapshot agents.AgentSnapshot
 		if json.Unmarshal(message.Payload, &snapshot) != nil {
-			return launch.Result{}, errors.New("spawned agent published invalid registration")
+			return runtimes.Result{}, errors.New("spawned agent published invalid registration")
 		}
 		if snapshot.ID != saved.AgentID || string(snapshot.Type) != saved.AgentType {
-			return launch.Result{}, errors.New("registration does not match assigned agent ID and package type")
+			return runtimes.Result{}, errors.New("registration does not match assigned agent ID and package type")
 		}
 		if snapshot.Status != agents.AgentReady && snapshot.Status != agents.AgentWorking {
 			continue
 		}
 		if snapshot.Server.Validate() != nil {
-			return launch.Result{}, errors.New("spawned agent published invalid server metadata")
+			return runtimes.Result{}, errors.New("spawned agent published invalid server metadata")
 		}
 		seen := make(map[string]bool, len(snapshot.Actions))
 		for _, definition := range snapshot.Actions {
 			if definition.Validate() != nil || seen[definition.Name] || (definition.Status != actions.Ready && definition.Status != actions.Unavailable && definition.Status != actions.Unknown) {
-				return launch.Result{}, errors.New("spawned agent published invalid action metadata")
+				return runtimes.Result{}, errors.New("spawned agent published invalid action metadata")
 			}
 			seen[definition.Name] = true
 		}
-		return launch.Result{AgentID: saved.AgentID, AgentType: saved.AgentType, Package: saved.Package, Runtime: "docker", Actions: snapshot.Actions}, nil
+		return runtimes.Result{AgentID: saved.AgentID, AgentType: saved.AgentType, Package: saved.Package, Runtime: "docker", Actions: snapshot.Actions}, nil
 	}
 }

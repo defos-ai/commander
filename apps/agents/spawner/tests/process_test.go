@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/native"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
 	"github.com/defos-ai/commander/framework/id"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 	"golang.org/x/sys/unix"

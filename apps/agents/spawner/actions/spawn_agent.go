@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent/action"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
@@ -18,7 +18,7 @@ const SpawnAgentName = "spawn-agent"
 // Spawner owns launch records. A retry observes the saved launch for the same
 // request rather than starting another agent with the same ID.
 type Spawner interface {
-	Spawn(ctx context.Context, requestID, reference string) (launch.Result, error)
+	Spawn(ctx context.Context, requestID, reference string) (runtimes.Result, error)
 }
 
 type SpawnAgentInput struct {
@@ -30,11 +30,11 @@ func (input SpawnAgentInput) Validate() error {
 	return err
 }
 
-func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, launch.Result], error) {
+func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Result], error) {
 	if launcher == nil {
 		return nil, errors.New("agent launcher is required")
 	}
-	return action.NewFunc(action.FuncConfig[SpawnAgentInput, launch.Result]{
+	return action.NewFunc(action.FuncConfig[SpawnAgentInput, runtimes.Result]{
 		Action: actionmodel.Action{
 			Name:        SpawnAgentName,
 			Description: "Launch a versioned agent package and wait for its exact agent ID and type to announce registration. Returns its actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host.",
@@ -58,10 +58,10 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, launch.Resul
 				"additionalProperties":false
 			}`),
 		},
-		Run: func(ctx context.Context, input SpawnAgentInput) (launch.Result, error) {
+		Run: func(ctx context.Context, input SpawnAgentInput) (runtimes.Result, error) {
 			requestID, err := spawnRequestID(ctx)
 			if err != nil {
-				return launch.Result{}, err
+				return runtimes.Result{}, err
 			}
 			return launcher.Spawn(ctx, requestID, input.Package)
 		},

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/launch"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/domain/actions"
 )
@@ -29,14 +29,15 @@ type Config struct {
 }
 
 type Manager struct {
-	config   Config
-	ctx      context.Context
-	cancel   context.CancelFunc
-	mu       sync.Mutex
-	children map[string]*child
-	closed   bool
-	once     sync.Once
-	closeErr error
+	config        Config
+	ctx           context.Context
+	cancel        context.CancelFunc
+	mu            sync.Mutex
+	children      map[string]*child
+	closed        bool
+	once          sync.Once
+	closeErr      error
+	ownedResolver bool
 }
 
 func NewManager(ctx context.Context, config Config) (*Manager, error) {
@@ -69,11 +70,12 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 			return nil, fmt.Errorf("create spawner state: %w", err)
 		}
 	}
-	if config.Resolver == nil {
+	ownedResolver := config.Resolver == nil
+	if ownedResolver {
 		config.Resolver = packages.NewResolver(nil)
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	m := &Manager{config: config, ctx: ctx, cancel: cancel, children: make(map[string]*child)}
+	m := &Manager{config: config, ctx: ctx, cancel: cancel, children: make(map[string]*child), ownedResolver: ownedResolver}
 	go func() {
 		<-ctx.Done()
 		_ = m.Close()
@@ -107,12 +109,14 @@ func (m *Manager) Close() error {
 		for err := range failures {
 			m.closeErr = errors.Join(m.closeErr, err)
 		}
-		m.config.Resolver.CloseIdleConnections()
+		if m.ownedResolver {
+			m.config.Resolver.CloseIdleConnections()
+		}
 	})
 	return m.closeErr
 }
 
-func cloneResult(result launch.Result) launch.Result {
+func cloneResult(result runtimes.Result) runtimes.Result {
 	result.Actions = append([]actions.Action{}, result.Actions...)
 	for i := range result.Actions {
 		result.Actions[i] = result.Actions[i].Clone()

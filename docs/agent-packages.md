@@ -87,7 +87,7 @@ Deployment selects the execution mode explicitly:
 
 | Deployment | Launch behavior |
 | --- | --- |
-| Standalone spawner | Native by default; `--runtime docker --docker-network <network>` selects Docker. |
+| Standalone spawner | Native by default; set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` for Docker. |
 | Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. Enable with `--profile spawner`. |
 | Native `commander --all-in-one` (planned) | Child executable using the session's FS bus and artifact directories. |
 | Docker AIO (planned) | Child executable inside the AIO container, using the same FS directories. |

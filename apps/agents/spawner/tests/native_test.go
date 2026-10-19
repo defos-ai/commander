@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/native"
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"

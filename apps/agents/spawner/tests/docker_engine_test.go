@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/containers"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -18,13 +18,13 @@ import (
 
 const engineImage = "ghcr.io/defos-ai/example-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-func testDockerEngine(t *testing.T, handler transportFunc) containers.Engine {
+func testDockerEngine(t *testing.T, handler transportFunc) docker.Engine {
 	t.Helper()
 	value, err := client.New(client.WithHost("http://docker.invalid"), client.WithHTTPClient(&http.Client{Transport: handler}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine, err := containers.NewEngineWithClient(value)
+	engine, err := docker.NewEngineWithClient(value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestDockerEngineNegotiatesCreatesAndStartsConstrainedContainer(t *testing.T
 	if err := engine.Pull(ctx, engineImage); err != nil {
 		t.Fatal(err)
 	}
-	value, err := engine.Create(ctx, containers.Spec{
+	value, err := engine.Create(ctx, docker.Spec{
 		Name: "example-agent-a1b2c3d4", Image: engineImage, Network: "commander_default",
 		Environment: map[string]string{"BUS_URL": "amqp://rabbitmq", "COMMANDER_AGENT_ID_SUFFIX": "a1b2c3d4"},
 		Labels:      fixture.Config.Labels,
@@ -204,7 +204,7 @@ func TestDockerEngineRejectsBuiltinAndMissingNetworks(t *testing.T) {
 				t.Fatalf("invalid network reached create: %s", request.URL.Path)
 				return nil, errors.New("unexpected request")
 			})
-			_, err := engine.Create(context.Background(), containers.Spec{Name: "example-agent-a1b2c3d4", Image: engineImage, Network: name})
+			_, err := engine.Create(context.Background(), docker.Spec{Name: "example-agent-a1b2c3d4", Image: engineImage, Network: name})
 			if err == nil {
 				t.Fatal("invalid network accepted")
 			}
@@ -233,7 +233,7 @@ func TestDockerEngineSanitizesPullAndDaemonErrors(t *testing.T) {
 		}
 		return response(request, http.StatusNotFound, `{"message":"secret-bootstrap-value"}`), nil
 	})
-	if _, err := engine.Inspect(context.Background(), "unknown"); !errors.Is(err, containers.ErrNotFound) || strings.Contains(err.Error(), "secret-bootstrap") {
+	if _, err := engine.Inspect(context.Background(), "unknown"); !errors.Is(err, docker.ErrNotFound) || strings.Contains(err.Error(), "secret-bootstrap") {
 		t.Fatalf("missing container error absent or not sanitized: %v", err)
 	}
 }

@@ -1,6 +1,6 @@
 //go:build (!unix && !windows) || aix
 
-package containers
+package docker
 
 import "errors"
 
