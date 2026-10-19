@@ -28,7 +28,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	if strings.TrimSpace(requestID) == "" || len(requestID) > 1024 {
 		return runtimes.Result{}, errors.New("launch request identity is required and must be at most 1024 bytes")
 	}
-	if _, err := packages.ParseReference(reference); err != nil {
+	if _, err := packages.ParseSelector(reference); err != nil {
 		return runtimes.Result{}, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
@@ -45,6 +45,10 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 		return runtimes.Result{}, errors.New("native spawner is closed")
 	}
 	if err := ctx.Err(); err != nil {
+		return runtimes.Result{}, err
+	}
+	reference, err := runtimes.PinPackage(ctx, m.config.Directory, requestID, reference, m.config.Resolver)
+	if err != nil {
 		return runtimes.Result{}, err
 	}
 	if current := m.children[requestID]; current != nil {

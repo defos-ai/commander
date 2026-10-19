@@ -59,6 +59,8 @@ func TestSpawnAgentsArguments(t *testing.T) {
 		{name: "defaults", args: []string{"--all-in-one"}},
 		{name: "empty override", args: []string{"--all-in-one", "--spawn-agents="}},
 		{name: "custom package", args: []string{"--all-in-one", "--spawn-agents=" + web}},
+		{name: "repository URL", args: []string{"--all-in-one", "--spawn-agents=https://github.com/defos-ai/commander-web-agent"}},
+		{name: "stable package", args: []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander/apps/agents/builder@stable"}},
 		{name: "repeated packages", args: []string{"--all-in-one", "--spawn-agents", web, "--spawn-agents", browser}},
 		{name: "invalid reference", args: []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander-web-agent@latest"}, want: "agent package"},
 		{name: "remote package", args: []string{"--spawn-agents=" + web}, want: "--spawn-agents requires --all-in-one"},

@@ -120,8 +120,9 @@
   settings or use a Docker socket. The default startup package list is empty;
   the spawner is the only embedded agent. Repeatable `--spawn-agents` opts into
   startup packages; explicit `--spawn-agents=` clears that list. Reject the flag
-  outside all-in-one mode. Preserve explicit release pins and production package
-  resolution; an explicitly requested package's download or launch failure must
+  outside all-in-one mode. Accept public GitHub URLs, `@stable`, and exact pins;
+  omitted versions mean stable. Keep version resolution and saved pins in the
+  spawner; an explicitly requested package's download or launch failure must
   fail startup. Package downloads require Internet access.
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a

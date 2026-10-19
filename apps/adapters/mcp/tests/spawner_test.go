@@ -18,7 +18,7 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	a := connect(t)
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
 	var provision operations.Operation
-	input := object{"package": reference}
+	input := object{"package": "https://github.com/defos-ai/fixture-agent"}
 	a.call("start_operation", object{"mission_name": "install-agent", "input": input}, &provision)
 	if provision.Preflight == nil || !provision.Preflight.Ready {
 		t.Fatalf("spawner is not ready: %+v", provision.Preflight)

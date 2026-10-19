@@ -227,7 +227,7 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	args = append(args, "--spawn-agents=github.com/defos-ai/commander/apps/agents/builder@v0.2.0")
+	args = append(args, "--spawn-agents=github.com/defos-ai/commander/apps/agents/builder@v0.2.0", "--spawn-agents=https://github.com/defos-ai/commander-example-agent", "--spawn-agents=github.com/defos-ai/commander-example-agent@stable")
 	if err := cli.Run(ctx, args, io.Discard); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pre-canceled host returned %v", err)
 	}

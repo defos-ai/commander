@@ -128,7 +128,7 @@ func TestStableSelectionPinsNativeAndDockerPackages(t *testing.T) {
 				requests = append(requests, request.URL.String())
 				switch request.URL.String() {
 				case "https://api.github.com/repos/defos-ai/example-agent/releases/latest":
-					return response(request, http.StatusOK, `{"tag_name":"v0.1.0","draft":false,"prerelease":false}`), nil
+					return response(request, http.StatusOK, privateRelease("v0.1.0")), nil
 				case releaseURL + "agent.yaml", moduleReleaseURL + "agent.yaml":
 					body := packageManifest(binary) + "docker:\n  image: ghcr.io/defos-ai/example-agent@sha256:" + strings.Repeat("a", 64) + "\n"
 					return response(request, http.StatusOK, body), nil
@@ -139,14 +139,12 @@ func TestStableSelectionPinsNativeAndDockerPackages(t *testing.T) {
 					return nil, errors.New("unexpected request")
 				}
 			})
-			metadata := agentpackages.NewClient(transport)
-			t.Cleanup(metadata.CloseIdleConnections)
-			pinned, err := metadata.Resolve(context.Background(), strings.TrimSuffix(reference, "@v0.1.0")+"@stable")
+			resolver := packages.NewResolver(transport)
+			t.Cleanup(resolver.CloseIdleConnections)
+			pinned, err := resolver.Pin(context.Background(), strings.TrimSuffix(reference, "@v0.1.0")+"@stable")
 			if err != nil || pinned.String() != reference {
 				t.Fatalf("stable reference: %s, %v", pinned.String(), err)
 			}
-			resolver := packages.NewResolver(transport)
-			t.Cleanup(resolver.CloseIdleConnections)
 			pkg, err := resolver.Resolve(context.Background(), pinned.String())
 			if err != nil {
 				t.Fatal(err)

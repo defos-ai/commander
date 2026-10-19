@@ -70,6 +70,7 @@ func TestSpawnAgentScopesEnvironmentTokenToPrivatePackages(t *testing.T) {
 
 func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "")
+	const privateURL = "https://github.com/defos-ai/commander-example-agent"
 	for _, cancelWaiting := range []bool{false, true} {
 		name := "delivered"
 		if cancelWaiting {
@@ -106,7 +107,7 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 			finished := make(chan struct{})
 			go func() {
 				defer close(finished)
-				result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`","visibility":"private"}`))
+				result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+privateURL+`","visibility":"private"}`))
 				if bytes.Contains(result.Output, []byte("managed-github-token")) {
 					t.Error("spawn output exposed the managed token")
 				}
@@ -153,7 +154,7 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 			if err != nil || len(launched) != 1 || len(requested) != 0 {
 				t.Fatalf("secret delivery did not finish exactly one launch: %v", err)
 			}
-			if call := <-launched; call != (spawnInvocation{requestID: "task:" + work.TaskID, reference: actionPackage}) {
+			if call := <-launched; call != (spawnInvocation{requestID: "task:" + work.TaskID, reference: privateURL}) {
 				t.Fatalf("secret wait changed execution identity: %+v", call)
 			}
 			if !bytes.Equal(received, make([]byte, len(received))) || !bytes.Equal(provided, make([]byte, len(provided))) {

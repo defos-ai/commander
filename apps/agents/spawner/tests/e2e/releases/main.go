@@ -65,6 +65,10 @@ func run(ctx context.Context) error {
 		return err
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/defos-ai/fixture-agent/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"tag_name":"v0.1.0","draft":false,"prerelease":false,"published_at":"2026-01-01T00:00:00Z"}`)
+	})
 	mux.HandleFunc("GET "+releasePath+"agent.yaml", func(w http.ResponseWriter, r *http.Request) {
 		body := nativeManifest
 		if registry := os.Getenv("FIXTURE_REGISTRY_URL"); registry != "" {
@@ -175,7 +179,7 @@ func createCertificate() (tls.Certificate, error) {
 		return tls.Certificate{}, err
 	}
 	server := &x509.Certificate{
-		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "github.com"}, DNSNames: []string{"github.com"},
+		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "github.com"}, DNSNames: []string{"github.com", "api.github.com"},
 		NotBefore: ca.NotBefore, NotAfter: ca.NotAfter,
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}

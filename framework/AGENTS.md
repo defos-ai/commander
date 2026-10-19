@@ -98,20 +98,20 @@
   and secrets out of manifests.
   See the [package contract](../docs/agent-packages.md#source-template).
   Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
-- [`agent/packages`](agent/packages/) owns GitHub package references,
-  strict discovery-catalog parsing, bounded remote catalog loading and resolution
-  of `stable` to a pinned version. The official source is
+- [`agent/packages`](agent/packages/) owns GitHub package reference/selector
+  parsing, strict discovery catalogs and bounded remote catalog loading. Selectors
+  accept GitHub HTTPS URLs or canonical references, with omitted versions meaning
+  `@stable`; exact persisted references remain strict. The official source is
   [`catalog/agents.yaml`](../catalog/agents.yaml); runtime readers fetch a configured
   remote source without requiring a checkout. Catalog entries require repository
   `visibility: public | private`; this describes access, not trust or image
-  visibility. The shared metadata client remains anonymous. Spawner's package
-  downloader supports explicit per-call authentication; private catalog integration
-  remains separate. Catalog entries support discovery,
-  not an enforced installation allowlist. Resolve `stable` from the repository's
-  promoted root GitHub Latest release, require a stable semantic version and map
-  module references to that version's module tag. Never guess or fall back to
-  another release. Manifest resolution and executable downloads remain in the
-  spawner; the framework must not depend on it. Cover metadata behavior and the
+  visibility. The shared catalog client remains anonymous. Catalog entries
+  support discovery, not an enforced installation allowlist. The spawner owns
+  version selection, manifest resolution and executable downloads, including
+  scoped GitHub authentication. Its resolver selects `stable` from the repository's
+  published root Latest release and maps module references to that version's
+  module tag. The spawner runtime saves the exact pin before preparing a launch. The framework
+  must not depend on the spawner. Cover catalog/reference behavior and the
   official catalog in [`tests/agent/packages`](tests/agent/packages/).
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.

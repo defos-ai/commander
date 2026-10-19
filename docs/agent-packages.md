@@ -23,55 +23,52 @@ capabilities, not live readiness or complete mission coverage. The catalog is no
 installation allowlist; an operator must trust any selected package author.
 See the [catalog guide](../catalog/README.md).
 
-Catalog lookup belongs to the Commander client. Installation calls pass a pinned
-`package` and `visibility` to the install mission and `spawn-agent`. The spawner does not
-load a catalog. With `visibility: private`, it uses environment `GITHUB_TOKEN`
-first, otherwise requests the managed secret scoped to `spawner-agent`. Supply it
-through the existing Playground/Admin secret form, outside chat. The same task
-waits and resumes within its existing timeout. Public or omitted visibility
-keeps downloads anonymous. Visibility is an authentication hint, not an access
-grant; the GitHub token's permissions determine access. Private `stable`
-resolution and private Docker pulls remain separate integration steps. The
-shared metadata client remains anonymous.
+Catalog lookup belongs to the Commander client. MCP exposes the read-only
+`list_agent_packages` tool; pass a selected entry's `package` and `visibility`
+to the install mission and `spawn-agent`. A direct GitHub repository URL works
+without a catalog lookup. The spawner does not load a catalog.
 
 [`framework/agent/packages`](../framework/agent/packages/) owns shared reference
-parsing, strict catalog parsing, bounded remote loading and resolution of `stable`
-to a pinned reference. `Client.LoadCatalog(ctx, source)` accepts an explicitly
-configured public HTTPS URL, so metadata loading needs no source checkout. The
-official source URL for application integration is
-`https://raw.githubusercontent.com/defos-ai/commander/main/catalog/agents.yaml`,
-used by MCP unless `AGENT_CATALOG_URL` overrides it; the framework does not hardcode it. Catalog loads have
-a 64 KiB limit and a 30-second deadline. Source URLs must have no credentials,
-query or fragment, and redirects are rejected. The default client uses no
-environment proxies, cookies or credentials. The spawner continues to own release
-manifest lookup, native downloads and launch behavior.
+parsing, strict catalog parsing and bounded remote catalog loading.
+`Client.LoadCatalog(ctx, source)` accepts an explicitly configured public HTTPS
+URL, so discovery needs no source checkout. MCP defaults to
+`https://raw.githubusercontent.com/defos-ai/commander/main/catalog/agents.yaml`;
+`AGENT_CATALOG_URL` overrides it. The framework does not hardcode this source.
+Catalog loads have a 64 KiB limit and a 30-second deadline. Source URLs must have
+no credentials, query or fragment; redirects are rejected. Loading is lazy, and
+catalog failure does not prevent installation from a direct reference.
 
-Catalog references use
-`github.com/<owner>/<repository>[/<module-path>]@<version>`, with an explicit
-`vMAJOR.MINOR.PATCH` or `stable`. To resolve `stable`, read that repository's promoted
-GitHub **Latest** release and require its tag to be a root stable semantic version.
-For example, Latest `v0.2.0` resolves
+The spawner owns version resolution, manifest lookup, downloads and launching:
+
+| Input | Selected version |
+| --- | --- |
+| `https://github.com/owner/repository` | `stable` |
+| `github.com/owner/repository[/module/path]` | `stable` |
+| `github.com/owner/repository[/module/path]@stable` | `stable` |
+| `github.com/owner/repository[/module/path]@v0.2.0` | Exactly `v0.2.0` |
+
+`stable` reads the repository's promoted GitHub **Latest** release and requires a
+published root stable semantic version. For example, Latest `v0.2.0` resolves
 `github.com/defos-ai/commander/apps/agents/builder@stable` to
-`github.com/defos-ai/commander/apps/agents/builder@v0.2.0`; the spawner then looks
-up `apps/agents/builder/v0.2.0`. Standalone repository references use the same
-version directly as their release tag. `Client.Resolve(ctx, selector)` returns a
-validated pinned reference without a network request when given an explicit
-version. Resolving `stable` reads the GitHub API's latest-release metadata with a
-1 MiB limit and a 30-second deadline.
+`github.com/defos-ai/commander/apps/agents/builder@v0.2.0`; the package then uses
+the `apps/agents/builder/v0.2.0` release. Standalone packages use the root version
+tag directly. Explicit pins skip Latest lookup. `latest` is not a supported selector.
 
 Missing, draft, prerelease or non-version Latest releases are errors. Resolution
-does not search other tags or fall back to another package version. A pinned
-reference does not prove the release contains `agent.yaml`: the existing spawner
-resolver checks that when fetching the package. Catalog inclusion also does not
-make packages available before their release workflows publish them.
+does not search other tags or fall back to another version. The spawner saves
+the canonical requested selector and exact version before fetching the manifest
+or executable or pulling an image. Retries of that request reuse the saved pin;
+a new request resolves `stable` again. The result reports the exact package.
+Catalog inclusion does not prove that a package or its manifest is published.
 
-MCP exposes `list_agent_packages` to list candidates and `resolve_agent_package`
-to pin a selected `package` with its `visibility`. The resolver accepts any
-compatible reference, without requiring catalog membership. Public `@stable`
-references resolve through GitHub; private references must already name an exact
-version. Both tools are read-only, and the host makes no startup metadata request.
-Save the returned pin and visibility as installation input; do not resolve again
-on a retry. The spawner action and CLI still accept only exact versions.
+With `visibility: private`, the spawner uses environment `GITHUB_TOKEN` first,
+otherwise requests the managed secret scoped to `spawner-agent`. Supply it through
+the existing Playground/Admin secret form, outside chat. The same task waits and
+resumes within its existing timeout. This token covers both stable resolution
+and private release downloads. Public or omitted visibility keeps requests
+anonymous. Visibility is an authentication hint, not an access grant; the token's
+permissions determine access. Docker image pulls remain anonymous. Catalog
+loading is also anonymous and does not receive the spawner's token.
 
 ## Release manifest
 
@@ -170,12 +167,11 @@ existing releases are unchanged. See [release publication](releases.md#agent-pac
 ## Resolving a package
 
 A reference has the form
-`github.com/<owner>/<repository>[/<module-path>]@<version>`. The current spawner
-requires explicit `vMAJOR.MINOR.PATCH` versions. Resolve catalog `stable`
-references through the shared metadata API before submitting a package to it;
-`latest` is not a supported reference version. A repository package uses the root
-version tag; a module package uses `<module-path>/<version>`. Every package
-resolves `agent.yaml` from that tag's release in the same repository.
+`github.com/<owner>/<repository>[/<module-path>]@<version>`. A GitHub HTTPS
+repository URL is also accepted. The spawner normalizes missing versions to
+`stable`, resolves them and saves an exact `vMAJOR.MINOR.PATCH` pin. A repository
+package uses the root version tag; a module package uses `<module-path>/<version>`.
+Every package resolves `agent.yaml` from that tag's release in the same repository.
 
 For `github.com/defos-ai/commander-example-agent@v0.1.0`:
 
@@ -200,7 +196,7 @@ credentials beyond explicitly authenticated GitHub API requests or into redirect
 
 For authenticated downloads, attach a caller-owned token with
 `packages.WithGitHubToken(ctx, token)` from the spawner's `packages` package, and
-use that context for both `Resolve` and `DownloadNative`. The downloader reads
+use that context for `Pin`, `Resolve` and `DownloadNative`. The downloader reads
 the exact release tag through GitHub's API, checks it is published and not a
 prerelease, selects the asset by name, and downloads its content by ID. It ignores
 asset URLs from the response. Metadata is limited to 2 MiB and 30 seconds; native
@@ -281,6 +277,10 @@ later through chat. See [Playground](../apps/playground/README.md#startup-agents
 Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
+A package selection record saves the requested selector and resolved version
+before downloads. Invalid, partial or conflicting selections fail closed; no token
+is saved. The existing launch intent separately records process/container ownership.
+
 A stable launch request identifies an instance across retries; its agent ID must
 be allocated and recorded before starting the process/container. Startup requests
 are scoped to a deployment and configured instance; runtime requests are tied to
@@ -323,7 +323,7 @@ scaling, automatic upgrades and replacement are outside the spawner's role.
 
 Runtime spawning uses the bundled `install-agent` mission in a separate
 provisioning operation. Its only required action is `spawn-agent`, so it is ready
-with only the spawner registered. Start it with `{"package":"<pinned reference>"}`,
+with only the spawner registered. Start it with `{"package":"<package reference or GitHub URL>"}`,
 then assign `spawn-agent` with the same input. Review the saved result, resolve
 its model continuation with no follow-up actions, and complete provisioning.
 Recheck the agent's readiness and the target mission's preflight before work.

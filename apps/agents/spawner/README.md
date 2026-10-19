@@ -7,8 +7,9 @@ Any compatible GitHub release package can be installed, including packages
 outside Commander's discovery catalog. Read the spawner's registered
 responsibilities through `list_agents` or `describe_agent` for installation
 guidance, and `describe_action` for the `spawn-agent` input schema.
-MCP's `list_agent_packages` discovers catalog entries; `resolve_agent_package`
-pins a public `@stable` reference before submitting it to the spawner.
+MCP's `list_agent_packages` discovers catalog entries. Pass an entry's package
+and visibility, or a GitHub URL, to the spawner. An omitted version or `@stable`
+selects the repository's promoted Latest release; an explicit `@v0.2.0` pins it.
 
 ## Run
 
@@ -29,8 +30,9 @@ To start a published package immediately, add:
 --spawn-agents github.com/defos-ai/commander-example-agent@v0.2.0
 ```
 
-Repeat the flag for multiple instances. The release must contain `agent.yaml`
-and a native executable for your OS and architecture.
+Repeat the flag for multiple instances. A bare GitHub URL or `@stable` also works;
+the spawner resolves and saves the version before downloading. The release must
+contain `agent.yaml` and a native executable for your OS and architecture.
 
 For agents in a repository's Go module, include the module path. The next
 Commander release will provide this spawner package:
@@ -126,7 +128,7 @@ the manifest; it does not establish whether the program is safe to run.
 
 ### Private GitHub packages
 
-Pass the pinned package reference and `"visibility":"private"` from the catalog
+Pass the package reference or GitHub URL and `"visibility":"private"` from the catalog
 or operator to the install mission and `spawn-agent`. The spawner does not load
 the catalog. It uses its environment `GITHUB_TOKEN` first; otherwise it requests
 the managed `GITHUB_TOKEN` secret for `spawner-agent`. Supply the value through
@@ -140,11 +142,10 @@ are never saved in launch records or passed to spawned agents.
 
 ## Current scope
 
-The action supports public and private pinned GitHub releases. Docker image pulls
-remain anonymous; private registry authentication is a separate step. Startup
-`--spawn-agents` remains public-only. The action and startup flag require pinned
-versions; resolve public `@stable` references through MCP first. Private
-`@stable` resolution is not supported yet.
+The action supports public and private GitHub packages, including stable resolution.
+Docker image pulls remain anonymous; private registry authentication is a separate
+step. Startup `--spawn-agents` remains public-only. Both inputs accept GitHub URLs,
+`@stable`, and exact versions. A missing version means stable.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.
 
@@ -168,9 +169,11 @@ Native children also receive the deployment's `CHROMIUM_PATH` and
 `CHROMIUM_NO_SANDBOX` settings when set. These let browser agents use the selected
 Chromium executable and the container's sandbox configuration.
 
-Launch records live in `./state/spawner`; set `SPAWNER_STATE_DIR` to change it.
+Package selections and launch records live in `./state/spawner`; set
+`SPAWNER_STATE_DIR` to change it. The exact version is saved before downloads;
+retries reuse it even if Latest changes. A new request can select the newer release.
 Native retries reuse the live child in the same host. After a native host restart,
-existing requests report uncertainty; inspect old processes before requesting
+existing launch intents report uncertainty; inspect old processes before requesting
 replacements with a new state directory.
 
 Docker retries also work after a spawner restart: they verify the saved ownership

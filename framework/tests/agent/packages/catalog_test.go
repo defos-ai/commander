@@ -47,16 +47,22 @@ func TestPackageSelectors(t *testing.T) {
 		{"github.com/defos-ai/web-agent@v0.1.0", packages.Reference{Owner: "defos-ai", Repository: "web-agent", Version: "v0.1.0"}, "v0.1.0"},
 		{"github.com/defos-ai/commander/apps/agents/builder@v1.2.3", packages.Reference{Owner: "defos-ai", Repository: "commander", ModulePath: "apps/agents/builder", Version: "v1.2.3"}, "apps/agents/builder/v1.2.3"},
 		{"github.com/Example/Repo.Name/Module_v2@v0.0.1", packages.Reference{Owner: "Example", Repository: "Repo.Name", ModulePath: "Module_v2", Version: "v0.0.1"}, "Module_v2/v0.0.1"},
+		{"github.com/owner/repo/actions@v1.2.3", packages.Reference{Owner: "owner", Repository: "repo", ModulePath: "actions", Version: "v1.2.3"}, "actions/v1.2.3"},
 		{"github.com/defos-ai/web-agent@stable", packages.Reference{Owner: "defos-ai", Repository: "web-agent", Version: "stable"}, "stable"},
 		{"github.com/defos-ai/commander/apps/agents/builder@stable", packages.Reference{Owner: "defos-ai", Repository: "commander", ModulePath: "apps/agents/builder", Version: "stable"}, "apps/agents/builder/stable"},
+		{"github.com/defos-ai/web-agent", packages.Reference{Owner: "defos-ai", Repository: "web-agent", Version: "stable"}, "stable"},
+		{"https://github.com/defos-ai/web-agent/", packages.Reference{Owner: "defos-ai", Repository: "web-agent", Version: "stable"}, "stable"},
+		{"https://github.com/defos-ai/web-agent@stable", packages.Reference{Owner: "defos-ai", Repository: "web-agent", Version: "stable"}, "stable"},
+		{"https://github.com/defos-ai/commander/apps/agents/builder", packages.Reference{Owner: "defos-ai", Repository: "commander", ModulePath: "apps/agents/builder", Version: "stable"}, "apps/agents/builder/stable"},
+		{"https://github.com/defos-ai/commander/apps/agents/builder@v1.2.3", packages.Reference{Owner: "defos-ai", Repository: "commander", ModulePath: "apps/agents/builder", Version: "v1.2.3"}, "apps/agents/builder/v1.2.3"},
 	} {
 		t.Run(tc.value, func(t *testing.T) {
 			got, err := packages.ParseSelector(tc.value)
-			if err != nil || got != tc.want || got.String() != tc.value || got.ReleaseTag() != tc.tag {
+			if err != nil || got != tc.want || got.String() != tc.want.String() || got.ReleaseTag() != tc.tag {
 				t.Fatalf("selector: %#v, tag %q, error %v", got, got.ReleaseTag(), err)
 			}
 			pinned, err := packages.ParseReference(tc.value)
-			if got.Version == "stable" {
+			if got.Version == "stable" || tc.value != got.String() {
 				if err == nil {
 					t.Fatal("exact package parser accepted a moving selector")
 				}
@@ -67,15 +73,21 @@ func TestPackageSelectors(t *testing.T) {
 	}
 
 	for _, value := range []string{
-		"", "web", "github.com/owner/repo", "github.com/owner/repo@", "github.com/owner/repo@latest",
+		"", "web", "github.com/owner/repo@", "github.com/owner/repo@latest",
 		"github.com/owner/repo@v0.0.0", "github.com/owner/repo@v01.2.3", "github.com/owner/repo@v1.2",
 		"github.com/owner/repo@v1.2.3-rc.1", "github.com/owner/repo@v1.2.3+build.1", "github.com/owner/repo@1.2.3",
 		"github.com/owner/repo@Stable", "github.com/owner/repo@stable?token=secret", "github.com/owner/repo@v1.2.3#tag",
-		"https://github.com/owner/repo@v1.2.3", "gitlab.com/owner/repo@v1.2.3", "github.com/owner/repo@v1.2.3@stable",
+		"gitlab.com/owner/repo@v1.2.3", "github.com/owner/repo@v1.2.3@stable",
 		" github.com/owner/repo@stable", "github.com/owner/repo@stable\n", "github.com//repo@stable",
 		"github.com/owner//module@stable", "github.com/owner/repo/@stable", "github.com/owner/repo/module//nested@stable",
 		"github.com/owner/repo/../module@stable", "github.com/owner/repo/module..name@stable", "github.com/owner/repo/module.@stable",
 		"github.com/owner/repo/module.lock@stable", "github.com/owner/repo/module%2fnested@stable", `github.com/owner/repo/module\nested@stable`,
+		"http://github.com/owner/repo", "https://github.com:443/owner/repo", "https://github.com:8443/owner/repo",
+		"https://user:secret@github.com/owner/repo", "https://github.com.evil/owner/repo", "https://evil.example/owner/repo",
+		"https://github.com/owner/repo?token=secret", "https://github.com/owner/repo?", "https://github.com/owner/repo#",
+		"https://github.com/owner/repo#fragment", "https://github.com/owner/repo/%61pps", "https://github.com/owner/repo/tree/main",
+		"https://github.com/owner/repo\n@v1.2.3", "https://github.com/owner/\trepo",
+		"https://github.com/owner/repo/blob/main/agent.yaml", "github.com/owner/repo/tree/main", "https://github.com/owner/repo/releases/tag/v1.2.3",
 	} {
 		t.Run("invalid/"+value, func(t *testing.T) {
 			if _, err := packages.ParseSelector(value); err == nil {

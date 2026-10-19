@@ -11,12 +11,12 @@ Read the [root guide](../AGENTS.md) and
   parsing, remote loading and package-reference validation.
 - Visibility describes the GitHub repository; package trust and Docker image
   visibility are separate. Commander client integration owns catalog lookup and
-  passes the pinned package and visibility to `spawn-agent`; never load the
+  passes the selected package and visibility unchanged to `spawn-agent`; never load the
   catalog in spawner. Private actions use environment `GITHUB_TOKEN` first,
   then a managed secret scoped to `spawner-agent` through the existing
   Playground/Admin exchange. Public or omitted visibility stays anonymous.
-  The metadata client remains anonymous; private `stable` resolution and Docker
-  registry authentication are not integrated yet.
+  The spawner owns public and private `stable` resolution and saves the exact pin
+  for retries. Catalog loading and Docker image pulls remain anonymous.
 - Describe implemented capabilities. Builder currently prepares source through
   `checkout-template`; do not advertise coding, builds or publication as complete.
   Catalog aliases are separate from registered agent types and action names.
@@ -28,12 +28,11 @@ Read the [root guide](../AGENTS.md) and
   Keep deployment settings, credentials, action schemas and readiness out of it.
   The spawner owns manifest and executable downloads. Shared metadata code must
   remain independent of the spawner and must not require this checkout at runtime.
-- MCP exposes `list_agent_packages` and `resolve_agent_package`; the latter
-  accepts references, not aliases, and returns a pin plus supplied visibility.
-  Public channels resolve before installation; exact private references need no
-  metadata request. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading is
-  lazy and catalog failure must not prevent direct pinned installs. Spawner
-  action and CLI inputs continue to require pins, not aliases or `@stable`.
+- MCP exposes only `list_agent_packages` for package discovery; version resolution
+  belongs to the spawner. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading
+  is lazy and catalog failure must not prevent direct installs. Spawner action
+  and CLI inputs accept GitHub URLs, bare references, `@stable` or exact pins;
+  aliases remain discovery names, not installation inputs.
 
 ## Validation
 

@@ -60,7 +60,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 
 func StartWithOptions(ctx context.Context, options Options) (session *Session, err error) {
 	for _, reference := range options.SpawnAgents {
-		if _, err := packages.ParseReference(reference); err != nil {
+		if _, err := packages.ParseSelector(reference); err != nil {
 			return nil, fmt.Errorf("spawn-agents: %w", err)
 		}
 	}

@@ -1,7 +1,7 @@
 [
   {
     "name": "install-agent",
-    "objective": "Install one agent from an explicit pinned GitHub release. Read spawn-agent's schema and readiness, then assign spawn-agent with the mission input, preserving the supplied visibility; omitted visibility means public. Private repositories use the spawner's GitHub token or the existing managed-secret form; never request token values in chat or action input. Review its saved result and resolve the continuation with no follow-up actions. Recheck the registered agent's action readiness before completing with its agent_id and any limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready.",
+    "objective": "Install one agent from a GitHub package reference or repository URL. The spawner resolves an omitted version or @stable and saves the exact version for retries; explicit @vMAJOR.MINOR.PATCH pins are also accepted. Read spawn-agent's schema and readiness, then assign spawn-agent with the mission input, preserving the supplied visibility; omitted visibility means public. Private repositories use the spawner's GitHub token or the existing managed-secret form; never request token values in chat or action input. Review its saved result and resolve the continuation with no follow-up actions. Recheck the registered agent's action readiness before completing with its agent_id and any limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready.",
     "required_actions": [
       "spawn-agent"
     ],
@@ -23,8 +23,8 @@
       "properties": {
         "package": {
           "type": "string",
-          "pattern": "^github\\.com/[^/@?#\\s]+/[^@?#\\s]+@v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
-          "description": "Exact GitHub release with optional module path: github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH."
+          "pattern": "^(https://)?github\\.com/[^/@?#:\\s]+/[^@?#:\\s]+(@(stable|v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)))?$",
+          "description": "GitHub repository URL or github.com/owner/repository[/module/path], optionally followed by @stable or @vMAJOR.MINOR.PATCH; omitted version means stable."
         },
         "visibility": {
           "type": "string",

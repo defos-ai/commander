@@ -13,7 +13,6 @@ import (
 )
 
 const clientCatalog = "schema_version: 1\nagents:\n  builder:\n    description: Build an agent\n    package: github.com/acme/agents/apps/agents/builder@stable\n    visibility: public\n"
-const clientRelease = `{"tag_name":"v1.2.3","draft":false,"prerelease":false}`
 
 type metadataTransport func(*http.Request) (*http.Response, error)
 
@@ -44,37 +43,6 @@ func checkPublicMetadataRequest(t *testing.T, request *http.Request) {
 	deadline, ok := request.Context().Deadline()
 	if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 30*time.Second {
 		t.Fatal("metadata request needs a positive deadline of at most 30 seconds")
-	}
-}
-
-func TestClientResolvesStableToFreshPins(t *testing.T) {
-	calls := 0
-	client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
-		checkPublicMetadataRequest(t, request)
-		if request.URL.String() != "https://api.github.com/repos/acme/agents/releases/latest" {
-			t.Fatalf("unexpected latest release endpoint: %s", request.URL)
-		}
-		versions := []string{"v1.2.3", "v1.3.0"}
-		if calls >= len(versions) {
-			t.Fatal("resolving an exact saved package contacted the network")
-		}
-		body := `{"tag_name":"` + versions[calls] + `","draft":false,"prerelease":false,"id":42,"assets":[],"html_url":"https://github.com/acme/agents/releases"}`
-		calls++
-		return metadataResponse(request, http.StatusOK, io.NopCloser(strings.NewReader(body))), nil
-	}))
-	t.Cleanup(client.CloseIdleConnections)
-	selector := "github.com/acme/agents/apps/agents/builder@stable"
-	old, err := client.Resolve(context.Background(), selector)
-	if err != nil || old.String() != "github.com/acme/agents/apps/agents/builder@v1.2.3" || old.ReleaseTag() != "apps/agents/builder/v1.2.3" {
-		t.Fatalf("first stable resolution: %#v, %v", old, err)
-	}
-	current, err := client.Resolve(context.Background(), selector)
-	if err != nil || current.Version != "v1.3.0" {
-		t.Fatalf("stable did not advance: %#v, %v", current, err)
-	}
-	saved, err := client.Resolve(context.Background(), old.String())
-	if err != nil || saved != old || calls != 2 {
-		t.Fatalf("saved exact reference changed: %#v, %v; requests: %d", saved, err, calls)
 	}
 }
 
@@ -116,35 +84,6 @@ func TestClientRejectsUnsafeSourcesBeforeRequest(t *testing.T) {
 			t.Errorf("unsafe catalog source should fail without echoing input: %v", err)
 		}
 	}
-	if _, err := client.Resolve(context.Background(), "https://private-marker.example/release"); err == nil || strings.Contains(err.Error(), "private-marker") {
-		t.Errorf("URL selector should fail without echoing input: %v", err)
-	}
-}
-
-func TestClientRejectsInvalidLatestRelease(t *testing.T) {
-	for _, tc := range []struct{ name, body string }{
-		{"malformed JSON", `{"tag_name": private-marker}`},
-		{"missing version", `{"draft":false,"prerelease":false}`},
-		{"missing draft flag", `{"tag_name":"v1.2.3","prerelease":false}`},
-		{"missing prerelease flag", `{"tag_name":"v1.2.3","draft":false}`},
-		{"null flag", `{"tag_name":"v1.2.3","draft":null,"prerelease":false}`},
-		{"draft", `{"tag_name":"v1.2.3","draft":true,"prerelease":false}`},
-		{"prerelease", `{"tag_name":"v1.2.3","draft":false,"prerelease":true}`},
-		{"zero version", `{"tag_name":"v0.0.0","draft":false,"prerelease":false}`},
-		{"prerelease tag", `{"tag_name":"v1.2.3-rc.1","draft":false,"prerelease":false}`},
-		{"module tag", `{"tag_name":"apps/agents/builder/v1.2.3","draft":false,"prerelease":false}`},
-		{"trailing JSON", clientRelease + ` {"private-marker":true}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
-				return metadataResponse(request, http.StatusOK, io.NopCloser(strings.NewReader(tc.body))), nil
-			}))
-			t.Cleanup(client.CloseIdleConnections)
-			if ref, err := client.Resolve(context.Background(), "github.com/acme/agents@stable"); err == nil || ref != (packages.Reference{}) || strings.Contains(err.Error(), "private-marker") {
-				t.Fatalf("invalid latest release resolved: %#v, %v", ref, err)
-			}
-		})
-	}
 }
 
 type countedMetadataBody struct {
@@ -172,10 +111,6 @@ func TestClientBoundsMetadataAndClosesBodies(t *testing.T) {
 	}{
 		{"catalog", clientCatalog, packages.MaxCatalogBytes, func(client *packages.Client) error {
 			_, err := client.LoadCatalog(context.Background(), "https://catalog.example/agents.yaml")
-			return err
-		}},
-		{"release", clientRelease, 1 << 20, func(client *packages.Client) error {
-			_, err := client.Resolve(context.Background(), "github.com/acme/agents@stable")
 			return err
 		}},
 	} {
@@ -283,9 +218,6 @@ func TestClientPreservesContextCancellation(t *testing.T) {
 			t.Cleanup(client.CloseIdleConnections)
 			if _, err := client.LoadCatalog(ctx, "https://catalog.example/private-marker.yaml"); !errors.Is(err, expected) || strings.Contains(err.Error(), "private-marker") {
 				t.Fatalf("catalog cancellation: %v", err)
-			}
-			if _, err := client.Resolve(ctx, "github.com/acme/agents@stable"); !errors.Is(err, expected) {
-				t.Fatalf("release cancellation: %v", err)
 			}
 		})
 	}

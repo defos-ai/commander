@@ -87,12 +87,16 @@ func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
 	}
 	for _, input := range []string{
 		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0"}`,
+		`{"package":"https://github.com/defos-ai/commander-web-agent"}`,
+		`{"package":"github.com/defos-ai/commander-web-agent"}`,
+		`{"package":"github.com/defos-ai/commander/apps/agents/builder@stable"}`,
+		`{"package":"https://github.com/example/private-agent","visibility":"private"}`,
 		`{"package":"github.com/defos-ai/commander/apps/agents/builder@v0.2.0"}`,
 		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0","visibility":"public"}`,
 		`{"package":"github.com/example/private-agent@v0.2.0","visibility":"private"}`,
 	} {
 		if err := mission.ValidateInput(json.RawMessage(input)); err != nil {
-			t.Fatalf("pinned package rejected: %v", err)
+			t.Fatalf("package rejected: %v", err)
 		}
 		if err := mission.ValidateOutput(json.RawMessage(input), json.RawMessage(`{"agent_id":"web-agent-1234abcd","limitations":["Actions still need configuration"]}`)); err != nil {
 			t.Fatalf("registration with readiness limitations rejected: %v", err)

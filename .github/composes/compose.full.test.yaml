@@ -248,7 +248,7 @@ services:
   spawner-agent:
     <<: *agent
     image: commander-spawner-agent:test
-    command: ["--heartbeat-interval=1s", "--spawn-agents=github.com/defos-ai/fixture-agent@v0.1.0"]
+    command: ["--heartbeat-interval=1s", "--spawn-agents=https://github.com/defos-ai/fixture-agent"]
     user: "0:0"
     build:
       context: ../..
@@ -278,7 +278,7 @@ services:
       - fixture-data:/tls
     networks:
       default:
-        aliases: [github.com]
+        aliases: [github.com, api.github.com]
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/healthz"]
       interval: 1s

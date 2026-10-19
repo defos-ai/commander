@@ -47,6 +47,11 @@ func NewResolver(transport http.RoundTripper) *Resolver {
 		request.Header.Del("Proxy-Authorization")
 		request.Header.Del("Cookie")
 		request.Header.Del("Referer")
+		// Version and asset selection must come from the requested repository's
+		// API endpoint. Only asset bytes may follow GitHub's download redirects.
+		if len(via) != 0 && via[0].URL.Host == "api.github.com" && via[0].Header.Get("Accept") == "application/vnd.github+json" {
+			return errors.New("GitHub release metadata must not redirect")
+		}
 		return validateDownloadURL(request.URL)
 	}}}
 }

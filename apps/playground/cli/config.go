@@ -48,12 +48,12 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for supplying agent secrets; omitted asks when needed (COMMANDER_API_URL)")
 	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and spawner; credentials are generated when unset; temporary state is removed on exit")
 	flags.BoolVar(&c.NoAdmin, "no-admin", false, "Disable Admin UI in --all-in-one mode")
-	flags.Func("spawn-agents", "Optional all-in-one startup package; repeat to start multiple agents; no packages start by default; an empty value clears the list", func(value string) error {
+	flags.Func("spawn-agents", "Optional public all-in-one startup package or GitHub URL; omitted version means stable; repeat for multiple agents; no packages start by default; an empty value clears the list", func(value string) error {
 		if value == "" {
 			c.SpawnAgents = []string{}
 			return nil
 		}
-		if _, err := packages.ParseReference(value); err != nil {
+		if _, err := packages.ParseSelector(value); err != nil {
 			return err
 		}
 		c.SpawnAgents = append(c.SpawnAgents, value)

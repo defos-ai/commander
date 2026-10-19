@@ -64,6 +64,8 @@
   its model review rule: the client must inspect launch results and current
   readiness before completing provisioning. A mission waiting on the new
   actions cannot dispatch its own provisioning task.
+  Its `package` input accepts GitHub URLs, `@stable`, and exact versions. Leave
+  stable resolution and retry pinning to the spawner; an omitted version means stable.
   Its optional `visibility` input is `public` or `private`, defaulting to public;
   clients preserve it when assigning `spawn-agent`. Never accept tokens in mission input.
 

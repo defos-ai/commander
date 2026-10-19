@@ -155,12 +155,15 @@ launching. Downloads and child working directories stay within the temporary
 session and are removed after child shutdown. Installing a package does not
 install host dependencies or guarantee that all its actions are ready.
 
-For an explicit startup package, use `--spawn-agents`; repeat it for additional
+For a startup package, use `--spawn-agents`; repeat it for additional
 instances, for example:
 
 ```sh
 ./commander --all-in-one --spawn-agents github.com/defos-ai/commander-web-agent@v0.2.0
 ```
+
+A GitHub repository URL or `@stable` also works; an omitted version means stable.
+The spawner saves the resolved version and reuses it for retries.
 
 An explicitly requested startup package must download and launch successfully
 before startup completes. `--spawn-agents=` clears the explicit package list;

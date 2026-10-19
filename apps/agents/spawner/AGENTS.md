@@ -16,7 +16,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Default registered `Responsibilities` in `agent.go` own installation guidance;
   action descriptions own their input behavior. MCP and Playground discover this
   metadata instead of maintaining a package list or installation instructions.
-  Accept any compatible pinned GitHub package, including packages outside the
+  Accept any compatible GitHub package, including packages outside the
   discovery catalog. Preserve caller-supplied responsibilities. Keep mission
   rules in `install-agent`; agent guidance must not bypass controller dispatch.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
@@ -49,7 +49,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
 - Catalog lookup belongs to the Commander client. `spawn-agent` accepts the
-  pinned `package` and optional `visibility` (`public` by default). Never load a
+  `package` URL/reference and optional `visibility` (`public` by default). Never load a
   catalog in the spawner or add catalog configuration to its host. Private input
   uses environment `GITHUB_TOKEN` first, otherwise `action.RequestSecret` within
   the current execution. Keep discovery ready without a token; do not declare
@@ -57,23 +57,25 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   after spawning. Public input must remain anonymous even with an inherited
   download token. Visibility selects authentication, not authorization or trust.
 - The shared [package metadata](../../../framework/agent/packages/) package owns
-  GitHub reference parsing, discovery catalogs and `stable` resolution. The
-  spawner action accepts only explicit GitHub releases as
-  `github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH`. A module path
-  selects the `module/path/vMAJOR.MINOR.PATCH` release tag; a standalone package
-  selects `vMAJOR.MINOR.PATCH`. Fetch `agent.yaml` and its native assets from that
-  same tag, escaping the complete tag as one URL path component. The manifest
-  version remains `vMAJOR.MINOR.PATCH`. Build download URLs from validated
-  components; do not accept arbitrary URLs, fragments or moving aliases in task
-  input. Preserve the module path in launch records and request comparisons.
-  Action and CLI inputs require pins, not catalog aliases or `@stable`.
-  Clients can use MCP's `list_agent_packages` and `resolve_agent_package` to
-  discover entries and pin public channels before dispatch. Never resolve a
-  moving channel again during a launch retry.
+  reference parsing and discovery catalogs. `ParseSelector` accepts GitHub HTTPS
+  URLs or `github.com/owner/repository[/module/path]`, with an optional exact
+  `@vMAJOR.MINOR.PATCH` or `@stable`; omitted versions mean stable. `ParseReference`
+  remains strict for exact canonical persisted references and download inputs.
+  Reject URL credentials, queries, fragments and arbitrary download URLs.
+  Spawner's `packages.Resolver.Pin` resolves stable using the repository's promoted
+  root Latest version, preserving module paths. A module path selects
+  `module/path/vMAJOR.MINOR.PATCH`; standalone packages use the root version tag.
+  Missing or invalid Latest metadata must not fall back to another release.
+  MCP only lists packages; never load a catalog or accept catalog aliases here.
+  Native and Docker runtimes save the canonical selector and exact pin before
+  manifest/executable download or image pull. Reuse it on retries, including
+  preparation failures, and fail closed on conflicting or incomplete records.
+  Existing launch intents still fence process/container creation separately.
+  Return the exact package in results. Never save tokens in either record.
   Startup `--spawn-agents` remains anonymous; it has no visibility setting or
   serving execution through which to request a managed secret.
-  Manifest and executable downloads remain in this module; shared metadata code
-  must not import the spawner or require a local Commander checkout.
+  Version resolution, manifest and executable downloads remain in this module;
+  shared metadata code must not import the spawner.
 - The shared [manifest package](../../../framework/agent/manifest/) validates the
   complete manifest, including unused modes. Keep release version validation in
   that package and use it when parsing package references.
@@ -90,7 +92,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - `packages/resolver.go` uses a dedicated HTTP client. The default transport does
   not inherit proxies, cookies or credentials. Injected transports are trusted
   deployment configuration and must not add credentials. `packages.WithGitHubToken`
-  supplies a caller-owned token for one download context; keep its bytes intact
+  supplies a caller-owned token for one resolution/download context; keep its bytes intact
   until downloads finish, then clear them. Never retain it in the resolver,
   package metadata, launch records or child environment. Authenticated downloads
   use GitHub's fixed API endpoints to select a named asset from the exact published

@@ -2,7 +2,6 @@ package packages
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,13 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
-const maxReleaseBytes = 1 << 20
-
-// Client reads public package metadata. It does not download or launch agents.
+// Client reads a public discovery catalog. It does not resolve or launch agents.
 type Client struct {
 	client *http.Client
 }
@@ -35,8 +30,7 @@ func NewClient(transport http.RoundTripper) *Client {
 	}
 	return &Client{client: &http.Client{
 		Transport: transport,
-		// Metadata sources are explicit. A redirect must not silently change a
-		// trusted catalog or select a different repository after a rename.
+		// A redirect must not silently change the configured catalog source.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
 }
@@ -61,43 +55,6 @@ func (c *Client) LoadCatalog(ctx context.Context, source string) (Catalog, error
 	return catalog, nil
 }
 
-// Resolve pins a selector to a release version. Exact references need no network.
-// Save the returned reference before dispatch; a retry must reuse that value
-// rather than resolve a moving channel again. Manifest validation follows in the
-// spawner before downloading an executable or launching an image.
-func (c *Client) Resolve(ctx context.Context, selector string) (Reference, error) {
-	ref, err := ParseSelector(selector)
-	if err != nil {
-		return Reference{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return Reference{}, err
-	}
-	if ref.Version != "stable" {
-		return ref, nil
-	}
-	target := "https://api.github.com/repos/" + ref.Owner + "/" + ref.Repository + "/releases/latest"
-	data, err := c.read(ctx, target, "stable release", maxReleaseBytes)
-	if err != nil {
-		return Reference{}, err
-	}
-	var release struct {
-		Tag        string `json:"tag_name"`
-		Draft      *bool  `json:"draft"`
-		Prerelease *bool  `json:"prerelease"`
-	}
-	if err := json.Unmarshal(data, &release); err != nil {
-		return Reference{}, errors.New("invalid stable release metadata")
-	}
-	if !manifest.ValidVersion(release.Tag) || release.Draft == nil || *release.Draft || release.Prerelease == nil || *release.Prerelease {
-		return Reference{}, errors.New("stable release must be a published, non-prerelease vMAJOR.MINOR.PATCH root tag")
-	}
-	// A module package uses the repository's promoted root version. This requires
-	// lockstep releases, as used by Commander's built-in agents.
-	ref.Version = release.Tag
-	return ref, nil
-}
-
 func (c *Client) read(ctx context.Context, target, resource string, limit int64) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -106,10 +63,6 @@ func (c *Client) read(ctx context.Context, target, resource string, limit int64)
 		return nil, fmt.Errorf("invalid %s URL", resource)
 	}
 	request.Header.Set("User-Agent", "Commander-Package-Catalog")
-	if request.URL.Hostname() == "api.github.com" {
-		request.Header.Set("Accept", "application/vnd.github+json")
-		request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
-	}
 	response, err := c.client.Do(request)
 	if err != nil {
 		return nil, metadataError(ctx, resource)
@@ -120,7 +73,7 @@ func (c *Client) read(ctx context.Context, target, resource string, limit int64)
 	case http.StatusNotFound:
 		return nil, fmt.Errorf("%s not found (HTTP 404)", resource)
 	case http.StatusForbidden, http.StatusTooManyRequests:
-		return nil, fmt.Errorf("%s request denied or rate limited (HTTP %d); retry later or use an exact package version", resource, response.StatusCode)
+		return nil, fmt.Errorf("%s request denied or rate limited (HTTP %d); retry later", resource, response.StatusCode)
 	default:
 		return nil, fmt.Errorf("%s returned HTTP %d", resource, response.StatusCode)
 	}

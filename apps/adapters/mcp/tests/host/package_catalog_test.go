@@ -33,6 +33,8 @@ func (transport packageMetadataTransport) RoundTrip(request *http.Request) (*htt
 }
 
 func TestMCPPackageDiscovery(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "private-token-sentinel")
+	t.Setenv("GH_TOKEN", "private-token-sentinel")
 	const source = "https://catalog.example/agents.yaml"
 	const catalog = `schema_version: 1
 agents:
@@ -61,8 +63,6 @@ agents:
 			if catalogUnavailable.Load() {
 				status = http.StatusServiceUnavailable
 			}
-		case "https://api.github.com/repos/other-team/agents/releases/latest":
-			body = `{"tag_name":"v2.4.0","draft":false,"prerelease":false}`
 		default:
 			t.Errorf("unexpected metadata URL: %s", request.URL)
 			return nil, errors.New("unexpected metadata request")
@@ -102,61 +102,32 @@ agents:
 		listing.Packages[1].Description != "Private package fixture." || listing.Packages[1].Package != "github.com/private-org/private-agent@v1.2.3" || listing.Packages[1].Visibility != "private" {
 		t.Fatalf("package listing lost sorted catalog entries or visibility: %+v", listing)
 	}
-	for _, test := range []struct{ selector, visibility, pinned string }{
-		{"github.com/other-team/agents/apps/agents/custom@stable", "public", "github.com/other-team/agents/apps/agents/custom@v2.4.0"},
-		{"github.com/elsewhere/custom-agent@v4.5.6", "public", "github.com/elsewhere/custom-agent@v4.5.6"},
-		{"github.com/private-org/private-agent@v1.2.3", "private", "github.com/private-org/private-agent@v1.2.3"},
-	} {
-		var result struct{ Package, Visibility string }
-		call("resolve_agent_package", map[string]any{"package": test.selector, "visibility": test.visibility}, &result)
-		if result.Package != test.pinned || result.Visibility != test.visibility {
-			t.Fatalf("resolution lost the pinned reference or visibility: %+v", result)
-		}
-	}
-	if requests.Load() != 2 {
-		t.Fatal("resolution fetched the catalog or contacted GitHub for an exact reference")
-	}
 	for _, args := range []map[string]any{
-		{"package": "github.com/private-org/private-agent@stable", "visibility": "private"},
-		{"package": "github.com/acme/public-agent@v1.2.3"},
-		{"package": "github.com/acme/public-agent@v1.2.3", "visibility": ""},
-		{"package": "github.com/acme/public-agent@v1.2.3", "visibility": nil},
-		{"package": "github.com/acme/public-agent@v1.2.3", "visibility": "internal"},
-		{"package": "alpha", "visibility": "public"},
+		{"url": "https://other.example/agents.yaml"},
+		{"token": "private-token-sentinel"},
 	} {
-		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "resolve_agent_package", Arguments: args})
+		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "list_agent_packages", Arguments: args})
 		if err == nil && !result.IsError {
-			t.Fatalf("invalid package selector or visibility was accepted: %+v", args)
-		}
-		if args["visibility"] == "private" {
-			if err != nil || len(result.Content) != 1 {
-				t.Fatal("private stable selection did not return an actionable tool error")
-			}
-			content, ok := result.Content[0].(*sdkmcp.TextContent)
-			if !ok || !strings.Contains(content.Text, "pinned package version") {
-				t.Fatal("private stable selection did not request an exact version")
-			}
+			t.Fatal("tool input overrode the catalog URL or accepted a credential")
 		}
 	}
-	if requests.Load() != 2 {
-		t.Fatal("invalid or private stable selection reached anonymous metadata transport")
-	}
-	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "list_agent_packages", Arguments: map[string]any{"url": "https://other.example/agents.yaml"}})
-	if err == nil && !result.IsError {
-		t.Fatal("tool input overrode the deployment's catalog URL")
-	}
-	if requests.Load() != 2 {
-		t.Fatal("untrusted catalog URL input reached metadata transport")
+	if requests.Load() != 1 {
+		t.Fatal("untrusted tool input reached metadata transport")
 	}
 	catalogUnavailable.Store(true)
-	result, err = session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "list_agent_packages", Arguments: map[string]any{}})
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "list_agent_packages", Arguments: map[string]any{}})
 	if err != nil || !result.IsError {
 		t.Fatal("unavailable catalog must return a tool error")
 	}
-	var exact struct{ Package, Visibility string }
-	call("resolve_agent_package", map[string]any{"package": "github.com/elsewhere/custom-agent@v4.5.6", "visibility": "public"}, &exact)
-	if exact.Package != "github.com/elsewhere/custom-agent@v4.5.6" || requests.Load() != 3 {
-		t.Fatal("catalog failure prevented an unrelated exact package resolution")
+	var agents map[string]any
+	call("list_agents", map[string]any{}, &agents)
+	if requests.Load() != 2 {
+		t.Fatal("an unrelated tool fetched package metadata")
+	}
+	catalogUnavailable.Store(false)
+	call("list_agent_packages", map[string]any{}, &listing)
+	if len(listing.Packages) != 2 || requests.Load() != 3 {
+		t.Fatal("catalog discovery did not recover after the source became available")
 	}
 }
 

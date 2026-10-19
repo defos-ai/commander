@@ -33,6 +33,7 @@ type fakeDockerEngine struct {
 	current   map[string]docker.Container
 	created   chan docker.Spec
 	onStart   func(context.Context, docker.Container) error
+	pullErr   error
 	createErr error
 	startErr  error
 	pulls     int
@@ -47,6 +48,9 @@ func (e *fakeDockerEngine) Pull(ctx context.Context, image string) error {
 	e.pulls++
 	if image != dockerFixtureImage {
 		return errors.New("fixture received unexpected image")
+	}
+	if e.pullErr != nil {
+		return e.pullErr
 	}
 	return ctx.Err()
 }

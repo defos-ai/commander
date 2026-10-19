@@ -79,24 +79,26 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 	executor := newSpawnAction(t, launcher)
 	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
 	for _, execution := range []action.Execution{{CommandID: id.MessageID(), Work: work}, {CommandID: id.MessageID()}} {
-		ctx := action.WithExecution(t.Context(), execution)
-		result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`"}`))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var actual runtimes.Result
-		if err := json.Unmarshal(result.Output, &actual); err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(actual, launcher.result) {
-			t.Fatalf("spawn output lost registration or action readiness: %+v", actual)
-		}
-		wantID := "command:" + execution.CommandID
-		if execution.Work.TaskID != "" {
-			wantID = "task:" + execution.Work.TaskID
-		}
-		if call := launcher.calls[len(launcher.calls)-1]; call != (spawnInvocation{requestID: wantID, reference: actionPackage}) {
-			t.Fatalf("launcher received wrong dispatch identity: %+v", call)
+		for _, reference := range []string{actionPackage, "https://github.com/defos-ai/commander-example-agent", "github.com/defos-ai/commander-example-agent@stable"} {
+			ctx := action.WithExecution(t.Context(), execution)
+			result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+reference+`"}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var actual runtimes.Result
+			if err := json.Unmarshal(result.Output, &actual); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(actual, launcher.result) {
+				t.Fatalf("spawn output lost registration or action readiness: %+v", actual)
+			}
+			wantID := "command:" + execution.CommandID
+			if execution.Work.TaskID != "" {
+				wantID = "task:" + execution.Work.TaskID
+			}
+			if call := launcher.calls[len(launcher.calls)-1]; call != (spawnInvocation{requestID: wantID, reference: reference}) {
+				t.Fatalf("launcher received wrong dispatch identity: %+v", call)
+			}
 		}
 	}
 }
@@ -114,7 +116,7 @@ func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 		{name: "invalid command", execution: &action.Execution{CommandID: "../command"}, input: validInput},
 		{name: "incomplete task", execution: &action.Execution{Work: messages.WorkContext{TaskID: id.TaskID()}}, input: validInput},
 		{name: "invalid task with command", execution: &action.Execution{CommandID: id.MessageID(), Work: messages.WorkContext{TaskID: "../task"}}, input: validInput},
-		{name: "moving package", execution: &validExecution, input: json.RawMessage(`{"package":"github.com/defos-ai/commander-example-agent@stable"}`)},
+		{name: "unsupported channel", execution: &validExecution, input: json.RawMessage(`{"package":"github.com/defos-ai/commander-example-agent@latest"}`)},
 		{name: "missing package", execution: &validExecution, input: json.RawMessage(`{}`)},
 		{name: "null package", execution: &validExecution, input: json.RawMessage(`{"package":null}`)},
 		{name: "invalid visibility", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","visibility":"internal"}`)},

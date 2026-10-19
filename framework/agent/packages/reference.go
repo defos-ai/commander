@@ -3,6 +3,7 @@ package packages
 
 import (
 	"errors"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -24,9 +25,44 @@ func ParseReference(value string) (Reference, error) {
 	return parseReference(value, false)
 }
 
-// ParseSelector also accepts @stable for a package whose release is selected later.
+// ParseSelector accepts GitHub package references or HTTPS repository URLs.
+// An omitted version means @stable; the spawner selects the exact release later.
 func ParseSelector(value string) (Reference, error) {
-	return parseReference(value, true)
+	if strings.ContainsAny(value, " \t\r\n") {
+		return Reference{}, errors.New("agent package must not contain whitespace")
+	}
+	isURL := strings.HasPrefix(value, "https://")
+	explicitVersion := strings.Contains(value, "@")
+	if isURL {
+		target, err := url.Parse(value)
+		if err != nil || target.Host != "github.com" || target.User != nil || target.Opaque != "" || target.RawQuery != "" || target.ForceQuery || strings.ContainsAny(value, "#%") {
+			return Reference{}, errors.New("agent package URL must be HTTPS on github.com without credentials, query or fragment")
+		}
+		value = "github.com" + target.Path
+	}
+	if !strings.Contains(value, "@") {
+		// A copied repository homepage URL commonly includes a trailing slash.
+		if strings.HasSuffix(value, "/") && strings.Count(value, "/") == 3 {
+			value = strings.TrimSuffix(value, "/")
+		}
+		value += "@stable"
+	}
+	ref, err := parseReference(value, true)
+	if err != nil {
+		return Reference{}, err
+	}
+	first, _, _ := strings.Cut(ref.ModulePath, "/")
+	switch first {
+	case "tree", "blob":
+		if isURL || !explicitVersion {
+			return Reference{}, errors.New("agent package must identify a repository or module, not a GitHub web page")
+		}
+	case "releases", "issues", "pull", "pulls", "actions", "commit", "commits", "compare", "archive", "tags":
+		if isURL {
+			return Reference{}, errors.New("agent package must identify a repository or module, not a GitHub web page")
+		}
+	}
+	return ref, nil
 }
 
 func parseReference(value string, allowStable bool) (Reference, error) {
