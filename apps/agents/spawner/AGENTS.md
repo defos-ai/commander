@@ -38,8 +38,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   created by that call. `native.Manager` owns successful child downloads and
   removes them only after shutdown. Preserve records and child working data.
 - Native launch records use hashed request filenames and exclusive creation.
-  Flush the assigned `COMMANDER_AGENT_ID` before `Start`. An incomplete record,
-  conflicting request or an intent from another host must never authorize a new
+  Flush the assigned full agent ID before `Start`; pass only its eight lowercase
+  hex characters as `COMMANDER_AGENT_ID_SUFFIX`. The child constructs its full ID
+  using its fixed type. An incomplete record, conflicting request or an intent
+  from another host must never authorize a new
   launch. Do not adopt by PID: retries use the owned `exec.Cmd`, and a new host
   reports uncertainty. New/replacement launches need fresh IDs.
 - Subscribe before starting the child. Match both assigned ID and manifest type;

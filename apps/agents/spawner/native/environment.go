@@ -25,8 +25,10 @@ func copyEnvironment(input map[string]string) (map[string]string, error) {
 }
 
 func (m *Manager) environment(agentID, directory string) []string {
+	// The manager generated and saved this full ID; the child supplies its own type.
+	suffix := agentID[strings.LastIndexByte(agentID, '-')+1:]
 	values := []string{
-		"COMMANDER_AGENT_ID=" + agentID,
+		"COMMANDER_AGENT_ID_SUFFIX=" + suffix,
 		"BUS_URL=" + m.config.BusURL,
 		"STORAGE_URL=" + m.config.StorageURL,
 		"HOME=" + directory,

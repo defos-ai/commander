@@ -16,6 +16,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/id"
 	fsprovider "github.com/defos-ai/commander/providers/fs"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
@@ -41,13 +42,17 @@ func run() error {
 	if err := os.MkdirAll(storagePath, 0700); err != nil {
 		return err
 	}
-	agentID := os.Getenv("COMMANDER_AGENT_ID")
+	suffix := os.Getenv("COMMANDER_AGENT_ID_SUFFIX")
+	agentID, err := id.AgentIDFromSuffix("fixture-agent", suffix)
+	if err != nil {
+		return err
+	}
 	privateEnvironment := false
 	for _, key := range []string{"SPAWNER_PARENT_SECRET", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN"} {
 		privateEnvironment = privateEnvironment || os.Getenv(key) != ""
 	}
 	report, err := json.Marshal(map[string]any{
-		"agent_id": agentID, "pid": os.Getpid(), "inherited_secret": privateEnvironment,
+		"agent_id": agentID, "agent_id_suffix": suffix, "pid": os.Getpid(), "inherited_secret": privateEnvironment,
 		"region": os.Getenv("AWS_REGION"), "home": os.Getenv("HOME"),
 	})
 	if err != nil {

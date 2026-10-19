@@ -27,9 +27,11 @@ For runtime spawning, have the controller dispatch `spawn-agent` with:
 ```
 
 It verifies the download, assigns an agent ID, starts the process and waits for
-that exact ID and type to announce themselves. The result includes the PID and
-action readiness. Missing requirements do not prevent registration; the controller
-still determines when an agent is eligible for work.
+that exact ID and type to announce themselves. Only the eight-character hex suffix
+is passed as `COMMANDER_AGENT_ID_SUFFIX`; each agent adds its own fixed type.
+The result includes the PID and action readiness. Missing requirements do not
+prevent registration; the controller still determines when an agent is eligible
+for work.
 
 Children stay running after the action finishes and stop during spawner shutdown.
 Linux also stops their process group; other platforms stop the direct child only.

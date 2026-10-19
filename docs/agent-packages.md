@@ -104,7 +104,7 @@ own credentials into the new agent or accept deployment settings from a manifest
 | `BUS_URL` | Shared absolute FS path or RabbitMQ URL. |
 | `STORAGE_URL` | Shared absolute FS path or S3 artifact store URL. |
 | S3 settings | The deployment's applicable `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `S3_USE_PATH_STYLE`. |
-| `COMMANDER_AGENT_ID` | Agent instance ID assigned and saved by the spawner before launch. |
+| `COMMANDER_AGENT_ID_SUFFIX` | Exactly eight lowercase hex characters from the agent ID assigned and saved by the spawner before launch. |
 
 Keep ordinary process settings such as executable search paths explicit too.
 Spawned workload agents connect to the bus and artifact storage; this bootstrap
@@ -115,11 +115,14 @@ access. Secret values stay out of package files, action inputs,
 results and logs. Existing encrypted secret delivery remains responsible for
 action secrets after registration.
 
-The agent host uses nonempty `COMMANDER_AGENT_ID` as `AgentConfig.ID`. It must
-match the framework's agent ID format for the package type (for example,
-`example-agent-0123abcd`). Reject invalid values before opening providers.
-When unset or empty, the host generates a fresh ID. The ID is already part of
-registration and needs no additional public configuration field.
+The agent host combines nonempty `COMMANDER_AGENT_ID_SUFFIX` with its fixed type
+to form `AgentConfig.ID`: `0123abcd` becomes `example-agent-0123abcd`. Use
+`id.AgentIDFromSuffix` to validate and construct it. Reject full IDs, prefixes,
+uppercase hex and any value other than eight lowercase hex characters before
+opening providers. When unset or empty, the host generates a fresh ID.
+Registration and saved launch records still contain the complete ID; only the
+suffix crosses the process bootstrap boundary. No additional public configuration
+field is needed.
 
 The native spawner matches the assigned ID and expected type to the child's
 registration announcement before returning the agent ID and process reference.
@@ -179,7 +182,7 @@ that would spawn the missing agent.
 
 ## Adoption order
 
-1. Update `commander-example-agent` to accept a preassigned agent ID,
+1. Update `commander-example-agent` to accept a preassigned agent ID suffix,
    keep bus/storage bootstrap settings consistent, and include a manifest template.
 2. Add its binary/image release workflow. Validate and publish native assets,
    image digest and generated `agent.yaml` from the same tested revision. Keep the

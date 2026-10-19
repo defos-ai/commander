@@ -17,17 +17,28 @@ import (
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/id"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 )
 
 func TestSpawnerCLIRegistersCatalogAndStopsStartupChildren(t *testing.T) {
-	for _, empty := range []bool{false, true} {
-		name := "default catalog and two startup agents"
-		if empty {
-			name = "explicit empty catalog"
-		}
-		t.Run(name, func(t *testing.T) {
-			t.Setenv("COMMANDER_AGENT_ID", "spawner-agent-12345678")
+	seenFreshIDs := map[string]bool{}
+	for _, test := range []struct {
+		name, suffix string
+		empty, unset bool
+	}{
+		{name: "default catalog and two startup agents", suffix: "12345678"},
+		{name: "explicit empty catalog", suffix: "1234abcd", empty: true},
+		{name: "empty suffix creates a fresh ID", empty: true},
+		{name: "unset suffix creates a fresh ID", empty: true, unset: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", test.suffix)
+			if test.unset {
+				if err := os.Unsetenv("COMMANDER_AGENT_ID_SUFFIX"); err != nil {
+					t.Fatal(err)
+				}
+			}
 			root := t.TempDir()
 			bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
 			if err != nil {
@@ -47,7 +58,7 @@ func TestSpawnerCLIRegistersCatalogAndStopsStartupChildren(t *testing.T) {
 				"--registration-timeout=5s",
 			}
 			resolver, _ := nativeFixtureResolver(t, "")
-			if empty {
+			if test.empty {
 				args = append(args, "--actions=")
 			} else {
 				args = append(args, "--spawn-agents="+fixtureReference, "--spawn-agents="+fixtureReference)
@@ -67,11 +78,24 @@ func TestSpawnerCLIRegistersCatalogAndStopsStartupChildren(t *testing.T) {
 					t.Error("spawner host did not stop")
 				}
 			}()
-			snapshot := readAgentAnnouncement(t, ctx, subscription, messages.AgentStarted, "spawner-agent-12345678")
+			expectedID := ""
+			if test.suffix != "" {
+				expectedID = "spawner-agent-" + test.suffix
+			}
+			snapshot := readAgentAnnouncement(t, ctx, subscription, messages.AgentStarted, expectedID)
+			if !id.ValidAgent(snapshot.ID) || !strings.HasPrefix(snapshot.ID, "spawner-agent-") {
+				t.Fatalf("unexpected spawner identity: %s", snapshot.ID)
+			}
+			if test.suffix == "" {
+				if seenFreshIDs[snapshot.ID] {
+					t.Fatalf("fresh host reused agent ID %s", snapshot.ID)
+				}
+				seenFreshIDs[snapshot.ID] = true
+			}
 			if snapshot.Type != "spawner-agent" || snapshot.Status != agent.AgentReady || snapshot.DiscoveryScope == nil || snapshot.DiscoveryScope.Paths == nil || len(snapshot.DiscoveryScope.Paths) != 0 {
 				t.Fatalf("incorrect host registration: %+v", snapshot)
 			}
-			if empty {
+			if test.empty {
 				if len(snapshot.Actions) != 0 {
 					t.Fatal("explicit empty catalog was ignored")
 				}
@@ -108,7 +132,7 @@ func TestSpawnerCLIRegistersCatalogAndStopsStartupChildren(t *testing.T) {
 }
 
 func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
-	t.Setenv("COMMANDER_AGENT_ID", "")
+	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
 	for _, test := range []struct{ name, argument, expected string }{
 		{"empty state", "--state-dir=", "state-dir"},
 		{"unknown action", "--actions=checkout-template", "unknown action"},
@@ -133,13 +157,13 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 			}
 		})
 	}
-	for _, value := range []string{"builder-agent-12345678", "spawner-agent-INVALID", " "} {
-		t.Run("agent id "+value, func(t *testing.T) {
-			t.Setenv("COMMANDER_AGENT_ID", value)
+	for _, value := range []string{"builder-agent-12345678", "spawner-agent-12345678", "arbitrary-text", "1234567", "123456789", "1234ABCD", "1234567g", " 12345678", "12345678 ", " "} {
+		t.Run("agent id suffix "+value, func(t *testing.T) {
+			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", value)
 			root := filepath.Join(t.TempDir(), "unused")
 			err := cli.Run(t.Context(), []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"), "--state-dir=" + filepath.Join(root, "spawner")}, io.Discard)
-			if err == nil || !strings.Contains(err.Error(), "COMMANDER_AGENT_ID") {
-				t.Fatalf("invalid ID returned %v", err)
+			if err == nil || !strings.Contains(err.Error(), "COMMANDER_AGENT_ID_SUFFIX") {
+				t.Fatalf("invalid ID suffix returned %v", err)
 			}
 			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 				t.Fatal("invalid identity created state")

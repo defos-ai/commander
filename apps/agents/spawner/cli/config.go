@@ -60,7 +60,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run a spawner agent and launch native agent packages on the same bus and artifact storage.")
-		fmt.Fprintln(stderr, "A fresh agent ID is created unless COMMANDER_AGENT_ID is provided by a spawner.")
+		fmt.Fprintln(stderr, "A fresh agent ID is created unless COMMANDER_AGENT_ID_SUFFIX supplies eight lowercase hex characters.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -88,14 +88,13 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	if result.registrationTimeout <= 0 {
 		return config{}, errors.New("registration-timeout must be positive")
 	}
-	result.agentID = os.Getenv("COMMANDER_AGENT_ID")
-	if result.agentID != "" {
-		kind, valid := id.RuntimeType(result.agentID, id.Agent)
-		if !valid || kind != strings.TrimSuffix(string(spawner.SpawnerAgentType), "-agent") {
-			return config{}, errors.New("COMMANDER_AGENT_ID must be a valid spawner-agent ID")
+	var err error
+	if suffix := os.Getenv("COMMANDER_AGENT_ID_SUFFIX"); suffix != "" {
+		result.agentID, err = id.AgentIDFromSuffix(string(spawner.SpawnerAgentType), suffix)
+		if err != nil {
+			return config{}, fmt.Errorf("COMMANDER_AGENT_ID_SUFFIX: %w", err)
 		}
 	}
-	var err error
 	if provided["actions"] {
 		result.actionNames, err = parseList(actionNames)
 		if err != nil {

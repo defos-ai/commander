@@ -139,6 +139,7 @@ func newNativeFixture(t *testing.T, mode string, timeout time.Duration) nativeFi
 
 type childReport struct {
 	AgentID         string `json:"agent_id"`
+	AgentIDSuffix   string `json:"agent_id_suffix"`
 	PID             int    `json:"pid"`
 	InheritedSecret bool   `json:"inherited_secret"`
 	Region          string `json:"region"`
@@ -167,6 +168,7 @@ func childReports(t *testing.T, directory string) []childReport {
 }
 
 func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) {
+	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "12345678")
 	for _, key := range []string{"SPAWNER_PARENT_SECRET", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN"} {
 		t.Setenv(key, "private-parent-sentinel")
 	}
@@ -207,6 +209,9 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		t.Fatalf("started %d children; want two", len(reports))
 	}
 	for _, report := range reports {
+		if len(report.AgentIDSuffix) != 8 || report.AgentID != "fixture-agent-"+report.AgentIDSuffix || !id.ValidAgent(report.AgentID) {
+			t.Fatalf("child did not construct its assigned identity from a hex suffix: %+v", report)
+		}
 		if report.InheritedSecret || report.Region != "fixture-region" || report.Home == "" {
 			t.Fatalf("unexpected child environment: %+v", report)
 		}

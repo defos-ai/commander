@@ -91,6 +91,9 @@
 
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.
+- Hosts accepting a preassigned agent ID from outside accept only an eight-digit
+  lowercase hex suffix. `id.AgentIDFromSuffix` combines it with the host's fixed
+  type; persisted IDs and `AgentConfig.ID` remain complete typed runtime IDs.
 - Discover executables and configuration through [`Environment`](agent/environment/environment.go).
   Missing requirements make only the affected action unavailable. Advertise
   secret names, never values, and recheck configuration during execution.
