@@ -16,6 +16,17 @@
 - Reusable hosts also run inside Playground. Keep process exits, global signal
   handlers and UI-specific dependencies out of constructors and reusable `Run` code.
 
+## Planned package contract
+
+- [Agent packages and bootstrap](../../docs/agent-packages.md) defines the release
+  manifest and planned spawner behavior. It is not a current CLI feature.
+- Adopt the contract in `commander-example-agent` before extracting web/browser.
+  Package workflows must publish binaries, image digest and manifest from the
+  same tested revision; keep action schemas and requirements in registration.
+- Planned `COMMANDER_SPAWN_ID` maps to `PublicConfig.spawn_id`, preserving fresh
+  per-process agent IDs. It identifies a launched instance, not authorization.
+  Keep provider settings, secrets and launch permissions under deployment control.
+
 ## Actions and readiness
 
 - Use [action.NewFunc](../../framework/agent/action/func.go) for typed JSON actions;

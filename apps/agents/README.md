@@ -15,6 +15,10 @@ The [builder agent](builder/README.md) starts agent creation by checking out the
 example template into an isolated workspace. Build and deployment actions are
 still to come.
 
+The planned [agent package contract](../../docs/agent-packages.md) describes
+versioned binaries/images and bootstrap for agents created from
+`commander-example-agent`. Spawner support is not implemented yet.
+
 ## Quick start
 
 With Go 1.26.7+, run from the repository root:
