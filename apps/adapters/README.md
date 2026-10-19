@@ -46,7 +46,8 @@ per-user permissions are not provided.
 
 ### Discover agent packages
 
-Use `list_agent_packages` to find packages in Commander's discovery catalog.
+Use `get_agent_catalog` to discover available agents. Its `agents` list includes
+each entry's name, description, package reference and repository visibility.
 Pass a selected entry's `package` and `visibility` unchanged to the installation
 workflow described by the spawner's responsibilities. The spawner resolves the
 version and saves it for retries. Discovery does not launch an agent or confirm

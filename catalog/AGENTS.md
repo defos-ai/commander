@@ -28,8 +28,9 @@ Read the [root guide](../AGENTS.md) and
   Keep deployment settings, credentials, action schemas and readiness out of it.
   The spawner owns manifest and executable downloads. Shared metadata code must
   remain independent of the spawner and must not require this checkout at runtime.
-- MCP exposes only `list_agent_packages` for package discovery; version resolution
-  belongs to the spawner. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading
+- MCP exposes `get_agent_catalog` for discovery, returning a sorted `agents` list
+  with each entry's package and visibility. Version resolution belongs to the
+  spawner. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading
   is lazy and catalog failure must not prevent direct installs. Spawner action
   and CLI inputs accept GitHub URLs, bare references, `@stable` or exact pins;
   aliases remain discovery names, not installation inputs.

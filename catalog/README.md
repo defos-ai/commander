@@ -19,7 +19,7 @@ Visibility describes the GitHub repository. Package trust remains the operator's
 decision, and Docker image visibility is separate. All official entries are public.
 Catalog lookup belongs to the Commander client. Installation calls pass the
 package reference and visibility to `spawn-agent`; the spawner does not read the
-catalog. MCP exposes it through `list_agent_packages`.
+catalog. MCP's `get_agent_catalog` returns its entries in an `agents` list.
 
 Descriptions cover implemented capabilities. In particular, the builder currently
 checks out a template; build, publication and deployment actions are future work.
@@ -52,7 +52,7 @@ agent package. The spawner saves the exact version before downloading the manife
 or assets or pulling an image. Retries of the same request reuse that version;
 a new request resolves `stable` again.
 
-Use `list_agent_packages` to choose an entry, then pass its `package` and
+Use `get_agent_catalog` to choose an agent, then pass its `package` and
 `visibility` unchanged to the installation workflow described by the spawner's
 responsibilities. Direct GitHub URLs and references work without catalog lookup.
 Aliases are names for discovery, not installation inputs. Catalog inclusion does not

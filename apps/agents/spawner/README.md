@@ -7,7 +7,7 @@ Any compatible GitHub release package can be installed, including packages
 outside Commander's discovery catalog. Read the spawner's registered
 responsibilities through `list_agents` or `describe_agent` for installation
 guidance, and `describe_action` for the `spawn-agent` input schema.
-MCP's `list_agent_packages` discovers catalog entries. Pass an entry's package
+MCP's `get_agent_catalog` discovers available agents. Pass an entry's package
 and visibility, or a GitHub URL, to the spawner. An omitted version or `@stable`
 selects the repository's promoted Latest release; an explicit `@v0.2.0` pins it.
 

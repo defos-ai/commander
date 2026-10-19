@@ -24,8 +24,9 @@ installation allowlist; an operator must trust any selected package author.
 See the [catalog guide](../catalog/README.md).
 
 Catalog lookup belongs to the Commander client. MCP exposes the read-only
-`list_agent_packages` tool; pass a selected entry's `package` and `visibility`
-to the install mission and `spawn-agent`. A direct GitHub repository URL works
+`get_agent_catalog` tool, returning an `agents` list; pass a selected entry's
+`package` and `visibility` to the install mission and `spawn-agent`.
+A direct GitHub repository URL works
 without a catalog lookup. The spawner does not load a catalog.
 
 [`framework/agent/packages`](../framework/agent/packages/) owns shared reference
