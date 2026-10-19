@@ -22,7 +22,7 @@ type Spawner interface {
 }
 
 type SpawnAgentInput struct {
-	Package string `json:"package" jsonschema:"Exact public GitHub release, for example github.com/defos-ai/commander-example-agent@v0.1.0"`
+	Package string `json:"package" jsonschema:"Exact public GitHub release with optional module path: github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH; for example github.com/defos-ai/commander/apps/agents/builder@v0.2.0"`
 }
 
 func (input SpawnAgentInput) Validate() error {

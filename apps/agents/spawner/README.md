@@ -25,6 +25,19 @@ To start a published package immediately, add:
 Repeat the flag for multiple instances. The release must contain `agent.yaml`
 and a native executable for your OS and architecture.
 
+For agents in a repository's Go module, include the module path. The next
+Commander release will provide this spawner package:
+
+```sh
+--spawn-agents github.com/defos-ai/commander/apps/agents/spawner@v0.2.0
+```
+
+It resolves `agent.yaml` from the `apps/agents/spawner/v0.2.0` release in the
+Commander repository, with six native platforms and a Docker image. The manifest
+version is `v0.2.0`. These package assets become available only when that release
+publishes; existing releases are unchanged. See
+[package resolution](../../../docs/agent-packages.md#resolving-a-package).
+
 The next Commander release will include `commander-spawner-agent_<os>_<arch>`
 executables for Linux, macOS and Windows on amd64/arm64 (`.exe` for Windows).
 After downloading one as `commander-spawner-agent` and making it executable on
@@ -67,6 +80,10 @@ The next Commander release also publishes
 after the complete release succeeds. The image defaults to native mode; Compose
 sets Docker mode and supplies its network, socket access and persistent launch
 state. Until that release is published, Compose builds the image locally.
+
+A spawner started through its release package also defaults to native mode.
+It receives no automatic Docker privileges or socket access, and package spawning
+does not install prerequisites for the agents it later starts.
 
 The Compose spawner has control of the host Docker daemon through its socket.
 Spawned agents receive no Docker socket, host mounts, published ports or elevated

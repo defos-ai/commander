@@ -44,6 +44,27 @@ includes the builder, with workspaces under the session's local state directory.
 Its Docker image includes Git; native installations use Git from the host and
 report it as a missing requirement if unavailable.
 
+## Release package
+
+The next Commander release will publish `agent.yaml` on the builder's module-tag
+release, such as `apps/agents/builder/v0.2.0`. Once published, a spawner configured
+for Docker can use:
+
+```sh
+--spawn-agents github.com/defos-ai/commander/apps/agents/builder@v0.2.0
+```
+
+This package provides the `linux/amd64` image
+`ghcr.io/defos-ai/commander-builder-agent`, pinned by digest in the manifest.
+It includes Git and offers no standalone native executable. Existing releases
+are unchanged; use source or the bundled deployment until publication.
+See [agent packages](../../../docs/agent-packages.md).
+
+The spawner does not supply a managed-secrets encryption key. The spawned
+builder can run `checkout-template` without it; actions requiring managed
+secrets need operator-provisioned access. Package metadata cannot grant access
+to the key or add mounts.
+
 ## Secrets
 
 The host accepts `SECRETS_ENCRYPTION_KEY` for actions that require managed secrets.

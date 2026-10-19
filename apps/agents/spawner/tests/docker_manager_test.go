@@ -170,7 +170,7 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 		return publishDockerRegistration(ctx, bus, current, nil)
 	}
 	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		if filepath.Base(request.URL.Path) != "agent.yaml" {
+		if request.URL.String() != fixtureReleaseURL+"agent.yaml" && request.URL.String() != fixtureModuleReleaseURL+"agent.yaml" {
 			return response(request, http.StatusNotFound, "not found"), nil
 		}
 		manifest := "schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\ndocker:\n  image: " + dockerFixtureImage + "\n"
@@ -400,20 +400,23 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 func TestDockerManagerRestartAdoptsRunningContainerAfterFreshRegistration(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
 	requestID := "task:" + id.New()
-	first, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference)
+	first, err := fixture.manager.Spawn(t.Context(), requestID, fixtureModuleReference)
 	if err != nil {
 		t.Fatal(err)
 	}
 	restarted := restartDockerManager(t, fixture)
+	if _, err := restarted.Spawn(t.Context(), requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
+		t.Fatalf("record did not preserve its module package: %v", err)
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
-	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := restarted.Spawn(ctx, requestID, fixtureModuleReference); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("restarted manager did not wait for fresh registration: %v", err)
 	}
 	stop := dockerHeartbeats(t, fixture, first.ContainerID)
 	defer stop()
-	result, err := restarted.Spawn(t.Context(), requestID, fixtureReference)
-	if err != nil || result.AgentID != first.AgentID || result.ContainerID != first.ContainerID {
+	result, err := restarted.Spawn(t.Context(), requestID, fixtureModuleReference)
+	if err != nil || result.AgentID != first.AgentID || result.ContainerID != first.ContainerID || result.Package != fixtureModuleReference {
 		t.Fatalf("restart did not adopt original container: result=%+v error=%v", result, err)
 	}
 	creates, starts, _ := fixture.engine.counts()

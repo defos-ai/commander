@@ -19,7 +19,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const actionPackage = "github.com/defos-ai/commander-example-agent@v0.1.0"
+const actionPackage = "github.com/defos-ai/commander/apps/agents/example@v0.1.0"
 
 func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 	launcher := &actionLauncher{}

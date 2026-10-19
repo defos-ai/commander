@@ -30,7 +30,12 @@ import (
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 )
 
-const fixtureReference = "github.com/defos-ai/fixture-agent@v0.1.0"
+const (
+	fixtureReference        = "github.com/defos-ai/fixture-agent@v0.1.0"
+	fixtureModuleReference  = "github.com/defos-ai/fixture-agent/apps/agents/fixture@v0.1.0"
+	fixtureReleaseURL       = "https://github.com/defos-ai/fixture-agent/releases/download/v0.1.0/"
+	fixtureModuleReleaseURL = "https://github.com/defos-ai/fixture-agent/releases/download/apps%2Fagents%2Ffixture%2Fv0.1.0/"
+)
 
 var fixtureBuild struct {
 	once      sync.Once
@@ -86,10 +91,10 @@ func nativeFixtureResolver(t *testing.T, mode string) (*packages.Resolver, *atom
 	requests := new(atomic.Int32)
 	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
 		requests.Add(1)
-		switch filepath.Base(request.URL.Path) {
-		case "agent.yaml":
+		switch request.URL.String() {
+		case fixtureReleaseURL + "agent.yaml", fixtureModuleReleaseURL + "agent.yaml":
 			return response(request, http.StatusOK, manifest), nil
-		case asset:
+		case fixtureReleaseURL + asset, fixtureModuleReleaseURL + asset:
 			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(binary)), Request: request}, nil
 		default:
 			return response(request, http.StatusNotFound, "not found"), nil
@@ -190,22 +195,22 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		t.Fatalf("registration action inventory was not returned: %+v", first.Actions)
 	}
 	requestID := "task:" + id.New()
-	second, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+	second, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.AgentID == first.AgentID || second.PID == first.PID {
+	if second.AgentID == first.AgentID || second.PID == first.PID || second.Package != fixtureModuleReference {
 		t.Fatal("independent requests reused an agent identity or process")
 	}
 	before := fixture.requests.Load()
-	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if repeated.AgentID != second.AgentID || repeated.PID != second.PID || fixture.requests.Load() != before {
 		t.Fatal("same request did not reuse the existing child without downloading again")
 	}
-	if _, err := fixture.manager.Spawn(ctx, requestID, "github.com/defos-ai/other-agent@v0.1.0"); err == nil {
+	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
 		t.Fatal("request identity accepted a conflicting package")
 	}
 	reports := childReports(t, fixture.storage)
@@ -401,7 +406,7 @@ func awaitChildReport(t *testing.T, ctx context.Context, directory string) child
 func TestNativeRestartDoesNotRelaunchRecordedRequest(t *testing.T) {
 	fixture := newNativeFixture(t, "", 5*time.Second)
 	requestID := "task:" + id.New()
-	if _, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference); err != nil {
+	if _, err := fixture.manager.Spawn(t.Context(), requestID, fixtureModuleReference); err != nil {
 		t.Fatal(err)
 	}
 	if err := fixture.manager.Close(); err != nil {
@@ -413,8 +418,11 @@ func TestNativeRestartDoesNotRelaunchRecordedRequest(t *testing.T) {
 	}
 	defer restarted.Close()
 	before := fixture.requests.Load()
-	if _, err := restarted.Spawn(t.Context(), requestID, fixtureReference); err == nil {
+	if _, err := restarted.Spawn(t.Context(), requestID, fixtureModuleReference); err == nil {
 		t.Fatal("restarted manager trusted an old process identity")
+	}
+	if _, err := restarted.Spawn(t.Context(), requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
+		t.Fatalf("record did not preserve its module package: %v", err)
 	}
 	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
 		t.Fatal("restarted manager relaunched a recorded request")

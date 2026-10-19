@@ -138,6 +138,8 @@ jobs:
       contents: write
     with:
       version: ${{ inputs.version }}
+      builder-digest: ${{ needs.agents.outputs.builder-digest }}
+      spawner-digest: ${{ needs.agents.outputs.spawner-digest }}
 
   stable:
     needs: [release, api, admin, mcp, controllers, agents, aio, playground]

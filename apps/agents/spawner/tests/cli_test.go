@@ -26,6 +26,7 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 		{"zero registration timeout", "--registration-timeout=0", "registration-timeout"},
 		{"negative registration timeout", "--registration-timeout=-1s", "registration-timeout"},
 		{"unpinned package", "--spawn-agents=github.com/defos-ai/fixture-agent@latest", "stable version"},
+		{"invalid module path", "--spawn-agents=github.com/defos-ai/commander/apps/../builder@v0.2.0", "module path"},
 		{"invalid bus", "--bus-url=https://example.invalid", "bus"},
 		{"invalid storage", "--storage-url=https://example.invalid", "storage"},
 		{"removed state flag", "--state-dir=ignored", "flag provided but not defined"},
@@ -204,7 +205,7 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	if err := cli.Run(t.Context(), append(args, "--help"), &output); err != nil {
 		t.Fatal(err)
 	}
-	for _, word := range []string{"spawn-agent", "spawn-agents", "registration-timeout", "agent-id-suffix"} {
+	for _, word := range []string{"spawn-agent", "spawn-agents", "registration-timeout", "agent-id-suffix", "[/module/path]"} {
 		if !strings.Contains(output.String(), word) {
 			t.Errorf("help omits %s", word)
 		}
@@ -219,6 +220,7 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
+	args = append(args, "--spawn-agents=github.com/defos-ai/commander/apps/agents/builder@v0.2.0")
 	if err := cli.Run(ctx, args, io.Discard); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pre-canceled host returned %v", err)
 	}

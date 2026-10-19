@@ -13,7 +13,7 @@ artifacts, and the repository's release workflow publishes packages in this form
 
 ## Release manifest
 
-Attach `agent.yaml` to each agent's GitHub release alongside its native binaries.
+Attach `agent.yaml` to each agent's GitHub release alongside any native binaries.
 Generate the published manifest after building the binaries and pushing the
 Docker image. This example uses illustrative checksums and an image digest;
 release workflows must substitute the actual values.
@@ -40,7 +40,7 @@ docker:
 | --- | --- |
 | `schema_version` | Required integer `1`; reject unsupported versions. |
 | `type` | Required agent type, matching the type registered by the executable. |
-| `version` | Required exact release tag, matching the requested version. |
+| `version` | Required version such as `v0.2.0`, matching the requested version without any module-path prefix. |
 | `native` | Optional map of `<GOOS>/<GOARCH>` to one executable asset and its SHA-256 checksum. |
 | `docker.image` | Optional fully qualified registry image reference pinned by `@sha256:<digest>`. |
 
@@ -86,24 +86,32 @@ digest-pinned image. Leave an absent mode `nil`; explicitly empty modes are
 invalid. At least one mode is required.
 
 `Parse(data, requestedVersion)` strictly validates downloaded manifests and
-checks the release tag. Rendering and parsing share the same schema, identity,
+checks the requested version. Rendering and parsing share the same schema, identity,
 asset, checksum, image and 64 KiB size constraints. The spawner uses this parser;
 release tooling computes actual checksums, obtains the pushed image digest from
 the same tested revision, handles render errors, and writes/uploads `agent.yaml`.
 Placeholders and moving image tags are not release metadata.
 
-Commander's release workflows currently build the builder as an image only and
-the spawner as both an image and six native binaries (Linux, macOS and Windows on
-amd64/arm64). They do not yet render or attach manifests for these agents. Both
-agents share one GitHub release, while the resolver selects a single `agent.yaml`
-per release and has no agent selector. The shared rendering API therefore does
-not make either built-in agent a selectable release package.
+The next Commander release will publish a separate package release for each
+built-in agent, using its existing module tag. Both releases contain `agent.yaml`:
+
+| Package | Release tag for `v0.2.0` | Delivery modes |
+| --- | --- | --- |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` | Docker, `linux/amd64` |
+| `github.com/defos-ai/commander/apps/agents/spawner@v0.2.0` | `apps/agents/spawner/v0.2.0` | Native Linux/macOS/Windows on amd64/arm64; Docker, `linux/amd64` |
+
+Their manifests use the actual native checksums and image digests from the same
+release run. These packages become available only after that release publishes;
+existing releases are unchanged. See [release publication](releases.md#agent-packages).
 
 ## Resolving a package
 
-A reference has the form `github.com/<owner>/<repository>@<version>`. Start with
-explicit `vMAJOR.MINOR.PATCH` releases; moving aliases such as `stable` and
-`latest` are outside this initial contract.
+A reference has the form
+`github.com/<owner>/<repository>[/<module-path>]@<version>`. Use explicit
+`vMAJOR.MINOR.PATCH` versions; moving aliases such as `stable` and `latest` are
+outside this contract. A repository package uses the root version tag; a module
+package uses `<module-path>/<version>`. Every package resolves `agent.yaml` from
+that tag's release in the same repository.
 
 For `github.com/defos-ai/commander-example-agent@v0.1.0`:
 
@@ -113,6 +121,12 @@ For `github.com/defos-ai/commander-example-agent@v0.1.0`:
    from that release and verify its checksum before making it executable.
 3. In Docker mode, ask the configured Docker Engine to pull and start the image
    by digest on the deployment's network.
+
+For `github.com/defos-ai/commander/apps/agents/spawner@v0.2.0`, fetch
+`/defos-ai/commander/releases/download/apps%2Fagents%2Fspawner%2Fv0.2.0/agent.yaml`
+from `https://github.com`. Its manifest version remains `v0.2.0`, and native
+assets come from that same module-tag release. The module path selects the
+release; it does not change the manifest filename or registered agent type.
 
 Verify downloaded bytes before using or caching them; an incomplete download
 must not become an executable. Checksums pin the downloaded content to the

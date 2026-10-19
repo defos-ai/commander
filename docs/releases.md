@@ -46,10 +46,10 @@ In GitHub Actions, open [Make release](../.github/workflows/make-release.yml),
 choose the default branch, enter the version and select **Run workflow**.
 This runs the full release-test workflow first. Only after every suite succeeds,
 it builds and tests the native binaries, pushes the root and all module tags
-atomically, then publishes Docker images and the GitHub Release. Every artifact
-uses that run's exact commit SHA. Publishing is allowed only from the default
-branch. If any Git tag exists, tagging fails without overwriting tags or
-publishing a partial tag set.
+atomically, then publishes Docker images, agent package releases and the root
+GitHub Release. Every artifact uses that run's exact commit SHA. Publishing is
+allowed only from the default branch. If any Git tag exists, tagging fails
+without overwriting tags or publishing a partial tag set.
 
 Use the separate release-test workflow for validation without publication.
 
@@ -61,7 +61,8 @@ runners. Each runner builds and embeds the Admin frontend in Commander, checks
 environment discovery, runs the all-in-one smoke tests (including Admin), and
 checks both executables' `--help` before uploading them.
 
-After every image publishes, [push-binaries.yml](../.github/workflows/push-binaries.yml)
+After every image and both agent package releases publish,
+[push-binaries.yml](../.github/workflows/push-binaries.yml)
 attaches all twelve executables, `LICENSE` and `checksums.txt` to the root-version
 GitHub Release. File names are `commander_<os>_<arch>` and
 `commander-spawner-agent_<os>_<arch>` (`.exe` for Windows); OS names are `linux`,
@@ -93,6 +94,43 @@ publication, rerun failed jobs in the same workflow run; partial draft uploads
 can be replaced, but published release assets cannot. Tag and image publication
 cannot be rolled back by a later release-upload failure. Release creation uses
 the repository's `GITHUB_TOKEN` with `contents: write`.
+If publication already completed, a retry succeeds only after verifying that
+the published filenames and bytes exactly match this run's assets.
+
+## Agent packages
+
+Starting with the next release, [push-binaries.yml](../.github/workflows/push-binaries.yml)
+also publishes two agent package releases in this repository, using the existing
+module tags. For a `v0.2.0` release:
+
+| Release tag | Assets |
+| --- | --- |
+| `apps/agents/builder/v0.2.0` | `agent.yaml`, `LICENSE`, `checksums.txt` |
+| `apps/agents/spawner/v0.2.0` | Six `commander-spawner-agent_<os>_<arch>` executables, `agent.yaml`, `LICENSE`, `checksums.txt` |
+
+The builder manifest provides Docker only; the spawner manifest provides all six
+native platforms and Docker. Both images are `linux/amd64`, using the existing
+`ghcr.io/defos-ai/commander-builder-agent` and
+`ghcr.io/defos-ai/commander-spawner-agent` image names.
+The [manifest generator](../.github/scripts/agent-manifest.go) calls the shared
+`framework/agent/manifest.Render` with the native binary checksums and pushed
+image digests from that same tested release run. Each manifest's `version` is
+`v0.2.0`, without the module path. Each package's `checksums.txt` covers its
+manifest, license and any native binaries.
+
+Package references include the module path:
+`github.com/defos-ai/commander/apps/agents/builder@v0.2.0` and
+`github.com/defos-ai/commander/apps/agents/spawner@v0.2.0`.
+See [package resolution](agent-packages.md#resolving-a-package). These packages
+are available only after the next release publishes; existing releases are
+unchanged. Standalone agent repositories continue to use their root version
+tags and `agent.yaml`.
+
+Both package releases remain drafts until their complete assets are attached and
+are published with `Latest` disabled. Retry failures in the same workflow run;
+never overwrite published assets. The root release still contains all twelve
+native binaries and publishes only after both package releases succeed. Docker
+`stable` and the root release's `Latest` promotion wait for all three releases.
 
 ## Docker images
 
@@ -126,7 +164,7 @@ There are no automatic pushes from pull requests or ordinary branch updates.
 If an image fails to publish, rerun failed jobs in the same release run.
 Git tags and images are separate publication steps; image failures do not undo tags.
 
-After all images and native binaries publish,
+After all images, agent packages and root release assets publish,
 [push-stable.yml](../.github/workflows/push-stable.yml) points each `stable` tag
 to that run's image digest without rebuilding, then marks the GitHub Release as
 `Latest`. Only the highest published stable release advances these pointers;

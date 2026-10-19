@@ -46,7 +46,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
-	flags.Func("spawn-agents", "Public GitHub agent package to start; repeat for multiple agents: github.com/owner/repository@vMAJOR.MINOR.PATCH", func(value string) error {
+	flags.Func("spawn-agents", "Public GitHub agent package to start; repeat for multiple agents: github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH", func(value string) error {
 		if _, err := packages.ParseReference(value); err != nil {
 			return err
 		}

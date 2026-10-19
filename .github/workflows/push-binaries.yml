@@ -1,4 +1,4 @@
-name: Push native binaries
+name: Push native binaries and agent packages
 
 on:
   workflow_call:
@@ -7,12 +7,161 @@ on:
         description: Released Commander version
         type: string
         required: true
+      builder-digest:
+        description: Builder image digest from this release run
+        type: string
+        required: true
+      spawner-digest:
+        description: Spawner image digest from this release run
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 jobs:
+  agents:
+    name: Publish ${{ matrix.agent }} agent package
+    if: ${{ github.repository == 'defos-ai/commander' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - agent: builder
+            digest: ${{ inputs.builder-digest }}
+          - agent: spawner
+            digest: ${{ inputs.spawner-digest }}
+    env:
+      VERSION: ${{ inputs.version }}
+      AGENT: ${{ matrix.agent }}
+      DIGEST: ${{ matrix.digest }}
+      TAG: apps/agents/${{ matrix.agent }}/${{ inputs.version }}
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the agent release tag
+        id: verify
+        shell: bash
+        run: |
+          [[ "$VERSION" =~ ^v[01]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$VERSION" != v0.0.0 ]]
+          test "$(git rev-parse "refs/tags/$TAG^{commit}")" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@v4
+        if: matrix.agent == 'spawner'
+        with:
+          pattern: commander-native-*
+          merge-multiple: true
+          path: artifacts
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: Stage agent release assets
+        id: stage
+        shell: bash
+        run: |
+          mkdir package
+          if [[ "$AGENT" == spawner ]]; then
+            for os in linux darwin windows; do
+              extension=
+              if [[ "$os" == windows ]]; then extension=.exe; fi
+              for arch in amd64 arm64; do
+                binary="commander-spawner-agent_${os}_${arch}${extension}"
+                if [[ ! -s "artifacts/$binary" || ! -f "artifacts/$binary" || -L "artifacts/$binary" ]]; then
+                  echo "Missing native binary: $binary" >&2
+                  exit 1
+                fi
+                cp "artifacts/$binary" package/
+              done
+            done
+          fi
+          cp LICENSE package/LICENSE
+      - name: Generate agent manifest
+        id: manifest
+        shell: bash
+        run: |
+          go run ./.github/scripts/agent-manifest.go \
+            --agent "$AGENT" --version "$VERSION" --digest "$DIGEST" \
+            --artifacts package --output package/agent.yaml
+      - name: Publish agent package and checksums
+        id: publish
+        working-directory: package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          assets=(agent.yaml LICENSE)
+          case "$AGENT" in
+            builder) ;;
+            spawner)
+              for os in linux darwin windows; do
+                extension=
+                if [[ "$os" == windows ]]; then extension=.exe; fi
+                for arch in amd64 arm64; do
+                  assets+=("commander-spawner-agent_${os}_${arch}${extension}")
+                done
+              done
+              ;;
+            *) exit 1 ;;
+          esac
+          shopt -s nullglob dotglob
+          staged=(*)
+          if (( ${#staged[@]} != ${#assets[@]} )); then
+            echo "Unexpected agent package assets; refusing an incomplete release." >&2
+            exit 1
+          fi
+          for asset in "${assets[@]}"; do
+            if [[ ! -s "$asset" || ! -f "$asset" || -L "$asset" ]]; then
+              echo "Missing agent package asset: $asset" >&2
+              exit 1
+            fi
+          done
+          sha256sum "${assets[@]}" > checksums.txt
+
+          draft=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[]' |
+            jq -sr --arg tag "$TAG" 'map(select(.tag_name == $tag)) | if length == 0 then "missing" else .[0].draft end')
+          case "$draft" in
+            missing)
+              gh release create "$TAG" --verify-tag --draft --title "Commander $AGENT agent $VERSION" --generate-notes --latest=false
+              ;;
+            true) ;;
+            false)
+              published_dir=$(mktemp -d)
+              trap 'rm -rf "$published_dir"' EXIT
+              gh release download "$TAG" --dir "$published_dir"
+              published=("$published_dir"/*)
+              expected=("${assets[@]}" checksums.txt)
+              if (( ${#published[@]} != ${#expected[@]} )); then
+                echo "Published release $TAG has a different asset set; refusing to overwrite it." >&2
+                exit 1
+              fi
+              for asset in "${expected[@]}"; do
+                if [[ ! -f "$published_dir/$asset" || -L "$published_dir/$asset" ]] || ! cmp -s "$asset" "$published_dir/$asset"; then
+                  echo "Published release $TAG differs at $asset; refusing to overwrite it." >&2
+                  exit 1
+                fi
+              done
+              echo "Release $TAG already contains the exact assets from this run."
+              exit 0
+              ;;
+            *)
+              echo "Could not determine release $TAG status; refusing to publish." >&2
+              exit 1
+              ;;
+          esac
+          gh release upload "$TAG" "${assets[@]}" checksums.txt --clobber
+          gh release edit "$TAG" --draft=false --latest=false
+
   release:
+    needs: agents
     if: ${{ github.repository == 'defos-ai/commander' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -73,11 +222,30 @@ jobs:
             jq -sr --arg version "$VERSION" 'map(select(.tag_name == $version)) | if length == 0 then "missing" else .[0].draft end')
           case "$draft" in
             missing)
-              gh release create "$VERSION" --verify-tag --draft --title "Commander $VERSION" --generate-notes
+              gh release create "$VERSION" --verify-tag --draft --title "Commander $VERSION" --generate-notes --latest=false
               ;;
             true) ;;
+            false)
+              published_dir=$(mktemp -d)
+              trap 'rm -rf "$published_dir"' EXIT
+              gh release download "$VERSION" --dir "$published_dir"
+              published=("$published_dir"/*)
+              expected=("${binaries[@]}" LICENSE checksums.txt)
+              if (( ${#published[@]} != ${#expected[@]} )); then
+                echo "Published release $VERSION has a different asset set; refusing to overwrite it." >&2
+                exit 1
+              fi
+              for asset in "${expected[@]}"; do
+                if [[ ! -f "$published_dir/$asset" || -L "$published_dir/$asset" ]] || ! cmp -s "$asset" "$published_dir/$asset"; then
+                  echo "Published release $VERSION differs at $asset; refusing to overwrite it." >&2
+                  exit 1
+                fi
+              done
+              echo "Release $VERSION already contains the exact assets from this run."
+              exit 0
+              ;;
             *)
-              echo "Release $VERSION is already published; its assets will not be overwritten." >&2
+              echo "Could not determine release $VERSION status; refusing to publish." >&2
               exit 1
               ;;
           esac

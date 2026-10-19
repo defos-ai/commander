@@ -21,6 +21,8 @@ import (
 const (
 	packageReference = "github.com/defos-ai/example-agent@v0.1.0"
 	releaseURL       = "https://github.com/defos-ai/example-agent/releases/download/v0.1.0/"
+	moduleReference  = "github.com/defos-ai/example-agent/apps/agents/example@v0.1.0"
+	moduleReleaseURL = "https://github.com/defos-ai/example-agent/releases/download/apps%2Fagents%2Fexample%2Fv0.1.0/"
 	binaryAsset      = "example-agent_linux_amd64"
 )
 
@@ -45,12 +47,19 @@ func packageManifest(binary string) string {
 }
 
 func TestParsePackageReference(t *testing.T) {
-	ref, err := packages.ParseReference(packageReference)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ref.Owner != "defos-ai" || ref.Repository != "example-agent" || ref.Version != "v0.1.0" || ref.String() != packageReference {
-		t.Fatalf("unexpected reference: %#v (%q)", ref, ref.String())
+	for _, modulePath := range []string{"", "apps/agents/example", "agents/example_agent.v2"} {
+		input := "github.com/defos-ai/example-agent"
+		if modulePath != "" {
+			input += "/" + modulePath
+		}
+		input += "@v0.1.0"
+		ref, err := packages.ParseReference(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ref.Owner != "defos-ai" || ref.Repository != "example-agent" || ref.ModulePath != modulePath || ref.Version != "v0.1.0" || ref.String() != input {
+			t.Fatalf("unexpected reference: %#v (%q)", ref, ref.String())
+		}
 	}
 	for _, input := range []string{
 		"", "https://" + packageReference, "github.com/defos-ai/example-agent",
@@ -60,6 +69,15 @@ func TestParsePackageReference(t *testing.T) {
 		"github.com/../example-agent@v1.2.3", "github.com/defos-ai/../example-agent@v1.2.3",
 		"github.com/defos-ai/example-agent@v1.2.3?token=abc", "github.com/defos-ai/example-agent@v1.2.3#fragment",
 		"github.com/defos-ai/%2e%2e@v1.2.3", "github.com:443/defos-ai/example-agent@v1.2.3",
+		"github.com/defos-ai/example-agent/@v1.2.3", "github.com/defos-ai/example-agent//agent@v1.2.3",
+		"github.com/defos-ai/example-agent/apps//agent@v1.2.3", "github.com/defos-ai/example-agent/apps/@v1.2.3",
+		"github.com/defos-ai/example-agent/../agent@v1.2.3", "github.com/defos-ai/example-agent/apps/./agent@v1.2.3",
+		"github.com/defos-ai/example-agent/apps/%2e%2e@v1.2.3", "github.com/defos-ai/example-agent/apps%2Fagent@v1.2.3",
+		"github.com/defos-ai/example-agent/apps/agent?token=abc@v1.2.3", "github.com/defos-ai/example-agent/apps/agent#fragment@v1.2.3",
+		"github.com/defos-ai/example-agent/apps/agent@v1.2.3#selector", "github.com/defos-ai/example-agent/apps/agent@v1.2.3@v1.2.4",
+		"github.com/defos-ai/example-agent/apps\\agent@v1.2.3", "github.com/defos-ai/example-agent/apps/agent..name@v1.2.3",
+		"github.com/defos-ai/example-agent/apps/agent.@v1.2.3", "github.com/defos-ai/example-agent/apps/agent.lock@v1.2.3",
+		"github.com/defos-ai/example-agent/apps/.agent@v1.2.3", "github.com/defos-ai/example-agent/apps/agent name@v1.2.3",
 		" " + packageReference, packageReference + " ",
 	} {
 		t.Run(input, func(t *testing.T) {
@@ -78,18 +96,25 @@ func TestParsePackageReference(t *testing.T) {
 }
 
 func TestResolvePackage(t *testing.T) {
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		if request.Method != http.MethodGet || request.URL.String() != releaseURL+"agent.yaml" {
-			t.Fatalf("unexpected manifest request: %s %s", request.Method, request.URL)
-		}
-		return response(request, http.StatusOK, packageManifest("executable bytes")), nil
-	}))
-	pkg, err := resolver.Resolve(context.Background(), packageReference)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if pkg.Reference.String() != packageReference || pkg.Manifest.Type != "example-agent" || pkg.Manifest.Native["linux/amd64"].Asset != binaryAsset {
-		t.Fatalf("unexpected package: %#v", pkg)
+	for _, tc := range []struct{ reference, release string }{
+		{packageReference, releaseURL},
+		{moduleReference, moduleReleaseURL},
+	} {
+		t.Run(tc.reference, func(t *testing.T) {
+			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+				if request.Method != http.MethodGet || request.URL.String() != tc.release+"agent.yaml" {
+					t.Fatalf("unexpected manifest request: %s %s", request.Method, request.URL)
+				}
+				return response(request, http.StatusOK, packageManifest("executable bytes")), nil
+			}))
+			pkg, err := resolver.Resolve(context.Background(), tc.reference)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pkg.Reference.String() != tc.reference || pkg.Manifest.Type != "example-agent" || pkg.Manifest.Version != "v0.1.0" || pkg.Manifest.Native["linux/amd64"].Asset != binaryAsset {
+				t.Fatalf("unexpected package: %#v", pkg)
+			}
+		})
 	}
 }
 
@@ -221,9 +246,9 @@ func TestDownloadNativeVerifiesBeforeExecution(t *testing.T) {
 	downloads := 0
 	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
 		switch request.URL.String() {
-		case releaseURL + "agent.yaml":
+		case moduleReleaseURL + "agent.yaml":
 			return response(request, http.StatusOK, packageManifest(binary)), nil
-		case releaseURL + binaryAsset:
+		case moduleReleaseURL + binaryAsset:
 			downloads++
 			if downloads > 1 {
 				return response(request, http.StatusOK, binary), nil
@@ -242,7 +267,7 @@ func TestDownloadNativeVerifiesBeforeExecution(t *testing.T) {
 			return nil, errors.New("unexpected request")
 		}
 	}))
-	pkg, err := resolver.Resolve(context.Background(), packageReference)
+	pkg, err := resolver.Resolve(context.Background(), moduleReference)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,6 +414,17 @@ func TestDownloadNativeRejectsUnsupportedAndForgedPackages(t *testing.T) {
 	pkg, err := resolver.Resolve(context.Background(), packageReference)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, ref := range []packages.Reference{
+		{Owner: "defos-ai", Repository: "example-agent", ModulePath: "apps/../agent", Version: "v0.1.0"},
+		{Owner: "defos-ai", Repository: "example-agent/apps", ModulePath: "agent", Version: "v0.1.0"},
+		{Owner: "defos-ai", Repository: "example-agent", ModulePath: "apps%2Fagent", Version: "v0.1.0"},
+	} {
+		forged := pkg
+		forged.Reference = ref
+		if _, err := resolver.DownloadNative(context.Background(), forged, "linux", "amd64", t.TempDir()); err == nil {
+			t.Fatalf("accepted forged reference: %+v", ref)
+		}
 	}
 	if _, err := resolver.DownloadNative(context.Background(), pkg, "darwin", "arm64", t.TempDir()); err == nil {
 		t.Fatal("accepted unavailable platform")

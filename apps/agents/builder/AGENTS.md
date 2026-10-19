@@ -57,6 +57,12 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - Playground's all-in-one host injects its existing cipher and keeps builder
   workspaces inside session state. Native users supply Git; its Docker image
   includes Git. The builder remains limited to checkout in either deployment.
+- The release package uses `apps/agents/builder/<version>` in this repository
+  with `agent.yaml`; its reference includes `apps/agents/builder` before
+  `@<version>`. Keep it Docker-only while no standalone native binary is built.
+  The shared manifest renderer must receive the builder image digest from the
+  same release run. Package spawning does not provision a secrets key or mounts;
+  preserve the existing operator-controlled secret boundary.
 
 ## Validation
 
@@ -75,7 +81,9 @@ go vet ./apps/agents/builder/...
 
 Keep the builder owner filter and unit step in `.github` aligned with provider
 imports, including the downstream Playground filter. Release image publication
-uses `push-agents.yml`; the native Commander binary embeds this host.
+uses `push-agents.yml`; `push-binaries.yml` publishes its module-tag package with
+`Latest` disabled before the root release and stable promotion. The native
+Commander binary embeds this host.
 For deployment changes, run the Compose and release wiring checks from
 `.github/tests` with `GOWORK=off go test -run '^TestCI' ./...` and validate
 `docker compose config --quiet`. Test the builder image as its configured

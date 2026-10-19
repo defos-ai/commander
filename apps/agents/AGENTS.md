@@ -32,6 +32,13 @@
 - Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.
+- Built-in packages use their module-path references and existing module tags:
+  `github.com/defos-ai/commander/apps/agents/<name>@<version>` resolves
+  `agent.yaml` from `apps/agents/<name>/<version>` in the Commander repository.
+  The manifest version remains the bare version. Builder provides Docker only;
+  spawner provides its six native assets and Docker. Keep standalone repository
+  references resolving `agent.yaml` from the root version tag. Agent releases
+  never become `Latest`; root publication and stable promotion wait for them.
 - `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an explicit
   empty flag. Nonempty suffixes accept exactly eight lowercase hex characters.
   The host combines it with its fixed type using `id.AgentIDFromSuffix` and sets

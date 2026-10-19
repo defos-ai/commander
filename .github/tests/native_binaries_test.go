@@ -37,6 +37,7 @@ func newNativeFixture(t *testing.T) *nativeFixture {
 	f.env = map[string]string{
 		"PATH": f.dir + ":/usr/bin:/bin", "STATE": f.dir,
 		"VERSION": "v0.1.0", "GH_REPO": "defos-ai/commander",
+		"RELEASE_TAG": "v0.1.0", "RELEASE_TITLE": "Commander v0.1.0",
 		"RELEASES": "", "GH_STATUS": "0",
 	}
 	f.write(t, "LICENSE", "Commander test license\n")
@@ -53,10 +54,15 @@ case "$1 $2" in
     exit "$GH_STATUS"
     ;;
   'release create')
-    [[ "$*" == "release create $VERSION --verify-tag --draft --title Commander $VERSION --generate-notes" ]]
+    [[ "$*" == "release create $RELEASE_TAG --verify-tag --draft --title $RELEASE_TITLE --generate-notes --latest=false" ]]
+    ;;
+  'release download')
+    [[ "$3" == "$RELEASE_TAG" && "$4" == '--dir' && $# == 5 ]]
+    [[ "${FAIL_DOWNLOAD:-0}" == 0 ]] || exit 1
+    cp -a "$STATE/published/." "$5/"
     ;;
   'release upload')
-    [[ "${3}" == "$VERSION" && "${@: -1}" == '--clobber' ]]
+    [[ "${3}" == "$RELEASE_TAG" && "${@: -1}" == '--clobber' ]]
     [[ "${FAIL_UPLOAD:-0}" == 0 ]] || exit 1
     mkdir "$STATE/uploaded"
     shift 3
@@ -65,7 +71,7 @@ case "$1 $2" in
     done
     ;;
   'release edit')
-    [[ "$*" == "release edit $VERSION --draft=false --latest=false" ]]
+    [[ "$*" == "release edit $RELEASE_TAG --draft=false --latest=false" ]]
     ;;
   *) exit 1 ;;
 esac
@@ -221,6 +227,69 @@ func TestCINativeBinaryPublicationFailures(t *testing.T) {
 			}
 			if mode != "upload failure" && strings.Contains(log, "release upload") {
 				t.Errorf("publication must not upload after lookup failure or to a published release: %s", log)
+			}
+		})
+	}
+}
+
+func TestCIPublishedReleaseRetry(t *testing.T) {
+	for _, name := range []string{"root", "builder", "spawner"} {
+		t.Run(name, func(t *testing.T) {
+			newFixture := func(t *testing.T) *nativeFixture {
+				if name == "root" {
+					return newNativeFixture(t)
+				}
+				return newAgentPackageFixture(t, name)
+			}
+			original := newFixture(t)
+			if output, err := original.run(t); err != nil {
+				t.Fatalf("initial publication failed: %v: %s", err, output)
+			}
+			entries, err := os.ReadDir(filepath.Join(original.dir, "uploaded"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, mode := range []string{"identical", "changed bytes", "changed checksums", "missing asset", "extra asset", "download failure"} {
+				t.Run(mode, func(t *testing.T) {
+					f := newFixture(t)
+					f.env["RELEASES"] = fmt.Sprintf(`{"tag_name":%q,"draft":false}`, f.env["RELEASE_TAG"])
+					if err := os.Mkdir(filepath.Join(f.dir, "published"), 0700); err != nil {
+						t.Fatal(err)
+					}
+					for _, entry := range entries {
+						f.write(t, "published/"+entry.Name(), original.read(t, "uploaded/"+entry.Name()))
+					}
+					switch mode {
+					case "changed bytes":
+						asset := "agent.yaml"
+						if name == "root" {
+							asset = nativeBinaryNames[0]
+						}
+						f.write(t, "published/"+asset, "different release bytes")
+					case "changed checksums":
+						f.write(t, "published/checksums.txt", "different checksums")
+					case "missing asset":
+						if err := os.Remove(filepath.Join(f.dir, "published", entries[0].Name())); err != nil {
+							t.Fatal(err)
+						}
+					case "extra asset":
+						f.write(t, "published/extra", "unexpected asset")
+					case "download failure":
+						f.env["FAIL_DOWNLOAD"] = "1"
+					}
+					if output, err := f.run(t); (err != nil) != (mode != "identical") {
+						t.Fatalf("published release retry = %v: %s", err, output)
+					}
+					log := f.read(t, "gh.log")
+					if !strings.Contains(log, "release download "+f.env["RELEASE_TAG"]) {
+						t.Errorf("retry must read the published assets: %s", log)
+					}
+					for _, mutation := range []string{"release create", "release upload", "release edit"} {
+						if strings.Contains(log, mutation) {
+							t.Errorf("published release retry must not write: %s", log)
+						}
+					}
+				})
 			}
 		})
 	}

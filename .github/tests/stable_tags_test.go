@@ -143,6 +143,7 @@ func TestCIStableReleaseSelection(t *testing.T) {
 		{"numeric order", "v1.10.0", `[{"tag_name":"v1.9.9"},{"tag_name":"v1.10.0"}]`, "0", "true", false},
 		{"maintenance", "v1.9.10", `[{"tag_name":"v1.9.10"},{"tag_name":"v1.10.0"}]`, "0", "false", false},
 		{"draft and prerelease ignored", "v1.10.0", `[{"tag_name":"v1.10.0"},{"tag_name":"v1.11.0","draft":true},{"tag_name":"v1.12.0","prerelease":true},{"tag_name":"v2.0.0-rc.1"}]`, "0", "true", false},
+		{"agent module releases ignored", "v1.10.0", `[{"tag_name":"v1.10.0"},{"tag_name":"apps/agents/builder/v9.0.0"},{"tag_name":"apps/agents/spawner/v9.0.0"}]`, "0", "true", false},
 		{"absent release", "v1.10.0", `[{"tag_name":"v1.9.0"}]`, "0", "", true},
 		{"API failure with output", "v1.10.0", `[{"tag_name":"v1.10.0"}]`, "1", "", true},
 		{"prerelease input", "v1.10.0-rc.1", `[{"tag_name":"v1.10.0-rc.1"}]`, "0", "", true},

@@ -35,9 +35,14 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
-- `packages/reference.go` accepts explicit public GitHub releases. Build download
-  URLs from validated owner/repository/version components; do not accept arbitrary
-  download URLs or moving aliases in task input.
+- `packages/reference.go` accepts explicit public GitHub releases as
+  `github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH`. A module path
+  selects the `module/path/vMAJOR.MINOR.PATCH` release tag; a standalone package
+  selects `vMAJOR.MINOR.PATCH`. Fetch `agent.yaml` and its native assets from that
+  same tag, escaping the complete tag as one URL path component. The manifest
+  version remains `vMAJOR.MINOR.PATCH`. Build download URLs from validated
+  components; do not accept arbitrary URLs, fragments or moving aliases in task
+  input. Preserve the module path in launch records and request comparisons.
 - The shared [manifest package](../../../framework/agent/manifest/) validates the
   complete manifest, including unused modes. Keep release version validation in
   that package and use it when parsing package references.
@@ -140,7 +145,10 @@ the workspace. The spawner is embedded in Commander and also ships standalone:
 [push-agents.yml](../../../.github/workflows/push-agents.yml) publishes
 `commander-spawner-agent`, and [build-binaries.yml](../../../.github/workflows/build-binaries.yml)
 builds its six native assets alongside Commander's six. Keep both executables in
-the same native build artifacts and checksum list. Image publication returns its
-digest to the release parent; `stable` promotion must use that digest only after
-every image and native asset has published. Keep these workflows reusable-only;
+the same native build artifacts and checksum list. Agent package publication
+attaches `agent.yaml` and native assets to `apps/agents/spawner/vMAJOR.MINOR.PATCH`,
+using the image digest and native checksums from the same tested revision.
+Image publication returns its digest to the release parent; `stable` promotion
+must use that digest only after every image and native asset has published.
+Keep these workflows reusable-only;
 adding publication support does not make artifacts available in older releases.
