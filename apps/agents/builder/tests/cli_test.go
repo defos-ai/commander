@@ -40,12 +40,12 @@ func TestBuilderConstruction(t *testing.T) {
 	}
 	var previousID string
 	for range 2 {
-		instance, err := builder.NewBuilderAgent(config, t.TempDir())
+		instance, err := builder.NewAgent(config, t.TempDir())
 		if err != nil {
 			t.Fatal(err)
 		}
 		snapshot := instance.Describe()
-		if snapshot.Type != builder.BuilderAgentType || !id.ValidAgent(snapshot.ID) || !strings.HasPrefix(snapshot.ID, "builder-agent-") || snapshot.ID == previousID {
+		if snapshot.Type != builder.AgentType || !id.ValidAgent(snapshot.ID) || !strings.HasPrefix(snapshot.ID, "builder-agent-") || snapshot.ID == previousID {
 			t.Fatalf("incorrect builder identity: %s / %s", snapshot.ID, snapshot.Type)
 		}
 		previousID = snapshot.ID
@@ -54,7 +54,7 @@ func TestBuilderConstruction(t *testing.T) {
 		}
 	}
 	config.Actions = []action.Executor{}
-	empty, err := builder.NewBuilderAgent(config, "")
+	empty, err := builder.NewAgent(config, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestBuilderConstruction(t *testing.T) {
 		t.Fatal("explicit empty catalog was replaced with defaults")
 	}
 	config.Actions = nil
-	if _, err := builder.NewBuilderAgent(config, ""); err == nil {
+	if _, err := builder.NewAgent(config, ""); err == nil {
 		t.Fatal("default catalog accepted empty workspace configuration")
 	}
 }
@@ -74,18 +74,24 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 	}
 	ids := map[string]bool{}
 	for _, test := range []struct {
-		name    string
-		empty   bool
-		key     string
-		options cli.Options
+		name      string
+		empty     bool
+		key       string
+		suffix    string
+		arguments []string
+		wantID    string
+		options   cli.Options
 	}{
 		{name: "missing git"},
-		{name: "empty catalog", empty: true},
-		{name: "injected overrides malformed environment", empty: true, key: "malformed-private-key", options: cli.Options{SecretCipher: cipher}},
-		{name: "nil uses environment", empty: true, key: strings.Repeat("b2", 32)},
+		{name: "empty catalog with environment identity", empty: true, suffix: "a1b2c3d4", wantID: "builder-agent-a1b2c3d4"},
+		{name: "injected cipher and flag override malformed environment", empty: true, key: "malformed-private-key", options: cli.Options{SecretCipher: cipher},
+			suffix: "invalid", arguments: []string{"--agent-id-suffix=b2c3d4e5"}, wantID: "builder-agent-b2c3d4e5"},
+		{name: "nil cipher uses environment and empty suffix flag generates identity", empty: true, key: strings.Repeat("b2", 32),
+			suffix: "invalid", arguments: []string{"--agent-id-suffix="}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
+			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", test.suffix)
 			empty := test.empty
 			root := t.TempDir()
 			bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
@@ -109,6 +115,7 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 			if empty {
 				args = append(args, "--actions=")
 			}
+			args = append(args, test.arguments...)
 			serving, stop := context.WithCancel(ctx)
 			finished := make(chan struct{})
 			var runErr error
@@ -122,8 +129,11 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 				}
 			}()
 			snapshot := readSnapshot(t, ctx, subscription, messages.AgentStarted)
-			if snapshot.Type != builder.BuilderAgentType || !strings.HasPrefix(snapshot.ID, "builder-agent-") || !id.ValidAgent(snapshot.ID) || ids[snapshot.ID] {
-				t.Fatalf("registration must use a fresh builder identity: %s / %s", snapshot.ID, snapshot.Type)
+			if snapshot.Type != builder.AgentType || !strings.HasPrefix(snapshot.ID, "builder-agent-") || !id.ValidAgent(snapshot.ID) || ids[snapshot.ID] {
+				t.Fatalf("registration must use a valid unique builder identity: %s / %s", snapshot.ID, snapshot.Type)
+			}
+			if test.wantID != "" && snapshot.ID != test.wantID {
+				t.Fatalf("registration ID = %s, want %s", snapshot.ID, test.wantID)
 			}
 			ids[snapshot.ID] = true
 			if snapshot.Status != agent.AgentReady || snapshot.DiscoveryScope == nil || snapshot.DiscoveryScope.Paths == nil || len(snapshot.DiscoveryScope.Paths) != 0 {
@@ -181,16 +191,24 @@ func readSnapshot(t *testing.T, ctx context.Context, subscription comms.Subscrip
 
 func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
-	for _, test := range []struct{ name, argument, expected string }{
-		{"empty workspace", "--workspace-dir=", "workspace-dir"},
-		{"unknown action", "--actions=build-agent", "unknown action"},
-		{"duplicate action", "--actions=checkout-template,checkout-template", "duplicate"},
-		{"negative heartbeat", "--heartbeat-interval=-1s", "heartbeat-interval"},
-		{"positional argument", "unexpected", "positional"},
+	for _, test := range []struct{ name, argument, suffix, expected string }{
+		{"empty workspace", "--workspace-dir=", "", "workspace-dir"},
+		{"unknown action", "--actions=build-agent", "", "unknown action"},
+		{"duplicate action", "--actions=checkout-template,checkout-template", "", "duplicate"},
+		{"negative heartbeat", "--heartbeat-interval=-1s", "", "heartbeat-interval"},
+		{"positional argument", "unexpected", "", "positional"},
+		{"short suffix", "--agent-id-suffix=1234567", "", "agent-id-suffix"},
+		{"uppercase suffix", "--agent-id-suffix=ABCDEF12", "", "agent-id-suffix"},
+		{"full ID", "--agent-id-suffix=builder-agent-a1b2c3d4", "", "agent-id-suffix"},
+		{"invalid environment suffix", "", "invalid", "COMMANDER_AGENT_ID_SUFFIX"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", test.suffix)
 			root := filepath.Join(t.TempDir(), "unused")
-			args := []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"), "--workspace-dir=" + filepath.Join(root, "workspaces"), test.argument}
+			args := []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"), "--workspace-dir=" + filepath.Join(root, "workspaces")}
+			if test.argument != "" {
+				args = append(args, test.argument)
+			}
 			err := cli.Run(t.Context(), args, io.Discard)
 			if err == nil || !strings.Contains(err.Error(), test.expected) {
 				t.Fatalf("invalid configuration was not explained: %v", err)

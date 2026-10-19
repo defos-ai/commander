@@ -25,7 +25,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
 const (
@@ -53,8 +53,8 @@ func run(ctx context.Context) error {
 		return err
 	}
 	asset := "fixture-agent_linux_" + runtime.GOARCH
-	manifest := fmt.Sprintf("schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\nnative:\n  linux/%s:\n    asset: %s\n    sha256: %q\n", runtime.GOARCH, asset, fmt.Sprintf("%x", hash.Sum(nil)))
-	if _, err := packages.ParseManifest([]byte(manifest), "v0.1.0"); err != nil {
+	nativeManifest := fmt.Sprintf("schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\nnative:\n  linux/%s:\n    asset: %s\n    sha256: %q\n", runtime.GOARCH, asset, fmt.Sprintf("%x", hash.Sum(nil)))
+	if _, err := manifest.Parse([]byte(nativeManifest), "v0.1.0"); err != nil {
 		return err
 	}
 	certificate, err := createCertificate()
@@ -66,7 +66,7 @@ func run(ctx context.Context) error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+releasePath+"agent.yaml", func(w http.ResponseWriter, r *http.Request) {
-		body := manifest
+		body := nativeManifest
 		if registry := os.Getenv("FIXTURE_REGISTRY_URL"); registry != "" {
 			image, err := registryImage(r.Context(), registry)
 			if err != nil {
@@ -75,7 +75,7 @@ func run(ctx context.Context) error {
 			}
 			body += fmt.Sprintf("docker:\n  image: %q\n", image)
 		}
-		if _, err := packages.ParseManifest([]byte(body), "v0.1.0"); err != nil {
+		if _, err := manifest.Parse([]byte(body), "v0.1.0"); err != nil {
 			http.Error(w, "invalid fixture manifest", http.StatusInternalServerError)
 			return
 		}

@@ -11,7 +11,6 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/moby/moby/api v1.56.1
 	github.com/moby/moby/client v0.6.2
-	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sys v0.48.0
 )
 
@@ -51,4 +50,5 @@ require (
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 )

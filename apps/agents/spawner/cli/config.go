@@ -15,7 +15,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
-	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -33,17 +32,17 @@ type config struct {
 	logLevel            string
 	logFormat           string
 	heartbeatInterval   time.Duration
-	scope               *environment.DiscoveryScope
 }
 
 func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
 	knownActions := spawner.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
-	var actionNames, searchPaths string
+	var actionNames, agentIDSuffix string
 	var busURL, storageURL string
 	flags := flag.NewFlagSet(serviceName, flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	flags.StringVar(&agentIDSuffix, "agent-id-suffix", "", "8 lowercase hex characters; overrides COMMANDER_AGENT_ID_SUFFIX; empty generates a fresh ID")
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
@@ -58,11 +57,10 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	flags.StringVar(&result.logLevel, "log-level", "info", "Log level: debug, info, warn, error; overrides LOG_LEVEL")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Log format: json or text; overrides LOG_FORMAT; logs are written to stderr")
 	flags.DurationVar(&result.heartbeatInterval, "heartbeat-interval", agent.DefaultHeartbeatInterval, "Heartbeat interval; zero disables heartbeats and prevents a later controller from discovering this agent")
-	flags.StringVar(&searchPaths, "search-paths", "", "Executable discovery paths separated by the OS path separator; omitted uses PATH, explicit empty searches nowhere")
 	flags.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run a spawner agent and launch agent packages on the same bus and artifact storage.")
-		fmt.Fprintln(stderr, "A fresh agent ID is created unless COMMANDER_AGENT_ID_SUFFIX supplies eight lowercase hex characters.")
+		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -113,10 +111,10 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		return config{}, errors.New("registration-timeout must be positive")
 	}
 	var err error
-	if suffix := os.Getenv("COMMANDER_AGENT_ID_SUFFIX"); suffix != "" {
-		result.agentID, err = id.AgentIDFromSuffix(string(spawner.SpawnerAgentType), suffix)
+	if suffix := host.Value(agentIDSuffix, provided["agent-id-suffix"], "COMMANDER_AGENT_ID_SUFFIX", ""); suffix != "" {
+		result.agentID, err = id.AgentIDFromSuffix(string(spawner.AgentType), suffix)
 		if err != nil {
-			return config{}, fmt.Errorf("COMMANDER_AGENT_ID_SUFFIX: %w", err)
+			return config{}, fmt.Errorf("agent-id-suffix / COMMANDER_AGENT_ID_SUFFIX: %w", err)
 		}
 	}
 	if provided["actions"] {
@@ -129,13 +127,6 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		if !slices.Contains(knownActions, name) {
 			return config{}, fmt.Errorf("unknown action %q; available: %s", name, availableActions)
 		}
-	}
-	if provided["search-paths"] {
-		paths := filepath.SplitList(searchPaths)
-		if paths == nil {
-			paths = []string{}
-		}
-		result.scope = &environment.DiscoveryScope{Paths: paths}
 	}
 	result.busURL, err = normalizeConnection(result.busURL, "bus-url", "amqp", "amqps")
 	if err != nil {

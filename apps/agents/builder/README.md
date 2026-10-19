@@ -18,6 +18,11 @@ Connect the [controller](../../controllers/README.md#quick-start) to the same
 The builder registers as `builder-agent-{id}`. If Git is missing,
 `checkout-template` reports it as a missing requirement.
 
+To assign its instance suffix, use `--agent-id-suffix=a1b2c3d4` or
+`COMMANDER_AGENT_ID_SUFFIX`. The flag takes precedence; an explicit empty flag
+generates a fresh ID. A nonempty suffix must be eight lowercase hex characters;
+each running instance needs a unique ID.
+
 In an operation, request `checkout-template` with `{}` as input. The action uses
 the fixed public template; it requires no GitHub token. Each call creates a
 separate checkout under `state/builder-workspaces/<workspace_id>/source`.

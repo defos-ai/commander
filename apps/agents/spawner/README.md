@@ -11,6 +11,11 @@ From the repository root, using the same bus and artifact storage as your contro
 go run ./apps/agents/spawner/cmd --bus-url ./state/bus --storage-url ./state/storage
 ```
 
+Each host gets a fresh `spawner-agent-<suffix>` ID. To supply its suffix, use
+`--agent-id-suffix=1234abcd` or `COMMANDER_AGENT_ID_SUFFIX`; values must be exactly
+eight lowercase hex characters. The flag overrides the environment, and an
+explicit `--agent-id-suffix=` generates a fresh ID. Child IDs are assigned separately.
+
 To start a published package immediately, add:
 
 ```sh
@@ -140,6 +145,9 @@ See the [package contract](../../../docs/agent-packages.md) and
 [implementation guide](AGENTS.md).
 
 ## Development
+
+[agent.go](agent.go) defines `AgentType`, `NewAgent` and the action catalog.
+Action implementations live in `actions/`; `cli/` owns configuration and providers.
 
 From the repository root with Go 1.26.7+:
 

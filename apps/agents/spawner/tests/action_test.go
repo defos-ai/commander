@@ -25,11 +25,11 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 	launcher := &actionLauncher{}
 	config := agent.AgentConfig{Type: "ignored", ArtifactFileStore: actionArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}
-	first, err := spawner.NewSpawnerAgent(config, launcher)
+	first, err := spawner.NewAgent(config, launcher)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := spawner.NewSpawnerAgent(config, launcher)
+	second, err := spawner.NewAgent(config, launcher)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,11 +40,11 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
-		instance *spawner.SpawnerAgent
+		instance *agent.Agent
 		status   action.Status
 	}{{first, action.Ready}, {second, action.Unknown}} {
 		snapshot := test.instance.Describe()
-		if snapshot.Type != spawner.SpawnerAgentType || len(snapshot.Actions) != 1 ||
+		if snapshot.Type != spawner.AgentType || len(snapshot.Actions) != 1 ||
 			snapshot.Actions[0].Name != spawneractions.SpawnAgentName || snapshot.Actions[0].Status != test.status {
 			t.Fatalf("incorrect spawner catalog: %+v", snapshot)
 		}
@@ -56,12 +56,12 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 		t.Fatal("construction or discovery launched a process")
 	}
 	config.Actions = []action.Executor{}
-	empty, err := spawner.NewSpawnerAgent(config, nil)
+	empty, err := spawner.NewAgent(config, nil)
 	if err != nil || len(empty.Describe().Actions) != 0 {
 		t.Fatalf("explicit empty catalog was replaced: %v", err)
 	}
 	config.Actions = nil
-	if _, err := spawner.NewSpawnerAgent(config, nil); err == nil {
+	if _, err := spawner.NewAgent(config, nil); err == nil {
 		t.Fatal("default catalog accepted a missing launcher")
 	}
 	if names := spawner.ActionNames(); !reflect.DeepEqual(names, []string{spawneractions.SpawnAgentName}) {
@@ -206,7 +206,7 @@ func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 func TestSpawnerAgentWorkUsesTaskIdentity(t *testing.T) {
 	launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
 		Package: actionPackage, Runtime: "native", PID: 42, Actions: []actionmodel.Action{}}}
-	runtime, err := spawner.NewSpawnerAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
+	runtime, err := spawner.NewAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}, launcher)
 	if err != nil {
 		t.Fatal(err)

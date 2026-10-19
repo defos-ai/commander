@@ -9,6 +9,9 @@
 - Give each agent a fixed type and a fresh ID per process. Construct fresh action
   instances for every agent so discovery state is never shared between hosts.
   Propagate constructor failures instead of starting a partial runtime.
+- Keep the fixed `AgentType`, `NewAgent` constructor and action catalog in
+  `agent.go`. Return the framework's `*agent.Agent` directly when the host adds no
+  agent methods or state; individual action implementations belong in `actions/`.
 - Keep provider construction in each host's `cli/factory.go`; inject the bus and
   artifact file store into the runtime. Unsupported schemes must fail at startup.
 - `Run` accepts cancellation without installing signal handlers; `Main` owns
@@ -29,7 +32,8 @@
 - Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.
-- `COMMANDER_AGENT_ID_SUFFIX` accepts exactly eight lowercase hex characters.
+- `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an explicit
+  empty flag. Nonempty suffixes accept exactly eight lowercase hex characters.
   The host combines it with its fixed type using `id.AgentIDFromSuffix` and sets
   `AgentConfig.ID`; reject full IDs, prefixes and invalid suffixes before opening
   providers. Unset/empty values generate fresh IDs. The spawner saves the full

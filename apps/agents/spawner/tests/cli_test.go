@@ -20,6 +20,8 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 	for _, test := range []struct{ name, argument, expected string }{
 		{"unknown action", "--actions=checkout-template", "unknown action"},
 		{"duplicate action", "--actions=spawn-agent,spawn-agent", "duplicate"},
+		{"full agent ID", "--agent-id-suffix=spawner-agent-12345678", "agent-id-suffix"},
+		{"invalid agent ID suffix", "--agent-id-suffix=1234ABCD", "agent-id-suffix"},
 		{"negative heartbeat", "--heartbeat-interval=-1s", "heartbeat-interval"},
 		{"zero registration timeout", "--registration-timeout=0", "registration-timeout"},
 		{"negative registration timeout", "--registration-timeout=-1s", "registration-timeout"},
@@ -29,6 +31,7 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 		{"removed state flag", "--state-dir=ignored", "flag provided but not defined"},
 		{"removed runtime flag", "--runtime=native", "flag provided but not defined"},
 		{"removed network flag", "--docker-network=commander_default", "flag provided but not defined"},
+		{"removed search paths flag", "--search-paths=ignored", "flag provided but not defined"},
 		{"positional argument", "unexpected", "positional"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -57,6 +60,28 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 				t.Fatal("invalid identity created state")
 			}
 		})
+	}
+}
+
+func TestSpawnerCLIAgentIDSuffixFlagOverridesEnvironment(t *testing.T) {
+	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "invalid")
+	t.Setenv("SPAWNER_RUNTIME", "native")
+	root := filepath.Join(t.TempDir(), "unused")
+	t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, suffix := range []string{"1234abcd", ""} {
+		args := []string{
+			"--bus-url=" + filepath.Join(root, "bus"),
+			"--storage-url=" + filepath.Join(root, "storage"),
+			"--agent-id-suffix=" + suffix,
+		}
+		if err := cli.Run(ctx, args, io.Discard); !errors.Is(err, context.Canceled) {
+			t.Fatalf("explicit suffix %q did not override the environment: %v", suffix, err)
+		}
+	}
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("pre-canceled startup created state")
 	}
 }
 
@@ -179,12 +204,12 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	if err := cli.Run(t.Context(), append(args, "--help"), &output); err != nil {
 		t.Fatal(err)
 	}
-	for _, word := range []string{"spawn-agent", "spawn-agents", "registration-timeout"} {
+	for _, word := range []string{"spawn-agent", "spawn-agents", "registration-timeout", "agent-id-suffix"} {
 		if !strings.Contains(output.String(), word) {
 			t.Errorf("help omits %s", word)
 		}
 	}
-	for _, flag := range []string{"-state-dir", "-runtime", "-docker-network"} {
+	for _, flag := range []string{"-state-dir", "-runtime", "-docker-network", "-search-paths"} {
 		if strings.Contains(output.String(), flag) {
 			t.Errorf("help advertises removed flag %s", flag)
 		}

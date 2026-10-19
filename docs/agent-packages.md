@@ -61,6 +61,44 @@ installation scripts. Native prerequisites such as Chromium remain in the agent'
 README and discovery results; container images include their runtime dependencies.
 Actions and required secret names remain in normal agent registration.
 
+### Source template
+
+Use [`framework/agent/manifest`](../framework/agent/manifest/manifest.go) when
+preparing a release manifest. `Render` validates a `Manifest` and returns YAML
+bytes from its embedded [`agent.yaml.tmpl`](../framework/agent/manifest/agent.yaml.tmpl),
+with deterministic platform ordering and quoted strings. For example, after
+computing `checksum` from a built binary:
+
+```go
+data, err := manifest.Render(manifest.Manifest{
+    SchemaVersion: 1,
+    Type:          "example-agent",
+    Version:       "v0.1.0",
+    Native: map[string]manifest.NativeAsset{
+        "linux/amd64": {Asset: "commander-example-agent_linux_amd64", SHA256: checksum},
+    },
+})
+```
+
+Import `github.com/defos-ai/commander/framework/agent/manifest`. Add a
+`Docker: &manifest.Docker{Image: imageDigest}` field for a fully qualified,
+digest-pinned image. Leave an absent mode `nil`; explicitly empty modes are
+invalid. At least one mode is required.
+
+`Parse(data, requestedVersion)` strictly validates downloaded manifests and
+checks the release tag. Rendering and parsing share the same schema, identity,
+asset, checksum, image and 64 KiB size constraints. The spawner uses this parser;
+release tooling computes actual checksums, obtains the pushed image digest from
+the same tested revision, handles render errors, and writes/uploads `agent.yaml`.
+Placeholders and moving image tags are not release metadata.
+
+Commander's release workflows currently build the builder as an image only and
+the spawner as both an image and six native binaries (Linux, macOS and Windows on
+amd64/arm64). They do not yet render or attach manifests for these agents. Both
+agents share one GitHub release, while the resolver selects a single `agent.yaml`
+per release and has no agent selector. The shared rendering API therefore does
+not make either built-in agent a selectable release package.
+
 ## Resolving a package
 
 A reference has the form `github.com/<owner>/<repository>@<version>`. Start with

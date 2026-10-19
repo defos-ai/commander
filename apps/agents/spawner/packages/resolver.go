@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
 type Package struct {
 	Reference Reference
-	Manifest  Manifest
+	Manifest  manifest.Manifest
 }
 
 type Resolver struct {
@@ -61,15 +63,15 @@ func (r *Resolver) Resolve(ctx context.Context, reference string) (Package, erro
 		return Package{}, err
 	}
 	defer response.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(response.Body, MaxManifestBytes+1))
+	data, err := io.ReadAll(io.LimitReader(response.Body, manifest.MaxBytes+1))
 	if err != nil {
 		return Package{}, downloadError(ctx, "read package manifest")
 	}
-	manifest, err := ParseManifest(data, ref.Version)
+	parsed, err := manifest.Parse(data, ref.Version)
 	if err != nil {
 		return Package{}, err
 	}
-	return Package{Reference: ref, Manifest: manifest}, nil
+	return Package{Reference: ref, Manifest: parsed}, nil
 }
 
 func (r *Resolver) get(ctx context.Context, target string) (*http.Response, error) {

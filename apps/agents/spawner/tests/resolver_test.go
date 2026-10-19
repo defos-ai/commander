@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
 const (
@@ -399,7 +400,7 @@ func TestDownloadNativeRejectsUnsupportedAndForgedPackages(t *testing.T) {
 		t.Fatal("accepted forged traversal asset")
 	}
 	pkg.Manifest.Native = nil
-	pkg.Manifest.Docker = &packages.Docker{Image: "ghcr.io/defos-ai/example-agent@sha256:" + strings.Repeat("a", 64)}
+	pkg.Manifest.Docker = &manifest.Docker{Image: "ghcr.io/defos-ai/example-agent@sha256:" + strings.Repeat("a", 64)}
 	if _, err := resolver.DownloadNative(context.Background(), pkg, "linux", "amd64", t.TempDir()); err == nil {
 		t.Fatal("accepted Docker-only package for native download")
 	}

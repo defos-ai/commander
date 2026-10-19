@@ -1,0 +1,15 @@
+schema_version: {{ .SchemaVersion }}
+type: {{ printf "%q" .Type }}
+version: {{ printf "%q" .Version }}
+{{- if .Native }}
+native:
+{{- range $platform, $asset := .Native }}
+  {{ printf "%q" $platform }}:
+    asset: {{ printf "%q" $asset.Asset }}
+    sha256: {{ printf "%q" $asset.SHA256 }}
+{{- end }}
+{{- end }}
+{{- if .Docker }}
+docker:
+  image: {{ printf "%q" .Docker.Image }}
+{{- end }}

@@ -52,6 +52,7 @@ jobs:
       - name: Test native environment and all-in-one hosts
         run: |
           go test -count=1 -timeout=3m ./framework/tests/agent/environment
+          go test -count=1 -timeout=3m ./framework/tests/agent/manifest
           go test -count=1 -timeout=3m ./apps/agents/spawner/...
           go test -tags embed_ui -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne'
       - name: Build Commander and spawner

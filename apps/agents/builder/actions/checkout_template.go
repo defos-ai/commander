@@ -32,14 +32,6 @@ type CheckoutTemplate struct {
 	executable   atomic.Pointer[string]
 }
 
-func NewActions(workspaceDir string) ([]action.Executor, error) {
-	checkout, err := NewCheckoutTemplate(workspaceDir)
-	if err != nil {
-		return nil, err
-	}
-	return []action.Executor{checkout}, nil
-}
-
 func NewCheckoutTemplate(workspaceDir string) (*CheckoutTemplate, error) {
 	if strings.TrimSpace(workspaceDir) == "" {
 		return nil, errors.New("workspace directory must not be blank")

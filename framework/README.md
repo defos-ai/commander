@@ -28,6 +28,15 @@ receives a task. See [agent selection](../apps/controllers/README.md#agent-selec
 They can also supply a `RuleSelector` to choose rules for each new operation;
 see [rule selection](../apps/controllers/README.md#rule-selection).
 
+## Agent package manifests
+
+Use [`agent/manifest`](agent/manifest/manifest.go) to render and parse release
+manifests with shared validation. `manifest.Render` accepts a `manifest.Manifest`
+and returns `agent.yaml` bytes using the embedded template. Release tooling
+supplies actual binary checksums and the image digest, then writes and publishes
+the returned bytes. See the [package contract](../docs/agent-packages.md#source-template)
+for API usage and the current builder/spawner packaging scope.
+
 ## Reference
 
 - [Messaging](comms/README.md): consumers, inbox lifetimes and delivery limits.

@@ -19,7 +19,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const serviceName = "commander-" + string(spawner.SpawnerAgentType)
+const serviceName = "commander-" + string(spawner.AgentType)
 
 // ErrShutdown tells an embedded host to retain shared state after cleanup fails.
 var ErrShutdown = errors.New("spawner shutdown failed")
@@ -58,12 +58,12 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	}
 	agentID := configuration.agentID
 	if agentID == "" {
-		agentID, err = id.AgentID(string(spawner.SpawnerAgentType))
+		agentID, err = id.AgentID(string(spawner.AgentType))
 		if err != nil {
 			return err
 		}
 	}
-	logger = logger.With("service", serviceName, "agent_type", spawner.SpawnerAgentType, "agent_id", agentID)
+	logger = logger.With("service", serviceName, "agent_type", spawner.AgentType, "agent_id", agentID)
 	defer func() {
 		if result != nil && !cancellationOnly(result) {
 			logger.Error("agent stopped with error", "error", result)
@@ -99,7 +99,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 			}
 		}
 	}
-	instance, err := spawner.NewSpawnerAgent(agent.AgentConfig{
+	instance, err := spawner.NewAgent(agent.AgentConfig{
 		ID:                agentID,
 		Actions:           selected,
 		ArtifactFileStore: dependencies.ArtifactFileStore,
@@ -124,7 +124,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		options.Ready(agentID, spawned)
 	}
 	logger.Info("agent starting", "heartbeat_interval", configuration.heartbeatInterval)
-	return instance.Serve(ctx, dependencies.Bus, configuration.scope)
+	return instance.Serve(ctx, dependencies.Bus, nil)
 }
 
 func Main(args []string, stderr io.Writer) int {

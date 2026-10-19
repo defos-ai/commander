@@ -5,7 +5,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 ## Current boundary
 
-- `spawner_agent.go` constructs a regular framework agent. The `spawn-agent`
+- [agent.go](agent.go) defines `AgentType`, constructs a regular framework agent
+  through `NewAgent` and owns the action catalog helpers. Preserve fresh action
+  instances and an explicitly empty caller-supplied catalog. The `spawn-agent`
   action and repeatable CLI `--spawn-agents` share `runtimes.Runtime`
   (`Spawn`/`Close`), defined in [runtimes/runtime.go](runtimes/runtime.go).
   [runtimes/result.go](runtimes/result.go) holds their shared result;
@@ -25,13 +27,20 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   to `native` and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
   unsupported runtimes explicitly. Do not reintroduce flags for these settings.
+- `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an
+  explicitly empty flag. Validate nonempty values with `id.AgentIDFromSuffix`
+  before opening providers; empty values generate a fresh host ID. This setting
+  identifies the spawner itself; the runtime assigns each child's ID separately.
+  The spawner action has no executable discovery requirements or search-path flag.
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
 - `packages/reference.go` accepts explicit public GitHub releases. Build download
   URLs from validated owner/repository/version components; do not accept arbitrary
   download URLs or moving aliases in task input.
-- `packages/manifest.go` validates the complete manifest, including unused modes.
+- The shared [manifest package](../../../framework/agent/manifest/) validates the
+  complete manifest, including unused modes. Keep release version validation in
+  that package and use it when parsing package references.
   Reject unsupported schemas, unknown/duplicate keys, aliases, multiple YAML
   documents, scalar coercions, unsafe asset paths and unpinned images. Asset
   basenames must be safe on the current host, excluding device names and trailing
@@ -110,10 +119,11 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 Keep public API tests in `tests/`, using an external package and deterministic
 HTTP transports. Read the [shared test guide](../../../framework/tests/AGENTS.md).
-Cover strict manifest validation, redirect restrictions, cancellation, checksum
+Cover manifest resolution, redirect restrictions, cancellation, checksum
 failures, identity conflicts and runtime cleanup without public network or paid
 model calls. Keep CLI tests focused on configuration and help; exercise host
 startup, registration and spawned-agent execution through API/MCP stack scenarios.
+Strict manifest contract tests live in the framework's tests.
 Keep the child executable fixture under tests for native runtime edge cases.
 Use fake Engine/HTTP transports for Docker outcomes and safety checks; keep live
 Docker resource lifecycle in external setup, outside Go tests.

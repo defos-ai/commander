@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/framework/agent/manifest"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -64,8 +65,8 @@ func (m *Manager) readRecord(requestID, reference string) (record, bool, error) 
 	}
 	kind, valid := id.RuntimeType(saved.AgentID, id.Agent)
 	ref, parseErr := packages.ParseReference(saved.Package)
-	manifest := packages.Manifest{SchemaVersion: 1, Type: saved.AgentType, Version: ref.Version, Docker: &packages.Docker{Image: saved.Image}}
-	if saved.RequestID != requestID || !valid || kind != strings.TrimSuffix(saved.AgentType, "-agent") || !id.Valid(saved.Owner) || parseErr != nil || manifest.Validate() != nil || !explicitNetwork(saved.Network) {
+	definition := manifest.Manifest{SchemaVersion: 1, Type: saved.AgentType, Version: ref.Version, Docker: &manifest.Docker{Image: saved.Image}}
+	if saved.RequestID != requestID || !valid || kind != strings.TrimSuffix(saved.AgentType, "-agent") || !id.Valid(saved.Owner) || parseErr != nil || definition.Validate() != nil || !explicitNetwork(saved.Network) {
 		return record{}, true, invalid
 	}
 	if saved.Package != reference {

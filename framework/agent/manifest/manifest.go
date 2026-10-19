@@ -1,21 +1,30 @@
-package packages
+// Package manifest defines and renders versioned agent release manifests.
+package manifest
 
 import (
 	"bytes"
 	"crypto/sha256"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"text/template"
 
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/distribution/reference"
 	"go.yaml.in/yaml/v3"
 )
 
-const MaxManifestBytes = 64 << 10
+// MaxBytes is the maximum size of a published agent manifest.
+const MaxBytes = 64 << 10
+
+//go:embed agent.yaml.tmpl
+var templateSource string
+
+var releaseTemplate = template.Must(template.New("agent.yaml").Parse(templateSource))
 
 type Manifest struct {
 	SchemaVersion int                    `yaml:"schema_version"`
@@ -35,16 +44,38 @@ type Docker struct {
 }
 
 var (
+	versionPattern  = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 	platformPattern = regexp.MustCompile(`^[a-z0-9]+/[a-z0-9]+$`)
 	assetPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
-// ParseManifest accepts one strict release manifest matching the requested tag.
-func ParseManifest(data []byte, version string) (Manifest, error) {
-	if len(data) > MaxManifestBytes {
-		return Manifest{}, fmt.Errorf("agent manifest exceeds %d bytes", MaxManifestBytes)
+// ValidVersion accepts nonzero stable vMAJOR.MINOR.PATCH release tags.
+func ValidVersion(value string) bool {
+	return value != "v0.0.0" && versionPattern.MatchString(value)
+}
+
+// Render validates a manifest and returns deterministic YAML bytes. Callers
+// supply actual asset checksums and image digests and own file publication.
+func Render(value Manifest) ([]byte, error) {
+	if err := value.Validate(); err != nil {
+		return nil, err
 	}
-	if !validVersion(version) {
+	var output bytes.Buffer
+	if err := releaseTemplate.Execute(&output, value); err != nil {
+		return nil, fmt.Errorf("render agent manifest: %w", err)
+	}
+	if output.Len() > MaxBytes {
+		return nil, fmt.Errorf("agent manifest exceeds %d bytes", MaxBytes)
+	}
+	return output.Bytes(), nil
+}
+
+// Parse accepts one strict release manifest matching the requested tag.
+func Parse(data []byte, version string) (Manifest, error) {
+	if len(data) > MaxBytes {
+		return Manifest{}, fmt.Errorf("agent manifest exceeds %d bytes", MaxBytes)
+	}
+	if !ValidVersion(version) {
 		return Manifest{}, errors.New("requested version must be a nonzero stable vMAJOR.MINOR.PATCH tag")
 	}
 
@@ -132,7 +163,7 @@ func (m Manifest) Validate() error {
 	if !id.ValidType(m.Type) || !id.ValidRuntime(runtimeType+"-agent-00000000", id.Agent) {
 		return errors.New("agent manifest type cannot form a valid agent ID")
 	}
-	if !validVersion(m.Version) {
+	if !ValidVersion(m.Version) {
 		return errors.New("agent manifest version must be a nonzero stable vMAJOR.MINOR.PATCH tag")
 	}
 	if m.Native == nil && m.Docker == nil {

@@ -6,12 +6,11 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
-var (
-	repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	versionPattern    = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
-)
+var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 type Reference struct {
 	Owner      string
@@ -22,7 +21,7 @@ type Reference struct {
 // ParseReference accepts an exact public GitHub release, without URL parameters.
 func ParseReference(value string) (Reference, error) {
 	repository, version, ok := strings.Cut(strings.TrimPrefix(value, "github.com/"), "@")
-	if !strings.HasPrefix(value, "github.com/") || !ok || !repositoryPattern.MatchString(repository) || !validVersion(version) {
+	if !strings.HasPrefix(value, "github.com/") || !ok || !repositoryPattern.MatchString(repository) || !manifest.ValidVersion(version) {
 		return Reference{}, errors.New("agent package must be github.com/owner/repository@vMAJOR.MINOR.PATCH with a nonzero stable version")
 	}
 	owner, name, _ := strings.Cut(repository, "/")
@@ -35,8 +34,4 @@ func (r Reference) String() string {
 
 func (r Reference) assetURL(asset string) string {
 	return "https://github.com/" + r.Owner + "/" + r.Repository + "/releases/download/" + r.Version + "/" + url.PathEscape(asset)
-}
-
-func validVersion(value string) bool {
-	return value != "v0.0.0" && versionPattern.MatchString(value)
 }

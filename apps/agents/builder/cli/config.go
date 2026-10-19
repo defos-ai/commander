@@ -16,10 +16,12 @@ import (
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type config struct {
 	actionNames       []string
+	agentID           string
 	busURL            string
 	storageURL        string
 	workspaceDir      string
@@ -34,10 +36,11 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	knownActions := builder.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
-	var actionNames, searchPaths string
+	var actionNames, searchPaths, agentIDSuffix string
 	var busURL, storageURL string
 	flags := flag.NewFlagSet(serviceName, flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	flags.StringVar(&agentIDSuffix, "agent-id-suffix", "", "8 lowercase hex characters; overrides COMMANDER_AGENT_ID_SUFFIX; empty generates a fresh ID")
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
@@ -49,7 +52,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	flags.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run one agent independently; connect the default controller to the same bus and artifact storage.")
-		fmt.Fprintln(stderr, "A fresh agent ID is created on each start.")
+		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
 		fmt.Fprintln(stderr, "Set SECRETS_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
 		flags.PrintDefaults()
 	}
@@ -61,6 +64,13 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	}
 	provided := make(map[string]bool)
 	flags.Visit(func(f *flag.Flag) { provided[f.Name] = true })
+	if suffix := host.Value(agentIDSuffix, provided["agent-id-suffix"], "COMMANDER_AGENT_ID_SUFFIX", ""); suffix != "" {
+		var err error
+		result.agentID, err = id.AgentIDFromSuffix(string(builder.AgentType), suffix)
+		if err != nil {
+			return config{}, fmt.Errorf("agent-id-suffix / COMMANDER_AGENT_ID_SUFFIX: %w", err)
+		}
+	}
 	result.busURL = host.Value(busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
 	result.storageURL = host.Value(storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
 	result.workspaceDir = host.Value(result.workspaceDir, provided["workspace-dir"], "BUILDER_WORKSPACE_DIR", filepath.Join("state", "builder-workspaces"))

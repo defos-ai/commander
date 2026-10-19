@@ -89,6 +89,16 @@
 
 ## Agent extension contracts
 
+- [`agent/manifest`](agent/manifest/manifest.go) owns release manifest types,
+  strict `Parse` and `Render` using the embedded [`agent.yaml.tmpl`](agent/manifest/agent.yaml.tmpl).
+  Both APIs use the same validation; reject invalid supplied modes and require
+  at least one. Render deterministically and quote strings to preserve YAML types.
+  Release tooling supplies actual binary checksums and a digest-pinned image from
+  the same tested revision, then writes and publishes the bytes. Keep host settings
+  and secrets out of manifests.
+  See the [package contract](../docs/agent-packages.md#source-template).
+  Keep package resolution and downloads in the spawner; the framework must not
+  depend on it. Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.
 - Hosts accepting a preassigned agent ID from outside accept only an eight-digit

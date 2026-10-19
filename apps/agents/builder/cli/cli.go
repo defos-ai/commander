@@ -18,7 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const serviceName = "commander-" + string(builder.BuilderAgentType)
+const serviceName = "commander-" + string(builder.AgentType)
 
 // Options supplies dependencies for an embedded host.
 type Options struct {
@@ -50,11 +50,14 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	if err != nil {
 		return err
 	}
-	agentID, err := id.AgentID(string(builder.BuilderAgentType))
-	if err != nil {
-		return err
+	agentID := configuration.agentID
+	if agentID == "" {
+		agentID, err = id.AgentID(string(builder.AgentType))
+		if err != nil {
+			return err
+		}
 	}
-	logger = logger.With("service", serviceName, "agent_type", builder.BuilderAgentType, "agent_id", agentID)
+	logger = logger.With("service", serviceName, "agent_type", builder.AgentType, "agent_id", agentID)
 	defer func() {
 		if result != nil && !cancellationOnly(result) {
 			logger.Error("agent stopped with error", "error", result)
@@ -86,7 +89,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		return err
 	}
 	defer func() { result = errors.Join(result, dependencies.Close()) }()
-	agent, err := builder.NewBuilderAgent(agents.AgentConfig{
+	agent, err := builder.NewAgent(agents.AgentConfig{
 		ID:                agentID,
 		Actions:           actions,
 		ArtifactFileStore: dependencies.ArtifactFileStore,

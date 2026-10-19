@@ -4,12 +4,17 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 
 ## Entry points
 
-- [builder_agent.go](builder_agent.go) fixes the type to `builder-agent` and
-  supplies a fresh action catalog when `AgentConfig.Actions` is nil. An explicitly
-  empty catalog stays empty.
+- [agent.go](agent.go) defines `AgentType` and `NewAgent`, returning the framework
+  agent with a fresh catalog when `AgentConfig.Actions` is nil. An explicitly
+  empty catalog stays empty. Keep catalog construction here; individual action
+  constructors belong in `actions/`.
 - [cli](cli/) owns host configuration, provider factories and lifecycle.
   `--workspace-dir` overrides `BUILDER_WORKSPACE_DIR`; the default is
   `state/builder-workspaces`. Providers follow the example-agent template's conventions.
+- `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an explicit
+  empty flag. Validate nonempty suffixes with `id.AgentIDFromSuffix` before opening
+  providers; empty/unset values generate fresh IDs. Keep the fixed `builder-agent`
+  type and never accept full IDs or a caller-supplied type prefix.
 - `cli.RunWithOptions` accepts an initialized `Options.SecretCipher` for embedding.
   A non-nil cipher takes precedence over optional `SECRETS_ENCRYPTION_KEY`;
   validate it before opening providers. Keep `Run` as the wrapper with empty
