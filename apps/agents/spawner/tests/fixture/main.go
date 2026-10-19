@@ -54,6 +54,7 @@ func run() error {
 	report, err := json.Marshal(map[string]any{
 		"agent_id": agentID, "agent_id_suffix": suffix, "pid": os.Getpid(), "inherited_secret": privateEnvironment,
 		"region": os.Getenv("AWS_REGION"), "home": os.Getenv("HOME"),
+		"chromium_path": os.Getenv("CHROMIUM_PATH"), "chromium_no_sandbox": os.Getenv("CHROMIUM_NO_SANDBOX"),
 	})
 	if err != nil {
 		return err

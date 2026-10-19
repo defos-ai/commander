@@ -26,6 +26,7 @@ type Config struct {
 	Debug                            bool
 	Notices                          []string
 	LocalAPI                         *LocalAPI
+	LocalAgentCount                  int
 	MCPCredentials                   host.BearerCredentials
 }
 

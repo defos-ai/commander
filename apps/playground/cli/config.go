@@ -9,14 +9,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
 )
 
 type config struct {
 	ui.Config
-	AllInOne bool
-	NoAdmin  bool
+	AllInOne    bool
+	NoAdmin     bool
+	SpawnAgents []string
 }
 
 func configuration(args []string, stderr io.Writer) (config, error) {
@@ -26,6 +28,17 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&c.MCPURL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
 	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and agents; credentials are generated when unset; temporary state is removed on exit")
 	flags.BoolVar(&c.NoAdmin, "no-admin", false, "Disable Admin UI in --all-in-one mode")
+	flags.Func("spawn-agents", "All-in-one startup package; repeat to replace the default web/browser v0.2.0 agents; use an empty value to start no packages", func(value string) error {
+		if value == "" {
+			c.SpawnAgents = []string{}
+			return nil
+		}
+		if _, err := packages.ParseReference(value); err != nil {
+			return err
+		}
+		c.SpawnAgents = append(c.SpawnAgents, value)
+		return nil
+	})
 	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Override the browser-facing Admin UI URL; Docker all-in-one defaults to http://localhost:4275 (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
 	flags.StringVar(&c.Model, "model", env("COMMANDER_LLM_MODEL", ""), "Model name; omitted asks interactively (COMMANDER_LLM_MODEL)")
@@ -58,6 +71,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	}
 	if c.NoAdmin && !c.AllInOne {
 		return c, errors.New("--no-admin requires --all-in-one")
+	}
+	if c.SpawnAgents != nil && !c.AllInOne {
+		return c, errors.New("--spawn-agents requires --all-in-one")
 	}
 	if c.NoAdmin && c.AdminURL != "" {
 		return c, errors.New("--no-admin cannot be combined with --admin-url or COMMANDER_ADMIN_URL")

@@ -37,7 +37,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
-		session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: config.NoAdmin})
+		session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: config.NoAdmin, SpawnAgents: config.SpawnAgents})
 		if err != nil {
 			return err
 		}
@@ -48,6 +48,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		config.MCPCredentials = session.MCPCredentials
 		config.Notices = session.Notices
 		config.LocalAPI = &ui.LocalAPI{URL: session.APIURL, Username: session.APICredentials.Username, Password: session.APICredentials.Password}
+		config.LocalAgentCount = session.AgentCount
 		if config.Debug {
 			config.Notices = append(config.Notices, "Local host logs: "+session.Directory+"/hosts.log (removed on exit)")
 		}

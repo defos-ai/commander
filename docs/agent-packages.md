@@ -1,12 +1,12 @@
 # Agent packages and bootstrap
 
-This contract defines agent packaging, native/Docker spawning and planned deployment
+This contract defines agent packaging, native/Docker spawning and deployment
 integrations. The `commander-example-agent` template supports preassigned agent
 IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
 resolves public packages and runs a regular agent host with `spawn-agent` and
 repeatable `--spawn-agents`. Native and Docker modes are implemented; Compose
-enables Docker mode with its optional `spawner` profile. Playground/AIO
-integration remains planned.
+enables Docker mode with its optional `spawner` profile. Playground and Docker AIO
+embed the spawner in native mode.
 
 An agent repository publishes runnable packages; the spawner starts a selected
 package using the deployment's connection settings. Builder produces source and
@@ -89,8 +89,8 @@ Deployment selects the execution mode explicitly:
 | --- | --- |
 | Standalone spawner | Native by default; set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` for Docker. |
 | Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. Enable with `--profile spawner`. |
-| Native `commander --all-in-one` (planned) | Child executable using the session's FS bus and artifact directories. |
-| Docker AIO (planned) | Child executable inside the AIO container, using the same FS directories. |
+| Native `commander --all-in-one` | Child executable using the session's FS bus and artifact directories. |
+| Docker AIO | Child executable inside the AIO container, using the same FS directories; no Docker socket. |
 
 Docker AIO continues to include its default agents' native prerequisites. A
 Compose spawner needs access to the host's Docker Engine. Spawned containers use
@@ -108,6 +108,7 @@ own credentials into the new agent or accept deployment settings from a manifest
 | `BUS_URL` | Shared absolute FS path or RabbitMQ URL. |
 | `STORAGE_URL` | Shared absolute FS path or S3 artifact store URL. |
 | S3 settings | The deployment's applicable `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `S3_USE_PATH_STYLE`. |
+| Native browser settings | The deployment's `CHROMIUM_PATH` and `CHROMIUM_NO_SANDBOX`, when set. |
 | `COMMANDER_AGENT_ID_SUFFIX` | Exactly eight lowercase hex characters from the agent ID assigned and saved by the spawner before launch. |
 
 Keep ordinary process settings such as executable search paths explicit too.
@@ -146,7 +147,12 @@ required actions are ready.
 The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
 instance, including repeated references when two instances of a type are needed.
 Compose can pass this list as its spawner service's command. Native/AIO Commander
-integration is planned. Startup and the controller-dispatched
+defaults to `github.com/defos-ai/commander-web-agent@v0.2.0` and
+`github.com/defos-ai/commander-browser-agent@v0.2.0`. Its repeatable `--spawn-agents`
+replaces those defaults; `--spawn-agents=` skips startup packages while keeping
+the embedded builder and spawner. Each temporary session needs Internet access
+for its configured package downloads. See [Playground](../apps/playground/README.md#startup-agents).
+Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
 A stable launch request identifies an instance across retries; its agent ID must
@@ -203,8 +209,9 @@ that would spawn the missing agent.
    AGENTS instructions, with tests and fixtures in `tests/`.
 3. Verify that an agent built from the template can be spawned natively and through
    Docker, including exact-instance registration and repeat-request behavior.
-4. Apply the same packaging to the separate web/browser repositories. Publish
-   verified packages before switching Commander startup or removing bundled code.
+4. Keep the separate web/browser repositories on the same package contract.
+   Commander startup uses their `v0.2.0` native packages; bundled code remains
+   available for offline test scenarios until its separate removal.
 
 The template remains the reference for manually developed and builder-generated
 agents. Its demo Compose remains useful for development; the spawner consumes

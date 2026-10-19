@@ -70,14 +70,24 @@ the manifest; it does not establish whether the program is safe to run.
 ## Current scope
 
 The host supports public GitHub releases and public Docker images. Private
-packages, moving tags such as `stable`, and Playground/AIO integration are not
-implemented. `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
+packages and moving tags such as `stable` are not implemented.
+`SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the optional Compose service explicitly selects Docker mode.
+
+[Playground all-in-one](../../playground/README.md#startup-agents) embeds the
+spawner in native mode, including inside Docker AIO. It downloads web/browser
+`v0.2.0` packages by default and accepts `--spawn-agents` overrides. Its state,
+downloads and child working directories are temporary; shutdown awaits child
+processes before removing them.
 
 `BUS_URL` and `STORAGE_URL` configure the shared providers. Children receive those
 settings and explicit process/S3 settings, without inheriting API, MCP or model
 credentials. S3 credentials must be available as environment settings; host profile
 files are not shared. Native processes run as the spawner's OS user, not in a sandbox.
+
+Native children also receive the deployment's `CHROMIUM_PATH` and
+`CHROMIUM_NO_SANDBOX` settings when set. These let browser agents use the selected
+Chromium executable and the container's sandbox configuration.
 
 Launch records live in `./state/spawner`; set `SPAWNER_STATE_DIR` to change it.
 Native retries reuse the live child in the same host. After a native host restart,

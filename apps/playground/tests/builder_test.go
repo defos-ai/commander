@@ -64,9 +64,10 @@ func testAllInOneBuilderWorkspace(t *testing.T) {
 			builderID = agent.ID
 		}
 	}
-	if builderID == "" || len(inventory.Agents) != 3 {
+	if builderID == "" || len(inventory.Agents) != 2 {
 		t.Fatal("all-in-one returned before every agent registered")
 	}
+	stopAgents := startLocalWebHosts(t, session.Directory)
 	var operation operations.Operation
 	call("start_operation", map[string]any{"mission_name": "review-website-no-browser", "input": map[string]any{"url": "https://example.test"}}, &operation)
 	var task operations.Task
@@ -99,6 +100,7 @@ func testAllInOneBuilderWorkspace(t *testing.T) {
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
+	stopAgents()
 	stop()
 	if _, err := os.Stat(session.Directory); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("all-in-one retained its builder workspace after closing")

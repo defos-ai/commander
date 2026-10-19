@@ -123,7 +123,9 @@ func newNativeFixture(t *testing.T, mode string, timeout time.Duration) nativeFi
 	config := native.Config{
 		Directory: filepath.Join(root, "spawner"), Bus: bus, BusURL: filepath.Join(root, "bus"),
 		StorageURL: filepath.Join(root, "storage"), Resolver: resolver, RegistrationTimeout: timeout,
-		Environment: map[string]string{"AWS_REGION": "fixture-region"},
+		Environment: map[string]string{
+			"AWS_REGION": "fixture-region", "CHROMIUM_PATH": filepath.Join(root, "chromium"), "CHROMIUM_NO_SANDBOX": "true",
+		},
 	}
 	manager, err := native.NewManager(t.Context(), config)
 	if err != nil {
@@ -138,12 +140,14 @@ func newNativeFixture(t *testing.T, mode string, timeout time.Duration) nativeFi
 }
 
 type childReport struct {
-	AgentID         string `json:"agent_id"`
-	AgentIDSuffix   string `json:"agent_id_suffix"`
-	PID             int    `json:"pid"`
-	InheritedSecret bool   `json:"inherited_secret"`
-	Region          string `json:"region"`
-	Home            string `json:"home"`
+	AgentID           string `json:"agent_id"`
+	AgentIDSuffix     string `json:"agent_id_suffix"`
+	PID               int    `json:"pid"`
+	InheritedSecret   bool   `json:"inherited_secret"`
+	Region            string `json:"region"`
+	Home              string `json:"home"`
+	ChromiumPath      string `json:"chromium_path"`
+	ChromiumNoSandbox string `json:"chromium_no_sandbox"`
 }
 
 func childReports(t *testing.T, directory string) []childReport {
@@ -214,6 +218,9 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		}
 		if report.InheritedSecret || report.Region != "fixture-region" || report.Home == "" {
 			t.Fatalf("unexpected child environment: %+v", report)
+		}
+		if report.ChromiumPath != fixture.config.Environment["CHROMIUM_PATH"] || report.ChromiumNoSandbox != "true" {
+			t.Fatalf("child did not receive browser deployment settings: %+v", report)
 		}
 		if relative, err := filepath.Rel(fixture.config.Directory, report.Home); err != nil || !filepath.IsLocal(relative) {
 			t.Fatalf("child home is not isolated within its spawner directory: %s", report.Home)

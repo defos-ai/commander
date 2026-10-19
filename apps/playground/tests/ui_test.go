@@ -60,7 +60,7 @@ func TestHelpLayout(t *testing.T) {
 					http.Error(w, "unexpected model request", http.StatusBadRequest)
 				}))
 				defer provider.Close()
-				u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAPI: local})
+				u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAgentCount: 4, LocalAPI: local})
 				defer u.model.Close()
 				u.model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
 				u.text("/help")
@@ -298,7 +298,7 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 				mode = "remote"
 			}
 			t.Run(mode+"/"+tc.command, func(t *testing.T) {
-				model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAPI: local, MCPURL: "http://127.0.0.1:4273/mcp", MCPCredentials: credentials}, io.Discard)
+				model := ui.New(t.Context(), ui.Config{NoColor: true, LocalAgentCount: 4, LocalAPI: local, MCPURL: "http://127.0.0.1:4273/mcp", MCPCredentials: credentials}, io.Discard)
 				defer model.Close()
 				model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/help")})
 				model.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -360,7 +360,7 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		writeModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
 	}))
 	defer provider.Close()
-	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, MCPCredentials: credentials, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAPI: local, AdminURL: adminURL})
+	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL, MCPCredentials: credentials, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAgentCount: 4, LocalAPI: local, AdminURL: adminURL})
 	defer u.model.Close()
 	if strings.Contains(u.model.View(), local.Password) || strings.Contains(u.model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")
@@ -729,7 +729,7 @@ func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDri
 	u.run(u.model.Init())
 	ready := "Commander connected"
 	if config.LocalAPI != nil {
-		ready = "Commander ready · all-in-one · 3 agents connected"
+		ready = fmt.Sprintf("Commander ready · all-in-one · %d agents connected", config.LocalAgentCount)
 	}
 	u.wait("connection", func(view string) bool { return strings.Contains(view, ready) })
 	return u

@@ -4,7 +4,8 @@
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
-  Admin, MCP, API, controller, web, browser and builder agent hosts for `--all-in-one`.
+  Admin, MCP, API, controller, builder and spawner hosts for `--all-in-one`.
+  The spawner launches the selected external agent packages as native children.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
@@ -77,16 +78,27 @@
   Keep this public metadata limited to deployment enums; it retains API Host,
   Origin and proxy validation and must never expose credentials or paths.
 - All-in-one starts temporary state and loopback services, waits for readiness,
-  then shuts down hosts before deleting that session's files. It must not use or
+  then shuts down hosts and awaits native children before deleting that session's
+  files, including downloads and child working directories. It must not use or
   delete the user's configured database/storage or existing Compose state.
   Pass the builder workspace directory explicitly beneath the session directory;
   never use `BUILDER_WORKSPACE_DIR` or leave generated source behind on exit.
+- Use the spawner's `RunWithOptions` to force native mode and a state directory
+  beneath the session directory, including Docker AIO. Do not mutate environment
+  settings or use a Docker socket. Default startup packages are
+  `github.com/defos-ai/commander-web-agent@v0.2.0` and
+  `github.com/defos-ai/commander-browser-agent@v0.2.0`.
+  Repeatable `--spawn-agents` replaces this list; explicit `--spawn-agents=` skips
+  startup packages while retaining builder and spawner. Reject the flag outside
+  all-in-one mode. Preserve explicit release pins and production package
+  resolution; download or launch failure must fail startup. Downloads need
+  Internet access for each temporary session.
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
   Inject the same cipher into API and builder, without changing process environment, writing
   the key to files, or exposing it in logs, credentials output or model messages.
-  Web and browser hosts do not need this key.
+  The spawner and its child agents must not receive this key.
   Docker AIO uses this same Go startup path, with no second generator in its
   entrypoint. The generated key and encrypted state are temporary; persistent
   deployments must retain their key separately and must not silently replace it.
@@ -151,15 +163,18 @@
   internal. The default advertised link assumes host port `4275`; use optional
   `--admin-url` after the image name for another published port or host.
   Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
-  non-root. State remains temporary; adding image dependencies must not change
-  session persistence. Container ports cannot be published after creation.
+  non-root and pass this setting through native bootstrap. Retain Chromium,
+  fonts and Git for child agents. State remains temporary; adding image
+  dependencies must not change session persistence. Container ports cannot be
+  published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
   Embed both website missions: native quick start uses `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.
-  Wait for web, browser and builder agents to register. The web agent owns HTTP
-  work and remains ready without Chromium; the browser advertises rendering
+  Wait for builder, spawner and the configured startup agents to register; custom
+  package lists must not require the default web/browser types. The web agent
+  owns HTTP work and remains ready without Chromium; the browser advertises rendering
   requirements. Missing Git makes `checkout-template` unavailable without blocking
   all-in-one startup or website missions. Keep builder readiness in its discovery.
 - Preserve the chat engine's single-owner state and responsive queued input,
@@ -198,8 +213,9 @@
   frozen screen. Do not add a mouse mode command.
   Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
   while a reply is active.
-  All-in-one startup shows the provider/model, readiness with three connected agents,
-  one review prompt and the temporary-state note. Keep URLs, host inventories and
+  All-in-one startup shows the provider/model, readiness with the actual connected
+  agent count (four with the default packages), one review prompt and the
+  temporary-state note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 
 ## Checks
@@ -218,7 +234,9 @@ and `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
 
 Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
 behavior changes. The suite includes all-in-one coverage without a paid model
-or host browser. For transport or workflow changes, also use the
+or host browser. Keep tests offline with explicit startup-package overrides and
+local fixtures; retained web/browser test hosts still require their CI dependency
+filters. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
 
 For image changes, build both Dockerfiles from the repository root. Verify the

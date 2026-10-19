@@ -159,14 +159,14 @@ func checkLocalAdminProxy(t *testing.T, session *local.Session) {
 	var agents struct {
 		Items []struct{ Type string } `json:"items"`
 	}
-	if json.Unmarshal(body, &agents) != nil || len(agents.Items) != 3 {
+	if json.Unmarshal(body, &agents) != nil || len(agents.Items) != 2 {
 		t.Fatal("Admin proxy did not return the embedded API's registered agents")
 	}
 	types := map[string]bool{}
 	for _, agent := range agents.Items {
 		types[agent.Type] = true
 	}
-	if !types["web-agent"] || !types["browser-agent"] || !types["builder-agent"] {
+	if !types["builder-agent"] || !types["spawner-agent"] {
 		t.Fatal("Admin proxy returned an unexpected agent inventory")
 	}
 }
@@ -183,6 +183,7 @@ func startLocalAdminSession(t *testing.T, options local.Options) (*local.Session
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	t.Cleanup(cancel)
+	options.SpawnAgents = []string{} // Keep unrelated session checks independent of public packages.
 	session, err := local.StartWithOptions(ctx, options)
 	if err != nil {
 		t.Fatalf("start all-in-one: %v", err)

@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/host"
@@ -20,12 +21,28 @@ import (
 
 const serviceName = "commander-" + string(spawner.SpawnerAgentType)
 
+// ErrShutdown tells an embedded host to retain shared state after cleanup fails.
+var ErrShutdown = errors.New("spawner shutdown failed")
+
+// Options lets an embedded host isolate its runtime and receive startup identities.
+type Options struct {
+	Runtime  string
+	StateDir string
+	// Ready reports observed startup agents before serving. The caller must still
+	// wait for the controller to persist these identities before using them.
+	Ready func(agentID string, spawned []runtimes.Result)
+}
+
 // Run installs no signal handlers; Main adds process-level shutdown handling.
 func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
+	return RunWithOptions(ctx, args, stderr, Options{})
+}
+
+func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	configuration, err := parseConfig(args, stderr)
+	configuration, err := parseConfig(args, stderr, options)
 	if errors.Is(err, flag.ErrHelp) {
 		return nil
 	}
@@ -58,7 +75,11 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if err != nil {
 		return err
 	}
-	defer func() { result = errors.Join(result, dependencies.Close()) }()
+	defer func() {
+		if err := dependencies.Close(); err != nil {
+			result = errors.Join(result, fmt.Errorf("%w: %w", ErrShutdown, err))
+		}
+	}()
 	selected := []action.Executor{}
 	if configuration.actionNames == nil || len(configuration.actionNames) > 0 {
 		selected, err = spawner.NewActions(dependencies.Runtime)
@@ -88,13 +109,19 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if err != nil {
 		return err
 	}
+	spawned := make([]runtimes.Result, 0, len(configuration.spawnAgents))
 	for index, reference := range configuration.spawnAgents {
-		if _, err := dependencies.Runtime.Spawn(ctx, "startup:"+strconv.Itoa(index), reference); err != nil {
+		result, err := dependencies.Runtime.Spawn(ctx, "startup:"+strconv.Itoa(index), reference)
+		if err != nil {
 			return fmt.Errorf("spawn startup agent %d: %w", index+1, err)
 		}
+		spawned = append(spawned, result)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if options.Ready != nil {
+		options.Ready(agentID, spawned)
 	}
 	logger.Info("agent starting", "heartbeat_interval", configuration.heartbeatInterval)
 	return instance.Serve(ctx, dependencies.Bus, configuration.scope)

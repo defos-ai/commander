@@ -13,9 +13,10 @@ import (
 
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
-	browsercli "github.com/defos-ai/commander/apps/agents/browser/cli"
 	buildercli "github.com/defos-ai/commander/apps/agents/builder/cli"
-	webcli "github.com/defos-ai/commander/apps/agents/web/cli"
+	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
+	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -32,6 +33,8 @@ type runningHost struct {
 
 type Options struct {
 	DisableAdmin bool
+	// Nil uses released web/browser packages; an empty slice starts no packages.
+	SpawnAgents []string
 }
 
 type Session struct {
@@ -43,6 +46,7 @@ type Session struct {
 	MCPCredentials host.BearerCredentials
 	Directory      string
 	Notices        []string
+	AgentCount     int
 	cancel         context.CancelCauseFunc
 	hosts          []*runningHost
 	log            *os.File
@@ -56,6 +60,17 @@ func Start(ctx context.Context) (session *Session, err error) {
 }
 
 func StartWithOptions(ctx context.Context, options Options) (session *Session, err error) {
+	if options.SpawnAgents == nil {
+		options.SpawnAgents = []string{
+			"github.com/defos-ai/commander-web-agent@v0.2.0",
+			"github.com/defos-ai/commander-browser-agent@v0.2.0",
+		}
+	}
+	for _, reference := range options.SpawnAgents {
+		if _, err := packages.ParseReference(reference); err != nil {
+			return nil, fmt.Errorf("spawn-agents: %w", err)
+		}
+	}
 	s := &Session{}
 	s.Context, s.cancel = context.WithCancelCause(ctx)
 	defer func() {
@@ -93,7 +108,8 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 		"--log-level=info", "--log-format=json",
 	}
 	database := "--database-url=" + filepath.Join(s.Directory, "database")
-	startup, cancelStartup := context.WithTimeout(s.Context, 30*time.Second)
+	// Each package can spend 30s resolving, 5m downloading and 30s registering.
+	startup, cancelStartup := context.WithTimeout(s.Context, 30*time.Second+time.Duration(len(options.SpawnAgents))*6*time.Minute)
 	defer cancelStartup()
 	controllerReady := make(chan struct{})
 	s.start("controller", func(ctx context.Context) error {
@@ -103,8 +119,6 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = awaitReady(startup, controllerReady); err != nil {
 		return nil, err
 	}
-	s.start("web agent", func(ctx context.Context) error { return webcli.Run(ctx, common, s.log) })
-	s.start("browser agent", func(ctx context.Context) error { return browsercli.Run(ctx, common, s.log) })
 	s.start("builder agent", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), "--workspace-dir="+filepath.Join(s.Directory, "builder-workspaces"))
 		return buildercli.RunWithOptions(ctx, args, s.log, buildercli.Options{SecretCipher: cipher})
@@ -135,7 +149,28 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = awaitReady(startup, apiReady); err != nil {
 		return nil, err
 	}
-	if err = s.awaitAgents(startup); err != nil {
+	spawnerReady := make(chan struct{})
+	expected := make(map[string]string)
+	s.start("spawner agent", func(ctx context.Context) error {
+		args := append([]string{}, common...)
+		for _, reference := range options.SpawnAgents {
+			args = append(args, "--spawn-agents="+reference)
+		}
+		return spawnercli.RunWithOptions(ctx, args, s.log, spawnercli.Options{
+			Runtime: "native", StateDir: filepath.Join(s.Directory, "spawner"),
+			Ready: func(agentID string, spawned []runtimes.Result) {
+				expected[agentID] = "spawner-agent"
+				for _, result := range spawned {
+					expected[result.AgentID] = result.AgentType
+				}
+				close(spawnerReady)
+			},
+		})
+	})
+	if err = awaitReady(startup, spawnerReady); err != nil {
+		return nil, err
+	}
+	if err = s.awaitAgents(startup, expected); err != nil {
 		return nil, err
 	}
 	if !options.DisableAdmin {
@@ -198,7 +233,7 @@ func localHTTPURL(address net.Addr) string {
 	return "http://" + net.JoinHostPort(host, port)
 }
 
-func (s *Session) awaitAgents(ctx context.Context) error {
+func (s *Session) awaitAgents(ctx context.Context, expected map[string]string) error {
 	client, err := bridge.Connect(ctx, s.MCPURL, s.MCPCredentials)
 	if err != nil {
 		return err
@@ -216,23 +251,33 @@ func (s *Session) awaitAgents(ctx context.Context) error {
 		}
 		var inventory struct {
 			Agents []struct {
+				ID     string `json:"id"`
 				Status string `json:"status"`
 				Type   string `json:"type"`
+				Stale  bool   `json:"stale"`
 			} `json:"agents"`
 		}
 		if err := json.Unmarshal(result.Data, &inventory); err != nil {
 			return err
 		}
-		var webReady, browserReady, builderReady bool
+		var builderReady bool
+		matched, connected := 0, 0
 		for _, agent := range inventory.Agents {
-			if agent.Status != "ready" {
+			if agent.Status != "ready" || agent.Stale {
 				continue
 			}
-			webReady = webReady || agent.Type == "web-agent"
-			browserReady = browserReady || agent.Type == "browser-agent"
-			builderReady = builderReady || agent.Type == "builder-agent"
+			connected++
+			if expectedType, expectedAgent := expected[agent.ID]; expectedAgent {
+				if expectedType == agent.Type {
+					matched++
+				}
+			} else if agent.Type == "builder-agent" {
+				// A custom startup package must not stand in for the embedded builder.
+				builderReady = true
+			}
 		}
-		if webReady && browserReady && builderReady {
+		if matched == len(expected) && builderReady {
+			s.AgentCount = connected
 			return nil
 		}
 		select {
@@ -247,10 +292,12 @@ func (s *Session) awaitAgents(ctx context.Context) error {
 func (s *Session) Close() error {
 	s.once.Do(func() {
 		s.cancel(context.Canceled)
+		retainState := false
 		for i := len(s.hosts) - 1; i >= 0; i-- {
 			host := s.hosts[i]
 			host.stop()
 			<-host.done
+			retainState = retainState || errors.Is(host.err, spawnercli.ErrShutdown)
 			if err := host.err; host.required && err != nil && !cancellationOnly(err) {
 				s.closeErr = errors.Join(s.closeErr, fmt.Errorf("stop %s: %w", host.name, err))
 			}
@@ -259,7 +306,11 @@ func (s *Session) Close() error {
 			s.closeErr = errors.Join(s.closeErr, s.log.Close())
 		}
 		if s.Directory != "" {
-			s.closeErr = errors.Join(s.closeErr, os.RemoveAll(s.Directory))
+			if retainState {
+				s.closeErr = errors.Join(s.closeErr, fmt.Errorf("local state retained at %s because spawner shutdown failed", s.Directory))
+			} else {
+				s.closeErr = errors.Join(s.closeErr, os.RemoveAll(s.Directory))
+			}
 		}
 	})
 	return s.closeErr

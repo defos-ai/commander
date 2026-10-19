@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +23,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	browsercli "github.com/defos-ai/commander/apps/agents/browser/cli"
+	webcli "github.com/defos-ai/commander/apps/agents/web/cli"
 	"github.com/defos-ai/commander/apps/playground/cli"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -38,6 +41,40 @@ func TestAllInOne(t *testing.T) {
 	t.Run("session secret encryption", testAllInOneSecrets)
 	t.Run("API startup failures clean up local hosts", testAllInOneAPIFailure)
 	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
+}
+
+func TestSpawnAgentsArguments(t *testing.T) {
+	allInOneEnvironment(t)
+	t.Setenv("COMMANDER_LLM_PROVIDER", "")
+	t.Setenv("COMMANDER_LLM_BASE_URL", "")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // Parse startup overrides without downloading packages or opening hosts.
+	const web = "github.com/defos-ai/commander-web-agent@v0.2.0"
+	const browser = "github.com/defos-ai/commander-browser-agent@v0.2.0"
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "defaults", args: []string{"--all-in-one"}},
+		{name: "empty override", args: []string{"--all-in-one", "--spawn-agents="}},
+		{name: "custom package", args: []string{"--all-in-one", "--spawn-agents=" + web}},
+		{name: "repeated packages", args: []string{"--all-in-one", "--spawn-agents", web, "--spawn-agents", browser}},
+		{name: "invalid reference", args: []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander-web-agent@latest"}, want: "agent package"},
+		{name: "remote package", args: []string{"--spawn-agents=" + web}, want: "--spawn-agents requires --all-in-one"},
+		{name: "remote empty override", args: []string{"--spawn-agents="}, want: "--spawn-agents requires --all-in-one"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := cli.Run(ctx, test.args, strings.NewReader(""), io.Discard, io.Discard)
+			if test.want == "" {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("valid startup packages were rejected: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("startup package validation: got %v, want %q", err, test.want)
+			}
+		})
+	}
 }
 
 func testAllInOneWorkflow(t *testing.T) {
@@ -73,7 +110,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		expected := map[int32][]string{
 			2: {"review-website-no-browser", "review-website-with-browser"},
 			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
-			4: {"web-agent-", "browser-agent-", "builder-agent-", "checkout-template"},
+			4: {"web-agent-", "browser-agent-", "builder-agent-", "spawner-agent-", "checkout-template", "spawn-agent"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -156,15 +193,16 @@ func testAllInOneWorkflow(t *testing.T) {
 	defer model.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
+	// Stop fixture agents before cancellation lets the CLI remove shared state.
+	cliContext, stopCLI := context.WithCancel(context.WithoutCancel(ctx))
+	stopAgents := func() {}
 	input, keyboard := io.Pipe()
-	defer input.Close()
-	defer keyboard.Close()
 	var output terminalOutput
 	done := make(chan error, 1)
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- cli.Run(ctx, []string{"--all-in-one", "--provider=other", "--model=fixture", "--base-url=" + model.URL + "/v1", "--no-color", "--debug=false"}, input, &output, &output)
+		done <- cli.Run(cliContext, []string{"--all-in-one", "--spawn-agents=", "--provider=other", "--model=fixture", "--base-url=" + model.URL + "/v1", "--no-color", "--debug=false"}, input, &output, &output)
 	}()
 	wait := func(text string) {
 		t.Helper()
@@ -181,8 +219,10 @@ func testAllInOneWorkflow(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() {
-		cancel()
+		stopAgents()
+		stopCLI()
 		_ = keyboard.Close()
+		_ = input.Close()
 		select {
 		case <-stopped:
 		case <-time.After(10 * time.Second):
@@ -191,7 +231,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	})
 	wait("Temporary session · results deleted on exit")
 	welcome := output.String()
-	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 3 agents connected", "Try: Review defos.ai"} {
+	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try: Review defos.ai"} {
 		if !strings.Contains(welcome, want) {
 			t.Fatalf("missing startup message %q: %s", want, welcome)
 		}
@@ -266,16 +306,39 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 	get("/api/v1/operations", "", http.StatusUnauthorized)
 	get("/api/v1/operations", "wrong-password", http.StatusUnauthorized)
+	directories, err := filepath.Glob(filepath.Join(temporary, "commander-playground-*"))
+	if err != nil || len(directories) != 1 {
+		t.Fatalf("locate local session: %v (%v)", directories, err)
+	}
+	stopAgents = startLocalWebHosts(t, directories[0])
 	var agents models.ListResponse[models.AgentResponse]
-	if err := json.Unmarshal(get("/api/v1/agents", "all-in-one-api-secret", http.StatusOK), &agents); err != nil {
-		t.Fatal(err)
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if err := json.Unmarshal(get("/api/v1/agents", "all-in-one-api-secret", http.StatusOK), &agents); err != nil {
+			t.Fatal(err)
+		}
+		ready := 0
+		for _, agent := range agents.Items {
+			if agent.Status == "ready" {
+				ready++
+			}
+		}
+		if ready == 4 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("local fixture agents did not register: %+v", agents.Items)
+		case <-tick.C:
+		}
 	}
-	if len(agents.Items) != 3 {
-		t.Fatalf("unexpected bundled agents: %+v", agents.Items)
+	if len(agents.Items) != 4 {
+		t.Fatalf("unexpected local agents: %+v", agents.Items)
 	}
-	var webChecks, browserChecks, builderChecks int
+	var webChecks, browserChecks, builderChecks, spawnerChecks int
 	for _, agent := range agents.Items {
-		if !regexp.MustCompile(`^(web|browser|builder)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
+		if !regexp.MustCompile(`^(web|browser|builder|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
 			t.Fatalf("unexpected bundled agent identity: %+v", agent)
 		}
 		for _, action := range agent.Actions {
@@ -295,13 +358,18 @@ func testAllInOneWorkflow(t *testing.T) {
 					t.Fatalf("unexpected builder action without Git: %+v", action)
 				}
 				builderChecks++
+			case "spawner-agent":
+				if action.Name != "spawn-agent" || action.Status != "ready" {
+					t.Fatalf("unexpected spawner action: %+v", action)
+				}
+				spawnerChecks++
 			default:
 				t.Fatalf("unexpected bundled agent type: %s", agent.Type)
 			}
 		}
 	}
-	if webChecks != 5 || browserChecks != 2 || builderChecks != 1 {
-		t.Fatalf("unexpected bundled action coverage: web=%d, browser=%d, builder=%d", webChecks, browserChecks, builderChecks)
+	if webChecks != 5 || browserChecks != 2 || builderChecks != 1 || spawnerChecks != 1 {
+		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, builder=%d, spawner=%d", webChecks, browserChecks, builderChecks, spawnerChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
@@ -384,6 +452,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 	wait("Review on Admin UI")
 	client.Close()
+	stopAgents()
 	if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {
 		t.Fatal(err)
 	}
@@ -416,10 +485,51 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 }
 
+// The workflow uses real hosts with local fixtures; package downloading and child
+// ownership are exercised by the spawner suites and native/image smoke checks.
+func startLocalWebHosts(t *testing.T, directory string) func() {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))
+	args := []string{"--bus-url=" + filepath.Join(directory, "bus"), "--storage-url=" + filepath.Join(directory, "storage")}
+	done := make(chan error, 2)
+	go func() { done <- webcli.Run(ctx, args, io.Discard) }()
+	go func() { done <- browsercli.Run(ctx, args, io.Discard) }()
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			cancel()
+			timer := time.NewTimer(10 * time.Second)
+			defer timer.Stop()
+			for range 2 {
+				select {
+				case err := <-done:
+					if err != nil && !errors.Is(err, context.Canceled) {
+						t.Errorf("stop workflow agent: %v", err)
+					}
+				case <-timer.C:
+					t.Error("workflow agents did not stop before session cleanup")
+					return
+				}
+			}
+		})
+	}
+	t.Cleanup(stop)
+	return stop
+}
+
 func allInOneEnvironment(t *testing.T) string {
 	t.Helper()
 	temporary := t.TempDir()
 	frontend := t.TempDir()
+	externalSpawner := t.TempDir()
+	t.Setenv("SPAWNER_RUNTIME", "docker")
+	t.Setenv("SPAWNER_DOCKER_NETWORK", "")
+	t.Setenv("SPAWNER_STATE_DIR", externalSpawner)
+	t.Cleanup(func() {
+		if files, err := os.ReadDir(externalSpawner); err != nil || len(files) != 0 {
+			t.Errorf("all-in-one used the external spawner state directory: %v (%v)", files, err)
+		}
+	})
 	if err := os.WriteFile(filepath.Join(frontend, "index.html"), []byte(`<html>Admin fixture</html>`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +585,7 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			stopped := make(chan struct{})
 			go func() {
 				defer close(stopped)
-				done <- cli.Run(ctx, []string{"--all-in-one", "--provider=", "--model=", "--base-url=", "--no-color"}, input, &output, &output)
+				done <- cli.Run(ctx, []string{"--all-in-one", "--spawn-agents=", "--provider=", "--model=", "--base-url=", "--no-color"}, input, &output, &output)
 			}()
 			t.Cleanup(func() {
 				cancel()
@@ -681,7 +791,7 @@ func testAllInOneMCPFailure(t *testing.T) {
 			temporary := allInOneEnvironment(t)
 			t.Setenv("MCP_TOKEN", token)
 			var output bytes.Buffer
-			err := cli.Run(t.Context(), []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
+			err := cli.Run(t.Context(), []string{"--all-in-one", "--spawn-agents=", "--no-color"}, strings.NewReader(""), &output, &output)
 			if err == nil || !strings.Contains(err.Error(), "MCP_TOKEN") || strings.Contains(err.Error(), token) {
 				t.Fatal("invalid MCP credentials were accepted or disclosed")
 			}
@@ -716,7 +826,7 @@ func testAllInOneAPIFailure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 			defer cancel()
 			var output bytes.Buffer
-			err := cli.Run(ctx, []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
+			err := cli.Run(ctx, []string{"--all-in-one", "--spawn-agents=", "--no-color"}, strings.NewReader(""), &output, &output)
 			if err == nil || !strings.Contains(err.Error(), want) || ctx.Err() != nil {
 				t.Fatalf("API startup failure was not propagated promptly: %v", err)
 			}

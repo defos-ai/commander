@@ -101,8 +101,9 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	u := newUIWithConfig(t, ctx, ui.Config{
 		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCPURL: endpoint.URL,
 		Keys: map[string]string{"other": "test-only"}, NoColor: true, AdminURL: adminURL,
-		LocalAPI:       &ui.LocalAPI{URL: "http://localhost:4274", Username: "commander", Password: password},
-		MCPCredentials: host.BearerCredentials{Token: token},
+		LocalAgentCount: 4,
+		LocalAPI:        &ui.LocalAPI{URL: "http://localhost:4274", Username: "commander", Password: password},
+		MCPCredentials:  host.BearerCredentials{Token: token},
 	})
 	defer u.model.Close()
 	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 80})

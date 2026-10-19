@@ -12,6 +12,7 @@ func copyEnvironment(input map[string]string) (map[string]string, error) {
 	for key, value := range input {
 		switch key {
 		case "PATH", "SystemRoot", "WINDIR", "TMPDIR", "TMP", "TEMP",
+			"CHROMIUM_PATH", "CHROMIUM_NO_SANDBOX",
 			"AWS_ENDPOINT_URL_S3", "AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "S3_USE_PATH_STYLE":
 		default:
 			return nil, fmt.Errorf("unsupported child environment setting %q", key)

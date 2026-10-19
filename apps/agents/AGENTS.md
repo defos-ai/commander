@@ -16,14 +16,16 @@
 - Reusable hosts also run inside Playground. Keep process exits, global signal
   handlers and UI-specific dependencies out of constructors and reusable `Run` code.
 
-## Planned package contract
+## Package contract
 
 - [Agent packages and bootstrap](../../docs/agent-packages.md) defines the release
-  manifest and planned spawner behavior. The [spawner module](spawner/AGENTS.md)
+  manifest and spawner behavior. The [spawner module](spawner/AGENTS.md)
   implements native/Docker spawning with `spawn-agent` and repeatable
   `--spawn-agents`. Compose opts into Docker mode with the `spawner` profile;
-  Playground/AIO integration remains a separate step.
-- Adopt the contract in `commander-example-agent` before extracting web/browser.
+  Playground and Docker AIO embed the spawner in native mode and launch external
+  web/browser packages by default. Bundled web/browser modules remain for tests
+  until their separate removal.
+- Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.
 - `COMMANDER_AGENT_ID_SUFFIX` accepts exactly eight lowercase hex characters.

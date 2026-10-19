@@ -16,8 +16,11 @@ docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
 ```
 
-This image includes Admin, MCP, the API, a controller, and web, browser and builder
-agents, with Chromium, fonts and Git. Completed operations show a review link to Admin at
+This image includes Admin, MCP, the API, a controller, builder and spawner agents,
+with Chromium, fonts and Git. At startup, the spawner downloads and starts the
+web and browser agents as native processes inside the container; it needs no
+Docker socket. See [startup agents](#startup-agents) for package selection and
+Internet requirements. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
 If an operation shows **secrets needed**, open its Admin link and provide the
@@ -90,8 +93,9 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts Admin, MCP, the HTTP API, one controller, and web, browser and builder agents using
-temporary FS state. The API listens at `http://127.0.0.1:4274` with username
+This starts Admin, MCP, the HTTP API, one controller, builder and spawner agents
+using temporary FS state. The spawner downloads and starts web and browser agents
+as child processes. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
@@ -114,13 +118,39 @@ Start with `review-website-no-browser` for links, SEO and technology checks.
 [Chromium](../agents/browser/README.md#native-agent).
 The builder's `checkout-template` action requires Git on `PATH`; without it,
 website missions still work. See the [builder guide](../agents/builder/README.md).
-**Exiting stops these hosts and deletes operations, reports, artifacts and builder workspaces.**
+**Exiting stops these hosts and child agents, then deletes operations, reports,
+artifacts, builder workspaces and downloaded executables.**
 Use Compose to retain work.
 
 `--all-in-one` chooses its own connections, ignoring `COMMANDER_MCP_URL`,
 `COMMANDER_MCP_TOKEN`, `BUS_URL`, `STORAGE_URL` and `DATABASE_URL`; it cannot be
 combined with `--mcp-url`. `--debug`
 shows the temporary host log location, which is also deleted on exit.
+
+### Startup agents
+
+Native and Docker all-in-one sessions start these packages by default:
+
+- `github.com/defos-ai/commander-web-agent@v0.2.0`
+- `github.com/defos-ai/commander-browser-agent@v0.2.0`
+
+Each temporary session downloads the release manifests and native executables
+from GitHub, requiring Internet access. The spawner verifies checksums before
+launching; a failed download or launch prevents startup. Downloads and child
+working directories stay within the temporary session and are removed after
+child shutdown.
+
+Repeat `--spawn-agents` to replace the default package list with explicit public
+GitHub releases, for example:
+
+```sh
+./commander --all-in-one --spawn-agents github.com/defos-ai/commander-web-agent@v0.2.0
+```
+
+Use `--spawn-agents=` to start without package downloads. The embedded builder
+and spawner remain available; website missions require the corresponding agents.
+The flag is all-in-one only. For Docker AIO, place it after the image name.
+Use packages from authors you trust; native agents run as the current OS user.
 
 ### Credentials
 

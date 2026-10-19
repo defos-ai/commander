@@ -71,8 +71,11 @@ Download the binary as `commander` (`commander.exe` on Windows). On Linux/macOS,
 run `chmod +x commander`, then `./commander --all-in-one`; on Windows, run
 `.\commander.exe --all-in-one`. See
 [native setup](../apps/playground/README.md#native-one-executable) for model setup,
-the generated API login and temporary-state behavior. Native users can run
-`review-website-no-browser` immediately; the with-browser mission also needs
+the generated API login and temporary-state behavior. All-in-one startup downloads
+web/browser `v0.2.0` native packages from GitHub for each temporary session;
+Internet access is required. Use [startup package overrides](../apps/playground/README.md#startup-agents)
+to change or skip those downloads. With the default agents,
+`review-website-no-browser` needs no browser; the with-browser mission also needs
 Chromium or Chrome.
 The bundled builder's `checkout-template` action needs Git on the host.
 
@@ -104,7 +107,8 @@ and a moving `stable` tag:
 These reusable workflows run only through **Make release**, after its tests and
 tagging succeed. They publish `linux/amd64` images; Admin includes the built UI.
 The all-in-one image starts Playground with its local hosts, embeds Admin in the
-Commander binary and includes Chromium and Git for the bundled builder.
+Commander binary and includes Chromium and Git. Its native spawner downloads the
+web/browser packages inside the container, without a Docker socket.
 Publish `127.0.0.1:4275:4275` to use Admin;
 its API connection stays inside the container.
 The lightweight Playground image connects to an existing MCP service.

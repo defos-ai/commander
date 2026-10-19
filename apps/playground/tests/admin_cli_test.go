@@ -85,7 +85,7 @@ func testAllInOneAdminAddress(t *testing.T) {
 			t.Setenv("API_RUNTIME", tc.runtime)
 			t.Setenv("API_USERNAME", "operator+local")
 			t.Setenv("COMMANDER_ADMIN_URL", tc.publicURL)
-			args := []string{"--all-in-one"}
+			args := []string{"--all-in-one", "--spawn-agents="}
 			if tc.disabled {
 				args = append(args, "--no-admin")
 			}

@@ -13,13 +13,15 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [docker.Manager](runtimes/docker/manager.go) implement the interface.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
   resources and closes them in reverse order. `cli.Run` uses deployment
-  configuration; keep injection in runtime constructors for focused tests.
+  configuration. `cli.RunWithOptions` accepts production runtime/state-directory
+  overrides and a readiness callback for embedding. Playground uses these to
+  select native mode and session state, including inside Docker AIO. Keep test
+  injection in runtime constructors; do not add resolver options to the host.
   Injected runtime clients remain caller-owned; a manager closes its resolver
   only when it created it. Keep concrete runtime
-  imports out of `cli/cli.go`. Compose has an opt-in `spawner` profile; inclusion in
-  Playground, AIO and release images remains separate work.
-- Runtime settings are environment-only: `SPAWNER_RUNTIME` defaults to `native`
-  and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
+  imports out of `cli/cli.go`. Compose has an opt-in `spawner` profile.
+- Standalone runtime settings are environment-only: `SPAWNER_RUNTIME` defaults
+  to `native` and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
   unsupported runtimes explicitly. Do not reintroduce flags for these settings.
 - Actions get task/command identity from `action.ExecutionFromContext`, supplied
@@ -70,6 +72,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   platforms terminate the direct child. Processes that escape the group are
   outside this guarantee. This is not a sandbox or process-tree supervision.
 - Bootstrap uses an explicit environment allowlist and private HOME/USERPROFILE.
+  Native children receive `CHROMIUM_PATH` and `CHROMIUM_NO_SANDBOX` when configured
+  by the deployment; keep these settings out of Docker bootstrap.
   No inherited API/MCP/model credentials or secrets encryption key. Do not log
   child output or persist bootstrap credentials. CLI resolves FS paths before
   children switch to their private working directories.
@@ -117,6 +121,7 @@ go vet ./apps/agents/spawner/...
 ```
 
 The `spawner` owner filter in `.github/test-paths.yml` selects its unit check.
-Keep `go.work` and CI coverage aligned with dependencies. Release module tagging
-discovers this module through the workspace; image/native asset publication has
-not yet been added to the release chain.
+Playground's filter also includes spawner changes. Keep `go.work` and CI coverage
+aligned with dependencies. Release module tagging discovers this module through
+the workspace. The spawner is embedded in Commander; standalone image/native
+asset publication has not yet been added to the release chain.

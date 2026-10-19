@@ -99,7 +99,7 @@ func testAllInOneSecrets(t *testing.T) {
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 				defer cancel()
-				session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: true})
+				session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: true, SpawnAgents: []string{}})
 				if session != nil {
 					t.Cleanup(func() { _ = session.Close() })
 					t.Fatal("invalid encryption key started a local session")

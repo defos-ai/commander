@@ -36,7 +36,7 @@ type config struct {
 	scope               *environment.DiscoveryScope
 }
 
-func parseConfig(args []string, stderr io.Writer) (config, error) {
+func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
 	knownActions := spawner.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
@@ -77,6 +77,12 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	result.storageURL = host.Value(storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
 	result.stateDir = host.Value("", false, "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
 	result.runtime = host.Value("", false, "SPAWNER_RUNTIME", "native")
+	if options.Runtime != "" {
+		result.runtime = options.Runtime
+	}
+	if options.StateDir != "" {
+		result.stateDir = options.StateDir
+	}
 	if result.runtime != "native" && result.runtime != "docker" {
 		return config{}, errors.New("SPAWNER_RUNTIME must be native or docker")
 	}
@@ -173,7 +179,7 @@ func parseList(value string) ([]string, error) {
 func childEnvironment(storageURL, runtime string) map[string]string {
 	var names []string
 	if runtime == "native" {
-		names = []string{"PATH", "SystemRoot", "WINDIR", "TMPDIR", "TEMP", "TMP"}
+		names = []string{"PATH", "SystemRoot", "WINDIR", "TMPDIR", "TEMP", "TMP", "CHROMIUM_PATH", "CHROMIUM_NO_SANDBOX"}
 	}
 	if connectionScheme(storageURL) == "s3" {
 		names = append(names, "AWS_ENDPOINT_URL_S3", "AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "S3_USE_PATH_STYLE")
