@@ -177,6 +177,16 @@ func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error
 	default:
 		return agentmodel.AgentSnapshot{}, errors.New("agent description has an invalid status")
 	}
+	sessionIDs := map[string]bool{}
+	for _, item := range description.Sessions {
+		if err := item.Validate(); err != nil {
+			return agentmodel.AgentSnapshot{}, err
+		}
+		if item.OwnerAgentID != description.ID || sessionIDs[item.ID] {
+			return agentmodel.AgentSnapshot{}, errors.New("invalid session ownership")
+		}
+		sessionIDs[item.ID] = true
+	}
 	seen := make(map[string]bool, len(description.Actions))
 	for _, entry := range description.Actions {
 		if err := entry.Validate(); err != nil {

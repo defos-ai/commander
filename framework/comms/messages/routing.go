@@ -8,6 +8,8 @@ import (
 
 const DefaultControllerType = "default"
 
+func AgentControls(agentID string) string { return "agents." + agentID + ".controls" }
+
 func AgentCommands(agentID string) string { return "agents." + agentID + ".commands" }
 
 // AgentEvents is consumed independently so long-running commands cannot delay

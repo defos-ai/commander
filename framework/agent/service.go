@@ -39,6 +39,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	var resultsDone chan struct{}
 	var eventsDone chan struct{}
 	var outcomesDone <-chan struct{}
+	var sessionsDone <-chan struct{}
 	var subscription comms.Subscription
 	var eventSubscription comms.Subscription
 	var stopCommandID string
@@ -60,6 +61,9 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	}
 	stopBackground := func() {
 		stopWorkers()
+		if sessionsDone != nil {
+			<-sessionsDone
+		}
 		if heartbeatDone != nil {
 			<-heartbeatDone
 		}
@@ -74,6 +78,12 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}
 	}
 	announceStopped := func(ctx context.Context, commandID string) error {
+		if closer, ok := a.config.Sessions.(interface{ Close() error }); ok {
+			if err := closer.Close(); err != nil {
+				return err
+			}
+		}
+
 		return a.stateChange(ctx, func(next *agentState) error {
 			next.status, next.work = AgentStopped, nil
 			return nil
@@ -147,6 +157,10 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		return err
 	}
 	if err := a.publishState(ctx, events, controllerevents.AgentStarted, ""); err != nil {
+		return err
+	}
+	sessionsDone, err = a.serveSessions(workersCtx, bus, events, endService)
+	if err != nil {
 		return err
 	}
 	a.config.Logger.Info("agent ready", "action_count", len(a.config.Actions))

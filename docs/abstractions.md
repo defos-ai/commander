@@ -153,3 +153,6 @@ bus acknowledgement that a message was processed.
 
 See [message contracts](../framework/comms/messages/README.md) for routes and
 [message handling](../framework/comms/README.md) for acknowledgement behavior.
+
+
+Agent-owned resources that survive an action use the [runtime session contract](runtime-sessions.md), including explicit owner routing and an independent control channel.

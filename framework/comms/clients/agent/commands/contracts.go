@@ -10,6 +10,7 @@ const (
 	RunAction       = messages.RunAction
 	DiscoverActions = messages.DiscoverActions
 	StopAgent       = messages.StopAgent
+	ControlSession  = messages.ControlSession
 )
 
 type ActionCall = actionmodel.ActionCall

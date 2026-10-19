@@ -6,6 +6,7 @@ import (
 )
 
 type AgentResponse struct {
+	Sessions         []RuntimeSessionResponse     `json:"sessions,omitempty"`
 	ID               string                       `json:"id"`
 	Type             string                       `json:"type"`
 	Status           string                       `json:"status"`

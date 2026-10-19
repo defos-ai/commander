@@ -27,6 +27,8 @@ func (c Client) Publish(ctx context.Context, command messages.Message) error {
 		return err
 	}
 	switch command.Type {
+	case ControlSession:
+		return c.Bus.Publish(ctx, messages.AgentControls(command.AgentID), command)
 	case RunAction, DiscoverActions, StopAgent:
 	default:
 		return fmt.Errorf("unsupported agent command %q", command.Type)

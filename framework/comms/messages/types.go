@@ -6,6 +6,7 @@ const (
 	AdapterRequest         MessageType = "adapter.request"
 	AdapterRequestCanceled MessageType = "adapter.request.canceled"
 	ControllerResponse     MessageType = "controller.response"
+	ControlSession         MessageType = "agent.control_session"
 	RunAction              MessageType = "action.run"
 	DiscoverActions        MessageType = "agent.discover"
 	StopAgent              MessageType = "agent.stop"

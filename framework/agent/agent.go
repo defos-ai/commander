@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"io"
 	"log/slog"
 	"strings"
@@ -22,6 +23,7 @@ import (
 )
 
 type AgentConfig struct {
+	Sessions sessions.Provider
 	// ID is optional. Missing IDs use the type, -agent if absent, and eight lowercase hex characters.
 	ID   string
 	Type AgentType
@@ -143,6 +145,9 @@ func (a *Agent) Describe() AgentSnapshot {
 		description.Actions = append(description.Actions, instance.Action())
 	}
 
+	if a.config.Sessions != nil {
+		description.Sessions = sessions.CloneAll(a.config.Sessions.Snapshot())
+	}
 	return description
 }
 
@@ -271,6 +276,13 @@ func (a *Agent) packageOutput(ctx context.Context, name string, result action.Re
 		return ActionOutput{}, err
 	}
 	output := ActionOutput{ActionName: name, Output: bytes.Clone(result.Output), NextActions: actionmodel.CloneNextActions(result.NextActions)}
+	if result.Session != nil {
+		v := result.Session.Clone()
+		if v.OwnerAgentID != a.ID() {
+			return ActionOutput{}, errors.New("session belongs to another agent")
+		}
+		output.Session = &v
+	}
 	owner := artifacts.Owner{AgentID: a.ID(), ActionName: name, CommandID: commandID}
 	for _, attachment := range result.Artifacts {
 		ref, err := a.publishArtifact(ctx, attachment, owner)

@@ -1,0 +1,48 @@
+# Agent-owned runtime sessions
+
+A runtime session is a resource that outlives an action and its operation. Its
+reference is `{id, owner_agent_id, scope_id}`: canonical session/scope UUIDs and
+the exact process's agent ID. The agent reports snapshots through its session
+provider; Commander persists them in inventory and projects lease loss as `lost`.
+A shell implementation lives in the external agent, not in the framework.
+
+Actions declare `session_mode: create|use`. Their object input carries
+`session_scope` and, for use, `session_id`. The controller treats owner routing as
+an eligibility restriction: only the owning agent may run a use action or an
+explicit create-action reuse. A stale, stopped, unknown, or unverified session
+never falls back to another agent. A new create request is rejected if the scope
+has a live reservation, and queued/running creation reserves the scope until its
+first snapshot arrives. Explicitly close before replacing.
+
+Mission and action input schemas may publish `x-commander-session-mode` with the
+same values. A trusted chat host injects its chat UUID as `session_scope`, verifies
+the session binding, and supplies the existing session ID for a use action. This
+annotation is public client metadata; it never grants agent permissions.
+
+MCP exposes:
+
+- `list_runtime_sessions({scope_id})`: inventory snapshots for that scope.
+- `control_runtime_session({id, owner_agent_id, scope_id, method})`: `inspect`,
+  `verify`, or `close`, routed through the controller to that exact owner.
+
+Control messages use `agents.<id>.controls`, separate from the serialized action
+inbox. They remain available while an action is working. Verification must not
+inject into busy command input. Providers return an error when a probe cannot
+run; close stops the transport and reports its result. Controllers do not
+interpret shell bytes, create replacement sessions, or replay commands.
+
+`Session` includes `kind`, `label`, `state`, `busy`, revision/timestamps, optional
+endpoint/peer/host/user, and reason. States are `starting`, `listening`, `verifying`,
+`connected`, `unverified`, `lost`, `closed`, `failed`. Action outputs can include
+the same typed `session` field. HTTP agent/action/result projections expose these
+fields through explicit API mappings. Snapshots are independently cloned.
+
+One active controller per database remains the supported coordination model.
+Sessions are process-owned and cannot migrate after a restart. An unreachable
+owner cannot confirm closure; clients retain that uncertainty. Session snapshots
+expire with the existing agent inventory retention policy, so chat hosts must
+persist their binding and refuse silent replacement if that record disappears.
+
+The cross-repository real-process E2E is in the external agent repository at
+`tests/remote_shell_e2e_test.go`. Its `scripts/test-remote-sessions.sh` builds these
+local Commander hosts and tests public HTTP/MCP behavior with two agents.

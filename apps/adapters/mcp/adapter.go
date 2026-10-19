@@ -94,6 +94,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 		Logger:       config.Logger,
 		Instructions: "Find a mission with list_missions; read describe_mission and relevant action schemas before starting. Use tracked operations; specify actions and input, the controller selects agents. Check preflight, follow mission rules, and resolve pending model continuations using current versions. Review failed-task recovery before ending the operation; ask before changing scope. ask_question is for active-operation decisions; general clarifications belong in chat. Only record real operator answers; expiry is not approval. Finish with complete_operation using output_schema; report limitations. Finished operations are read-only: get_report reads reports; new work needs a new operation. Inspect saved state before retrying an ambiguous failure. Never request secrets in chat or tool inputs. Read artifacts with resources/read.",
 	})
+	registerSessions(server, config)
 	if config.Logger != nil {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
 	}

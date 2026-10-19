@@ -16,6 +16,7 @@ const (
 )
 
 type Action struct {
+	SessionMode         string          `json:"session_mode,omitempty"`
 	Name                string          `json:"name"`
 	Description         string          `json:"description"`
 	StatusReason        string          `json:"status_reason,omitempty"`
@@ -28,6 +29,9 @@ type Action struct {
 // Validate checks shared metadata before it enters agent inventory or the catalog.
 // Readiness is interpreted separately for each agent and for catalog entries.
 func (a Action) Validate() error {
+	if a.SessionMode != "" && a.SessionMode != "create" && a.SessionMode != "use" {
+		return errors.New("session_mode must be create or use")
+	}
 	if strings.TrimSpace(a.Name) == "" {
 		return errors.New("action requires a name")
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -23,6 +24,16 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
 			return operations.Task{}, err
+		}
+		records, err := r.catalog.Agents(ctx)
+		if err != nil {
+			return operations.Task{}, err
+		}
+		if err := r.checkSessionCreation(task, records); err != nil {
+			return operations.Task{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+		}
+		if _, err := sessionOwner(task, records); err != nil {
+			return operations.Task{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 		}
 		next, err := r.store.QueueTask(ctx, command.OperationID, task)
 		if err := s.acceptUpdate(next, err); err != nil {

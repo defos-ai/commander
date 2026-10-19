@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"io"
 	"slices"
 	"sync/atomic"
@@ -24,9 +25,10 @@ const (
 )
 
 type Result struct {
-	Output      json.RawMessage `json:"output"`
-	Artifacts   []Artifact      `json:"-"`
-	NextActions []NextAction    `json:"next_actions,omitempty"`
+	Session     *sessions.Session `json:"session,omitempty"`
+	Output      json.RawMessage   `json:"output"`
+	Artifacts   []Artifact        `json:"-"`
+	NextActions []NextAction      `json:"next_actions,omitempty"`
 }
 
 // Each instance belongs to one agent. Run never chooses another action or contacts a controller.

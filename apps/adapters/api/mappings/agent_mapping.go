@@ -11,6 +11,7 @@ import (
 func ToAgentResponse(agent agents.Agent) models.AgentResponse {
 	response := models.AgentResponse{
 		ID:               agent.ID,
+		Sessions:         ToRuntimeSessionResponses(agent.Sessions),
 		Type:             string(agent.Type),
 		Status:           string(agent.Status),
 		Server:           models.AgentServerResponse{IPAddress: agent.Server.IPAddress, Hostname: agent.Server.Hostname},

@@ -10,6 +10,7 @@ import (
 func ToActionResponse(action actions.Action) models.ActionResponse {
 	return models.ActionResponse{
 		Name:                action.Name,
+		SessionMode:         action.SessionMode,
 		Description:         action.Description,
 		StatusReason:        action.StatusReason,
 		Status:              string(action.Status),
@@ -46,7 +47,13 @@ func ToActionRequirementResponses(requirements []actions.Requirement) []models.A
 }
 
 func ToActionOutputResponse(output actions.ActionOutput) models.ActionOutputResponse {
+	var session *models.RuntimeSessionResponse
+	if output.Session != nil {
+		v := ToRuntimeSessionResponse(*output.Session)
+		session = &v
+	}
 	return models.ActionOutputResponse{
+		Session:     session,
 		ActionName:  output.ActionName,
 		Output:      bytes.Clone(output.Output),
 		Artifacts:   ToArtifactResponses(output.Artifacts),

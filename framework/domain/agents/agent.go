@@ -2,6 +2,7 @@ package agents
 
 import (
 	"bytes"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"slices"
 	"time"
 )
@@ -34,10 +35,19 @@ func (record Agent) Snapshot(now time.Time) Agent {
 	if record.Stale {
 		record.Status = AgentUnavailable
 	}
+	if record.Stale || record.Status == AgentStopped {
+		for i := range record.Sessions {
+			if record.Sessions[i].State != "closed" && record.Sessions[i].State != "failed" {
+				record.Sessions[i].State = "lost"
+				record.Sessions[i].Reason = "Session owner is unavailable"
+			}
+		}
+	}
 	return record
 }
 
 func (record Agent) Clone() Agent {
+	record.Sessions = sessions.CloneAll(record.Sessions)
 	record.Work = record.Work.Clone()
 	record.Responsibilities = slices.Clone(record.Responsibilities)
 	if record.DiscoveryScope != nil {

@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"fmt"
+	"github.com/defos-ai/commander/framework/domain"
 
 	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -30,6 +32,28 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
 			return operations.Operation{}, err
+		}
+		records, err := r.catalog.Agents(ctx)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		creationScopes := map[string]bool{}
+		for _, action := range command.Actions {
+			task := operations.Task{ActionName: action.ActionName, Input: action.Input}
+			scope, err := creationScope(task, records)
+			if err != nil {
+				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+			}
+			if scope != "" && creationScopes[scope] {
+				return operations.Operation{}, fmt.Errorf("%w: multiple session creations for one scope", domain.ErrInvalidInput)
+			}
+			creationScopes[scope] = true
+			if err := r.checkSessionCreation(task, records); err != nil {
+				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+			}
+			if _, err := sessionOwner(task, records); err != nil {
+				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+			}
 		}
 		next, err := r.store.ResolveContinuation(ctx, command.OperationID, command.TaskID, command.Version, command.Actions)
 		if err := s.acceptUpdate(next, err); err != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"strings"
 
 	"github.com/defos-ai/commander/framework/domain"
@@ -12,6 +13,7 @@ import (
 )
 
 type ActionOutput struct {
+	Session     *sessions.Session    `json:"session,omitempty"`
 	ActionName  string               `json:"action_name"`
 	Output      json.RawMessage      `json:"output"`
 	Artifacts   []artifacts.Artifact `json:"artifacts,omitempty"`
@@ -19,6 +21,11 @@ type ActionOutput struct {
 }
 
 func (o ActionOutput) Validate() error {
+	if o.Session != nil {
+		if err := o.Session.Validate(); err != nil {
+			return err
+		}
+	}
 	if err := ValidateNextActions(o.NextActions); err != nil {
 		return err
 	}
@@ -37,6 +44,10 @@ func (o ActionOutput) Validate() error {
 }
 
 func (o ActionOutput) Clone() ActionOutput {
+	if o.Session != nil {
+		v := o.Session.Clone()
+		o.Session = &v
+	}
 	o.Output = bytes.Clone(o.Output)
 	o.NextActions = CloneNextActions(o.NextActions)
 	o.Artifacts = artifacts.CloneAll(o.Artifacts)

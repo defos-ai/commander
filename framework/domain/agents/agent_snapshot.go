@@ -2,6 +2,7 @@ package agents
 
 import (
 	"encoding/json"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
@@ -42,6 +43,7 @@ func (work *Work) Clone() *Work {
 // AgentSnapshot is the public state reported by an agent. The controller adds
 // liveness observations when storing it as an Agent.
 type AgentSnapshot struct {
+	Sessions         []sessions.Session   `json:"sessions,omitempty"`
 	ID               string               `json:"id"`
 	Type             AgentType            `json:"type"`
 	Status           AgentStatus          `json:"status"`

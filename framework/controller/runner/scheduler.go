@@ -84,9 +84,16 @@ func (r *Runner) dispatchQueued() {
 }
 
 func (r *Runner) selectAgent(ctx context.Context, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
+	owner, err := sessionOwner(task, records)
+	if err != nil {
+		return "", err
+	}
 	selection := AgentSelection{PreviousAgentID: r.lastAgent}
 	eligible := make(map[string]bool)
 	for _, record := range records {
+		if owner != "" && record.ID != owner {
+			continue
+		}
 		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity {
 			continue
 		}

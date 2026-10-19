@@ -113,7 +113,7 @@ func (c *Controller) dispatchCommand(ctx, waiting context.Context, message messa
 	}
 	record = c.state.Snapshot(record, time.Now().UTC())
 	available := record.Status == agentmodel.AgentReady || record.Status == agentmodel.AgentWorking
-	if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent {
+	if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent || kind == agentcommands.ControlSession {
 		available = available || record.Status == agentmodel.AgentUnavailable
 	}
 	if record.Stale || !available {
