@@ -357,6 +357,7 @@ func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus 
 	if err != nil {
 		t.Fatal(err)
 	}
+	commandCtx, cancelCommands := context.WithCancel(t.Context())
 	var commands *adapterconsumer.Consumer
 	var done chan error
 	stopped := false
@@ -366,10 +367,9 @@ func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus 
 			return
 		}
 		stopped = true
+		// Stop the reader before closing subscriptions, including in-flight ACKs.
+		cancelCommands()
 		if commands != nil {
-			if err := commands.Close(); err != nil {
-				t.Errorf("operation command consumer shutdown: %v", err)
-			}
 			select {
 			case err := <-done:
 				if err != nil && !errors.Is(err, context.Canceled) {
@@ -377,6 +377,9 @@ func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus 
 				}
 			case <-time.After(5 * time.Second):
 				t.Error("operation command consumer shutdown timed out")
+			}
+			if err := commands.Close(); err != nil {
+				t.Errorf("operation command consumer shutdown: %v", err)
 			}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -391,7 +394,7 @@ func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus 
 		t.Fatal(err)
 	}
 	done = make(chan error, 1)
-	go func() { done <- commands.Consume(t.Context()) }()
+	go func() { done <- commands.Consume(commandCtx) }()
 	return stop
 }
 
