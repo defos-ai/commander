@@ -117,7 +117,7 @@ func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testi
 }
 
 func TestSecretRequestsRequireLiveOwnType(t *testing.T) {
-	for _, name := range []string{"wrong type", "unknown recipient", "stale agent", "stopped agent", "operation", "future"} {
+	for _, name := range []string{"wrong type", "unknown recipient", "stale agent", "stopped agent", "future"} {
 		t.Run(name, func(t *testing.T) {
 			consumer, requests, _, bus := secretConsumerFixture(t)
 			request := secretSyncRequest()
@@ -136,8 +136,6 @@ func TestSecretRequestsRequireLiveOwnType(t *testing.T) {
 				stopped := store.record.Load().Clone()
 				stopped.Status = agents.AgentStopped
 				store.record.Store(&stopped)
-			case "operation":
-				request.OperationID = id.OperationID()
 			case "future":
 				request.RequestedAt = time.Now().Add(time.Hour)
 				request.ExpiresAt = request.RequestedAt.Add(time.Minute)

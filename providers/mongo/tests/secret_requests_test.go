@@ -283,7 +283,7 @@ func mongoRequestFixture(t *testing.T) (secrets.Request, secrets.Delivery, secre
 	secret.Metadata.ExpiresAt = stamp.Add(time.Minute)
 	secret = encryptMongoSecret(t, secret.Metadata)
 	request := secrets.Request{ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678",
-		OperationID: id.New(), Status: secrets.Pending, RequestedAt: stamp, ExpiresAt: stamp.Add(time.Hour)}
+		Status: secrets.Pending, RequestedAt: stamp, ExpiresAt: stamp.Add(time.Hour)}
 	delivery := secrets.Delivery{ID: id.New(), RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
 		CreatedAt: stamp.Add(time.Nanosecond), ExpiresAt: stamp.Add(time.Minute)}
 	installation := secrets.Installation{ID: id.New(), RequestID: request.ID, DeliveryID: delivery.ID, AgentID: request.AgentID,

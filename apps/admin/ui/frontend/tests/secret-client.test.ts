@@ -92,7 +92,7 @@ describe('secret management client', () => {
     respond({ ...metadata, status: 'expired', expires_at: undefined });
     expect(await getSecret(url, credentials, key)).toEqual({ ...metadata, status: 'expired', expires_at: undefined });
     for (const status of ['needs_value', 'awaiting_delivery', 'awaiting_installation'] as const) {
-      const request = { ...pending, status, operation_id: id };
+      const request = { ...pending, status };
       respond({ items: [request] });
       expect(await listSecretRequests(url, credentials)).toEqual([request]);
     }
@@ -110,7 +110,7 @@ describe('secret management client', () => {
 
   it.each([
     { id: 'bad' }, { agent_id: 'builder-agent-ABCDef12' }, { agent_id: 'missing-role-0123abcd' },
-    { operation_id: '' }, { operation_id: 'bad' }, { status: 'fulfilled' }, { requested_at: null },
+    { status: 'fulfilled' }, { requested_at: null },
     { name: ' ' }, { agent_type: 'invalid--type' }, { expires_at: '2026-10-17T10:00:00' },
   ])('rejects malformed pending requests: %j', async patch => {
     respond({ items: [{ ...pending, ...patch }] });

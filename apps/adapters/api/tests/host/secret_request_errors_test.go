@@ -198,11 +198,12 @@ func TestPendingSecretRequestOpenAPIDescribesSafeProgress(t *testing.T) {
 		properties = append(properties, name)
 	}
 	slices.Sort(properties)
-	if !slices.Equal(properties, []string{"agent_id", "agent_type", "expires_at", "id", "name", "operation_id", "requested_at", "status"}) {
+	if !slices.Equal(properties, []string{"agent_id", "agent_type", "expires_at", "id", "name", "requested_at", "status"}) {
 		t.Fatal("pending request schema must expose only explicit safe metadata")
 	}
-	if slices.Contains(schema.Required, "operation_id") || len(schema.Required) != 7 {
-		t.Fatal("pending request schema must make only operation_id optional")
+	slices.Sort(schema.Required)
+	if !slices.Equal(schema.Required, properties) {
+		t.Fatal("pending request schema must require all metadata fields")
 	}
 	if !slices.Equal(schema.Properties["status"].Enum, []string{"needs_value", "awaiting_delivery", "awaiting_installation"}) {
 		t.Fatal("pending request progress states are undocumented")

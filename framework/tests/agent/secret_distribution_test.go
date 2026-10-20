@@ -305,7 +305,7 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-private"}
 	command := fixture.command(t, "inspect", `{"private":true}`, work)
 	request := fixture.request(t, "")
-	if request.Key.Scope.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.runtime.ID() || request.OperationID != "" {
+	if request.Key.Scope.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.runtime.ID() {
 		t.Fatal("dynamic request lost its agent scope")
 	}
 	if fixture.runtime.Status() != agent.AgentWorking || privateCalls.Load() != 1 {

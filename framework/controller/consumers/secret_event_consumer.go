@@ -43,7 +43,7 @@ func (c SecretEventConsumer) request(ctx context.Context, message messages.Messa
 		return InvalidMessage(err)
 	}
 	request, now := payload.Request, time.Now().UTC()
-	if request.OperationID != "" || request.RequestedAt.After(now.Add(maxAgentClockSkew)) {
+	if request.RequestedAt.After(now.Add(maxAgentClockSkew)) {
 		return InvalidMessage(errors.New("secret synchronization requires an agent request with a current timestamp"))
 	}
 	allowed, err := c.allowed(ctx, request, now)
@@ -199,9 +199,6 @@ func (c SecretEventConsumer) installed(ctx context.Context, message messages.Mes
 }
 
 func (c SecretEventConsumer) allowed(ctx context.Context, request secrets.Request, now time.Time) (bool, error) {
-	if request.OperationID != "" {
-		return false, nil
-	}
 	record, err := c.Inventory.Get(ctx, request.AgentID)
 	if errors.Is(err, agents.ErrUnknownAgent) {
 		return false, nil

@@ -25,7 +25,6 @@ type pendingSecretView struct {
 	AgentType   string    `json:"agent_type"`
 	Name        string    `json:"name"`
 	AgentID     string    `json:"agent_id"`
-	OperationID string    `json:"operation_id,omitempty"`
 	RequestedAt time.Time `json:"requested_at"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	Status      string    `json:"status"`
@@ -36,7 +35,6 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	requests, values := secretRequestStores(t, fixture)
 	request := pendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
-	request.OperationID = id.New()
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +47,7 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 		}
 		expected := pendingSecretView{
 			ID: request.ID, AgentType: request.Key.Scope.AgentType, Name: request.Key.Name,
-			AgentID: request.AgentID, OperationID: request.OperationID,
+			AgentID:     request.AgentID,
 			RequestedAt: request.RequestedAt, ExpiresAt: request.ExpiresAt, Status: want,
 		}
 		if !reflect.DeepEqual(items[0], expected) {
@@ -148,8 +146,8 @@ func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *
 		got := make([]string, len(items))
 		for index, item := range items {
 			got[index] = item.ID
-			if item.Status != "needs_value" || item.OperationID != "" {
-				t.Fatal("missing secret request had unexpected state or operation")
+			if item.Status != "needs_value" {
+				t.Fatal("missing secret request had unexpected state")
 			}
 		}
 		sort.Strings(tc.want)
@@ -166,7 +164,7 @@ func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *
 	}
 	for _, item := range raw.Items {
 		if _, present := item["operation_id"]; present {
-			t.Fatal("absent operation ID must be omitted")
+			t.Fatal("agent secret requests must not expose an operation link")
 		}
 	}
 	after, err := os.ReadFile(path)

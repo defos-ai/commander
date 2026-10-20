@@ -113,7 +113,6 @@ func RegisterSecretRequestsOpenAPI(paths, components map[string]any, options *js
 	}
 	schema.Description = "Pending request metadata only; never includes secret values, encrypted envelopes or encryption keys."
 	schema.Properties["id"].Pattern, schema.Properties["id"].Format = secretIDPattern, "uuid"
-	schema.Properties["operation_id"].Pattern, schema.Properties["operation_id"].Format = secretIDPattern, "uuid"
 	schema.Properties["agent_type"].Pattern = secretScopePattern
 	maximum := 63
 	schema.Properties["agent_type"].MaxLength = &maximum

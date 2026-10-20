@@ -20,7 +20,6 @@ export interface SecretMetadata extends SecretKey {
 export interface PendingSecretRequest extends SecretKey {
   id: string;
   agent_id: string;
-  operation_id?: string;
   requested_at: string;
   expires_at: string;
   status: 'needs_value' | 'awaiting_delivery' | 'awaiting_installation';
@@ -101,15 +100,13 @@ function readMetadata(value: unknown): SecretMetadata {
 function readPendingRequest(value: unknown): PendingSecretRequest {
   if (!isObject(value) || !isKey(value) || !isUUID(value.id) || typeof value.agent_id !== 'string' ||
     value.agent_id.length > 63 || !agentIDPattern.test(value.agent_id) ||
-    (value.operation_id !== undefined && !isUUID(value.operation_id)) || !isTimestamp(value.requested_at) ||
-    !isTimestamp(value.expires_at) ||
+    !isTimestamp(value.requested_at) || !isTimestamp(value.expires_at) ||
     (value.status !== 'needs_value' && value.status !== 'awaiting_delivery' && value.status !== 'awaiting_installation')) {
     throw new SecretError('invalid_response');
   }
   return {
     id: value.id, agent_type: value.agent_type, name: value.name, agent_id: value.agent_id,
     requested_at: value.requested_at, expires_at: value.expires_at, status: value.status,
-    ...(value.operation_id === undefined ? {} : { operation_id: value.operation_id }),
   };
 }
 

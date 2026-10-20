@@ -66,11 +66,6 @@ func TestScopeAndInvalidIdentities(t *testing.T) {
 	if err := request.Validate(); err == nil {
 		t.Error("agent type accepted as recipient instance ID")
 	}
-	request = requestFixture()
-	request.OperationID = "operation-1"
-	if err := request.Validate(); err == nil {
-		t.Error("invalid linked operation identity accepted")
-	}
 }
 
 func TestAvailabilityBoundaries(t *testing.T) {

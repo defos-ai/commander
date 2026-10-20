@@ -16,7 +16,9 @@
   Transport commands belong in [`comms/clients`](comms/clients/).
 - [`secrets`](domain/secrets/) separates public metadata from encrypted storage
   records. Keys use the registered agent type and a secret name. Secret versions
-  identify value/validity changes, not provider revisions; recreated keys get fresh IDs. Request fulfillment
+  identify value/validity changes, not provider revisions; recreated keys get fresh IDs.
+  Requests identify the recipient agent and secret key; operation/task waits use
+  `MissingRequirements` separately. Request fulfillment
   records a specific delivery acknowledged by its recipient, never mere availability.
   Historical fulfillment does not establish current readiness. Domain validation
   proves neither encryption nor authorization; both belong above the stores.

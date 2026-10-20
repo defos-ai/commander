@@ -69,7 +69,6 @@ func TestRequestRecordRequiresPendingCreationAndPreservesOriginalIdentity(t *tes
 		func(r *secrets.Request) { r.AgentID = "builder-agent-87654321" },
 		func(r *secrets.Request) { r.Key.Scope.AgentType = "another-agent" },
 		func(r *secrets.Request) { r.Key.Name = "OTHER_TOKEN" },
-		func(r *secrets.Request) { r.OperationID = installationID },
 		func(r *secrets.Request) { r.RequestedAt = r.RequestedAt.Add(-time.Second) },
 		func(r *secrets.Request) { r.ExpiresAt = r.ExpiresAt.Add(time.Second) },
 	} {
