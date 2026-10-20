@@ -320,7 +320,7 @@ func (d *dependencies) connectMongo(ctx context.Context, rawURL string) error {
 	}
 	database, err := mongostore.Open(ctx, rawURL)
 	if err != nil {
-		return &mongoConnectionError{cause: err}
+		return err
 	}
 	d.mongo = database
 	d.closers = append(d.closers, func() error {
@@ -330,16 +330,6 @@ func (d *dependencies) connectMongo(ctx context.Context, rawURL string) error {
 	})
 	return nil
 }
-
-type mongoConnectionError struct {
-	cause error
-}
-
-func (e *mongoConnectionError) Error() string {
-	return "MongoDB initialization failed; check DATABASE_URL and database availability"
-}
-
-func (e *mongoConnectionError) Unwrap() error { return e.cause }
 
 func (d *dependencies) connectS3(ctx context.Context, rawURL string) error {
 	if err := ctx.Err(); err != nil {

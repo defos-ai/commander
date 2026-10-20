@@ -41,16 +41,26 @@ func Open(ctx context.Context, uri string) (*MongoStore, error) {
 		SetReadConcern(readconcern.Majority()).
 		SetWriteConcern(writeconcern.Majority()))
 	if err != nil {
-		return nil, err
+		return nil, &connectionError{cause: err}
 	}
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = client.Disconnect(cleanup)
-		return nil, err
+		return nil, &connectionError{cause: err}
 	}
 	return &MongoStore{client: client, database: client.Database(database)}, nil
 }
+
+// Driver initialization errors may contain sensitive URI options. Keep their
+// printable form safe while retaining the cause for errors.Is/As inspection.
+type connectionError struct{ cause error }
+
+func (e *connectionError) Error() string {
+	return "MongoDB initialization failed; check connection settings and database availability"
+}
+
+func (e *connectionError) Unwrap() error { return e.cause }
 
 func (s *MongoStore) Find(ctx context.Context, collection string, filter, out any, opts ...options.Lister[options.FindOptions]) error {
 	cursor, err := s.database.Collection(collection).Find(ctx, filter, opts...)

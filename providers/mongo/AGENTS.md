@@ -9,6 +9,9 @@ artifact bytes and reports belong to the separate storage provider.
   Require a database name and support `mongodb://` and `mongodb+srv://` through
   driver validation, including seed lists. Share one `MongoStore` across domain
   stores; the host closes it after consumers stop.
+- Keep driver initialization errors safe to print in `store.Open`; URI options
+  can contain secrets. Preserve the underlying cause for `errors.Is`/`errors.As`,
+  but do not log that cause or duplicate redaction in individual hosts.
 - Preserve primary reads, majority read/write concerns and snapshot transactions.
   Operation storage requires a replica set or sharded cluster; do not fall back
   to partially applied writes on standalone MongoDB.

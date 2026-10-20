@@ -178,6 +178,26 @@ func TestMongoConnectionRejectsInvalidConfiguration(t *testing.T) {
 	}
 }
 
+func TestMongoConnectionRedactsDriverErrors(t *testing.T) {
+	const secret = "provider-private-password"
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	uri := "mongodb://user:" + secret + "@127.0.0.1:1/test?tlsCertificateKeyFilePassword=" + secret + "%zz"
+	database, err := store.Open(ctx, uri)
+	if database != nil {
+		_ = database.Close(ctx)
+	}
+	if err == nil {
+		t.Fatal("malformed URI option must fail initialization")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Error("initialization error exposed a sensitive URI option")
+	}
+	if errors.Unwrap(err) == nil {
+		t.Error("initialization error must preserve its cause for inspection")
+	}
+}
+
 func TestMongoConnectionAcceptsSeedLists(t *testing.T) {
 	for _, hosts := range []string{"127.0.0.1:1,127.0.0.1", "[::1]:1,[::1]"} {
 		t.Run(hosts, func(t *testing.T) {
