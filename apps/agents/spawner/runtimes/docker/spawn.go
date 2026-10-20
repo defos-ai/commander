@@ -46,7 +46,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 		}
 	}
 	if !exists {
-		created, err := m.config.Engine.Create(ctx, Spec{Name: saved.name(), Image: saved.Image, Network: saved.Network, Environment: m.environment(saved.AgentID), Labels: saved.labels()})
+		created, err := m.config.Engine.Create(ctx, Spec{Name: saved.name(), Image: saved.Image, Network: saved.Network, Environment: m.environment(saved), Labels: saved.labels()})
 		if err != nil {
 			return runtimes.Result{}, fmt.Errorf("container creation for %s is uncertain; retry inspects this request: %w", saved.AgentID, err)
 		}
@@ -143,7 +143,15 @@ func (m *Manager) verify(saved record, container Container) error {
 			return errors.New("Docker container ownership does not match the launch record")
 		}
 	}
-	for key, value := range m.environment(saved.AgentID) {
+	expected := m.environment(saved)
+	// Also check absence: a removed grant must not adopt a container that still
+	// holds the old key. Never include either value in a mismatch diagnostic.
+	expectedKey, expectsKey := expected["SECRETS_ENCRYPTION_KEY"]
+	actualKey, hasKey := container.Environment["SECRETS_ENCRYPTION_KEY"]
+	if expectsKey != hasKey || expectedKey != actualKey {
+		return errors.New("Docker container secrets bootstrap differs from spawner configuration")
+	}
+	for key, value := range expected {
 		if actual, ok := container.Environment[key]; !ok || actual != value {
 			return errors.New("Docker container bootstrap settings differ from spawner configuration")
 		}

@@ -26,7 +26,11 @@ import (
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 )
 
-const dockerFixtureImage = "ghcr.io/defos-ai/fixture-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const (
+	dockerFixtureImage      = "ghcr.io/defos-ai/fixture-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	dockerBuilderReference  = "github.com/defos-ai/commander/apps/agents/builder@v0.1.0"
+	dockerImpostorReference = "github.com/other/builder-agent@v0.1.0"
+)
 
 type fakeDockerEngine struct {
 	mu        sync.Mutex
@@ -174,10 +178,16 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 		return publishDockerRegistration(ctx, bus, current, nil)
 	}
 	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		if request.URL.String() != fixtureReleaseURL+"agent.yaml" && request.URL.String() != fixtureModuleReleaseURL+"agent.yaml" {
+		agentType := "fixture-agent"
+		switch request.URL.String() {
+		case fixtureReleaseURL + "agent.yaml", fixtureModuleReleaseURL + "agent.yaml":
+		case "https://github.com/defos-ai/commander/releases/download/apps%2Fagents%2Fbuilder%2Fv0.1.0/agent.yaml",
+			"https://github.com/other/builder-agent/releases/download/v0.1.0/agent.yaml":
+			agentType = "builder-agent"
+		default:
 			return response(request, http.StatusNotFound, "not found"), nil
 		}
-		manifest := "schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\ndocker:\n  image: " + dockerFixtureImage + "\n"
+		manifest := "schema_version: 1\ntype: " + agentType + "\nversion: v0.1.0\ndocker:\n  image: " + dockerFixtureImage + "\n"
 		return response(request, http.StatusOK, manifest), nil
 	}))
 	t.Cleanup(resolver.CloseIdleConnections)
@@ -200,8 +210,13 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 }
 
 func publishDockerRegistration(ctx context.Context, bus *fscomms.FsBus, current docker.Container, change func(*agent.AgentSnapshot)) error {
+	agentID := strings.TrimPrefix(current.Name, "commander-")
+	agentType, valid := id.RuntimeType(agentID, id.Agent)
+	if !valid {
+		return errors.New("fixture container has an invalid assigned agent ID")
+	}
 	snapshot := agent.AgentSnapshot{
-		ID: "fixture-agent-" + current.Environment["COMMANDER_AGENT_ID_SUFFIX"], Type: "fixture-agent", Status: agent.AgentReady,
+		ID: agentID, Type: agent.AgentType(agentType + "-agent"), Status: agent.AgentReady,
 		Server:  agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"},
 		Actions: []actionmodel.Action{{Name: "fixture-action", Status: actionmodel.Ready, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
 	}
@@ -429,6 +444,87 @@ func TestDockerManagerRestartAdoptsRunningContainerAfterFreshRegistration(t *tes
 	}
 }
 
+func TestDockerManagerBootstrapsSecretsOnlyForTrustedBuilder(t *testing.T) {
+	fixture := newDockerManagerFixture(t)
+	key := strings.Repeat("ab", 32)
+	var err error
+	fixture.config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.manager = restartDockerManager(t, fixture)
+	for _, reference := range []string{dockerBuilderReference, dockerImpostorReference, fixtureReference} {
+		if _, err := fixture.manager.Spawn(t.Context(), "task:"+id.New(), reference); err != nil {
+			t.Fatal(err)
+		}
+		spec := <-fixture.engine.created
+		value, supplied := spec.Environment["SECRETS_ENCRYPTION_KEY"]
+		if reference == dockerBuilderReference {
+			if !supplied || value != key {
+				t.Fatal("trusted builder did not receive the deployment key")
+			}
+		} else if supplied {
+			t.Fatal("untrusted package received the deployment key")
+		}
+	}
+	if err := filepath.WalkDir(fixture.config.Directory, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err == nil && bytes.Contains(data, []byte(key)) {
+			t.Error("launch state persisted the encryption key")
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
+	fixture := newDockerManagerFixture(t)
+	key := strings.Repeat("ab", 32)
+	var err error
+	fixture.config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.manager = restartDockerManager(t, fixture)
+	requestID := "task:" + id.New()
+	first, err := fixture.manager.Spawn(t.Context(), requestID, dockerBuilderReference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.manager = restartDockerManager(t, fixture)
+	stop := dockerHeartbeats(t, fixture, first.ContainerID)
+	repeated, err := fixture.manager.Spawn(t.Context(), requestID, dockerBuilderReference)
+	stop()
+	if err != nil || repeated.ContainerID != first.ContainerID {
+		t.Fatalf("unchanged bootstrap did not reuse the builder: %v", err)
+	}
+	for _, replacement := range []string{strings.Repeat("cd", 32), ""} {
+		fixture.config.SecretBootstrap = nil
+		if replacement != "" {
+			fixture.config.SecretBootstrap, err = runtimes.NewSecretBootstrap(replacement)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		fixture.manager = restartDockerManager(t, fixture)
+		_, err := fixture.manager.Spawn(t.Context(), requestID, dockerBuilderReference)
+		if err == nil || !strings.Contains(err.Error(), "secrets bootstrap") {
+			t.Fatalf("changed or removed bootstrap was accepted: %v", err)
+		}
+		if strings.Contains(err.Error(), key) || replacement != "" && strings.Contains(err.Error(), replacement) {
+			t.Fatal("bootstrap mismatch disclosed an encryption key")
+		}
+	}
+	creates, starts, _ := fixture.engine.counts()
+	if creates != 1 || starts != 1 {
+		t.Fatalf("bootstrap reconciliation relaunched builder: creates=%d starts=%d", creates, starts)
+	}
+}
+
 func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
 	cases := map[string]func(*fakeDockerEngine){
 		"missing": func(engine *fakeDockerEngine) {
@@ -449,6 +545,9 @@ func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
 		},
 		"changed suffix": func(engine *fakeDockerEngine) {
 			engine.change(func(c *docker.Container) { c.Environment["COMMANDER_AGENT_ID_SUFFIX"] = "invalid" })
+		},
+		"unexpected secrets key": func(engine *fakeDockerEngine) {
+			engine.change(func(c *docker.Container) { c.Environment["SECRETS_ENCRYPTION_KEY"] = strings.Repeat("ab", 32) })
 		},
 	}
 	for name, change := range cases {

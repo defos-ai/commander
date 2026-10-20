@@ -36,10 +36,17 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
   unsupported runtimes explicitly. Do not reintroduce flags for these settings.
 - Optional `SECRETS_ENCRYPTION_KEY` configures this host's managed secret exchange.
-  Embedded hosts pass `Options.SecretCipher`, which takes precedence over the
-  environment. Validate keys and supplied ciphers before opening providers.
-  Compose mounts the existing key volume read-only; all-in-one injects the API's
-  session cipher. Never forward the key or cipher to spawned agents.
+  Embedded hosts pass `Options.SecretsEncryptionKey`, which takes precedence over
+  the environment. Validate the key before opening providers; construct the
+  host cipher and optional runtime `SecretBootstrap` from that same key.
+  Compose mounts the existing key volume read-only; all-in-one supplies its
+  session key without changing the process environment.
+  Bootstrap the key only for the exact resolved module
+  `github.com/defos-ai/commander/apps/agents/builder@<version>` with manifest type
+  `builder-agent`. This trusts published versions of that official module;
+  a self-claimed type, catalog entry or visibility never grants access.
+  Keep this exception out of the generic environment allowlist and never save
+  its key in launch records, output or logs.
 - `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an
   explicitly empty flag. Validate nonempty values with `id.AgentIDFromSuffix`
   before opening providers; empty values generate a fresh host ID. This setting
@@ -130,8 +137,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Bootstrap uses an explicit environment allowlist and private HOME/USERPROFILE.
   Native children receive `CHROMIUM_PATH` and `CHROMIUM_NO_SANDBOX` when configured
   by the deployment; keep these settings out of Docker bootstrap.
-  No inherited API/MCP/model credentials or secrets encryption key. Do not log
-  child output or persist bootstrap credentials. CLI resolves FS paths before
+  No inherited API/MCP/model credentials or GitHub token. Only the trusted builder
+  bootstrap may add the secrets encryption key. Do not log child output or
+  persist bootstrap credentials. CLI resolves FS paths before
   children switch to their private working directories.
 
 ## Docker ownership
@@ -148,6 +156,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   the recorded name, ownership labels, image, network and bootstrap settings,
   plus the constrained host configuration. An image's inherited volumes must not
   bypass the no-mount policy. Never grant socket access to a child.
+  Verify encryption-key presence and value against the current trusted bootstrap
+  on retries; changing or removing the key must fail reconciliation. Keep the
+  value out of errors and records. It is present in the trusted builder's Docker
+  environment and is therefore visible to Docker administrators.
 - Durable create-only intents precede Create. Reconcile lost Create/Start
   responses by inspecting the owned container; a missing container is uncertain,
   not permission to create again. Only a never-started `created` container may

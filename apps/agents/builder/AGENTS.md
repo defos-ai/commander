@@ -53,16 +53,20 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   spawner among agents. Builder starts on demand through `spawn-agent`: Docker
   for Compose and native for all-in-one. Keep checkout workspaces local to the
   spawned builder; package spawning does not provision persistent mounts.
-- Compose's secrets-key initializer supplies API and spawner. Spawning a builder does
-  not inject that key or Playground's cipher. Never add the key to the shared
-  agent environment. Native users supply Git; both the builder and all-in-one
-  Docker images include Git.
+- Compose's secrets-key initializer supplies API and spawner. The spawner's
+  trusted bootstrap passes the same key to the official builder package only,
+  checking its exact repository/module and `builder-agent` manifest type.
+  Playground uses its session key through the same bootstrap. Never add the key
+  to the shared agent environment or infer trust from type alone. Action secrets
+  still use managed-secret delivery; no GitHub or model tokens are inherited.
+  Native users supply Git; both the builder and all-in-one Docker images include Git.
 - The release package uses `apps/agents/builder/<version>` in this repository
   with `agent.yaml`; its reference includes `apps/agents/builder` before
   `@<version>`. It provides six native platforms and Docker.
   The shared manifest renderer must receive the builder image digest from the
-  same release run. Package spawning does not provision a secrets key or mounts;
-  preserve the existing operator-controlled secret boundary.
+  same release run. Package metadata cannot request keys or mounts; the spawner
+  owns the narrow trusted-builder key policy. Docker administrators can inspect
+  the key in the spawned container environment.
 
 ## Validation
 

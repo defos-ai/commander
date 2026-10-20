@@ -79,8 +79,9 @@ func (d *dependencies) openRuntime(ctx context.Context, configuration config) (e
 		d.Runtime, err = native.NewManager(ctx, native.Config{
 			Directory: configuration.stateDir, Bus: d.Bus,
 			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
-			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
-			Resolver:    resolver, RegistrationTimeout: configuration.registrationTimeout,
+			Environment:     childEnvironment(configuration.storageURL, configuration.runtime),
+			SecretBootstrap: configuration.secretBootstrap,
+			Resolver:        resolver, RegistrationTimeout: configuration.registrationTimeout,
 		})
 	case "docker":
 		engine, engineErr := docker.NewEngine()
@@ -91,8 +92,9 @@ func (d *dependencies) openRuntime(ctx context.Context, configuration config) (e
 		d.Runtime, err = docker.NewManager(ctx, docker.Config{
 			Directory: configuration.stateDir, Bus: d.Bus,
 			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
-			Environment: childEnvironment(configuration.storageURL, configuration.runtime),
-			Resolver:    resolver, Engine: engine, Network: configuration.dockerNetwork,
+			Environment:     childEnvironment(configuration.storageURL, configuration.runtime),
+			SecretBootstrap: configuration.secretBootstrap,
+			Resolver:        resolver, Engine: engine, Network: configuration.dockerNetwork,
 			RegistrationTimeout: configuration.registrationTimeout,
 		})
 	default:

@@ -236,26 +236,26 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	}
 }
 
-func TestSpawnerCLIEmbeddedSecretCipherOverridesEnvironment(t *testing.T) {
+func TestSpawnerCLIEmbeddedSecretsKeyOverridesEnvironment(t *testing.T) {
 	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
 	t.Setenv("SPAWNER_RUNTIME", "native")
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "private-invalid-key")
 	root := filepath.Join(t.TempDir(), "unused")
 	t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))
 	args := []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage")}
-	cipher, err := crypto.NewSecretCipher(strings.Repeat("ab", 32))
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretCipher: cipher}); !errors.Is(err, context.Canceled) {
-		t.Fatalf("embedded cipher did not override invalid environment: %v", err)
+	for _, key := range []string{strings.Repeat("ab", 32), ""} {
+		if err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretsEncryptionKey: &key}); !errors.Is(err, context.Canceled) {
+			t.Fatalf("embedded key did not override invalid environment: %v", err)
+		}
 	}
-	if err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretCipher: &crypto.SecretCipher{}}); !errors.Is(err, crypto.ErrMissingKey) {
-		t.Fatalf("uninitialized embedded cipher was not rejected: %v", err)
+	key := "private-invalid-embedded-key"
+	err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretsEncryptionKey: &key})
+	if !errors.Is(err, crypto.ErrInvalidKey) || strings.Contains(err.Error(), key) {
+		t.Fatalf("invalid embedded key was not safely rejected: %v", err)
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("pre-canceled or invalid cipher configuration created state")
+		t.Fatal("pre-canceled or invalid key configuration created state")
 	}
 }

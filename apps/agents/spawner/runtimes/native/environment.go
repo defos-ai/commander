@@ -25,9 +25,9 @@ func copyEnvironment(input map[string]string) (map[string]string, error) {
 	return result, nil
 }
 
-func (m *Manager) environment(agentID, directory string) []string {
+func (m *Manager) environment(saved record, directory string) []string {
 	// The manager generated and saved this full ID; the child supplies its own type.
-	suffix := agentID[strings.LastIndexByte(agentID, '-')+1:]
+	suffix := saved.AgentID[strings.LastIndexByte(saved.AgentID, '-')+1:]
 	values := []string{
 		"COMMANDER_AGENT_ID_SUFFIX=" + suffix,
 		"BUS_URL=" + m.config.BusURL,
@@ -37,6 +37,9 @@ func (m *Manager) environment(agentID, directory string) []string {
 	}
 	for key, value := range m.config.Environment {
 		values = append(values, key+"="+value)
+	}
+	if key := m.config.SecretBootstrap.KeyFor(saved.Package, saved.AgentType); key != "" {
+		values = append(values, "SECRETS_ENCRYPTION_KEY="+key)
 	}
 	sort.Strings(values)
 	return values

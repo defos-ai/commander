@@ -60,9 +60,12 @@ fails startup instead of replacing the saved key.
 
 Back up this key volume with MongoDB and restore them together. Do not delete the
 key volume while keeping the database: a new key cannot decrypt existing secrets.
-Spawned children, MCP, Playground and the controller do not receive this key.
-Builders need the same key configured explicitly only for actions that use
-managed secrets; `checkout-template` does not need it.
+The spawner automatically supplies it to the official
+`github.com/defos-ai/commander/apps/agents/builder@<version>` package with manifest
+type `builder-agent`. Other spawned packages, MCP, the Compose Playground client
+and the controller do not receive it. Docker administrators can inspect the
+builder's environment. A separately started builder needs the same key configured
+for managed secrets; `checkout-template` does not need it.
 
 ## Configuration
 
@@ -76,7 +79,7 @@ then start the mission after the new agent is ready. See the
 [runtime spawning example](../apps/agents/spawner/README.md#during-a-mission).
 Launching packages needs Internet access for GitHub manifests and uncached image
 pulls. Children receive bus/storage settings, without the socket or secrets
-encryption key.
+encryption key, except for the [trusted builder bootstrap](#secret-encryption).
 
 `docker compose restart spawner-agent` reuses live children and their saved launch
 records in `spawner-state`. Spawned containers have no automatic restart policy:

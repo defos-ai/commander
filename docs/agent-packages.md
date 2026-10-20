@@ -244,12 +244,23 @@ own credentials into the new agent or accept deployment settings from a manifest
 
 Keep ordinary process settings such as executable search paths explicit too.
 Spawned workload agents connect to the bus and artifact storage; this bootstrap
-supplies no controller-database connection or API/MCP login. The current
-spawner does not distribute `SECRETS_ENCRYPTION_KEY`. Future managed-secret
-bootstrap must be configured by the operator; a manifest cannot grant this
-access. Secret values stay out of package files, action inputs,
-results and logs. Existing encrypted secret delivery remains responsible for
-action secrets after registration.
+supplies no controller-database connection, API/MCP login, GitHub token or model key.
+
+The spawner has one trusted exception: when `SECRETS_ENCRYPTION_KEY` is configured,
+it supplies that key to the resolved exact package
+`github.com/defos-ai/commander/apps/agents/builder@<version>` only when the manifest
+type is `builder-agent`. This trusts published versions under that exact module,
+not other packages claiming its type. Catalog membership and repository visibility
+do not grant access. The optional runtime `SecretBootstrap` keeps this policy
+separate from the generic environment allowlist.
+
+Compose supplies the persisted API/spawner key; native all-in-one and Docker AIO
+use their in-memory session key. Standalone hosts must configure the same key as
+the API. Keys stay out of package files, action inputs, launch records, results
+and logs, but a Docker administrator can read the builder's environment. Docker
+retries compare key presence and value with the current bootstrap; a changed or
+removed key cannot silently reuse an existing container. Existing encrypted secret
+delivery remains responsible for action secrets after registration.
 
 The agent host combines nonempty `COMMANDER_AGENT_ID_SUFFIX` with its fixed type
 to form `AgentConfig.ID`: `0123abcd` becomes `example-agent-0123abcd`. Use

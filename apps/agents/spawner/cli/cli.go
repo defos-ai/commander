@@ -15,7 +15,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -29,8 +28,9 @@ var ErrShutdown = errors.New("spawner shutdown failed")
 type Options struct {
 	Runtime  string
 	StateDir string
-	// SecretCipher overrides SECRETS_ENCRYPTION_KEY when non-nil.
-	SecretCipher *crypto.SecretCipher
+	// SecretsEncryptionKey overrides SECRETS_ENCRYPTION_KEY when non-nil.
+	// An explicit empty value disables managed secrets and child key delivery.
+	SecretsEncryptionKey *string
 	// Ready reports observed startup agents before serving. The caller must still
 	// wait for the controller to persist these identities before using them.
 	Ready func(agentID string, spawned []runtimes.Result)

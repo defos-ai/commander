@@ -42,8 +42,9 @@ docker exec commander commander credentials mcp
 Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
 The API and spawner share a secret encryption key in memory for the temporary session.
-Pass `-e SECRETS_ENCRYPTION_KEY` to use your own. Spawned agents do not receive
-this key; actions requiring managed secrets need operator-provisioned access.
+Pass `-e SECRETS_ENCRYPTION_KEY` to use your own. The spawner also supplies it to
+the [official builder package](../agents/builder/README.md#secrets) when installed;
+other spawned packages receive no key.
 
 Admin reaches the API inside the container; publishing API port `4274` is optional.
 Add `-p 127.0.0.1:4274:4274` if other tools need API access. For a different
@@ -114,8 +115,9 @@ model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset
 empty values use their defaults. Generated credentials change each session.
 The API and spawner share a separate encryption key generated in memory for each session.
 Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own; an invalid
-key prevents startup. Spawned agents do not receive the key. The session's saved
-secrets are deleted on exit.
+key prevents startup. The official builder receives the same key automatically
+when installed; other spawned packages do not. The session's saved secrets are
+deleted on exit.
 Type `/admin` for a link with the local API URL and username prefilled; enter the
 password shown by `/credentials`. Admin defaults to **http://127.0.0.1:4275**.
 Use `/status` to see the running addresses.

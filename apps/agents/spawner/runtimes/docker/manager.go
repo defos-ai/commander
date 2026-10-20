@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/comms"
 )
 
@@ -24,6 +25,7 @@ type Config struct {
 	BusURL              string
 	StorageURL          string
 	Environment         map[string]string
+	SecretBootstrap     *runtimes.SecretBootstrap
 	Resolver            *packages.Resolver
 	Engine              Engine
 	Network             string
@@ -119,13 +121,16 @@ func (m *Manager) Close() error {
 	return m.closeErr
 }
 
-func (m *Manager) environment(agentID string) map[string]string {
+func (m *Manager) environment(saved record) map[string]string {
 	values := maps.Clone(m.config.Environment)
 	if values == nil {
 		values = make(map[string]string)
 	}
 	values["BUS_URL"] = m.config.BusURL
 	values["STORAGE_URL"] = m.config.StorageURL
-	values["COMMANDER_AGENT_ID_SUFFIX"] = agentID[strings.LastIndexByte(agentID, '-')+1:]
+	values["COMMANDER_AGENT_ID_SUFFIX"] = saved.AgentID[strings.LastIndexByte(saved.AgentID, '-')+1:]
+	if key := m.config.SecretBootstrap.KeyFor(saved.Package, saved.AgentType); key != "" {
+		values["SECRETS_ENCRYPTION_KEY"] = key
+	}
 	return values
 }

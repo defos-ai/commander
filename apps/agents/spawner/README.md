@@ -158,7 +158,15 @@ the Compose service explicitly selects Docker mode.
 Compose and all-in-one configure spawner's managed secret exchange with the same
 encryption key as the API. For a standalone spawner, set `SECRETS_ENCRYPTION_KEY`
 to that API's 64-character hex key. An invalid key prevents startup; leaving it
-unset disables managed secret exchange. The key is never passed to spawned agents.
+unset disables managed secret exchange.
+
+The spawner also supplies this key to the official builder package:
+`github.com/defos-ai/commander/apps/agents/builder@<version>`, after resolving an
+exact published version and verifying its `builder-agent` manifest type.
+Other packages receive no key, even if they declare the same type or appear in
+the catalog. This trusts published versions of that exact Commander module.
+The key stays out of launch records, results and logs. Docker administrators can
+read it from the builder container's environment.
 
 [Playground all-in-one](../../playground/README.md#startup-agents) embeds the
 spawner in native mode, including inside Docker AIO. It starts no other agents
@@ -184,6 +192,8 @@ replacements with a new state directory.
 
 Docker retries also work after a spawner restart: they verify the saved ownership
 labels, image, network and bootstrap configuration, then await registration.
+Builder retries also verify the encryption key; changing or removing it requires
+a fresh launch rather than silently reusing a differently configured container.
 Missing or stopped containers are never recreated or restarted by a retry;
 request a replacement with a new task or startup slot. Containers use no automatic
 restart policy. `docker compose restart spawner-agent` reuses live children.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/packages"
@@ -34,6 +35,7 @@ type config struct {
 	logFormat           string
 	heartbeatInterval   time.Duration
 	secrets             *agent.SecretConfig
+	secretBootstrap     *runtimes.SecretBootstrap
 }
 
 func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
@@ -147,18 +149,18 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 			return config{}, errors.New("docker runtime requires an s3 storage-url reachable from spawned containers")
 		}
 	}
-	cipher := options.SecretCipher
-	if cipher == nil {
-		if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
-			cipher, err = crypto.NewSecretCipher(key)
-			if err != nil {
-				return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
-			}
-		}
+	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
+	if options.SecretsEncryptionKey != nil {
+		key = *options.SecretsEncryptionKey
 	}
-	if cipher != nil {
-		if err := cipher.Validate(); err != nil {
-			return config{}, fmt.Errorf("secret cipher: %w", err)
+	if key != "" {
+		cipher, err := crypto.NewSecretCipher(key)
+		if err != nil {
+			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+		}
+		result.secretBootstrap, err = runtimes.NewSecretBootstrap(key)
+		if err != nil {
+			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
 		}
 		result.secrets = &agent.SecretConfig{Decryptor: cipher}
 	}

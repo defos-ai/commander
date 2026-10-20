@@ -21,20 +21,25 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 )
 
 const (
-	fixtureReference        = "github.com/defos-ai/fixture-agent@v0.1.0"
-	fixtureModuleReference  = "github.com/defos-ai/fixture-agent/apps/agents/fixture@v0.1.0"
-	fixtureReleaseURL       = "https://github.com/defos-ai/fixture-agent/releases/download/v0.1.0/"
-	fixtureModuleReleaseURL = "https://github.com/defos-ai/fixture-agent/releases/download/apps%2Fagents%2Ffixture%2Fv0.1.0/"
+	fixtureReference         = "github.com/defos-ai/fixture-agent@v0.1.0"
+	fixtureModuleReference   = "github.com/defos-ai/fixture-agent/apps/agents/fixture@v0.1.0"
+	fixtureReleaseURL        = "https://github.com/defos-ai/fixture-agent/releases/download/v0.1.0/"
+	fixtureModuleReleaseURL  = "https://github.com/defos-ai/fixture-agent/releases/download/apps%2Fagents%2Ffixture%2Fv0.1.0/"
+	fixtureBuilderReference  = "github.com/defos-ai/commander/apps/agents/builder@v0.1.0"
+	fixtureBuilderReleaseURL = "https://github.com/defos-ai/commander/releases/download/apps%2Fagents%2Fbuilder%2Fv0.1.0/"
 )
 
 var fixtureBuild struct {
@@ -87,14 +92,18 @@ func nativeFixtureResolver(t *testing.T, mode string) (*packages.Resolver, *atom
 		asset += ".exe"
 	}
 	checksum := sha256.Sum256(binary)
-	manifest := fmt.Sprintf("schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\nnative:\n  %s/%s:\n    asset: %s\n    sha256: %q\n", runtime.GOOS, runtime.GOARCH, asset, fmt.Sprintf("%x", checksum))
+	agentType := "fixture-agent"
+	if mode == "-builder" {
+		agentType = "builder-agent"
+	}
+	manifest := fmt.Sprintf("schema_version: 1\ntype: %s\nversion: v0.1.0\nnative:\n  %s/%s:\n    asset: %s\n    sha256: %q\n", agentType, runtime.GOOS, runtime.GOARCH, asset, fmt.Sprintf("%x", checksum))
 	requests := new(atomic.Int32)
 	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
 		requests.Add(1)
 		switch request.URL.String() {
-		case fixtureReleaseURL + "agent.yaml", fixtureModuleReleaseURL + "agent.yaml":
+		case fixtureReleaseURL + "agent.yaml", fixtureModuleReleaseURL + "agent.yaml", fixtureBuilderReleaseURL + "agent.yaml":
 			return response(request, http.StatusOK, manifest), nil
-		case fixtureReleaseURL + asset, fixtureModuleReleaseURL + asset:
+		case fixtureReleaseURL + asset, fixtureModuleReleaseURL + asset, fixtureBuilderReleaseURL + asset:
 			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(binary)), Request: request}, nil
 		default:
 			return response(request, http.StatusNotFound, "not found"), nil
@@ -112,7 +121,7 @@ type nativeFixture struct {
 	requests *atomic.Int32
 }
 
-func newNativeFixture(t *testing.T, mode string, timeout time.Duration) nativeFixture {
+func newNativeFixture(t *testing.T, mode string, timeout time.Duration, bootstrap ...*runtimes.SecretBootstrap) nativeFixture {
 	t.Helper()
 	root := t.TempDir()
 	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
@@ -132,6 +141,9 @@ func newNativeFixture(t *testing.T, mode string, timeout time.Duration) nativeFi
 			"AWS_REGION": "fixture-region", "CHROMIUM_PATH": filepath.Join(root, "chromium"), "CHROMIUM_NO_SANDBOX": "true",
 		},
 	}
+	if len(bootstrap) > 0 {
+		config.SecretBootstrap = bootstrap[0]
+	}
 	manager, err := native.NewManager(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -145,14 +157,15 @@ func newNativeFixture(t *testing.T, mode string, timeout time.Duration) nativeFi
 }
 
 type childReport struct {
-	AgentID           string `json:"agent_id"`
-	AgentIDSuffix     string `json:"agent_id_suffix"`
-	PID               int    `json:"pid"`
-	InheritedSecret   bool   `json:"inherited_secret"`
-	Region            string `json:"region"`
-	Home              string `json:"home"`
-	ChromiumPath      string `json:"chromium_path"`
-	ChromiumNoSandbox string `json:"chromium_no_sandbox"`
+	AgentID           string          `json:"agent_id"`
+	AgentIDSuffix     string          `json:"agent_id_suffix"`
+	PID               int             `json:"pid"`
+	InheritedSecret   bool            `json:"inherited_secret"`
+	SecretChallenge   *secrets.Secret `json:"secret_challenge"`
+	Region            string          `json:"region"`
+	Home              string          `json:"home"`
+	ChromiumPath      string          `json:"chromium_path"`
+	ChromiumNoSandbox string          `json:"chromium_no_sandbox"`
 }
 
 func childReports(t *testing.T, directory string) []childReport {
@@ -221,7 +234,7 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		if len(report.AgentIDSuffix) != 8 || report.AgentID != "fixture-agent-"+report.AgentIDSuffix || !id.ValidAgent(report.AgentID) {
 			t.Fatalf("child did not construct its assigned identity from a hex suffix: %+v", report)
 		}
-		if report.InheritedSecret || report.Region != "fixture-region" || report.Home == "" {
+		if report.InheritedSecret || report.SecretChallenge != nil || report.Region != "fixture-region" || report.Home == "" {
 			t.Fatalf("unexpected child environment: %+v", report)
 		}
 		if report.ChromiumPath != fixture.config.Environment["CHROMIUM_PATH"] || report.ChromiumNoSandbox != "true" {
@@ -258,6 +271,65 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 				t.Fatalf("Close returned before child shutdown finished: %v", err)
 			}
 		}
+	}
+}
+
+func TestNativeBootstrapSharesUsableKeyOnlyWithTrustedBuilder(t *testing.T) {
+	key := strings.Repeat("6a", 32)
+	bootstrap, err := runtimes.NewSecretBootstrap(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := crypto.NewSecretCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "unrelated-parent-key")
+	t.Setenv("API_PASSWORD", "private-parent-sentinel")
+	for _, test := range []struct {
+		name, mode, reference string
+		receivesKey           bool
+	}{
+		{"trusted builder", "-builder", fixtureBuilderReference, true},
+		{"untrusted builder type", "-builder", fixtureReference, false},
+		{"wrong manifest type", "", fixtureBuilderReference, false},
+		{"ordinary agent", "", fixtureReference, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newNativeFixture(t, test.mode, 5*time.Second, bootstrap)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			if _, err := fixture.manager.Spawn(ctx, "task:"+id.New(), test.reference); err != nil {
+				t.Fatal(err)
+			}
+			report := awaitChildReport(t, ctx, fixture.storage)
+			if report.InheritedSecret {
+				t.Fatal("child inherited unrelated host credentials")
+			}
+			if (report.SecretChallenge != nil) != test.receivesKey {
+				t.Fatal("secret key bootstrap did not respect the trusted package and type")
+			}
+			if report.SecretChallenge != nil {
+				plaintext, err := cipher.Decrypt(*report.SecretChallenge)
+				defer clear(plaintext)
+				if err != nil || string(plaintext) != "fixture secret bootstrap" {
+					t.Fatal("child could not encrypt with the deployment's key")
+				}
+			}
+			paths, err := filepath.Glob(filepath.Join(fixture.config.Directory, "records", "*.json"))
+			if err != nil || len(paths) == 0 {
+				t.Fatal("missing native launch records")
+			}
+			for _, path := range paths {
+				record, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if bytes.Contains(record, []byte(key)) {
+					t.Fatal("launch record contains the bootstrap key")
+				}
+			}
+		})
 	}
 }
 

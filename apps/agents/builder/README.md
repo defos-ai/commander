@@ -58,16 +58,20 @@ The builder image includes Git; native executables require Git on the host.
 Existing releases are unchanged; use the source command until publication.
 See [agent packages](../../../docs/agent-packages.md).
 
-The spawner does not supply a managed-secrets encryption key or a persistent
-workspace volume. The spawned
-builder can run `checkout-template` without it; actions requiring managed
-secrets need operator-provisioned access. Package metadata cannot grant access
-to the key or add mounts.
+The spawner supplies its managed-secrets encryption key to this official builder
+package automatically. It checks both the exact repository/module and the
+`builder-agent` manifest type; a fork or another package claiming that type
+receives no key. Package spawning does not add a persistent workspace volume.
 
 ## Secrets
 
 The host accepts `SECRETS_ENCRYPTION_KEY` for actions that require managed secrets.
-Use the same key as the API; `checkout-template` does not need it.
+Compose and Playground all-in-one configure it automatically when spawning the
+official builder. For a separately started builder, use the same key as the API;
+`checkout-template` does not need it. Docker administrators can read the key from
+the builder container's environment. Action secrets still arrive through the
+managed-secret flow; the spawner does not copy GitHub or model tokens into the
+builder.
 
 When embedding the builder, pass an initialized
 [`crypto.SecretCipher`](../../../framework/crypto/README.md) through

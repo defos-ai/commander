@@ -101,7 +101,8 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 	if err := ctx.Err(); err != nil {
 		return runtimes.Result{}, err
 	}
-	if err := m.reserve(record{RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type}); err != nil {
+	saved := record{RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type}
+	if err := m.reserve(saved); err != nil {
 		return runtimes.Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -109,7 +110,7 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 	}
 	command := exec.Command(path)
 	command.Dir = directory
-	command.Env = m.environment(agentID, directory)
+	command.Env = m.environment(saved, directory)
 	// Child output can contain secrets. Do not put it in action errors or logs.
 	configureCommand(command)
 	if err := command.Start(); err != nil {

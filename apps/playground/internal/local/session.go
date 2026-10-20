@@ -79,7 +79,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err != nil {
 		return nil, err
 	}
-	cipher, err := secretCipher()
+	secretsKey, cipher, err := secretCipher()
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 		}
 		return spawnercli.RunWithOptions(ctx, args, s.log, spawnercli.Options{
 			Runtime: "native", StateDir: filepath.Join(s.Directory, "spawner"),
-			SecretCipher: cipher,
+			SecretsEncryptionKey: &secretsKey,
 			Ready: func(agentID string, spawned []runtimes.Result) {
 				expected[agentID] = "spawner-agent"
 				for _, result := range spawned {

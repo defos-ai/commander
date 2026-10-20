@@ -15,7 +15,9 @@ import (
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	fsprovider "github.com/defos-ai/commander/providers/fs"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
@@ -42,18 +44,32 @@ func run() error {
 	if err := os.MkdirAll(storagePath, 0700); err != nil {
 		return err
 	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	mode := filepath.Base(executable)
+	agentType := "fixture-agent"
+	if strings.Contains(mode, "-builder") {
+		agentType = "builder-agent"
+	}
 	suffix := os.Getenv("COMMANDER_AGENT_ID_SUFFIX")
-	agentID, err := id.AgentIDFromSuffix("fixture-agent", suffix)
+	agentID, err := id.AgentIDFromSuffix(agentType, suffix)
 	if err != nil {
 		return err
 	}
 	privateEnvironment := false
-	for _, key := range []string{"SPAWNER_PARENT_SECRET", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN"} {
+	for _, key := range []string{"SPAWNER_PARENT_SECRET", "API_PASSWORD", "MCP_TOKEN"} {
 		privateEnvironment = privateEnvironment || os.Getenv(key) != ""
+	}
+	challenge, err := secretChallenge(agentType)
+	if err != nil {
+		return err
 	}
 	report, err := json.Marshal(map[string]any{
 		"agent_id": agentID, "agent_id_suffix": suffix, "pid": os.Getpid(), "inherited_secret": privateEnvironment,
-		"region": os.Getenv("AWS_REGION"), "home": os.Getenv("HOME"),
+		"secret_challenge": challenge,
+		"region":           os.Getenv("AWS_REGION"), "home": os.Getenv("HOME"),
 		"chromium_path": os.Getenv("CHROMIUM_PATH"), "chromium_no_sandbox": os.Getenv("CHROMIUM_NO_SANDBOX"),
 	})
 	if err != nil {
@@ -72,11 +88,6 @@ func run() error {
 		return err
 	}
 	defer bus.Close()
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	mode := filepath.Base(executable)
 	if strings.Contains(mode, "delayed") {
 		if err := waitForRegistrationGate(ctx); err != nil {
 			return err
@@ -128,7 +139,7 @@ func run() error {
 	}
 	interval := time.Duration(0)
 	instance, err := agent.NewAgent(agent.AgentConfig{
-		ID: agentID, Type: "fixture-agent", Actions: []action.Executor{executor},
+		ID: agentID, Type: agent.AgentType(agentType), Actions: []action.Executor{executor},
 		ArtifactFileStore: store, HeartbeatInterval: &interval,
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"},
 	})
@@ -137,6 +148,24 @@ func run() error {
 	}
 	_ = instance.Serve(ctx, bus, nil)
 	return nil
+}
+
+// Only ciphertext crosses back to the parent; the key stays in this process.
+func secretChallenge(agentType string) (*secrets.Secret, error) {
+	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
+	if key == "" {
+		return nil, nil
+	}
+	cipher, err := crypto.NewSecretCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	encrypted, err := cipher.Encrypt(secrets.Metadata{
+		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: agentType}, Name: "BOOTSTRAP_CHECK"},
+		Version: 1, CreatedAt: now, UpdatedAt: now,
+	}, []byte("fixture secret bootstrap"))
+	return &encrypted, err
 }
 
 func waitForRegistrationGate(ctx context.Context) error {
