@@ -52,8 +52,13 @@
   interrupted and cancelled dispatched tasks retain ownership. Enforce agreement
   atomically in `DispatchTask` and reject conflicting history during recovery.
   This is a placement constraint, not a continuation rule or execution ordering.
-  Scheduler filtering and affinity readiness reporting are the next integration
-  step; do not enable it in bundled missions before that integration.
+  Before binding, preflight limits grouped actions to agents advertising the
+  entire group. After binding, assess only the saved owner's readiness. Include
+  grouped actions even when omitted from `required_actions`; preserve the existing
+  operation-wide preflight gate. Busy owners wait for normal scheduler capacity.
+  Recheck the binding for each dispatch, including subsequent tasks in the same
+  scheduler pass. Never fall back to another agent or rebind after an outage.
+  Do not present secret requirements from agents excluded by affinity.
 - [`RuleSelector`](controller/runner/rule_selector.go) selects a complete rule set
   at operation start, after mission/input validation and before persistence. The
   default retains mission rules. Validate and clone selection output into the
@@ -98,7 +103,7 @@
   saves only after persistence and readback. Retry the same immutable checkpoint
   request after an uncertain publication or lost reply, never the action itself.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
-  eligible candidates. The runner owns readiness and capacity checks
+  eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
 - Operation preflight exposes missing requirements only for live, ready/working

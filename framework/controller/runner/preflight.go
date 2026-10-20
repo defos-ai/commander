@@ -5,11 +5,13 @@ import (
 	"reflect"
 
 	"github.com/defos-ai/commander/framework/domain/agents"
-	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func (r *Runner) refreshPreflight(ctx context.Context, state *operationState, records []agents.Agent) error {
-	preflight := operations.AssessPreflight(state.operation.Mission, records)
+	preflight, err := state.operation.AssessPreflight(records)
+	if err != nil {
+		return err
+	}
 	if previous := state.operation.Preflight; previous != nil {
 		if preflight.Ready == previous.Ready && reflect.DeepEqual(preflight.Actions, previous.Actions) {
 			return nil

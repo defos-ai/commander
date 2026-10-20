@@ -7,7 +7,8 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
-// AgentSelector chooses from eligible candidates without dispatching work.
+// AgentSelector chooses from candidates satisfying affinity, readiness and
+// capacity without dispatching work.
 // Calls are serial within a runner and must return promptly and honor ctx.
 // An empty ID defers selection; errors leave work queued for retry.
 type AgentSelector interface {

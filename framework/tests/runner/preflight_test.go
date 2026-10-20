@@ -217,7 +217,10 @@ func TestPreflightExposesCurrentRequirementsOnLiveCandidates(t *testing.T) {
 				test.change(&candidate)
 			}
 			original := slices.Clone(candidate.Actions[0].MissingRequirements)
-			preflight := operations.AssessPreflight(mission, []agents.Agent{candidate})
+			preflight, err := (operations.Operation{Mission: mission}).AssessPreflight([]agents.Agent{candidate})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if preflight.Ready || len(preflight.Actions) != 1 || len(preflight.Actions[0].UnavailableAgents) != 1 {
 				t.Fatalf("missing requirements no longer block preflight: %+v", preflight)
 			}
@@ -240,7 +243,10 @@ func TestPreflightExposesCurrentRequirementsOnLiveCandidates(t *testing.T) {
 
 	t.Run("another ready agent covers the action", func(t *testing.T) {
 		ready := readyAgent("review-agent-00000002")
-		preflight := operations.AssessPreflight(mission, []agents.Agent{base, ready})
+		preflight, err := (operations.Operation{Mission: mission}).AssessPreflight([]agents.Agent{base, ready})
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !preflight.Ready || len(preflight.Actions[0].UnavailableAgents) != 0 || !slices.Equal(preflight.Actions[0].ReadyAgentIDs, []string{ready.ID}) {
 			t.Fatalf("an available candidate did not clear the action's wait: %+v", preflight)
 		}

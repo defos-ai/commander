@@ -11,29 +11,64 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
-func AssessPreflight(mission missions.Mission, records []agents.Agent) *Preflight {
-	names := slices.Clone(mission.RequiredActions)
-	for _, step := range mission.Steps {
+// AssessPreflight checks mission requirements against the operation's saved
+// affinity. Capacity remains a scheduler concern, so working agents can be ready.
+func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
+	boundAgentID, err := o.AffinityAgentID()
+	if err != nil {
+		return nil, err
+	}
+	group := o.Mission.Rules[missions.SameAgent].ForActions
+	commonAgents := make(map[string]bool)
+	if len(group) != 0 && boundAgentID == "" {
+		for _, record := range records {
+			commonAgents[record.ID] = providesActions(record, group)
+		}
+	}
+	names := slices.Clone(o.Mission.RequiredActions)
+	for _, step := range o.Mission.Steps {
 		names = append(names, step.RequiredActions...)
 	}
+	names = append(names, group...)
 	slices.Sort(names)
 	names = slices.Compact(names)
 	result := &Preflight{Ready: true, Version: 1, Actions: make([]ActionReadiness, 0, len(names))}
 	for _, name := range names {
 		readiness := ActionReadiness{ActionName: name}
+		grouped := slices.Contains(group, name)
+		foundOwner := false
 		for _, record := range records {
-			for _, action := range record.Actions {
-				if action.Name != name {
-					continue
-				}
-				candidate := AssessAgentAction(record, action)
-				if candidate.Reason == "" {
-					readiness.ReadyAgentIDs = append(readiness.ReadyAgentIDs, record.ID)
-				} else {
-					readiness.UnavailableAgents = append(readiness.UnavailableAgents, candidate)
-				}
-				break
+			if grouped && boundAgentID != "" && record.ID != boundAgentID {
+				continue
 			}
+			foundOwner = foundOwner || record.ID == boundAgentID
+			index := slices.IndexFunc(record.Actions, func(action actions.Action) bool { return action.Name == name })
+			if index < 0 {
+				if grouped && boundAgentID != "" {
+					readiness.UnavailableAgents = append(readiness.UnavailableAgents, AgentReadiness{
+						AgentID: record.ID, AgentType: string(record.Type), Reason: "Agent required by same-agent does not provide this action",
+					})
+				}
+				continue
+			}
+			var candidate AgentReadiness
+			if grouped && boundAgentID == "" && !commonAgents[record.ID] {
+				candidate = AgentReadiness{
+					AgentID: record.ID, AgentType: string(record.Type), Reason: "Agent does not provide all actions required by same-agent",
+				}
+			} else {
+				candidate = AssessAgentAction(record, record.Actions[index])
+			}
+			if candidate.Reason == "" {
+				readiness.ReadyAgentIDs = append(readiness.ReadyAgentIDs, record.ID)
+			} else {
+				readiness.UnavailableAgents = append(readiness.UnavailableAgents, candidate)
+			}
+		}
+		if grouped && boundAgentID != "" && !foundOwner {
+			readiness.UnavailableAgents = append(readiness.UnavailableAgents, AgentReadiness{
+				AgentID: boundAgentID, Reason: "Agent required by same-agent is not registered",
+			})
 		}
 		if len(readiness.ReadyAgentIDs) != 0 {
 			slices.Sort(readiness.ReadyAgentIDs)
@@ -46,7 +81,16 @@ func AssessPreflight(mission missions.Mission, records []agents.Agent) *Prefligh
 		}
 		result.Actions = append(result.Actions, readiness)
 	}
-	return result
+	return result, nil
+}
+
+func providesActions(record agents.Agent, names []string) bool {
+	for _, name := range names {
+		if !slices.ContainsFunc(record.Actions, func(action actions.Action) bool { return action.Name == name }) {
+			return false
+		}
+	}
+	return true
 }
 
 func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness {
@@ -76,7 +120,10 @@ func (o *Operation) RefreshPreflight(records []agents.Agent) (bool, error) {
 	if o.Status.Terminal() {
 		return false, ErrFinished
 	}
-	next := AssessPreflight(o.Mission, records)
+	next, err := o.AssessPreflight(records)
+	if err != nil {
+		return false, err
+	}
 	if previous := o.Preflight; previous != nil {
 		if next.Ready == previous.Ready && reflect.DeepEqual(next.Actions, previous.Actions) {
 			return false, nil

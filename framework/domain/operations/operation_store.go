@@ -18,8 +18,8 @@ type OperationStore interface {
 	Create(context.Context, Operation) error
 	Get(context.Context, string) (Operation, error)
 	List(context.Context) ([]Operation, error)
-	// RefreshPreflight assesses the saved mission against the supplied inventory
-	// snapshot. Changed readiness, its version, status, and event commit together;
+	// RefreshPreflight assesses the saved mission and affinity against the supplied
+	// inventory. Changed readiness, its version, status, and event commit together;
 	// identical readiness returns the saved operation without writing.
 	RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (Operation, error)
 	// Recover validates the latest saved work, expires due questions, and records
