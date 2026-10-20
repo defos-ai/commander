@@ -183,15 +183,24 @@ Native children also receive the deployment's `CHROMIUM_PATH` and
 `CHROMIUM_NO_SANDBOX` settings when set. These let browser agents use the selected
 Chromium executable and the container's sandbox configuration.
 
-Package selections and launch records live in `./state/spawner`; set
-`SPAWNER_STATE_DIR` to change it. The exact version is saved before downloads;
-retries reuse it even if Latest changes. A new request can select the newer release.
+The `spawn-agent` action saves its package selection and launch intent as
+controller-owned execution checkpoints in FS or MongoDB. It waits for persistence
+before downloading the package or creating the agent. Retries reuse the same
+version even if Latest changes; a new execution can select the newer release.
+Checkpoint failures stop the action.
+
+Startup `--spawn-agents` still keeps its package selections and launch records
+in `./state/spawner`; set `SPAWNER_STATE_DIR` to change it. The directory also holds
+native downloads, child working directories and the Docker manager lock.
 Native retries reuse the live child in the same host. After a native host restart,
 existing launch intents report uncertainty; inspect old processes before requesting
-replacements with a new state directory.
+replacements through a new task or startup slot.
 
-Docker retries also work after a spawner restart: they verify the saved ownership
-labels, image, network and bootstrap configuration, then await registration.
+Docker retries verify the saved ownership labels, image, network and bootstrap
+configuration, then await registration. A restored manager can observe a running
+container. For checkpointed actions, only the manager that received confirmation
+of the new intent may start a container still in `created` state; another manager reports
+uncertainty. Checkpoints do not automatically replay tasks after a host restart.
 Builder retries also verify the encryption key; changing or removing it requires
 a fresh launch rather than silently reusing a differently configured container.
 Missing or stopped containers are never recreated or restarted by a retry;
@@ -200,12 +209,13 @@ restart policy. `docker compose restart spawner-agent` reuses live children.
 They are separate containers, not Compose services; follow the
 [scoped teardown](../../../docs/deployment.md#stopping-and-resetting-agents) to
 remove children and reset launch records before `docker compose down`. Keep
-`spawner-state` while these containers exist. Only one Docker spawner may
-use a state directory at a time; a second host fails startup.
+startup state and controller execution records while these containers exist.
+Only one Docker spawner may use a state directory at a time; a second host fails startup.
 
 Registration waits default to 30 seconds for native mode and 45 seconds for
-Docker (`--registration-timeout`). A timed-out or canceled wait can be retried
-without launching a duplicate. Docker pulls have a ten-minute deadline.
+Docker (`--registration-timeout`). Retrying the same launch request observes its
+existing intent; creating a new task is a new launch request. Docker pulls have a
+ten-minute deadline.
 
 Downloads use HTTPS to GitHub release hosts without environment proxies. Private
 downloads send their token only to GitHub's API; redirects carry no credentials.

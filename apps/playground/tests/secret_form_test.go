@@ -110,6 +110,11 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 	}
 	publish(op)
 	u.wait("fresh agent readiness", func(view string) bool { return !strings.Contains(view, "secrets needed") })
+	if !runtime {
+		// A ready preflight revision also schedules model review. Await it so
+		// teardown cannot cancel the request while the fixture inspects its body.
+		u.wait("ready preflight review", func(view string) bool { return strings.Contains(view, "Ready preflight reviewed") })
+	}
 }
 
 func TestSecretFormDismissalAndManualReopen(t *testing.T) {
@@ -404,6 +409,13 @@ func secretFormUI(t *testing.T, ctx context.Context, api ui.Connection[host.Basi
 		content := "Operation reviewed"
 		if bytes.Contains(body, []byte("Normal message after")) {
 			content = "Normal chat remains available"
+		}
+		var request struct{ Messages []struct{ Content string } }
+		if err := json.Unmarshal(body, &request); err == nil && len(request.Messages) != 0 {
+			last := request.Messages[len(request.Messages)-1].Content
+			if strings.HasPrefix(last, "Operation update:") && strings.Contains(last, `"ready":true`) {
+				content = "Ready preflight reviewed"
+			}
 		}
 		writeModelDelta(w, map[string]any{"content": content}, "stop")
 	}))

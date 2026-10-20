@@ -297,14 +297,22 @@ later through chat. See [Playground](../apps/playground/README.md#startup-agents
 Startup and the controller-dispatched
 `spawn-agent` action use the same package resolution and launch implementation.
 
-A package selection record saves the requested selector and resolved version
-before downloads. Invalid, partial or conflicting selections fail closed; no token
-is saved. The existing launch intent separately records process/container ownership.
+Controller-dispatched actions save `package-selection` and `launch-intent`
+through the framework's [execution checkpoints](abstractions.md#results-and-evidence).
+The first holds the requested selector and resolved version; the second holds
+runtime and process/container ownership metadata. Persistence is acknowledged
+before downloads or launch respectively. Invalid or conflicting checkpoints fail
+closed; no tokens or environment values are saved. Missing checkpoint capability
+cannot fall back to local files.
+
+Startup `--spawn-agents` retains its local package selection and launch records
+until bootstrap is routed through controller tasks. Downloads, child working
+directories and the Docker manager lock still use local state.
 
 A stable launch request identifies an instance across retries; its agent ID must
 be allocated and recorded before starting the process/container. Startup requests
 are scoped to a deployment and configured instance; runtime requests are tied to
-their saved task identity. Repeating a package reference in two startup slots
+their saved command identity. Repeating a package reference in two startup slots
 creates two identities, not a retry. A conflicting package for an existing launch
 request fails explicitly instead of silently replacing the agent.
 
@@ -316,7 +324,7 @@ The initial native implementation reconciles only processes it still owns in
 memory. Its create-only launch intents survive every restart, including clean
 shutdown; encountering an old intent reports uncertainty instead of adopting a
 PID or launching a replacement. Inspect the old instance before requesting
-replacements with a new state directory.
+replacements through a new task or startup slot.
 Native restart recovery is not implemented.
 
 Docker records also hold the image digest, network and a random ownership label.
@@ -325,8 +333,12 @@ reusing it, including after a spawner restart. A fresh host then waits for a fre
 agent announcement. Lost Create/Start responses keep the intent for reconciliation;
 they never trigger a second Create. A missing container reports uncertainty; an
 exited container requires a new launch request. Only a never-started container may
-start under its saved identity. An OS lock permits one active Docker spawner per
-state directory, preventing concurrent Start calls from racing across hosts.
+start under its saved identity. For checkpointed actions, this also requires the
+manager that originally received acknowledgement for the new intent. A different
+manager may observe a verified running container, but cannot start a saved
+`created` instance. This keeps separate local state directories from authorizing
+duplicate starts. Startup file records remain protected by the state-directory
+OS lock. Neither mechanism authorizes controller redispatch to a new agent.
 
 Reconcile uncertain launches before trying again. Retain enough ownership
 information to identify the exact instance; a PID or agent type alone is not

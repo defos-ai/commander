@@ -17,8 +17,8 @@ import (
 
 const SpawnAgentName = "spawn-agent"
 
-// Spawner owns launch records. A retry observes the saved launch for the same
-// request rather than starting another agent with the same ID.
+// Spawner uses execution checkpoints for action launches. A retry observes the
+// saved launch for the same command rather than starting another agent.
 type Spawner interface {
 	Spawn(ctx context.Context, requestID, reference string) (runtimes.Result, error)
 }
@@ -104,20 +104,14 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 
 func spawnRequestID(ctx context.Context) (string, error) {
 	execution, ok := action.ExecutionFromContext(ctx)
-	if !ok {
-		return "", errors.New("spawn-agent requires task or command execution identity")
+	if !ok || execution.CommandID == "" {
+		return "", errors.New("spawn-agent requires a controller-dispatched execution")
 	}
 	if err := execution.Work.Validate(); err != nil {
 		return "", fmt.Errorf("spawn-agent execution identity: %w", err)
 	}
-	if execution.CommandID != "" && !id.Valid(execution.CommandID) {
+	if !id.Valid(execution.CommandID) {
 		return "", errors.New("spawn-agent command ID must be a UUID")
 	}
-	if execution.Work.TaskID != "" {
-		return "task:" + execution.Work.TaskID, nil
-	}
-	if execution.CommandID != "" {
-		return "command:" + execution.CommandID, nil
-	}
-	return "", errors.New("spawn-agent requires task or command execution identity")
+	return "command:" + execution.CommandID, nil
 }

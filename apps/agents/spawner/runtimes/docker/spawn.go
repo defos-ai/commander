@@ -35,7 +35,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	if err != nil {
 		return runtimes.Result{}, err
 	}
-	saved, exists, err := m.readRecord(requestID, reference)
+	saved, exists, err := m.readRecord(ctx, requestID, reference)
 	if err != nil {
 		return runtimes.Result{}, err
 	}
@@ -60,6 +60,11 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	}
 	if container.Status != "created" && container.Status != "running" {
 		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task or startup slot", saved.AgentID, container.Status)
+	}
+	if container.Status == "created" && runtimes.UsesExecutionCheckpoints(ctx) && m.ownedIntents[requestID] != saved.Owner {
+		// Checkpoints identify the intent, not an exclusive runtime owner. A
+		// restored manager cannot safely compete to Start this container.
+		return runtimes.Result{}, fmt.Errorf("recorded container for %s has not started; launch ownership is uncertain, refusing to start it", saved.AgentID)
 	}
 	current, err := m.observe(saved)
 	if err != nil {
@@ -110,11 +115,11 @@ func (m *Manager) prepare(ctx context.Context, requestID, reference string) (rec
 	if err != nil {
 		return record{}, err
 	}
-	saved := record{RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type, Image: image, Network: m.config.Network, Owner: id.New()}
+	saved := record{Runtime: "docker", RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type, Image: image, Network: m.config.Network, Owner: id.New()}
 	if err := ctx.Err(); err != nil {
 		return record{}, err
 	}
-	if err := m.reserve(saved); err != nil {
+	if err := m.reserve(ctx, saved); err != nil {
 		return record{}, err
 	}
 	return saved, nil

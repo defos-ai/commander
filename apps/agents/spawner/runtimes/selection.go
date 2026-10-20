@@ -1,6 +1,7 @@
 package runtimes
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,7 +14,9 @@ import (
 	"strings"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/framework/agent/action"
 	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type packageSelection struct {
@@ -35,6 +38,9 @@ func PinPackage(ctx context.Context, directory, requestID, selector string, reso
 	requested, err := agentpackages.ParseSelector(selector)
 	if err != nil {
 		return "", err
+	}
+	if UsesExecutionCheckpoints(ctx) {
+		return pinExecutionPackage(ctx, requestID, requested, resolver)
 	}
 	digest := sha256.Sum256([]byte(requestID))
 	path := filepath.Join(directory, "records", hex.EncodeToString(digest[:])+".package.json")
@@ -80,6 +86,50 @@ func PinPackage(ctx context.Context, directory, requestID, selector string, reso
 	}
 	if err := syncSelectionDirectory(filepath.Dir(path)); err != nil {
 		return "", fmt.Errorf("persist package selection directory: %w", err)
+	}
+	return saved.Package, nil
+}
+
+func pinExecutionPackage(ctx context.Context, requestID string, requested agentpackages.Reference, resolver *packages.Resolver) (string, error) {
+	execution, _ := action.ExecutionFromContext(ctx)
+	if !id.Valid(execution.CommandID) || requestID != "command:"+execution.CommandID {
+		return "", errors.New("package checkpoint requires its execution command identity")
+	}
+	data, exists, err := action.LoadCheckpoint(ctx, "package-selection")
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		var saved packageSelection
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&saved) != nil || decoder.Decode(new(any)) != io.EOF {
+			return "", errors.New("invalid package checkpoint; refusing to resolve another version")
+		}
+		if err := saved.validate(requestID, requested); err != nil {
+			return "", err
+		}
+		// A previous save may have returned an uncertain write. Confirm the
+		// identical value's durability before using it for further preparation.
+		if err := action.SaveCheckpoint(ctx, "package-selection", data); err != nil {
+			return "", err
+		}
+		return saved.Package, nil
+	}
+	resolved, err := resolver.Pin(ctx, requested.String())
+	if err != nil {
+		return "", err
+	}
+	saved := packageSelection{RequestID: requestID, Selector: requested.String(), Package: resolved.String()}
+	if err := saved.validate(requestID, requested); err != nil {
+		return "", err
+	}
+	data, err = json.Marshal(saved)
+	if err != nil {
+		return "", err
+	}
+	if err := action.SaveCheckpoint(ctx, "package-selection", data); err != nil {
+		return "", err
 	}
 	return saved.Package, nil
 }

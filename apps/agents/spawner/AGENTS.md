@@ -53,8 +53,11 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   before opening providers; empty values generate a fresh host ID. This setting
   identifies the spawner itself; the runtime assigns each child's ID separately.
   The spawner action has no executable discovery requirements or search-path flag.
-- Actions get task/command identity from `action.ExecutionFromContext`, supplied
-  by the framework runtime. Never accept a spawn key, agent ID, environment,
+- Actions get command identity from `action.ExecutionFromContext`, supplied
+  by the framework runtime. Use `command:<UUID>` for runtime requests so different
+  executions of a task cannot share in-memory child ownership. Standalone
+  `Agent.Work` cannot run `spawn-agent`; it has no controller execution.
+  Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
 - Catalog lookup belongs to the Commander client. `spawn-agent` accepts the
   `package` URL/reference and optional `visibility` (`public` by default). Never load a
@@ -76,9 +79,14 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   Missing or invalid Latest metadata must not fall back to another release.
   MCP only lists packages; never load a catalog or accept catalog aliases here.
   Native and Docker runtimes save the canonical selector and exact pin before
-  manifest/executable download or image pull. Reuse it on retries, including
-  preparation failures, and fail closed on conflicting or incomplete records.
-  Existing launch intents still fence process/container creation separately.
+  manifest/executable download or image pull. Controller-dispatched actions use
+  the execution's `package-selection` checkpoint; startup uses local records.
+  Reuse the saved pin on retries, including preparation failures, and confirm its
+  durability with an identical save before continuing. Fail closed on conflicting
+  or incomplete records. The `launch-intent` checkpoint separately fences
+  process/container creation and includes the runtime and assigned child ID.
+  Checkpoint access errors must never fall back to local records. Startup keeps
+  its existing file persistence until bootstrap uses controller tasks.
   Return the exact package in results. Never save tokens in either record.
   Startup `--spawn-agents` remains anonymous; it has no visibility setting or
   serving execution through which to request a managed secret.
@@ -116,8 +124,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - The caller owns successful downloads. On failure remove only the directory
   created by that call. `native.Manager` owns successful child downloads and
   removes them only after shutdown. Preserve records and child working data.
-- Native launch records use hashed request filenames and exclusive creation.
-  Flush the assigned full agent ID before `Start`; pass only its eight lowercase
+- Native action launches wait for controller persistence before `Start`.
+  Startup launch records use hashed request filenames and exclusive creation.
+  Persist the assigned full agent ID first; pass only its eight lowercase
   hex characters as `COMMANDER_AGENT_ID_SUFFIX`. The child constructs its full ID
   using its fixed type. An incomplete record, conflicting request or an intent
   from another host must never authorize a new
@@ -165,13 +174,19 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   responses by inspecting the owned container; a missing container is uncertain,
   not permission to create again. Only a never-started `created` container may
   start. Exited instances need a new request/ID; no automatic restart policy.
-- Native and Docker intents share `records/`: changing runtime must not repeat an
-  existing request. Docker observation survives action cancellation. A new host
+- Native and Docker actions share the `launch-intent` checkpoint name; startup
+  intents share `records/`. Validate the runtime discriminator: changing runtime
+  must not repeat an existing request. Docker observation survives action cancellation. A new host
   requires a fresh announcement; cached readiness is an observed snapshot only.
 - Hold an OS lock on the Docker state directory for the manager's lifetime.
   Checking `created` and then starting it is not atomic across hosts: two owners
   could restart a quickly exiting container under the same ID. A crash releases
   the lock; never use a stale create-only lock file for host ownership.
+- Execution checkpoints can be read from different local directories. Track
+  freshly acknowledged Docker intents in manager memory; only that manager can
+  start their `created` containers. Another manager may observe a verified
+  running container, but cannot start an uncertain intent. A persisted checkpoint
+  does not authorize controller redispatch or ownership transfer.
 - Docker `Close` ends observers, leaving containers and records intact. The factory
   closes Engine and providers afterward. Containers are not Compose-owned services;
   operators stop the spawner, remove only children on that deployment network

@@ -80,7 +80,8 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "install"}
-			ctx = action.WithExecution(ctx, action.Execution{CommandID: id.MessageID(), Work: work})
+			commandID := id.MessageID()
+			ctx = action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: work})
 			requested := make(chan string, 1)
 			deliver := make(chan struct{})
 			provided := []byte("managed-github-token")
@@ -154,7 +155,7 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 			if err != nil || len(launched) != 1 || len(requested) != 0 {
 				t.Fatalf("secret delivery did not finish exactly one launch: %v", err)
 			}
-			if call := <-launched; call != (spawnInvocation{requestID: "task:" + work.TaskID, reference: privateURL}) {
+			if call := <-launched; call != (spawnInvocation{requestID: "command:" + commandID, reference: privateURL}) {
 				t.Fatalf("secret wait changed execution identity: %+v", call)
 			}
 			if !bytes.Equal(received, make([]byte, len(received))) || !bytes.Equal(provided, make([]byte, len(provided))) {

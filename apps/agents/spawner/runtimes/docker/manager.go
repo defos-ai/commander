@@ -38,6 +38,7 @@ type Manager struct {
 	cancel        context.CancelFunc
 	mu            sync.Mutex
 	observations  map[string]*observation
+	ownedIntents  map[string]string
 	once          sync.Once
 	releaseLock   func() error
 	closeErr      error
@@ -96,7 +97,7 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 		config.Resolver = packages.NewResolver(nil)
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	m := &Manager{config: config, ctx: ctx, cancel: cancel, observations: make(map[string]*observation), releaseLock: release, ownedResolver: ownedResolver}
+	m := &Manager{config: config, ctx: ctx, cancel: cancel, observations: make(map[string]*observation), ownedIntents: make(map[string]string), releaseLock: release, ownedResolver: ownedResolver}
 	go func() { <-ctx.Done(); _ = m.Close() }()
 	return m, nil
 }

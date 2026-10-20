@@ -93,9 +93,6 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 				t.Fatalf("spawn output lost registration or action readiness: %+v", actual)
 			}
 			wantID := "command:" + execution.CommandID
-			if execution.Work.TaskID != "" {
-				wantID = "task:" + execution.Work.TaskID
-			}
 			if call := launcher.calls[len(launcher.calls)-1]; call != (spawnInvocation{requestID: wantID, reference: reference}) {
 				t.Fatalf("launcher received wrong dispatch identity: %+v", call)
 			}
@@ -113,6 +110,7 @@ func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 	}{
 		{name: "no execution", input: validInput},
 		{name: "empty execution", execution: &action.Execution{}, input: validInput},
+		{name: "task without command", execution: &action.Execution{Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}}, input: validInput},
 		{name: "invalid command", execution: &action.Execution{CommandID: "../command"}, input: validInput},
 		{name: "incomplete task", execution: &action.Execution{Work: messages.WorkContext{TaskID: id.TaskID()}}, input: validInput},
 		{name: "invalid task with command", execution: &action.Execution{CommandID: id.MessageID(), Work: messages.WorkContext{TaskID: "../task"}}, input: validInput},
@@ -208,7 +206,7 @@ func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 	}
 }
 
-func TestSpawnerAgentWorkUsesTaskIdentity(t *testing.T) {
+func TestSpawnerAgentWorkRequiresControllerDispatch(t *testing.T) {
 	launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
 		Package: actionPackage, Runtime: "native", PID: 42, Actions: []actionmodel.Action{}}}
 	runtime, err := spawner.NewAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
@@ -220,13 +218,11 @@ func TestSpawnerAgentWorkUsesTaskIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
-	_, err = runtime.Work(t.Context(), agent.ActionCall{ActionName: spawneractions.SpawnAgentName, Work: work,
+	ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID(), Work: work})
+	_, err = runtime.Work(ctx, agent.ActionCall{ActionName: spawneractions.SpawnAgentName, Work: work,
 		Input: json.RawMessage(`{"package":"` + actionPackage + `"}`)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(launcher.calls) != 1 || launcher.calls[0].requestID != "task:"+work.TaskID {
-		t.Fatalf("agent did not supply task identity: %+v", launcher.calls)
+	if err == nil || len(launcher.calls) != 0 {
+		t.Fatalf("standalone Work must not launch without a controller execution: %v", err)
 	}
 }
 

@@ -60,7 +60,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 		}
 		return m.awaitRegistration(ctx, current)
 	}
-	if err := m.existingRecord(requestID, reference); err != nil {
+	if err := m.existingRecord(ctx, requestID, reference); err != nil {
 		return runtimes.Result{}, err
 	}
 	return m.launch(ctx, requestID, reference)
@@ -101,8 +101,8 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 	if err := ctx.Err(); err != nil {
 		return runtimes.Result{}, err
 	}
-	saved := record{RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type}
-	if err := m.reserve(saved); err != nil {
+	saved := record{Runtime: "native", RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type}
+	if err := m.reserve(ctx, saved); err != nil {
 		return runtimes.Result{}, err
 	}
 	if err := ctx.Err(); err != nil {

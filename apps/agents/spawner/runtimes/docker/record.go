@@ -2,6 +2,7 @@ package docker
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/manifest"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/id"
@@ -21,6 +24,7 @@ import (
 // lets a retry distinguish our container after an uncertain Create response.
 // No credentials or environment values belong in this record.
 type record struct {
+	Runtime   string `json:"runtime"`
 	RequestID string `json:"request_id"`
 	Package   string `json:"package"`
 	AgentID   string `json:"agent_id"`
@@ -47,7 +51,14 @@ func (m *Manager) recordPath(requestID string) string {
 	return filepath.Join(m.config.Directory, "records", digest(requestID)+".json")
 }
 
-func (m *Manager) readRecord(requestID, reference string) (record, bool, error) {
+func (m *Manager) readRecord(ctx context.Context, requestID, reference string) (record, bool, error) {
+	if runtimes.UsesExecutionCheckpoints(ctx) {
+		data, found, err := action.LoadCheckpoint(ctx, "launch-intent")
+		if err != nil || !found {
+			return record{}, found, err
+		}
+		return m.decodeRecord(bytes.NewReader(data), requestID, reference)
+	}
 	file, err := os.Open(m.recordPath(requestID))
 	if errors.Is(err, os.ErrNotExist) {
 		return record{}, false, nil
@@ -56,8 +67,12 @@ func (m *Manager) readRecord(requestID, reference string) (record, bool, error) 
 		return record{}, true, fmt.Errorf("read Docker launch record: %w", err)
 	}
 	defer file.Close()
+	return m.decodeRecord(file, requestID, reference)
+}
+
+func (m *Manager) decodeRecord(source io.Reader, requestID, reference string) (record, bool, error) {
 	var saved record
-	decoder := json.NewDecoder(io.LimitReader(file, 16*1024))
+	decoder := json.NewDecoder(io.LimitReader(source, 16*1024))
 	decoder.DisallowUnknownFields()
 	invalid := errors.New("Docker launch record is invalid or incomplete; refusing another container")
 	if decoder.Decode(&saved) != nil || decoder.Decode(new(any)) != io.EOF {
@@ -66,7 +81,7 @@ func (m *Manager) readRecord(requestID, reference string) (record, bool, error) 
 	kind, valid := id.RuntimeType(saved.AgentID, id.Agent)
 	ref, parseErr := packages.ParseReference(saved.Package)
 	definition := manifest.Manifest{SchemaVersion: 1, Type: saved.AgentType, Version: ref.Version, Docker: &manifest.Docker{Image: saved.Image}}
-	if saved.RequestID != requestID || !valid || kind != strings.TrimSuffix(saved.AgentType, "-agent") || !id.Valid(saved.Owner) || parseErr != nil || definition.Validate() != nil || !explicitNetwork(saved.Network) {
+	if saved.Runtime != "docker" || saved.RequestID != requestID || !valid || kind != strings.TrimSuffix(saved.AgentType, "-agent") || !id.Valid(saved.Owner) || parseErr != nil || definition.Validate() != nil || !explicitNetwork(saved.Network) {
 		return record{}, true, invalid
 	}
 	if saved.Package != reference {
@@ -78,10 +93,17 @@ func (m *Manager) readRecord(requestID, reference string) (record, bool, error) 
 	return saved, true, nil
 }
 
-func (m *Manager) reserve(saved record) error {
+func (m *Manager) reserve(ctx context.Context, saved record) error {
 	data, err := json.Marshal(saved)
 	if err != nil {
 		return err
+	}
+	if runtimes.UsesExecutionCheckpoints(ctx) {
+		if err := action.SaveCheckpoint(ctx, "launch-intent", data); err != nil {
+			return err
+		}
+		m.ownedIntents[saved.RequestID] = saved.Owner
+		return nil
 	}
 	file, err := os.OpenFile(m.recordPath(saved.RequestID), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
