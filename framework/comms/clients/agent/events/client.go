@@ -11,8 +11,8 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Client sends receipts and secret deliveries through a separate inbox, allowing
-// agents to process them while an action command is running.
+// Client sends receipts, secret deliveries and checkpoint responses through a
+// separate inbox while an action command is running.
 type Client struct {
 	Bus comms.Bus
 }
@@ -38,6 +38,10 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		}
 	case SecretDelivered:
 		if _, err := DecodeSecretDelivery(message); err != nil {
+			return err
+		}
+	case CheckpointResponded:
+		if _, err := DecodeCheckpointResponse(message); err != nil {
 			return err
 		}
 	default:

@@ -19,4 +19,6 @@ const (
 	SecretSyncRequested    MessageType = "secret.sync.requested"
 	SecretDelivered        MessageType = "secret.delivered"
 	SecretInstalled        MessageType = "secret.installed"
+	CheckpointRequested    MessageType = "execution.checkpoint.requested"
+	CheckpointResponded    MessageType = "execution.checkpoint.responded"
 )

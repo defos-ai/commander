@@ -291,6 +291,13 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			}
 			executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
 			executionContext, cancelExecution := context.WithCancel(executionContext)
+			var checkpoints action.CheckpointProvider
+			if fromServer {
+				if client, ok := ctx.Value(checkpointClientKey{}).(*checkpointClient); ok && client != nil {
+					checkpoints = &executionCheckpoints{client: client, lifetime: executionContext, commandID: commandID, work: call.Work}
+				}
+			}
+			executionContext = action.WithCheckpoints(executionContext, checkpoints)
 			var waits *workSecretWaits
 			if fromServer {
 				waits = &workSecretWaits{agent: a, context: executionContext, commandID: commandID,

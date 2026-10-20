@@ -13,6 +13,12 @@
   across commands, outcomes and receipts; replies correlate to the command ID.
 - Result receipts match result ID, command ID and work context and follow durable
   controller persistence. They must never be treated as broker acknowledgements.
+- Checkpoint requests correlate to the original action command; responses
+  correlate to the checkpoint request and retain command/name/work identity.
+  Validate bounded JSON and fixed error codes in the typed clients. The controller
+  must match the saved execution claim before reading or writing; an inventory
+  lease is not ownership evidence. Saves acknowledge persisted data, and identical
+  request retries must not rerun actions. Use the independent agent event inbox.
 - Secret synchronization uses the controller owner loop and agent event inbox. Keep encrypted
   deliveries separate from action commands. Match requests, recipients, scoped
   keys, deadlines and exact secret IDs/versions through the typed validators.

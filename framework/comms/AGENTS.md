@@ -37,6 +37,10 @@
 - Preserve the adapter client's subscribe-before-publish behavior. A lost reply
   does not authorize retrying a mutation. Controller request replay is bounded
   and in memory; it does not survive controller restart.
+- Execution checkpoint requests are explicitly retryable: reads and identical
+  immutable saves reuse their request identity while the action is active.
+  Controller replies follow saved-claim validation and durable persistence.
+  This does not extend adapter mutation replay or authorize rerunning an action.
 - Agent command expiry controls admission of new work, not cancellation of
   running work or replay of cached outcomes. Recovery preserves the deadline.
 - Lifecycle observations use source timestamps, including lease renewal. Late

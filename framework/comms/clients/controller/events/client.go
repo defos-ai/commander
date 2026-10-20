@@ -32,6 +32,10 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		if _, err := DecodeSecretInstalled(message); err != nil {
 			return err
 		}
+	case CheckpointRequested:
+		if _, err := DecodeCheckpointRequest(message); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported controller event type %q", message.Type)
 	}

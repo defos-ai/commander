@@ -49,6 +49,8 @@ func (c EventConsumer) Consume(ctx context.Context, message messages.Message) er
 		return (AgentEventConsumer{Inventory: c.Inventory, Actions: c.Actions, State: c.State}).Consume(ctx, message)
 	case controllerevents.ActionSucceeded, controllerevents.CommandFailed:
 		return (CommandResultConsumer{Inventory: c.Inventory, Executions: c.Executions, Artifacts: c.Artifacts, Bus: c.Bus, State: c.State}).Consume(ctx, message)
+	case controllerevents.CheckpointRequested:
+		return (CheckpointConsumer{Executions: c.Executions, Bus: c.Bus}).Consume(ctx, message)
 	case controllerevents.SecretSyncRequested, controllerevents.SecretInstalled:
 		if c.Secrets == nil {
 			return InvalidMessage(errors.New("secret distribution is not configured"))

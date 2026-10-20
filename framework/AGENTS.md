@@ -78,8 +78,17 @@
   and completion prevents new names. Persist atomically with completion and other
   checkpoints; uncertain writes must be reconciled before proceeding. Keep
   snapshots independent and secrets/file contents out of checkpoints. Checkpoints
-  do not authorize retry or transfer execution ownership. This storage contract
-  is not yet connected to agent actions or bus messages.
+  do not authorize retry or transfer execution ownership.
+- [`action.LoadCheckpoint` and `action.SaveCheckpoint`](agent/action/checkpoints.go)
+  use an execution-scoped capability injected only during controller-dispatched
+  work in `Agent.Serve`. Bind identities from the accepted command, overriding
+  caller context. End waits when the caller, action or serving instance ends,
+  including when the action supplies a detached context. Requests use controller
+  events; replies use the agent event inbox so long-running actions cannot block
+  them. Match reply/request IDs, command, name and work before accepting data.
+  The controller owner loop verifies the saved dispatch claim and acknowledges
+  saves only after persistence and readback. Retry the same immutable checkpoint
+  request after an uncertain publication or lost reply, never the action itself.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

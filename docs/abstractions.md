@@ -166,14 +166,34 @@ Artifacts and reports can be read independently of the model conversation.
 See [providers](../providers/README.md) for persistence implementations and
 [recovery](overview.md#state-and-restart-recovery) for uncertain outcomes.
 
-Checkpoint persistence is available through
-[`ExecutionStore`](../framework/domain/executions/execution_store.go) in FS and
-MongoDB; action and bus integration comes separately. Each execution can contain
+Actions running through `Agent.Serve` use
+[`action.LoadCheckpoint` and `action.SaveCheckpoint`](../framework/agent/action/checkpoints.go).
+The controller verifies the saved execution claim and persists checkpoints through
+[`ExecutionStore`](../framework/domain/executions/execution_store.go) in FS or
+MongoDB before acknowledging a save. Each execution can contain
 up to 32 checkpoints, each a JSON object of at most 16 KiB, including JSON
 escaping when encoded for storage or transport. An identical retry
 confirms the saved value; different data under the same name is rejected. New
 checkpoints cannot be added after completion. Checkpoints contain no secrets or
 file contents, and do not grant permission to repeat an external side effect.
+
+```go
+data, found, err := action.LoadCheckpoint(ctx, "intent")
+if err != nil {
+    return err
+}
+if !found {
+    data = json.RawMessage(`{"package":"github.com/example/agent@v1.2.3"}`)
+    if err := action.SaveCheckpoint(ctx, "intent", data); err != nil {
+        return err
+    }
+}
+// Use the confirmed intent; reconcile any external effect before repeating it.
+```
+
+The runtime retries lost checkpoint replies without rerunning the action. Waits
+end when the caller, action or agent host stops; cancellation does not prove a
+write was rejected. Standalone `Agent.Work` has no checkpoint provider.
 
 ## Messages and durable execution
 

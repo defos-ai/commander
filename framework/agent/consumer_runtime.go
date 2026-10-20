@@ -11,12 +11,14 @@ import (
 )
 
 type agentRuntime struct {
-	agent    *Agent
-	events   controllerevents.Client
-	shutdown func(context.Context, string) error
+	agent       *Agent
+	events      controllerevents.Client
+	checkpoints *checkpointClient
+	shutdown    func(context.Context, string) error
 }
 
 func (r agentRuntime) Execute(ctx context.Context, call ActionCall, commandID string) (ActionOutput, error) {
+	ctx = context.WithValue(ctx, checkpointClientKey{}, r.checkpoints)
 	return r.agent.work(ctx, call, commandID, true, func(ctx context.Context, snapshot AgentSnapshot) error {
 		publication, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()

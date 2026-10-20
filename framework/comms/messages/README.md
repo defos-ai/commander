@@ -19,8 +19,8 @@ for adapters and agents.
 | Adapter → controller | `controllers.default.cancellations` | `adapter.request.canceled` |
 | Controller → adapter | `adapters.<adapter-id>.replies` | `controller.response`: result or domain error |
 | Controller → agent | `agents.<agent-id>.commands` | `action.run`, `agent.discover`, `agent.stop` |
-| Controller → agent | `agents.<agent-id>.events` | `action.result.accepted`, `secret.delivered` |
-| Agent → controller | `controllers.default.events` | Lifecycle events, action outcomes, secret requests and installation acknowledgements |
+| Controller → agent | `agents.<agent-id>.events` | `action.result.accepted`, `secret.delivered`, `execution.checkpoint.responded` |
+| Agent → controller | `controllers.default.events` | Lifecycle events, action outcomes, checkpoint requests, secret requests and installation acknowledgements |
 
 Use [`routing.go`](routing.go) to build destinations. Hosts use transient inboxes;
 see [inbox lifetimes](../README.md#delivery-guarantees).
@@ -74,6 +74,35 @@ See [consumer behavior](../README.md) and
 on replay and unknown outcomes.
 
 For changes to these contracts, see [coding guidance](AGENTS.md).
+
+## Execution checkpoints
+
+An action running through `Agent.Serve` can call
+[`action.LoadCheckpoint` or `action.SaveCheckpoint`](../../agent/action/checkpoints.go)
+to read or append a named JSON fact in its reserved execution. Standalone
+`Agent.Work` has no checkpoint capability.
+
+| Direction | Message | Correlation |
+| --- | --- | --- |
+| Agent → controller events | `execution.checkpoint.requested` | Original action command ID |
+| Controller → agent events | `execution.checkpoint.responded` | Checkpoint request message ID |
+
+The runtime binds each request to the accepted command's agent and work context.
+The controller checks that identity against the saved execution claim, then
+persists a save and reads it back before replying. Responses include the command
+ID, checkpoint name and saved JSON, or a fixed error code. The agent processes
+them through its independent event inbox while the action waits.
+
+Lost replies and uncertain publications retry the same checkpoint request.
+Identical saves confirm the immutable value; conflicting data fails. Waits end
+with caller, action or host cancellation. Cancellation can leave a write's outcome
+unknown. Checkpoints do not authorize rerunning an action, transferring execution
+ownership or repeating an external side effect.
+
+These replies are separate from broker acknowledgements and terminal result
+receipts. Bus access remains the trusted publisher boundary; matching envelope
+fields alone does not authenticate a process. See
+[checkpoint limits](../../../docs/abstractions.md#results-and-evidence).
 
 ## Secret synchronization contracts
 

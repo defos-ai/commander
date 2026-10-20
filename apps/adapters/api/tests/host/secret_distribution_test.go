@@ -136,7 +136,9 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	heartbeat := 100 * time.Millisecond
+	// Heartbeats only rediscover the agent after controller restart. Keep them
+	// slower than secret retries so durable FS writes do not swamp that exchange.
+	heartbeat := time.Second
 	worker, err := agent.NewAgent(agent.AgentConfig{
 		Type: "builder-agent", Actions: []action.Executor{private, public, onDemand}, ArtifactFileStore: files,
 		HeartbeatInterval: &heartbeat,
@@ -178,7 +180,16 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	// restart, without restarting the agent or supplying a value through its env.
 	closeSecretController(t, coordinator)
 	coordinator = startController()
-	stopOperations := startSecretOperationRunner(t, coordinator, observedBus, database)
+	stopOperations := startOperationRunner(t, coordinator, observedBus, database,
+		missions.Mission{
+			Name: "secret-distribution", Objective: "Use an agent's managed secret",
+			RequiredActions: []string{"use-secret"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
+		},
+		missions.Mission{
+			Name: "on-demand-secret", Objective: "Request a secret during execution",
+			RequiredActions: []string{"on-demand"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
+		},
+	)
 	operation := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodPost, "/api/v1/operations",
 		`{"mission_name":"secret-distribution","input":{}}`), http.StatusCreated)
 	if operation.Status != "waiting" || operation.Preflight == nil || operation.Preflight.Ready || len(operation.Preflight.Actions) != 1 || len(operation.Preflight.Actions[0].UnavailableAgents) != 1 {
@@ -321,23 +332,16 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	assertNoDistributedPlaintext(t, fixture.root)
 }
 
-func startSecretOperationRunner(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string) func() {
+func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string, definitions ...missions.Mission) func() {
 	t.Helper()
 	missionStore, err := fsmissions.NewMissionFsStore(database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := missionStore.Upsert(t.Context(), missions.Mission{
-		Name: "secret-distribution", Objective: "Use an agent's managed secret",
-		RequiredActions: []string{"use-secret"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := missionStore.Upsert(t.Context(), missions.Mission{
-		Name: "on-demand-secret", Objective: "Request a secret during execution",
-		RequiredActions: []string{"on-demand"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
-	}); err != nil {
-		t.Fatal(err)
+	for _, definition := range definitions {
+		if err := missionStore.Upsert(t.Context(), definition); err != nil {
+			t.Fatal(err)
+		}
 	}
 	operationStore, err := fsoperations.NewOperationFsStore(database)
 	if err != nil {
