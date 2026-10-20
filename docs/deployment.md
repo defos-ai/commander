@@ -105,12 +105,11 @@ Run a host with `--help` for its flags. Action-specific dependencies belong in t
 [browser agent guide](https://github.com/defos-ai/commander-browser-agent); model settings belong in
 [Playground](../apps/playground/README.md).
 
-Native all-in-one uses its own Admin address; Docker all-in-one defaults to
-`http://localhost:4275`; Compose supplies its known published address.
-Set `COMMANDER_ADMIN_URL` or pass `--admin-url` to override the link or configure
-an existing remote Admin. This advertises the URL; it does not publish a port or
-start a remote Admin server. Without it, remote Playground does not guess an
-Admin URL or API connection.
+Native all-in-one uses its own Admin address; Docker all-in-one and standalone
+Playground default their links to `http://localhost:4275`. Compose supplies its
+known published address. Set `COMMANDER_ADMIN_URL` or pass `--admin-url` to
+override the link. Standalone Playground does not start Admin; the link does not
+publish a port or infer an API connection from MCP.
 
 ## State
 

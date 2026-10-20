@@ -223,7 +223,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "pgup", "pgdown", "ctrl+u":
+		case "up", "down", "pgup", "pgdown", "ctrl+u":
+			// With native terminal selection, wheel/trackpad scrolling arrives
+			// as Up/Down too. Selectors and focused forms handle these first.
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd

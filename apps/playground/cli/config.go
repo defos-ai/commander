@@ -59,7 +59,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 		c.SpawnAgents = append(c.SpawnAgents, value)
 		return nil
 	})
-	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Override the browser-facing Admin UI URL; Docker all-in-one defaults to http://localhost:4275 (COMMANDER_ADMIN_URL)")
+	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Admin UI browser address; defaults to http://localhost:4275 or the native all-in-one address (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
 	flags.StringVar(&c.Model, "model", env("COMMANDER_LLM_MODEL", ""), "Model name; omitted asks interactively (COMMANDER_LLM_MODEL)")
 	flags.StringVar(&c.BaseURL, "base-url", env("COMMANDER_LLM_BASE_URL", ""), "Override the model API base URL (COMMANDER_LLM_BASE_URL)")
@@ -104,6 +104,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	}
 	if c.NoAdmin && c.AdminURL != "" {
 		return c, errors.New("--no-admin cannot be combined with --admin-url or COMMANDER_ADMIN_URL")
+	}
+	if !c.AllInOne && c.AdminURL == "" {
+		c.AdminURL = defaultAdminURL
 	}
 	if c.AdminURL != "" {
 		if err := validateAdminURL(c.AdminURL); err != nil {

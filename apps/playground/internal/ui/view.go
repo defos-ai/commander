@@ -124,7 +124,7 @@ func (m *Model) View() string {
 	}
 	var content string
 	if m.stage == stageChat {
-		content = m.viewport.View()
+		content = m.renderer.NewStyle().PaddingLeft(2).Render(m.viewport.View())
 	} else {
 		var lines []string
 		switch m.stage {

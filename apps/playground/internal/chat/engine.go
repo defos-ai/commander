@@ -243,6 +243,6 @@ const Help = `/help — Show this help
 /exit — Exit; server-side work keeps running
 
 Try: "Install the web agent, then review defos.ai."
-Use PgUp/PgDown to scroll chat.
+Scroll with the wheel, trackpad or PgUp/PgDown.
 Drag to select, then copy normally: Ctrl+Shift+C in GNOME Terminal, Cmd+C in macOS Terminal, or the Copy menu.
 Ctrl+C stops a reply; Ctrl+D exits.`

@@ -46,13 +46,13 @@
   Add a short Admin review link to each completed, settled operation's progress
   row; do not add a separate chat notice. Account for wrapped progress rows when
   sizing the chat viewport. Native
-  all-in-one uses the ready Admin address; Docker all-in-one defaults the link to
-  `http://localhost:4275`. This is a conventional default, not detection of a
-  published port. `--admin-url` / `COMMANDER_ADMIN_URL` optionally overrides the
-  browser address; it does not change listeners or port mappings. Never infer
+  all-in-one uses the ready Admin address; Docker all-in-one and standalone
+  Playground default the link to `http://localhost:4275`. This is a conventional
+  default, not detection of a running server or published port.
+  `--admin-url` / `COMMANDER_ADMIN_URL` optionally overrides the browser address;
+  it does not start Admin or change listeners or port mappings. Never infer
   Admin's address from a remote MCP endpoint. Do not advertise a disabled or
-  failed local Admin. Remote mode without a configured URL gives short `/admin`
-  setup guidance and no operation review link.
+  failed local Admin.
   Local links use `#/connect?api=...&username=...` with URL-encoded non-secret
   values; operation review links add `operation=...`. Preserve encoded query
   values when adding the destination. Never include passwords or tokens, log
@@ -231,10 +231,11 @@
   Keep mouse reporting disabled so plain drag selects through the terminal.
   For real terminal output, save, enable and restore alternate-scroll mode
   (DEC 1007); supported terminals translate wheel/trackpad events into Up/Down.
-  Use Up/Down for provider/model selection and focused questions, not chat
-  scrolling; leave the chat keys available for future message history. Chat
-  scrolling uses PgUp/PgDown. Wheel events translated into arrow keys do not
-  scroll chat. Up/Down must never submit input or answers. Preserve drafts and
+  Route Up/Down to provider/model selection and focused forms first, then to the
+  chat viewport. Physical arrow keys and translated wheel events are identical;
+  ignoring chat arrows breaks wheel/trackpad scrolling. Keep the header, status
+  and input fixed while the inner viewport scrolls. PgUp/PgDown also scroll chat.
+  Up/Down must never submit input or answers. Preserve drafts and
   question focus. Do not emit terminal mode controls to files.
   Leave selection and copying to the terminal. Do not draw an application-owned
   selection, intercept copy shortcuts or send clipboard control sequences.

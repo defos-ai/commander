@@ -71,10 +71,11 @@ func TestHelpLayout(t *testing.T) {
 				for _, width := range []int{120, 60, 120} {
 					u.model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
 					view := ansi.Strip(u.model.View())
-					start := strings.Index(view, "/help — Show this help")
-					if start < 1 || view[start-1] != '\n' {
-						t.Fatalf("help is not aligned at the start of the line at width %d", width)
+					start := strings.Index(view, "\n  /help — Show this help")
+					if start < 0 {
+						t.Fatalf("help is not aligned with the chat inset at width %d", width)
 					}
+					start++
 					end := strings.Index(view[start:], "exits.")
 					if end < 0 {
 						t.Fatalf("help was truncated at width %d", width)
@@ -83,7 +84,7 @@ func TestHelpLayout(t *testing.T) {
 					if !strings.Contains(strings.Join(strings.Fields(help), " "), "Ctrl+D exits.") {
 						t.Fatal("help lost its final keyboard shortcut")
 					}
-					if !strings.Contains(help, "\n/run <operation-id> <action> <json-input> —") || !strings.Contains(help, "\n/exit —") {
+					if !strings.Contains(help, "\n  /run <operation-id> <action> <json-input> —") || !strings.Contains(help, "\n  /exit —") {
 						t.Fatal("help command rows are misaligned")
 					}
 					if !strings.Contains(strings.Join(strings.Fields(help), " "), "/credentials — Show API login and MCP token (all-in-one)") {
@@ -96,7 +97,7 @@ func TestHelpLayout(t *testing.T) {
 						t.Fatal("help disclosed local credentials")
 					}
 					for _, line := range strings.Split(help, "\n") {
-						if ansi.StringWidth(line) > width-4 {
+						if ansi.StringWidth(line) > width-2 {
 							t.Fatalf("help exceeds the viewport at width %d", width)
 						}
 					}

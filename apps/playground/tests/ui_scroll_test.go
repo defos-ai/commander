@@ -16,21 +16,15 @@ import (
 )
 
 func TestChatScrolling(t *testing.T) {
-	for _, input := range []struct {
+	inputs := append(scrollInputs(), struct {
 		name     string
 		up, down tea.Msg
 	}{
-		{
-			name: "mouse events",
-			up:   tea.MouseMsg{Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress, X: 10, Y: 5},
-			down: tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress, X: 10, Y: 5},
-		},
-		{
-			name: "page keys",
-			up:   tea.KeyMsg{Type: tea.KeyPgUp},
-			down: tea.KeyMsg{Type: tea.KeyPgDown},
-		},
-	} {
+		name: "page keys",
+		up:   tea.KeyMsg{Type: tea.KeyPgUp},
+		down: tea.KeyMsg{Type: tea.KeyPgDown},
+	})
+	for _, input := range inputs {
 		t.Run(input.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
@@ -58,12 +52,10 @@ func TestChatScrolling(t *testing.T) {
 				tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionMotion, X: 15, Y: 3},
 				tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease, X: 15, Y: 3},
 				tea.MouseMsg{Button: tea.MouseButtonWheelLeft, Action: tea.MouseActionPress},
-				tea.KeyMsg{Type: tea.KeyUp},
-				tea.KeyMsg{Type: tea.KeyDown},
 			} {
 				u.model.Update(msg)
 				if u.model.View() != bottom {
-					t.Fatal("an arrow key, click, drag, horizontal wheel or release scrolled the chat or changed its input")
+					t.Fatal("a click, drag, horizontal wheel or release scrolled the chat or changed its input")
 				}
 			}
 			for range 30 {
@@ -73,11 +65,10 @@ func TestChatScrolling(t *testing.T) {
 			if !strings.Contains(top, "Commander connected") || strings.Contains(top, "Ctrl+D exits.") || !strings.Contains(top, draft) {
 				t.Fatal("scrolling up did not reach earlier chat content while preserving the draft")
 			}
-			for _, key := range []tea.KeyType{tea.KeyUp, tea.KeyDown} {
-				u.model.Update(tea.KeyMsg{Type: key})
-				if u.model.View() != top {
-					t.Fatal("an arrow key changed earlier chat content or its draft")
-				}
+			before, after := strings.Split(bottom, "\n"), strings.Split(top, "\n")
+			if len(before) != len(after) || before[0] != after[0] ||
+				strings.Join(before[len(before)-3:], "\n") != strings.Join(after[len(after)-3:], "\n") {
+				t.Fatal("scrolling moved the header, input or footer")
 			}
 			u.model.Update(input.up)
 			if u.model.View() != top {
@@ -102,7 +93,7 @@ func TestChatScrolling(t *testing.T) {
 }
 
 func TestProviderSelectorScrolling(t *testing.T) {
-	for _, input := range providerScrollInputs() {
+	for _, input := range scrollInputs() {
 		t.Run(input.name, func(t *testing.T) {
 			model := ui.New(t.Context(), ui.Config{NoColor: true}, io.Discard)
 			defer model.Close()
@@ -144,7 +135,7 @@ func TestProviderSelectorScrolling(t *testing.T) {
 	}
 }
 
-func providerScrollInputs() []struct {
+func scrollInputs() []struct {
 	name     string
 	up, down tea.Msg
 } {

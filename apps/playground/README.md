@@ -216,8 +216,9 @@ To connect to an existing MCP server, paste its token when prompted or set
 | Disable colors | `NO_COLOR` | `--no-color` |
 
 Flags override environment values. MCP defaults to `http://localhost:4273/mcp`.
-For existing hosts, add `--admin-url https://YOUR_ADMIN_HOST` to enable `/admin`;
-Playground does not infer Admin's address or API connection from MCP.
+Standalone Playground defaults its Admin link to `http://localhost:4275`;
+use `--admin-url https://YOUR_ADMIN_HOST` for another address. This does not
+start Admin or infer the API connection from MCP.
 When a secret form opens, enter the API URL and login if they are not configured.
 All-in-one reuses its existing API connection automatically. The connection and
 entered values stay in session memory; API requests do not follow redirects.
@@ -260,8 +261,9 @@ to include rendered accessibility and screenshots.
 | `/exit` or **Ctrl+D** | Exit chat; all-in-one hosts also stop. |
 
 Messages queue during replies; slash commands and operation updates remain
-responsive. Scroll chat with **PgUp/PgDown**. Wheel and trackpad scrolling are
-unavailable in terminals that translate those gestures into arrow keys.
+responsive. Scroll inside the fixed header and input with the **mouse wheel**,
+**trackpad** or **PgUp/PgDown**. **↑/↓** also scroll chat; supported terminals
+send the same events for wheel and trackpad gestures.
 Drag to select output, then use your terminal's usual copy command:
 **Ctrl+Shift+C** in GNOME Terminal,
 **Cmd+C** in macOS Terminal, or **Copy** from the terminal menu.
@@ -269,8 +271,8 @@ Selection stays in the terminal; **Ctrl+C** still stops the reply.
 
 Completed operation rows include **Review on Admin UI** links to that operation.
 Local all-in-one links prefill the connection or reuse a saved one; sign in if
-needed. Remote sessions need a configured Admin address, then ask you to choose
-the API connection. Passwords and tokens never appear in links.
+needed. Standalone sessions link to the default or configured Admin address,
+where you choose the API connection. Passwords and tokens never appear in links.
 
 Questions appear in a selector: use **↑/↓** and **Enter**, type a custom answer,
 or press **Tab** to return to chat. The panel shows the latest question, deadline
