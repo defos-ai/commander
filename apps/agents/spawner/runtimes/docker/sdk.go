@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/containerd/errdefs"
+	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/distribution/reference"
+	"github.com/moby/moby/api/pkg/authconfig"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
 )
 
@@ -44,13 +47,34 @@ func (e *dockerEngine) Pull(ctx context.Context, image string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	// Empty auth deliberately avoids forwarding the host's registry credentials.
-	response, err := e.client.ImagePull(ctx, image, client.ImagePullOptions{})
+	auth, err := ghcrAuth(ctx, image)
+	if err != nil {
+		return err
+	}
+	response, err := e.client.ImagePull(ctx, image, client.ImagePullOptions{RegistryAuth: auth})
 	if err != nil {
 		return dockerError(ctx, "pull Docker image", err)
 	}
 	defer response.Close()
 	return dockerError(ctx, "pull Docker image", response.Wait(ctx))
+}
+
+func ghcrAuth(ctx context.Context, image string) (string, error) {
+	token := packages.GitHubToken(ctx)
+	named, err := reference.ParseNormalizedNamed(image)
+	if err != nil || reference.Domain(named) != "ghcr.io" || len(token) == 0 {
+		return "", nil
+	}
+	// Use the token only for this GHCR pull, never the host's Docker credentials.
+	// GHCR accepts a placeholder username, as used by devcontainers/cli:
+	// https://github.com/devcontainers/cli/blob/main/src/spec-configuration/httpOCIRegistry.ts
+	auth, err := authconfig.Encode(registry.AuthConfig{
+		Username: "USERNAME", Password: string(token), ServerAddress: "ghcr.io",
+	})
+	if err != nil {
+		return "", errors.New("encode GHCR pull authentication")
+	}
+	return auth, nil
 }
 
 func (e *dockerEngine) Inspect(ctx context.Context, nameOrID string) (Container, error) {

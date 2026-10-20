@@ -65,11 +65,15 @@ Catalog inclusion does not prove that a package or its manifest is published.
 With `visibility: private`, the spawner uses environment `GITHUB_TOKEN` first,
 otherwise requests the managed secret scoped to `spawner-agent`. Supply it through
 the existing Playground/Admin secret form, outside chat. The same task waits and
-resumes within its existing timeout. This token covers both stable resolution
-and private release downloads. Public or omitted visibility keeps requests
-anonymous. Visibility is an authentication hint, not an access grant; the token's
-permissions determine access. Docker image pulls remain anonymous. Catalog
-loading is also anonymous and does not receive the spawner's token.
+resumes within its existing timeout. This token covers stable resolution,
+private release downloads and Docker image pulls from exactly `ghcr.io`.
+Public or omitted visibility keeps requests anonymous. Visibility is an
+authentication hint, not an access grant; the token's permissions determine
+access. Private GHCR pulls need image access in addition
+to repository access; personal access tokens must be classic tokens with
+`read:packages`, per [GitHub's registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
+Other registries remain anonymous. The spawner does not read host Docker login
+credentials. Catalog loading is also anonymous and does not receive the token.
 
 ## Release manifest
 
@@ -197,13 +201,16 @@ credentials beyond explicitly authenticated GitHub API requests or into redirect
 
 For authenticated downloads, attach a caller-owned token with
 `packages.WithGitHubToken(ctx, token)` from the spawner's `packages` package, and
-use that context for `Pin`, `Resolve` and `DownloadNative`. The downloader reads
-the exact release tag through GitHub's API, checks it is published and not a
-prerelease, selects the asset by name, and downloads its content by ID. It ignores
+use that context for `Pin`, `Resolve`, `DownloadNative` and Docker `Pull`. The
+downloader reads the exact release tag through GitHub's API, checks it is published
+and not a prerelease, selects the asset by name, and downloads its content by ID. It ignores
 asset URLs from the response. Metadata is limited to 2 MiB and 30 seconds; native
-checksum verification is unchanged. Clear the token after the calls finish.
-Neither the resolver nor the returned package retains credentials. The caller
-owns token acquisition. The `spawn-agent` action acquires it only for private
+checksum verification is unchanged. Docker `Pull` supplies credentials only for
+the exact `ghcr.io` registry and only on its pull request to the configured Engine.
+Clear the token after the calls finish. The resolver and Docker SDK client do not
+retain authentication; package metadata, launch records and spawned agents do
+not receive it. The caller owns token acquisition. The `spawn-agent` action
+acquires it only for private
 input and clears its temporary bytes after the runtime call returns. Startup
 `--spawn-agents` has no visibility input and continues to use anonymous downloads.
 

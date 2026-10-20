@@ -339,7 +339,7 @@ func dockerHeartbeats(t *testing.T, fixture dockerManagerFixture, name string) f
 }
 
 func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
-	for _, name := range []string{"SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN", "OPENAI_API_KEY"} {
+	for _, name := range []string{"SECRETS_ENCRYPTION_KEY", "GITHUB_TOKEN", "API_PASSWORD", "MCP_TOKEN", "OPENAI_API_KEY"} {
 		t.Setenv(name, "private-parent-sentinel")
 	}
 	fixture := newDockerManagerFixture(t)
@@ -364,7 +364,7 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 	if spec.Environment["BUS_URL"] != fixture.config.BusURL || spec.Environment["STORAGE_URL"] != fixture.config.StorageURL || spec.Environment["AWS_SECRET_ACCESS_KEY"] != "private-storage-sentinel" {
 		t.Fatal("provider bootstrap configuration was not passed to container")
 	}
-	for _, name := range []string{"COMMANDER_AGENT_ID", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN", "OPENAI_API_KEY", "PATH", "HOME"} {
+	for _, name := range []string{"COMMANDER_AGENT_ID", "SECRETS_ENCRYPTION_KEY", "GITHUB_TOKEN", "API_PASSWORD", "MCP_TOKEN", "OPENAI_API_KEY", "PATH", "HOME"} {
 		if _, exists := spec.Environment[name]; exists {
 			t.Errorf("container inherited %s", name)
 		}

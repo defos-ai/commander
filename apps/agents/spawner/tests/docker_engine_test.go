@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
+	"github.com/moby/moby/api/pkg/authconfig"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -78,6 +80,9 @@ func TestDockerEngineNegotiatesCreatesAndStartsConstrainedContainer(t *testing.T
 	fixture := inspectFixture()
 	engine := testDockerEngine(t, func(request *http.Request) (*http.Response, error) {
 		requests = append(requests, request.Method+" "+request.URL.Path)
+		if request.Header.Get("Authorization") != "" || request.URL.Path != "/v1.48/images/create" && request.Header.Get("X-Registry-Auth") != "" {
+			t.Fatal("registry authentication escaped the pull request")
+		}
 		if request.URL.Path == "/_ping" {
 			return dockerPing(request), nil
 		}
@@ -86,8 +91,9 @@ func TestDockerEngineNegotiatesCreatesAndStartsConstrainedContainer(t *testing.T
 		}
 		switch request.URL.Path {
 		case "/v1.48/images/create":
-			if request.Header.Get("X-Registry-Auth") != "" || request.Header.Get("Authorization") != "" {
-				t.Fatal("pull forwards registry credentials")
+			auth, err := authconfig.Decode(request.Header.Get("X-Registry-Auth"))
+			if err != nil || auth.Password != privateToken || auth.Username == "" || auth.ServerAddress != "ghcr.io" || auth.RegistryToken != "" || auth.IdentityToken != "" {
+				t.Fatal("pull did not authenticate with the request's GitHub token")
 			}
 			if request.URL.Query().Get("fromImage") != "ghcr.io/defos-ai/example-agent" || request.URL.Query().Get("tag") != strings.Split(engineImage, "@")[1] {
 				t.Fatal("image pull lost its digest pin")
@@ -112,7 +118,7 @@ func TestDockerEngineNegotiatesCreatesAndStartsConstrainedContainer(t *testing.T
 			return nil, errors.New("unexpected request")
 		}
 	})
-	ctx := context.Background()
+	ctx := packages.WithGitHubToken(t.Context(), []byte(privateToken))
 	if err := engine.Pull(ctx, engineImage); err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +149,61 @@ func TestDockerEngineNegotiatesCreatesAndStartsConstrainedContainer(t *testing.T
 	}
 	if requests[0] != "HEAD /_ping" || len(requests) != 6 {
 		t.Fatalf("unexpected API calls: %v", requests)
+	}
+}
+
+func TestDockerEngineScopesGitHubAuthenticationToGHCR(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "host-token-must-not-be-read")
+	private := packages.WithGitHubToken(t.Context(), []byte(privateToken))
+	authenticated := false
+	pulls := 0
+	engine := testDockerEngine(t, func(request *http.Request) (*http.Response, error) {
+		if request.Header.Get("Authorization") != "" {
+			t.Fatal("registry token became daemon authorization")
+		}
+		if request.URL.Path == "/_ping" {
+			if request.Header.Get("X-Registry-Auth") != "" {
+				t.Fatal("registry token leaked to daemon negotiation")
+			}
+			return dockerPing(request), nil
+		}
+		if request.URL.Path != "/v1.48/images/create" {
+			t.Fatal("unexpected daemon request")
+		}
+		pulls++
+		header := request.Header.Get("X-Registry-Auth")
+		if authenticated {
+			auth, err := authconfig.Decode(header)
+			if err != nil || auth.Password != privateToken || auth.Username == "" || auth.ServerAddress != "ghcr.io" {
+				t.Fatal("GHCR pull lacks scoped authentication")
+			}
+		} else if header != "" {
+			t.Fatal("anonymous or other-registry pull received credentials")
+		}
+		return response(request, http.StatusOK, "{\"status\":\"done\"}\n"), nil
+	})
+	for _, tc := range []struct {
+		name, registry string
+		ctx            context.Context
+		authenticated  bool
+	}{
+		{"private GHCR", "ghcr.io", private, true},
+		{"subsequent public GHCR", "ghcr.io", t.Context(), false},
+		{"masked token", "ghcr.io", packages.WithGitHubToken(private, nil), false},
+		{"other registry", "registry.example", private, false},
+		{"lookalike registry", "ghcr.io.example", private, false},
+		{"explicit port", "ghcr.io:443", private, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			authenticated = tc.authenticated
+			image := strings.Replace(engineImage, "ghcr.io", tc.registry, 1)
+			if err := engine.Pull(tc.ctx, image); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if pulls != 6 {
+		t.Fatalf("expected six pulls, got %d", pulls)
 	}
 }
 
@@ -223,7 +284,8 @@ func TestDockerEngineSanitizesPullAndDaemonErrors(t *testing.T) {
 			}
 			return response(request, http.StatusOK, body), nil
 		})
-		if err := engine.Pull(context.Background(), engineImage); err == nil || strings.Contains(err.Error(), "registry-token") {
+		ctx := packages.WithGitHubToken(t.Context(), []byte("registry-token-do-not-log"))
+		if err := engine.Pull(ctx, engineImage); err == nil || strings.Contains(err.Error(), "registry-token") {
 			t.Fatalf("pull error absent or not sanitized: %v", err)
 		}
 	}

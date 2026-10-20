@@ -137,14 +137,20 @@ token arrives, within its existing execution timeout. Never paste a token into c
 
 Compose forwards an optional host `GITHUB_TOKEN` to the spawner only. Native and
 Docker AIO can receive it through their environment too. Public or omitted
-visibility uses anonymous downloads, even when a token is configured. Tokens
-are never saved in launch records or passed to spawned agents.
+visibility uses anonymous downloads and image pulls, even when a token is configured.
+
+In Docker mode, private installs reuse that token for image pulls from exactly
+`ghcr.io`. The token needs repository access and access to the image; for a
+personal access token, GitHub requires a classic token with `read:packages`.
+See [GitHub's registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
+Other registries remain anonymous. The spawner does not read host Docker login
+credentials, save tokens in launch records or pass them to spawned agents.
 
 ## Current scope
 
 The action supports public and private GitHub packages, including stable resolution.
-Docker image pulls remain anonymous; private registry authentication is a separate
-step. Startup `--spawn-agents` remains public-only. Both inputs accept GitHub URLs,
+Private Docker image authentication is supported for GHCR.
+Startup `--spawn-agents` remains public-only. Both inputs accept GitHub URLs,
 `@stable`, and exact versions. A missing version means stable.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.

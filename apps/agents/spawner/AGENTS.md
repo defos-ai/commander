@@ -92,8 +92,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - `packages/resolver.go` uses a dedicated HTTP client. The default transport does
   not inherit proxies, cookies or credentials. Injected transports are trusted
   deployment configuration and must not add credentials. `packages.WithGitHubToken`
-  supplies a caller-owned token for one resolution/download context; keep its bytes intact
-  until downloads finish, then clear them. Never retain it in the resolver,
+  supplies a caller-owned token for one spawn context; keep its bytes intact
+  until downloads and image pulls finish, then clear them. Never retain it in the resolver,
   package metadata, launch records or child environment. Authenticated downloads
   use GitHub's fixed API endpoints to select a named asset from the exact published
   release; ignore URLs in metadata. Only initial `api.github.com` requests carry
@@ -137,8 +137,12 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 ## Docker ownership
 
 - `runtimes/docker/sdk.go` wraps the official Docker Engine SDK. Operator settings
-  choose the daemon and explicit network; images must be pinned by digest. Pulls
-  do not forward registry authentication. Bound requests and omit raw daemon
+  choose the daemon and explicit network; images must be pinned by digest.
+  Only pulls whose parsed registry domain is exactly `ghcr.io` may use
+  `packages.GitHubToken(ctx)`, through that request's registry auth header.
+  Other registries and public installs remain anonymous. Never read host Docker
+  login credentials or retain authentication on the Engine, in launch records,
+  container configuration or child environments. Bound requests and omit raw daemon
   errors, response bodies and environment values from diagnostics.
 - Inspect actual container configuration before starting or adopting it. Require
   the recorded name, ownership labels, image, network and bootstrap settings,
