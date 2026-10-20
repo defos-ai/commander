@@ -50,6 +50,9 @@ agents, load/capacity and last dispatched agent ID. Return a candidate's ID, or 
 empty ID to defer work. Errors and invalid IDs leave the task queued; set
 `runner.Config.Logger` for diagnostics.
 
+The runner applies [task affinity](../../docs/abstractions.md#task-affinity) before
+calling the selector. A selector cannot move grouped work away from its saved owner.
+
 Report the selector's `Name()` in `controller.RegistrationConfig.AgentSelector`.
 The [default host](default/cli/cli.go) shows runtime and registration setup. See
 [AGENTS.md](AGENTS.md) for scheduler constraints when extending the runtime.
@@ -64,6 +67,8 @@ Report the selector's `Name()` in `controller.RegistrationConfig.RuleSelector`.
 Return the complete rule set; clone `selection.Mission.Rules` first to extend it.
 An empty set uses default automatic behavior. The controller validates and saves
 the selection for that operation, including recovery; errors reject the start.
+This also applies to `same-agent` rules added by the selector even when the
+catalog mission has no affinity rule.
 
 ### Run tests
 

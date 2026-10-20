@@ -23,7 +23,7 @@
 ## Selection and durable work
 
 - [runner.AgentSelector](../../framework/controller/runner/agent_selector.go)
-  chooses only among supplied eligible candidates. Readiness, capacity
+  chooses only among supplied eligible candidates. Affinity, readiness, capacity
   checks and durable dispatch reservation remain the runner's responsibility.
 - Selection runs serially in the owner loop. Return promptly, honor cancellation,
   and do not dispatch work or retain mutable candidate snapshots. An empty ID

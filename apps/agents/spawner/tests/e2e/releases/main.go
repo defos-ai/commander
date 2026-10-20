@@ -91,6 +91,7 @@ func run(ctx context.Context) error {
 	})
 	health := http.NewServeMux()
 	health.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	registerGates(health)
 	secureListener, err := net.Listen("tcp", ":443")
 	if err != nil {
 		return err

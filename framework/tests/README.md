@@ -42,6 +42,11 @@ browser agent with Chromium from pinned standalone release images, and a native
 spawner. API/MCP scenarios install a fixture agent through a controller operation,
 run an action and retrieve its artifact. A local HTTPS release server supplies the
 fixture manifest and binary. Web/browser images are pulled from GHCR during setup.
+The `fixture-affinity` scenarios install two instances, pause the selected
+instance's action readiness, and verify that its queued work waits while another
+operation uses a spare. A fixture-only HTTP gate releases the pause; it is exposed
+on loopback port `14276` (`COMMANDER_TEST_FIXTURE_URL` overrides the test client's
+address). Agent pauses time out after 30 seconds and are released during cleanup.
 
 For MongoDB/RabbitMQ/MinIO and Docker spawning (`commander-full-test`):
 
@@ -65,7 +70,8 @@ requires the host Docker socket. Its containers outlive the spawner, so remove
 those on the test network before taking the stack down, including after failures.
 
 Run only one stack locally at a time: both expose MCP on `14273` and HTTP API on
-`14274`. Keep `-p 1` so the two adapter suites use the stack sequentially.
+`14274`, and fixture controls on `14276`. Keep `-p 1` so the two adapter suites use
+the stack sequentially.
 
 Tests use these endpoints and test credentials automatically. Override with
 `COMMANDER_TEST_MCP_URL`, `COMMANDER_TEST_MCP_TOKEN`, `COMMANDER_TEST_API_URL`,

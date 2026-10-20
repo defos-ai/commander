@@ -289,6 +289,8 @@ services:
       FIXTURE_IMAGE: localhost:15000/fixture-agent
     volumes:
       - fixture-data:/tls
+    ports:
+      - "127.0.0.1:14276:8080"
     networks:
       default:
         aliases: [github.com, api.github.com]

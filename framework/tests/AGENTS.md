@@ -32,6 +32,11 @@
   agents launch only through controller-dispatched actions in the API/MCP scenarios,
   never during spawner startup. Catalog checks must permit fixture agents left
   running by the preceding suite without requiring one before the install scenario.
+- Affinity scenarios use the spawned fixture's bounded `resume_url` readiness
+  pause. Its only allowed target is the release fixture's `/gates/<UUID>` route;
+  both test stacks expose controls on loopback `14276`. Release gates in cleanup
+  before settling operations. Keep controls inside test fixtures; never relax
+  spawner container privileges or mutate registrations to simulate an outage.
 - Fixtures must settle active work before calling test-only cleanup (`ENV=tests`).
   Terminal operation status alone is insufficient if tasks or agent work remain.
 - Preserve [`TestCleaner`](../testing/test_cleaner.go) and

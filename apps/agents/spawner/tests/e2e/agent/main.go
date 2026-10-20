@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -63,8 +66,17 @@ func run(ctx context.Context) (result error) {
 		return err
 	}
 	interval := time.Second
+	pauseContext, stopPauses := context.WithCancel(ctx)
+	executor := &echoAction{Func: echo, pauseContext: pauseContext,
+		client: &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{Proxy: nil},
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	defer func() {
+		stopPauses()
+		executor.pauses.Wait()
+		executor.client.CloseIdleConnections()
+	}()
 	instance, err := agent.NewAgent(agent.AgentConfig{
-		ID: agentID, Type: agentType, Actions: []action.Executor{&echoAction{Func: echo}},
+		ID: agentID, Type: agentType, Actions: []action.Executor{executor},
 		ArtifactFileStore: store, HeartbeatInterval: &interval,
 	})
 	if err != nil {
@@ -87,7 +99,18 @@ func run(ctx context.Context) (result error) {
 }
 
 type echoInput struct {
-	Message string `json:"message"`
+	Message   string `json:"message"`
+	ResumeURL string `json:"resume_url,omitempty"`
+}
+
+func (i echoInput) Validate() error {
+	if i.ResumeURL != "" {
+		const prefix = "http://fixture-releases:8080/gates/"
+		if !strings.HasPrefix(i.ResumeURL, prefix) || !id.Valid(strings.TrimPrefix(i.ResumeURL, prefix)) {
+			return errors.New("resume_url must identify a fixture release gate")
+		}
+	}
+	return nil
 }
 
 type echoOutput struct {
@@ -97,6 +120,9 @@ type echoOutput struct {
 
 type echoAction struct {
 	*action.Func[echoInput, echoOutput]
+	pauseContext context.Context
+	pauses       sync.WaitGroup
+	client       *http.Client
 }
 
 func (a *echoAction) Run(ctx context.Context, input json.RawMessage) (action.Result, error) {
@@ -107,6 +133,27 @@ func (a *echoAction) Run(ctx context.Context, input json.RawMessage) (action.Res
 	var output echoOutput
 	if err := json.Unmarshal(result.Output, &output); err != nil {
 		return action.Result{}, err
+	}
+	var request echoInput
+	if err := json.Unmarshal(input, &request); err != nil {
+		return action.Result{}, err
+	}
+	if request.ResumeURL != "" {
+		a.SetUnavailable("Waiting for the test fixture to restore availability")
+		// Keep the pause independent of the completed task, but bounded by both
+		// a timeout and the host lifetime so failed tests cannot strand the agent.
+		a.pauses.Add(1)
+		go func() {
+			defer a.pauses.Done()
+			defer a.SetStatus(action.Ready)
+			req, err := http.NewRequestWithContext(a.pauseContext, http.MethodGet, request.ResumeURL, nil)
+			if err != nil {
+				return
+			}
+			if response, err := a.client.Do(req); err == nil {
+				response.Body.Close()
+			}
+		}()
 	}
 	result.Artifacts = []action.Artifact{{
 		Name: "Echo evidence",

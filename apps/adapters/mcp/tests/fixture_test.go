@@ -26,6 +26,7 @@ type object = map[string]any
 
 type operationDetail struct {
 	operations.Operation
+	Affinity           *operations.Affinity `json:"affinity"`
 	LastQuestion       *operations.Question `json:"last_question"`
 	RemainingQuestions int                  `json:"remaining_questions"`
 }
