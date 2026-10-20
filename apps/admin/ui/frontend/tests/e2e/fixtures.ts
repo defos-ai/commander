@@ -45,25 +45,27 @@ export class CommanderAPI {
         this.get<{ items: Agent[] }>('/agents'), this.get<{ items: Action[] }>('/actions'), this.get<{ items: Mission[] }>('/missions'),
         this.get<{ items: Controller[] }>('/controllers'),
       ]);
+      // API/MCP suites can leave fixture agents running; a browser-only run has none.
       const spawned = agents.items.filter(agent => agent.type === 'fixture-agent');
       return {
         agents: agents.items.filter(agent => agent.type !== 'fixture-agent').map(agent => ({ type: agent.type, status: agent.status, stale: agent.stale, working: Boolean(agent.work),
           readyActions: agent.actions?.filter(action => action.status === 'ready').length })).sort((left, right) => left.type.localeCompare(right.type)),
-        spawnedReady: spawned.length > 0 && spawned.every(agent => agent.status === 'ready' && !agent.stale && !agent.work
+        spawnedReady: spawned.every(agent => agent.status === 'ready' && !agent.stale && !agent.work
           && agent.actions?.length === 1 && agent.actions[0].name === 'fixture-echo' && agent.actions[0].status === 'ready'),
         actions: actions.items.filter(action => action.name !== 'fixture-echo').map(action => action.name).sort(),
         spawnedCatalog: actions.items.filter(action => action.name === 'fixture-echo').length === Math.min(spawned.length, 1),
         missions: missions.items.map(mission => mission.name).sort(),
         controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin' && controller.rule_selector === 'mission-rules'),
       };
-    }, { timeout: 60_000, message: 'Wait for controller, test missions and ready web, browser, spawner and previously spawned agents' }).toEqual({
+    }, { timeout: 60_000, message: 'Wait for controller, test missions and ready web, browser, builder, spawner and any previously spawned agents' }).toEqual({
       agents: [
         { type: 'browser-agent', status: 'ready', stale: false, working: false, readyActions: 2 },
+        { type: 'builder-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
         { type: 'spawner-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
         ...Array(2).fill({ type: 'web-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
       ], spawnedReady: true, spawnedCatalog: true,
-      actions: ['capture-page', 'check-accessibility', 'check-links', 'check-seo', 'detect-technologies', 'discover-pages', 'discover-pages-no-browser', 'spawn-agent'],
-      missions: ['fixture-use-agent', 'install-agent', 'review-website-no-browser', 'review-website-with-browser'], controller: true,
+      actions: ['capture-page', 'check-accessibility', 'check-links', 'check-seo', 'checkout-template', 'detect-technologies', 'discover-pages', 'discover-pages-no-browser', 'spawn-agent'],
+      missions: ['fixture-affinity', 'fixture-use-agent', 'install-agent', 'review-website-no-browser', 'review-website-with-browser'], controller: true,
     });
   }
 
