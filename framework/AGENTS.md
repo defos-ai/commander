@@ -71,6 +71,15 @@
 - Preserve immutable execution outcomes and reports. Save reports before
   completing operations. Agents upload bytes through `ArtifactFileStore`;
   controllers accept metadata through `ArtifactStore`. Bytes alone are not evidence.
+- [`ExecutionStore.SaveCheckpoint`](domain/executions/execution_store.go) records
+  bounded, named JSON facts within a reserved execution. Use
+  [`Execution.RecordCheckpoint`](domain/executions/checkpoint.go) for immutable
+  transitions: identical retries confirm saved data, conflicting values fail,
+  and completion prevents new names. Persist atomically with completion and other
+  checkpoints; uncertain writes must be reconciled before proceeding. Keep
+  snapshots independent and secrets/file contents out of checkpoints. Checkpoints
+  do not authorize retry or transfer execution ownership. This storage contract
+  is not yet connected to agent actions or bus messages.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

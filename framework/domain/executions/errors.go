@@ -6,9 +6,11 @@ import (
 )
 
 var (
-	ErrUnknownExecution  = errors.New("unknown execution")
-	ErrExecutionConflict = errors.New("execution already exists with different content")
-	ErrIndeterminate     = errors.New("execution outcome is unknown; automatic retry is unsafe")
+	ErrUnknownExecution   = errors.New("unknown execution")
+	ErrExecutionConflict  = errors.New("execution already exists with different content")
+	ErrCheckpointConflict = errors.New("checkpoint already exists with different content")
+	ErrExecutionCompleted = errors.New("completed execution cannot accept new checkpoints")
+	ErrIndeterminate      = errors.New("execution outcome is unknown; automatic retry is unsafe")
 )
 
 type CommandError struct {

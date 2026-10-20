@@ -123,6 +123,35 @@ func (s *ExecutionFsStore) Complete(ctx context.Context, result messages.Message
 	})
 }
 
+func (s *ExecutionFsStore) SaveCheckpoint(ctx context.Context, agentID, commandID, name string, data json.RawMessage) error {
+	path, err := s.path(ctx, agentID, commandID)
+	if err != nil {
+		return err
+	}
+	if err := executions.ValidateCheckpoint(name, data); err != nil {
+		return err
+	}
+	// Like completion, a checkpoint cannot create an unclaimed execution.
+	if _, err := s.Get(ctx, agentID, commandID); err != nil {
+		return err
+	}
+	collection, err := jsonfile.NewContext(ctx, path)
+	if err != nil {
+		return err
+	}
+	return collection.Update(ctx, func(current []byte) ([]byte, error) {
+		record, err := decodeExecution(current, agentID, commandID)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := record.RecordCheckpoint(name, data); err != nil {
+			return nil, err
+		}
+		// Exact retries still publish and sync to confirm an uncertain write.
+		return json.Marshal([]executions.Execution{record})
+	})
+}
+
 func (s *ExecutionFsStore) Get(ctx context.Context, agentID, commandID string) (executions.Execution, error) {
 	path, err := s.path(ctx, agentID, commandID)
 	if err != nil {

@@ -11,11 +11,12 @@ import (
 )
 
 type executionDocument struct {
-	ID          string               `bson:"_id"`
-	Command     messageDocument      `bson:"command"`
-	Result      *messageDocument     `bson:"result,omitempty"`
-	StartedAt   bsonvalue.Timestamp  `bson:"started_at"`
-	CompletedAt *bsonvalue.Timestamp `bson:"completed_at,omitempty"`
+	ID          string                     `bson:"_id"`
+	Command     messageDocument            `bson:"command"`
+	Checkpoints map[string]json.RawMessage `bson:"checkpoints,omitempty"`
+	Result      *messageDocument           `bson:"result,omitempty"`
+	StartedAt   bsonvalue.Timestamp        `bson:"started_at"`
+	CompletedAt *bsonvalue.Timestamp       `bson:"completed_at,omitempty"`
 }
 
 type messageDocument struct {
@@ -64,6 +65,12 @@ func (d executionDocument) decode() (executions.Execution, error) {
 	}
 	if record.StartedAt, err = d.StartedAt.Decode(); err != nil {
 		return executions.Execution{}, err
+	}
+	if d.Checkpoints != nil {
+		record.Checkpoints = make(map[string]json.RawMessage, len(d.Checkpoints))
+		for name, data := range d.Checkpoints {
+			record.Checkpoints[name] = bytes.Clone(data)
+		}
 	}
 	if d.Result != nil {
 		result, err := d.Result.decode()

@@ -158,12 +158,22 @@ question at a time with keyboard selection. Question history stays in the operat
 | **Action output** | Structured result and artifact references. A failed command carries an error instead. |
 | **Artifact** | Database metadata for produced evidence, including its owner and file descriptors. |
 | **Artifact file** | Bytes in file storage: screenshots, downloads or detailed JSON. Descriptors include name, media type, size and checksum. |
-| **Execution** | Durable command reservation and received outcome. A reservation does not prove execution happened. |
+| **Execution** | Durable command reservation, optional checkpoints and received outcome. A reservation does not prove execution happened. |
+| **Checkpoint** | A named, immutable JSON fact inside one execution, such as a selected package version or launch intent. |
 | **Operation event** | An ordered record of progress, available through cursor-based queries. |
 
 Artifacts and reports can be read independently of the model conversation.
 See [providers](../providers/README.md) for persistence implementations and
 [recovery](overview.md#state-and-restart-recovery) for uncertain outcomes.
+
+Checkpoint persistence is available through
+[`ExecutionStore`](../framework/domain/executions/execution_store.go) in FS and
+MongoDB; action and bus integration comes separately. Each execution can contain
+up to 32 checkpoints, each a JSON object of at most 16 KiB, including JSON
+escaping when encoded for storage or transport. An identical retry
+confirms the saved value; different data under the same name is rejected. New
+checkpoints cannot be added after completion. Checkpoints contain no secrets or
+file contents, and do not grant permission to repeat an external side effect.
 
 ## Messages and durable execution
 

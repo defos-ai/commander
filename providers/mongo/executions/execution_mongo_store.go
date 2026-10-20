@@ -100,6 +100,37 @@ func (s *ExecutionMongoStore) Complete(ctx context.Context, result messages.Mess
 	return compareResult(winner, result)
 }
 
+func (s *ExecutionMongoStore) SaveCheckpoint(ctx context.Context, agentID, commandID, name string, data json.RawMessage) error {
+	key, err := executionID(ctx, agentID, commandID)
+	if err != nil {
+		return err
+	}
+	if err := executions.ValidateCheckpoint(name, data); err != nil {
+		return err
+	}
+	// Read and update the whole map in one transaction. A concurrent checkpoint
+	// or completion forces a fresh snapshot, preserving names and terminal state.
+	return s.database.WithTransaction(ctx, func(tx context.Context) error {
+		record, err := s.Get(tx, agentID, commandID)
+		if err != nil {
+			return err
+		}
+		created, err := record.RecordCheckpoint(name, data)
+		if err != nil || !created {
+			return err
+		}
+		updated, err := s.database.Update(tx, collection, bson.M{"_id": key},
+			bson.M{"$set": bson.M{"checkpoints": record.Checkpoints}})
+		if err != nil {
+			return err
+		}
+		if updated.MatchedCount != 1 {
+			return executions.ErrUnknownExecution
+		}
+		return nil
+	})
+}
+
 func (s *ExecutionMongoStore) Get(ctx context.Context, agentID, commandID string) (executions.Execution, error) {
 	key, err := executionID(ctx, agentID, commandID)
 	if err != nil {

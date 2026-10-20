@@ -43,6 +43,11 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   their encrypted deliveries remain retained; deleting a current secret does not
   erase these copies or revoke installed plaintext. This store neither checks the
   current `SecretStore` nor distributes values or performs retention cleanup.
+- [`ExecutionFsStore`](executions/execution_fs_store.go) saves named immutable
+  checkpoints under the same collection lock as terminal results. Checkpoint
+  writes require an existing claim; exact retries still publish/sync, including
+  after completion. Use domain transitions so a late checkpoint cannot extend a
+  completed execution or overwrite an earlier checkpoint.
 
 ## Bus lifecycle
 

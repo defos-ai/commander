@@ -23,6 +23,10 @@ artifact bytes and reports belong to the separate storage provider.
 - In operation mutations, reconstruct state from the latest transaction snapshot
   on every attempt, including generated child IDs and event sequences. Check the
   stored revision when replacing metadata; update related collections together.
+- Execution checkpoints are immutable named JSON values, stored as BSON binary
+  to preserve number precision. Read and update their map inside one transaction;
+  concurrent checkpoint writes or completion must retry against current state.
+  Return failed commit confirmation to the caller for reconciliation.
 - Keep [`operationWriteError`](operations/operation_mongo_store.go) conservative
   about ambiguous commits. Do not turn an unknown commit outcome into a definite
   rollback or discard `operations.ErrWriteUncertain` while wrapping errors.
