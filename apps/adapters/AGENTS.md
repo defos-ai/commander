@@ -83,6 +83,8 @@
   Match the saved execution identity and retain its deadline; suppress waits for
   terminal operations. Inventory failures omit this optional observation while
   keeping saved results readable. Never infer a task wait from sync requests.
+  Task summaries include `deadline_at` only alongside live missing requirements;
+  detail queries retain the saved deadline even after that observation clears.
 - Continuation decisions must retain the task and business version used to reject
   stale choices. Questions record actual operator answers; expiry is not approval.
 - Keep pagination cursors bound to the resource and operation. Bound event waits

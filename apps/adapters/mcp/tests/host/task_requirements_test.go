@@ -120,6 +120,9 @@ func TestMCPTaskQueriesProjectLiveExecutionRequirements(t *testing.T) {
 	if items := readTasks("get_operation"); len(items[0].MissingRequirements) != 0 || items[0].AgentType != "" {
 		t.Fatal("unrelated agent work became an operation secret wait")
 	}
+	if items := readTasks("operation_tasks"); len(items[0].MissingRequirements) != 0 || items[0].AgentType != "" || items[0].DeadlineAt != nil {
+		t.Fatal("task summary retained an observation from unrelated agent work")
+	}
 	record.ObservedAt = record.ObservedAt.Add(time.Second)
 	record.Work.TaskID = task.ID
 	if err := agentStore.Upsert(ctx, record); err != nil {
@@ -129,8 +132,16 @@ func TestMCPTaskQueriesProjectLiveExecutionRequirements(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tool := range []string{"get_operation", "get_task", "operation_tasks"} {
-		if items := readTasks(tool); len(items[0].MissingRequirements) != 0 || items[0].AgentType != "" {
+		items := readTasks(tool)
+		if len(items[0].MissingRequirements) != 0 || items[0].AgentType != "" {
 			t.Fatalf("%s exposed a wait on a terminal operation", tool)
+		}
+		if tool == "operation_tasks" {
+			if items[0].DeadlineAt != nil {
+				t.Fatal("terminal task summary repeats the saved deadline")
+			}
+		} else if items[0].DeadlineAt == nil || !items[0].DeadlineAt.Equal(deadline) {
+			t.Fatalf("%s lost the saved task deadline", tool)
 		}
 	}
 }

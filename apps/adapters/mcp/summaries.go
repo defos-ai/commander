@@ -85,12 +85,13 @@ func summarizeTask(task operations.Task, record agents.Agent, now time.Time) tas
 	summary := taskSummary{
 		ID: task.ID, ParentTaskID: task.ParentTaskID, StepID: task.StepID,
 		AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
-		DeadlineAt: task.DeadlineAt,
-		Error:      task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+		Error: task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 	}
 	if requirements := operations.AssessTaskRequirements(task, record, now); len(requirements) != 0 {
 		summary.AgentType = string(record.Type)
 		summary.MissingRequirements = requirements
+		// Clients need the deadline to expire this live observation locally.
+		summary.DeadlineAt = task.DeadlineAt
 	}
 	if c := task.Continuation; c != nil {
 		summary.Continuation = &continuationSummary{Status: c.Status, DecisionBy: c.DecisionBy, Version: c.Version}

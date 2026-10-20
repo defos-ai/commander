@@ -8,22 +8,20 @@
 
 Use Commander for complex workflows that a single AI cannot reliably coordinate alone:
 
-- **Cybersecurity:** pen-testing, SOC alert triage, and incident response.
+- **Cybersecurity:** pen-testing, 2C infrastructure, SOC alert triage, and incident response.
 - **Investigations:** collect evidence, correlate sources, and build case timelines.
 - **Development:** implement features, test changes, and review code across repositories.
 - **Sales:** research prospects, qualify leads, prepare outreach, and update CRM records.
 - **IT operations:** diagnose incidents and run approved recovery steps.
 - **Data processing:** validate datasets, enrich records, and generate reports.
-- **Website quality:** check links, accessibility, SEO, and page rendering before release.
 
 ## Quick start
 
 Each option opens Playground. Choose a model, enter its API key, and ask:
 
-> Install the web agent, then review defos.ai and summarize what should be fixed before release.
+> Review defos.ai
 
-Fresh sessions start with the spawner agent. Ask in chat to install the agents
-needed for your work; Commander checks their readiness before running a mission.
+Fresh sessions start with the spawner agent. Ask Commander to run a mission, it checks available agents, installs them providing capabilities to complete a mission.
 
 ### Docker
 
@@ -74,8 +72,7 @@ Go (terminal only; [build with Admin](apps/playground/README.md#native-one-execu
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one --no-admin
 ```
 
-All-in-one results are temporary; Compose retains them. See [Playground](apps/playground/README.md)
-for native dependencies and configuration.
+See [Playground](apps/playground/README.md) for native dependencies and configuration.
 
 ## How it works
 
