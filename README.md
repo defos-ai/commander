@@ -21,7 +21,7 @@ Each option opens Playground. Choose a model, enter its API key, and ask:
 
 > Review defos.ai
 
-Fresh sessions start with the spawner agent. Ask Commander to run a mission, it checks available agents, installs them providing capabilities to complete a mission.
+Fresh sessions start with builder and spawner agents. Ask Commander to run a mission; it checks available actions and installs additional agents when needed.
 
 ### Docker
 

@@ -22,10 +22,10 @@ docker compose up --build --wait &&
 docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and Admin, one controller, and the spawner agent.
-Use Playground or another connected MCP client to request additional agents
-before starting work that needs their actions. Web agents run HTTP checks,
-the browser renders pages, and the builder checks out the agent template.
+Compose runs MCP, the API and Admin, one controller, and builder and spawner
+agents. The builder checks out the agent template. Use Playground or another
+connected MCP client to request additional agents before starting work that needs
+their actions: web agents run HTTP checks and the browser renders pages.
 It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
 storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
 [MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
@@ -53,8 +53,8 @@ API credentials remain in its process environment.
 ### Secret encryption
 
 Compose enables secret management automatically. The `secrets-key` initializer
-saves one encryption key in its own volume; API and spawner mount it read-only and
-load it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
+saves one encryption key in its own volume; API, builder and spawner mount it
+read-only and load it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
 the first start to supply your own 64-character hex key; a later conflicting value
 fails startup instead of replacing the saved key.
 
@@ -119,8 +119,9 @@ publish a port or infer an API connection from MCP.
 Compose creates named Docker volumes; no host `state/` directory is needed.
 It persists RabbitMQ, MongoDB, and MinIO data in their own volumes.
 Separate volumes hold the shared MCP token and the secrets encryption key.
-The `spawner-state` volume retains launch records. Each spawned builder owns its
-workspaces; Docker package workspaces live inside that builder's container.
+The `spawner-state` volume retains launch records. The default builder stores
+checkouts in `builder-workspaces`, which survives container recreation. Additional
+spawned builders own their workspaces inside their containers.
 Host inboxes remain transient: broker persistence does not preserve a replaced
 host's inbox.
 
@@ -147,7 +148,8 @@ docker compose down
 For a custom Compose project name, replace `commander_default` and
 `commander_spawner-state` with that project's network and volume names. Removing
 launch records is deliberate here, after the spawner and its children stop; it
-lets later spawn requests create fresh agents. MongoDB, artifacts and credentials
-remain; removing a spawned builder's container also removes its workspaces.
+lets later spawn requests create fresh agents. MongoDB, artifacts, credentials
+and the default builder's workspaces remain; removing a spawned builder's
+container also removes that instance's workspaces.
 **`docker compose down --volumes` deletes the Compose stack's saved state.**
 For restart behavior and scaling limits, see [architecture](overview.md#state-and-restart-recovery).

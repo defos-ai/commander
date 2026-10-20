@@ -27,7 +27,7 @@ runs:
           echo 'settings<<EOF'
           for target in "${targets[@]}"; do
             case "$target" in
-              controller|api|mcp|minio|spawner-agent|fixture-releases|fixture-agent) scope="test-$target" ;;
+              controller|api|mcp|minio|builder-agent|spawner-agent|fixture-releases|fixture-agent) scope="test-$target" ;;
               ui) scope=test-admin-ui ;;
               minio-init) scope=test-minio-client ;;
               *) echo "Unknown build target: $target" >&2; exit 1 ;;

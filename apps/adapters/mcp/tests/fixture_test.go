@@ -78,7 +78,7 @@ func connect(t *testing.T) *api {
 				ready = ready && action.Status == "ready"
 			}
 		}
-		if ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["spawner-agent"] == 1 && types["fixture-agent"] >= 1 {
+		if ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["builder-agent"] == 1 && types["spawner-agent"] == 1 && types["fixture-agent"] >= 1 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -86,7 +86,7 @@ func connect(t *testing.T) *api {
 			for _, agent := range list.Agents {
 				states = append(states, fmt.Sprintf("%s: status=%s stale=%t last_heartbeat=%s", agent.ID, agent.Status, agent.Stale, agent.LastHeartbeat.Format(time.RFC3339)))
 			}
-			t.Fatalf("expected two web agents, one browser agent, one spawner and its startup fixture agent ready after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
+			t.Fatalf("expected two web agents, one browser agent, one builder, one spawner and its startup fixture agent ready after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -108,6 +108,8 @@ func expectedAgentActions(agentType string) []string {
 		return []string{"capture-page", "check-accessibility"}
 	case "spawner-agent":
 		return []string{"spawn-agent"}
+	case "builder-agent":
+		return []string{"checkout-template"}
 	case "fixture-agent":
 		return []string{"fixture-echo"}
 	default:

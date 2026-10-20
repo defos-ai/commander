@@ -19,8 +19,8 @@ The [agent package contract](../../docs/agent-packages.md) describes
 versioned binaries/images and bootstrap for agents created from
 `commander-example-agent`. The [spawner module](spawner/README.md) resolves these
 packages and starts native processes or Docker containers through `spawn-agent`
-or repeatable `--spawn-agents` flags. Compose and all-in-one start only the
-spawner agent. Ask in chat to install other agents when needed, for example:
+or repeatable `--spawn-agents` flags. Compose and all-in-one start builder and
+spawner agents. Ask in chat to install other agents when needed, for example:
 **Install the web agent, then review defos.ai.**
 
 ## Quick start

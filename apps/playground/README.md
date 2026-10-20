@@ -16,10 +16,10 @@ docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
 ```
 
-This image includes Admin, MCP, the API, a controller and the spawner agent,
-with Chromium, fonts and Git. Ask in chat: **Install the web agent, then review
-defos.ai.** Agents are downloaded when requested and run as native processes
-inside the container; the spawner needs no Docker socket. See
+This image includes Admin, MCP, the API, a controller, and builder and spawner
+agents, with Chromium, fonts and Git. Ask in chat: **Install the web agent, then review
+defos.ai.** Additional agents are downloaded when requested and run as native
+processes inside the container; the spawner needs no Docker socket. See
 [startup agents](#startup-agents) for optional startup packages and Internet
 requirements. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
@@ -41,8 +41,8 @@ docker exec commander commander credentials mcp
 
 Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
 `-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
-The API and spawner share a secret encryption key in memory for the temporary session.
-Pass `-e SECRETS_ENCRYPTION_KEY` to use your own. The spawner also supplies it to
+The API, builder and spawner share a secret encryption key in memory for the
+temporary session. Pass `-e SECRETS_ENCRYPTION_KEY` to use your own. The spawner also supplies it to
 the [official builder package](../agents/builder/README.md#secrets) when installed;
 other spawned packages receive no key.
 
@@ -73,8 +73,9 @@ docker compose exec mcp commander-mcp credentials
 
 Add `--raw` to print only the token.
 `/exit` closes chat; hosts and saved work remain.
-Compose also starts with only the spawner agent. Ask in chat to install agents;
-it starts them as sibling containers sharing the deployment's bus and storage.
+Compose also starts builder and spawner agents. Ask in chat to install additional
+agents; the spawner starts them as sibling containers sharing the deployment's
+bus and storage.
 Compose also configures `/admin` for `http://localhost:4275`, following
 `COMMANDER_UI_PORT` when changed. Set `COMMANDER_ADMIN_URL` for another browser address.
 API secret management is configured automatically with a separate persistent
@@ -105,19 +106,20 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts Admin, MCP, the HTTP API, one controller and the spawner agent using
-temporary FS state. Ask in chat to install other agents as child processes when
-needed. The API listens at `http://127.0.0.1:4274` with username
+This starts Admin, MCP, the HTTP API, one controller, and builder and spawner
+agents using temporary FS state. Ask in chat to install other agents as child
+processes when needed. The API listens at `http://127.0.0.1:4274` with username
 `commander` and a random password for this session. MCP gets its own random token,
 shared directly with Playground. During setup or chat, type `/credentials` to
 view the API login and MCP token. Credentials stay local and are never sent to the
 model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
 empty values use their defaults. Generated credentials change each session.
-The API and spawner share a separate encryption key generated in memory for each session.
+The API, builder and spawner share a separate encryption key generated in memory
+for each session.
 Set `SECRETS_ENCRYPTION_KEY` (64 hex characters) to supply your own; an invalid
-key prevents startup. The official builder receives the same key automatically
-when installed; other spawned packages do not. The session's saved secrets are
-deleted on exit.
+key prevents startup. Additional instances of the official builder receive the
+same key automatically when installed; other spawned packages do not. The
+session's saved secrets are deleted on exit.
 Type `/admin` for a link with the local API URL and username prefilled; enter the
 password shown by `/credentials`. Admin defaults to **http://127.0.0.1:4275**.
 Use `/status` to see the running addresses.
@@ -131,7 +133,7 @@ Install the web agent for `review-website-no-browser` links, SEO and technology
 checks. `review-website-with-browser` also needs the browser agent and adds
 screenshots and rendered accessibility, requiring
 [Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander).
-If you install the builder, its `checkout-template` action requires Git on `PATH`.
+The built-in builder's `checkout-template` action requires Git on `PATH`.
 See the [builder guide](../agents/builder/README.md).
 **Exiting stops these hosts and child agents, then deletes operations, reports,
 artifacts, builder workspaces and downloaded executables.**
@@ -144,8 +146,9 @@ shows the temporary host log location, which is also deleted on exit.
 
 ### Startup agents
 
-Native and Docker all-in-one sessions start only the spawner. There are no
-default package downloads. Ask in chat to install the agents your mission needs.
+Native and Docker all-in-one sessions embed builder and spawner from the current
+build. There are no default package downloads. Ask in chat to install additional
+agents your mission needs.
 Known web/browser packages are pinned to:
 
 - `github.com/defos-ai/commander-web-agent@v0.2.0`
@@ -169,8 +172,8 @@ The spawner saves the resolved version and reuses it for retries.
 
 An explicitly requested startup package must download and launch successfully
 before startup completes. `--spawn-agents=` clears the explicit package list;
-the spawner remains available. The flag is all-in-one only. For Docker AIO, place
-it after the image name.
+the built-in builder and spawner remain available. The flag is all-in-one only.
+For Docker AIO, place it after the image name.
 Use packages from authors you trust; native agents run as the current OS user.
 
 ### Credentials

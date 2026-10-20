@@ -8,11 +8,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	builder "github.com/defos-ai/commander/apps/agents/builder"
+	buildercli "github.com/defos-ai/commander/apps/agents/builder/cli"
 	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
@@ -20,6 +23,7 @@ import (
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type runningHost struct {
@@ -32,7 +36,7 @@ type runningHost struct {
 
 type Options struct {
 	DisableAdmin bool
-	// Optional packages to launch in addition to the embedded spawner.
+	// Optional packages to launch in addition to the embedded builder and spawner.
 	SpawnAgents []string
 }
 
@@ -160,6 +164,18 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = awaitReady(startup, spawnerReady); err != nil {
 		return nil, err
 	}
+	builderID, err := id.AgentID(string(builder.AgentType))
+	if err != nil {
+		return nil, err
+	}
+	expected[builderID] = string(builder.AgentType)
+	s.start("builder agent", func(ctx context.Context) error {
+		args := append(append([]string{}, common...),
+			"--agent-id-suffix="+strings.TrimPrefix(builderID, string(builder.AgentType)+"-"),
+			"--workspace-dir="+filepath.Join(s.Directory, "builder-workspaces"),
+		)
+		return buildercli.RunWithOptions(ctx, args, s.log, buildercli.Options{SecretCipher: cipher})
+	})
 	if err = s.awaitAgents(startup, expected); err != nil {
 		return nil, err
 	}

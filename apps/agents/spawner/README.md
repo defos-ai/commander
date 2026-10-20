@@ -68,8 +68,8 @@ Start Compose with its default spawner:
 docker compose up --build --wait
 ```
 
-It starts only the spawner agent. Ask in Playground to install the web agent,
-or use the `install-agent` mission through MCP. Requested agents run as sibling
+Compose starts builder and spawner agents. Ask in Playground to install the web
+agent, or use the `install-agent` mission through MCP. Requested agents run as sibling
 containers on Commander's network, sharing RabbitMQ and S3. To opt into a startup
 package, set `command` under `spawner-agent` in `compose.yaml`:
 
@@ -169,9 +169,9 @@ The key stays out of launch records, results and logs. Docker administrators can
 read it from the builder container's environment.
 
 [Playground all-in-one](../../playground/README.md#startup-agents) embeds the
-spawner in native mode, including inside Docker AIO. It starts no other agents
-by default; install them through chat/MCP or opt into `--spawn-agents`. Its state,
-downloads and child working directories are temporary; shutdown awaits child
+spawner in native mode alongside the built-in builder, including inside Docker
+AIO. Install additional agents through chat/MCP or opt into `--spawn-agents`.
+Its state, downloads and child working directories are temporary; shutdown awaits child
 processes before removing them.
 
 `BUS_URL` and `STORAGE_URL` configure the shared providers. Children receive those

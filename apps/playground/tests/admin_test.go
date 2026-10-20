@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -159,8 +160,16 @@ func checkLocalAdminProxy(t *testing.T, session *local.Session) {
 	var agents struct {
 		Items []struct{ Type string } `json:"items"`
 	}
-	if json.Unmarshal(body, &agents) != nil || len(agents.Items) != 1 || agents.Items[0].Type != "spawner-agent" {
+	if json.Unmarshal(body, &agents) != nil || len(agents.Items) != 2 {
 		t.Fatal("Admin proxy did not return the embedded API's registered agents")
+	}
+	var types []string
+	for _, agent := range agents.Items {
+		types = append(types, agent.Type)
+	}
+	slices.Sort(types)
+	if !slices.Equal(types, []string{"builder-agent", "spawner-agent"}) {
+		t.Fatal("Admin proxy did not return the embedded builder and spawner")
 	}
 }
 

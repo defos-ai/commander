@@ -53,7 +53,7 @@ flowchart TD
 
 Hosts construct providers and inject interfaces. The framework imports no providers
 or applications. Runtimes communicate through shared contracts without importing
-each other. All-in-one and Compose start with only the spawner agent. Chat uses
+each other. All-in-one and Compose start with builder and spawner agents. Chat uses
 the `install-agent` mission to add agents when needed: native child processes in
 all-in-one, sibling containers in Compose. Web and browser agents are developed
 in [separate repositories](../apps/agents/README.md).

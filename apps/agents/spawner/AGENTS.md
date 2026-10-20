@@ -27,10 +27,11 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   injection in runtime constructors; do not add resolver options to the host.
   Injected runtime clients remain caller-owned; a manager closes its resolver
   only when it created it. Keep concrete runtime
-  imports out of `cli/cli.go`. Compose starts only this agent in Docker mode by
-  default. Playground/AIO embed only this agent in native mode. Other agents
-  start through the bundled `install-agent` mission or explicit `--spawn-agents`
-  entries; never add implicit builder/web/browser packages.
+  imports out of `cli/cli.go`. Compose starts this agent in Docker mode alongside
+  the builder service. Playground/AIO embed this agent in native mode and the
+  builder host from the current build. Additional agents start through the bundled
+  `install-agent` mission or explicit `--spawn-agents` entries; the default
+  deployment must not download packages.
 - Standalone runtime settings are environment-only: `SPAWNER_RUNTIME` defaults
   to `native` and `SPAWNER_STATE_DIR` to `./state/spawner`. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject

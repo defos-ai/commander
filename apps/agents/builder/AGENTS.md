@@ -49,14 +49,18 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - [Dockerfile](docker/Dockerfile) includes Git and CA certificates, runs as
   UID/GID 1000, and creates `/home/commander/workspaces` with matching ownership.
   Keep `BUILDER_WORKSPACE_DIR` aligned with this writable directory.
-- [Compose](../../../compose.yaml) and Playground all-in-one start only the
-  spawner among agents. Builder starts on demand through `spawn-agent`: Docker
-  for Compose and native for all-in-one. Keep checkout workspaces local to the
-  spawned builder; package spawning does not provision persistent mounts.
-- Compose's secrets-key initializer supplies API and spawner. The spawner's
-  trusted bootstrap passes the same key to the official builder package only,
-  checking its exact repository/module and `builder-agent` manifest type.
-  Playground uses its session key through the same bootstrap. Never add the key
+- [Compose](../../../compose.yaml) and Playground all-in-one start builder and
+  spawner by default from the current build. Compose mounts `builder-workspaces`
+  at `/home/commander/workspaces`; retain it across container recreation.
+  All-in-one embeds the builder CLI, explicitly puts workspaces beneath session
+  state and removes them after host shutdown. Never inherit an external workspace
+  directory in a temporary session. Additional spawned builders keep local
+  workspaces; package spawning does not provision persistent mounts.
+- Compose's secrets-key initializer supplies API, builder and spawner through
+  read-only mounts. Playground shares the API's session cipher with its embedded
+  builder. For additional builders, the spawner's trusted bootstrap passes the
+  same key to the official package only, checking its exact repository/module
+  and `builder-agent` manifest type. Never add the key
   to the shared agent environment or infer trust from type alone. Action secrets
   still use managed-secret delivery; no GitHub or model tokens are inherited.
   Native users supply Git; both the builder and all-in-one Docker images include Git.

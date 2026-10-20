@@ -182,6 +182,8 @@ services:
       API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api,api-secondary
       API_ALLOWED_ORIGINS: http://localhost:14275,http://127.0.0.1:14275
       API_SWAGGER_ENABLED: "true"
+      # Fixed fixture key, only for the isolated test stack.
+      SECRETS_ENCRYPTION_KEY: &secrets-encryption-key 014ac583269fe047014ac583269fe047014ac583269fe047014ac583269fe047
     networks:
       default:
         aliases: [api-secondary]
@@ -245,6 +247,18 @@ services:
     image: ghcr.io/defos-ai/commander-web-agent:v0.2.0
     pull_policy: missing
 
+  builder-agent:
+    <<: *agent
+    image: commander-builder-agent:test
+    build:
+      context: ../..
+      dockerfile: apps/agents/builder/docker/Dockerfile
+    environment:
+      <<: *environment
+      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
+    volumes:
+      - builder-workspaces:/home/commander/workspaces
+
   spawner-agent:
     <<: *agent
     image: commander-spawner-agent:test
@@ -259,6 +273,7 @@ services:
       SPAWNER_DOCKER_NETWORK: commander-full-test_default
       SPAWNER_STATE_DIR: /var/lib/commander/spawner
       SSL_CERT_FILE: /fixtures/ca.pem
+      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - fixture-data:/fixtures:ro
@@ -307,6 +322,7 @@ services:
       target: agent
 
 volumes:
+  builder-workspaces:
   rabbitmq:
   minio:
   mongo:

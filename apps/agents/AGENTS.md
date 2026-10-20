@@ -26,10 +26,10 @@
   manifest and spawner behavior. The [spawner module](spawner/AGENTS.md)
   implements native/Docker spawning with `spawn-agent` and repeatable
   `--spawn-agents`. Compose uses Docker mode; Playground and Docker AIO embed
-  the spawner in native mode. Fresh deployments start only the spawner; other
-  agents are requested through the `install-agent` mission or explicit startup
-  packages. Keep web/browser examples pinned to `v0.2.0`. Web/browser source,
-  unit tests and releases belong to their standalone repositories.
+  the spawner in native mode. Fresh deployments also start the builder from the
+  current build; other agents are requested through the `install-agent` mission
+  or explicit startup packages. Keep web/browser examples pinned to `v0.2.0`.
+  Web/browser source, unit tests and releases belong to their standalone repositories.
 - Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.

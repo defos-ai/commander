@@ -254,9 +254,9 @@ not other packages claiming its type. Catalog membership and repository visibili
 do not grant access. The optional runtime `SecretBootstrap` keeps this policy
 separate from the generic environment allowlist.
 
-Compose supplies the persisted API/spawner key; native all-in-one and Docker AIO
-use their in-memory session key. Standalone hosts must configure the same key as
-the API. Keys stay out of package files, action inputs, launch records, results
+Compose supplies the persisted API/builder/spawner key; native all-in-one and
+Docker AIO use their in-memory session key. Standalone hosts must configure the
+same key as the API. Keys stay out of package files, action inputs, launch records, results
 and logs, but a Docker administrator can read the builder's environment. Docker
 retries compare key presence and value with the current bootstrap; a changed or
 removed key cannot silently reuse an existing container. Existing encrypted secret
@@ -288,9 +288,10 @@ required actions are ready.
 
 The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
 instance, including repeated references when two instances of a type are needed.
-Compose and native/Docker AIO start only the spawner by default. Other agents are
-installed through chat/MCP when needed. Repeatable `--spawn-agents` opts into
-startup packages; `--spawn-agents=` clears that list while keeping the spawner.
+Compose and native/Docker AIO start builder and spawner agents by default, using
+the current build without package downloads. Other agents are installed through
+chat/MCP when needed. Repeatable `--spawn-agents` opts into additional startup
+packages; `--spawn-agents=` clears that list while keeping both built-in agents.
 Package downloads need Internet access, whether requested during startup or
 later through chat. See [Playground](../apps/playground/README.md#startup-agents).
 Startup and the controller-dispatched

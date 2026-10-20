@@ -32,7 +32,7 @@ printf '%s' "$API_PASSWORD" > "$FIXTURE_DIR/observed-password"
 printf '%s' "$$" > "$FIXTURE_DIR/after-pid"
 printf '%s\n' "$@" > "$FIXTURE_DIR/observed-arguments"
 `
-	for _, binary := range []string{"commander-api", "commander-spawner-agent"} {
+	for _, binary := range []string{"commander-api", "commander-spawner-agent", "commander-builder-agent"} {
 		if err := os.WriteFile(filepath.Join(f.dir, binary), []byte(mock), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -198,7 +198,7 @@ func TestCIComposeSecretsRejectsInvalidState(t *testing.T) {
 }
 
 func TestCIComposeSecretsConsumer(t *testing.T) {
-	for _, service := range []string{"api", "spawner-agent"} {
+	for _, service := range []string{"api", "spawner-agent", "builder-agent"} {
 		t.Run(service, func(t *testing.T) { testComposeSecretsConsumer(t, service) })
 	}
 }
@@ -209,14 +209,14 @@ func testComposeSecretsConsumer(t *testing.T, service string) {
 		t.Fatalf("key initialization failed: %v", err)
 	}
 	var arguments []string
-	if service == "spawner-agent" {
-		arguments = []string{"--spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0"}
+	if service != "api" {
+		arguments = []string{"--heartbeat-interval=1s"}
 	}
 	if err := f.run(t, service, strings.Repeat("cd", 32), arguments...); err != nil {
 		t.Fatalf("consumer startup failed: %v", err)
 	}
-	if service == "spawner-agent" && f.read(t, "observed-arguments") != strings.Join(arguments, "\n")+"\n" {
-		t.Fatal("spawner key initialization dropped startup arguments")
+	if service != "api" && f.read(t, "observed-arguments") != strings.Join(arguments, "\n")+"\n" {
+		t.Fatal("agent key initialization dropped startup arguments")
 	}
 	if f.read(t, "observed-key") != strings.TrimSpace(f.read(t, "secrets/key")) {
 		t.Fatal("consumer must load the persisted key even when its environment contains an override")
@@ -261,7 +261,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if api.Init == nil || *api.Init {
 		t.Fatal("API must remain PID 1")
 	}
-	for _, name := range []string{"api", "spawner-agent"} {
+	for _, name := range []string{"api", "spawner-agent", "builder-agent"} {
 		service := services[name]
 		if !slices.Contains(service.Volumes, "secrets-key:/run/commander-secrets:ro") ||
 			service.DependsOn["secrets-key"].Condition != "service_completed_successfully" {
@@ -275,7 +275,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 		if _, exists := service.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
 			t.Fatalf("%s must not receive the key through Compose environment configuration", name)
 		}
-		if name == "api" || name == "spawner-agent" {
+		if name == "api" || name == "spawner-agent" || name == "builder-agent" {
 			continue
 		}
 		for _, volume := range service.Volumes {
@@ -289,7 +289,13 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if _, exists := compose.Volumes["secrets-key"]; !exists {
 		t.Fatal("Compose must declare a persistent secrets-key volume")
 	}
-	if _, exists := compose.Volumes["builder-workspaces"]; exists {
-		t.Fatal("Compose must not provision workspaces for a builder that starts on demand")
+	builder := services["builder-agent"]
+	if _, exists := compose.Volumes["builder-workspaces"]; !exists ||
+		!slices.Contains(builder.Volumes, "builder-workspaces:/home/commander/workspaces") {
+		t.Fatal("Compose builder must retain workspaces across container recreation")
+	}
+	if builder.User != "1000:1000" || !slices.Contains(builder.CapDrop, "ALL") ||
+		!slices.Contains(builder.SecurityOpt, "no-new-privileges:true") {
+		t.Fatal("Compose builder must use its unprivileged image user without extra privileges")
 	}
 }

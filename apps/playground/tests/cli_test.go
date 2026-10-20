@@ -33,7 +33,7 @@ import (
 )
 
 func TestAllInOne(t *testing.T) {
-	t.Run("spawner-only startup", testAllInOneSpawnerOnly)
+	t.Run("default builder and spawner startup", testAllInOneDefaultAgents)
 	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
 	t.Run("optional Admin lifecycle", testAllInOneAdmin)
 	t.Run("advertised Admin address", testAllInOneAdminAddress)
@@ -112,7 +112,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		expected := map[int32][]string{
 			2: {"review-website-no-browser", "review-website-with-browser"},
 			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
-			4: {"web-agent-", "browser-agent-", "spawner-agent-", "spawn-agent"},
+			4: {"web-agent-", "browser-agent-", "builder-agent-", "checkout-template", "spawner-agent-", "spawn-agent"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -233,7 +233,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	})
 	wait("Temporary session · results deleted on exit")
 	welcome := output.String()
-	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 1 agent connected", "Try: Install the web agent, then review defos.ai"} {
+	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try: Install the web agent, then review defos.ai"} {
 		if !strings.Contains(welcome, want) {
 			t.Fatalf("missing startup message %q: %s", want, welcome)
 		}
@@ -326,7 +326,7 @@ func testAllInOneWorkflow(t *testing.T) {
 				ready++
 			}
 		}
-		if ready == 3 {
+		if ready == 4 {
 			break
 		}
 		select {
@@ -335,12 +335,12 @@ func testAllInOneWorkflow(t *testing.T) {
 		case <-tick.C:
 		}
 	}
-	if len(agents.Items) != 3 {
+	if len(agents.Items) != 4 {
 		t.Fatalf("unexpected local agents: %+v", agents.Items)
 	}
-	var webChecks, browserChecks, spawnerChecks int
+	var webChecks, browserChecks, builderChecks, spawnerChecks int
 	for _, agent := range agents.Items {
-		if !regexp.MustCompile(`^(web|browser|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
+		if !regexp.MustCompile(`^(web|browser|builder|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
 			t.Fatalf("unexpected bundled agent identity: %+v", agent)
 		}
 		for _, action := range agent.Actions {
@@ -360,13 +360,18 @@ func testAllInOneWorkflow(t *testing.T) {
 					t.Fatalf("unexpected spawner action: %+v", action)
 				}
 				spawnerChecks++
+			case "builder-agent":
+				if action.Name != "checkout-template" || action.Status != "unavailable" {
+					t.Fatalf("unexpected builder action without Git: %+v", action)
+				}
+				builderChecks++
 			default:
 				t.Fatalf("unexpected bundled agent type: %s", agent.Type)
 			}
 		}
 	}
-	if webChecks != 5 || browserChecks != 2 || spawnerChecks != 1 {
-		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, spawner=%d", webChecks, browserChecks, spawnerChecks)
+	if webChecks != 5 || browserChecks != 2 || builderChecks != 1 || spawnerChecks != 1 {
+		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, builder=%d, spawner=%d", webChecks, browserChecks, builderChecks, spawnerChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
@@ -519,12 +524,17 @@ func allInOneEnvironment(t *testing.T) string {
 	temporary := t.TempDir()
 	frontend := t.TempDir()
 	externalSpawner := t.TempDir()
+	externalBuilder := t.TempDir()
 	t.Setenv("SPAWNER_RUNTIME", "docker")
 	t.Setenv("SPAWNER_DOCKER_NETWORK", "")
 	t.Setenv("SPAWNER_STATE_DIR", externalSpawner)
+	t.Setenv("BUILDER_WORKSPACE_DIR", externalBuilder)
 	t.Cleanup(func() {
 		if files, err := os.ReadDir(externalSpawner); err != nil || len(files) != 0 {
 			t.Errorf("all-in-one used the external spawner state directory: %v (%v)", files, err)
+		}
+		if files, err := os.ReadDir(externalBuilder); err != nil || len(files) != 0 {
+			t.Errorf("all-in-one used the external builder workspace directory: %v (%v)", files, err)
 		}
 	})
 	if err := os.WriteFile(filepath.Join(frontend, "index.html"), []byte(`<html>Admin fixture</html>`), 0600); err != nil {

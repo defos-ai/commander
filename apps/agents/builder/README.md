@@ -32,14 +32,14 @@ Change the root with `--workspace-dir` or `BUILDER_WORKSPACE_DIR`.
 
 The repository [Compose stack](../../../compose.yaml) and
 [Playground all-in-one](../../playground/README.md#native-one-executable) start
-the spawner agent. Request the builder package through chat or MCP when needed,
-or run the source command above against the same bus and artifact storage.
+builder and spawner agents from the current build, without downloading packages.
 
-Compose spawns the builder in Docker, with Git installed and workspaces inside
-its container at `/home/commander/workspaces`. Playground all-in-one spawns its
-native executable; the all-in-one Docker image includes Git, while native
+Compose runs the builder with Git installed and a `builder-workspaces` volume
+at `/home/commander/workspaces`; checkouts survive container recreation. Playground
+all-in-one embeds the builder host and keeps its workspaces in temporary session
+state, deleted on exit. The all-in-one Docker image includes Git; native
 installations use Git from the host. Missing Git makes `checkout-template`
-unavailable until it is installed.
+unavailable without preventing startup.
 
 ## Release package
 
@@ -66,8 +66,10 @@ receives no key. Package spawning does not add a persistent workspace volume.
 ## Secrets
 
 The host accepts `SECRETS_ENCRYPTION_KEY` for actions that require managed secrets.
-Compose and Playground all-in-one configure it automatically when spawning the
-official builder. For a separately started builder, use the same key as the API;
+Compose shares its persisted key with the default builder; Playground all-in-one
+passes its session cipher directly to the embedded builder. Additional official
+builder packages receive the key through the spawner's trusted bootstrap.
+For a separately started builder, use the same key as the API;
 `checkout-template` does not need it. Docker administrators can read the key from
 the builder container's environment. Action secrets still arrive through the
 managed-secret flow; the spawner does not copy GitHub or model tokens into the
@@ -80,9 +82,9 @@ environment key and is validated before providers start.
 
 ## Current scope
 
-Successful workspaces remain on disk for later work; failed or cancelled checkouts
-are removed. Workspace IDs refer to this builder's local storage, so they cannot
-be handed to another builder instance.
+Successful workspaces remain on disk for later work; all-in-one removes them
+on exit. Failed or cancelled checkouts are removed. Workspace IDs refer to this
+builder's local storage, so they cannot be handed to another builder instance.
 
 Checkout does not execute template code. Git uses isolated configuration without
 host credentials, hooks, proxies or submodule checkout. It needs direct HTTPS

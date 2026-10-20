@@ -4,7 +4,7 @@
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
-  Admin, MCP, API, controller and spawner hosts for `--all-in-one`.
+  Admin, MCP, API, controller, builder and spawner hosts for `--all-in-one`.
   The spawner launches requested agent packages as native children.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
@@ -112,23 +112,25 @@
   then shuts down hosts and awaits native children before deleting that session's
   files, including downloads and child working directories. It must not use or
   delete the user's configured database/storage or existing Compose state.
-  Spawned agents' private working directories, including builder workspaces,
+  The embedded builder's workspaces and spawned agents' private working directories
   remain beneath session state; never inherit `BUILDER_WORKSPACE_DIR` or leave
   generated source behind on exit.
 - Use the spawner's `RunWithOptions` to force native mode and a state directory
   beneath the session directory, including Docker AIO. Do not mutate environment
-  settings or use a Docker socket. The default startup package list is empty;
-  the spawner is the only embedded agent. Repeatable `--spawn-agents` opts into
-  startup packages; explicit `--spawn-agents=` clears that list. Reject the flag
-  outside all-in-one mode. Accept public GitHub URLs, `@stable`, and exact pins;
+  settings or use a Docker socket. Embed the builder host from the same build,
+  with its workspace directory beneath session state. The default startup package
+  list is empty. Repeatable `--spawn-agents` opts into additional startup packages;
+  explicit `--spawn-agents=` clears that list without disabling builder or spawner.
+  Reject the flag outside all-in-one mode. Accept public GitHub URLs, `@stable`, and exact pins;
   omitted versions mean stable. Keep version resolution and saved pins in the
   spawner; an explicitly requested package's download or launch failure must
   fail startup. Package downloads require Internet access.
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
-  Retain the key and API cipher in session memory. Pass the key through the
-  spawner's `Options.SecretsEncryptionKey` so it constructs its own cipher and
+  Retain the key and cipher in session memory. Share the cipher with API and
+  the embedded builder through their `Options.SecretCipher`. Pass the key through
+  the spawner's `Options.SecretsEncryptionKey` so it constructs its own cipher and
   trusted-builder bootstrap from the same value. Do not change process environment,
   write the key to files, or expose it in logs, credentials output or model messages.
   Only the spawner's exact official builder package policy may pass the key to
@@ -207,10 +209,11 @@
   the web agent before using `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.
-  Wait for the spawner and explicitly configured startup agents to register;
-  custom package lists must not require web/browser or builder types. The web agent
+  Wait for the embedded builder, spawner and explicitly configured startup agents
+  to register; custom package lists must not require web/browser types. The web agent
   owns HTTP work and remains ready without Chromium; the browser advertises rendering
-  requirements. A spawned builder discovers Git itself; keep readiness in the agent.
+  requirements. The builder discovers Git itself; missing Git makes its action
+  unavailable without failing all-in-one startup. Keep readiness in the agent.
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.
@@ -249,7 +252,7 @@
   Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
   while a reply is active.
   All-in-one startup shows the provider/model, readiness with the actual connected
-  agent count (one by default), one agent-installation prompt and the
+  agent count (two by default), one agent-installation prompt and the
   temporary-state note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 

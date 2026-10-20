@@ -329,6 +329,35 @@ services:
       retries: 12
       start_period: 5s
 
+  builder-agent:
+    <<: *agent
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        export SECRETS_ENCRYPTION_KEY
+        exec commander-builder-agent "$$@"
+      - commander-builder-agent
+    image: commander-builder-agent:local
+    build:
+      context: .
+      dockerfile: apps/agents/builder/docker/Dockerfile
+    user: "1000:1000"
+    volumes:
+      - builder-workspaces:/home/commander/workspaces
+      - secrets-key:/run/commander-secrets:ro
+    depends_on:
+      secrets-key:
+        condition: service_completed_successfully
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
   spawner-agent:
     <<: *agent
     entrypoint:
@@ -414,8 +443,11 @@ services:
         condition: service_healthy
       spawner-agent:
         condition: service_started
+      builder-agent:
+        condition: service_started
 
 volumes:
+  builder-workspaces:
   secrets-key:
   spawner-state:
   mcp-credentials:
