@@ -23,15 +23,22 @@ func TestMissionRulesValidation(t *testing.T) {
 		{name: "aggregate empty parameters", rules: missions.RuleSet{
 			missions.AggregateResults: {ForActions: []string{"batch-ports"}, Params: &missions.RuleParams{}},
 		}},
+		{name: "same-agent defaults", rules: missions.RuleSet{
+			missions.SameAgent: {ForActions: []string{"checkout-template", "build-agent"}},
+		}},
+		{name: "same-agent empty parameters", rules: missions.RuleSet{
+			missions.SameAgent: {ForActions: []string{"checkout-template", "build-agent"}, Params: &missions.RuleParams{}},
+		}},
 		{name: "composable rules on same action", rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"batch-ports"}},
 			missions.DecideNextActions: {ForActions: []string{"batch-ports", "scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.SameAgent:         {ForActions: []string{"batch-ports", "scan-ports"}},
 		}},
 		{name: "unknown rule", rules: missions.RuleSet{
 			"unknown": {ForActions: []string{"scan-ports"}},
 		}, want: `rule "unknown": unsupported rule`},
 		{name: "empty selectors", rules: missions.RuleSet{
-			missions.AggregateResults: {},
+			missions.SameAgent: {},
 		}, want: "for_actions must not be empty"},
 		{name: "blank selector", rules: missions.RuleSet{
 			missions.AggregateResults: {ForActions: []string{"batch-ports", " \t"}},
@@ -43,10 +50,13 @@ func TestMissionRulesValidation(t *testing.T) {
 			missions.AggregateResults: {ForActions: []string{"batch-ports\n"}},
 		}, want: "without surrounding whitespace"},
 		{name: "duplicate selector", rules: missions.RuleSet{
-			missions.AggregateResults: {ForActions: []string{"batch-ports", "batch-ports"}},
+			missions.SameAgent: {ForActions: []string{"batch-ports", "batch-ports"}},
 		}, want: `duplicate action "batch-ports"`},
 		{name: "aggregation decision parameters", rules: missions.RuleSet{
 			missions.AggregateResults: {ForActions: []string{"batch-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		}, want: "does not accept decision_by"},
+		{name: "same-agent decision parameters", rules: missions.RuleSet{
+			missions.SameAgent: {ForActions: []string{"batch-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 		}, want: "does not accept decision_by"},
 		{name: "missing decision parameters", rules: missions.RuleSet{
 			missions.DecideNextActions: {ForActions: []string{"scan-ports"}},
@@ -116,7 +126,8 @@ func TestMissionRulesJSON(t *testing.T) {
 			"decide-next-actions": {
 				"for_actions": ["scan-ports"],
 				"params": {"decision_by": "model"}
-			}
+			},
+			"same-agent": {"for_actions": ["batch-ports", "scan-ports"]}
 		}
 	}`
 	decoded, err := missions.LoadMission([]byte(input))
@@ -126,6 +137,7 @@ func TestMissionRulesJSON(t *testing.T) {
 	want := missions.RuleSet{
 		missions.AggregateResults:  {ForActions: []string{"batch-ports"}},
 		missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.SameAgent:         {ForActions: []string{"batch-ports", "scan-ports"}},
 	}
 	if !reflect.DeepEqual(decoded.Rules, want) {
 		t.Fatalf("decoded rules = %+v, want %+v", decoded.Rules, want)

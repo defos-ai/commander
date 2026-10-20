@@ -2,9 +2,11 @@ package operations
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -35,6 +37,13 @@ func (o *Operation) DispatchTask(dispatch TaskDispatch) error {
 	}
 	if task.OperationID != o.ID || task.CommandID != task.ID {
 		return errors.New("task dispatch requires matching operation and command identities")
+	}
+	agentID, err := o.AffinityAgentID()
+	if err != nil {
+		return err
+	}
+	if agentID != "" && ruleMatches(o.Mission.Rules, missions.SameAgent, task.ActionName) && dispatch.AgentID != agentID {
+		return fmt.Errorf("%w: same-agent requires agent %s", ErrOperationConflict, agentID)
 	}
 
 	deadline := dispatch.DeadlineAt.UTC()

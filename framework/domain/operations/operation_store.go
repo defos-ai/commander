@@ -42,8 +42,8 @@ type OperationStore interface {
 	// including after dispatch; a conflicting assignment returns ErrOperationConflict.
 	QueueTask(ctx context.Context, operationID string, task Task) (Operation, error)
 	// DispatchTask atomically claims a queued task using the latest operation,
-	// respecting questions, preflight, and any pinned agent. It preserves the
-	// queued command ID and saves the running task, event, status, and timestamp
+	// respecting questions, preflight, and the saved same-agent binding. It preserves
+	// the queued command ID and saves the running task, event, status, and timestamp
 	// together. A competing claim returns ErrOperationConflict without dispatching.
 	DispatchTask(ctx context.Context, operationID string, dispatch TaskDispatch) (Operation, error)
 	// FinishTask saves a running or interrupted task's outcome together with its

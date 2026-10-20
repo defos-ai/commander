@@ -46,6 +46,14 @@
   failures and empty proposals also require review. Aggregation uses the current
   decision's saved child IDs. Preserve parent grouping before evaluating children,
   each child's parentage, and fresh group membership on subsequent decisions.
+- The `same-agent` mission rule binds its listed actions within one operation.
+  [`Operation.AffinityAgentID`](domain/operations/affinity.go) derives the binding
+  from retained task assignments; no separate binding record is stored. Failed,
+  interrupted and cancelled dispatched tasks retain ownership. Enforce agreement
+  atomically in `DispatchTask` and reject conflicting history during recovery.
+  This is a placement constraint, not a continuation rule or execution ordering.
+  Scheduler filtering and affinity readiness reporting are the next integration
+  step; do not enable it in bundled missions before that integration.
 - [`RuleSelector`](controller/runner/rule_selector.go) selects a complete rule set
   at operation start, after mission/input validation and before persistence. The
   default retains mission rules. Validate and clone selection output into the

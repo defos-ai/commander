@@ -13,6 +13,7 @@ type RuleName string
 const (
 	AggregateResults  RuleName = "aggregate-results"
 	DecideNextActions RuleName = "decide-next-actions"
+	SameAgent         RuleName = "same-agent"
 )
 
 type Decision string
@@ -40,7 +41,7 @@ func (rules RuleSet) Validate() error {
 }
 
 func (rule Rule) validate(name RuleName) error {
-	if name != AggregateResults && name != DecideNextActions {
+	if name != AggregateResults && name != DecideNextActions && name != SameAgent {
 		return errors.New("unsupported rule")
 	}
 	if len(rule.ForActions) == 0 {
@@ -56,8 +57,8 @@ func (rule Rule) validate(name RuleName) error {
 		}
 		seen[action] = true
 	}
-	if name == AggregateResults && rule.Params != nil && rule.Params.DecisionBy != "" {
-		return errors.New("aggregate-results does not accept decision_by")
+	if name != DecideNextActions && rule.Params != nil && rule.Params.DecisionBy != "" {
+		return fmt.Errorf("%s does not accept decision_by", name)
 	}
 	if name == DecideNextActions && (rule.Params == nil || rule.Params.DecisionBy != Model) {
 		return fmt.Errorf("decision_by must be %q", Model)
