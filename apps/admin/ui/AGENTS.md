@@ -92,6 +92,12 @@
   hooks; keep node details in dialogs and preserve mouse, keyboard, zoom and focus
   behavior. Mission rules use a compact table of rules, `for_actions` and settings;
   they describe policies, not execution dependencies.
+- Accept and display the `same-agent` mission rule. Operation `affinity` is a
+  read-only placement view: show its owner or first-dispatch binding note, and
+  give history errors precedence over unbound wording. Show queued-for-owner
+  hints only on matching queued tasks in active operations. Retain terminal
+  ownership as history, and use saved preflight reasons without inferring
+  current capacity or promising fallback.
 - Use existing theme tokens/fonts. The COMMANDER wordmark uses Grunt Grotesk
   SemiBold without a star. Keep dialog labels and focus behavior accessible.
 

@@ -5,6 +5,7 @@ export interface Operation {
   mission: Mission;
   input: unknown;
   status: string;
+  affinity?: OperationAffinity;
   preflight?: OperationPreflight | null;
   tasks: OperationTask[] | null;
   questions: OperationQuestion[] | null;
@@ -14,6 +15,12 @@ export interface Operation {
   events: OperationEvent[] | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OperationAffinity {
+  for_actions: string[];
+  agent_id?: string;
+  error?: string;
 }
 
 export interface OperationTask {

@@ -2,10 +2,34 @@ package operations
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/id"
 )
+
+// Affinity is a read-only view of a saved same-agent rule and its dispatch history.
+// An error leaves the history inspectable without suggesting the group is unbound.
+type Affinity struct {
+	ForActions []string `json:"for_actions"`
+	AgentID    string   `json:"agent_id,omitempty"`
+	Error      string   `json:"error,omitempty"`
+}
+
+func (o Operation) AssessAffinity() *Affinity {
+	rule, exists := o.Mission.Rules[missions.SameAgent]
+	if !exists {
+		return nil
+	}
+	result := &Affinity{ForActions: slices.Clone(rule.ForActions)}
+	agentID, err := o.AffinityAgentID()
+	if err != nil {
+		result.Error = err.Error()
+	} else {
+		result.AgentID = agentID
+	}
+	return result
+}
 
 // AffinityAgentID returns the agent bound by the operation's same-agent rule,
 // or an empty ID before the first matching dispatch. Failed, interrupted and

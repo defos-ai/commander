@@ -55,6 +55,13 @@ func ToOperationResponse(operation operations.Operation) models.OperationRespons
 		preflight := ToPreflightResponse(*operation.Preflight)
 		response.Preflight = &preflight
 	}
+	if affinity := operation.AssessAffinity(); affinity != nil {
+		response.Affinity = &models.AffinityResponse{
+			ForActions: affinity.ForActions,
+			AgentID:    affinity.AgentID,
+			Error:      affinity.Error,
+		}
+	}
 	return response
 }
 

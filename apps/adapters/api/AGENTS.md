@@ -32,6 +32,9 @@
   managed declarations for assessed live candidates, not sensitive host
   configuration (`kind: configuration`, `sensitive: true`) or pending lease requests.
   Keep mappings independent; API reads never infer readiness from secret storage.
+- Operation DTOs explicitly map the read-only `affinity` assessment from saved
+  task history. Keep ownership separate from queued task assignments and live
+  readiness; preserve history errors rather than presenting them as unbound.
 - Operation/task query DTOs add live `agent_type` and `missing_requirements` only
   for an exact current running execution. Keep this projection separate from
   persisted tasks, status and deadlines. Missing inventory omits the observation;

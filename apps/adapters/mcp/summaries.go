@@ -105,6 +105,7 @@ type operationSummary struct {
 	Input              json.RawMessage               `json:"input"`
 	Status             operations.Status             `json:"status"`
 	Preflight          *operations.Preflight         `json:"preflight,omitempty"`
+	Affinity           *operations.Affinity          `json:"affinity,omitempty"`
 	TaskCounts         map[operations.TaskStatus]int `json:"task_counts"`
 	PendingDecisions   int                           `json:"pending_decisions"`
 	PendingQuestions   int                           `json:"pending_questions"`
@@ -121,6 +122,7 @@ func summarizeOperation(operation operations.Operation) operationSummary {
 		ID: operation.ID, Mission: missionSummary{Name: operation.Mission.Name}, Input: operation.Input,
 		Status: operation.Status, TaskCounts: make(map[operations.TaskStatus]int),
 		Preflight: operation.Preflight,
+		Affinity:  operation.AssessAffinity(),
 		ReportID:  operation.ReportID, Error: operation.Error,
 		CreatedAt: operation.CreatedAt, UpdatedAt: operation.UpdatedAt,
 	}

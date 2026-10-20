@@ -3,7 +3,7 @@ import { ApiError, getJSON } from './client';
 import { isActionRequirement } from './actions';
 import { isMission } from './missions';
 import type {
-  Operation, OperationActionOutput, OperationActionReadiness, OperationAgentReadiness,
+  Operation, OperationActionOutput, OperationActionReadiness, OperationAffinity, OperationAgentReadiness,
   OperationArtifact, OperationArtifactFile, OperationContinuation, OperationEvent,
   OperationNextAction, OperationPreflight, OperationQuestion, OperationTask,
 } from './operation-types';
@@ -102,10 +102,20 @@ function isPreflight(value: unknown): value is OperationPreflight {
     isNullableArray(value.actions, isActionReadiness);
 }
 
+function isAffinity(value: unknown): value is OperationAffinity {
+  return isObject(value) && Array.isArray(value.for_actions) && value.for_actions.length > 0 &&
+    value.for_actions.every(action => typeof action === 'string' && action !== '' && action.trim() === action) &&
+    new Set(value.for_actions).size === value.for_actions.length &&
+    (value.agent_id === undefined || isIdentifier(value.agent_id)) &&
+    (value.error === undefined || (typeof value.error === 'string' && value.error.trim() !== '')) &&
+    (value.error === undefined || value.agent_id === undefined);
+}
+
 export function isOperation(value: unknown): value is Operation {
   return isObject(value) && isIdentifier(value.id) && isMission(value.mission) && 'input' in value &&
     typeof value.status === 'string' && isOptionalString(value.report_id) && isOptionalString(value.error) &&
     isDate(value.created_at) && isDate(value.updated_at) &&
+    (value.affinity === undefined || isAffinity(value.affinity)) &&
     (value.preflight === undefined || value.preflight === null || isPreflight(value.preflight)) &&
     isNullableArray(value.tasks, isTask) && isNullableArray(value.questions, isQuestion) &&
     isNullableArray(value.events, isEvent);

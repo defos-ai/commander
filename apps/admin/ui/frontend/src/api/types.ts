@@ -16,7 +16,7 @@ export interface MissionStep {
   required_actions: string[] | null;
 }
 
-export type MissionRuleName = 'aggregate-results' | 'decide-next-actions';
+export type MissionRuleName = 'aggregate-results' | 'decide-next-actions' | 'same-agent';
 
 export interface MissionRule {
   for_actions: string[];

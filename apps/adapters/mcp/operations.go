@@ -92,7 +92,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's actions, rules, steps and input/output schemas. Valid proposals run automatically; rules group results or request model review. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's actions, rules, steps and input/output schemas. Valid proposals run automatically; rules group results, request model review or constrain placement. same-agent keeps its for_actions on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
@@ -100,7 +100,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request StartOperationRequest) (operations.Operation, error) {
 			return execution.Start(ctx, commands.StartOperationCommand(request))
 		})
-	addTool(server, "list_operations", "List operation IDs, mission names, inputs, status, task counts and counts of pending model decisions/questions. Use get_operation for results and decisions, or get_report for a final report.", emptySchema,
+	addTool(server, "list_operations", "List operation IDs, mission names, inputs, status, affinity, task counts and counts of pending model decisions/questions. Use get_operation for results and decisions, or get_report for a final report.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Operations []operationSummary `json:"operations"`
 		}, error) {
@@ -113,7 +113,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Operations []operationSummary `json:"operations"`
 			}{summaries}, err
 		})
-	addTool(server, "get_operation", "Read status, preflight, tasks, results, continuations and question history. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
+	addTool(server, "get_operation", "Read status, preflight, affinity, tasks, results, continuations and question history. affinity derives the same-agent for_actions and bound agent_id from saved dispatches; agent_id is absent before the first dispatch. Command responses contain saved state; use this query for the derived affinity view. Queued tasks remain unassigned. A busy or unavailable bound agent causes waiting, never fallback or automatic replay; an affinity error requires inspection, not retry or rebinding. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
 			operation, err := config.OperationStore.Get(ctx, request.OperationID)
 			var records map[string]agents.Agent
@@ -155,7 +155,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return readReport(ctx, config.OperationStore, config.ReportStore, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and enforces same-agent placement. Clients do not select or rebind agents. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
 		"operation_id": stringProperty,
 		"step_id":      missionStepProperty,
 		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages. An action name is not a mission step ID."},

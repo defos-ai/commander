@@ -87,6 +87,11 @@
   detail queries retain the saved deadline even after that observation clears.
 - Continuation decisions must retain the task and business version used to reject
   stale choices. Questions record actual operator answers; expiry is not approval.
+- MCP `get_operation` and `list_operations` expose read-only `affinity` through
+  `Operation.AssessAffinity`. Preserve `for_actions`, the saved owner and any
+  history error even without live inventory. Queued tasks remain unassigned.
+  Explain `same-agent` as placement with no fallback; saved preflight is not
+  evidence of current capacity. Command responses retain their saved-state shape.
 - Keep pagination cursors bound to the resource and operation. Bound event waits
   and honor cancellation without changing saved operation state.
 

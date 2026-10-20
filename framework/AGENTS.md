@@ -59,6 +59,10 @@
   Recheck the binding for each dispatch, including subsequent tasks in the same
   scheduler pass. Never fall back to another agent or rebind after an outage.
   Do not present secret requirements from agents excluded by affinity.
+  `Operation.AssessAffinity` derives a read-only query view from the same history,
+  retaining binding after completion or loss of registration. Keep it out of
+  persisted operation fields; inconsistent history returns an explicit error,
+  never an apparently unbound group.
 - [`RuleSelector`](controller/runner/rule_selector.go) selects a complete rule set
   at operation start, after mission/input validation and before persistence. The
   default retains mission rules. Validate and clone selection output into the

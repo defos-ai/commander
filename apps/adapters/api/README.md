@@ -36,6 +36,11 @@ events use `cursor` and `limit` pagination (default 100, maximum 1,000); pass
 graphs show recorded tasks and their artifacts and files. Poll active graphs
 every 2–5 seconds; dispatched tasks can still finish after cancellation or failure.
 
+Operations with `same-agent` include a read-only `affinity` view: `for_actions`,
+the bound `agent_id` after first dispatch, or `error` for inconsistent history.
+The binding survives completion and an agent going offline. Queued tasks remain
+unassigned until dispatch; preflight describes saved readiness, not capacity.
+
 Reports are available after completion. Artifact downloads verify file size and
 SHA-256 before returning bytes; `HEAD` returns headers only. Files are read fully
 into memory, and range requests are unsupported.

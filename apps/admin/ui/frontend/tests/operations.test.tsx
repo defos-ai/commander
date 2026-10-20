@@ -33,6 +33,58 @@ function mockAPI(respond?: (url: string, options: RequestInit) => Response | Pro
 }
 
 describe('operations browser', () => {
+  it('shows affinity before dispatch, preserves its owner, and limits queue hints to grouped active tasks', async () => {
+    const actions = ['checkout-template', 'build-agent'];
+    const owner = 'builder-agent-1234abcd';
+    const queued = { ...task, agent_id: '', status: 'queued', finished_at: undefined, result: undefined };
+    let snapshot: Operation = {
+      ...operation, mission: { ...operation.mission, rules: { 'same-agent': { for_actions: actions } } },
+      affinity: { for_actions: actions },
+      tasks: [{ ...queued, id: 'task-build', action_name: 'build-agent' }, { ...queued, id: 'task-other', action_name: 'other-action' }],
+    };
+    mockAPI(() => Response.json(snapshot));
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={operation.id}
+      onSelect={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Same agent' })).toBeVisible();
+    expect(screen.getByText('The first dispatched action selects the agent.')).toBeVisible();
+    expect(screen.getByText('These actions stay on one agent for this operation. No automatic fallback.')).toBeVisible();
+    for (const action of ['build-agent', 'other-action']) {
+      fireEvent.click(screen.getByText(action, { selector: 'summary *' }).closest('summary')!);
+    }
+    expect(screen.queryByText(`Queued for ${owner}.`)).not.toBeInTheDocument();
+
+    snapshot = { ...snapshot, affinity: { for_actions: actions, agent_id: owner }, preflight: { ready: false, version: 1, actions: [
+      { action_name: 'build-agent', unavailable_agents: [{ agent_id: owner, reason: 'Agent required by same-agent is not registered' }] },
+    ] } };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    expect(await screen.findByText(`Queued for ${owner}.`)).toBeVisible();
+    expect(screen.getAllByText(`Queued for ${owner}.`)).toHaveLength(1);
+    expect(screen.queryByText('The first dispatched action selects the agent.')).not.toBeInTheDocument();
+    const preflight = screen.getByRole('heading', { name: 'Agent readiness' }).closest('section')!;
+    fireEvent.click(within(preflight).getByText('build-agent').closest('summary')!);
+    expect(screen.getByText('Agent required by same-agent is not registered')).toBeVisible();
+
+    snapshot = { ...snapshot, status: 'completed' };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Completed', { selector: '.catalog-status' })).toBeVisible();
+    expect(screen.queryByText(`Queued for ${owner}.`)).not.toBeInTheDocument();
+    const affinity = screen.getByRole('heading', { name: 'Same agent' }).closest('section')!;
+    expect(within(affinity).getByText(owner)).toBeVisible();
+
+    snapshot = { ...snapshot, status: 'waiting', affinity: { for_actions: actions, error: 'Conflicting assignments' } };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Conflicting assignments');
+    expect(screen.queryByText(`Queued for ${owner}.`)).not.toBeInTheDocument();
+    expect(screen.queryByText('The first dispatched action selects the agent.')).not.toBeInTheDocument();
+
+    snapshot = { ...operation };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {});
+    expect(screen.queryByRole('heading', { name: 'Same agent' })).not.toBeInTheDocument();
+  });
+
   it('reuses the secret notice for running work and clears it without a saved timestamp change', async () => {
     let snapshot: Operation = { ...operation, status: 'running', preflight: { ready: true, version: 1, actions: [] }, tasks: [
       { ...task, status: 'running', finished_at: undefined, result: undefined, agent_type: 'web-agent',

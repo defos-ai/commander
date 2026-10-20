@@ -19,6 +19,7 @@ const mission: Mission = {
   rules: {
     'aggregate-results': { for_actions: ['discover-pages'] },
     'decide-next-actions': { for_actions: ['check-links', 'capture-page'], params: { decision_by: 'model' } },
+    'same-agent': { for_actions: ['discover-pages', 'check-links'] },
   },
 };
 const otherMission: Mission = { ...mission, name: 'review-service', objective: 'Check service availability.' };
@@ -55,8 +56,9 @@ describe('missions browser', () => {
     expect(screen.getByRole('heading', { name: mission.name, level: 1 })).toHaveFocus();
     expect(screen.getByText('Website to review')).toBeVisible();
     const rules = within(screen.getByRole('table', { name: 'Mission rules' }));
-    expect(rules.getAllByRole('row')).toHaveLength(3);
+    expect(rules.getAllByRole('row')).toHaveLength(4);
     expect(rules.getByRole('row', { name: 'Aggregate results discover-pages All direct children' })).toBeVisible();
+    expect(rules.getByRole('row', { name: 'Same agent discover-pages check-links One agent per operation; no fallback' })).toBeVisible();
     expect(rules.getByRole('row', { name: 'Decide next actions check-links capture-page Model' })).toBeVisible();
     expect(fetch.mock.calls.some(([url]) => upstreamURL(url) === `${connection.url}/api/v1/missions/review-website-with-browser`)).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));

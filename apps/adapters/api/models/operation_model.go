@@ -27,6 +27,7 @@ type OperationResponse struct {
 	Input     json.RawMessage    `json:"input"`
 	Status    string             `json:"status"`
 	Preflight *PreflightResponse `json:"preflight,omitempty"`
+	Affinity  *AffinityResponse  `json:"affinity,omitempty"`
 	Tasks     []TaskResponse     `json:"tasks"`
 	Questions []QuestionResponse `json:"questions"`
 	Output    json.RawMessage    `json:"output,omitempty"`
@@ -35,4 +36,10 @@ type OperationResponse struct {
 	Events    []EventResponse    `json:"events"`
 	CreatedAt time.Time          `json:"created_at"`
 	UpdatedAt time.Time          `json:"updated_at"`
+}
+
+type AffinityResponse struct {
+	ForActions []string `json:"for_actions"`
+	AgentID    string   `json:"agent_id,omitempty"`
+	Error      string   `json:"error,omitempty"`
 }

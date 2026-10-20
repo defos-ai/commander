@@ -12,6 +12,7 @@ const operation: Operation = {
     starting_actions: ['discover-pages'], input_schema: null, output_schema: null,
   },
   input: { url: 'https://example.com' }, status: 'waiting',
+  affinity: { for_actions: ['check-links', 'capture-page'], agent_id: 'agent-1' },
   preflight: {
     ready: false, version: 2, actions: [{
       action_name: 'capture-page', ready_agent_ids: ['agent-1'], unavailable_agents: [{
@@ -146,10 +147,26 @@ describe('operations client', () => {
     { events: [{ ...operation.events![0], sequence: -1 }] },
     { updated_at: 42 },
     { error: { message: 'failure' } },
+    { affinity: { for_actions: [] } },
+    { affinity: { for_actions: ['check-links', 'check-links'] } },
+    { affinity: { for_actions: [42] } },
+    { affinity: { for_actions: ['check-links'], agent_id: 42 } },
+    { affinity: { for_actions: ['check-links'], agent_id: 'agent-1', error: 'Conflicting assignments' } },
+    { affinity: { for_actions: ['check-links'], error: { message: 'Invalid binding' } } },
   ])('rejects malformed nested data before rendering: %j', async patch => {
     respond({ items: [{ ...operation, ...patch }] });
 
     await expect(listOperations(url, credentials)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
+  it('preserves unbound affinity and a binding error without inventing an agent', async () => {
+    for (const affinity of [
+      { for_actions: ['check-links', 'capture-page'] },
+      { for_actions: ['check-links'], error: 'Conflicting assignments' },
+    ]) {
+      respond({ ...operation, affinity });
+      expect((await getOperation(url, credentials, operation.id)).affinity).toEqual(affinity);
+    }
   });
 
   it('rejects invalid artifact file metadata even when the rest of the result is valid', async () => {

@@ -25,7 +25,7 @@ function isRule(name: string, value: unknown): value is MissionRule {
     value.for_actions.some(action => !action || action.trim() !== action) || new Set(value.for_actions).size !== value.for_actions.length) return false;
   const params = value.params;
   if (params !== undefined && (!isObject(params) || Object.keys(params).some(key => key !== 'decision_by'))) return false;
-  if (name === 'aggregate-results') return params === undefined || params.decision_by === undefined;
+  if (name === 'aggregate-results' || name === 'same-agent') return params === undefined || params.decision_by === undefined;
   return name === 'decide-next-actions' && isObject(params) && params.decision_by === 'model';
 }
 

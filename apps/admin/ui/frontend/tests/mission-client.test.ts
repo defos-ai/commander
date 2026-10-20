@@ -22,6 +22,7 @@ const mission: Mission = {
   rules: {
     'aggregate-results': { for_actions: ['discover-pages'] },
     'decide-next-actions': { for_actions: ['check-links'], params: { decision_by: 'model' } },
+    'same-agent': { for_actions: ['discover-pages', 'check-links'] },
   },
   input_schema: { type: 'object', properties: { url: { type: 'string' } } },
   output_schema: {},
@@ -100,6 +101,7 @@ describe('mission API', () => {
     { items: [{ ...mission, rules: { 'aggregate-results': { for_actions: ['discover-pages'], params: { unknown: true } } } }] },
     { items: [{ ...mission, rules: { 'decide-next-actions': { for_actions: ['check-links'] } } }] },
     { items: [{ ...mission, rules: { 'decide-next-actions': { for_actions: ['check-links'], params: { decision_by: 'unknown' } } } }] },
+    { items: [{ ...mission, rules: { 'same-agent': { for_actions: ['discover-pages'], params: { decision_by: 'model' } } } }] },
     { items: [{ ...mission, rules: { 'unknown-rule': { for_actions: ['check-links'] } } }] },
     { items: [{ ...mission, input_schema: [] }] },
   ])('rejects malformed fields before they reach rendering', async body => {

@@ -10,6 +10,7 @@ import (
 type operationDetail struct {
 	operations.Operation
 	Tasks              []taskDetail         `json:"tasks"`
+	Affinity           *operations.Affinity `json:"affinity,omitempty"`
 	LastQuestion       *operations.Question `json:"last_question"`
 	RemainingQuestions int                  `json:"remaining_questions"`
 }
@@ -24,7 +25,7 @@ func describeOperation(operation operations.Operation, records map[string]agents
 		}
 		tasks[i] = describeTask(task, record, now)
 	}
-	return operationDetail{Operation: operation, Tasks: tasks, LastQuestion: question, RemainingQuestions: remaining}
+	return operationDetail{Operation: operation, Tasks: tasks, Affinity: operation.AssessAffinity(), LastQuestion: question, RemainingQuestions: remaining}
 }
 
 // Remaining excludes the displayed question. A passed deadline also hides the

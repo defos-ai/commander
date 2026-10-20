@@ -88,6 +88,13 @@ See [preflight](../../docs/abstractions.md#discovery-and-preflight) and
 [continuations](../../docs/abstractions.md#next-actions-and-continuations) for the
 decision rules. Finished operations are read-only; new work needs a new operation.
 
+For missions with `same-agent`, `get_operation` and `list_operations` include
+`affinity`: the grouped `for_actions` and, after first dispatch, their bound
+`agent_id`. Later matching tasks wait for that instance; there is no automatic
+fallback. Preflight explains saved readiness blockers, while capacity remains a
+scheduler check. An affinity `error` means inconsistent saved history, not an
+unbound group; inspect the tasks before attempting more work.
+
 A running task may expose `agent_type` and `missing_requirements` of kind `secret`
 when its assigned agent requests a secret during execution. These names reflect
 live matching work, separate from mission preflight. Use Playground's masked form
