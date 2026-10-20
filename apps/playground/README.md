@@ -20,7 +20,7 @@ This image includes Admin, MCP, the API, a controller, and builder and spawner
 agents, with Chromium, fonts and Git. Ask in chat: **Install the web agent, then review
 defos.ai.** Additional agents are downloaded when requested and run as native
 processes inside the container; the spawner needs no Docker socket. See
-[startup agents](#startup-agents) for optional startup packages and Internet
+[installing agents](#installing-agents) for package references and Internet
 requirements. Completed operations show a review link to Admin at
 `http://localhost:4275`, with the local connection prefilled.
 Type `/admin` for the general Admin link anytime.
@@ -144,7 +144,7 @@ Use Compose to retain work.
 combined with `--mcp-url`. `--debug`
 shows the temporary host log location, which is also deleted on exit.
 
-### Startup agents
+### Installing agents
 
 Native and Docker all-in-one sessions embed builder and spawner from the current
 build. There are no default package downloads. Ask in chat to install additional
@@ -160,20 +160,10 @@ launching. Downloads and child working directories stay within the temporary
 session and are removed after child shutdown. Installing a package does not
 install host dependencies or guarantee that all its actions are ready.
 
-For a startup package, use `--spawn-agents`; repeat it for additional
-instances, for example:
-
-```sh
-./commander --all-in-one --spawn-agents github.com/defos-ai/commander-web-agent@v0.2.0
-```
-
-A GitHub repository URL or `@stable` also works; an omitted version means stable.
-The spawner saves the resolved version and reuses it for retries.
-
-An explicitly requested startup package must download and launch successfully
-before startup completes. `--spawn-agents=` clears the explicit package list;
-the built-in builder and spawner remain available. The flag is all-in-one only.
-For Docker AIO, place it after the image name.
+Ask in chat to install a package by its GitHub repository URL or a reference
+above. An omitted version or `@stable` selects the latest stable release.
+MCP submits each installation to the controller, which dispatches `spawn-agent`;
+execution checkpoints retain the resolved version and launch intent for retries.
 Use packages from authors you trust; native agents run as the current OS user.
 
 ### Credentials

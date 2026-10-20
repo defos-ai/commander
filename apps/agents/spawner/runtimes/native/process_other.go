@@ -12,7 +12,3 @@ func waitProcess(c *child) error {
 	_ = c.command.Wait()
 	return nil
 }
-
-// Directory fsync is not available on every platform. The create-only record
-// itself is flushed before starting the process on all platforms.
-func syncDirectory(_ string) error { return nil }

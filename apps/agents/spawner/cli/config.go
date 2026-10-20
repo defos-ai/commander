@@ -15,7 +15,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/framework/agent"
-	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
@@ -29,7 +28,6 @@ type config struct {
 	stateDir            string
 	runtime             string
 	dockerNetwork       string
-	spawnAgents         []string
 	registrationTimeout time.Duration
 	logLevel            string
 	logFormat           string
@@ -50,13 +48,6 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
-	flags.Func("spawn-agents", "Public GitHub repository URL or package to start; omitted version means stable; optional [/module/path] and @stable or @vMAJOR.MINOR.PATCH; repeat for multiple agents", func(value string) error {
-		if _, err := packages.ParseSelector(value); err != nil {
-			return err
-		}
-		result.spawnAgents = append(result.spawnAgents, value)
-		return nil
-	})
 	flags.DurationVar(&result.registrationTimeout, "registration-timeout", 30*time.Second, "Maximum wait for each spawned agent to register; Docker defaults to 45s to allow the next heartbeat")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Log level: debug, info, warn, error; overrides LOG_LEVEL")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Log format: json or text; overrides LOG_FORMAT; logs are written to stderr")
@@ -65,6 +56,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run a spawner agent and launch agent packages on the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
+		fmt.Fprintln(stderr, "Install agent packages through the install-agent mission in Playground or MCP.")
 		fmt.Fprintln(stderr, "Set SECRETS_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
 		flags.PrintDefaults()
 	}
@@ -78,13 +70,9 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	flags.Visit(func(f *flag.Flag) { provided[f.Name] = true })
 	result.busURL = host.Value(busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
 	result.storageURL = host.Value(storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
-	result.stateDir = host.Value("", false, "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
 	result.runtime = host.Value("", false, "SPAWNER_RUNTIME", "native")
 	if options.Runtime != "" {
 		result.runtime = options.Runtime
-	}
-	if options.StateDir != "" {
-		result.stateDir = options.StateDir
 	}
 	if result.runtime != "native" && result.runtime != "docker" {
 		return config{}, errors.New("SPAWNER_RUNTIME must be native or docker")
@@ -101,8 +89,14 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 			result.registrationTimeout = 45 * time.Second
 		}
 	}
-	if strings.TrimSpace(result.stateDir) == "" {
-		return config{}, errors.New("SPAWNER_STATE_DIR must not be blank")
+	if result.runtime == "native" {
+		result.stateDir = host.Value("", false, "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
+		if options.StateDir != "" {
+			result.stateDir = options.StateDir
+		}
+		if strings.TrimSpace(result.stateDir) == "" {
+			return config{}, errors.New("SPAWNER_STATE_DIR must not be blank")
+		}
 	}
 	result.logLevel = host.Value(result.logLevel, provided["log-level"], "LOG_LEVEL", "info")
 	result.logFormat = host.Value(result.logFormat, provided["log-format"], "LOG_FORMAT", "json")

@@ -18,8 +18,8 @@ still to come.
 The [agent package contract](../../docs/agent-packages.md) describes
 versioned binaries/images and bootstrap for agents created from
 `commander-example-agent`. The [spawner module](spawner/README.md) resolves these
-packages and starts native processes or Docker containers through `spawn-agent`
-or repeatable `--spawn-agents` flags. Compose and all-in-one start builder and
+packages and starts native processes or Docker containers through the
+controller-dispatched `spawn-agent` action. Compose and all-in-one start builder and
 spawner agents. Ask in chat to install other agents when needed, for example:
 **Install the web agent, then review defos.ai.**
 
@@ -29,8 +29,11 @@ Start the [controller](../controllers/README.md#quick-start) first. With Go 1.26
 run from the repository root using the same bus and artifact storage:
 
 ```sh
-go run ./apps/agents/spawner/cmd --spawn-agents github.com/defos-ai/commander-web-agent@v0.2.0
+go run ./apps/agents/spawner/cmd
 ```
+
+Then ask Playground to **install the web agent**, or use the
+[`install-agent` mission through MCP](spawner/README.md#during-a-mission).
 
 See the [browser agent](https://github.com/defos-ai/commander-browser-agent)
 for native requirements and [deployment](../../docs/deployment.md) for configuration.

@@ -74,7 +74,7 @@ func testAllInOneDefaultAgents(t *testing.T) {
 		t.Fatalf("installation cannot start with the default agents: %+v", provision)
 	}
 	call("cancel_operation", map[string]any{"operation_id": provision.ID}, nil)
-	for _, directory := range []string{"downloads", "records", "agents"} {
+	for _, directory := range []string{"downloads", "agents"} {
 		entries, err := os.ReadDir(filepath.Join(session.Directory, "spawner", directory))
 		if err != nil || len(entries) != 0 {
 			t.Fatalf("default startup downloaded or launched an agent: %s: %v (%v)", directory, entries, err)

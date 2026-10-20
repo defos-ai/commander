@@ -43,39 +43,10 @@ func TestAllInOne(t *testing.T) {
 	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
 }
 
-func TestSpawnAgentsArguments(t *testing.T) {
-	allInOneEnvironment(t)
-	t.Setenv("COMMANDER_LLM_PROVIDER", "")
-	t.Setenv("COMMANDER_LLM_BASE_URL", "")
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel() // Parse startup overrides without downloading packages or opening hosts.
-	const web = "github.com/defos-ai/commander-web-agent@v0.2.0"
-	const browser = "github.com/defos-ai/commander-browser-agent@v0.2.0"
-	for _, test := range []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "defaults", args: []string{"--all-in-one"}},
-		{name: "empty override", args: []string{"--all-in-one", "--spawn-agents="}},
-		{name: "custom package", args: []string{"--all-in-one", "--spawn-agents=" + web}},
-		{name: "repository URL", args: []string{"--all-in-one", "--spawn-agents=https://github.com/defos-ai/commander-web-agent"}},
-		{name: "stable package", args: []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander/apps/agents/builder@stable"}},
-		{name: "repeated packages", args: []string{"--all-in-one", "--spawn-agents", web, "--spawn-agents", browser}},
-		{name: "invalid reference", args: []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander-web-agent@latest"}, want: "agent package"},
-		{name: "remote package", args: []string{"--spawn-agents=" + web}, want: "--spawn-agents requires --all-in-one"},
-		{name: "remote empty override", args: []string{"--spawn-agents="}, want: "--spawn-agents requires --all-in-one"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			err := cli.Run(ctx, test.args, strings.NewReader(""), io.Discard, io.Discard)
-			if test.want == "" {
-				if !errors.Is(err, context.Canceled) {
-					t.Fatalf("valid startup packages were rejected: %v", err)
-				}
-			} else if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("startup package validation: got %v, want %q", err, test.want)
-			}
-		})
+func TestSpawnAgentsFlagRemoved(t *testing.T) {
+	err := cli.Run(t.Context(), []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0"}, strings.NewReader(""), io.Discard, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -spawn-agents") {
+		t.Fatalf("removed startup flag: got %v", err)
 	}
 }
 
@@ -595,7 +566,7 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			stopped := make(chan struct{})
 			go func() {
 				defer close(stopped)
-				done <- cli.Run(ctx, []string{"--all-in-one", "--spawn-agents=", "--provider=", "--model=", "--base-url=", "--no-color"}, input, &output, &output)
+				done <- cli.Run(ctx, []string{"--all-in-one", "--provider=", "--model=", "--base-url=", "--no-color"}, input, &output, &output)
 			}()
 			t.Cleanup(func() {
 				cancel()
@@ -801,7 +772,7 @@ func testAllInOneMCPFailure(t *testing.T) {
 			temporary := allInOneEnvironment(t)
 			t.Setenv("MCP_TOKEN", token)
 			var output bytes.Buffer
-			err := cli.Run(t.Context(), []string{"--all-in-one", "--spawn-agents=", "--no-color"}, strings.NewReader(""), &output, &output)
+			err := cli.Run(t.Context(), []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
 			if err == nil || !strings.Contains(err.Error(), "MCP_TOKEN") || strings.Contains(err.Error(), token) {
 				t.Fatal("invalid MCP credentials were accepted or disclosed")
 			}
@@ -836,7 +807,7 @@ func testAllInOneAPIFailure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 			defer cancel()
 			var output bytes.Buffer
-			err := cli.Run(ctx, []string{"--all-in-one", "--spawn-agents=", "--no-color"}, strings.NewReader(""), &output, &output)
+			err := cli.Run(ctx, []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
 			if err == nil || !strings.Contains(err.Error(), want) || ctx.Err() != nil {
 				t.Fatalf("API startup failure was not propagated promptly: %v", err)
 			}

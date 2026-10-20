@@ -11,7 +11,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Spawn uses the task/command or startup-slot identity supplied by the host.
+// Spawn uses the controller execution command identity.
 // An uncertain Docker response never authorizes a second Create for that request.
 func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
 	if strings.TrimSpace(requestID) == "" || len(requestID) > 1024 {
@@ -31,7 +31,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	if err := ctx.Err(); err != nil {
 		return runtimes.Result{}, err
 	}
-	reference, err := runtimes.PinPackage(ctx, m.config.Directory, requestID, reference, m.config.Resolver)
+	reference, err := runtimes.PinPackage(ctx, requestID, reference, m.config.Resolver)
 	if err != nil {
 		return runtimes.Result{}, err
 	}
@@ -59,9 +59,9 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 		return runtimes.Result{}, err
 	}
 	if container.Status != "created" && container.Status != "running" {
-		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task or startup slot", saved.AgentID, container.Status)
+		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task", saved.AgentID, container.Status)
 	}
-	if container.Status == "created" && runtimes.UsesExecutionCheckpoints(ctx) && m.ownedIntents[requestID] != saved.Owner {
+	if container.Status == "created" && m.ownedIntents[requestID] != saved.Owner {
 		// Checkpoints identify the intent, not an exclusive runtime owner. A
 		// restored manager cannot safely compete to Start this container.
 		return runtimes.Result{}, fmt.Errorf("recorded container for %s has not started; launch ownership is uncertain, refusing to start it", saved.AgentID)
@@ -82,7 +82,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 		}
 	}
 	if container.Status != "running" {
-		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task or startup slot", saved.AgentID, container.Status)
+		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task", saved.AgentID, container.Status)
 	}
 	result, err := m.awaitRegistration(ctx, current)
 	if err != nil {

@@ -74,7 +74,7 @@ scheduling state: they are not entirely stateless.
 | --- | --- |
 | MCP restarts | Coordination continues. Saved data remains queryable; a lost command reply does not prove the command failed. |
 | Controller restarts | It reloads operations, reconciles saved outcomes and resumes queued work. A saved dispatch may be replayed only to its original live agent using the same command ID. |
-| Docker spawner restarts | It adopts matching live containers using saved launch records. Children outlive the spawner; stopped or missing children require a new launch. |
+| Docker spawner restarts | Children keep running; installation tasks are not replayed. Launch checkpoints remain in the controller database. Stopped or missing children require inspection before a new launch. |
 | Agent dies | Its heartbeat expires. Undispatched tasks can use other ready agents; an unknown outcome from dispatched work is not silently rerun on a replacement. |
 
 The agent's command deduplication and pending result cache last for that process's

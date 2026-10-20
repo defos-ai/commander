@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +18,6 @@ import (
 // Config is trusted host configuration. Packages and action input cannot supply
 // container privileges, networks, mounts, arguments or bootstrap credentials.
 type Config struct {
-	Directory           string
 	Bus                 comms.Bus
 	BusURL              string
 	StorageURL          string
@@ -40,8 +37,6 @@ type Manager struct {
 	observations  map[string]*observation
 	ownedIntents  map[string]string
 	once          sync.Once
-	releaseLock   func() error
-	closeErr      error
 	ownedResolver bool
 }
 
@@ -49,8 +44,8 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if config.Bus == nil || config.Engine == nil || strings.TrimSpace(config.Directory) == "" {
-		return nil, errors.New("Docker spawner requires a bus, engine and state directory")
+	if config.Bus == nil || config.Engine == nil {
+		return nil, errors.New("Docker spawner requires a bus and engine")
 	}
 	if err := ValidateNetwork(config.Network); err != nil {
 		return nil, err
@@ -80,30 +75,18 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 			return nil, errors.New("Docker bootstrap environment contains a NUL byte")
 		}
 	}
-	var err error
-	config.Directory, err = filepath.Abs(config.Directory)
-	if err != nil {
-		return nil, fmt.Errorf("spawner state directory: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Join(config.Directory, "records"), 0700); err != nil {
-		return nil, fmt.Errorf("create Docker launch records: %w", err)
-	}
-	release, err := lockState(config.Directory)
-	if err != nil {
-		return nil, err
-	}
 	ownedResolver := config.Resolver == nil
 	if ownedResolver {
 		config.Resolver = packages.NewResolver(nil)
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	m := &Manager{config: config, ctx: ctx, cancel: cancel, observations: make(map[string]*observation), ownedIntents: make(map[string]string), releaseLock: release, ownedResolver: ownedResolver}
+	m := &Manager{config: config, ctx: ctx, cancel: cancel, observations: make(map[string]*observation), ownedIntents: make(map[string]string), ownedResolver: ownedResolver}
 	go func() { <-ctx.Done(); _ = m.Close() }()
 	return m, nil
 }
 
-// Close ends registration observation. Containers and their launch records
-// survive the spawner; the caller owns the Engine and shared providers.
+// Close ends registration observation. Containers survive the spawner;
+// the caller owns the Engine and shared providers.
 func (m *Manager) Close() error {
 	m.once.Do(func() {
 		m.cancel()
@@ -115,11 +98,8 @@ func (m *Manager) Close() error {
 		if m.ownedResolver {
 			m.config.Resolver.CloseIdleConnections()
 		}
-		if err := m.releaseLock(); err != nil {
-			m.closeErr = fmt.Errorf("release Docker state lock: %w", err)
-		}
 	})
-	return m.closeErr
+	return nil
 }
 
 func (m *Manager) environment(saved record) map[string]string {

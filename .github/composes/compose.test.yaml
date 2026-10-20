@@ -195,7 +195,6 @@ services:
   spawner-agent:
     <<: *agent
     image: commander-spawner-agent:test
-    command: ["--heartbeat-interval=1s", "--spawn-agents=https://github.com/defos-ai/fixture-agent"]
     build:
       context: ../..
       dockerfile: apps/agents/spawner/docker/Dockerfile

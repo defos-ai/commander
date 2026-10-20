@@ -28,8 +28,10 @@
   native child processes; full-provider tests use a loopback registry and Docker
   sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;
   do not introduce resolver injection or deployment flags solely for these tests.
-  Fixture missions are merged with bundled missions at fixture startup. Catalog
-  checks must permit fixture agents left running by the preceding suite.
+  Fixture missions are merged with bundled missions at fixture startup. Fixture
+  agents launch only through controller-dispatched actions in the API/MCP scenarios,
+  never during spawner startup. Catalog checks must permit fixture agents left
+  running by the preceding suite without requiring one before the install scenario.
 - Fixtures must settle active work before calling test-only cleanup (`ENV=tests`).
   Terminal operation status alone is insufficient if tasks or agent work remain.
 - Preserve [`TestCleaner`](../testing/test_cleaner.go) and

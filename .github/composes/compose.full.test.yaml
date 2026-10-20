@@ -262,7 +262,6 @@ services:
   spawner-agent:
     <<: *agent
     image: commander-spawner-agent:test
-    command: ["--heartbeat-interval=1s", "--spawn-agents=https://github.com/defos-ai/fixture-agent"]
     user: "0:0"
     build:
       context: ../..
@@ -271,7 +270,6 @@ services:
       <<: *environment
       SPAWNER_RUNTIME: docker
       SPAWNER_DOCKER_NETWORK: commander-full-test_default
-      SPAWNER_STATE_DIR: /var/lib/commander/spawner
       SSL_CERT_FILE: /fixtures/ca.pem
       SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     volumes:

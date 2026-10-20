@@ -378,13 +378,11 @@ services:
     environment:
       <<: *environment
       SPAWNER_RUNTIME: docker
-      SPAWNER_STATE_DIR: /var/lib/commander/spawner
       SPAWNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-commander}_default
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - spawner-state:/var/lib/commander/spawner
       - secrets-key:/run/commander-secrets:ro
     depends_on:
       secrets-key:
@@ -449,7 +447,6 @@ services:
 volumes:
   builder-workspaces:
   secrets-key:
-  spawner-state:
   mcp-credentials:
   rabbitmq:
   minio:

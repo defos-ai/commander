@@ -21,7 +21,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Spawn uses a host-generated request identity (task/command or startup slot),
+// Spawn uses the controller execution command identity,
 // never an identifier supplied by a model in action input. Each new request
 // gets its own agent ID; a retry can only observe that same child.
 func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
@@ -34,8 +34,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	ctx, cancel := context.WithCancel(ctx)
 	stopForwarding := context.AfterFunc(m.ctx, cancel)
 	defer func() { stopForwarding(); cancel() }()
-	// Regular agents execute one action at a time. Serializing startup and
-	// action requests also makes ownership and Close independent of scheduling.
+	// Serialize requests so ownership and Close are independent of scheduling.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ctx.Err(); err != nil {
@@ -47,7 +46,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	if err := ctx.Err(); err != nil {
 		return runtimes.Result{}, err
 	}
-	reference, err := runtimes.PinPackage(ctx, m.config.Directory, requestID, reference, m.config.Resolver)
+	reference, err := runtimes.PinPackage(ctx, requestID, reference, m.config.Resolver)
 	if err != nil {
 		return runtimes.Result{}, err
 	}
@@ -56,7 +55,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 			return runtimes.Result{}, errors.New("launch request already belongs to a different package")
 		}
 		if current.exited() {
-			return runtimes.Result{}, fmt.Errorf("agent %s has exited; a replacement requires a new task or startup slot", current.result.AgentID)
+			return runtimes.Result{}, fmt.Errorf("agent %s has exited; a replacement requires a new task", current.result.AgentID)
 		}
 		return m.awaitRegistration(ctx, current)
 	}

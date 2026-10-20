@@ -7,13 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/manifest"
 	"github.com/defos-ai/commander/framework/agent/packages"
@@ -47,27 +43,13 @@ func (r record) labels() map[string]string {
 		"ai.defos.commander.package":       r.Package,
 	}
 }
-func (m *Manager) recordPath(requestID string) string {
-	return filepath.Join(m.config.Directory, "records", digest(requestID)+".json")
-}
 
 func (m *Manager) readRecord(ctx context.Context, requestID, reference string) (record, bool, error) {
-	if runtimes.UsesExecutionCheckpoints(ctx) {
-		data, found, err := action.LoadCheckpoint(ctx, "launch-intent")
-		if err != nil || !found {
-			return record{}, found, err
-		}
-		return m.decodeRecord(bytes.NewReader(data), requestID, reference)
+	data, found, err := action.LoadCheckpoint(ctx, "launch-intent")
+	if err != nil || !found {
+		return record{}, found, err
 	}
-	file, err := os.Open(m.recordPath(requestID))
-	if errors.Is(err, os.ErrNotExist) {
-		return record{}, false, nil
-	}
-	if err != nil {
-		return record{}, true, fmt.Errorf("read Docker launch record: %w", err)
-	}
-	defer file.Close()
-	return m.decodeRecord(file, requestID, reference)
+	return m.decodeRecord(bytes.NewReader(data), requestID, reference)
 }
 
 func (m *Manager) decodeRecord(source io.Reader, requestID, reference string) (record, bool, error) {
@@ -98,22 +80,9 @@ func (m *Manager) reserve(ctx context.Context, saved record) error {
 	if err != nil {
 		return err
 	}
-	if runtimes.UsesExecutionCheckpoints(ctx) {
-		if err := action.SaveCheckpoint(ctx, "launch-intent", data); err != nil {
-			return err
-		}
-		m.ownedIntents[saved.RequestID] = saved.Owner
-		return nil
+	if err := action.SaveCheckpoint(ctx, "launch-intent", data); err != nil {
+		return err
 	}
-	file, err := os.OpenFile(m.recordPath(saved.RequestID), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return fmt.Errorf("reserve Docker launch request (intents are never overwritten): %w", err)
-	}
-	_, writeErr := io.Copy(file, bytes.NewReader(data))
-	syncErr := file.Sync()
-	closeErr := file.Close()
-	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-		return fmt.Errorf("persist Docker launch intent: %w", err)
-	}
-	return syncDirectory(filepath.Dir(m.recordPath(saved.RequestID)))
+	m.ownedIntents[saved.RequestID] = saved.Owner
+	return nil
 }

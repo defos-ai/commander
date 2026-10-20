@@ -5,7 +5,7 @@
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
   Admin, MCP, API, controller, builder and spawner hosts for `--all-in-one`.
-  The spawner launches requested agent packages as native children.
+  The spawner launches agent packages requested through chat/MCP as native children.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
 - [`internal/api/secrets.go`](internal/api/secrets.go) supplies the local secret
@@ -118,13 +118,11 @@
 - Use the spawner's `RunWithOptions` to force native mode and a state directory
   beneath the session directory, including Docker AIO. Do not mutate environment
   settings or use a Docker socket. Embed the builder host from the same build,
-  with its workspace directory beneath session state. The default startup package
-  list is empty. Repeatable `--spawn-agents` opts into additional startup packages;
-  explicit `--spawn-agents=` clears that list without disabling builder or spawner.
-  Reject the flag outside all-in-one mode. Accept public GitHub URLs, `@stable`, and exact pins;
-  omitted versions mean stable. Keep version resolution and saved pins in the
-  spawner; an explicitly requested package's download or launch failure must
-  fail startup. Package downloads require Internet access.
+  with its workspace directory beneath session state. Only the embedded builder
+  and spawner start automatically. Install additional packages through chat/MCP
+  and controller-dispatched actions; do not add a direct startup launch path.
+  Keep version resolution and execution checkpoints in the spawner action.
+  Package downloads require Internet access.
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
@@ -209,8 +207,7 @@
   the web agent before using `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.
-  Wait for the embedded builder, spawner and explicitly configured startup agents
-  to register; custom package lists must not require web/browser types. The web agent
+  Wait for the embedded builder and spawner to register. The web agent
   owns HTTP work and remains ready without Chromium; the browser advertises rendering
   requirements. The builder discovers Git itself; missing Git makes its action
   unavailable without failing all-in-one startup. Keep readiness in the agent.
@@ -272,9 +269,9 @@ and `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
 
 Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
 behavior changes. The suite includes all-in-one coverage without a paid model
-or host browser. Keep tests offline with explicit startup-package overrides and
-pinned standalone web/browser modules as local fixture hosts. These imports are
-only for tests; production launches released executables through the spawner. For transport or workflow changes, also use the
+or host browser. Keep tests offline with pinned standalone web/browser modules as
+local fixture hosts. These imports are only for tests; production launches released
+executables through the spawner. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
 
 For image changes, build both Dockerfiles from the repository root. Verify the

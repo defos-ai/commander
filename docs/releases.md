@@ -75,8 +75,7 @@ run `chmod +x commander`, then `./commander --all-in-one`; on Windows, run
 `.\commander.exe --all-in-one`. See
 [native setup](../apps/playground/README.md#native-one-executable) for model setup,
 the generated API login and temporary-state behavior. All-in-one embeds builder
-and spawner agents and downloads no packages by default. Add agents through chat, or
-use explicit [startup packages](../apps/playground/README.md#startup-agents).
+and spawner agents. Install additional agents through chat/MCP.
 Package downloads require Internet access. Native browser actions need Chromium
 or Chrome; the builder's `checkout-template` action needs Git on the host.
 

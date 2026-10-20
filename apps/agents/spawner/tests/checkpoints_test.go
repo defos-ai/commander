@@ -61,3 +61,19 @@ func (s *spawnCheckpoints) SaveCheckpoint(ctx context.Context, name string, data
 	}
 	return ctx.Err()
 }
+
+func assertCheckpointExcludes(t *testing.T, journal *spawnCheckpoints, values ...string) {
+	t.Helper()
+	journal.mu.Lock()
+	defer journal.mu.Unlock()
+	if len(journal.record.Checkpoints) == 0 {
+		t.Fatal("missing execution checkpoints")
+	}
+	for _, data := range journal.record.Checkpoints {
+		for _, value := range values {
+			if bytes.Contains(data, []byte(value)) {
+				t.Fatal("execution checkpoint contains a bootstrap value")
+			}
+		}
+	}
+}

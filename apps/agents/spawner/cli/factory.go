@@ -90,7 +90,7 @@ func (d *dependencies) openRuntime(ctx context.Context, configuration config) (e
 		}
 		d.closers = append(d.closers, engine.Close)
 		d.Runtime, err = docker.NewManager(ctx, docker.Config{
-			Directory: configuration.stateDir, Bus: d.Bus,
+			Bus:    d.Bus,
 			BusURL: configuration.busURL, StorageURL: configuration.storageURL,
 			Environment:     childEnvironment(configuration.storageURL, configuration.runtime),
 			SecretBootstrap: configuration.secretBootstrap,

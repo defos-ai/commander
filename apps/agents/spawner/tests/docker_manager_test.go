@@ -1,15 +1,12 @@
 package packages_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"maps"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -192,7 +189,7 @@ func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
 	}))
 	t.Cleanup(resolver.CloseIdleConnections)
 	config := docker.Config{
-		Directory: filepath.Join(root, "spawner"), Bus: bus,
+		Bus:    bus,
 		BusURL: "amqp://fixture/", StorageURL: "s3://fixture", Network: "fixture-network",
 		Engine: engine, Resolver: resolver, RegistrationTimeout: time.Second,
 		Environment: map[string]string{"AWS_REGION": "fixture-region", "AWS_SECRET_ACCESS_KEY": "private-storage-sentinel"},
@@ -247,36 +244,7 @@ func restartDockerManager(t *testing.T, fixture dockerManagerFixture) *docker.Ma
 	return manager
 }
 
-func TestDockerManagerOwnsStateDirectoryUntilClose(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	second, err := docker.NewManager(t.Context(), fixture.config)
-	if err == nil {
-		_ = second.Close()
-		t.Fatal("two Docker spawner hosts acquired the same state directory")
-	}
-	if !strings.Contains(err.Error(), "another Docker spawner") {
-		t.Fatalf("expected immediate ownership conflict, got %v", err)
-	}
-	if err := fixture.manager.Close(); err != nil {
-		t.Fatal(err)
-	}
-	second, err = docker.NewManager(t.Context(), fixture.config)
-	if err != nil {
-		t.Fatalf("closed manager left a stale state lock: %v", err)
-	}
-	defer second.Close()
-	// Closing the old host again must not release the new host's ownership.
-	if err := fixture.manager.Close(); err != nil {
-		t.Fatal(err)
-	}
-	third, err := docker.NewManager(t.Context(), fixture.config)
-	if err == nil {
-		_ = third.Close()
-		t.Fatal("closed manager released a later host's state lock")
-	}
-}
-
-func TestDockerManagerRejectsInvalidConfigurationBeforeState(t *testing.T) {
+func TestDockerManagerRejectsInvalidConfiguration(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
 	for _, test := range []struct {
 		name   string
@@ -284,7 +252,6 @@ func TestDockerManagerRejectsInvalidConfigurationBeforeState(t *testing.T) {
 	}{
 		{"missing bus", func(c *docker.Config) { c.Bus = nil }},
 		{"missing engine", func(c *docker.Config) { c.Engine = nil }},
-		{"blank directory", func(c *docker.Config) { c.Directory = " " }},
 		{"host network", func(c *docker.Config) { c.Network = "host" }},
 		{"filesystem bus", func(c *docker.Config) { c.BusURL = "file:///state/bus" }},
 		{"filesystem storage", func(c *docker.Config) { c.StorageURL = "file:///state/storage" }},
@@ -302,8 +269,6 @@ func TestDockerManagerRejectsInvalidConfigurationBeforeState(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			config := fixture.config
-			directory := filepath.Join(t.TempDir(), "unused")
-			config.Directory = directory
 			test.change(&config)
 			manager, err := docker.NewManager(t.Context(), config)
 			if err == nil {
@@ -312,9 +277,6 @@ func TestDockerManagerRejectsInvalidConfigurationBeforeState(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), "private-config-sentinel") {
 				t.Fatal("configuration error disclosed a bootstrap value")
-			}
-			if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
-				t.Fatal("invalid configuration created launch state")
 			}
 		})
 	}
@@ -358,8 +320,8 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 		t.Setenv(name, "private-parent-sentinel")
 	}
 	fixture := newDockerManagerFixture(t)
-	requestID := "task:" + id.New()
-	first, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference)
+	ctx, requestID, journal := newSpawnCheckpoints(t)
+	first, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,25 +346,14 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 			t.Errorf("container inherited %s", name)
 		}
 	}
-	second, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference)
+	second, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
 	if err != nil || second.AgentID != first.AgentID || second.ContainerID != first.ContainerID {
 		t.Fatalf("same request did not reuse its container: result=%+v error=%v", second, err)
 	}
-	if _, err := fixture.manager.Spawn(t.Context(), requestID, "github.com/defos-ai/other-agent@v0.1.0"); err == nil {
+	if _, err := fixture.manager.Spawn(ctx, requestID, "github.com/defos-ai/other-agent@v0.1.0"); err == nil {
 		t.Fatal("existing request accepted a conflicting package")
 	}
-	if err := filepath.WalkDir(fixture.config.Directory, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err == nil && (bytes.Contains(data, []byte("private-parent-sentinel")) || bytes.Contains(data, []byte("private-storage-sentinel"))) {
-			t.Error("launch state persisted a bootstrap secret")
-		}
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	assertCheckpointExcludes(t, journal, "private-parent-sentinel", "private-storage-sentinel")
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -418,23 +369,23 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 
 func TestDockerManagerRestartAdoptsRunningContainerAfterFreshRegistration(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
-	requestID := "task:" + id.New()
-	first, err := fixture.manager.Spawn(t.Context(), requestID, fixtureModuleReference)
+	ctx, requestID, _ := newSpawnCheckpoints(t)
+	first, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
 	if err != nil {
 		t.Fatal(err)
 	}
 	restarted := restartDockerManager(t, fixture)
-	if _, err := restarted.Spawn(t.Context(), requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
+	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
 		t.Fatalf("record did not preserve its module package: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	waitCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 	defer cancel()
-	if _, err := restarted.Spawn(ctx, requestID, fixtureModuleReference); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := restarted.Spawn(waitCtx, requestID, fixtureModuleReference); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("restarted manager did not wait for fresh registration: %v", err)
 	}
 	stop := dockerHeartbeats(t, fixture, first.ContainerID)
 	defer stop()
-	result, err := restarted.Spawn(t.Context(), requestID, fixtureModuleReference)
+	result, err := restarted.Spawn(ctx, requestID, fixtureModuleReference)
 	if err != nil || result.AgentID != first.AgentID || result.ContainerID != first.ContainerID || result.Package != fixtureModuleReference {
 		t.Fatalf("restart did not adopt original container: result=%+v error=%v", result, err)
 	}
@@ -454,9 +405,11 @@ func TestDockerManagerBootstrapsSecretsOnlyForTrustedBuilder(t *testing.T) {
 	}
 	fixture.manager = restartDockerManager(t, fixture)
 	for _, reference := range []string{dockerBuilderReference, dockerImpostorReference, fixtureReference} {
-		if _, err := fixture.manager.Spawn(t.Context(), "task:"+id.New(), reference); err != nil {
+		ctx, requestID, journal := newSpawnCheckpoints(t)
+		if _, err := fixture.manager.Spawn(ctx, requestID, reference); err != nil {
 			t.Fatal(err)
 		}
+		assertCheckpointExcludes(t, journal, key)
 		spec := <-fixture.engine.created
 		value, supplied := spec.Environment["SECRETS_ENCRYPTION_KEY"]
 		if reference == dockerBuilderReference {
@@ -466,18 +419,6 @@ func TestDockerManagerBootstrapsSecretsOnlyForTrustedBuilder(t *testing.T) {
 		} else if supplied {
 			t.Fatal("untrusted package received the deployment key")
 		}
-	}
-	if err := filepath.WalkDir(fixture.config.Directory, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err == nil && bytes.Contains(data, []byte(key)) {
-			t.Error("launch state persisted the encryption key")
-		}
-		return err
-	}); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -490,14 +431,14 @@ func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture.manager = restartDockerManager(t, fixture)
-	requestID := "task:" + id.New()
-	first, err := fixture.manager.Spawn(t.Context(), requestID, dockerBuilderReference)
+	ctx, requestID, _ := newSpawnCheckpoints(t)
+	first, err := fixture.manager.Spawn(ctx, requestID, dockerBuilderReference)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fixture.manager = restartDockerManager(t, fixture)
 	stop := dockerHeartbeats(t, fixture, first.ContainerID)
-	repeated, err := fixture.manager.Spawn(t.Context(), requestID, dockerBuilderReference)
+	repeated, err := fixture.manager.Spawn(ctx, requestID, dockerBuilderReference)
 	stop()
 	if err != nil || repeated.ContainerID != first.ContainerID {
 		t.Fatalf("unchanged bootstrap did not reuse the builder: %v", err)
@@ -511,7 +452,7 @@ func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
 			}
 		}
 		fixture.manager = restartDockerManager(t, fixture)
-		_, err := fixture.manager.Spawn(t.Context(), requestID, dockerBuilderReference)
+		_, err := fixture.manager.Spawn(ctx, requestID, dockerBuilderReference)
 		if err == nil || !strings.Contains(err.Error(), "secrets bootstrap") {
 			t.Fatalf("changed or removed bootstrap was accepted: %v", err)
 		}
@@ -553,13 +494,13 @@ func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {
 			fixture := newDockerManagerFixture(t)
-			requestID := "task:" + id.New()
-			if _, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference); err != nil {
+			ctx, requestID, _ := newSpawnCheckpoints(t)
+			if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err != nil {
 				t.Fatal(err)
 			}
 			change(fixture.engine)
 			restarted := restartDockerManager(t, fixture)
-			if _, err := restarted.Spawn(t.Context(), requestID, fixtureReference); err == nil {
+			if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil {
 				t.Fatal("manager trusted a missing, stopped, unsafe, or changed container")
 			}
 			creates, starts, _ := fixture.engine.counts()
@@ -573,9 +514,9 @@ func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
 func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
 	fixture.engine.onStart = nil
-	ctx, cancel := context.WithCancel(t.Context())
+	executionCtx, requestID, _ := newSpawnCheckpoints(t)
+	ctx, cancel := context.WithCancel(executionCtx)
 	defer cancel()
-	requestID := "task:" + id.New()
 	finished := make(chan error, 1)
 	go func() {
 		_, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
@@ -619,7 +560,7 @@ func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
 	if err := publishDockerRegistration(t.Context(), fixture.bus, current, nil); err != nil {
 		t.Fatal(err)
 	}
-	result, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference)
+	result, err := fixture.manager.Spawn(executionCtx, requestID, fixtureReference)
 	if err != nil || result.ContainerID != current.ID {
 		t.Fatalf("retry missed late registration: result=%+v error=%v", result, err)
 	}
@@ -638,9 +579,9 @@ func TestDockerManagerReconcilesUncertainCreateAndStart(t *testing.T) {
 			} else {
 				fixture.engine.startErr = errors.New("fixture lost Start reply after daemon accepted it")
 			}
-			requestID := "task:" + id.New()
-			_, _ = fixture.manager.Spawn(t.Context(), requestID, fixtureReference)
-			result, err := fixture.manager.Spawn(t.Context(), requestID, fixtureReference)
+			ctx, requestID, _ := newSpawnCheckpoints(t)
+			_, _ = fixture.manager.Spawn(ctx, requestID, fixtureReference)
+			result, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
 			if err != nil || result.Runtime != "docker" || result.ContainerID == "" {
 				t.Fatalf("retry did not reconcile accepted %s: result=%+v error=%v", phase, result, err)
 			}
@@ -663,9 +604,10 @@ func TestDockerManagerRejectsInvalidRegistration(t *testing.T) {
 			fixture.engine.onStart = func(ctx context.Context, current docker.Container) error {
 				return publishDockerRegistration(ctx, fixture.bus, current, change)
 			}
-			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			ctx, requestID, _ := newSpawnCheckpoints(t)
+			ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
-			if result, err := fixture.manager.Spawn(ctx, "task:"+id.New(), fixtureReference); err == nil {
+			if result, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
 				t.Fatalf("invalid registration was accepted: %+v", result)
 			}
 		})

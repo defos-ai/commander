@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,7 +48,6 @@ func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
 			if creates != 0 || starts != 0 {
 				t.Fatalf("checkpoint failure launched container: create=%d start=%d", creates, starts)
 			}
-			assertNoDockerCheckpointFiles(t, fixture.config.Directory)
 		})
 	}
 }
@@ -71,12 +68,10 @@ func TestDockerCheckpointReusesContainerWithoutLocalRecords(t *testing.T) {
 			t.Fatalf("missing controller checkpoint %s: %v", name, err)
 		}
 	}
-	assertNoDockerCheckpointFiles(t, fixture.config.Directory)
 
-	// A different state directory cannot supply the old launch records. Only
-	// the persisted checkpoint and the daemon's owned running instance remain.
+	// Another manager has only the execution checkpoint and the daemon's
+	// owned running instance; no local launch records exist.
 	config := fixture.config
-	config.Directory = filepath.Join(t.TempDir(), "restored")
 	restored, err := docker.NewManager(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +87,6 @@ func TestDockerCheckpointReusesContainerWithoutLocalRecords(t *testing.T) {
 	if creates != 1 || starts != 1 {
 		t.Fatalf("repeat relaunched container: create=%d start=%d", creates, starts)
 	}
-	assertNoDockerCheckpointFiles(t, config.Directory)
 }
 
 func TestDockerCheckpointCreatedContainerNeedsOriginalOwner(t *testing.T) {
@@ -102,10 +96,9 @@ func TestDockerCheckpointCreatedContainerNeedsOriginalOwner(t *testing.T) {
 	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
 		t.Fatal("lost Create response unexpectedly succeeded")
 	}
-	// A second directory has its own OS lock, so saved intent alone must not
-	// grant a second manager permission to Start the original container.
+	// The saved intent alone must not grant another manager permission to
+	// Start the original container.
 	config := fixture.config
-	config.Directory = filepath.Join(t.TempDir(), "second-owner")
 	second, err := docker.NewManager(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -162,17 +155,5 @@ func TestDockerCheckpointRejectsRuntimeMismatch(t *testing.T) {
 	creates, starts, _ := fixture.engine.counts()
 	if creates != 0 || starts != 0 {
 		t.Fatalf("runtime mismatch launched container: create=%d start=%d", creates, starts)
-	}
-	assertNoDockerCheckpointFiles(t, fixture.config.Directory)
-}
-
-func assertNoDockerCheckpointFiles(t *testing.T, directory string) {
-	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(directory, "records"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 0 {
-		t.Fatal("execution checkpoint path persisted local launch records")
 	}
 }

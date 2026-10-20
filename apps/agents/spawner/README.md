@@ -1,7 +1,7 @@
 # Spawner
 
 The spawner starts published agents as native processes or Docker containers.
-It exposes `spawn-agent` and can also start packages on launch.
+It executes the controller-dispatched `spawn-agent` action.
 
 Any compatible GitHub release package can be installed, including packages
 outside Commander's discovery catalog. Read the spawner's registered
@@ -24,21 +24,16 @@ Each host gets a fresh `spawner-agent-<suffix>` ID. To supply its suffix, use
 eight lowercase hex characters. The flag overrides the environment, and an
 explicit `--agent-id-suffix=` generates a fresh ID. Child IDs are assigned separately.
 
-To start a published package immediately, add:
-
-```sh
---spawn-agents github.com/defos-ai/commander-example-agent@v0.2.0
-```
-
-Repeat the flag for multiple instances. A bare GitHub URL or `@stable` also works;
-the spawner resolves and saves the version before downloading. The release must
-contain `agent.yaml` and a native executable for your OS and architecture.
+Install packages through Playground or the [`install-agent` mission](#during-a-mission).
+A bare GitHub URL or `@stable` works; the spawner resolves and saves the version
+before downloading. Native packages must contain `agent.yaml` and an executable
+for your OS and architecture.
 
 For agents in a repository's Go module, include the module path. The next
 Commander release will provide this spawner package:
 
-```sh
---spawn-agents github.com/defos-ai/commander/apps/agents/spawner@v0.2.0
+```text
+github.com/defos-ai/commander/apps/agents/spawner@v0.2.0
 ```
 
 It resolves `agent.yaml` from the `apps/agents/spawner/v0.2.0` release in the
@@ -53,8 +48,7 @@ After downloading one as `commander-spawner-agent` and making it executable on
 Linux/macOS, run it with the same settings:
 
 ```sh
-./commander-spawner-agent --bus-url ./state/bus --storage-url ./state/storage \
-  --spawn-agents github.com/defos-ai/commander-example-agent@v0.2.0
+./commander-spawner-agent --bus-url ./state/bus --storage-url ./state/storage
 ```
 
 On Windows, use `.\commander-spawner-agent.exe`. Until that release is published,
@@ -70,15 +64,7 @@ docker compose up --build --wait
 
 Compose starts builder and spawner agents. Ask in Playground to install the web
 agent, or use the `install-agent` mission through MCP. Requested agents run as sibling
-containers on Commander's network, sharing RabbitMQ and S3. To opt into a startup
-package, set `command` under `spawner-agent` in `compose.yaml`:
-
-```yaml
-command: ["--spawn-agents", "github.com/defos-ai/commander-example-agent@v0.2.0"]
-```
-
-For an existing deployment, [remove its children and reset launch records](../../../docs/deployment.md#stopping-and-resetting-agents)
-before changing startup entries. Existing slots cannot switch packages.
+containers on Commander's network, sharing RabbitMQ and S3.
 
 The package must publish a `docker.image` digest in `agent.yaml`. Standalone
 hosts set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` with
@@ -88,8 +74,8 @@ uses the Docker Engine API; no Docker CLI is needed inside its image.
 The next Commander release also publishes
 `ghcr.io/defos-ai/commander-spawner-agent:<version>` and promotes `:stable` only
 after the complete release succeeds. The image defaults to native mode; Compose
-sets Docker mode and supplies its network, socket access and persistent launch
-state. Until that release is published, Compose builds the image locally.
+sets Docker mode and supplies its network and socket access. Until that release
+is published, Compose builds the image locally.
 
 A spawner started through its release package also defaults to native mode.
 It receives no automatic Docker privileges or socket access, and package spawning
@@ -150,7 +136,7 @@ credentials, save tokens in launch records or pass them to spawned agents.
 
 The action supports public and private GitHub packages, including stable resolution.
 Private Docker image authentication is supported for GHCR.
-Startup `--spawn-agents` remains public-only. Both inputs accept GitHub URLs,
+Action inputs accept GitHub URLs,
 `@stable`, and exact versions. A missing version means stable.
 `SPAWNER_RUNTIME` defaults to `native`, including in its Dockerfile;
 the Compose service explicitly selects Docker mode.
@@ -168,9 +154,9 @@ the catalog. This trusts published versions of that exact Commander module.
 The key stays out of launch records, results and logs. Docker administrators can
 read it from the builder container's environment.
 
-[Playground all-in-one](../../playground/README.md#startup-agents) embeds the
+[Playground all-in-one](../../playground/README.md#installing-agents) embeds the
 spawner in native mode alongside the built-in builder, including inside Docker
-AIO. Install additional agents through chat/MCP or opt into `--spawn-agents`.
+AIO. Install additional agents through chat/MCP.
 Its state, downloads and child working directories are temporary; shutdown awaits child
 processes before removing them.
 
@@ -189,28 +175,27 @@ before downloading the package or creating the agent. Retries reuse the same
 version even if Latest changes; a new execution can select the newer release.
 Checkpoint failures stop the action.
 
-Startup `--spawn-agents` still keeps its package selections and launch records
-in `./state/spawner`; set `SPAWNER_STATE_DIR` to change it. The directory also holds
-native downloads, child working directories and the Docker manager lock.
+Native downloads and child working directories use `./state/spawner`;
+`SPAWNER_STATE_DIR` changes that location in native mode. Docker mode needs no
+local launch state or state volume.
 Native retries reuse the live child in the same host. After a native host restart,
 existing launch intents report uncertainty; inspect old processes before requesting
-replacements through a new task or startup slot.
+replacements through a new task.
 
 Docker retries verify the saved ownership labels, image, network and bootstrap
 configuration, then await registration. A restored manager can observe a running
-container. For checkpointed actions, only the manager that received confirmation
+container. Only the manager that received confirmation
 of the new intent may start a container still in `created` state; another manager reports
 uncertainty. Checkpoints do not automatically replay tasks after a host restart.
 Builder retries also verify the encryption key; changing or removing it requires
 a fresh launch rather than silently reusing a differently configured container.
 Missing or stopped containers are never recreated or restarted by a retry;
-request a replacement with a new task or startup slot. Containers use no automatic
-restart policy. `docker compose restart spawner-agent` reuses live children.
+request a replacement with a new task. Containers use no automatic
+restart policy and keep running when the spawner restarts.
 They are separate containers, not Compose services; follow the
 [scoped teardown](../../../docs/deployment.md#stopping-and-resetting-agents) to
-remove children and reset launch records before `docker compose down`. Keep
-startup state and controller execution records while these containers exist.
-Only one Docker spawner may use a state directory at a time; a second host fails startup.
+remove children before `docker compose down`. Retain controller execution
+records while these containers exist.
 
 Registration waits default to 30 seconds for native mode and 45 seconds for
 Docker (`--registration-timeout`). Retrying the same launch request observes its
@@ -221,7 +206,7 @@ Downloads use HTTPS to GitHub release hosts without environment proxies. Private
 downloads send their token only to GitHub's API; redirects carry no credentials.
 Manifests are limited to 64 KiB and native executables to
 512 MiB. The native host removes its downloads after child shutdown and retains
-launch records and private child working directories.
+private child working directories.
 
 See the [package contract](../../../docs/agent-packages.md) and
 [implementation guide](AGENTS.md).

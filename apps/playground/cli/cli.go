@@ -37,7 +37,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
-		session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: config.NoAdmin, SpawnAgents: config.SpawnAgents})
+		session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: config.NoAdmin})
 		if err != nil {
 			return err
 		}

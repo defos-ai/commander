@@ -23,7 +23,6 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
-	"github.com/defos-ai/commander/framework/id"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 	"golang.org/x/sys/unix"
 )
@@ -103,9 +102,10 @@ func TestNativeSpawnerStopsDescendantsAfterTheirParentExits(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			ctx, requestID, _ := newSpawnCheckpoints(t)
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			if _, err := manager.Spawn(ctx, "task:"+id.TaskID(), fixtureReference); err == nil {
+			if _, err := manager.Spawn(ctx, requestID, fixtureReference); err == nil {
 				t.Fatal("non-registering fixture unexpectedly registered")
 			}
 			data, err := os.ReadFile(filepath.Join(storage, "descendant.pid"))

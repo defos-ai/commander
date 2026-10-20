@@ -42,8 +42,13 @@ func TestCIComposeDockerSpawner(t *testing.T) {
 	if spawner.Environment["SPAWNER_RUNTIME"] != "docker" || spawner.Environment["SPAWNER_DOCKER_NETWORK"] == "" {
 		t.Fatal("Compose spawner must use Docker and an explicitly selected network")
 	}
-	if !slices.Contains(spawner.Volumes, "spawner-state:/var/lib/commander/spawner") || spawner.Environment["SPAWNER_STATE_DIR"] != "/var/lib/commander/spawner" {
-		t.Fatal("Compose spawner must retain launch records across host recreation")
+	if _, configured := spawner.Environment["SPAWNER_STATE_DIR"]; configured {
+		t.Fatal("Docker spawner uses controller checkpoints, not local launch records")
+	}
+	for _, mount := range spawner.Volumes {
+		if strings.HasPrefix(mount, "spawner-state:") {
+			t.Fatal("Docker spawner must not mount a local launch-record volume")
+		}
 	}
 	if !slices.Contains(spawner.Volumes, "/var/run/docker.sock:/var/run/docker.sock") {
 		t.Fatal("Compose Docker spawner must have access to the host daemon")

@@ -3,17 +3,12 @@ package native
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/id"
@@ -29,33 +24,15 @@ type record struct {
 	AgentType string `json:"agent_type"`
 }
 
-func (m *Manager) recordPath(requestID string) string {
-	digest := sha256.Sum256([]byte(requestID))
-	return filepath.Join(m.config.Directory, "records", hex.EncodeToString(digest[:])+".json")
-}
-
 func (m *Manager) existingRecord(ctx context.Context, requestID, reference string) error {
-	if runtimes.UsesExecutionCheckpoints(ctx) {
-		// An execution always uses controller storage. A failed lookup must not
-		// fall back to the standalone startup journal.
-		data, found, err := action.LoadCheckpoint(ctx, "launch-intent")
-		if err != nil {
-			return fmt.Errorf("load launch intent: %w", err)
-		}
-		if !found {
-			return nil
-		}
-		return validateExistingRecord(bytes.NewReader(data), requestID, reference)
+	data, found, err := action.LoadCheckpoint(ctx, "launch-intent")
+	if err != nil {
+		return fmt.Errorf("load launch intent: %w", err)
 	}
-	file, err := os.Open(m.recordPath(requestID))
-	if errors.Is(err, os.ErrNotExist) {
+	if !found {
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("inspect launch record: %w", err)
-	}
-	defer file.Close()
-	return validateExistingRecord(file, requestID, reference)
+	return validateExistingRecord(bytes.NewReader(data), requestID, reference)
 }
 
 func validateExistingRecord(reader io.Reader, requestID, reference string) error {
@@ -85,23 +62,8 @@ func (m *Manager) reserve(ctx context.Context, saved record) error {
 	if err != nil {
 		return err
 	}
-	if runtimes.UsesExecutionCheckpoints(ctx) {
-		if err := action.SaveCheckpoint(ctx, "launch-intent", data); err != nil {
-			return fmt.Errorf("persist launch intent: %w", err)
-		}
-		return nil
-	}
-	file, err := os.OpenFile(m.recordPath(saved.RequestID), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return fmt.Errorf("reserve launch request (existing intents are never overwritten): %w", err)
-	}
-	_, writeErr := io.Copy(file, bytes.NewReader(data))
-	syncErr := file.Sync()
-	closeErr := file.Close()
-	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-		// Keep partial intent too: an uncertain durable write must not become
-		// permission to launch another instance on retry.
+	if err := action.SaveCheckpoint(ctx, "launch-intent", data); err != nil {
 		return fmt.Errorf("persist launch intent: %w", err)
 	}
-	return syncDirectory(filepath.Dir(m.recordPath(saved.RequestID)))
+	return nil
 }

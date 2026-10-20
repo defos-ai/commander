@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -86,19 +84,19 @@ func TestNativeRetryKeepsPackagePinAfterFailedDownloadAndRestart(t *testing.T) {
 			}
 		}
 	})
-	const requestID = "task:download-retry"
-	if _, err := manager.Spawn(t.Context(), requestID, "https://github.com/defos-ai/fixture-agent"); err == nil {
+	ctx, requestID, _ := newSpawnCheckpoints(t)
+	if _, err := manager.Spawn(ctx, requestID, "https://github.com/defos-ai/fixture-agent"); err == nil {
 		t.Fatal("failed download unexpectedly launched a child")
 	}
 	source.latest.Store(2)
-	if _, err := manager.Spawn(t.Context(), requestID, fixtureSelector); err == nil {
+	if _, err := manager.Spawn(ctx, requestID, fixtureSelector); err == nil {
 		t.Fatal("failed download unexpectedly launched a child on retry")
 	}
 	if source.latestRequests.Load() != 1 || len(childReports(t, fixture.storage)) != 0 {
 		t.Fatal("retry resolved a different release or launched a child")
 	}
 	before := source.requests.Load()
-	if _, err := manager.Spawn(t.Context(), requestID, fixtureReference); err == nil {
+	if _, err := manager.Spawn(ctx, requestID, fixtureReference); err == nil {
 		t.Fatal("same request accepted a different selector")
 	}
 	if source.requests.Load() != before {
@@ -112,7 +110,7 @@ func TestNativeRetryKeepsPackagePinAfterFailedDownloadAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	source.failDownload.Store(false)
-	result, err := manager.Spawn(t.Context(), requestID, "github.com/defos-ai/fixture-agent")
+	result, err := manager.Spawn(ctx, requestID, "github.com/defos-ai/fixture-agent")
 	if err != nil || result.Package != fixtureReference {
 		t.Fatalf("restart did not retain the originally selected release: result=%+v error=%v", result, err)
 	}
@@ -127,7 +125,7 @@ func TestNativeRetryKeepsPackagePinAfterFailedDownloadAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	before = source.requests.Load()
-	if _, err := manager.Spawn(t.Context(), requestID, fixtureSelector); err == nil || !strings.Contains(err.Error(), "uncertain") {
+	if _, err := manager.Spawn(ctx, requestID, fixtureSelector); err == nil || !strings.Contains(err.Error(), "uncertain") {
 		t.Fatalf("restart adopted or relaunched an uncertain native process: %v", err)
 	}
 	if source.requests.Load() != before {
@@ -141,31 +139,32 @@ func TestDockerRetryKeepsPackagePinAfterFailedPullAndRestart(t *testing.T) {
 	fixture.config.Resolver = source.resolver
 	manager := restartDockerManager(t, fixture)
 	fixture.engine.pullErr = errors.New("fixture pull unavailable")
-	const requestID = "task:pull-retry"
-	if _, err := manager.Spawn(t.Context(), requestID, fixtureSelector); err == nil {
+	ctx, requestID, _ := newSpawnCheckpoints(t)
+	if _, err := manager.Spawn(ctx, requestID, fixtureSelector); err == nil {
 		t.Fatal("failed image pull unexpectedly launched a container")
 	}
 	source.latest.Store(2)
 	fixture.manager = manager
 	manager = restartDockerManager(t, fixture)
 	fixture.engine.pullErr = nil
-	result, err := manager.Spawn(t.Context(), requestID, "https://github.com/defos-ai/fixture-agent")
+	result, err := manager.Spawn(ctx, requestID, "https://github.com/defos-ai/fixture-agent")
 	if err != nil || result.Package != fixtureReference {
 		t.Fatalf("restart did not retain the originally selected release: result=%+v error=%v", result, err)
 	}
 	before := source.requests.Load()
-	repeated, err := manager.Spawn(t.Context(), requestID, "github.com/defos-ai/fixture-agent")
+	repeated, err := manager.Spawn(ctx, requestID, "github.com/defos-ai/fixture-agent")
 	if err != nil || repeated.ContainerID != result.ContainerID || source.requests.Load() != before {
 		t.Fatalf("retry did not reuse the pinned container: result=%+v error=%v", repeated, err)
 	}
-	if _, err := manager.Spawn(t.Context(), requestID, strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1)); err == nil {
+	if _, err := manager.Spawn(ctx, requestID, strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1)); err == nil {
 		t.Fatal("same request accepted a conflicting package")
 	}
 	creates, starts, _ := fixture.engine.counts()
 	if source.latestRequests.Load() != 1 || creates != 1 || starts != 1 {
 		t.Fatalf("retry changed selection or duplicated launch: latest=%d creates=%d starts=%d", source.latestRequests.Load(), creates, starts)
 	}
-	fresh, err := manager.Spawn(t.Context(), "task:fresh-selection", fixtureSelector)
+	freshCtx, freshRequest, _ := newSpawnCheckpoints(t)
+	fresh, err := manager.Spawn(freshCtx, freshRequest, fixtureSelector)
 	if err != nil || fresh.Package != strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1) || source.latestRequests.Load() != 2 {
 		t.Fatalf("new request did not select the updated release: result=%+v error=%v", fresh, err)
 	}
@@ -195,34 +194,27 @@ func TestPackageSelectionRejectsCorruptStateWithoutResolvingAgain(t *testing.T) 
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			directory := t.TempDir()
-			if err := os.Mkdir(filepath.Join(directory, "records"), 0700); err != nil {
+			ctx, requestID, journal := newSpawnCheckpoints(t)
+			if _, err := runtimes.PinPackage(ctx, requestID, test.selector, source.resolver); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := runtimes.PinPackage(t.Context(), directory, "request", test.selector, source.resolver); err != nil {
-				t.Fatal(err)
-			}
-			paths, err := filepath.Glob(filepath.Join(directory, "records", "*.package.json"))
-			if err != nil || len(paths) != 1 {
+			data, found, err := journal.LoadCheckpoint(ctx, "package-selection")
+			if err != nil || !found {
 				t.Fatalf("missing durable package selection: %v", err)
-			}
-			data, err := os.ReadFile(paths[0])
-			if err != nil {
-				t.Fatal(err)
 			}
 			var saved map[string]any
 			if err := json.Unmarshal(data, &saved); err != nil {
 				t.Fatal(err)
 			}
 			corrupt := test.change(saved)
-			if err := os.WriteFile(paths[0], corrupt, 0600); err != nil {
-				t.Fatal(err)
-			}
+			journal.mu.Lock()
+			journal.record.Checkpoints["package-selection"] = corrupt
+			journal.mu.Unlock()
 			before := source.requests.Load()
-			if _, err := runtimes.PinPackage(t.Context(), directory, "request", test.selector, source.resolver); err == nil {
+			if _, err := runtimes.PinPackage(ctx, requestID, test.selector, source.resolver); err == nil {
 				t.Fatal("corrupt selection was trusted")
 			}
-			after, err := os.ReadFile(paths[0])
+			after, _, err := journal.LoadCheckpoint(ctx, "package-selection")
 			if err != nil || string(after) != string(corrupt) || source.requests.Load() != before {
 				t.Fatal("corrupt selection was overwritten or caused another resolution")
 			}
@@ -231,11 +223,8 @@ func TestPackageSelectionRejectsCorruptStateWithoutResolvingAgain(t *testing.T) 
 }
 
 func TestConcurrentPackageSelectionsKeepTheWinningPin(t *testing.T) {
-	directory := t.TempDir()
-	if err := os.Mkdir(filepath.Join(directory, "records"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	ctx, requestID, _ := newSpawnCheckpoints(t)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var workers sync.WaitGroup
 	t.Cleanup(func() { cancel(); workers.Wait() })
@@ -261,7 +250,7 @@ func TestConcurrentPackageSelectionsKeepTheWinningPin(t *testing.T) {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			pin, err := runtimes.PinPackage(ctx, directory, "same-request", fixtureSelector, resolver)
+			pin, err := runtimes.PinPackage(ctx, requestID, fixtureSelector, resolver)
 			results <- selectionResult{pin, err}
 		}()
 	}
@@ -274,7 +263,7 @@ func TestConcurrentPackageSelectionsKeepTheWinningPin(t *testing.T) {
 	}
 	close(release)
 	first, second := <-results, <-results
-	winner, err := runtimes.PinPackage(ctx, directory, "same-request", fixtureSelector, resolver)
+	winner, err := runtimes.PinPackage(ctx, requestID, fixtureSelector, resolver)
 	if err != nil || resolutions.Load() != 2 {
 		t.Fatalf("retry did not reuse winning selection: %q %v", winner, err)
 	}

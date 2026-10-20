@@ -17,11 +17,9 @@ import (
 	builder "github.com/defos-ai/commander/apps/agents/builder"
 	buildercli "github.com/defos-ai/commander/apps/agents/builder/cli"
 	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
-	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -36,8 +34,6 @@ type runningHost struct {
 
 type Options struct {
 	DisableAdmin bool
-	// Optional packages to launch in addition to the embedded builder and spawner.
-	SpawnAgents []string
 }
 
 type Session struct {
@@ -63,11 +59,6 @@ func Start(ctx context.Context) (session *Session, err error) {
 }
 
 func StartWithOptions(ctx context.Context, options Options) (session *Session, err error) {
-	for _, reference := range options.SpawnAgents {
-		if _, err := packages.ParseSelector(reference); err != nil {
-			return nil, fmt.Errorf("spawn-agents: %w", err)
-		}
-	}
 	s := &Session{}
 	s.Context, s.cancel = context.WithCancelCause(ctx)
 	defer func() {
@@ -105,8 +96,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 		"--log-level=info", "--log-format=json",
 	}
 	database := "--database-url=" + filepath.Join(s.Directory, "database")
-	// Each package can spend 30s resolving, 5m downloading and 30s registering.
-	startup, cancelStartup := context.WithTimeout(s.Context, 30*time.Second+time.Duration(len(options.SpawnAgents))*6*time.Minute)
+	startup, cancelStartup := context.WithTimeout(s.Context, 30*time.Second)
 	defer cancelStartup()
 	controllerReady := make(chan struct{})
 	s.start("controller", func(ctx context.Context) error {
@@ -146,17 +136,11 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	expected := make(map[string]string)
 	s.start("spawner agent", func(ctx context.Context) error {
 		args := append([]string{}, common...)
-		for _, reference := range options.SpawnAgents {
-			args = append(args, "--spawn-agents="+reference)
-		}
 		return spawnercli.RunWithOptions(ctx, args, s.log, spawnercli.Options{
 			Runtime: "native", StateDir: filepath.Join(s.Directory, "spawner"),
 			SecretsEncryptionKey: &secretsKey,
-			Ready: func(agentID string, spawned []runtimes.Result) {
+			Ready: func(agentID string) {
 				expected[agentID] = "spawner-agent"
-				for _, result := range spawned {
-					expected[result.AgentID] = result.AgentType
-				}
 				close(spawnerReady)
 			},
 		})

@@ -39,8 +39,7 @@ docker compose down --volumes
 
 The FS stack (`commander-test`) has isolated volumes, two web agents, one
 browser agent with Chromium from pinned standalone release images, and a native
-spawner. Startup provisions one fixture
-through `--spawn-agents`; API/MCP scenarios provision another through an operation,
+spawner. API/MCP scenarios install a fixture agent through a controller operation,
 run an action and retrieve its artifact. A local HTTPS release server supplies the
 fixture manifest and binary. Web/browser images are pulled from GHCR during setup.
 

@@ -144,11 +144,7 @@ func TestNativeExecutionUncertainCheckpointDoesNotStartOrFallback(t *testing.T) 
 
 func assertNoNativeLaunchRecords(t *testing.T, directory string) {
 	t.Helper()
-	records, err := os.ReadDir(filepath.Join(directory, "records"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(records) != 0 {
-		t.Fatal("controller-dispatched spawn wrote local launch records")
+	if _, err := os.Stat(filepath.Join(directory, "records")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("spawn created a local launch records directory")
 	}
 }

@@ -88,7 +88,7 @@ func connect(t *testing.T) *api {
 				ready = ready && action.Status == "ready"
 			}
 		}
-		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["builder-agent"] == 1 && types["spawner-agent"] == 1 && types["fixture-agent"] >= 1
+		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["builder-agent"] == 1 && types["spawner-agent"] == 1
 		actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 		missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
 		if ready && slices.Equal(actionNames(actions.Items), expectedCatalogActions(catalog.Items)) && slices.Equal(missionNames(missions.Items), expectedMissions) {

@@ -3,8 +3,8 @@
 This contract defines agent packaging, native/Docker spawning and deployment
 integrations. The `commander-example-agent` template supports preassigned agent
 IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
-resolves agent packages and runs a regular agent host with `spawn-agent` and
-repeatable `--spawn-agents`. Compose starts the spawner in Docker mode by default. Playground and Docker AIO
+resolves agent packages through the controller-dispatched `spawn-agent` action.
+Compose starts the spawner in Docker mode by default. Playground and Docker AIO
 embed the spawner in native mode.
 
 An agent repository publishes runnable packages; the spawner starts a selected
@@ -211,8 +211,7 @@ Clear the token after the calls finish. The resolver and Docker SDK client do no
 retain authentication; package metadata, launch records and spawned agents do
 not receive it. The caller owns token acquisition. The `spawn-agent` action
 acquires it only for private
-input and clears its temporary bytes after the runtime call returns. Startup
-`--spawn-agents` has no visibility input and continues to use anonymous downloads.
+input and clears its temporary bytes after the runtime call returns.
 
 Deployment selects the execution mode explicitly:
 
@@ -286,16 +285,11 @@ required actions are ready.
 
 ## Startup, retries and lifetime
 
-The spawner host's `--spawn-agents` is repeatable. Each occurrence requests one
-instance, including repeated references when two instances of a type are needed.
 Compose and native/Docker AIO start builder and spawner agents by default, using
 the current build without package downloads. Other agents are installed through
-chat/MCP when needed. Repeatable `--spawn-agents` opts into additional startup
-packages; `--spawn-agents=` clears that list while keeping both built-in agents.
-Package downloads need Internet access, whether requested during startup or
-later through chat. See [Playground](../apps/playground/README.md#startup-agents).
-Startup and the controller-dispatched
-`spawn-agent` action use the same package resolution and launch implementation.
+chat/MCP when needed. Each `spawn-agent` task requests one instance; use separate
+tasks for multiple instances. Package downloads need Internet access.
+See [Playground](../apps/playground/README.md#installing-agents).
 
 Controller-dispatched actions save `package-selection` and `launch-intent`
 through the framework's [execution checkpoints](abstractions.md#results-and-evidence).
@@ -305,14 +299,12 @@ before downloads or launch respectively. Invalid or conflicting checkpoints fail
 closed; no tokens or environment values are saved. Missing checkpoint capability
 cannot fall back to local files.
 
-Startup `--spawn-agents` retains its local package selection and launch records
-until bootstrap is routed through controller tasks. Downloads, child working
-directories and the Docker manager lock still use local state.
+Native downloads and child working directories still use local state.
+Docker spawning needs no local launch records or state volume.
 
 A stable launch request identifies an instance across retries; its agent ID must
-be allocated and recorded before starting the process/container. Startup requests
-are scoped to a deployment and configured instance; runtime requests are tied to
-their saved command identity. Repeating a package reference in two startup slots
+be allocated and recorded before starting the process/container. Requests are tied
+to their saved command identity. Repeating a package reference in two tasks
 creates two identities, not a retry. A conflicting package for an existing launch
 request fails explicitly instead of silently replacing the agent.
 
@@ -324,7 +316,7 @@ The initial native implementation reconciles only processes it still owns in
 memory. Its create-only launch intents survive every restart, including clean
 shutdown; encountering an old intent reports uncertainty instead of adopting a
 PID or launching a replacement. Inspect the old instance before requesting
-replacements through a new task or startup slot.
+replacements through a new task.
 Native restart recovery is not implemented.
 
 Docker records also hold the image digest, network and a random ownership label.
@@ -333,12 +325,11 @@ reusing it, including after a spawner restart. A fresh host then waits for a fre
 agent announcement. Lost Create/Start responses keep the intent for reconciliation;
 they never trigger a second Create. A missing container reports uncertainty; an
 exited container requires a new launch request. Only a never-started container may
-start under its saved identity. For checkpointed actions, this also requires the
+start under its saved identity. This requires the
 manager that originally received acknowledgement for the new intent. A different
 manager may observe a verified running container, but cannot start a saved
-`created` instance. This keeps separate local state directories from authorizing
-duplicate starts. Startup file records remain protected by the state-directory
-OS lock. Neither mechanism authorizes controller redispatch to a new agent.
+`created` instance. Reading checkpoints does not authorize another manager to
+start a container or the controller to redispatch work to a new agent.
 
 Reconcile uncertain launches before trying again. Retain enough ownership
 information to identify the exact instance; a PID or agent type alone is not

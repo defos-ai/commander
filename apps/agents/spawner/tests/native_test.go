@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -195,9 +194,8 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		t.Setenv(key, "private-parent-sentinel")
 	}
 	fixture := newNativeFixture(t, "", 5*time.Second)
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	first, err := fixture.manager.Spawn(ctx, "task:"+id.New(), fixtureReference)
+	firstCtx, firstRequest, firstJournal := newSpawnCheckpoints(t)
+	first, err := fixture.manager.Spawn(firstCtx, firstRequest, fixtureReference)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +205,7 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 	if len(first.Actions) != 1 || first.Actions[0].Name != "fixture-action" || first.Actions[0].Status != actionmodel.Ready {
 		t.Fatalf("registration action inventory was not returned: %+v", first.Actions)
 	}
-	requestID := "task:" + id.New()
+	ctx, requestID, journal := newSpawnCheckpoints(t)
 	second, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
 	if err != nil {
 		t.Fatal(err)
@@ -244,24 +242,8 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 			t.Fatalf("child home is not isolated within its spawner directory: %s", report.Home)
 		}
 	}
-	if err := filepath.WalkDir(filepath.Join(fixture.config.Directory, "records"), func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		if bytes.Contains(data, []byte("private-parent-sentinel")) || bytes.Contains(data, []byte("fixture-region")) {
-			t.Error("launch journal stores environment values")
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	assertCheckpointExcludes(t, firstJournal, "private-parent-sentinel", "fixture-region")
+	assertCheckpointExcludes(t, journal, "private-parent-sentinel", "fixture-region")
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -297,9 +279,10 @@ func TestNativeBootstrapSharesUsableKeyOnlyWithTrustedBuilder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newNativeFixture(t, test.mode, 5*time.Second, bootstrap)
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			ctx, requestID, journal := newSpawnCheckpoints(t)
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			if _, err := fixture.manager.Spawn(ctx, "task:"+id.New(), test.reference); err != nil {
+			if _, err := fixture.manager.Spawn(ctx, requestID, test.reference); err != nil {
 				t.Fatal(err)
 			}
 			report := awaitChildReport(t, ctx, fixture.storage)
@@ -316,19 +299,7 @@ func TestNativeBootstrapSharesUsableKeyOnlyWithTrustedBuilder(t *testing.T) {
 					t.Fatal("child could not encrypt with the deployment's key")
 				}
 			}
-			paths, err := filepath.Glob(filepath.Join(fixture.config.Directory, "records", "*.json"))
-			if err != nil || len(paths) == 0 {
-				t.Fatal("missing native launch records")
-			}
-			for _, path := range paths {
-				record, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if bytes.Contains(record, []byte(key)) {
-					t.Fatal("launch record contains the bootstrap key")
-				}
-			}
+			assertCheckpointExcludes(t, journal, key)
 		})
 	}
 }
@@ -337,9 +308,9 @@ func TestNativeRejectsInvalidRegistrationsWithoutRelaunching(t *testing.T) {
 	for _, mode := range []string{"-wrong-type", "-wrong-id", "-invalid-schema"} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := newNativeFixture(t, mode, time.Second)
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			ctx, requestID, _ := newSpawnCheckpoints(t)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			requestID := "task:" + id.New()
 			if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
 				t.Fatal("registration with an incorrect identity, type, or action schema was accepted")
 			}
@@ -356,8 +327,8 @@ func TestNativeRejectsInvalidRegistrationsWithoutRelaunching(t *testing.T) {
 
 func TestNativeCanceledWaitRetainsOneOwnedLaunch(t *testing.T) {
 	fixture := newNativeFixture(t, "-silent", 5*time.Second)
-	ctx, cancel := context.WithCancel(t.Context())
-	requestID := "task:" + id.New()
+	executionCtx, requestID, _ := newSpawnCheckpoints(t)
+	ctx, cancel := context.WithCancel(executionCtx)
 	finished := make(chan error, 1)
 	go func() { _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); finished <- err }()
 	defer cancel()
@@ -389,7 +360,7 @@ func TestNativeCanceledWaitRetainsOneOwnedLaunch(t *testing.T) {
 		t.Fatal("canceled spawn did not return")
 	}
 	before := fixture.requests.Load()
-	retryCtx, retryCancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	retryCtx, retryCancel := context.WithTimeout(executionCtx, 200*time.Millisecond)
 	defer retryCancel()
 	if _, err := fixture.manager.Spawn(retryCtx, requestID, fixtureReference); err == nil {
 		t.Fatal("silent child unexpectedly registered")
@@ -407,7 +378,8 @@ func TestNativeRetryReceivesRegistrationAnnouncedAfterItsInitialWaitEnded(t *tes
 		}
 		t.Run(name, func(t *testing.T) {
 			fixture := newNativeFixture(t, "-delayed", timeout)
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			ctx, requestID, _ := newSpawnCheckpoints(t)
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			observer, err := fixture.bus.Subscribe(ctx, comms.Inbox{
 				Topic: messages.ControllerEvents(messages.DefaultControllerType), Name: "late-registration-observer", Mode: comms.TransientExclusive,
@@ -418,7 +390,6 @@ func TestNativeRetryReceivesRegistrationAnnouncedAfterItsInitialWaitEnded(t *tes
 			defer observer.Close()
 			requestCtx, cancelRequest := context.WithCancel(ctx)
 			defer cancelRequest()
-			requestID := "task:" + id.New()
 			finished := make(chan error, 1)
 			go func() { _, err := fixture.manager.Spawn(requestCtx, requestID, fixtureReference); finished <- err }()
 			report := awaitChildReport(t, ctx, fixture.storage)
@@ -477,8 +448,8 @@ func awaitChildReport(t *testing.T, ctx context.Context, directory string) child
 
 func TestNativeRestartDoesNotRelaunchRecordedRequest(t *testing.T) {
 	fixture := newNativeFixture(t, "", 5*time.Second)
-	requestID := "task:" + id.New()
-	if _, err := fixture.manager.Spawn(t.Context(), requestID, fixtureModuleReference); err != nil {
+	ctx, requestID, _ := newSpawnCheckpoints(t)
+	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference); err != nil {
 		t.Fatal(err)
 	}
 	if err := fixture.manager.Close(); err != nil {
@@ -490,10 +461,10 @@ func TestNativeRestartDoesNotRelaunchRecordedRequest(t *testing.T) {
 	}
 	defer restarted.Close()
 	before := fixture.requests.Load()
-	if _, err := restarted.Spawn(t.Context(), requestID, fixtureModuleReference); err == nil {
+	if _, err := restarted.Spawn(ctx, requestID, fixtureModuleReference); err == nil {
 		t.Fatal("restarted manager trusted an old process identity")
 	}
-	if _, err := restarted.Spawn(t.Context(), requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
+	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
 		t.Fatalf("record did not preserve its module package: %v", err)
 	}
 	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {

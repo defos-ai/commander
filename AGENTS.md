@@ -60,8 +60,7 @@ The user's current instructions take precedence over repository guidance.
   interfaces. Unsupported schemes must fail explicitly.
 - [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO. Builder and the
   Docker spawner start by default; other agents launch on demand through chat/MCP
-  as sibling containers. Keep execution checkpoints and startup launch records
-  while children exist and scope
+  as sibling containers. Keep execution checkpoints while children exist and scope
   teardown by deployment network plus the spawn ownership label.
   Its `secrets-key` initializer persists the encryption key in a dedicated volume;
   API, builder and spawner mount it read-only and export it before exec. Retain

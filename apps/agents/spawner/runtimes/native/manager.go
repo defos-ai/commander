@@ -66,7 +66,7 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("spawner state directory: %w", err)
 	}
-	for _, path := range []string{config.Directory, filepath.Join(config.Directory, "records"), filepath.Join(config.Directory, "downloads"), filepath.Join(config.Directory, "agents")} {
+	for _, path := range []string{config.Directory, filepath.Join(config.Directory, "downloads"), filepath.Join(config.Directory, "agents")} {
 		if err := os.MkdirAll(path, 0700); err != nil {
 			return nil, fmt.Errorf("create spawner state: %w", err)
 		}
@@ -85,7 +85,7 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 }
 
 // Close terminates and awaits owned children before the caller closes shared
-// providers. Records remain: a later host must not relaunch their assigned IDs.
+// providers. Execution checkpoints prevent another host reusing their launch IDs.
 func (m *Manager) Close() error {
 	m.once.Do(func() {
 		m.cancel()

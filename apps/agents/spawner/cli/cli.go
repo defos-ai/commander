@@ -8,11 +8,9 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/host"
@@ -24,16 +22,16 @@ const serviceName = "commander-" + string(spawner.AgentType)
 // ErrShutdown tells an embedded host to retain shared state after cleanup fails.
 var ErrShutdown = errors.New("spawner shutdown failed")
 
-// Options lets an embedded host isolate its runtime and receive startup identities.
+// Options lets an embedded host isolate its runtime and receive its agent identity.
 type Options struct {
 	Runtime  string
 	StateDir string
 	// SecretsEncryptionKey overrides SECRETS_ENCRYPTION_KEY when non-nil.
 	// An explicit empty value disables managed secrets and child key delivery.
 	SecretsEncryptionKey *string
-	// Ready reports observed startup agents before serving. The caller must still
-	// wait for the controller to persist these identities before using them.
-	Ready func(agentID string, spawned []runtimes.Result)
+	// Ready reports this host's identity before serving. The caller must still
+	// wait for the controller to persist its registration before using it.
+	Ready func(agentID string)
 }
 
 // Run installs no signal handlers; Main adds process-level shutdown handling.
@@ -113,19 +111,11 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	if err != nil {
 		return err
 	}
-	spawned := make([]runtimes.Result, 0, len(configuration.spawnAgents))
-	for index, reference := range configuration.spawnAgents {
-		result, err := dependencies.Runtime.Spawn(ctx, "startup:"+strconv.Itoa(index), reference)
-		if err != nil {
-			return fmt.Errorf("spawn startup agent %d: %w", index+1, err)
-		}
-		spawned = append(spawned, result)
-	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if options.Ready != nil {
-		options.Ready(agentID, spawned)
+		options.Ready(agentID)
 	}
 	logger.Info("agent starting", "heartbeat_interval", configuration.heartbeatInterval)
 	return instance.Serve(ctx, dependencies.Bus, nil)
