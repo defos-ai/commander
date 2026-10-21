@@ -43,7 +43,7 @@ func TestBuildReleaseInstallationHandoff(t *testing.T) {
 			releaseJSON, _ := json.Marshal(released)
 			buildOutput := map[string]any{"workspace_id": "saved-workspace", "summary": "Built and released", "release": released}
 			now := time.Now()
-			build := &operations.Operation{ID: buildID, Mission: catalog["build-agent"], Input: json.RawMessage(`{"instructions":"Build an agent"}`), Status: operations.Planning, UpdatedAt: now,
+			build := &operations.Operation{ID: buildID, Mission: catalog["build-agent"], Input: json.RawMessage(`{"instructions":"Build an agent","actions":[{"name":"inspect","description":"Inspect supplied input.","input_schema":{"type":"object"},"output_schema":{"type":"object"}}]}`), Status: operations.Planning, UpdatedAt: now,
 				Tasks: []operations.Task{{ID: releaseTaskID, OperationID: buildID, ActionName: "release-agent", Status: operations.TaskSucceeded, Result: &actions.ActionOutput{ActionName: "release-agent", Output: releaseJSON}, Continuation: &operations.Continuation{Version: 1, DecisionBy: operations.DecisionModel, Status: operations.ContinuationPending}}}}
 			ops := map[string]*operations.Operation{buildID: build}
 			var mu sync.Mutex

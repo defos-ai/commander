@@ -20,6 +20,27 @@ func SchemaFor[T any]() (json.RawMessage, error) {
 	return json.Marshal(schema)
 }
 
+// ResolveSchema compiles an explicit action schema. Actions exchange JSON
+// objects, so the root must declare type object. References resolve within the
+// document; no external resource loader is configured. Defaults are validated.
+func ResolveSchema(raw json.RawMessage) (*jsonschema.Resolved, error) {
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return nil, err
+	}
+	if document["type"] != "object" {
+		return nil, errors.New("schema must declare type object")
+	}
+	if err := checkSchemaTypes(document); err != nil {
+		return nil, err
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return nil, err
+	}
+	return schema.Resolve(&jsonschema.ResolveOptions{ValidateDefaults: true})
+}
+
 // Resolve checks schema structure but accepts unknown type names. Check only
 // schema nodes: example/default object values may legitimately have a type key.
 func checkSchemaTypes(schema map[string]any) error {

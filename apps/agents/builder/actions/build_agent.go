@@ -23,11 +23,19 @@ import (
 )
 
 const BuildAgentName = "build-agent"
-const BuildAgentDescription = "Implement the requested Commander agent with Codex in a workspace returned by checkout-template on this builder. Run Go tests and build ./cmd, then validate generated identity and release structure locally and return its source archive and package metadata. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions. Does not publish or launch the agent."
+const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in a workspace returned by checkout-template on this builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then validate generated identity and release structure locally and return its source archive and package metadata. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
 
 type BuildAgentInput struct {
-	WorkspaceID  string `json:"workspace_id"`
-	Instructions string `json:"instructions"`
+	WorkspaceID  string                   `json:"workspace_id"`
+	Instructions string                   `json:"instructions"`
+	Actions      []actionmodel.Definition `json:"actions"`
+}
+
+func (i BuildAgentInput) Validate() error {
+	if !workspaceIDPattern.MatchString(i.WorkspaceID) || !utf8.ValidString(i.Instructions) || strings.TrimSpace(i.Instructions) == "" || len(i.Instructions) > 32000 || strings.ContainsRune(i.Instructions, 0) {
+		return errors.New("input requires a checkout workspace_id and nonblank instructions of at most 32000 bytes")
+	}
+	return build.ValidateActions(i.Actions)
 }
 
 type BuildAgentOutput struct {
@@ -63,8 +71,31 @@ func NewBuildAgent(workspaceDir string) (*BuildAgent, error) {
 		Name:            BuildAgentName,
 		Description:     BuildAgentDescription,
 		RequiredSecrets: []string{"CODEX_API_KEY"},
-		InputSchema:     json.RawMessage(`{"type":"object","properties":{"workspace_id":{"type":"string","pattern":"^checkout-[0-9]+$"},"instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"}},"required":["workspace_id","instructions"],"additionalProperties":false}`),
-		OutputSchema:    output,
+		InputSchema: json.RawMessage(`{
+  "type":"object",
+  "properties":{
+    "workspace_id":{"type":"string","pattern":"^checkout-[0-9]+$"},
+    "instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"},
+    "actions":{
+      "type":"array","minItems":1,"maxItems":100,
+      "description":"Requested action contracts. Required secret names belong to the generated agent; supply no secret values.",
+      "items":{
+        "type":"object","additionalProperties":false,
+        "properties":{
+          "name":{"type":"string","maxLength":128,"pattern":"^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+          "description":{"type":"string","maxLength":8192,"pattern":"^\\S(?:[\\s\\S]*\\S)?$"},
+          "required_secrets":{"type":["array","null"],"uniqueItems":true,"items":{"type":"string","maxLength":128,"pattern":"^[A-Za-z0-9_][A-Za-z0-9_.-]*$"}},
+          "input_schema":{"type":"object","properties":{"type":{"const":"object"}},"required":["type"]},
+          "output_schema":{"type":"object","properties":{"type":{"const":"object"}},"required":["type"]}
+        },
+        "required":["name","description","input_schema","output_schema"]
+      }
+    }
+  },
+  "required":["workspace_id","instructions","actions"],
+  "additionalProperties":false
+}`),
+		OutputSchema: output,
 	})}, nil
 }
 
@@ -114,8 +145,8 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if err := action.DecodeInput(raw, &input); err != nil {
 		return action.Result{}, err
 	}
-	if !workspaceIDPattern.MatchString(input.WorkspaceID) || !utf8.ValidString(input.Instructions) || strings.TrimSpace(input.Instructions) == "" || len(input.Instructions) > 32000 || strings.ContainsRune(input.Instructions, 0) {
-		return action.Result{}, errors.New("input requires a checkout workspace_id and nonblank instructions of at most 32000 bytes")
+	if err := input.Validate(); err != nil {
+		return action.Result{}, err
 	}
 	if !a.building.TryLock() {
 		return action.Result{}, errors.New("another build is running on this builder; wait for its outcome")
@@ -148,7 +179,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if err != nil {
 		return action.Result{}, err
 	}
-	if err := build.RunCodex(ctx, tools.codex, source, scratch, env, key, input.Instructions); err != nil {
+	if err := build.RunCodex(ctx, tools.codex, source, scratch, env, key, input.Instructions, input.Actions); err != nil {
 		return action.Result{}, err
 	}
 	// Check the original directory again: generated files cannot redirect later

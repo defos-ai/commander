@@ -3,6 +3,7 @@ package build
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
+	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func Environment(scratch, codexExecutable, goExecutable string) ([]string, error) {
@@ -42,7 +44,11 @@ func Environment(scratch, codexExecutable, goExecutable string) ([]string, error
 	return env, nil
 }
 
-func RunCodex(ctx context.Context, executable, source, scratch string, env []string, key []byte, instructions string) error {
+func RunCodex(ctx context.Context, executable, source, scratch string, env []string, key []byte, instructions string, definitions []actions.Definition) error {
+	contracts, err := json.MarshalIndent(definitions, "", "  ")
+	if err != nil {
+		return errors.New("encode requested action contracts failed")
+	}
 	// Only the Codex parent receives its API key. Its generated shell commands
 	// use the clean build environment, as do the independent Go checks below.
 	settings := make([]string, 0, len(env))
@@ -58,6 +64,11 @@ func RunCodex(ctx context.Context, executable, source, scratch string, env []str
 Follow AGENTS.md and preserve the template's framework/provider contracts, license notices,
 CLI bootstrap, release packaging and external tests/ layout. Keep the ./cmd executable.
 Implement real actions, schemas, discovery, tests, README and a matching mission.
+Implement the requested action contracts below, preserving their names, descriptions,
+input/output schemas and required secret declarations. Treat these contracts as the
+capability specification alongside the requested behavior. Required secret names
+belong to the generated agent type; obtain values through Commander's managed-secret
+flow at runtime. Never put secret values in action inputs, source or output.
 Choose a distinct lowercase AgentType and replace the example-agent module and
 identity consistently in Go imports, including release helpers, CLI, Dockerfile and
 documentation. Keep pure Responsibilities() and ActionDescriptions() metadata in
@@ -76,7 +87,7 @@ The host will independently run go test, go build and release structure checks,
 then archive the source.
 
 Requested agent:
-` + instructions
+` + instructions + "\n\nRequested action contracts (JSON):\n" + string(contracts)
 	return RunCommand(ctx, "Codex", executable, source, append(append([]string(nil), env...), "CODEX_API_KEY="+string(key)), strings.NewReader(prompt), args...)
 }
 

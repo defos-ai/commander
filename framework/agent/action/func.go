@@ -168,21 +168,7 @@ func funcSchema[T any](raw json.RawMessage) (*jsonschema.Resolved, json.RawMessa
 			return nil, nil, err
 		}
 	}
-	var document map[string]any
-	if err := json.Unmarshal(raw, &document); err != nil {
-		return nil, nil, err
-	}
-	if document["type"] != "object" {
-		return nil, nil, errors.New("schema must declare type object")
-	}
-	if err := checkSchemaTypes(document); err != nil {
-		return nil, nil, err
-	}
-	var schema jsonschema.Schema
-	if err := json.Unmarshal(raw, &schema); err != nil {
-		return nil, nil, err
-	}
-	resolved, err := schema.Resolve(&jsonschema.ResolveOptions{ValidateDefaults: true})
+	resolved, err := ResolveSchema(raw)
 	return resolved, raw, err
 }
 

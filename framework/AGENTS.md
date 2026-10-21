@@ -163,6 +163,8 @@
   validation and cloning through `Definition`; keep live requirement checks in
   `Action.Validate`. Metadata validation requires JSON-object schemas; typed
   executors additionally compile their schemas and validate execution data.
+  Reuse `action.ResolveSchema` to check explicit object schemas with the same
+  local reference, default and type validation as typed executors.
   Constructors accept action metadata and may infer schemas later, so validate
   secret declarations separately before inference. Release `manifest.Action`
   remains a name/description summary.
@@ -179,6 +181,8 @@
   empty lists, invalid text, duplicate names and unsafe YAML. Keep the 64 KiB
   document limit, 100-entry list bounds and 8 KiB text bounds. Preserve
   responsibility order and sort a cloned action list when rendering.
+  `manifest.Action.Validate` shares release-safe name and description constraints
+  with callers preparing action contracts before a build.
   See the [package contract](../docs/agent-packages.md#source-template).
   Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
 - [`agent/packages`](agent/packages/) owns GitHub package reference/selector

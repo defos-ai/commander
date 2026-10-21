@@ -45,6 +45,17 @@ type Action struct {
 	Description string `yaml:"description"`
 }
 
+// Validate checks the name and text bounds of a published capability summary.
+func (a Action) Validate() error {
+	if len(a.Name) > maxActionNameBytes || !actionPattern.MatchString(a.Name) {
+		return errors.New("manifest action names must be safe names of at most 128 bytes")
+	}
+	if !validDescription(a.Description) {
+		return errors.New("manifest action descriptions must be trimmed, nonblank UTF-8 text of at most 8192 bytes")
+	}
+	return nil
+}
+
 type NativeAsset struct {
 	Asset  string `yaml:"asset"`
 	SHA256 string `yaml:"sha256"`
@@ -254,13 +265,13 @@ func (m Manifest) validateDescription() error {
 	}
 	seen := make(map[string]bool, len(m.Actions))
 	for _, action := range m.Actions {
-		if len(action.Name) > maxActionNameBytes || !actionPattern.MatchString(action.Name) || seen[action.Name] {
-			return errors.New("manifest action names must be unique safe names of at most 128 bytes")
+		if err := action.Validate(); err != nil {
+			return err
+		}
+		if seen[action.Name] {
+			return errors.New("manifest action names must be unique")
 		}
 		seen[action.Name] = true
-		if !validDescription(action.Description) {
-			return errors.New("manifest action descriptions must be trimmed, nonblank UTF-8 text of at most 8192 bytes")
-		}
 	}
 	return nil
 }

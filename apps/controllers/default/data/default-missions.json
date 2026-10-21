@@ -1,7 +1,7 @@
 [
   {
     "name": "build-agent",
-    "objective": "Build a Commander agent from the operator's instructions, with optional source publication and release in this same operation. Read checkout-template and build-agent schemas and readiness first. Assign checkout-template with {} input, then review its result and resolve its continuation with build-agent using the returned workspace_id and the original mission instructions. The same-agent rule keeps checkout and build on the builder that owns the workspace; do not invent a workspace ID or route it to another instance. If CODEX_API_KEY is missing, use the local secret form or Admin Secrets; never request or include secret values in chat, questions or action input. Review the saved build result and source.tar.gz artifact before offering publication. Recommend sharing the reviewed source, but publish only when the operator requests or agrees to it; a supplied repository is a publication request. If the operator has not already requested or declined publication, ask a linked question offering publication or Skip, and wait for the actual answer; skipping resolves the build continuation with no follow-up actions and completes with workspace_id and a concise build summary. Keep the operation open while awaiting answers; expiry is not approval. For publication, read publish-agent's schema, obtain owner/repository from the operator if missing, and preserve the explicit visibility or advertised action default. Without either, ask Public (recommended) or Private and wait. Resolve the build continuation with publish-agent using the exact saved source_artifact_id, full source_file descriptor, repository and chosen visibility. Publication can run on any builder sharing artifact storage; it does not need the local workspace. GITHUB_TOKEN is needed only for optional publication/release and uses the managed-secret form; its absence must not block a build that skips publication. Never include token values in chat or inputs. Inspect uncertain publication before retrying, preserve existing repository visibility and never force-push. Review the saved publication result and include its output as the optional publication report. Release is another optional action: source publication alone is a valid completion. A supplied release_version requests release after publication; otherwise ask whether to release or finish with source only and wait for the operator. Obtain an explicit stable vMAJOR.MINOR.PATCH version; never invent one. To release, resolve the publication continuation with release-agent using repository, the saved publish-agent commit_sha, build-agent agent_type and chosen version. The default branch must still match the approved source commit. Pending release-agent results propose automatic status checks with workflow_run_id; preserve that ID and keep the operation open while waiting. Inspect failed or uncertain runs and direct the operator to the workflow; retry failed jobs in the same GitHub run, never silently dispatch a replacement. Only a released result confirms an installable pinned package. Review the terminal release result and include its output in the optional release report. Only after status released, offer installation of that exact package. Honor an explicit installation request or refusal already supplied by the operator; otherwise ask a linked question: Install this agent? with Install and Finish options, and wait for the actual answer while keeping the build operation open. An expired question is not approval. If the operator finishes without installation, resolve the release continuation with no follow-up actions and complete with workspace_id, a concise summary, and the saved publication/release links. Failed or uncertain releases never authorize installation. If installation is requested or accepted, first resolve the release continuation with no follow-up actions and complete this build operation with its successful release report. Then read describe_mission for install-agent and describe_action for spawn-agent, start a separate install-agent operation using exactly the verified release result package and visibility, and assign spawn-agent with that same input through the controller. Never substitute a catalog alias, repository URL without its version, @stable, or a default visibility; never queue spawn-agent inside the build operation. Review the saved spawn result, resolve its continuation with no follow-up actions, and recheck list_agents and the installed agent action readiness before completing the installation operation with agent_id and any limitations. Registration alone does not prove its actions are ready. Inspect an uncertain launch before retrying; never silently start another instance. Installation failure does not undo the successful build or release.",
+    "objective": "Build a Commander agent from the operator's instructions, with optional source publication and release in this same operation. Read checkout-template and build-agent schemas and readiness first. Define the requested action contracts before checkout; translate the operator's natural-language request into names, descriptions, input/output object schemas and required secret names, never values. Assign checkout-template with {} input, then review its result and resolve its continuation with build-agent using the returned workspace_id and the original mission instructions and actions unchanged. The same-agent rule keeps checkout and build on the builder that owns the workspace; do not invent a workspace ID or route it to another instance. If CODEX_API_KEY is missing, use the local secret form or Admin Secrets; never request or include secret values in chat, questions or action input. Review the saved build result and source.tar.gz artifact before offering publication. Recommend sharing the reviewed source, but publish only when the operator requests or agrees to it; a supplied repository is a publication request. If the operator has not already requested or declined publication, ask a linked question offering publication or Skip, and wait for the actual answer; skipping resolves the build continuation with no follow-up actions and completes with workspace_id and a concise build summary. Keep the operation open while awaiting answers; expiry is not approval. For publication, read publish-agent's schema, obtain owner/repository from the operator if missing, and preserve the explicit visibility or advertised action default. Without either, ask Public (recommended) or Private and wait. Resolve the build continuation with publish-agent using the exact saved source_artifact_id, full source_file descriptor, repository and chosen visibility. Publication can run on any builder sharing artifact storage; it does not need the local workspace. GITHUB_TOKEN is needed only for optional publication/release and uses the managed-secret form; its absence must not block a build that skips publication. Never include token values in chat or inputs. Inspect uncertain publication before retrying, preserve existing repository visibility and never force-push. Review the saved publication result and include its output as the optional publication report. Release is another optional action: source publication alone is a valid completion. A supplied release_version requests release after publication; otherwise ask whether to release or finish with source only and wait for the operator. Obtain an explicit stable vMAJOR.MINOR.PATCH version; never invent one. To release, resolve the publication continuation with release-agent using repository, the saved publish-agent commit_sha, build-agent agent_type and chosen version. The default branch must still match the approved source commit. Pending release-agent results propose automatic status checks with workflow_run_id; preserve that ID and keep the operation open while waiting. Inspect failed or uncertain runs and direct the operator to the workflow; retry failed jobs in the same GitHub run, never silently dispatch a replacement. Only a released result confirms an installable pinned package. Review the terminal release result and include its output in the optional release report. Only after status released, offer installation of that exact package. Honor an explicit installation request or refusal already supplied by the operator; otherwise ask a linked question: Install this agent? with Install and Finish options, and wait for the actual answer while keeping the build operation open. An expired question is not approval. If the operator finishes without installation, resolve the release continuation with no follow-up actions and complete with workspace_id, a concise summary, and the saved publication/release links. Failed or uncertain releases never authorize installation. If installation is requested or accepted, first resolve the release continuation with no follow-up actions and complete this build operation with its successful release report. Then read describe_mission for install-agent and describe_action for spawn-agent, start a separate install-agent operation using exactly the verified release result package and visibility, and assign spawn-agent with that same input through the controller. Never substitute a catalog alias, repository URL without its version, @stable, or a default visibility; never queue spawn-agent inside the build operation. Review the saved spawn result, resolve its continuation with no follow-up actions, and recheck list_agents and the installed agent action readiness before completing the installation operation with agent_id and any limitations. Registration alone does not prove its actions are ready. Inspect an uncertain launch before retrying; never silently start another instance. Installation failure does not undo the successful build or release.",
     "required_actions": [
       "checkout-template",
       "build-agent"
@@ -37,7 +37,76 @@
         "instructions": {
           "type": "string",
           "pattern": "\\S",
-          "description": "The agent to create, including its actions and expected behavior. Never include secret values."
+          "description": "Implementation guidance for the requested action contracts. Never include secret values."
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "description": "Requested action contracts for the generated agent. Names must be unique. Define them before checkout and pass them unchanged to build-agent; required_secrets are names, never values.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+              },
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "object"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "description": "JSON Schema for an object input, with local references only. Extension keywords are allowed."
+              },
+              "output_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "object"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "description": "JSON Schema for an object output, with local references only. Extension keywords are allowed."
+              },
+              "required_secrets": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+                },
+                "description": "Managed secret names needed by the generated action, not by the builder. Never include values."
+              }
+            },
+            "required": [
+              "name",
+              "description",
+              "input_schema",
+              "output_schema"
+            ],
+            "additionalProperties": false
+          }
         },
         "repository": {
           "type": "string",
@@ -60,7 +129,8 @@
         }
       },
       "required": [
-        "instructions"
+        "instructions",
+        "actions"
       ],
       "additionalProperties": false
     },

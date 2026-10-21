@@ -34,8 +34,34 @@ Change the root with `--workspace-dir` or `BUILDER_WORKSPACE_DIR`.
 Then request `build-agent` on the same builder with:
 
 ```json
-{"workspace_id":"<checkout result>","instructions":"Create an agent that checks JSON responses against a schema."}
+{
+  "workspace_id": "<checkout result>",
+  "instructions": "Create a word-counting agent. Count words separated by whitespace.",
+  "actions": [
+    {
+      "name": "count-words",
+      "description": "Count the words in supplied text.",
+      "input_schema": {
+        "type": "object",
+        "properties": {"text": {"type": "string"}},
+        "required": ["text"],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {"count": {"type": "integer", "minimum": 0}},
+        "required": ["count"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}
 ```
+
+Provide 1–100 action contracts with unique names, descriptions, object input/output
+schemas and optional `required_secrets` names. The builder validates these contracts
+before running Codex and includes them in its instructions. Secret names describe
+what the generated agent needs; secret values use the managed-secret form.
 
 It uses the managed `CODEX_API_KEY`, runs Codex and Go tests/build, then checks
 the release structure inherited from the template. It returns the workspace ID,
@@ -43,8 +69,9 @@ source file count, agent type, module path, binary name and a `source.tar.gz`
 artifact. Supply the key through Playground's secret form or Admin's agent
 secrets page; never put it in the instructions. The bundled `build-agent` mission
 connects checkout and build with a `same-agent` rule and model review after each
-stage. Publication and release are optional actions in that mission. Ask Playground to build
-an agent and describe its actions and expected behavior.
+stage. Ask Playground to build an agent and describe its behavior; it defines
+the action contracts before checkout and passes them unchanged to `build-agent`.
+Publication and release are optional actions in that mission.
 
 The structure check validates the agent identity, module and manifest against
 the template's release entry points. A failed check preserves the workspace for

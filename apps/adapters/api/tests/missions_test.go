@@ -21,7 +21,10 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 		t.Fatalf("build mission lost its optional publication action: %+v", build)
 	}
 	assertSchema(t, a, "Mission", a.request(http.MethodGet, "/api/v1/missions/build-agent", nil))
-	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "build-agent", "input": object{"instructions": "Create a fixture agent"}})
+	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "build-agent", "input": object{
+		"instructions": "Create a fixture agent",
+		"actions":      []object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": object{"type": "object"}, "output_schema": object{"type": "object"}}},
+	}})
 	buildOperation := decode[models.OperationResponse](t, created, http.StatusCreated)
 	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
 		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)

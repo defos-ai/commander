@@ -38,7 +38,10 @@ func TestMissions(t *testing.T) {
 		t.Fatalf("build mission lost its optional publication and release actions: %+v", build)
 	}
 	var buildOperation operations.Operation
-	a.call("start_operation", object{"mission_name": "build-agent", "input": object{"instructions": "Create a fixture agent"}}, &buildOperation)
+	a.call("start_operation", object{"mission_name": "build-agent", "input": object{
+		"instructions": "Create a fixture agent",
+		"actions":      []object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": object{"type": "object"}, "output_schema": object{"type": "object"}}},
+	}}, &buildOperation)
 	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
 		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
 	}

@@ -36,6 +36,9 @@ running agent. Use its validation and cloning when describing a capability befor
 implementation. `actions.Action` adds runtime readiness; `Action.Definition()`
 returns an independent copy of its static contract. Executor bases retain that
 definition separately from their discovery state.
+Use [`action.ResolveSchema`](agent/action/schema.go) to compile explicit object
+schemas with the same rules as typed executors, including local references and
+default validation.
 
 ## Agent package manifests
 

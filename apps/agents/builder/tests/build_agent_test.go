@@ -17,6 +17,7 @@ import (
 	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
@@ -32,7 +33,9 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 		t.Setenv(name, "ambient-secret-must-not-reach-child")
 	}
 	executor, config, _ := buildExecutor(t, root, checkout.WorkspaceID, "")
-	result, err := executor.Run(buildSecretContext(t), buildInput(t, checkout.WorkspaceID))
+	input := buildInput(t, checkout.WorkspaceID)
+	assertBuildInputSchema(t, executor.Action().InputSchema, input)
+	result, err := executor.Run(buildSecretContext(t), input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +79,94 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 		t.Fatalf("build did not verify before exporting: %q", calls)
 	}
 	assertBuildScratchRemoved(t, config)
+}
+
+func TestBuildAgentRejectsInvalidActionContractsBeforeExecution(t *testing.T) {
+	root, workspaceID := buildWorkspace(t)
+	executor, config, _ := buildExecutor(t, root, workspaceID, "")
+	for _, scenario := range []struct {
+		name   string
+		change func(map[string]any, map[string]any)
+	}{
+		{"missing actions", func(input, _ map[string]any) { delete(input, "actions") }},
+		{"empty actions", func(input, _ map[string]any) { input["actions"] = []any{} }},
+		{"null actions", func(input, _ map[string]any) { input["actions"] = nil }},
+		{"duplicate names", func(input, definition map[string]any) { input["actions"] = []any{definition, definition} }},
+		{"unsafe name", func(_, definition map[string]any) { definition["name"] = "../count-words" }},
+		{"blank description", func(_, definition map[string]any) { definition["description"] = " \t " }},
+		{"invalid secret name", func(_, definition map[string]any) { definition["required_secrets"] = []string{"service/token"} }},
+		{"missing object type", func(_, definition map[string]any) { definition["input_schema"] = map[string]any{} }},
+		{"invalid schema type", func(_, definition map[string]any) {
+			definition["output_schema"] = map[string]any{"type": "object", "properties": map[string]any{"count": map[string]any{"type": "not-a-json-type"}}}
+		}},
+		{"unresolved schema reference", func(_, definition map[string]any) {
+			definition["input_schema"] = map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"$ref": "#/$defs/missing"}}}
+		}},
+		{"remote schema reference", func(_, definition map[string]any) {
+			definition["input_schema"] = map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"$ref": "https://schema.invalid/text"}}}
+		}},
+		{"runtime readiness field", func(_, definition map[string]any) { definition["status"] = "ready" }},
+		{"unknown contract field", func(_, definition map[string]any) { definition["instruction"] = "implement" }},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			var input map[string]any
+			if err := json.Unmarshal(buildInput(t, workspaceID), &input); err != nil {
+				t.Fatal(err)
+			}
+			definition := input["actions"].([]any)[0].(map[string]any)
+			scenario.change(input, definition)
+			raw, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := executor.Run(t.Context(), raw)
+			if err == nil || errors.Is(err, action.ErrSecretUnavailable) {
+				t.Fatalf("action contract was not rejected before managed-secret access: %v", err)
+			}
+			if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 {
+				t.Fatal("invalid contract produced source or output")
+			}
+			if _, err := os.Stat(config.Calls); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("invalid contract started a subprocess")
+			}
+			entries, err := os.ReadDir(filepath.Dir(config.Source))
+			if err != nil || len(entries) != 1 || entries[0].Name() != "source" {
+				t.Fatal("invalid contract created build scratch files")
+			}
+			contents, err := os.ReadFile(filepath.Join(config.Source, "README.md"))
+			if err != nil || string(contents) != "Local source fixture\n" {
+				t.Fatal("invalid contract changed the source checkout")
+			}
+		})
+	}
+}
+
+func assertBuildInputSchema(t *testing.T, rawSchema, input json.RawMessage) {
+	t.Helper()
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(rawSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(input, &value); err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(value); err != nil {
+		t.Fatal("advertised schema rejected structured contracts with local references and extensions:", err)
+	}
+	definition := value["actions"].([]any)[0].(map[string]any)
+	definition["status"] = "ready"
+	if err := resolved.Validate(value); err == nil {
+		t.Fatal("advertised schema accepts runtime readiness in an action contract")
+	}
+	delete(value, "actions")
+	if err := resolved.Validate(value); err == nil {
+		t.Fatal("advertised schema does not require action contracts")
+	}
 }
 
 func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
@@ -330,7 +421,7 @@ func writeBuildFile(t *testing.T, root, name, value string) {
 
 func buildInput(t *testing.T, workspaceID string) json.RawMessage {
 	t.Helper()
-	input, err := json.Marshal(builderactions.BuildAgentInput{WorkspaceID: workspaceID, Instructions: buildTestInstructions})
+	input, err := json.Marshal(builderactions.BuildAgentInput{WorkspaceID: workspaceID, Instructions: buildTestInstructions, Actions: buildRequestedActions()})
 	if err != nil {
 		t.Fatal(err)
 	}

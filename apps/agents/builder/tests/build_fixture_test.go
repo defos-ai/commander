@@ -1,6 +1,7 @@
 package builder_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -16,12 +17,22 @@ import (
 
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 const buildTestSecret = "managed-codex-token-not-for-artifacts"
-const buildTestInstructions = "Create an agent that counts words. $(never-run-this)"
+const buildTestInstructions = "Create an agent that counts words. $(never-run-this)\nPreserve \"quoted\" instructions."
 const buildTestAgentType = "word-count-agent"
 const buildTestBinary = "commander-word-count-agent"
+
+func buildRequestedActions() []actionmodel.Definition {
+	return []actionmodel.Definition{{
+		Name: "count-words", Description: "Return the word count of supplied text",
+		RequiredSecrets: []string{"SERVICE_TOKEN"},
+		InputSchema:     json.RawMessage(`{"type":"object","$defs":{"text":{"type":"string","minLength":1}},"properties":{"text":{"$ref":"#/$defs/text"},"options":{"type":"object","properties":{"language":{"type":"string","default":"en"}},"additionalProperties":false}},"required":["text"],"additionalProperties":false,"x-contract":{"sample":9007199254740993,"type":"business-label"}}`),
+		OutputSchema:    json.RawMessage(`{"type":"object","properties":{"count":{"type":"integer","minimum":0}},"required":["count"],"additionalProperties":false}`),
+	}}
+}
 
 type buildFixtureConfig struct {
 	Source, Mode, Started, Calls, Home string
@@ -120,12 +131,12 @@ func executeBuildFixture(tool string) error {
 		if index := slices.Index(args, "--sandbox"); index < 0 || index+1 >= len(args) || args[index+1] != "workspace-write" {
 			return errors.New("Codex sandbox was not scoped to the workspace")
 		}
-		prompt, err := io.ReadAll(io.LimitReader(os.Stdin, 128<<10))
+		prompt, err := io.ReadAll(io.LimitReader(os.Stdin, 2<<20))
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(string(prompt), buildTestInstructions) || strings.Contains(string(prompt), buildTestSecret) {
-			return errors.New("stdin lost instructions or included credentials")
+		if err := validateBuildPrompt(prompt); err != nil {
+			return err
 		}
 		if config.Home != "" {
 			if err := os.WriteFile(config.Home, []byte(os.Getenv("HOME")), 0600); err != nil {
@@ -199,6 +210,44 @@ func executeBuildFixture(tool string) error {
 		return runReleaseFixture(args[2:], config)
 	}
 	return errors.New("unexpected Go verification command")
+}
+
+func validateBuildPrompt(prompt []byte) error {
+	text := string(prompt)
+	if !strings.Contains(text, "Requested agent:\n"+buildTestInstructions+"\n\nRequested action contracts (JSON):\n") || strings.Contains(text, buildTestSecret) {
+		return errors.New("stdin lost instructions or included credentials")
+	}
+	_, contracts, ok := strings.Cut(text, "Requested action contracts (JSON):\n")
+	if !ok {
+		return errors.New("stdin did not separate requested action contracts from instructions")
+	}
+	var actual []actionmodel.Definition
+	decoder := json.NewDecoder(strings.NewReader(contracts))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&actual); err != nil {
+		return fmt.Errorf("decode requested action contracts: %w", err)
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return errors.New("stdin has trailing content after action contracts")
+	}
+	expected := buildRequestedActions()
+	if len(actual) != len(expected) {
+		return errors.New("stdin lost requested action contracts")
+	}
+	for i, want := range expected {
+		got := actual[i]
+		if got.Name != want.Name || got.Description != want.Description || !slices.Equal(got.RequiredSecrets, want.RequiredSecrets) {
+			return errors.New("stdin changed requested action metadata")
+		}
+		for _, pair := range [][2]json.RawMessage{{got.InputSchema, want.InputSchema}, {got.OutputSchema, want.OutputSchema}} {
+			var gotCompact, wantCompact bytes.Buffer
+			// RawMessage keeps extension keywords and large JSON integers intact.
+			if json.Compact(&gotCompact, pair[0]) != nil || json.Compact(&wantCompact, pair[1]) != nil || !bytes.Equal(gotCompact.Bytes(), wantCompact.Bytes()) {
+				return errors.New("stdin changed requested JSON schemas")
+			}
+		}
+	}
+	return nil
 }
 
 func writeReleaseFixture(root, mode string) error {

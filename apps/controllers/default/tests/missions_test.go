@@ -133,14 +133,15 @@ func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublicationAndRelease
 	if len(mission.Rules) != 2 || !slices.Equal(affinity.ForActions, stages) || !slices.Equal(decision.ForActions, []string{"checkout-template", "build-agent", "publish-agent"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
 		t.Fatalf("workspace stages need affinity and build/publication review; release polls must continue automatically: %+v", mission.Rules)
 	}
-	input := json.RawMessage(`{"instructions":"Create a JSON validation agent."}`)
+	const requestedActions = `[{"name":"validate-json","description":"Validate supplied JSON.","input_schema":{"type":"object"},"output_schema":{"type":"object"}}]`
+	input := json.RawMessage(`{"instructions":"Create a JSON validation agent.","actions":` + requestedActions + `}`)
 	if err := mission.ValidateInput(input); err != nil {
 		t.Fatal(err)
 	}
 	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the agent and validated its source."}`)); err != nil {
 		t.Fatal(err)
 	}
-	publicationInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","repository":"example/json-agent","visibility":"public"}`)
+	publicationInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"public"}`)
 	if err := mission.ValidateInput(publicationInput); err != nil {
 		t.Fatalf("optional publication preferences rejected: %v", err)
 	}
@@ -154,7 +155,7 @@ func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublicationAndRelease
 	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the source.","publication":{"repository_url":"https://github.com/example/json-agent"}}`)); err == nil {
 		t.Fatal("incomplete publication result accepted")
 	}
-	releaseInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","repository":"example/json-agent","visibility":"public","release_version":"v0.1.0"}`)
+	releaseInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"public","release_version":"v0.1.0"}`)
 	if err := mission.ValidateInput(releaseInput); err != nil {
 		t.Fatalf("explicit optional release request rejected: %v", err)
 	}
@@ -168,7 +169,16 @@ func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublicationAndRelease
 	if err := mission.ValidateOutput(releaseInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Still waiting.","release":{"repository":"example/json-agent","commit_sha":"0123456789abcdef0123456789abcdef01234567","version":"v0.1.0","agent_type":"json-agent","visibility":"public","status":"pending"}}`)); err == nil {
 		t.Fatal("pending release accepted as a finished mission report")
 	}
-	for _, invalid := range []string{`{}`, `{"instructions":" "}`, `{"instructions":"Build an agent","CODEX_API_KEY":"value"}`, `{"instructions":"Build an agent","repository":"example/json-agent","visibility":"internal"}`, `{"instructions":"Build an agent","release_version":"stable"}`, `{"instructions":"Build an agent","release_version":"v0.1.0-rc.1"}`} {
+	for _, invalid := range []string{
+		`{}`,
+		`{"instructions":"Build an agent"}`,
+		`{"instructions":"Build an agent","actions":[]}`,
+		`{"instructions":" ","actions":` + requestedActions + `}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"CODEX_API_KEY":"value"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"internal"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"release_version":"stable"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"release_version":"v0.1.0-rc.1"}`,
+	} {
 		if err := mission.ValidateInput(json.RawMessage(invalid)); err == nil {
 			t.Fatalf("invalid build input accepted: %s", invalid)
 		}

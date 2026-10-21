@@ -22,7 +22,15 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - [checkout-template](actions/checkout_template.go) accepts `{}` and uses a fixed
   source URL; do not expose paths or arbitrary Git URLs through task input.
 - [build-agent](actions/build_agent.go) accepts the checkout's opaque workspace
-  ID and instructions. It uses managed `CODEX_API_KEY`, runs Codex and Go
+  ID, instructions and 1–100 `actions.Definition` contracts. Require unique safe
+  action names, trimmed nonblank descriptions, compilable input/output schemas
+  explicitly declaring `type: object`, and valid unique required secret names.
+  Preserve schema extensions and allow local references only. Validate contracts
+  before running Codex and include the complete definitions in its prompt.
+  Define contracts from the operator's request before checkout and pass the
+  mission's instructions and actions unchanged into the build continuation.
+  Declared secret names belong to the generated agent, not builder readiness;
+  only managed `CODEX_API_KEY` gates this action. It runs Codex and Go
   tests/build, validates the generated release structure, and exports
   `source.tar.gz` through the normal artifact runtime. Its successful output
   records the generated `agent_type`, `module_path` and `binary` alongside the
