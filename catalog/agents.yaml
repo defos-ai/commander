@@ -1,7 +1,7 @@
 schema_version: 1
 agents:
   builder:
-    description: Creates Commander agents from the example template with Codex, validates them with Go, and exports source artifacts.
+    description: Builds Commander agents with Codex, validates and exports source, and publishes reviewed source artifacts to GitHub.
     package: github.com/defos-ai/commander/apps/agents/builder@stable
     visibility: public
   web:

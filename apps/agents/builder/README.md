@@ -3,7 +3,8 @@
 The `builder-agent` creates Commander agents with Codex, checks them with Go,
 and exports their source as an artifact. `checkout-template` clones the
 [example agent](https://github.com/defos-ai/commander-example-agent);
-`build-agent` implements the requested behavior in that workspace.
+`build-agent` implements the requested behavior. `publish-agent` publishes
+a reviewed source artifact to GitHub.
 
 ## Run
 
@@ -41,6 +42,23 @@ key through Playground's secret form or Admin's agent secrets page; never put it
 in the instructions. The bundled `build-agent` mission connects checkout and
 build with a `same-agent` rule and model review after each stage. Ask Playground
 to build an agent and describe its actions and expected behavior.
+
+## Publish source
+
+After reviewing a build, ask Playground to publish its source to `owner/repository`.
+The separate `publish-agent` mission uses the saved artifact ID and its full file
+metadata, so publication can run on any builder connected to the same storage.
+It needs the managed `GITHUB_TOKEN`, supplied through the secret form.
+
+Choose **Public** (recommended) or **Private**. To set a deployment default,
+configure `BUILDER_DEFAULT_REPO_VISIBILITY=public` or `private` on the builder.
+The action advertises that default; without one, Playground asks and waits for
+your choice before publishing. An explicit choice overrides the default.
+
+Publication creates a repository or uses an empty one, preserves Commander
+attribution in its README, and returns the repository and commit links. It never
+changes an existing repository's visibility or overwrites conflicting history.
+Source publication does not produce a release package or install the agent.
 
 ## Bundled deployment
 
@@ -110,8 +128,8 @@ access to GitHub.
 Codex runs with its workspace-write sandbox and temporary configuration. Go
 checks use `GOWORK=off` and a clean environment without the Codex key, but execute
 generated code as the builder's operating-system user. Use a builder deployment
-you trust for code execution. GitHub publication and generated-agent startup
-remain separate stages.
+you trust for code execution. Source publication is a separate mission; release
+packaging and generated-agent startup remain later stages.
 
 ## Development
 

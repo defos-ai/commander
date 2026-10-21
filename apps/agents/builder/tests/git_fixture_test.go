@@ -22,6 +22,7 @@ type gitFixtureConfig struct {
 	Source  string
 	Mode    string
 	Started string
+	Publish *publicationGitFixture
 }
 
 type gitFixtureState struct {
@@ -120,6 +121,9 @@ func executeGitFixture() error {
 	var config gitFixtureState
 	if err := json.Unmarshal(encoded, &config); err != nil {
 		return err
+	}
+	if config.Publish != nil {
+		return executePublicationGitFixture(config.RealGit, *config.Publish)
 	}
 	if os.Getenv("GIT_ALLOW_PROTOCOL") != "https" {
 		return errors.New("checkout did not restrict the public template to HTTPS")

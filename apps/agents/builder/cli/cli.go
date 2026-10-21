@@ -65,9 +65,14 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 			logger.Info("agent stopped")
 		}
 	}()
+	dependencies, err := openDependencies(ctx, configuration)
+	if err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, dependencies.Close()) }()
 	actions := []action.Executor{}
 	if configuration.actionNames == nil || len(configuration.actionNames) > 0 {
-		actions, err = builder.NewActions(configuration.workspaceDir)
+		actions, err = builder.NewActions(configuration.workspaceDir, dependencies.ArtifactFileStore, configuration.defaultVisibility)
 		if err != nil {
 			return err
 		}
@@ -84,11 +89,6 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		}
 		actions = selected
 	}
-	dependencies, err := openDependencies(ctx, configuration)
-	if err != nil {
-		return err
-	}
-	defer func() { result = errors.Join(result, dependencies.Close()) }()
 	agent, err := builder.NewAgent(agents.AgentConfig{
 		ID:                agentID,
 		Actions:           actions,

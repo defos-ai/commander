@@ -32,8 +32,12 @@ func TestAgentsAndActions(t *testing.T) {
 		for _, action := range agent.Actions {
 			names = append(names, action.Name)
 			expectedCatalog[action.Name] = true
-			if action.Name == "build-agent" {
-				if action.Status != actions.Unavailable || !slices.Equal(action.RequiredSecrets, []string{"CODEX_API_KEY"}) || len(action.MissingRequirements) != 1 || action.MissingRequirements[0].Kind != actions.SecretRequirement || action.MissingRequirements[0].Name != "CODEX_API_KEY" {
+			if action.Name == "build-agent" || action.Name == "publish-agent" {
+				secret := "CODEX_API_KEY"
+				if action.Name == "publish-agent" {
+					secret = "GITHUB_TOKEN"
+				}
+				if action.Status != actions.Unavailable || !slices.Equal(action.RequiredSecrets, []string{secret}) || len(action.MissingRequirements) != 1 || action.MissingRequirements[0].Kind != actions.SecretRequirement || action.MissingRequirements[0].Name != secret {
 					t.Fatalf("builder tools must be installed while its managed key remains missing: %+v", action)
 				}
 			} else if action.Status != actions.Ready {

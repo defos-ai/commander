@@ -12,6 +12,7 @@ import (
 	"time"
 
 	builder "github.com/defos-ai/commander/apps/agents/builder"
+	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/crypto"
@@ -25,6 +26,7 @@ type config struct {
 	busURL            string
 	storageURL        string
 	workspaceDir      string
+	defaultVisibility string
 	logLevel          string
 	logFormat         string
 	heartbeatInterval time.Duration
@@ -54,6 +56,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		fmt.Fprintln(stderr, "Run one agent independently; connect the default controller to the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
 		fmt.Fprintln(stderr, "Set SECRETS_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
+		fmt.Fprintln(stderr, "BUILDER_DEFAULT_REPO_VISIBILITY optionally selects public or private; otherwise publication asks the operator.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -76,6 +79,10 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	result.workspaceDir = host.Value(result.workspaceDir, provided["workspace-dir"], "BUILDER_WORKSPACE_DIR", filepath.Join("state", "builder-workspaces"))
 	if strings.TrimSpace(result.workspaceDir) == "" {
 		return config{}, errors.New("workspace-dir must not be blank")
+	}
+	result.defaultVisibility = os.Getenv("BUILDER_DEFAULT_REPO_VISIBILITY")
+	if err := builderactions.ValidateDefaultRepoVisibility(result.defaultVisibility); err != nil {
+		return config{}, err
 	}
 
 	result.logLevel = host.Value(result.logLevel, provided["log-level"], "LOG_LEVEL", "info")

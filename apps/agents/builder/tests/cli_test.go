@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func TestBuilderConstruction(t *testing.T) {
 			t.Fatalf("incorrect builder identity: %s / %s", snapshot.ID, snapshot.Type)
 		}
 		previousID = snapshot.ID
-		if len(snapshot.Actions) != 2 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName || snapshot.Actions[1].Name != builderactions.BuildAgentName {
+		if len(snapshot.Actions) != 3 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName || snapshot.Actions[1].Name != builderactions.BuildAgentName || snapshot.Actions[2].Name != builderactions.PublishAgentName {
 			t.Fatalf("unexpected default catalog: %+v", snapshot.Actions)
 		}
 	}
@@ -65,6 +66,35 @@ func TestBuilderConstruction(t *testing.T) {
 	if _, err := builder.NewAgent(config, ""); err == nil {
 		t.Fatal("default catalog accepted empty workspace configuration")
 	}
+	if _, err := builderactions.NewPublishAgent(nil, ""); err == nil {
+		t.Fatal("publication accepted missing artifact storage")
+	}
+	if _, err := builderactions.NewPublishAgent(storage, "internal"); err == nil {
+		t.Fatal("publication accepted invalid default visibility")
+	}
+	for _, visibility := range []string{"", "public", "private"} {
+		executor, err := builderactions.NewPublishAgent(storage, visibility)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertPublicationVisibilitySchema(t, executor.Action(), visibility)
+	}
+}
+
+func assertPublicationVisibilitySchema(t *testing.T, definition actionmodel.Action, visibility string) {
+	t.Helper()
+	var schema struct {
+		Required   []string `json:"required"`
+		Properties map[string]struct {
+			Default string `json:"default"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(definition.InputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(schema.Required, "visibility") != (visibility == "") || schema.Properties["visibility"].Default != visibility {
+		t.Fatal("publication schema did not advertise the configured visibility choice")
+	}
 }
 
 func TestCLIRegistrationAndCancellation(t *testing.T) {
@@ -74,15 +104,17 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 	}
 	ids := map[string]bool{}
 	for _, test := range []struct {
-		name      string
-		empty     bool
-		key       string
-		suffix    string
-		arguments []string
-		wantID    string
-		options   cli.Options
+		name       string
+		empty      bool
+		key        string
+		suffix     string
+		visibility string
+		arguments  []string
+		wantID     string
+		options    cli.Options
 	}{
 		{name: "missing git"},
+		{name: "private publication default", visibility: "private"},
 		{name: "empty catalog with environment identity", empty: true, suffix: "a1b2c3d4", wantID: "builder-agent-a1b2c3d4"},
 		{name: "injected cipher and flag override malformed environment", empty: true, key: "malformed-private-key", options: cli.Options{SecretCipher: cipher},
 			suffix: "invalid", arguments: []string{"--agent-id-suffix=b2c3d4e5"}, wantID: "builder-agent-b2c3d4e5"},
@@ -92,6 +124,7 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
 			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", test.suffix)
+			t.Setenv("BUILDER_DEFAULT_REPO_VISIBILITY", test.visibility)
 			empty := test.empty
 			root := t.TempDir()
 			bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
@@ -144,7 +177,7 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 					t.Fatal("empty CLI selection exposed default actions")
 				}
 			} else {
-				if len(snapshot.Actions) != 2 {
+				if len(snapshot.Actions) != 3 {
 					t.Fatalf("incorrect catalog length: %d", len(snapshot.Actions))
 				}
 				definition := snapshot.Actions[0]
@@ -155,6 +188,13 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 				if build.Name != builderactions.BuildAgentName || build.Status != actionmodel.Unavailable {
 					t.Fatalf("missing build tools were not advertised: %+v", build)
 				}
+				publish := snapshot.Actions[2]
+				if publish.Name != builderactions.PublishAgentName || publish.Status != actionmodel.Unavailable || !slices.ContainsFunc(publish.MissingRequirements, func(r actionmodel.Requirement) bool {
+					return r.Kind == actionmodel.ExecutableRequirement && r.Name == "git"
+				}) {
+					t.Fatalf("missing publication Git was not advertised: %+v", publish)
+				}
+				assertPublicationVisibilitySchema(t, publish, test.visibility)
 			}
 			stop()
 			select {
@@ -195,6 +235,7 @@ func readSnapshot(t *testing.T, ctx context.Context, subscription comms.Subscrip
 
 func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
+	t.Setenv("BUILDER_DEFAULT_REPO_VISIBILITY", "")
 	for _, test := range []struct{ name, argument, suffix, expected string }{
 		{"empty workspace", "--workspace-dir=", "", "workspace-dir"},
 		{"unknown action", "--actions=unknown-action", "", "unknown action"},
@@ -222,6 +263,17 @@ func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
 			}
 		})
 	}
+	t.Run("invalid default repository visibility", func(t *testing.T) {
+		t.Setenv("BUILDER_DEFAULT_REPO_VISIBILITY", "internal")
+		root := filepath.Join(t.TempDir(), "unused")
+		err := cli.Run(t.Context(), []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"), "--workspace-dir=" + filepath.Join(root, "workspaces")}, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "BUILDER_DEFAULT_REPO_VISIBILITY") {
+			t.Fatalf("invalid publication default was not explained: %v", err)
+		}
+		if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("invalid publication default opened providers")
+		}
+	})
 	t.Run("pre-cancelled", func(t *testing.T) {
 		root := filepath.Join(t.TempDir(), "unused")
 		ctx, cancel := context.WithCancel(t.Context())

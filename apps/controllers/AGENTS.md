@@ -73,6 +73,15 @@
   Keep `same-agent` on both stages because workspace files are local, and model
   review on both results. Build exports source; publication and spawning remain
   separate operations. Managed `CODEX_API_KEY` goes through the secret flow.
+  After successful standalone completion, recommend sharing through `publish-agent`
+  without extending the build operation automatically.
+- The separate `publish-agent` mission uses the saved source artifact ID and full
+  file metadata, requiring only `publish-agent` with model review. It has no
+  `same-agent` rule or local workspace dependency. Read the action's visibility
+  default; if neither an explicit choice nor a default exists, ask Public
+  (recommended) or Private through `ask_question` and wait for the real answer.
+  Never infer approval from expiry. Managed `GITHUB_TOKEN` uses the secret flow.
+  Publication returns a source commit, not a released or installed agent.
 
 ## Validation
 

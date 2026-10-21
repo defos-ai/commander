@@ -25,10 +25,21 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   ID and instructions. It uses managed `CODEX_API_KEY`, runs Codex and Go
   tests/build, and exports `source.tar.gz` through the normal artifact runtime.
   Never publish, spawn or accept secret values through this action's input.
+- [publish-agent](actions/publish_agent.go) consumes the saved source artifact ID
+  and full file descriptor, verifies its bytes, then publishes source to GitHub.
+  It needs managed `GITHUB_TOKEN`; keep values out of inputs, errors and subprocess
+  arguments. Publication has no dependency on a local checkout or builder affinity.
+  `BUILDER_DEFAULT_REPO_VISIBILITY` optionally sets `public` or `private`; validate
+  it at startup and advertise it as the action schema default. Without an explicit
+  visibility or advertised default, clients must ask the operator and wait.
+  Recommend Public without selecting it implicitly. Preserve existing visibility,
+  reject conflicting history, and never force-push. A source commit is not an
+  installable release.
 - Keep registered action implementations in `actions/`. Supporting
   code lives in `internal/build/` (Codex, Go and source archives), `internal/git/`
   (isolated Git commands) and `internal/process/` (executable checks and process
-  cancellation). Internal packages must not import `actions/`.
+  cancellation). Keep publication support under `internal/` by purpose. Internal
+  packages must not import `actions/`.
 
 ## Workspace and process boundaries
 

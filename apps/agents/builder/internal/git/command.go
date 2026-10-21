@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
@@ -19,8 +20,16 @@ type Command struct {
 }
 
 func (g Command) Run(ctx context.Context, directory string, args ...string) (string, error) {
-	// The template is public: do not inherit Git helpers, hooks, URL rewrites,
-	// proxy settings or agent secrets. Never invoke a shell or recurse submodules.
+	return g.run(ctx, directory, nil, args...)
+}
+
+func (g Command) run(ctx context.Context, directory string, env []string, args ...string) (string, error) {
+	absolute, err := filepath.Abs(directory)
+	if err != nil {
+		return "", errors.New("Git working directory is unavailable")
+	}
+	// Never inherit Git helpers, hooks, URL rewrites, proxy settings or agent
+	// secrets. Any publication authorization is scoped explicitly to GitHub.
 	options := []string{
 		"-c", "credential.helper=",
 		"-c", "core.hooksPath=" + os.DevNull,
@@ -29,7 +38,7 @@ func (g Command) Run(ctx context.Context, directory string, args ...string) (str
 		"-c", "http.followRedirects=false",
 	}
 	command := exec.CommandContext(ctx, g.Executable, append(options, args...)...)
-	command.Dir = directory
+	command.Dir = absolute
 	command.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + g.Home,
@@ -40,10 +49,13 @@ func (g Command) Run(ctx context.Context, directory string, args ...string) (str
 		"TEMP=" + g.Home,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_GLOBAL=" + os.DevNull,
+		// Keep the current repository, but never discover config in its parents.
+		"GIT_CEILING_DIRECTORIES=" + absolute,
 		"GIT_TERMINAL_PROMPT=0",
 		"GIT_ALLOW_PROTOCOL=https",
 		"LC_ALL=C",
 	}
+	command.Env = append(command.Env, env...)
 	for _, key := range []string{"SystemRoot", "WINDIR"} {
 		if value, ok := os.LookupEnv(key); ok {
 			command.Env = append(command.Env, key+"="+value)
@@ -56,13 +68,13 @@ func (g Command) Run(ctx context.Context, directory string, args ...string) (str
 	// Raw Git diagnostics can contain environment or server-supplied data. Return
 	// only the exit status and a bounded revision, never stderr in task results.
 	command.Stderr = io.Discard
-	err := command.Run()
+	err = command.Run()
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
-		return "", fmt.Errorf("Git exited with status %d; check Git installation and template access", exitError.ExitCode())
+		return "", fmt.Errorf("Git exited with status %d; check Git installation and repository access", exitError.ExitCode())
 	}
 	if err != nil {
 		return "", err

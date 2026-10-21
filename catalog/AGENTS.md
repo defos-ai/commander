@@ -18,8 +18,9 @@ Read the [root guide](../AGENTS.md) and
   The spawner owns public and private `stable` resolution and saves the exact pin
   for retries. Catalog loading and Docker image pulls remain anonymous.
 - Describe implemented capabilities. Builder prepares source through
-  `checkout-template`, then uses `build-agent` for Codex generation, Go validation
-  and source artifacts. Do not advertise publication or generated-agent startup.
+  `checkout-template`, uses `build-agent` for Codex generation, Go validation
+  and source artifacts, then optionally publishes a reviewed artifact through
+  `publish-agent`. Source publication does not create an installable release.
   Catalog aliases are separate from registered agent types and action names.
 - Keep package references explicit, including the builder's module path. Official
   entries use `@stable`; this means the repository's promoted root GitHub Latest

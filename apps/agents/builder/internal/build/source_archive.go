@@ -39,7 +39,7 @@ func ArchiveSource(ctx context.Context, source string, key []byte) ([]byte, int,
 		if bytes.Contains([]byte(name), key) {
 			return errors.New("source filename contains the build API key; remove it before exporting")
 		}
-		if excludedSource(entry.Name()) {
+		if ExcludedSource(entry.Name()) {
 			if entry.IsDir() {
 				return fs.SkipDir
 			}
@@ -98,7 +98,7 @@ func ArchiveSource(ctx context.Context, source string, key []byte) ([]byte, int,
 	return buffer.Bytes(), count, nil
 }
 
-func excludedSource(name string) bool {
+func ExcludedSource(name string) bool {
 	switch name {
 	case ".git", ".codex", ".cache", ".home", "state", "node_modules", "bin", "dist", "auth.json":
 		return true

@@ -10,7 +10,7 @@ Operators remain responsible for trusting package authors.
 schema_version: 1
 agents:
   builder:
-    description: Creates Commander agents from the example template with Codex, validates them with Go, and exports source artifacts.
+    description: Builds Commander agents with Codex, validates and exports source, and publishes reviewed source artifacts to GitHub.
     package: github.com/defos-ai/commander/apps/agents/builder@stable
     visibility: public
 ```
@@ -22,8 +22,9 @@ package reference and visibility to `spawn-agent`; the spawner does not read the
 catalog. MCP's `get_agent_catalog` returns its entries in an `agents` list.
 
 Descriptions cover implemented capabilities. The builder checks out a template,
-generates and validates source, and exports an artifact. Publication and deployment
-remain separate stages.
+generates and validates source, and exports an artifact. A separate `publish-agent`
+mission publishes reviewed source to GitHub. Source publication does not create
+an installable release; packaging and deployment remain separate stages.
 The catalog does not contain deployment settings, credentials, action schemas or
 live readiness. Agents advertise their actions and requirements when they register.
 

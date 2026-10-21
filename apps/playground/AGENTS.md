@@ -203,7 +203,12 @@
   published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
-  Embed `build-agent`, `install-agent` and both website missions. The native quick start installs
+  Embed `build-agent`, `publish-agent`, `install-agent` and both website missions.
+  Source publication remains a separate operation after build completion.
+  Read its action schema for a visibility default; absent an explicit choice or
+  default, ask Public (recommended) or Private and await the operator's answer.
+  Never put managed GitHub/model keys in chat or question answers.
+  The native quick start installs
   the web agent before using `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.

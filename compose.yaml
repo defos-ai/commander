@@ -331,6 +331,9 @@ services:
 
   builder-agent:
     <<: *agent
+    environment:
+      <<: *environment
+      BUILDER_DEFAULT_REPO_VISIBILITY: ${BUILDER_DEFAULT_REPO_VISIBILITY:-}
     entrypoint:
       - /bin/sh
       - -ec
