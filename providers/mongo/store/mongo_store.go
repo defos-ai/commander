@@ -62,6 +62,8 @@ func (e *connectionError) Error() string {
 
 func (e *connectionError) Unwrap() error { return e.cause }
 
+// Callers build BSON keys/operators in provider code; request input stays in
+// typed values. This method does not sanitize client-decoded query documents.
 func (s *MongoStore) Find(ctx context.Context, collection string, filter, out any, opts ...options.Lister[options.FindOptions]) error {
 	cursor, err := s.database.Collection(collection).Find(ctx, filter, opts...)
 	if err != nil {
@@ -94,6 +96,8 @@ func (s *MongoStore) Upsert(ctx context.Context, collection string, filter, upda
 	return s.database.Collection(collection).UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
 }
 
+// Keep filter keys/operators provider-defined and request input in typed values.
+// The replacement is a stored record, not an update expression.
 func (s *MongoStore) Replace(ctx context.Context, collection string, filter, replacement any, upsert bool) (*mongo.UpdateResult, error) {
 	return s.database.Collection(collection).ReplaceOne(ctx, filter, replacement, options.Replace().SetUpsert(upsert))
 }

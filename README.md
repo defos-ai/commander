@@ -2,7 +2,7 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: framework and runtime for distributed agents" width="100%">
 </p>
 
-**DEFOS Commander is a framework and runtime for building distributed agents and orchestrating complex missions.** Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
+**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions. Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
 ## Where to use it
 
@@ -66,7 +66,7 @@ Docker Compose ([setup and teardown](docs/deployment.md#local-compose)):
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground
 ```
 
-Go (terminal only; [build with Admin](apps/playground/README.md#native-one-executable)):
+Go:
 
 ```sh
 go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one --no-admin
