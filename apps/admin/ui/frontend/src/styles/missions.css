@@ -1,4 +1,11 @@
 .missions-page { max-width: 1008px; }
+.missions-page .page-heading { flex-wrap: wrap; }
+.dialog.mission-create-dialog { width: min(756px, calc(100% - 29px)); }
+.mission-create-form { display: grid; gap: 16px; margin-top: 22px; }
+.mission-create-form .form-field { min-width: 0; }
+.mission-create-form textarea { width: 100%; padding: 13px; border: 1px solid #bcbcb4; border-radius: 4px; background: var(--panel); color: var(--ink); font: 400 12px/1.6 var(--font-mono); resize: vertical; min-height: 180px; max-height: 48vh; tab-size: 2; }
+.mission-create-form textarea[aria-invalid='true'] { border-color: var(--red); }
+.mission-create-form textarea:disabled { opacity: .65; }
 .missions-page h1 { overflow-wrap: anywhere; }
 .missions-back { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 22px; padding: 0; min-height: 29px; border: 0; background: transparent; color: var(--muted); font-size: 13px; }
 .missions-back:hover { color: var(--ink); }

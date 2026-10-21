@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/api/client';
-import { getMission, listMissions } from '../src/api/missions';
+import { createMission, getMission, listMissions, MissionCreateError } from '../src/api/missions';
 import type { Mission } from '../src/api/types';
 
 const url = 'https://commander.example/proxy';
@@ -166,5 +166,120 @@ describe('mission API', () => {
 
     await result;
     expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  });
+});
+
+describe('mission creation', () => {
+  const definition = JSON.stringify(mission);
+
+  it('posts the original JSON through the session proxy without rounding schema numbers', async () => {
+    const raw = '{\n "name":"new mission", "objective":"Review", "input_schema":{"minimum":9007199254740993}, "output_schema":{}, "optional_actions":null, "rules":null\n}';
+    const saved = { ...JSON.parse(raw), required_actions: null, starting_actions: null, optional_actions: undefined, rules: undefined };
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(saved, { status: 201 }));
+    vi.stubGlobal('fetch', fetch);
+    const stored = vi.spyOn(Storage.prototype, 'setItem');
+
+    expect(await createMission(url, credentials, raw)).toEqual(saved);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [path, options] = fetch.mock.calls[0];
+    expect(requestedPath(path)).toBe('/api/v1/missions');
+    expect(options).toMatchObject({ method: 'POST', body: raw, credentials: 'same-origin', redirect: 'error', cache: 'no-store' });
+    const headers = new Headers(options?.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('Accept')).toBe('application/json');
+    expect(headers.get('X-Commander-UI')).toBe('1');
+    expect(headers.has('Authorization')).toBe(false);
+    expect(stored).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed JSON, missing form fields and mismatched sessions before sending', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    vi.stubGlobal('fetch', fetch);
+    await expect(createMission(url, credentials, '{ private-content')).rejects.toEqual(new MissionCreateError('invalid_json'));
+    for (const patch of [null, [], { ...mission, name: ' ' }, { ...mission, name: '.' }, { ...mission, name: '..' },
+      { ...mission, objective: '' }, { ...mission, input_schema: null }, { ...mission, output_schema: [] }]) {
+      await expect(createMission(url, credentials, JSON.stringify(patch))).rejects.toEqual(new MissionCreateError('invalid_input'));
+    }
+    await expect(createMission('https://other.example', credentials, definition)).rejects.toEqual(new MissionCreateError('invalid_input'));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('lets the server validate optional fields and cross-field constraints', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('private-validation-details', { status: 400 }));
+    vi.stubGlobal('fetch', fetch);
+    const raw = JSON.stringify({ ...mission, rules: { unknown: {} }, starting_actions: ['not-required'] });
+
+    await expect(createMission(url, credentials, raw)).rejects.toEqual(new MissionCreateError('invalid_input'));
+    expect(fetch.mock.calls[0][1]?.body).toBe(raw);
+  });
+
+  it.each([
+    [400, 'invalid_input'], [413, 'invalid_input'], [415, 'invalid_input'], [422, 'invalid_input'],
+    [401, 'authentication'], [403, 'forbidden'], [409, 'conflict'], [408, 'unknown'], [500, 'unknown'], [503, 'unknown'],
+  ] as const)('classifies HTTP %i without reading private errors or retrying', async (status, kind) => {
+    const response = new Response('private-api-error', { status });
+    const read = vi.spyOn(response, 'json');
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response);
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(createMission(url, credentials, definition)).rejects.toEqual(new MissionCreateError(kind));
+    expect(read).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('expires only the failed connection session on authentication failure', async () => {
+    const expired = vi.fn();
+    window.addEventListener('commander:session-expired', expired);
+    try {
+      vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 401 })));
+      await expect(createMission(url, credentials, definition)).rejects.toEqual(new MissionCreateError('authentication'));
+      expect(expired).toHaveBeenCalledTimes(1);
+      expect((expired.mock.calls[0][0] as CustomEvent).detail).toBe(url);
+    } finally { window.removeEventListener('commander:session-expired', expired); }
+  });
+
+  it('treats wrong status, malformed or mismatched success and network failures as uncertain', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json(mission))
+      .mockResolvedValueOnce(Response.json({ ...mission, name: 'another' }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ saved: true }, { status: 201 }))
+      .mockResolvedValueOnce(new Response('private-proxy-response', { status: 201 }))
+      .mockRejectedValueOnce(new TypeError('private-network-details'));
+    vi.stubGlobal('fetch', fetch);
+
+    for (let i = 0; i < 5; i++) {
+      await expect(createMission(url, credentials, definition)).rejects.toEqual(new MissionCreateError('unknown'));
+    }
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it.each(['send', 'body'] as const)('bounds the complete %s phase to thirty seconds without retrying', async phase => {
+    vi.useFakeTimers();
+    const response = Response.json(mission, { status: 201 });
+    if (phase === 'body') vi.spyOn(response, 'json').mockImplementation(() => new Promise(() => {}));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(() => phase === 'send' ? new Promise(() => {}) : Promise.resolve(response));
+    vi.stubGlobal('fetch', fetch);
+    const pending = expect(createMission(url, credentials, definition)).rejects.toEqual(new MissionCreateError('unknown'));
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    await pending;
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not send pre-cancelled requests and treats cancellation after sending as uncertain', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(() => new Promise(() => {}));
+    vi.stubGlobal('fetch', fetch);
+    const pending = createMission(url, credentials, definition, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toEqual(new MissionCreateError('unknown'));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    await expect(createMission(url, credentials, definition, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

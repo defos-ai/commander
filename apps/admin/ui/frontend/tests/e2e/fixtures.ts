@@ -8,6 +8,7 @@ export const publicAPIURL = 'http://localhost:14274';
 export const username = process.env.COMMANDER_TEST_API_USERNAME ?? 'api-fixture-user';
 export const password = process.env.COMMANDER_TEST_API_PASSWORD ?? 'api-fixture-password';
 const terminal = new Set(['completed', 'cancelled', 'failed']);
+const fixtureMissions = ['build-agent', 'fixture-affinity', 'fixture-use-agent', 'install-agent', 'review-website-no-browser', 'review-website-with-browser'];
 
 export class CommanderAPI {
   constructor(private readonly request: APIRequestContext) {}
@@ -53,7 +54,8 @@ export class CommanderAPI {
           && agent.actions?.length === 1 && agent.actions[0].name === 'fixture-echo' && agent.actions[0].status === 'ready'),
         actions: actions.items.filter(action => action.name !== 'fixture-echo').map(action => action.name).sort(),
         spawnedCatalog: actions.items.filter(action => action.name === 'fixture-echo').length === Math.min(spawned.length, 1),
-        missions: missions.items.map(mission => mission.name).sort(),
+        // Cleanup retains catalogs, including missions created by earlier browser tests.
+        missions: fixtureMissions.filter(name => missions.items.some(mission => mission.name === name)),
         controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin' && controller.rule_selector === 'mission-rules'),
       };
     }, { timeout: 60_000, message: 'Wait for controller, test missions and ready web, browser, builder, spawner and any previously spawned agents' }).toEqual({
@@ -64,7 +66,7 @@ export class CommanderAPI {
         ...Array(2).fill({ type: 'web-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
       ], spawnedReady: true, spawnedCatalog: true,
       actions: ['build-agent', 'capture-page', 'check-accessibility', 'check-links', 'check-seo', 'checkout-template', 'detect-technologies', 'discover-pages', 'discover-pages-no-browser', 'publish-agent', 'release-agent', 'spawn-agent'],
-      missions: ['build-agent', 'fixture-affinity', 'fixture-use-agent', 'install-agent', 'review-website-no-browser', 'review-website-with-browser'], controller: true,
+      missions: fixtureMissions, controller: true,
     });
   }
 

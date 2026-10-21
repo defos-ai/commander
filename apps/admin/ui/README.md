@@ -14,6 +14,17 @@ Operation details refresh every 10 seconds. Select graph nodes to inspect work,
 or drag and zoom to explore. Artifact details offer image/text previews (up to
 2 MiB) and downloads (up to 100 MiB); completed reports download as JSON.
 
+## Create missions
+
+Open **Missions → Create mission** and edit or paste a JSON definition. Set a name,
+objective and input/output schemas; add action names, steps and rules as needed.
+The API validates the definition. Actions can be installed later, and saving
+does not start an operation. Keep secret values out of definitions.
+
+Mission names are unique; creation never replaces a saved definition. After an
+uncertain save, use **Check saved mission** before trying again. Drafts stay in
+memory and are discarded when the dialog closes or the connection changes.
+
 ## Secrets
 
 Open **Agents → Manage secrets** to supply values requested by agents, or add
