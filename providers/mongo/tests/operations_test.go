@@ -31,6 +31,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 		t.Fatalf("empty operations: %#v, %v", items, err)
 	}
 	original := newMongoOperation()
+	original.Mission.OptionalActions = []string{"publish"}
 	original.Mission.Rules = missions.RuleSet{
 		missions.AggregateResults:  {ForActions: []string{"discover"}},
 		missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -46,6 +47,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 		t.Fatal(err)
 	}
 	original.Input[0] = '!'
+	original.Mission.OptionalActions[0] = "changed"
 	original.Tasks[0].Input[0] = '!'
 	original.Questions[0].Options[0] = "changed"
 	original.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
@@ -57,6 +59,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	}
 	got.Preflight.Actions[0].ReadyAgentIDs[0] = "changed"
 	got.Mission.RequiredActions[0] = "changed"
+	got.Mission.OptionalActions[0] = "changed"
 	got.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
 	got.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	got.Questions[0].Options[0] = "changed"

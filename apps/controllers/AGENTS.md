@@ -71,17 +71,21 @@
 - The bundled `build-agent` mission starts checkout with `{}`, then model review
   assigns the returned workspace ID and original instructions to `build-agent`.
   Keep `same-agent` on both stages because workspace files are local, and model
-  review on both results. Build exports source; publication and spawning remain
-  separate operations. Managed `CODEX_API_KEY` goes through the secret flow.
-  After successful standalone completion, recommend sharing through `publish-agent`
-  without extending the build operation automatically.
-- The separate `publish-agent` mission uses the saved source artifact ID and full
-  file metadata, requiring only `publish-agent` with model review. It has no
-  `same-agent` rule or local workspace dependency. Read the action's visibility
-  default; if neither an explicit choice nor a default exists, ask Public
-  (recommended) or Private through `ask_question` and wait for the real answer.
-  Never infer approval from expiry. Managed `GITHUB_TOKEN` uses the secret flow.
-  Publication returns a source commit, not a released or installed agent.
+  review on both results. Managed `CODEX_API_KEY` goes through the secret flow.
+  After successful build review, offer the optional `publish-agent` action in
+  this operation and wait for operator agreement. Declining it completes the
+  mission with its source artifact. Declare publication in `optional_actions`,
+  outside `required_actions`, step requirements and `starting_actions`, so missing
+  `GITHUB_TOKEN` cannot block checkout/build. Action lists describe expected work;
+  they are not an execution allowlist. Normal rules and readiness apply when
+  optional work is scheduled.
+  Publication uses the saved source artifact ID and full file metadata, with
+  model review but no `same-agent` rule or local workspace dependency. Read the
+  action's visibility default; if neither an explicit choice nor a default exists,
+  ask Public (recommended) or Private through `ask_question` and wait for the real
+  answer. Never infer approval from expiry. Managed `GITHUB_TOKEN` uses the secret
+  flow only when publication is selected. Publication returns a source commit;
+  release packaging and installation remain separate stages.
 
 ## Validation
 

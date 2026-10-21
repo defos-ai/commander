@@ -11,8 +11,8 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
-// AssessPreflight checks mission requirements against the operation's saved
-// affinity. Capacity remains a scheduler concern, so working agents can be ready.
+// AssessPreflight checks mission requirements and queued optional work against
+// saved affinity. Capacity is separate, so working agents can provide coverage.
 func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
 	boundAgentID, err := o.AffinityAgentID()
 	if err != nil {
@@ -28,6 +28,13 @@ func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
 	names := slices.Clone(o.Mission.RequiredActions)
 	for _, step := range o.Mission.Steps {
 		names = append(names, step.RequiredActions...)
+	}
+	// Include selected optional work so missing requirements are visible while
+	// it waits for dispatch.
+	for _, task := range o.Tasks {
+		if task.Status == TaskQueued && slices.Contains(o.Mission.OptionalActions, task.ActionName) {
+			names = append(names, task.ActionName)
+		}
 	}
 	names = append(names, group...)
 	slices.Sort(names)

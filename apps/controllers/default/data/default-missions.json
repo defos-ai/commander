@@ -1,10 +1,13 @@
 [
   {
     "name": "build-agent",
-    "objective": "Build a Commander agent from the operator's instructions. Read checkout-template and build-agent schemas and readiness first. Assign checkout-template with {} input, then review its result and resolve its continuation with build-agent using the returned workspace_id and the original mission instructions. The same-agent rule keeps both stages on the builder that owns the workspace; do not invent a workspace ID or route the build to another instance. If CODEX_API_KEY is missing, direct the operator to the local secret form or Admin Secrets; never request or include secret values in chat, questions or action input. Review the saved build result and source.tar.gz artifact, resolve the build continuation with no follow-up actions, and complete with workspace_id and a concise summary of the generated agent and validation. Report failures and limitations accurately. After completing the build, recommend sharing the reviewed source through a separate publish-agent operation. Do not start publication without the operator requesting it. This mission builds and exports source; it does not publish to GitHub, install or run the generated agent.",
+    "objective": "Build a Commander agent from the operator's instructions, with optional source publication in this same operation. Read checkout-template and build-agent schemas and readiness first. Assign checkout-template with {} input, then review its result and resolve its continuation with build-agent using the returned workspace_id and the original mission instructions. The same-agent rule keeps checkout and build on the builder that owns the workspace; do not invent a workspace ID or route it to another instance. If CODEX_API_KEY is missing, use the local secret form or Admin Secrets; never request or include secret values in chat, questions or action input. Review the saved build result and source.tar.gz artifact before offering publication. Recommend sharing the reviewed source, but publish only when the operator requests or agrees to it; a supplied repository is a publication request. If the operator has not already requested or declined publication, ask a linked question offering publication or Skip, and wait for the actual answer; skipping resolves the build continuation with no follow-up actions and completes with workspace_id and a concise build summary. Keep the operation open while awaiting answers; expiry is not approval. For publication, read publish-agent's schema, obtain owner/repository from the operator if missing, and preserve the explicit visibility or advertised action default. Without either, ask Public (recommended) or Private and wait. Resolve the build continuation with publish-agent using the exact saved source_artifact_id, full source_file descriptor, repository and chosen visibility. Publication can run on any builder sharing artifact storage; it does not need the local workspace. GITHUB_TOKEN is needed only for this optional action and uses the managed-secret form; its absence must not block a build that skips publication. Never include token values in chat or inputs. Inspect uncertain publication before retrying, preserve existing repository visibility and never force-push. Review the saved publication result, resolve its continuation with no follow-up actions, and include its output as the optional publication report. Complete with workspace_id and a concise summary of validation, publication outcome and any limitations. This mission does not create release packages, install or run the generated agent.",
     "required_actions": [
       "checkout-template",
       "build-agent"
+    ],
+    "optional_actions": [
+      "publish-agent"
     ],
     "starting_actions": [
       "checkout-template"
@@ -19,7 +22,8 @@
       "decide-next-actions": {
         "for_actions": [
           "checkout-template",
-          "build-agent"
+          "build-agent",
+          "publish-agent"
         ],
         "params": {
           "decision_by": "model"
@@ -33,6 +37,19 @@
           "type": "string",
           "pattern": "\\S",
           "description": "The agent to create, including its actions and expected behavior. Never include secret values."
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$",
+          "description": "Optional GitHub owner/repository. Supplying it requests publication after a successful build and source review; otherwise ask whether to publish or skip."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "private"
+          ],
+          "description": "Optional publication visibility. Preserve an explicit choice or the action schema default; otherwise ask Public (recommended) or Private before publishing."
         }
       },
       "required": [
@@ -50,129 +67,47 @@
         "summary": {
           "type": "string",
           "pattern": "\\S"
+        },
+        "publication": {
+          "type": "object",
+          "properties": {
+            "repository_url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/"
+            },
+            "commit_url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/"
+            },
+            "commit_sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ]
+            },
+            "branch": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "repository_url",
+            "commit_url",
+            "commit_sha",
+            "visibility",
+            "branch"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
         "workspace_id",
         "summary"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "publish-agent",
-    "objective": "Publish one reviewed build source artifact to a GitHub repository. Read publish-agent schema and readiness, and use the exact saved source_artifact_id and full source_file descriptor; never invent file IDs or checksums. Preserve an explicit visibility choice. Otherwise read the visibility default advertised by describe_action; if no default exists, ask the operator one linked ask_question with Public (recommended) and Private choices, then wait for an actual answer before assigning publication. Do not infer approval from a timeout or silently choose Public. Supply the chosen visibility, or preserve omission when an advertised default exists. If GITHUB_TOKEN is missing, use the local secret form or Admin Secrets; never request or include its value in chat, questions or action input. Assign publish-agent with the artifact metadata and owner/repository. The action creates a new repository or uses an empty one, preserves Commander attribution, and rejects visibility conflicts or conflicting history. Inspect uncertain publication before retrying; never change visibility or force-push to recover. Review the saved repository and commit result, resolve its continuation with no follow-up actions, and complete with its repository_url, commit_url, commit_sha, visibility and branch. Publication shares source only: do not claim a release, installable agent package or deployment exists. Release packaging and installation are later operations.",
-    "required_actions": [
-      "publish-agent"
-    ],
-    "starting_actions": [
-      "publish-agent"
-    ],
-    "rules": {
-      "decide-next-actions": {
-        "for_actions": [
-          "publish-agent"
-        ],
-        "params": {
-          "decision_by": "model"
-        }
-      }
-    },
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "source_artifact_id": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-          "description": "Saved source artifact ID from the successful build."
-        },
-        "source_file": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-            },
-            "name": {
-              "type": "string",
-              "const": "source.tar.gz"
-            },
-            "media_type": {
-              "type": "string",
-              "const": "application/gzip"
-            },
-            "size": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "sha256": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{64}$"
-            }
-          },
-          "required": [
-            "id",
-            "name",
-            "media_type",
-            "size",
-            "sha256"
-          ],
-          "additionalProperties": false
-        },
-        "repository": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$",
-          "description": "GitHub destination as owner/repository."
-        },
-        "visibility": {
-          "type": "string",
-          "enum": [
-            "public",
-            "private"
-          ],
-          "description": "Explicit operator choice; otherwise use the action schema default. If neither exists, ask Public (recommended) or Private and wait before assigning publication."
-        }
-      },
-      "required": [
-        "source_artifact_id",
-        "source_file",
-        "repository"
-      ],
-      "additionalProperties": false
-    },
-    "output_schema": {
-      "type": "object",
-      "properties": {
-        "repository_url": {
-          "type": "string",
-          "pattern": "^https://github\\.com/"
-        },
-        "commit_url": {
-          "type": "string",
-          "pattern": "^https://github\\.com/"
-        },
-        "commit_sha": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{40}$"
-        },
-        "visibility": {
-          "type": "string",
-          "enum": [
-            "public",
-            "private"
-          ]
-        },
-        "branch": {
-          "type": "string",
-          "pattern": "\\S"
-        }
-      },
-      "required": [
-        "repository_url",
-        "commit_url",
-        "commit_sha",
-        "visibility",
-        "branch"
       ],
       "additionalProperties": false
     }

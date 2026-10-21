@@ -60,6 +60,8 @@ func openAPIDocument() ([]byte, error) {
 		case "MissionRule":
 			schema.Properties["for_actions"].Description = "Actions whose executions this rule applies to."
 		case "Mission":
+			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks, together with step required_actions."
+			schema.Properties["optional_actions"].Description = "Additional actions the mission may use. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Names are unique and must not overlap required_actions."
 			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. same-agent binds its for_actions to the first selected agent instance within each operation, with no fallback; it accepts no parameters and does not order tasks. Failures and empty proposals also require model review."
 		case "ActionRequirement":
 			schema.Properties["kind"].Enum = []any{"executable", "configuration", "secret"}

@@ -121,7 +121,7 @@ func expectedAgentActions(agentType string) []string {
 	}
 }
 
-var expectedMissions = []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "publish-agent", "review-website-no-browser", "review-website-with-browser"}
+var expectedMissions = []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "review-website-no-browser", "review-website-with-browser"}
 
 func expectedCatalogActions(agents []models.AgentResponse) []string {
 	var names []string

@@ -41,6 +41,14 @@
   state and send operation commands; only the controller selects agent instances.
 - Mission definitions own rules. Actions may propose schema-valid next
   actions, but must never dispatch them or contact a controller themselves.
+- Mission `required_actions` and step requirements participate in preflight;
+  `optional_actions` describes expected capabilities and adds coverage only while
+  its tasks are queued. Remove that extra coverage after dispatch/completion;
+  normal execution checks still apply. Neither list restricts which actions may
+  execute. Validate unique nonblank names and reject required/optional overlap;
+  clone both lists at snapshot boundaries. Normal rules and readiness apply to optional work.
+  Step requirements and `same-agent` groups still participate in preflight even
+  if an action is optional; optionality does not override a placement constraint.
 - [`missions.RuleSet`](domain/missions/rule.go) is saved in each operation's
   mission snapshot. [`operations.RuleApplier`](domain/operations/rule_applier.go)
   evaluates it without I/O; effects commit with the triggering transition.

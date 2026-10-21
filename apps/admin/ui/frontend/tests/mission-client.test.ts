@@ -17,6 +17,7 @@ const mission: Mission = {
   name: 'review-website-with-browser',
   objective: 'Review a website',
   required_actions: ['discover-pages'],
+  optional_actions: ['capture-page'],
   starting_actions: ['discover-pages'],
   steps: [{ id: 'discover', objective: 'Find pages', agent_types: null, required_actions: ['discover-pages'] }],
   rules: {
@@ -89,6 +90,9 @@ describe('mission API', () => {
   it.each([
     { items: null },
     { items: [{ ...mission, required_actions: 'discover-pages' }] },
+    { items: [{ ...mission, optional_actions: 'capture-page' }] },
+    { items: [{ ...mission, optional_actions: [42] }] },
+    { items: [{ ...mission, optional_actions: null }] },
     { items: [{ ...mission, steps: [{ id: 'discover' }] }] },
     { items: [{ ...mission, rules: [] }] },
     { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages'] } } }] },

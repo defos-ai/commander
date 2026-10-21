@@ -40,15 +40,18 @@ It uses the managed `CODEX_API_KEY`, runs Codex and Go tests/build, and returns
 the workspace ID, source file count and a `source.tar.gz` artifact. Supply the
 key through Playground's secret form or Admin's agent secrets page; never put it
 in the instructions. The bundled `build-agent` mission connects checkout and
-build with a `same-agent` rule and model review after each stage. Ask Playground
-to build an agent and describe its actions and expected behavior.
+build with a `same-agent` rule and model review after each stage. Publication is
+an optional action in that mission. Ask Playground to build an agent and describe
+its actions and expected behavior.
 
 ## Publish source
 
-After reviewing a build, ask Playground to publish its source to `owner/repository`.
-The separate `publish-agent` mission uses the saved artifact ID and its full file
-metadata, so publication can run on any builder connected to the same storage.
-It needs the managed `GITHUB_TOKEN`, supplied through the secret form.
+After reviewing a successful build, choose whether to publish its source to
+`owner/repository` before completing the build mission. If you agree, its optional
+`publish-agent` action uses the saved artifact ID and full file metadata, so it
+can run on any builder connected to the same storage. Only publication needs the
+managed `GITHUB_TOKEN`, supplied through the secret form. Skipping it still
+completes the build with its source artifact.
 
 Choose **Public** (recommended) or **Private**. To set a deployment default,
 configure `BUILDER_DEFAULT_REPO_VISIBILITY=public` or `private` on the builder.
@@ -128,8 +131,8 @@ access to GitHub.
 Codex runs with its workspace-write sandbox and temporary configuration. Go
 checks use `GOWORK=off` and a clean environment without the Codex key, but execute
 generated code as the builder's operating-system user. Use a builder deployment
-you trust for code execution. Source publication is a separate mission; release
-packaging and generated-agent startup remain later stages.
+you trust for code execution. Source publication is optional within the build
+mission; release packaging and generated-agent startup remain later stages.
 
 ## Development
 

@@ -10,6 +10,7 @@ const mission: Mission = {
   name: 'review-website-with-browser',
   objective: 'Review links and page quality.',
   required_actions: ['discover-pages', 'check-links'],
+  optional_actions: ['capture-page'],
   starting_actions: ['discover-pages'],
   input_schema: {
     type: 'object', required: ['url'],
@@ -46,6 +47,9 @@ describe('missions browser', () => {
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
     expect(await screen.findByRole('button', { name: 'View mission review-website-with-browser' })).toBeVisible();
     expect(screen.getByText('2 missions')).toBeVisible();
+    const listedMission = within(screen.getByRole('button', { name: 'View mission review-website-with-browser' }));
+    expect(listedMission.getByText('2 required actions')).toBeVisible();
+    expect(listedMission.getByText('1 optional action')).toBeVisible();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search missions' }), { target: { value: 'PAGE QUALITY' } });
     expect(screen.getByText('1 of 2 missions')).toBeVisible();
@@ -55,6 +59,9 @@ describe('missions browser', () => {
     expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
     expect(screen.getByRole('heading', { name: mission.name, level: 1 })).toHaveFocus();
     expect(screen.getByText('Website to review')).toBeVisible();
+    const optionalActions = screen.getByRole('heading', { name: 'Optional actions' }).closest('section')!;
+    expect(within(optionalActions).getByText('capture-page')).toBeVisible();
+    expect(within(optionalActions).queryByText('check-links')).not.toBeInTheDocument();
     const rules = within(screen.getByRole('table', { name: 'Mission rules' }));
     expect(rules.getAllByRole('row')).toHaveLength(4);
     expect(rules.getByRole('row', { name: 'Aggregate results discover-pages All direct children' })).toBeVisible();
@@ -90,6 +97,7 @@ describe('missions browser', () => {
     expect(screen.getByText('Valid proposals run automatically unless a rule requires model review. Failed work and invalid or empty proposals require model review.')).toBeVisible();
     expect(screen.queryByRole('table', { name: 'Mission rules' })).not.toBeInTheDocument();
     expect(screen.getAllByText('None specified')).toHaveLength(2);
+    expect(screen.queryByRole('heading', { name: 'Optional actions' })).not.toBeInTheDocument();
     expect(screen.getAllByText('No schema specified.')).toHaveLength(2);
     expect(screen.queryByText('discover-pages')).not.toBeInTheDocument();
   });

@@ -20,7 +20,8 @@ Read the [root guide](../AGENTS.md) and
 - Describe implemented capabilities. Builder prepares source through
   `checkout-template`, uses `build-agent` for Codex generation, Go validation
   and source artifacts, then optionally publishes a reviewed artifact through
-  `publish-agent`. Source publication does not create an installable release.
+  `publish-agent` within the build mission after operator agreement. Source
+  publication does not create an installable release.
   Catalog aliases are separate from registered agent types and action names.
 - Keep package references explicit, including the builder's module path. Official
   entries use `@stable`; this means the repository's promoted root GitHub Latest

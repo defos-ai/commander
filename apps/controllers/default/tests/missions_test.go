@@ -115,15 +115,19 @@ func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
 	}
 }
 
-func TestBuildAgentMissionKeepsWorkspaceStagesOnOneBuilder(t *testing.T) {
-	mission := defaultMissions(t)["build-agent"]
+func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublication(t *testing.T) {
+	catalog := defaultMissions(t)
+	if _, exists := catalog["publish-agent"]; exists {
+		t.Fatal("source publication must remain an optional action in build-agent")
+	}
+	mission := catalog["build-agent"]
 	stages := []string{"checkout-template", "build-agent"}
-	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.StartingActions, stages[:1]) {
+	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.OptionalActions, []string{"publish-agent"}) || !slices.Equal(mission.StartingActions, stages[:1]) {
 		t.Fatalf("build mission lost its checkout prerequisite: %+v", mission)
 	}
 	affinity, decision := mission.Rules[missions.SameAgent], mission.Rules[missions.DecideNextActions]
-	if len(mission.Rules) != 2 || !slices.Equal(affinity.ForActions, stages) || !slices.Equal(decision.ForActions, stages) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
-		t.Fatalf("build stages need local workspace affinity and model review: %+v", mission.Rules)
+	if len(mission.Rules) != 2 || !slices.Equal(affinity.ForActions, stages) || !slices.Equal(decision.ForActions, []string{"checkout-template", "build-agent", "publish-agent"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("workspace stages need affinity and every result needs model review: %+v", mission.Rules)
 	}
 	input := json.RawMessage(`{"instructions":"Create a JSON validation agent."}`)
 	if err := mission.ValidateInput(input); err != nil {
@@ -132,7 +136,21 @@ func TestBuildAgentMissionKeepsWorkspaceStagesOnOneBuilder(t *testing.T) {
 	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the agent and validated its source."}`)); err != nil {
 		t.Fatal(err)
 	}
-	for _, invalid := range []string{`{}`, `{"instructions":" "}`, `{"instructions":"Build an agent","CODEX_API_KEY":"value"}`} {
+	publicationInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","repository":"example/json-agent","visibility":"public"}`)
+	if err := mission.ValidateInput(publicationInput); err != nil {
+		t.Fatalf("optional publication preferences rejected: %v", err)
+	}
+	publicationOutput := json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated and published the source.","publication":{"repository_url":"https://github.com/example/json-agent","commit_url":"https://github.com/example/json-agent/commit/0123456789abcdef0123456789abcdef01234567","commit_sha":"0123456789abcdef0123456789abcdef01234567","visibility":"public","branch":"main"}}`)
+	if err := mission.ValidateOutput(publicationInput, publicationOutput); err != nil {
+		t.Fatalf("publication result rejected: %v", err)
+	}
+	if err := mission.ValidateOutput(publicationInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the source without publishing."}`)); err != nil {
+		t.Fatalf("publication must remain optional in the result: %v", err)
+	}
+	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the source.","publication":{"repository_url":"https://github.com/example/json-agent"}}`)); err == nil {
+		t.Fatal("incomplete publication result accepted")
+	}
+	for _, invalid := range []string{`{}`, `{"instructions":" "}`, `{"instructions":"Build an agent","CODEX_API_KEY":"value"}`, `{"instructions":"Build an agent","repository":"example/json-agent","visibility":"internal"}`} {
 		if err := mission.ValidateInput(json.RawMessage(invalid)); err == nil {
 			t.Fatalf("invalid build input accepted: %s", invalid)
 		}

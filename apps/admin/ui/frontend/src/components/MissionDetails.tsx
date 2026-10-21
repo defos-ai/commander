@@ -17,6 +17,7 @@ export function MissionDetails({ mission }: { mission: Mission }) {
       <section className="mission-section"><h2>{t($ => $.missions.startingActions)}</h2><ActionNames names={mission.starting_actions} /></section>
       <section className="mission-section"><h2>{t($ => $.missions.requiredActions)}</h2><ActionNames names={mission.required_actions} /></section>
     </div>
+    {Boolean(mission.optional_actions?.length) && <section className="mission-section"><h2>{t($ => $.missions.optionalActions)}</h2><ActionNames names={mission.optional_actions} /></section>}
     <section className="mission-section"><h2>{t($ => $.missions.rules)}</h2>
       <MissionRules rules={mission.rules} />
     </section>

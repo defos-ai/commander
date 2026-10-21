@@ -36,6 +36,7 @@ function isMissionName(value: unknown): value is string {
 export function isMission(value: unknown): value is Mission {
   return isObject(value) && isMissionName(value.name) && typeof value.objective === 'string' &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
+    (value.optional_actions === undefined || isStringArray(value.optional_actions)) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
     (value.steps === undefined || (Array.isArray(value.steps) && value.steps.every(isStep))) &&

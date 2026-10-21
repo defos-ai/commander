@@ -134,8 +134,9 @@ checks. `review-website-with-browser` also needs the browser agent and adds
 screenshots and rendered accessibility, requiring
 [Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander).
 The built-in builder needs Git for checkout/publication and Go/Codex for builds.
-Ask it to build an agent, then optionally publish the reviewed source to GitHub.
-Supply its managed keys through the secret form. See the
+Ask it to build an agent, then choose whether to publish the reviewed source to
+GitHub within the same mission. Supply `CODEX_API_KEY` through the secret form;
+`GITHUB_TOKEN` is needed only if publishing. See the
 [builder guide](../agents/builder/README.md).
 **Exiting stops these hosts and child agents, then deletes operations, reports,
 artifacts, builder workspaces and downloaded executables.**

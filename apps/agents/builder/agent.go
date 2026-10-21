@@ -19,7 +19,7 @@ func NewAgent(config agent.AgentConfig, workspaceDir string) (*agent.Agent, erro
 		config.Responsibilities = []string{
 			"Build Commander agents from the example-agent template with Codex, verify them with Go, and return their source as an artifact",
 			"Use checkout-template followed by build-agent in one build-agent operation; same-agent placement keeps the workspace on its owning builder. Supply CODEX_API_KEY through Admin or Playground's secret form, never in action inputs. Review the source artifact before publication or installation.",
-			"Publish a reviewed source artifact through a separate publish-agent mission. Read its schema: use explicit public/private visibility or the advertised default. Without either, ask Public (recommended) or Private and wait for the operator's answer. Supply managed GITHUB_TOKEN through the secret form. Source publication does not create an installable release.",
+			"After a successful build and source review, offer publish-agent as an optional continuation in the same build-agent operation. Publish only when the operator requests or agrees to it; skipping publication completes the build with its source artifact. Read publish-agent's schema: preserve explicit public/private visibility or the advertised default; without either, ask Public (recommended) or Private and wait. GITHUB_TOKEN is needed only for publication and uses the managed-secret form. Source publication does not create an installable release.",
 		}
 	}
 	if config.Actions == nil {

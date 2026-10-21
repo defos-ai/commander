@@ -21,7 +21,7 @@ func TestMissionMongoStore(t *testing.T) {
 	ctx := t.Context()
 	original := missions.Mission{
 		Name: "alpha", Objective: "Review a page",
-		RequiredActions: []string{"discover", "check"}, StartingActions: []string{"discover"},
+		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		Steps: []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
@@ -62,6 +62,7 @@ func TestMissionMongoStore(t *testing.T) {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
 	stored.RequiredActions[0] = "modified by reader"
+	stored.OptionalActions[0] = "modified by reader"
 	stored.InputSchema[0] = '!'
 	stored.Rules[missions.AggregateResults].ForActions[0] = "modified by reader"
 	stored.Rules[missions.DecideNextActions].Params.DecisionBy = "modified by reader"
@@ -72,7 +73,7 @@ func TestMissionMongoStore(t *testing.T) {
 
 	updated := original.Clone()
 	updated.Objective = "Review before release"
-	updated.Steps, updated.Rules = nil, nil
+	updated.OptionalActions, updated.Steps, updated.Rules = nil, nil, nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}

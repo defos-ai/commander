@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -16,7 +17,7 @@ func TestMissions(t *testing.T) {
 		Missions []map[string]string `json:"missions"`
 	}
 	a.call("list_missions", object{}, &catalog)
-	if len(catalog.Missions) != 7 {
+	if len(catalog.Missions) != 6 {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
 	summaries := make(map[string]map[string]string, len(catalog.Missions))
@@ -26,11 +27,27 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[summary["name"]] = summary
 	}
-	for _, name := range []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "publish-agent"} {
+	for _, name := range []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
 			t.Fatalf("missing agent mission: %s", name)
 		}
 	}
+	var build missions.Mission
+	a.call("describe_mission", object{"mission_name": "build-agent"}, &build)
+	if !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent"}) {
+		t.Fatalf("build mission lost its optional publication action: %+v", build)
+	}
+	var buildOperation operations.Operation
+	a.call("start_operation", object{"mission_name": "build-agent", "input": object{"instructions": "Create a fixture agent"}}, &buildOperation)
+	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
+		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
+	}
+	for _, action := range buildOperation.Preflight.Actions {
+		if !slices.Contains(build.RequiredActions, action.ActionName) {
+			t.Fatalf("unscheduled optional action blocked build preflight: %+v", action)
+		}
+	}
+	a.call("cancel_operation", object{"operation_id": buildOperation.ID}, nil)
 	for _, expected := range []struct {
 		name, discovery string
 		checks          []string

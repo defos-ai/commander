@@ -2,6 +2,7 @@ export interface Mission {
   name: string;
   objective: string;
   required_actions: string[] | null;
+  optional_actions?: string[];
   starting_actions: string[] | null;
   steps?: MissionStep[];
   rules?: Partial<Record<MissionRuleName, MissionRule>>;

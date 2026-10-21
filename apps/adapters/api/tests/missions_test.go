@@ -15,6 +15,23 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	if !slices.Equal(missionNames(catalog.Items), expectedMissions) {
 		t.Fatalf("unexpected stack missions: %+v", catalog)
 	}
+	build := read[models.MissionResponse](a, "/api/v1/missions/build-agent")
+	buildIndex := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == build.Name })
+	if buildIndex < 0 || !reflect.DeepEqual(catalog.Items[buildIndex], build) || !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent"}) {
+		t.Fatalf("build mission lost its optional publication action: %+v", build)
+	}
+	assertSchema(t, a, "Mission", a.request(http.MethodGet, "/api/v1/missions/build-agent", nil))
+	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "build-agent", "input": object{"instructions": "Create a fixture agent"}})
+	buildOperation := decode[models.OperationResponse](t, created, http.StatusCreated)
+	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
+		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
+	}
+	for _, action := range buildOperation.Preflight.Actions {
+		if !slices.Contains(build.RequiredActions, action.ActionName) {
+			t.Fatalf("unscheduled optional action blocked build preflight: %+v", action)
+		}
+	}
+	decode[models.OperationResponse](t, a.request(http.MethodPost, operationPath(buildOperation.ID)+"/cancel", nil), http.StatusOK)
 	for _, expected := range []struct {
 		name, discovery string
 		checks          []string

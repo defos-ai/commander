@@ -7,7 +7,7 @@ This guide defines the data and decisions passed between them.
 
 | Concept | Meaning | Website example |
 | --- | --- | --- |
-| **Mission** | Reusable objective, input/output schemas, required actions, optional steps and rules. | `review-website-with-browser` |
+| **Mission** | Reusable objective, input/output schemas, required and optional actions, steps and rules. | `review-website-with-browser` |
 | **Operation** | One run with specific input and a saved copy of the mission. | Review `https://defos.ai`, up to three pages. |
 | **Task** | One action assignment. The controller selects an agent when dispatching it. | Check one page's links. |
 | **Mission step** | Optional planning guidance that tasks can reference. It is not an action name or automatic workflow. | A declared step such as `quality-review`. |
@@ -16,6 +16,24 @@ This guide defines the data and decisions passed between them.
 `list_missions` gives a summary; `describe_mission` supplies the full definition.
 `starting_actions` guides initial assignments. Starting an operation still requires
 an initial task assignment. Omit `step_id` when the mission has no declared steps.
+
+`required_actions` declares capabilities needed before dispatch. `optional_actions`
+declares useful choices that do not block initial preflight. For example, a build
+mission requires checkout and build, while publication is optional:
+
+```json
+{
+  "required_actions": ["checkout-template", "build-agent"],
+  "optional_actions": ["publish-agent"],
+  "starting_actions": ["checkout-template"]
+}
+```
+
+Required and optional names must be unique and cannot overlap. These lists are
+planning guidance and readiness requirements, not an execution allowlist. When
+an optional action is scheduled, normal readiness checks and mission rules apply;
+its missing secrets can then block dispatch. A step requirement or `same-agent`
+rule can still include an optional action in preflight before it is scheduled.
 
 An operation keeps its mission snapshot through updates and restarts. Callers may
 supply a canonical lowercase UUID as `operation_id`; an existing ID is a conflict.
@@ -54,7 +72,9 @@ them to declared actions through `action.Secret(ctx, name)`. Missing or expired
 values block those actions. See [secret delivery](../framework/secrets/README.md#agent-requirements).
 
 **Preflight runs on the controller:** it checks the mission's and steps' required
-actions against live inventory. Different agents can satisfy different requirements.
+actions and queued optional actions against live inventory. Optional actions leave
+this coverage after dispatch or completion, unless another requirement or placement
+rule includes them. Different agents can satisfy different requirements.
 The [`same-agent` rule](#task-affinity) restricts its grouped actions to one agent.
 A busy agent can provide coverage, but dispatch still waits for capacity.
 
@@ -148,7 +168,7 @@ work, such as a checked-out source tree:
 {
   "rules": {
     "same-agent": {
-      "for_actions": ["checkout-template", "build-agent", "publish-agent"]
+      "for_actions": ["checkout-template", "build-agent"]
     }
   }
 }
@@ -162,7 +182,9 @@ actions outside the group use normal agent selection.
 
 A busy owner leaves tasks queued. An unavailable owner blocks preflight, which
 gates all new dispatch for the operation, including actions outside the group.
-Grouped actions participate in preflight even when omitted from `required_actions`.
+Grouped actions participate in preflight even when listed in `optional_actions`
+or omitted from both action lists. Keep publication outside this group when it
+uses a saved source artifact and can run on another builder.
 Work resumes when the saved owner is ready and has capacity; there is no fallback
 to another instance. Failed, interrupted and cancelled dispatched tasks retain the
 binding. Restart recovery uses saved rules and task assignments without rebinding

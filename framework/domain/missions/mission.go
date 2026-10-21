@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/defos-ai/commander/framework/domain"
@@ -24,8 +25,9 @@ type Step struct {
 }
 
 // Mission describes an objective independently of its operations.
-// RequiredActions define preflight coverage; StartingActions guide initial task
-// selection. An operation can be created with gaps, but dispatch waits for readiness.
+// RequiredActions define preflight coverage. OptionalActions describe capabilities
+// checked when selected for queued work; neither list is an execution allowlist.
+// StartingActions guide initial task selection. Dispatch waits for readiness.
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
@@ -33,6 +35,7 @@ type Mission struct {
 	Name            string          `json:"name"`
 	Objective       string          `json:"objective"`
 	RequiredActions []string        `json:"required_actions"`
+	OptionalActions []string        `json:"optional_actions,omitempty"`
 	StartingActions []string        `json:"starting_actions"`
 	Steps           []Step          `json:"steps,omitempty"`
 	InputSchema     json.RawMessage `json:"input_schema"`
@@ -69,15 +72,21 @@ func (m Mission) Validate() error {
 	if strings.TrimSpace(m.Objective) == "" {
 		return errors.New("mission objective must not be empty")
 	}
-	required := make(map[string]bool, len(m.RequiredActions))
-	for _, action := range m.RequiredActions {
-		if strings.TrimSpace(action) == "" {
-			return errors.New("mission actions must not be blank")
+	for _, list := range []struct {
+		name    string
+		actions []string
+	}{{"required_actions", m.RequiredActions}, {"optional_actions", m.OptionalActions}, {"starting_actions", m.StartingActions}} {
+		if err := validateActionNames(list.name, list.actions); err != nil {
+			return err
 		}
-		required[action] = true
+	}
+	for _, action := range m.OptionalActions {
+		if slices.Contains(m.RequiredActions, action) {
+			return fmt.Errorf("action %q must not be both required and optional", action)
+		}
 	}
 	for _, action := range m.StartingActions {
-		if !required[action] {
+		if !slices.Contains(m.RequiredActions, action) {
 			return fmt.Errorf("starting action %q is not a required action", action)
 		}
 	}
@@ -110,10 +119,27 @@ func (m Mission) Validate() error {
 	return nil
 }
 
+func validateActionNames(field string, names []string) error {
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
+			return fmt.Errorf("%s must contain nonblank names without surrounding whitespace", field)
+		}
+		if seen[name] {
+			return fmt.Errorf("%s contains duplicate action %q", field, name)
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
 func (m Mission) Clone() Mission {
 	m.Rules = m.Rules.Clone()
 	if m.RequiredActions != nil {
 		m.RequiredActions = append([]string{}, m.RequiredActions...)
+	}
+	if m.OptionalActions != nil {
+		m.OptionalActions = append([]string{}, m.OptionalActions...)
 	}
 	if m.StartingActions != nil {
 		m.StartingActions = append([]string{}, m.StartingActions...)

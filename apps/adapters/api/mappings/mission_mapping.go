@@ -13,6 +13,7 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 		Name:            mission.Name,
 		Objective:       mission.Objective,
 		RequiredActions: slices.Clone(mission.RequiredActions),
+		OptionalActions: slices.Clone(mission.OptionalActions),
 		StartingActions: slices.Clone(mission.StartingActions),
 		InputSchema:     bytes.Clone(mission.InputSchema),
 		OutputSchema:    bytes.Clone(mission.OutputSchema),

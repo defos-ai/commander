@@ -22,9 +22,10 @@ package reference and visibility to `spawn-agent`; the spawner does not read the
 catalog. MCP's `get_agent_catalog` returns its entries in an `agents` list.
 
 Descriptions cover implemented capabilities. The builder checks out a template,
-generates and validates source, and exports an artifact. A separate `publish-agent`
-mission publishes reviewed source to GitHub. Source publication does not create
-an installable release; packaging and deployment remain separate stages.
+generates and validates source, and exports an artifact. Its `build-agent` mission
+offers `publish-agent` as an optional action after build review and operator
+agreement. Source publication does not create an installable release; packaging
+and deployment remain separate stages.
 The catalog does not contain deployment settings, credentials, action schemas or
 live readiness. Agents advertise their actions and requirements when they register.
 

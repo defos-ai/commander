@@ -23,8 +23,8 @@ go run ./apps/controllers/default/cmd --with-missions ./apps/controllers/default
 `--with-missions` upserts definitions at each startup: matching names are updated,
 other missions are preserved. Without it, the host loads no mission file. Compose
 supplies the [bundled missions](default/data/default-missions.json) automatically:
-`build-agent` creates and validates source; `publish-agent` shares reviewed source
-to GitHub; `install-agent` uses the spawner to install a released package;
+`build-agent` creates and validates source, with optional publication to GitHub;
+`install-agent` uses the spawner to install a released package;
 `review-website-no-browser` uses HTTP checks; `review-website-with-browser` also
 requires rendering and screenshots. Install missing agents in a separate
 operation before running a website review.

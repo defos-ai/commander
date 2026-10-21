@@ -7,6 +7,7 @@ type MissionResponse struct {
 	Name            string                         `json:"name"`
 	Objective       string                         `json:"objective"`
 	RequiredActions []string                       `json:"required_actions"`
+	OptionalActions []string                       `json:"optional_actions,omitempty"`
 	StartingActions []string                       `json:"starting_actions"`
 	Steps           []MissionStepResponse          `json:"steps,omitempty"`
 	InputSchema     json.RawMessage                `json:"input_schema"`

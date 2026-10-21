@@ -28,7 +28,10 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - [publish-agent](actions/publish_agent.go) consumes the saved source artifact ID
   and full file descriptor, verifies its bytes, then publishes source to GitHub.
   It needs managed `GITHUB_TOKEN`; keep values out of inputs, errors and subprocess
-  arguments. Publication has no dependency on a local checkout or builder affinity.
+  arguments. The bundled build mission offers this action only after successful
+  build review and operator agreement; declining it must still allow completion
+  with the source artifact. `GITHUB_TOKEN` gates publication, not checkout/build.
+  Publication has no dependency on a local checkout or builder affinity.
   `BUILDER_DEFAULT_REPO_VISIBILITY` optionally sets `public` or `private`; validate
   it at startup and advertise it as the action schema default. Without an explicit
   visibility or advertised default, clients must ask the operator and wait.

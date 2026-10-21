@@ -115,6 +115,56 @@ func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 	})
 }
 
+func TestOptionalActionChecksReadinessOnlyWhenQueued(t *testing.T) {
+	config := fixture()
+	definition := &config.MissionStore.(*missionStore).mission
+	definition.RequiredActions = []string{"inspect"}
+	definition.OptionalActions = []string{"capture"}
+	record := readyAgent(agentID)
+	record.Actions = []actions.Action{{Name: "inspect", Status: actions.Ready}, {Name: "capture", Status: actions.Unavailable,
+		RequiredSecrets:     []string{"BROWSER_TOKEN"},
+		MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "BROWSER_TOKEN"}},
+	}}
+	catalog := &agentCatalog{}
+	catalog.set(record)
+	config.AgentCatalog = catalog
+	exec, calls := controlledExecutor()
+	r := newRunner(t, config, exec)
+	op := start(t, r)
+	if !op.Preflight.Ready || len(op.Preflight.Actions) != 1 || !slices.Equal(op.Mission.OptionalActions, []string{"capture"}) {
+		t.Fatalf("unscheduled optional action blocked initial preflight or was lost: %+v", op)
+	}
+	task := assign(t, r, op.ID, "capture")
+	closeRunner(t, r)
+	r = newRunner(t, config, exec)
+	blocked := awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+		return op.Preflight != nil && !op.Preflight.Ready && len(op.Preflight.Actions) == 2
+	})
+	coverage := blocked.Preflight.Actions[0]
+	if blocked.Status != operations.Waiting || blocked.Tasks[0].Status != operations.TaskQueued || coverage.ActionName != "capture" || len(coverage.UnavailableAgents) != 1 || !slices.Equal(coverage.UnavailableAgents[0].MissingRequirements, record.Actions[1].MissingRequirements) {
+		t.Fatalf("queued optional action lost its secret requirement across restart: %+v", blocked)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("optional action dispatched without its secret: %+v", call)
+	default:
+	}
+	record.Actions[1].Status = actions.Ready
+	record.Actions[1].MissingRequirements = nil
+	catalog.set(record)
+	call := receive(t, calls)
+	if call.call.ActionName != "capture" {
+		t.Fatalf("wrong optional action dispatched: %+v", call)
+	}
+	call.reply <- output("capture")
+	finished := awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+		return op.Tasks[0].ID == task.ID && op.Tasks[0].Status == operations.TaskSucceeded && op.Preflight.Ready && len(op.Preflight.Actions) == 1
+	})
+	if !slices.Equal(finished.Mission.OptionalActions, []string{"capture"}) {
+		t.Fatal("execution changed the mission's optional actions")
+	}
+}
+
 func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.RequiredActions = []string{"inspect", "capture"}

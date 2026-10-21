@@ -158,6 +158,13 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByText('Lease expires at', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/controllers\/default-controller-[^/]+$/);
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
+  const buildMission = page.getByRole('button', { name: 'View mission build-agent', exact: true });
+  await expect(buildMission.getByText('2 required actions', { exact: true })).toBeVisible();
+  await expect(buildMission.getByText('1 optional action', { exact: true })).toBeVisible();
+  await buildMission.click();
+  const optionalActions = page.locator('.mission-section').filter({ has: page.getByRole('heading', { name: 'Optional actions', exact: true }) });
+  await expect(optionalActions.getByRole('listitem')).toHaveText(['publish-agent']);
+  await page.getByRole('button', { name: 'All missions', exact: true }).click();
   await page.getByRole('button', { name: 'View mission review-website-with-browser' }).click();
   await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
   const missionURL = page.url();
