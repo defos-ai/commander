@@ -57,7 +57,10 @@ connects the bus and storage. See [AGENTS.md](AGENTS.md) for Commander contracts
 Use [`action.NewFunc`](../../framework/agent/action/func.go) for typed JSON
 input/output; it derives schemas from your Go types. For file attachments,
 implement [`action.Executor`](../../framework/agent/action/action.go) directly.
-Declare the action's name, implement its behavior, then
+Supply action metadata through `FuncConfig.Action`, or pass it to `action.NewBase`
+for a custom executor. The runtime keeps its static
+[`actions.Definition`](../../framework/domain/actions/definition.go) separately from
+readiness. Implement the action's behavior, then
 add its constructor to the [action catalog](https://github.com/defos-ai/commander-example-agent/blob/main/agent.go).
 [Analyze-text](https://github.com/defos-ai/commander-example-agent/blob/main/actions/analyze_text.go) is a small JSON action example.
 
@@ -70,7 +73,7 @@ make an action unavailable; other actions can still serve. See
 readiness affects scheduling. Each host's `--actions` flag selects its exposed
 catalog.
 
-Actions can declare persistent secret names in `Action.RequiredSecrets`.
+Actions declare persistent secret names in `Action.RequiredSecrets`.
 Secrets belong to the registered agent type, so its instances share the same
 named secrets. Declarations remain visible when an action is ready.
 For an agent that needs managed secrets, configure `AgentConfig.Secrets` with a

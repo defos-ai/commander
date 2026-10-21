@@ -42,6 +42,8 @@
   fresh slices and share action description constants with registered constructors.
   Release manifests project responsibilities and action names/descriptions only;
   running hosts report actual readiness, schemas and required secret names.
+  Built-in `ActionDescriptions()` returns `[]manifest.Action` summaries. Runtime
+  snapshots expose static contracts through `Action.Definition()`.
 - Built-in packages use their module-path references and existing module tags:
   `github.com/defos-ai/commander/apps/agents/<name>@<version>` resolves
   `agent.yaml` from `apps/agents/<name>/<version>` in the Commander repository.

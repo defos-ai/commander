@@ -6,7 +6,7 @@ import (
 	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/manifest"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 )
 
@@ -62,8 +62,8 @@ func NewActions(workspaceDir string, files artifacts.ArtifactFileStore, defaultV
 }
 
 // ActionDescriptions describes packaged capabilities without starting discovery or providers.
-func ActionDescriptions() []actionmodel.Action {
-	return []actionmodel.Action{
+func ActionDescriptions() []manifest.Action {
+	return []manifest.Action{
 		{Name: builderactions.CheckoutTemplateName, Description: builderactions.CheckoutTemplateDescription},
 		{Name: builderactions.BuildAgentName, Description: builderactions.BuildAgentDescription},
 		{Name: builderactions.PublishAgentName, Description: builderactions.PublishAgentDescription},

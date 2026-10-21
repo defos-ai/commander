@@ -1,14 +1,9 @@
 package actions
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
-	"strings"
-
-	"github.com/defos-ai/commander/framework/domain/secrets"
 )
 
 type Status string
@@ -19,6 +14,7 @@ const (
 	Unavailable Status = "unavailable"
 )
 
+// Action is the flat inventory snapshot of a definition and its readiness.
 type Action struct {
 	Name                string        `json:"name"`
 	Description         string        `json:"description"`
@@ -34,10 +30,7 @@ type Action struct {
 // Validate checks shared metadata before it enters agent inventory or the catalog.
 // Readiness is interpreted separately for each agent and for catalog entries.
 func (a Action) Validate() error {
-	if strings.TrimSpace(a.Name) == "" {
-		return errors.New("action requires a name")
-	}
-	if err := a.ValidateRequiredSecrets(); err != nil {
+	if err := a.definition().Validate(); err != nil {
 		return err
 	}
 	for _, requirement := range a.MissingRequirements {
@@ -51,34 +44,31 @@ func (a Action) Validate() error {
 	if a.Status == Ready && len(a.MissingRequirements) != 0 {
 		return errors.New("ready action cannot have missing requirements")
 	}
-	for name, schema := range map[string]json.RawMessage{"input": a.InputSchema, "output": a.OutputSchema} {
-		var value map[string]json.RawMessage
-		if err := json.Unmarshal(schema, &value); err != nil || value == nil {
-			return fmt.Errorf("action %s schema must be a JSON object", name)
-		}
-	}
 	return nil
 }
 
 // ValidateRequiredSecrets also supports constructors that prepare schemas later.
 func (a Action) ValidateRequiredSecrets() error {
-	seen := make(map[string]bool, len(a.RequiredSecrets))
-	for _, name := range a.RequiredSecrets {
-		if err := secrets.ValidateName(name); err != nil {
-			return fmt.Errorf("required secret: %w", err)
-		}
-		if seen[name] {
-			return errors.New("required secret names must be unique within an action")
-		}
-		seen[name] = true
+	return a.definition().ValidateRequiredSecrets()
+}
+
+// Definition returns an independent copy of the static capability contract.
+func (a Action) Definition() Definition {
+	return a.definition().Clone()
+}
+
+func (a Action) definition() Definition {
+	return Definition{
+		Name: a.Name, Description: a.Description, RequiredSecrets: a.RequiredSecrets,
+		InputSchema: a.InputSchema, OutputSchema: a.OutputSchema,
 	}
-	return nil
 }
 
 func (a Action) Clone() Action {
+	definition := a.Definition()
 	a.MissingRequirements = slices.Clone(a.MissingRequirements)
-	a.RequiredSecrets = slices.Clone(a.RequiredSecrets)
-	a.InputSchema = bytes.Clone(a.InputSchema)
-	a.OutputSchema = bytes.Clone(a.OutputSchema)
+	a.RequiredSecrets = definition.RequiredSecrets
+	a.InputSchema = definition.InputSchema
+	a.OutputSchema = definition.OutputSchema
 	return a
 }

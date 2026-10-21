@@ -28,6 +28,15 @@ receives a task. See [agent selection](../apps/controllers/README.md#agent-selec
 They can also supply a `RuleSelector` to choose rules for each new operation;
 see [rule selection](../apps/controllers/README.md#rule-selection).
 
+## Action definitions
+
+[`actions.Definition`](domain/actions/definition.go) describes an action's name,
+description, input/output schemas and required secret names independently of a
+running agent. Use its validation and cloning when describing a capability before
+implementation. `actions.Action` adds runtime readiness; `Action.Definition()`
+returns an independent copy of its static contract. Executor bases retain that
+definition separately from their discovery state.
+
 ## Agent package manifests
 
 Use [`agent/manifest`](agent/manifest/manifest.go) to render and parse release

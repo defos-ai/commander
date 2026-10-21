@@ -56,7 +56,7 @@ func NewFunc[I, O any](config FuncConfig[I, O]) (*Func[I, O], error) {
 	if err := config.Action.ValidateRequiredSecrets(); err != nil {
 		return nil, err
 	}
-	definition := config.Action
+	definition := config.Action.Definition()
 	input, rawInput, err := funcSchema[I](definition.InputSchema)
 	if err != nil {
 		return nil, fmt.Errorf("action input schema: %w", err)
@@ -67,7 +67,7 @@ func NewFunc[I, O any](config FuncConfig[I, O]) (*Func[I, O], error) {
 	}
 	definition.InputSchema, definition.OutputSchema = rawInput, rawOutput
 	return &Func[I, O]{
-		Base: NewBase(definition), newInput: config.NewInput,
+		Base: &Base{definition: definition}, newInput: config.NewInput,
 		discover: config.Discover, run: config.Run, nextActions: config.NextActions,
 		inputSchema: input, outputSchema: output,
 	}, nil

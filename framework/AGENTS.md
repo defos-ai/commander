@@ -155,6 +155,17 @@
 
 ## Agent extension contracts
 
+- [`actions.Definition`](domain/actions/definition.go) owns static action metadata:
+  name, description, input/output schemas and required secret names. Executor
+  bases retain this static contract separately from readiness. `actions.Action`
+  is the flat inventory snapshot, and
+  `Action.Definition()` returns an independent static copy. Share metadata
+  validation and cloning through `Definition`; keep live requirement checks in
+  `Action.Validate`. Metadata validation requires JSON-object schemas; typed
+  executors additionally compile their schemas and validate execution data.
+  Constructors accept action metadata and may infer schemas later, so validate
+  secret declarations separately before inference. Release `manifest.Action`
+  remains a name/description summary.
 - [`agent/manifest`](agent/manifest/manifest.go) owns release manifest types,
   strict `Parse` and `Render` using the embedded [`agent.yaml.tmpl`](agent/manifest/agent.yaml.tmpl).
   Both APIs use the same validation; reject invalid supplied modes and require

@@ -47,6 +47,9 @@ is unknown. Cancelling an operation stops new dispatch; running actions may fini
   **agent ID** identifies one process. Several instances can share a type.
 - **Action** is an executable capability with input/output schemas and
   readiness. It may use Go code, a host program or an external API.
+- **Action definition** describes the capability's name, description, schemas and
+  required secret names independently of installation or readiness. Executors use
+  this contract; their runtime action snapshots add status and missing requirements.
 - **Agent snapshot** reports actions, status and current `work` (action, operation,
   task and command IDs). Work clears when execution ends. Stale snapshots describe
   last known state; tasks and execution records hold history.

@@ -4,7 +4,7 @@ import (
 	spawneractions "github.com/defos-ai/commander/apps/agents/spawner/actions"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
 const AgentType agents.AgentType = "spawner-agent"
@@ -48,8 +48,8 @@ func NewActions(launcher spawneractions.Spawner) ([]action.Executor, error) {
 }
 
 // ActionDescriptions describes packaged capabilities without starting discovery or providers.
-func ActionDescriptions() []actionmodel.Action {
-	return []actionmodel.Action{
+func ActionDescriptions() []manifest.Action {
+	return []manifest.Action{
 		{Name: spawneractions.SpawnAgentName, Description: spawneractions.SpawnAgentDescription},
 	}
 }

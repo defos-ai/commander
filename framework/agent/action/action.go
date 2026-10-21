@@ -39,7 +39,7 @@ type Executor interface {
 // Base publishes immutable readiness snapshots for extensions.
 // Embed *Base, implement Run, and override Discover for external dependencies.
 type Base struct {
-	definition actionmodel.Action
+	definition actionmodel.Definition
 	readiness  atomic.Pointer[readiness]
 }
 
@@ -49,23 +49,24 @@ type readiness struct {
 	requirements []actionmodel.Requirement
 }
 
-func NewBase(definition actionmodel.Action) *Base {
-	definition.Status = Unknown
-	definition.StatusReason = ""
-	definition.MissingRequirements = nil
-	definition = definition.Clone()
-	return &Base{definition: definition}
+func NewBase(metadata actionmodel.Action) *Base {
+	return &Base{definition: metadata.Definition()}
 }
 
 // Action returns an independent snapshot of the action's metadata and readiness.
 func (b *Base) Action() actionmodel.Action {
-	definition := b.definition
-	if current := b.readiness.Load(); current != nil {
-		definition.Status = current.status
-		definition.StatusReason = current.reason
-		definition.MissingRequirements = current.requirements
+	snapshot := actionmodel.Action{
+		Name: b.definition.Name, Description: b.definition.Description,
+		RequiredSecrets: b.definition.RequiredSecrets,
+		InputSchema:     b.definition.InputSchema, OutputSchema: b.definition.OutputSchema,
+		Status: Unknown,
 	}
-	return definition.Clone()
+	if current := b.readiness.Load(); current != nil {
+		snapshot.Status = current.status
+		snapshot.StatusReason = current.reason
+		snapshot.MissingRequirements = current.requirements
+	}
+	return snapshot.Clone()
 }
 
 func (b *Base) SetStatus(status Status) {

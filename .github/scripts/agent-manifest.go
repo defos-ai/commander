@@ -13,7 +13,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/builder"
 	"github.com/defos-ai/commander/apps/agents/spawner"
 	"github.com/defos-ai/commander/framework/agent/manifest"
-	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func main() {
@@ -44,7 +43,7 @@ func generate(agent, version, digest, artifacts, output string) error {
 			Image: "ghcr.io/defos-ai/commander-" + agent + "-agent@" + digest,
 		},
 	}
-	var descriptions []actions.Action
+	var descriptions []manifest.Action
 	if agent == "builder" {
 		definition.Responsibilities = builder.Responsibilities()
 		descriptions = builder.ActionDescriptions()
@@ -52,9 +51,7 @@ func generate(agent, version, digest, artifacts, output string) error {
 		definition.Responsibilities = spawner.Responsibilities()
 		descriptions = spawner.ActionDescriptions()
 	}
-	for _, description := range descriptions {
-		definition.Actions = append(definition.Actions, manifest.Action{Name: description.Name, Description: description.Description})
-	}
+	definition.Actions = append(definition.Actions, descriptions...)
 	if err := definition.Validate(); err != nil {
 		return err
 	}
