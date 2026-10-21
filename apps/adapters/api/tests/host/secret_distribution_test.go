@@ -306,6 +306,17 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if !slices.Equal(detail.MissingRequirements, waitingTask.MissingRequirements) || detail.AgentType != waitingTask.AgentType {
 		t.Fatal("task detail lost execution requirements")
 	}
+	tasks := decodeResponse[models.PageResponse[models.TaskResponse]](t, secretRequest(t, server, http.MethodGet, runtimePath+"/tasks?limit=1", ""))
+	if len(tasks.Items) != 1 || tasks.NextCursor != waitingTask.ID || tasks.Items[0].AgentType != waitingTask.AgentType ||
+		!slices.Equal(tasks.Items[0].MissingRequirements, waitingTask.MissingRequirements) {
+		t.Fatal("task page lost execution requirements or its cursor")
+	}
+	listed := decodeResponse[models.ListResponse[models.OperationResponse]](t, secretRequest(t, server, http.MethodGet, "/api/v1/operations", ""))
+	index := slices.IndexFunc(listed.Items, func(item models.OperationResponse) bool { return item.ID == runtimeOperation.ID })
+	if index < 0 || len(listed.Items[index].Tasks) != 1 || listed.Items[index].Tasks[0].AgentType != waitingTask.AgentType ||
+		!slices.Equal(listed.Items[index].Tasks[0].MissingRequirements, waitingTask.MissingRequirements) {
+		t.Fatal("operation list lost execution requirements")
+	}
 	// Another operation on the same agent type must not inherit this wait.
 	previous := decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, operationPath, ""))
 	if len(previous.Tasks[0].MissingRequirements) != 0 {

@@ -6,23 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
 	"github.com/defos-ai/commander/framework/agent/packages"
-	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/id"
-	fsactions "github.com/defos-ai/commander/providers/fs/actions"
-	fsagents "github.com/defos-ai/commander/providers/fs/agents"
-	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
-	fscomms "github.com/defos-ai/commander/providers/fs/comms"
-	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
-	fsoperations "github.com/defos-ai/commander/providers/fs/operations"
-	fsreports "github.com/defos-ai/commander/providers/fs/reports"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -133,47 +122,5 @@ agents:
 
 func agentCatalogSession(t *testing.T, client *packages.Client, source string) (context.Context, *sdkmcp.ClientSession) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	t.Cleanup(cancel)
-	root := t.TempDir()
-	check := func(err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
-	check(err)
-	t.Cleanup(func() { check(bus.Close()) })
-	adapterID, err := id.AdapterID("mcp")
-	check(err)
-	operations, err := controllercommands.NewClient(ctx, bus, adapterID, nil)
-	check(err)
-	t.Cleanup(func() { check(operations.Close()) })
-	config := adapter.Config{Operations: operations, CatalogClient: client, CatalogURL: source}
-	database, storage := filepath.Join(root, "database"), filepath.Join(root, "storage")
-	config.AgentStore, err = fsagents.NewAgentFsStore(database)
-	check(err)
-	config.MissionStore, err = fsmissions.NewMissionFsStore(database)
-	check(err)
-	config.OperationStore, err = fsoperations.NewOperationFsStore(database)
-	check(err)
-	config.ActionStore, err = fsactions.NewActionFsStore(database)
-	check(err)
-	config.ArtifactStore, err = fsartifacts.NewArtifactFsStore(database)
-	check(err)
-	config.ArtifactFileStore, err = fsartifacts.NewArtifactFileFsStore(storage)
-	check(err)
-	config.ReportStore, err = fsreports.NewReportFsStore(storage)
-	check(err)
-	server, err := adapter.NewServer(config)
-	check(err)
-	serverTransport, clientTransport := sdkmcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	check(err)
-	t.Cleanup(func() { check(serverSession.Close()) })
-	session, err := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "agent-catalog-test", Version: "1"}, nil).Connect(ctx, clientTransport, nil)
-	check(err)
-	t.Cleanup(func() { check(session.Close()) })
-	return ctx, session
+	return mcpSession(t, adapter.Config{CatalogClient: client, CatalogURL: source})
 }

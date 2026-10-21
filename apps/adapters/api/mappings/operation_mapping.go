@@ -2,12 +2,11 @@ package mappings
 
 import (
 	"bytes"
-	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 func ToStartOperationCommand(request models.StartOperationRequest) controllercommands.StartOperationCommand {
@@ -37,12 +36,20 @@ func ToFailOperationCommand(operationID string, request models.FailOperationRequ
 }
 
 func ToOperationResponse(operation operations.Operation) models.OperationResponse {
+	return toOperationResponse(operation, ToTaskResponses(operation.Tasks), operation.AssessAffinity())
+}
+
+func ToOperationViewResponse(operation queries.OperationView) models.OperationResponse {
+	return toOperationResponse(operation.Operation, ToTaskViewResponses(operation.Tasks), operation.Affinity)
+}
+
+func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity) models.OperationResponse {
 	response := models.OperationResponse{
 		ID:        operation.ID,
 		Mission:   ToMissionResponse(operation.Mission),
 		Input:     bytes.Clone(operation.Input),
 		Status:    string(operation.Status),
-		Tasks:     ToTaskResponses(operation.Tasks),
+		Tasks:     tasks,
 		Questions: ToQuestionResponses(operation.Questions),
 		Output:    bytes.Clone(operation.Output),
 		ReportID:  operation.ReportID,
@@ -55,7 +62,7 @@ func ToOperationResponse(operation operations.Operation) models.OperationRespons
 		preflight := ToPreflightResponse(*operation.Preflight)
 		response.Preflight = &preflight
 	}
-	if affinity := operation.AssessAffinity(); affinity != nil {
+	if affinity != nil {
 		response.Affinity = &models.AffinityResponse{
 			ForActions: affinity.ForActions,
 			AgentID:    affinity.AgentID,
@@ -65,25 +72,13 @@ func ToOperationResponse(operation operations.Operation) models.OperationRespons
 	return response
 }
 
-func ToOperationResponses(operations []operations.Operation) []models.OperationResponse {
+func ToOperationViewResponses(operations []queries.OperationView) []models.OperationResponse {
 	if operations == nil {
 		return nil
 	}
 	responses := make([]models.OperationResponse, len(operations))
 	for i, operation := range operations {
-		responses[i] = ToOperationResponse(operation)
+		responses[i] = ToOperationViewResponse(operation)
 	}
 	return responses
-}
-
-func ToOperationResponseWithRequirements(operation operations.Operation, records map[string]agents.Agent, now time.Time) models.OperationResponse {
-	response := ToOperationResponse(operation)
-	if !operation.Status.Terminal() {
-		for i, task := range operation.Tasks {
-			if task.OperationID == operation.ID {
-				response.Tasks[i] = ToTaskResponseWithRequirements(task, records[task.AgentID], now)
-			}
-		}
-	}
-	return response
 }

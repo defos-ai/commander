@@ -6,8 +6,8 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 func ToAssignTaskCommand(operationID string, request models.AssignTaskRequest) controllercommands.AssignTaskCommand {
@@ -57,13 +57,22 @@ func ToTaskResponses(tasks []operations.Task) []models.TaskResponse {
 	return responses
 }
 
-func ToTaskResponseWithRequirements(task operations.Task, record agents.Agent, now time.Time) models.TaskResponse {
-	response := ToTaskResponse(task)
-	if requirements := operations.AssessTaskRequirements(task, record, now); len(requirements) != 0 {
-		response.AgentType = string(record.Type)
-		response.MissingRequirements = ToActionRequirementResponses(requirements)
-	}
+func ToTaskViewResponse(task queries.TaskView) models.TaskResponse {
+	response := ToTaskResponse(task.Task)
+	response.AgentType = task.AgentType
+	response.MissingRequirements = ToActionRequirementResponses(task.MissingRequirements)
 	return response
+}
+
+func ToTaskViewResponses(tasks []queries.TaskView) []models.TaskResponse {
+	if tasks == nil {
+		return nil
+	}
+	responses := make([]models.TaskResponse, len(tasks))
+	for i, task := range tasks {
+		responses[i] = ToTaskViewResponse(task)
+	}
+	return responses
 }
 
 func cloneTime(value *time.Time) *time.Time {

@@ -7,14 +7,16 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 func Register(mux *http.ServeMux, store operations.OperationStore, reportStore reports.ReportStore, agentStore agents.AgentStore, commands controllercommands.Operations) {
-	registerOperations(mux, store, agentStore)
+	query := queries.Operations{Store: store, Agents: agentStore, Reports: reportStore}
+	registerOperations(mux, query)
 	registerGraph(mux, store)
-	registerReports(mux, store, reportStore)
-	registerTasks(mux, store, agentStore)
-	registerEvents(mux, store)
+	registerReports(mux, query)
+	registerTasks(mux, query)
+	registerEvents(mux, query)
 	registerQuestions(mux, store, commands)
 	registerContinuations(mux, commands)
 	registerCommands(mux, commands)

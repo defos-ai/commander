@@ -10,10 +10,10 @@ import (
 	"time"
 
 	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/queries"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -79,6 +79,7 @@ type OperationTasksResult struct {
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
+	query := queries.Operations{Store: config.OperationStore, Agents: config.AgentStore, Reports: config.ReportStore}
 	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, rules and schemas before starting it.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Missions []missionListItem `json:"missions"`
@@ -104,11 +105,10 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, _ struct{}) (struct {
 			Operations []operationSummary `json:"operations"`
 		}, error) {
-			items, err := config.OperationStore.List(ctx)
-			now := time.Now().UTC()
+			items, err := query.List(ctx, false)
 			summaries := make([]operationSummary, 0, len(items))
 			for _, item := range items {
-				summaries = append(summaries, summarizeOperation(item, now))
+				summaries = append(summaries, summarizeOperation(item))
 			}
 			return struct {
 				Operations []operationSummary `json:"operations"`
@@ -116,45 +116,28 @@ func addOperationTools(server *mcp.Server, config Config) {
 		})
 	addTool(server, "get_operation", "Read status, preflight, affinity, tasks, results, continuations and question history. affinity derives the same-agent for_actions and bound agent_id from saved dispatches; agent_id is absent before the first dispatch. Command responses contain saved state; use this query for the derived affinity view. Queued tasks remain unassigned. A busy or unavailable bound agent causes waiting, never fallback or automatic replay; an affinity error requires inspection, not retry or rebinding. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
-			operation, err := config.OperationStore.Get(ctx, request.OperationID)
-			var records map[string]agents.Agent
-			if err == nil && !operation.Status.Terminal() {
-				records, err = readTaskAgents(ctx, config.AgentStore)
-			}
-			return describeOperation(operation, records, time.Now().UTC()), err
+			operation, err := query.Get(ctx, request.OperationID)
+			return describeOperation(operation), err
 		})
 	addTool(server, "operation_tasks", "Read task summaries in assignment order, up to limit (default 100, max 1000). Pass next_cursor as cursor for the next page; an empty page keeps the cursor unchanged. Use get_task for input, results and proposed next actions.", operationPageSchema(false),
 		func(ctx context.Context, request OperationPageRequest) (OperationTasksResult, error) {
-			tasks, err := config.OperationStore.ListTasks(ctx, request.OperationID, request.Cursor, request.pageLimit())
-			var records map[string]agents.Agent
-			if err == nil && len(tasks) != 0 {
-				records, err = readOperationTaskAgents(ctx, config, request.OperationID)
-			}
-			now := time.Now().UTC()
+			tasks, err := query.ListTasks(ctx, request.OperationID, request.Cursor, request.pageLimit())
 			summaries := make([]taskSummary, 0, len(tasks))
 			nextCursor := request.Cursor
 			for _, task := range tasks {
-				var record agents.Agent
-				if task.OperationID == request.OperationID {
-					record = records[task.AgentID]
-				}
-				summaries = append(summaries, summarizeTask(task, record, now))
+				summaries = append(summaries, summarizeTask(task))
 				nextCursor = task.ID
 			}
 			return OperationTasksResult{Tasks: summaries, NextCursor: nextCursor}, err
 		})
 	addTool(server, "get_task", "Read one task's input, result, artifacts, error and full continuation. Requires both operation_id and task_id; use the continuation version when resolving its decision.", objectSchema(map[string]any{"operation_id": stringProperty, "task_id": stringProperty}, "operation_id", "task_id"),
 		func(ctx context.Context, request TaskRequest) (taskDetail, error) {
-			task, err := config.OperationStore.GetTask(ctx, request.OperationID, request.TaskID)
-			var records map[string]agents.Agent
-			if err == nil && task.OperationID == request.OperationID {
-				records, err = readOperationTaskAgents(ctx, config, request.OperationID)
-			}
-			return describeTask(task, records[task.AgentID], time.Now().UTC()), err
+			task, err := query.GetTask(ctx, request.OperationID, request.TaskID)
+			return describeTask(task), err
 		})
 	addTool(server, "get_report", "Read a completed operation's report by operation_id. Use list_operations to find the ID; no operator question is needed.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
-			return readReport(ctx, config.OperationStore, config.ReportStore, request.OperationID)
+			return query.GetReport(ctx, request.OperationID)
 		})
 	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and enforces same-agent placement. Clients do not select or rebind agents. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
 		"operation_id": stringProperty,
@@ -187,7 +170,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				waitCtx, cancel = context.WithTimeout(ctx, time.Duration(request.WaitSeconds)*time.Second)
 				defer cancel()
 			}
-			events, err := readEvents(waitCtx, config.OperationStore, request.OperationID, after, request.pageLimit(), request.WaitSeconds > 0)
+			events, err := query.ListEvents(waitCtx, request.OperationID, after, request.pageLimit(), request.WaitSeconds > 0)
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 				err = nil
 			}
@@ -230,57 +213,6 @@ var missionStepProperty = map[string]any{
 	"type":        "string",
 	"minLength":   1,
 	"description": "Optional ID from the mission's explicitly declared steps. Omit when the mission has no steps. Do not substitute an action name.",
-}
-
-func readReport(ctx context.Context, store operations.OperationStore, reportStore reports.ReportStore, operationID string) (reports.Report, error) {
-	operation, err := store.Get(ctx, operationID)
-	if err != nil {
-		return reports.Report{}, err
-	}
-	if operation.Status != operations.Completed || operation.ReportID == "" {
-		return reports.Report{}, fmt.Errorf("operation has no stored report: %w", reports.ErrUnknownReport)
-	}
-	report, err := reportStore.Get(ctx, operation.ReportID)
-	if err != nil {
-		return reports.Report{}, err
-	}
-	if report.OperationID != operation.ID || report.Mission != operation.Mission.Name {
-		return reports.Report{}, errors.New("stored report does not belong to the operation")
-	}
-	return report, nil
-}
-
-// Long polling reads durable snapshots, so event history and updates do not
-// depend on a controller connection or in-memory notification channel.
-func readEvents(ctx context.Context, store operations.OperationStore, operationID string, after uint64, limit int, wait bool) ([]operations.Event, error) {
-	for {
-		events, err := store.ListEvents(ctx, operationID, after, limit)
-		if err != nil || len(events) > 0 || !wait {
-			return events, err
-		}
-		operation, err := store.Get(ctx, operationID)
-		if err != nil {
-			return nil, err
-		}
-		finished := operation.Status.Terminal()
-		for _, task := range operation.Tasks {
-			if task.Status == operations.TaskRunning {
-				finished = false
-				break
-			}
-		}
-		if finished {
-			// Completion may have been saved after the first event query.
-			return store.ListEvents(ctx, operationID, after, limit)
-		}
-		timer := time.NewTimer(100 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, ctx.Err()
-		case <-timer.C:
-		}
-	}
 }
 
 var stringProperty = map[string]any{"type": "string", "minLength": 1}

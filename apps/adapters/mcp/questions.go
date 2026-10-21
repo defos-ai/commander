@@ -1,10 +1,8 @@
 package missionsmcp
 
 import (
-	"time"
-
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 type operationDetail struct {
@@ -15,15 +13,11 @@ type operationDetail struct {
 	RemainingQuestions int                  `json:"remaining_questions"`
 }
 
-func describeOperation(operation operations.Operation, records map[string]agents.Agent, now time.Time) operationDetail {
-	progress := operation.AssessProgress(now)
+func describeOperation(operation queries.OperationView) operationDetail {
 	tasks := make([]taskDetail, len(operation.Tasks))
 	for i, task := range operation.Tasks {
-		var record agents.Agent
-		if !operation.Status.Terminal() && task.OperationID == operation.ID {
-			record = records[task.AgentID]
-		}
-		tasks[i] = describeTask(task, record, now)
+		tasks[i] = describeTask(task)
 	}
-	return operationDetail{Operation: operation, Tasks: tasks, Affinity: operation.AssessAffinity(), LastQuestion: progress.LastQuestion, RemainingQuestions: progress.RemainingQuestions}
+	return operationDetail{Operation: operation.Operation, Tasks: tasks, Affinity: operation.Affinity,
+		LastQuestion: operation.Progress.LastQuestion, RemainingQuestions: operation.Progress.RemainingQuestions}
 }

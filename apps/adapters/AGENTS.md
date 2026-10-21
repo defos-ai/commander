@@ -5,6 +5,11 @@
 - Adapters query saved state through stores and send typed operation commands to
   the controller. They must not select agents, dispatch agent commands, or mutate
   operation records directly. Queries should remain usable without a live controller.
+- Operation/task/report/event loading is shared through
+  [`queries.Operations`](../../framework/queries/operations.go). Map its derived
+  views into each adapter's wire format; keep pagination validation and bounded
+  wait deadlines here. Event waits end on saved-work settlement, not terminal
+  operation status alone, and reread events after observing settlement.
 - MCP registration and input decoding start in [mcp/adapter.go](mcp/adapter.go);
   operation tools live in [mcp/operations.go](mcp/operations.go), and file resources
   in [mcp/artifacts.go](mcp/artifacts.go). HTTP-specific guidance is in
@@ -79,7 +84,8 @@
   Admin Secrets; never solicit secret values through chat, tools or questions,
   or equate a saved secret with an agent becoming ready.
 - Running task queries also project `agent_type` and `missing_requirements` from
-  the assigned agent's live work, using `operations.AssessTaskRequirements`.
+  the assigned agent's live work. The shared query service applies
+  `operations.AssessTaskRequirements` with one assessment time per response.
   Match the saved execution identity and retain its deadline; suppress waits for
   terminal operations. Inventory failures omit this optional observation while
   keeping saved results readable. Never infer a task wait from sync requests.

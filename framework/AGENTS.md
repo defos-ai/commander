@@ -94,6 +94,13 @@
   saved-work view, not proof of agent idleness or permission to clean up state.
   Terminal operations retain history but expose no actionable decisions/questions.
   Reads never expire questions or change saved operation status.
+- [`queries.Operations`](queries/operations.go) loads operation/task views for
+  adapters, using one time per response for progress and live requirements.
+  Inventory and parent-status read failures omit optional task observations;
+  primary read failures and caller cancellation still fail the query. Compact
+  listings skip inventory. Report reads verify operation ownership, and event
+  waits use saved-work settlement with a final event reread. Keep wire formats,
+  pagination validation and wait deadlines in adapters; query views are not stored.
 - Preserve immutable execution outcomes and reports. Save reports before
   completing operations. Agents upload bytes through `ArtifactFileStore`;
   controllers accept metadata through `ArtifactStore`. Bytes alone are not evidence.

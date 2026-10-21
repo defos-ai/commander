@@ -19,9 +19,11 @@
 
 ## Request and response rules
 
-- Queries use stores; commands validate API input and send typed controller
-  commands. Preserve strict JSON decoding, unknown-field rejection, body limits,
-  content-type checks and canonical record-ID validation.
+- Operation/task/report/event queries use the shared framework
+  [`queries.Operations`](../../../framework/queries/) service; keep live requirement
+  enrichment out of handlers and mappings. Commands validate API input and send
+  typed controller commands. Preserve strict JSON decoding, unknown-field rejection,
+  body limits, content-type checks and canonical record-ID validation.
 - Keep command timeouts and error mapping explicit. An uncertain response does
   not prove rejection; do not retry commands automatically or infer completion
   from client cancellation.

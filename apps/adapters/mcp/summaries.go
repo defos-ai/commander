@@ -8,6 +8,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 // Listings carry selection and progress information. Schemas, configuration and
@@ -81,15 +82,15 @@ type taskSummary struct {
 	FinishedAt          *time.Time            `json:"finished_at,omitempty"`
 }
 
-func summarizeTask(task operations.Task, record agents.Agent, now time.Time) taskSummary {
+func summarizeTask(task queries.TaskView) taskSummary {
 	summary := taskSummary{
 		ID: task.ID, ParentTaskID: task.ParentTaskID, StepID: task.StepID,
 		AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
 		Error: task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 	}
-	if requirements := operations.AssessTaskRequirements(task, record, now); len(requirements) != 0 {
-		summary.AgentType = string(record.Type)
-		summary.MissingRequirements = requirements
+	if len(task.MissingRequirements) != 0 {
+		summary.AgentType = task.AgentType
+		summary.MissingRequirements = task.MissingRequirements
 		// Clients need the deadline to expire this live observation locally.
 		summary.DeadlineAt = task.DeadlineAt
 	}
@@ -117,12 +118,12 @@ type operationSummary struct {
 	UpdatedAt          time.Time                     `json:"updated_at"`
 }
 
-func summarizeOperation(operation operations.Operation, now time.Time) operationSummary {
-	progress := operation.AssessProgress(now)
+func summarizeOperation(operation queries.OperationView) operationSummary {
+	progress := operation.Progress
 	return operationSummary{
 		ID: operation.ID, Mission: missionSummary{Name: operation.Mission.Name}, Input: operation.Input,
 		Status: operation.Status, TaskCounts: progress.TaskCounts,
-		Preflight: operation.Preflight, Affinity: operation.AssessAffinity(),
+		Preflight: operation.Preflight, Affinity: operation.Affinity,
 		PendingDecisions: progress.PendingDecisions, PendingQuestions: progress.PendingQuestions,
 		LastQuestion: progress.LastQuestion, RemainingQuestions: progress.RemainingQuestions,
 		ReportID: operation.ReportID, Error: operation.Error,
