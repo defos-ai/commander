@@ -8,7 +8,6 @@ export const publicAPIURL = 'http://localhost:14274';
 export const username = process.env.COMMANDER_TEST_API_USERNAME ?? 'api-fixture-user';
 export const password = process.env.COMMANDER_TEST_API_PASSWORD ?? 'api-fixture-password';
 const terminal = new Set(['completed', 'cancelled', 'failed']);
-const unfinished = new Set(['queued', 'running', 'interrupted']);
 
 export class CommanderAPI {
   constructor(private readonly request: APIRequestContext) {}
@@ -80,7 +79,7 @@ export class CommanderAPI {
         await this.settleCommand(`/operations/${operation.id}/cancel`, undefined, ['operation_finished']);
       }
       const agents = await this.get<{ items: Agent[] }>('/agents');
-      return operations.items.every(item => terminal.has(item.status) && !item.tasks?.some(task => unfinished.has(task.status)))
+      return operations.items.every(item => item.progress.settled)
         && agents.items.every(agent => !agent.work && agent.status !== 'working');
     }, { timeout: 60_000, message: 'Settle test operations before removing stored state' }).toBe(true);
   }

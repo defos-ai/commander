@@ -219,6 +219,19 @@ func decode[T any](t *testing.T, result response, status int) T {
 	if err := json.Unmarshal([]byte(result.body), &value); err != nil {
 		t.Fatalf("decode response: %v: %s", err, result.body)
 	}
+	if _, ok := any(value).(models.OperationResponse); ok {
+		var payload struct {
+			Progress map[string]json.RawMessage `json:"progress"`
+		}
+		if err := json.Unmarshal([]byte(result.body), &payload); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"task_counts", "total_tasks", "finished_tasks", "pending_decisions", "pending_questions", "settled"} {
+			if raw := payload.Progress[field]; len(raw) == 0 || string(raw) == "null" {
+				t.Fatalf("operation response omitted progress.%s", field)
+			}
+		}
+	}
 	return value
 }
 

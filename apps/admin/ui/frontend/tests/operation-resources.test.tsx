@@ -10,6 +10,7 @@ const now = '2026-10-06T10:00:00Z';
 const artifact: OperationArtifact = { id: 'artifact-page', name: 'Homepage evidence', agent_id: 'agent-one', action_name: 'capture-page', created_at: now,
   files: [{ id: 'file-page', name: 'desktop.png', media_type: 'image/png', size: 1024, sha256: 'a'.repeat(64) }] };
 const operation: Operation = { id: 'operation-review', status: 'completed', report_id: 'report-review', input: {},
+  progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: true },
   mission: { name: 'review-website-with-browser', objective: 'Review website quality.', required_actions: [], starting_actions: [], input_schema: {}, output_schema: {} },
   tasks: [{ id: 'task-capture', operation_id: 'operation-review', agent_id: 'agent-one', action_name: 'capture-page', status: 'succeeded', started_at: now,
     result: { action_name: 'capture-page', output: {}, artifacts: [artifact] } }], questions: [], events: [], created_at: now, updated_at: now };

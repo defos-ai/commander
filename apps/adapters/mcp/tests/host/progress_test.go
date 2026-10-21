@@ -55,11 +55,16 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 	}
 	type operationView struct {
 		operations.Operation
-		TaskCounts         map[operations.TaskStatus]int `json:"task_counts"`
-		PendingDecisions   int                           `json:"pending_decisions"`
-		PendingQuestions   int                           `json:"pending_questions"`
-		LastQuestion       *operations.Question          `json:"last_question"`
-		RemainingQuestions int                           `json:"remaining_questions"`
+		Progress struct {
+			TaskCounts       map[operations.TaskStatus]int `json:"task_counts"`
+			TotalTasks       int                           `json:"total_tasks"`
+			FinishedTasks    int                           `json:"finished_tasks"`
+			PendingDecisions int                           `json:"pending_decisions"`
+			PendingQuestions int                           `json:"pending_questions"`
+			Settled          bool                          `json:"settled"`
+		} `json:"progress"`
+		LastQuestion       *operations.Question `json:"last_question"`
+		RemainingQuestions int                  `json:"remaining_questions"`
 	}
 	for _, status := range []operations.Status{operations.Waiting, operations.Cancelled} {
 		t.Run(string(status), func(t *testing.T) {
@@ -69,10 +74,13 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 			for _, status := range []operations.TaskStatus{operations.TaskSucceeded, operations.TaskSucceeded, operations.TaskInterrupted} {
 				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "review"})
 				task.Status = status
+				task.AgentID = "review-agent-12345678"
+				task.FinishedAt = &now
 				op.Tasks = append(op.Tasks, task)
 			}
 			op.Tasks[0].Continuation = &operations.Continuation{Status: operations.ContinuationPending, DecisionBy: operations.DecisionModel, Version: 1}
-			op.Tasks[1].Continuation = &operations.Continuation{Status: operations.ContinuationWaiting, DecisionBy: operations.DecisionCode, Version: 1}
+			op.Tasks[1].Continuation = &operations.Continuation{Status: operations.ContinuationWaiting, DecisionBy: operations.DecisionCode, Version: 1, CreatedTaskIDs: []string{op.Tasks[2].ID}}
+			op.Tasks[2].ParentTaskID = op.Tasks[1].ID
 			op.Questions = []operations.Question{
 				{ID: "00000000-0000-0000-0000-000000000002", Text: "Latest question", Status: operations.QuestionPending, AskedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)},
 				{ID: "00000000-0000-0000-0000-000000000001", Text: "Other question", Status: operations.QuestionPending, AskedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)},
@@ -100,17 +108,20 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 			if summary == nil {
 				t.Fatal("operation absent from listing")
 			}
-			if want := (map[operations.TaskStatus]int{operations.TaskSucceeded: 2, operations.TaskInterrupted: 1}); !reflect.DeepEqual(summary.TaskCounts, want) {
-				t.Fatalf("summary lost task states: %+v", summary.TaskCounts)
+			if want := (map[operations.TaskStatus]int{operations.TaskSucceeded: 2, operations.TaskInterrupted: 1}); !reflect.DeepEqual(summary.Progress.TaskCounts, want) {
+				t.Fatalf("summary lost task states: %+v", summary.Progress.TaskCounts)
 			}
 			if status.Terminal() {
-				if summary.PendingDecisions != 0 || summary.PendingQuestions != 0 {
+				if summary.Progress.PendingDecisions != 0 || summary.Progress.PendingQuestions != 0 {
 					t.Fatal("terminal operation advertised actionable decisions or questions")
 				}
-			} else if summary.PendingDecisions != 1 || summary.PendingQuestions != 2 {
-				t.Fatalf("summary pending decisions/questions = %d/%d; want 1/2", summary.PendingDecisions, summary.PendingQuestions)
+			} else if summary.Progress.PendingDecisions != 1 || summary.Progress.PendingQuestions != 2 {
+				t.Fatalf("summary pending decisions/questions = %d/%d; want 1/2", summary.Progress.PendingDecisions, summary.Progress.PendingQuestions)
 			}
 			for _, view := range []*operationView{&detail, summary} {
+				if view.Progress.TotalTasks != 3 || view.Progress.FinishedTasks != 2 || view.Progress.Settled || !reflect.DeepEqual(view.Progress, summary.Progress) {
+					t.Fatalf("query counted interrupted work as finished or disagreed: %+v", view.Progress)
+				}
 				if status.Terminal() {
 					if view.LastQuestion != nil || view.RemainingQuestions != 0 {
 						t.Fatal("terminal operation exposed a pending question")
@@ -128,6 +139,25 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, after) {
 				t.Fatal("query mutated saved operation")
+			}
+			if status.Terminal() {
+				_, err := store.FinishTask(ctx, op.ID, operations.TaskResult{
+					TaskID: op.Tasks[2].ID, AgentID: op.Tasks[2].AgentID,
+					Status: operations.TaskFailed, Error: "late failure", FinishedAt: time.Now().UTC(),
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				read(t, "get_operation", map[string]any{"operation_id": op.ID}, &detail)
+				read(t, "list_operations", map[string]any{}, &listing)
+				for _, item := range listing.Operations {
+					if item.ID == op.ID && !reflect.DeepEqual(item.Progress, detail.Progress) {
+						t.Fatal("late outcome progress differs across queries")
+					}
+				}
+				if !detail.Progress.Settled || detail.Progress.FinishedTasks != 3 || detail.Progress.PendingDecisions != 0 || detail.Progress.PendingQuestions != 0 || detail.Status != operations.Cancelled {
+					t.Fatalf("late known outcome did not settle cancelled work: %+v", detail.Progress)
+				}
 			}
 		})
 	}

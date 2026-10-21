@@ -227,14 +227,6 @@ func (m *Model) operationProgress() []string {
 	}
 	for i, id := range ids[:min(4, len(ids))] {
 		op := m.operations[id]
-		done := 0
-		pending := 0
-		for _, task := range op.Tasks {
-			if task.Status != "running" && task.Status != "queued" {
-				done++
-			}
-		}
-		pending = len(m.pendingQuestions(op, time.Now()))
 		marker := stars[m.frame%len(stars)]
 		if op.Settled() {
 			marker = "✓"
@@ -247,15 +239,15 @@ func (m *Model) operationProgress() []string {
 		if len(label) > 8 {
 			label = label[:8]
 		}
-		line := fmt.Sprintf("%s %s · %s · %d/%d tasks finished", m.color(marker, color), label, op.Status, done, len(op.Tasks))
+		line := fmt.Sprintf("%s %s · %s · %d/%d tasks finished", m.color(marker, color), label, op.Status, op.Progress.FinishedTasks, op.Progress.TotalTasks)
 		needsSecrets := op.NeedsSecrets()
 		if needsSecrets {
 			line += " · secrets needed · /secrets"
 		} else if !op.Terminal() && op.Preflight != nil && !op.Preflight.Ready {
 			line += " · requirements missing"
 		}
-		if pending > 0 {
-			line += fmt.Sprintf(" · %d question(s)", pending)
+		if op.Progress.PendingQuestions > 0 {
+			line += fmt.Sprintf(" · %d question(s)", op.Progress.PendingQuestions)
 		}
 		if (needsSecrets || op.Status == "completed" && op.Settled()) && m.config.AdminURL != "" {
 			line += " · " + m.operationAdminLink(id)

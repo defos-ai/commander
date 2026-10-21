@@ -214,6 +214,13 @@
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.
+- Render the server's `progress` counts and use its `settled` flag for watcher
+  completion, final model review and Admin review links. Do not recalculate task
+  completion locally: interrupted outcomes remain unknown even on terminal
+  operations. Compare derived progress separately from `updated_at`, since a
+  question deadline can change counts without a saved write. Keep local question
+  and secret deadlines for input safety and continuation versions for review
+  scheduling.
 - `/stop` ends model work, not the server operation. Watching an operation can
   resume model review. Do not automatically retry failed model or mutating MCP
   requests: their execution outcome may be unknown.

@@ -173,6 +173,7 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	if runtime {
 		op.Tasks[0].Status = "succeeded"
 		op.Status, op.UpdatedAt = "completed", op.UpdatedAt.Add(time.Second)
+		op.Progress = bridge.Progress{TaskCounts: map[string]int{"succeeded": 1}, TotalTasks: 1, FinishedTasks: 1, Settled: true}
 	} else {
 		op.UpdatedAt, op.Preflight.Ready = op.UpdatedAt.Add(time.Second), true
 		op.Preflight.Version++
@@ -344,7 +345,7 @@ func secretFormOperation(names ...string) bridge.Operation {
 	for _, name := range names {
 		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
 	}
-	return bridge.Operation{ID: "secret-form-operation", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Version: 1, Actions: []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: requirements}}}}}}
+	return bridge.Operation{ID: "secret-form-operation", Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}}, Preflight: &bridge.Preflight{Version: 1, Actions: []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: requirements}}}}}}
 }
 
 func runtimeSecretFormOperation(names ...string) bridge.Operation {
@@ -353,7 +354,7 @@ func runtimeSecretFormOperation(names ...string) bridge.Operation {
 		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
 	}
 	deadline := time.Now().Add(time.Minute)
-	return bridge.Operation{ID: "secret-form-operation", Status: "running", UpdatedAt: time.Now(), Tasks: []bridge.Task{{
+	return bridge.Operation{ID: "secret-form-operation", Status: "running", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{"running": 1}, TotalTasks: 1}, Tasks: []bridge.Task{{
 		ID: "running-task", Status: "running", ActionName: "build", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: requirements,
 	}}}
 }

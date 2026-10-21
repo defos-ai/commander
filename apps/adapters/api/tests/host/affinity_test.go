@@ -86,6 +86,17 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 			if err := schema.Validate(body); err != nil {
 				t.Fatalf("operation does not match its published schema: %v", err)
 			}
+			if detail.Progress.TotalTasks != 2 || detail.Progress.Settled || detail.Progress.TaskCounts == nil {
+				t.Fatalf("operation lost unsettled progress: %+v", detail.Progress)
+			}
+			if scenario == "terminal" && (detail.Progress.FinishedTasks != 1 || detail.Progress.TaskCounts["interrupted"] != 1 || detail.Progress.TaskCounts["cancelled"] != 1) {
+				t.Fatalf("cancelled operation counted interrupted work as finished: %+v", detail.Progress)
+			}
+			object := body.(map[string]any)
+			delete(object, "progress")
+			if err := schema.Validate(object); err == nil {
+				t.Fatal("operation schema permits a missing progress object")
+			}
 			affinity := detail.Affinity
 			switch {
 			case scenario == "no rule":
@@ -111,12 +122,24 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 			}
 			list := decodeResponse[models.ListResponse[models.OperationResponse]](t, server.request(t, http.MethodGet, "/api/v1/operations", authenticate))
 			index := slices.IndexFunc(list.Items, func(item models.OperationResponse) bool { return item.ID == op.ID })
-			if index < 0 || !reflect.DeepEqual(list.Items[index].Affinity, affinity) {
-				t.Fatal("list and detail disagree about saved affinity")
+			if index < 0 || !reflect.DeepEqual(list.Items[index].Affinity, affinity) || !reflect.DeepEqual(list.Items[index].Progress, detail.Progress) {
+				t.Fatal("list and detail disagree about saved affinity or progress")
 			}
 			after, err := store.Get(t.Context(), op.ID)
 			if err != nil || !reflect.DeepEqual(before, after) {
 				t.Fatal("queries changed saved operation state")
+			}
+			if scenario == "terminal" {
+				if _, err := store.FinishTask(t.Context(), op.ID, operations.TaskResult{
+					TaskID: op.Tasks[0].ID, AgentID: owner, Status: operations.TaskFailed,
+					Error: "late failure", FinishedAt: time.Now().UTC(),
+				}); err != nil {
+					t.Fatal(err)
+				}
+				late := decodeResponse[models.OperationResponse](t, server.request(t, http.MethodGet, "/api/v1/operations/"+op.ID, authenticate))
+				if !late.Progress.Settled || late.Progress.FinishedTasks != 2 || late.Progress.PendingDecisions != 0 || late.Status != "cancelled" {
+					t.Fatalf("late known outcome did not settle cancelled work: %+v", late.Progress)
+				}
 			}
 		})
 	}

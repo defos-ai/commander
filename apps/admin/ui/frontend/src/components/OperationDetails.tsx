@@ -9,10 +9,6 @@ import { Button } from './Button';
 import '../styles/catalog.css';
 import '../styles/operations.css';
 
-export function operationProgress(tasks: OperationTask[] | null) {
-  return { total: tasks?.length ?? 0, finished: tasks?.filter(task => task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled').length ?? 0 };
-}
-
 export function isActiveOperation(status: string) {
   return status === 'planning' || status === 'running' || status === 'waiting';
 }
@@ -219,13 +215,13 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
   onOpenReport?: () => void;
 }) {
   const { t } = useTranslation();
-  const progress = operationProgress(operation.tasks);
+  const progress = operation.progress;
   const artifacts = [...new Map(operation.tasks?.flatMap(task => task.result?.artifacts ?? []).map(artifact => [artifact.id, artifact])).values()];
   const events = [...operation.events ?? []].sort((a, b) => b.sequence - a.sequence);
   const affinity = operation.affinity;
   return <div className="catalog-details operation-details">
     <section className="catalog-section"><h2>{t($ => $.operations.summary)}</h2>
-      <p className="operation-progress">{t($ => $.operations.progress, progress)}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
+      <p className="operation-progress">{t($ => $.operations.progress, { total: progress.total_tasks, finished: progress.finished_tasks })}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
       <dl className="detail-list">
         <div><dt>{t($ => $.operations.status)}</dt><dd><OperationStatus status={operation.status} /></dd></div>
         <div><dt>{t($ => $.operations.operationId)}</dt><dd><code>{operation.id}</code></dd></div>

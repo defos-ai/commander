@@ -41,6 +41,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		t.Fatalf("new operation lacks identity, readiness or empty tasks: %+v headers=%v", op, created.header)
 	}
 	assertSchema(t, a, "Operation", created)
+	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
+		t.Fatalf("new operation progress: %+v", op.Progress)
+	}
 	assertError(t, a.request(http.MethodPost, base+"/tasks", object{"action_name": discovery, "step_id": "unknown", "input": object{"url": url}}), http.StatusUnprocessableEntity, "invalid_input")
 	assigned := a.request(http.MethodPost, base+"/tasks", object{"action_name": discovery, "input": object{"url": url, "max_pages": 2}})
 	root := decode[models.TaskResponse](t, assigned, http.StatusCreated)
@@ -98,7 +101,7 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	a.resolve(op.ID, *decision, []object{})
 	assertError(t, a.request(http.MethodPost, base+"/complete", object{"output": object{"summary": "Missing required URL and findings"}}), http.StatusUnprocessableEntity, "invalid_output")
 	completed := a.complete(op.ID, url, "HTTP website review completed")
-	if completed.Status != "completed" || completed.ReportID == "" {
+	if completed.Status != "completed" || completed.ReportID == "" || !completed.Progress.Settled || completed.Progress.FinishedTasks != len(completed.Tasks) || completed.Progress.TotalTasks != len(completed.Tasks) {
 		t.Fatalf("completion: %+v", completed)
 	}
 	byID := read[models.ReportResponse](a, "/api/v1/reports/"+completed.ReportID)
@@ -189,7 +192,7 @@ func TestOperationStartReplayCancelAndFail(t *testing.T) {
 				commandBody, wantStatus = object{"reason": "Operator ended this test"}, "failed"
 			}
 			ended := post[models.OperationResponse](a, operationPath(op.ID)+"/"+command, commandBody, http.StatusOK)
-			if ended.Status != wantStatus || len(ended.Tasks) != 1 || ended.Tasks[0].Status != "cancelled" {
+			if ended.Status != wantStatus || len(ended.Tasks) != 1 || ended.Tasks[0].Status != "cancelled" || !ended.Progress.Settled || ended.Progress.FinishedTasks != 1 || ended.Progress.TotalTasks != 1 {
 				t.Fatalf("terminal operation: %+v", ended)
 			}
 			if command == "fail" && ended.Error != "Operator ended this test" {

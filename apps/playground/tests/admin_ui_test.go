@@ -157,13 +157,36 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	command("/admin")
 	countLinks(0)
 	now := time.Now()
-	for _, status := range []string{"failed", "cancelled"} {
-		publish(bridge.Operation{ID: status, Status: status, UpdatedAt: now})
-		command("/watch " + status)
-		u.wait(status+" operation", func(view string) bool { return strings.Contains(view, status[:min(8, len(status))]+" · "+status) })
-		countLinks(0)
+	publish(bridge.Operation{ID: "failed", Status: "failed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+	command("/watch failed")
+	u.wait("failed operation reviewed", func(view string) bool {
+		return strings.Contains(view, "failed · failed") && strings.Count(view, "Operation reviewed") == 1 && !strings.Contains(view, "Thinking")
+	})
+	countLinks(0)
+	cancelled := bridge.Operation{
+		ID: "cancelled", Status: "cancelled", UpdatedAt: now,
+		Tasks:    []bridge.Task{{ID: "known", Status: "succeeded"}, {ID: "unknown", Status: "interrupted"}},
+		Progress: bridge.Progress{TaskCounts: map[string]int{"succeeded": 1, "interrupted": 1}, TotalTasks: 2, FinishedTasks: 1},
 	}
-	op := bridge.Operation{ID: "target", Status: "running", UpdatedAt: now, Tasks: []bridge.Task{{ID: "task", Status: "succeeded"}}}
+	publish(cancelled)
+	command("/watch cancelled")
+	targetReads := reads.Load() + 3
+	u.wait("cancelled work awaiting its outcome", func(view string) bool {
+		return strings.Contains(view, "cancelle · cancelled · 1/2 tasks finished") && reads.Load() >= targetReads
+	})
+	if strings.Contains(u.model.View(), "✓ cancelle") || strings.Count(u.model.View(), "Operation reviewed") != 1 {
+		t.Fatal("interrupted cancellation was marked settled or reviewed before its outcome arrived")
+	}
+	countLinks(0)
+	cancelled.Tasks[1].Status = "failed"
+	cancelled.UpdatedAt = now.Add(time.Second)
+	cancelled.Progress = bridge.Progress{TaskCounts: map[string]int{"succeeded": 1, "failed": 1}, TotalTasks: 2, FinishedTasks: 2, Settled: true}
+	publish(cancelled)
+	u.wait("late cancellation outcome reviewed once", func(view string) bool {
+		return strings.Contains(view, "✓ cancelle · cancelled · 2/2 tasks finished") && strings.Count(view, "Operation reviewed") == 2 && !strings.Contains(view, "Thinking")
+	})
+	countLinks(0)
+	op := bridge.Operation{ID: "target", Status: "running", UpdatedAt: now, Tasks: []bridge.Task{{ID: "task", Status: "succeeded"}}, Progress: bridge.Progress{TaskCounts: map[string]int{"succeeded": 1}, TotalTasks: 1, FinishedTasks: 1}}
 	publish(op)
 	command("/watch target")
 	u.wait("completed task in running operation", func(view string) bool { return strings.Contains(view, "target · running · 1/1 tasks finished") })
@@ -171,9 +194,10 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 
 	// Keep the watcher alive while delivering an obsolete terminal snapshot.
 	op.Status, op.Tasks[0].Status = "completed", "running"
+	op.Progress = bridge.Progress{TaskCounts: map[string]int{"running": 1}, TotalTasks: 1}
 	op.UpdatedAt = now.Add(-time.Second)
 	publish(op)
-	targetReads := reads.Load() + 2
+	targetReads = reads.Load() + 2
 	u.wait("stale snapshot read", func(string) bool { return reads.Load() >= targetReads })
 	op.Status, op.UpdatedAt = "waiting", now.Add(time.Second)
 	publish(op)
@@ -189,6 +213,7 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	targetReads = reads.Load() + 2
 	u.wait("repeated completion snapshots", func(string) bool { return reads.Load() >= targetReads })
 	op.Tasks[0].Status, op.UpdatedAt = "succeeded", now.Add(4*time.Second)
+	op.Progress = bridge.Progress{TaskCounts: map[string]int{"succeeded": 1}, TotalTasks: 1, FinishedTasks: 1, Settled: true}
 	publish(op)
 	u.wait("settled completion", func(view string) bool {
 		return strings.Contains(view, "target · completed · 1/1 tasks finished") && strings.Count(view, "Operation reviewed") == 3 && !strings.Contains(view, "Thinking")
@@ -200,7 +225,7 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	}
 	command("/clear")
 	u.wait("cleared model history", func(view string) bool { return strings.Contains(view, "Model conversation cleared") })
-	publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now})
+	publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 	command("/watch second")
 	u.wait("second completed operation", func(view string) bool { return strings.Contains(view, "second · completed") })
 	countLinks(2)
@@ -218,7 +243,7 @@ func TestAdminCompletionWithoutURLIsSilent(t *testing.T) {
 	defer cancel()
 	u, publish, _ := adminOperationUI(t, ctx, "", true)
 	defer u.model.Close()
-	publish(bridge.Operation{ID: "completed", Status: "completed", UpdatedAt: time.Now()})
+	publish(bridge.Operation{ID: "completed", Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 	u.text("/watch completed")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("completion without Admin", func(view string) bool { return strings.Contains(view, "complete · completed") })
@@ -274,7 +299,7 @@ func TestAdminLinkRendering(t *testing.T) {
 				u.key(tea.KeyMsg{Type: tea.KeyEnter})
 			}
 			check(u.model, adminURL)
-			publish(bridge.Operation{ID: "done", Status: "completed", UpdatedAt: time.Now()})
+			publish(bridge.Operation{ID: "done", Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 			u.text("/watch done")
 			u.key(tea.KeyMsg{Type: tea.KeyEnter})
 			u.wait("completion link", func(view string) bool { return strings.Contains(ansi.Strip(view), "Review on Admin UI") })
@@ -302,7 +327,7 @@ func TestOperationAdminLinkDestinations(t *testing.T) {
 			defer cancel()
 			u, publish, _ := adminOperationUI(t, ctx, test.adminURL, false)
 			defer u.model.Close()
-			publish(bridge.Operation{ID: operationID, Status: "completed", UpdatedAt: time.Now()})
+			publish(bridge.Operation{ID: operationID, Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 			u.text("/watch " + operationID)
 			u.key(tea.KeyMsg{Type: tea.KeyEnter})
 			u.wait("operation-specific review link", func(view string) bool {
@@ -339,7 +364,7 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 			now := time.Now()
 			for i, id := range []string{"alpha", "bravo", "charlie", "delta", "zulu"} {
 				// The last two share a timestamp so their order also exercises the ID tie-break.
-				publish(bridge.Operation{ID: id, Status: "completed", UpdatedAt: now.Add(time.Duration(min(i, 3)) * time.Second)})
+				publish(bridge.Operation{ID: id, Status: "completed", UpdatedAt: now.Add(time.Duration(min(i, 3)) * time.Second), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 				u.text("/watch " + id)
 				u.key(tea.KeyMsg{Type: tea.KeyEnter})
 				u.wait("completed "+id, func(view string) bool {

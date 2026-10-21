@@ -10,6 +10,13 @@
   views into each adapter's wire format; keep pagination validation and bounded
   wait deadlines here. Event waits end on saved-work settlement, not terminal
   operation status alone, and reread events after observing settlement.
+- Every operation response includes a required `progress` projection: sparse
+  nonnull `task_counts`, `total_tasks`, `finished_tasks`, `pending_decisions`,
+  `pending_questions` and `settled`. Use the query view's assessment or assess the
+  returned command snapshot once; never query again to enrich a command response.
+  Only succeeded, failed and cancelled tasks count as finished. Interrupted work
+  remains unsettled, including after the operation ends. Terminal operations
+  expose zero actionable decisions/questions without deleting their history.
 - MCP registration and input decoding start in [mcp/adapter.go](mcp/adapter.go);
   operation tools live in [mcp/operations.go](mcp/operations.go), and file resources
   in [mcp/artifacts.go](mcp/artifacts.go). HTTP-specific guidance is in

@@ -407,6 +407,10 @@ func testAllInOneWorkflow(t *testing.T) {
 	if apiOperation.ID != operationID || apiOperation.Status != "completed" || apiOperation.ReportID != report.ID || len(apiOperation.Tasks) != 4 {
 		t.Fatalf("API did not read the MCP operation: %+v", apiOperation)
 	}
+	progress := apiOperation.Progress
+	if progress.TotalTasks != 4 || progress.FinishedTasks != 4 || progress.PendingDecisions != 0 || progress.PendingQuestions != 0 || !progress.Settled || len(progress.TaskCounts) != 1 || progress.TaskCounts["succeeded"] != 4 {
+		t.Fatalf("API did not expose settled progress: %+v", progress)
+	}
 	var seoFound bool
 	for _, task := range apiOperation.Tasks {
 		if task.ActionName == "check-seo" && task.Status == "succeeded" && task.Result != nil && bytes.Contains(task.Result.Output, []byte("Release preview")) {
@@ -423,7 +427,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	if apiReport.ID != report.ID || apiReport.OperationID != operationID || !bytes.Contains(apiReport.Output, []byte("operator confirmed intentional noindex")) {
 		t.Fatalf("API did not read the MCP report: %+v", apiReport)
 	}
-	wait("Review on Admin UI")
+	wait("4/4 tasks finished · Review on Admin UI")
 	client.Close()
 	stopAgents()
 	if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {

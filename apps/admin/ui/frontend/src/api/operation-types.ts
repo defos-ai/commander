@@ -5,6 +5,7 @@ export interface Operation {
   mission: Mission;
   input: unknown;
   status: string;
+  progress: OperationProgress;
   affinity?: OperationAffinity;
   preflight?: OperationPreflight | null;
   tasks: OperationTask[] | null;
@@ -15,6 +16,15 @@ export interface Operation {
   events: OperationEvent[] | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OperationProgress {
+  task_counts: Record<string, number>;
+  total_tasks: number;
+  finished_tasks: number;
+  pending_decisions: number;
+  pending_questions: number;
+  settled: boolean;
 }
 
 export interface OperationAffinity {

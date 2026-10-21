@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 func (e *Engine) watch(id string) {
 	var cursor string
 	var updatedAt time.Time
+	var progress bridge.Progress
 	var missing []secrets.Key
 	first, failed := true, false
 	for e.ctx.Err() == nil {
@@ -42,7 +44,7 @@ func (e *Engine) watch(id string) {
 			operation, err = e.commander.Operation(ctx, id)
 			if err == nil {
 				currentMissing := operation.MissingSecrets()
-				if first || !operation.UpdatedAt.Equal(updatedAt) || !slices.Equal(currentMissing, missing) || failed {
+				if first || !operation.UpdatedAt.Equal(updatedAt) || !sameProgress(operation.Progress, progress) || !slices.Equal(currentMissing, missing) || failed {
 					select {
 					case e.updates <- operation:
 					case <-e.ctx.Done():
@@ -51,6 +53,7 @@ func (e *Engine) watch(id string) {
 					}
 				}
 				updatedAt = operation.UpdatedAt
+				progress = operation.Progress
 				missing = currentMissing
 				first = false
 				if failed {
@@ -83,4 +86,11 @@ func (e *Engine) watch(id string) {
 		case <-timer.C:
 		}
 	}
+}
+
+// Derived progress can change when a question expires without a saved update.
+func sameProgress(a, b bridge.Progress) bool {
+	return a.TotalTasks == b.TotalTasks && a.FinishedTasks == b.FinishedTasks &&
+		a.PendingDecisions == b.PendingDecisions && a.PendingQuestions == b.PendingQuestions &&
+		a.Settled == b.Settled && maps.Equal(a.TaskCounts, b.TaskCounts)
 }

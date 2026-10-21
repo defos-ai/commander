@@ -37,6 +37,9 @@
 - Operation DTOs explicitly map the read-only `affinity` assessment from saved
   task history. Keep ownership separate from queued task assignments and live
   readiness; preserve history errors rather than presenting them as unbound.
+- Operation DTOs expose the shared `progress` assessment on queries and commands.
+  Keep its six required fields in the OpenAPI contract and map counts explicitly;
+  clients use `settled` to keep observing terminal work with unknown outcomes.
 - Operation/task query DTOs add live `agent_type` and `missing_requirements` only
   for an exact current running execution. Keep this projection separate from
   persisted tasks, status and deadlines. Missing inventory omits the observation;

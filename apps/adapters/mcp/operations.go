@@ -98,10 +98,10 @@ func addOperationTools(server *mcp.Server, config Config) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
 	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until all declared mission requirements are ready.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
-		func(ctx context.Context, request StartOperationRequest) (operations.Operation, error) {
-			return execution.Start(ctx, commands.StartOperationCommand(request))
+		func(ctx context.Context, request StartOperationRequest) (operationResult, error) {
+			return commandOperation(execution.Start(ctx, commands.StartOperationCommand(request)))
 		})
-	addTool(server, "list_operations", "List operation IDs, mission names, inputs, status, affinity, task counts and counts of pending model decisions/questions. Use get_operation for results and decisions, or get_report for a final report.", emptySchema,
+	addTool(server, "list_operations", "List operation IDs, mission names, inputs, status, affinity and progress (task counts, finished/total tasks, pending model decisions/questions and settlement). Use get_operation for results and decisions, or get_report for a final report.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Operations []operationSummary `json:"operations"`
 		}, error) {
@@ -114,7 +114,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Operations []operationSummary `json:"operations"`
 			}{summaries}, err
 		})
-	addTool(server, "get_operation", "Read status, preflight, affinity, tasks, results, continuations and question history. affinity derives the same-agent for_actions and bound agent_id from saved dispatches; agent_id is absent before the first dispatch. Command responses contain saved state; use this query for the derived affinity view. Queued tasks remain unassigned. A busy or unavailable bound agent causes waiting, never fallback or automatic replay; an affinity error requires inspection, not retry or rebinding. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
+	addTool(server, "get_operation", "Read status, progress, preflight, affinity, tasks, results, continuations and question history. progress.finished_tasks counts succeeded, failed and cancelled tasks; interrupted tasks remain unfinished. progress.settled requires terminal status and all tasks finished; keep polling until settled even after cancellation or failure. affinity derives the same-agent for_actions and bound agent_id from saved dispatches; agent_id is absent before the first dispatch. Command responses contain saved state; use this query for the derived affinity view. Queued tasks remain unassigned. A busy or unavailable bound agent causes waiting, never fallback or automatic replay; an affinity error requires inspection, not retry or rebinding. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Expired questions return to model review without an operator answer. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
 			operation, err := query.Get(ctx, request.OperationID)
 			return describeOperation(operation), err
@@ -151,8 +151,8 @@ func addOperationTools(server *mcp.Server, config Config) {
 	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_task or get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. The controller selects agents. After an operator answer, review their guidance before resolving.", objectSchema(map[string]any{
 		"operation_id": stringProperty, "task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1},
 		"actions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"action_name": stringProperty, "input": map[string]any{"type": "object"}, "reason": stringProperty}, "required": []string{"action_name"}}},
-	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operations.Operation, error) {
-		return execution.Resolve(ctx, commands.ResolveContinuationCommand(request))
+	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operationResult, error) {
+		return commandOperation(execution.Resolve(ctx, commands.ResolveContinuationCommand(request)))
 	})
 	addTool(server, "operation_events", "Read events in sequence order, up to limit (default 100, max 1000). Pass next_cursor as cursor for the next page; an empty page keeps the cursor unchanged. Optionally wait up to 30 seconds. Inspect tasks with get_task and questions with get_operation.", operationPageSchema(true),
 		func(ctx context.Context, request OperationEventsRequest) (OperationEventsResult, error) {
@@ -192,20 +192,20 @@ func addOperationTools(server *mcp.Server, config Config) {
 			return question, err
 		})
 	addTool(server, "answer_question", "Record the operator's actual answer. A linked continuation returns to the model for a decision; this does not execute or approve any action automatically.", objectSchema(map[string]any{"operation_id": stringProperty, "question_id": stringProperty, "answer": stringProperty}, "operation_id", "question_id", "answer"),
-		func(ctx context.Context, request AnswerQuestionRequest) (operations.Operation, error) {
-			return execution.Answer(ctx, commands.AnswerQuestionCommand(request))
+		func(ctx context.Context, request AnswerQuestionRequest) (operationResult, error) {
+			return commandOperation(execution.Answer(ctx, commands.AnswerQuestionCommand(request)))
 		})
 	addTool(server, "complete_operation", "Save a final report and complete an operation, after active tasks and questions are resolved. Output must match output_schema. Returns report_id; read the saved report with get_report. Describe remaining limitations in the report.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
-		func(ctx context.Context, request CompleteOperationRequest) (operations.Operation, error) {
-			return execution.Complete(ctx, commands.CompleteOperationCommand(request))
+		func(ctx context.Context, request CompleteOperationRequest) (operationResult, error) {
+			return commandOperation(execution.Complete(ctx, commands.CompleteOperationCommand(request)))
 		})
 	addTool(server, "fail_operation", "End unrecoverable work, retaining results and the reason. Consider recovery or an operator decision first.", objectSchema(map[string]any{"operation_id": stringProperty, "reason": stringProperty}, "operation_id", "reason"),
-		func(ctx context.Context, request FailOperationRequest) (operations.Operation, error) {
-			return execution.Fail(ctx, commands.FailOperationCommand(request))
+		func(ctx context.Context, request FailOperationRequest) (operationResult, error) {
+			return commandOperation(execution.Fail(ctx, commands.FailOperationCommand(request)))
 		})
 	addTool(server, "cancel_operation", "Prevent new tasks. Already dispatched work may still execute, and its results are retained until task timeout.", operationSchema,
-		func(ctx context.Context, request OperationRequest) (operations.Operation, error) {
-			return execution.Cancel(ctx, commands.CancelOperationCommand{OperationID: request.OperationID})
+		func(ctx context.Context, request OperationRequest) (operationResult, error) {
+			return commandOperation(execution.Cancel(ctx, commands.CancelOperationCommand{OperationID: request.OperationID}))
 		})
 }
 

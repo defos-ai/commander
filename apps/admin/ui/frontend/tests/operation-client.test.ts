@@ -12,6 +12,7 @@ const operation: Operation = {
     starting_actions: ['discover-pages'], input_schema: null, output_schema: null,
   },
   input: { url: 'https://example.com' }, status: 'waiting',
+  progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: false },
   affinity: { for_actions: ['check-links', 'capture-page'], agent_id: 'agent-1' },
   preflight: {
     ready: false, version: 2, actions: [{
@@ -92,6 +93,7 @@ describe('operations client', () => {
   it('accepts an empty list and nullable Go slices with arbitrary raw JSON', async () => {
     const nullable: Operation = {
       ...operation, input: ['any', 42, false], output: 'a plain text result', status: 'future-status',
+      progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
       preflight: null, tasks: null, questions: null, events: null,
       created_at: '0001-01-01T00:00:00Z', updated_at: '0001-01-01T00:00:00Z',
     };
@@ -104,6 +106,7 @@ describe('operations client', () => {
   it('accepts queued tasks, optional nulls, nullable continuations and future status values', async () => {
     const nullable: Operation = {
       ...operation,
+      progress: { task_counts: { preparing: 1 }, total_tasks: 1, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
       preflight: { ready: false, version: 0, actions: null },
       tasks: [{
         id: 'task-1', operation_id: operation.id, agent_id: '', action_name: 'check-links', status: 'preparing',
@@ -142,6 +145,16 @@ describe('operations client', () => {
     { tasks: [{ ...operation.tasks![0], result: { action_name: 'check-links', output: null, artifacts: [{ id: 'artifact-1', files: 'unexpected' }] } }] },
     { tasks: [{ ...operation.tasks![0], continuation: { ...operation.tasks![0].continuation, created_task_ids: [42] } }] },
     { tasks: [{ ...operation.tasks![0], finished_at: 'not a date' }] },
+    { progress: undefined },
+    { progress: null },
+    { progress: { ...operation.progress, task_counts: null } },
+    { progress: { ...operation.progress, task_counts: [] } },
+    { progress: { ...operation.progress, task_counts: { interrupted: -1 } } },
+    { progress: { ...operation.progress, total_tasks: 0.5 } },
+    { progress: { ...operation.progress, finished_tasks: '1' } },
+    { progress: { ...operation.progress, pending_decisions: -1 } },
+    { progress: { ...operation.progress, pending_questions: Number.MAX_SAFE_INTEGER + 1 } },
+    { progress: { ...operation.progress, settled: 'true' } },
     { questions: [{ ...operation.questions![0], options: [42] }] },
     { preflight: { ready: false, version: 1, actions: [{ action_name: 'capture-page', unavailable_agents: [{ agent_id: 'agent-1', reason: 'Missing', missing_requirements: [{ kind: 'configuration', name: 'KEY', sensitive: 'yes' }] }] }] } },
     { events: [{ ...operation.events![0], sequence: -1 }] },

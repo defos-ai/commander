@@ -26,9 +26,19 @@ type object = map[string]any
 
 type operationDetail struct {
 	operations.Operation
+	Progress           operationProgress    `json:"progress"`
 	Affinity           *operations.Affinity `json:"affinity"`
 	LastQuestion       *operations.Question `json:"last_question"`
 	RemainingQuestions int                  `json:"remaining_questions"`
+}
+
+type operationProgress struct {
+	TaskCounts       map[string]int `json:"task_counts"`
+	TotalTasks       int            `json:"total_tasks"`
+	FinishedTasks    int            `json:"finished_tasks"`
+	PendingDecisions int            `json:"pending_decisions"`
+	PendingQuestions int            `json:"pending_questions"`
+	Settled          bool           `json:"settled"`
 }
 
 func connect(t *testing.T) *api {
@@ -254,10 +264,24 @@ func (a *api) call(name string, args object, out any) {
 	if result.StructuredContent != nil {
 		a.t.Fatalf("%s: result must contain JSON once, in content text only", name)
 	}
+	raw := []byte(resultText(result))
+	switch name {
+	case "start_operation", "get_operation", "resolve_continuation", "answer_question", "complete_operation", "fail_operation", "cancel_operation":
+		var payload struct {
+			Progress map[string]json.RawMessage `json:"progress"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			a.t.Fatal(err)
+		}
+		for _, field := range []string{"task_counts", "total_tasks", "finished_tasks", "pending_decisions", "pending_questions", "settled"} {
+			if value := payload.Progress[field]; len(value) == 0 || string(value) == "null" {
+				a.t.Fatalf("%s omitted progress.%s", name, field)
+			}
+		}
+	}
 	if out == nil {
 		return
 	}
-	raw := []byte(resultText(result))
 	if err := json.Unmarshal(raw, out); err != nil {
 		a.t.Fatalf("decode %s: %v; %s", name, err, raw)
 	}

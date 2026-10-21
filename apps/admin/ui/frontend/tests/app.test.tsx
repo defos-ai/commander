@@ -94,6 +94,7 @@ describe('connection links from Playground', () => {
   const operationID = 'review-operation';
   const operation = { id: operationID, mission: { name: 'review-website', objective: 'Review a website', required_actions: [],
     starting_actions: [], input_schema: {}, output_schema: {} }, input: {}, status: 'completed', tasks: [], questions: [], events: [],
+    progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: true },
     created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
 
   function operationAPI() {

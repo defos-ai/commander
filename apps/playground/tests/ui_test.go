@@ -406,7 +406,7 @@ func TestQuestionSelector(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	var mu sync.Mutex
-	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Questions: []bridge.Question{
+	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, PendingQuestions: 2}, Questions: []bridge.Question{
 		{ID: "older", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Minute)},
 		{ID: "latest", Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), ExpiresAt: time.Now().Add(2 * time.Minute)},
 	}}
@@ -436,6 +436,7 @@ func TestQuestionSelector(t *testing.T) {
 				op.UpdatedAt = time.Now()
 				op.Questions[1].Status = bridge.QuestionAnswered
 				op.Questions[1].Answer = args.Answer
+				op.Progress.PendingQuestions = 1
 				op.Questions[0].ExpiresAt = time.Now().Add(500 * time.Millisecond)
 				payload = op
 			}
@@ -475,6 +476,12 @@ func TestQuestionSelector(t *testing.T) {
 		t.Fatal("answer was not submitted")
 	}
 	wait("expiry", func(view string) bool { return !strings.Contains(view, "Operator input") })
+	// The server projection can hide an expired question before the controller
+	// saves expiry. Its progress must arrive without advancing updated_at.
+	mu.Lock()
+	op.Progress.PendingQuestions = 0
+	mu.Unlock()
+	wait("derived question progress", func(view string) bool { return !strings.Contains(view, "question(s)") })
 	if !strings.Contains(model.View(), "unsent chat draft") {
 		t.Fatal("answering or expiry lost the chat draft")
 	}
@@ -556,7 +563,7 @@ func TestReadingReportDoesNotTriggerBackgroundReview(t *testing.T) {
 			payload := `{"operation_id":"finished-operation","output":{"summary":"Saved review"}}`
 			if req.Params.Name != "get_report" {
 				reads.Add(1)
-				payload = `{"id":"finished-operation","status":"completed"}`
+				payload = `{"id":"finished-operation","status":"completed","progress":{"task_counts":{},"total_tasks":0,"finished_tasks":0,"pending_decisions":0,"pending_questions":0,"settled":true}}`
 			}
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: payload}}}, nil
 		})
@@ -609,7 +616,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	var snapshot atomic.Value
 	var reads, requests, eventPages atomic.Int32
 	const eventCursor = "opaque:event-page/token+1="
-	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Preflight: &bridge.Preflight{Ready: false, Version: 1}, Events: []json.RawMessage{json.RawMessage(`{"sequence":42}`)}}
+	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}}, Preflight: &bridge.Preflight{Ready: false, Version: 1}, Events: []json.RawMessage{json.RawMessage(`{"sequence":42}`)}}
 	op.Preflight.Actions = []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}}}}}
 	publish := func() {
 		encoded, err := json.Marshal(op)

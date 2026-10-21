@@ -345,8 +345,11 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	const reportSummary = "MCP API website workflow passed"
 	a := connect(t)
 	url := website(t)
-	var op operations.Operation
+	var op operationDetail
 	a.call("start_operation", object{"mission_name": mission, "input": object{"url": url, "max_pages": 2}}, &op)
+	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
+		t.Fatalf("new operation progress: %+v", op.Progress)
+	}
 	a.fails("assign_task", object{"operation_id": op.ID, "step_id": discovery, "action_name": discovery, "input": object{"url": url, "max_pages": 2}},
 		fmt.Sprintf(`mission %q declares no steps; omit step_id and use action_name`, mission))
 	if rejected := a.get(op.ID); len(rejected.Tasks) != 0 {
@@ -413,9 +416,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	a.resolve(op.ID, *decision, []object{})
 	a.fails("resolve_continuation", object{"operation_id": op.ID, "task_id": decision.ID, "version": decision.Continuation.Version, "actions": []object{}}, "pending")
 	a.fails("complete_operation", object{"operation_id": op.ID, "output": object{"summary": "missing required fields"}}, "output")
-	var completed operations.Operation
+	var completed operationDetail
 	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": reportSummary, "findings": []object{{"page_url": url, "check": "links", "description": "Broken /missing link"}}}}, &completed)
-	if completed.Status != operations.Completed || completed.ReportID == "" {
+	if completed.Status != operations.Completed || completed.ReportID == "" || !completed.Progress.Settled || completed.Progress.FinishedTasks != len(completed.Tasks) || completed.Progress.TotalTasks != len(completed.Tasks) {
 		t.Fatalf("completion: %+v", completed)
 	}
 	var report reports.Report
@@ -437,13 +440,13 @@ func TestOperationCancellationAndFailure(t *testing.T) {
 			if method == "fail_operation" {
 				args["reason"] = "operator ended test"
 			}
-			var ended operations.Operation
+			var ended operationDetail
 			a.call(method, args, &ended)
 			expected := operations.Cancelled
 			if method == "fail_operation" {
 				expected = operations.Failed
 			}
-			if ended.Status != expected || len(ended.Tasks) != 1 || ended.Tasks[0].Status != operations.TaskCancelled {
+			if ended.Status != expected || len(ended.Tasks) != 1 || ended.Tasks[0].Status != operations.TaskCancelled || !ended.Progress.Settled || ended.Progress.FinishedTasks != 1 || ended.Progress.TotalTasks != 1 {
 				t.Fatalf("terminal operation: %+v", ended)
 			}
 			a.fails("get_report", object{"operation_id": op.ID}, "report")

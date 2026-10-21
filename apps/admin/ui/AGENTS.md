@@ -57,6 +57,12 @@
   names and normalized URLs without credentials, query strings or fragments.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
+- Operation responses require the server's `progress` projection. Display its
+  finished/total task counts without recounting task statuses. Interrupted work
+  remains unfinished even when the operation is terminal; keep refreshing details
+  to receive late results. Settlement is separate from active status: it does not
+  enable commands or prove agent idleness for cleanup. Preserve local question
+  expiry checks and the active-only secret/command controls.
 - Open the dedicated Secrets page from Agents via **Manage secrets**, with
   **All agents** returning to the catalog. Keep Secrets out of the sidebar and
   highlight Agents while it is open. Preserve its route and operation shortcuts.

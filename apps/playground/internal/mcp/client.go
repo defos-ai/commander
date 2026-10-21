@@ -164,6 +164,7 @@ func Bounded(data []byte) string {
 type Operation struct {
 	ID                 string            `json:"id"`
 	Status             string            `json:"status"`
+	Progress           Progress          `json:"progress"`
 	Preflight          *Preflight        `json:"preflight"`
 	Tasks              []Task            `json:"tasks"`
 	Questions          []Question        `json:"questions"`
@@ -172,6 +173,15 @@ type Operation struct {
 	Events             []json.RawMessage `json:"events"`
 	UpdatedAt          time.Time         `json:"updated_at"`
 	Raw                json.RawMessage   `json:"-"`
+}
+
+type Progress struct {
+	TaskCounts       map[string]int `json:"task_counts"`
+	TotalTasks       int            `json:"total_tasks"`
+	FinishedTasks    int            `json:"finished_tasks"`
+	PendingDecisions int            `json:"pending_decisions"`
+	PendingQuestions int            `json:"pending_questions"`
+	Settled          bool           `json:"settled"`
 }
 
 type Preflight struct {
@@ -282,15 +292,7 @@ func (o Operation) NeedsSecrets() bool {
 }
 
 func (o Operation) Settled() bool {
-	if !o.Terminal() {
-		return false
-	}
-	for _, task := range o.Tasks {
-		if task.Status == "running" {
-			return false
-		}
-	}
-	return true
+	return o.Progress.Settled
 }
 func (c *Client) Operation(ctx context.Context, id string) (Operation, error) {
 	args, _ := json.Marshal(map[string]string{"operation_id": id})

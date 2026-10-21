@@ -16,6 +16,7 @@ const operation: Operation = {
   id: 'operation-review', mission: { name: 'review-website-with-browser', objective: 'Review website quality.',
     required_actions: ['discover-pages'], starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} },
   input: { url: 'https://defos.ai' }, status: 'planning', tasks: [task], questions: [], events: [], created_at: now, updated_at: now,
+  progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: false },
 };
 const secretWait: Operation = { ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [
   { action_name: 'build', unavailable_agents: [
@@ -40,6 +41,7 @@ describe('operations browser', () => {
     let snapshot: Operation = {
       ...operation, mission: { ...operation.mission, rules: { 'same-agent': { for_actions: actions } } },
       affinity: { for_actions: actions },
+      progress: { task_counts: { queued: 2 }, total_tasks: 2, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
       tasks: [{ ...queued, id: 'task-build', action_name: 'build-agent' }, { ...queued, id: 'task-other', action_name: 'other-action' }],
     };
     mockAPI(() => Response.json(snapshot));
@@ -86,7 +88,9 @@ describe('operations browser', () => {
   });
 
   it('reuses the secret notice for running work and clears it without a saved timestamp change', async () => {
-    let snapshot: Operation = { ...operation, status: 'running', preflight: { ready: true, version: 1, actions: [] }, tasks: [
+    let snapshot: Operation = { ...operation, status: 'running',
+      progress: { task_counts: { running: 1 }, total_tasks: 1, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
+      preflight: { ready: true, version: 1, actions: [] }, tasks: [
       { ...task, status: 'running', finished_at: undefined, result: undefined, agent_type: 'web-agent',
         deadline_at: new Date(Date.now() + 60_000).toISOString(), missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
     ] };
@@ -153,7 +157,8 @@ describe('operations browser', () => {
   });
 
   it('searches and filters operations while keeping task progress separate from mission completion', async () => {
-    const other: Operation = { ...operation, id: 'operation-completed', status: 'completed', mission: { ...operation.mission, name: 'other-review' } };
+    const other: Operation = { ...operation, id: 'operation-completed', status: 'completed', progress: { ...operation.progress, settled: true },
+      mission: { ...operation.mission, name: 'other-review' } };
     mockAPI(url => Response.json(url.endsWith('/operations') ? { items: [operation, other] } : operation));
     render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
 
@@ -210,30 +215,38 @@ describe('operations browser', () => {
     expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
   });
 
-  it('polls progress, clears unavailable snapshots, and recovers with refresh', async () => {
+  it('refreshes cancelled interrupted work until a late outcome, clears unavailable snapshots, and recovers', async () => {
     vi.useFakeTimers();
     try {
-      let snapshot = operation;
+      let snapshot: Operation = { ...operation, status: 'cancelled', tasks: [{ ...task, status: 'interrupted', result: undefined }],
+        progress: { task_counts: { interrupted: 1 }, total_tasks: 1, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false } };
       let unavailable = false;
       const fetch = mockAPI(url => unavailable ? new Response(null, { status: 503 })
         : Response.json(url.endsWith('/operations') ? { items: [snapshot] } : snapshot));
       await act(async () => { render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); });
-      fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
+      const row = screen.getByRole('button', { name: `View operation ${operation.id}` });
+      expect(within(row).getByText('Cancelled')).toBeVisible();
+      expect(within(row).getByText('0/1 tasks finished')).toBeVisible();
+      fireEvent.click(row);
       await act(async () => {});
-      snapshot = { ...operation, status: 'completed', output: { findings: ['Broken contact link'] }, report_id: 'report-123' };
+      expect(screen.getByText('0/1 tasks finished')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
+      snapshot = { ...snapshot, tasks: [{ ...snapshot.tasks![0], status: 'failed' }],
+        progress: { ...snapshot.progress, task_counts: { failed: 1 }, finished_tasks: 1, settled: true } };
 
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
 
-      expect(screen.getByText('Completed', { selector: '.catalog-status' })).toBeVisible();
-      expect(screen.getByText('report-123')).toBeVisible();
+      expect(screen.getByText('Cancelled', { selector: '.catalog-status' })).toBeVisible();
+      expect(screen.getByText('1/1 tasks finished')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
       unavailable = true;
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
       expect(screen.getByRole('alert')).toHaveTextContent('Could not load operations');
-      expect(screen.queryByText('report-123')).not.toBeInTheDocument();
+      expect(screen.queryByText('1/1 tasks finished')).not.toBeInTheDocument();
       unavailable = false;
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
       await act(async () => {});
-      expect(screen.getByText('report-123')).toBeVisible();
+      expect(screen.getByText('1/1 tasks finished')).toBeVisible();
       expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
     } finally { vi.useRealTimers(); }
   });

@@ -156,6 +156,7 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 			u.model.Update(tea.WindowSizeMsg{Width: 300, Height: 80})
 			op := bridge.Operation{
 				ID: "blocked-operation", Status: "waiting", UpdatedAt: time.Now(),
+				Progress: bridge.Progress{TaskCounts: map[string]int{}},
 				Preflight: &bridge.Preflight{Version: 1, Actions: []bridge.ActionReadiness{
 					{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}}}},
 				}},

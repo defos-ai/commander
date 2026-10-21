@@ -2,6 +2,7 @@ package mappings
 
 import (
 	"bytes"
+	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
@@ -36,19 +37,20 @@ func ToFailOperationCommand(operationID string, request models.FailOperationRequ
 }
 
 func ToOperationResponse(operation operations.Operation) models.OperationResponse {
-	return toOperationResponse(operation, ToTaskResponses(operation.Tasks), operation.AssessAffinity())
+	return toOperationResponse(operation, ToTaskResponses(operation.Tasks), operation.AssessAffinity(), operation.AssessProgress(time.Now().UTC()))
 }
 
 func ToOperationViewResponse(operation queries.OperationView) models.OperationResponse {
-	return toOperationResponse(operation.Operation, ToTaskViewResponses(operation.Tasks), operation.Affinity)
+	return toOperationResponse(operation.Operation, ToTaskViewResponses(operation.Tasks), operation.Affinity, operation.Progress)
 }
 
-func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity) models.OperationResponse {
+func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity, progress operations.Progress) models.OperationResponse {
 	response := models.OperationResponse{
 		ID:        operation.ID,
 		Mission:   ToMissionResponse(operation.Mission),
 		Input:     bytes.Clone(operation.Input),
 		Status:    string(operation.Status),
+		Progress:  toOperationProgressResponse(progress),
 		Tasks:     tasks,
 		Questions: ToQuestionResponses(operation.Questions),
 		Output:    bytes.Clone(operation.Output),
@@ -70,6 +72,18 @@ func toOperationResponse(operation operations.Operation, tasks []models.TaskResp
 		}
 	}
 	return response
+}
+
+func toOperationProgressResponse(progress operations.Progress) models.OperationProgressResponse {
+	counts := make(map[string]int, len(progress.TaskCounts))
+	for status, count := range progress.TaskCounts {
+		counts[string(status)] = count
+	}
+	return models.OperationProgressResponse{
+		TaskCounts: counts, TotalTasks: progress.TotalTasks, FinishedTasks: progress.FinishedTasks,
+		PendingDecisions: progress.PendingDecisions, PendingQuestions: progress.PendingQuestions,
+		Settled: progress.Settled,
+	}
 }
 
 func ToOperationViewResponses(operations []queries.OperationView) []models.OperationResponse {

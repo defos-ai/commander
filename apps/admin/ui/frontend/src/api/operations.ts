@@ -5,7 +5,7 @@ import { isMission } from './missions';
 import type {
   Operation, OperationActionOutput, OperationActionReadiness, OperationAffinity, OperationAgentReadiness,
   OperationArtifact, OperationArtifactFile, OperationContinuation, OperationEvent,
-  OperationNextAction, OperationPreflight, OperationQuestion, OperationTask,
+  OperationNextAction, OperationPreflight, OperationProgress, OperationQuestion, OperationTask,
 } from './operation-types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 
@@ -111,10 +111,16 @@ function isAffinity(value: unknown): value is OperationAffinity {
     (value.error === undefined || value.agent_id === undefined);
 }
 
+function isProgress(value: unknown): value is OperationProgress {
+  return isObject(value) && isObject(value.task_counts) && Object.values(value.task_counts).every(isUnsignedInteger) &&
+    isUnsignedInteger(value.total_tasks) && isUnsignedInteger(value.finished_tasks) &&
+    isUnsignedInteger(value.pending_decisions) && isUnsignedInteger(value.pending_questions) && typeof value.settled === 'boolean';
+}
+
 export function isOperation(value: unknown): value is Operation {
   return isObject(value) && isIdentifier(value.id) && isMission(value.mission) && 'input' in value &&
     typeof value.status === 'string' && isOptionalString(value.report_id) && isOptionalString(value.error) &&
-    isDate(value.created_at) && isDate(value.updated_at) &&
+    isDate(value.created_at) && isDate(value.updated_at) && isProgress(value.progress) &&
     (value.affinity === undefined || isAffinity(value.affinity)) &&
     (value.preflight === undefined || value.preflight === null || isPreflight(value.preflight)) &&
     isNullableArray(value.tasks, isTask) && isNullableArray(value.questions, isQuestion) &&

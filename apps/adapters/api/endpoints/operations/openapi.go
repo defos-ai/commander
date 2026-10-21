@@ -27,6 +27,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		{"Task", reflect.TypeFor[models.TaskResponse]()},
 		{"Event", reflect.TypeFor[models.EventResponse]()},
 		{"Question", reflect.TypeFor[models.QuestionResponse]()},
+		{"OperationProgress", reflect.TypeFor[models.OperationProgressResponse]()},
 		{"Operation", reflect.TypeFor[models.OperationResponse]()},
 		{"GraphTask", reflect.TypeFor[models.GraphTaskResponse]()},
 		{"GraphArtifact", reflect.TypeFor[models.GraphArtifactResponse]()},
@@ -61,6 +62,15 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			}
 		case "Question":
 			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
+		case "OperationProgress":
+			schema.Description = "Read-only progress derived from this saved operation snapshot at one assessment time. Never persisted or used to infer agent idleness."
+			schema.Properties["task_counts"].Type = "object"
+			schema.Properties["task_counts"].Types = nil
+			schema.Properties["task_counts"].Description = "Counts by saved task status. Statuses with no tasks are omitted; an empty operation returns {}."
+			schema.Properties["finished_tasks"].Description = "Tasks with known outcomes: succeeded, failed or cancelled. Interrupted tasks remain unfinished even when finished_at is set."
+			schema.Properties["pending_decisions"].Description = "Pending model continuations; zero for terminal operations."
+			schema.Properties["pending_questions"].Description = "Pending unexpired questions; zero for terminal operations."
+			schema.Properties["settled"].Description = "True only when the operation is terminal and every saved task has a known finished outcome. Keep polling while false, including after cancellation or failure."
 		case "Operation", "Event", "OperationGraph":
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
 			if model.name == "Operation" {

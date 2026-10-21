@@ -10,6 +10,7 @@ const now = '2026-10-05T10:00:00Z';
 const mission = { name: 'review-website-with-browser', objective: 'Review website quality.', required_actions: [], starting_actions: [],
   input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } }, output_schema: {} };
 const operation: Operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'waiting', tasks: [], events: [],
+  progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 1, settled: false },
   questions: [{ id: 'question-browser', status: 'pending', text: 'How should the review continue?', options: ['Configure the browser', 'Use HTTP checks'],
     asked_at: now, expires_at: '2099-01-01T00:00:00Z' }], created_at: now, updated_at: now };
 

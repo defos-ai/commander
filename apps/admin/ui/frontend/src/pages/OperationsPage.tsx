@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, LoaderCircle, Plus, RefreshCw, Search, Workflow } from 'lucide-react';
 import { getOperation, listOperations } from '../api/operations';
 import type { Operation, OperationQuestion } from '../api/operation-types';
-import { isActiveOperation, OperationDetails, OperationSecretsNotice, OperationStatus, operationProgress } from '../components/OperationDetails';
+import { isActiveOperation, OperationDetails, OperationSecretsNotice, OperationStatus } from '../components/OperationDetails';
 import { StartOperationDialog } from '../components/StartOperationDialog';
 import { OperationCommandDialog } from '../components/OperationCommandDialog';
 import { OperationGraphPanel } from '../components/OperationGraphPanel';
@@ -134,7 +134,7 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
           <span className="catalog-row-main"><span className="catalog-row-name">{item.mission.name}</span>
             <span className="operation-id">{item.id}</span>
             <span className="catalog-row-meta"><OperationStatus status={item.status} />
-              <span>{t($ => $.operations.progress, operationProgress(item.tasks))}</span>
+              <span>{t($ => $.operations.progress, { total: item.progress.total_tasks, finished: item.progress.finished_tasks })}</span>
               <time dateTime={item.updated_at}>{t($ => $.operations.updated, { time: new Date(item.updated_at).toLocaleString() })}</time>
             </span>
             {item.error && <span className="catalog-row-description">{item.error}</span>}
