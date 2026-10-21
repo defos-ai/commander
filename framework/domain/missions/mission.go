@@ -69,6 +69,9 @@ func (m Mission) Validate() error {
 	if strings.TrimSpace(m.Name) == "" {
 		return errors.New("mission name must not be empty")
 	}
+	if m.Name == "." || m.Name == ".." {
+		return errors.New("mission name must not be a dot segment")
+	}
 	if strings.TrimSpace(m.Objective) == "" {
 		return errors.New("mission objective must not be empty")
 	}

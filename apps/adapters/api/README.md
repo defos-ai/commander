@@ -1,7 +1,7 @@
 # HTTP API adapter
 
 The API exposes Commander catalogs, saved operations, reports and artifacts over
-HTTP, and sends operation commands to the controller.
+HTTP, creates mission definitions, and sends operation commands to the controller.
 
 ## Quick start
 
@@ -44,6 +44,34 @@ unassigned until dispatch; preflight describes saved readiness, not capacity.
 Reports are available after completion. Artifact downloads verify file size and
 SHA-256 before returning bytes; `HEAD` returns headers only. Files are read fully
 into memory, and range requests are unsupported.
+
+## Create missions
+
+Save one mission definition from a JSON file:
+
+```sh
+curl --user "$API_USERNAME" \
+  --header 'Content-Type: application/json' \
+  --data-binary @mission.json \
+  http://127.0.0.1:4274/api/v1/missions
+```
+
+The body requires `name`, `objective`, `input_schema` and `output_schema`.
+Names must be nonblank and cannot be `.` or `..`.
+It also accepts `required_actions`, `optional_actions`, `starting_actions`,
+`steps` and `rules`, using the same shape returned by mission detail queries.
+The API validates the definition, schemas and rules without requiring a running
+controller or installed agents. Readiness is checked when executing an operation.
+
+Success returns `201` with the saved mission and its detail URL in `Location`.
+An existing name returns `409 mission_exists`, even for identical content, and
+preserves the original. Startup mission imports still use their existing upsert
+behavior; operations retain their saved mission snapshots.
+
+Requests require `application/json`, reject unknown fields and query parameters,
+and have a 1 MiB body limit and 10-second deadline. Invalid definitions return
+`400 invalid_request`. After a timeout or other uncertain write error, read the
+mission by name before retrying; requests are never retried automatically.
 
 ## Operation commands
 

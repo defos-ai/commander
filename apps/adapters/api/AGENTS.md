@@ -19,6 +19,13 @@
 
 ## Request and response rules
 
+- `POST /api/v1/missions` strictly decodes a flat API request, maps it explicitly
+  to a mission and uses the shared validator before `MissionStore.Create`.
+  Existing names return `409 mission_exists`, including identical definitions;
+  never emulate creation with a read followed by `Upsert`. Return the created
+  mission and an escaped detail `Location`. Creation needs neither a controller
+  nor action availability; it does not start work or change operation snapshots.
+  Keep startup imports separate and reconcile uncertain writes by name before retrying.
 - Operation/task/report/event queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send

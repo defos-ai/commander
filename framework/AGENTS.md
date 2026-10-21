@@ -44,6 +44,8 @@
 - [`missions.MissionStore.Create`](domain/missions/mission_store.go) validates and
   atomically reserves an exact mission name; duplicates return `ErrMissionExists`
   even when the definition is identical. Keep `Upsert` for host-managed imports.
+  Mission names cannot be `.` or `..`; clients must be able to address catalog
+  entries safely.
   Providers own uniqueness and locks. Reconcile write errors by reading the
   catalog before retrying; saved operations retain their mission snapshots.
 - Mission `required_actions` and step requirements participate in preflight;
