@@ -110,8 +110,10 @@ func mcpSession(t *testing.T, config adapter.Config) (context.Context, *sdkmcp.C
 	database, storage := filepath.Join(root, "database"), filepath.Join(root, "storage")
 	config.AgentStore, err = fsagents.NewAgentFsStore(database)
 	check(err)
-	config.MissionStore, err = fsmissions.NewMissionFsStore(database)
-	check(err)
+	if config.MissionStore == nil {
+		config.MissionStore, err = fsmissions.NewMissionFsStore(database)
+		check(err)
+	}
 	if config.OperationStore == nil {
 		config.OperationStore, err = fsoperations.NewOperationFsStore(database)
 		check(err)

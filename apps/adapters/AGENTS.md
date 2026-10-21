@@ -60,6 +60,14 @@
   tool execution failures use text content with `IsError`.
 - Successful tool results carry JSON in text `content`. File references use
   resource-link blocks; do not duplicate result payloads in `structuredContent`.
+- `create_mission` accepts a flat `missions.Mission` and shares its validation
+  with the API and stores. Invalid definitions are invalid-params errors;
+  duplicate names are tool errors, including identical submissions. Call
+  `MissionStore.Create` directly with a bounded context, never `Upsert` or an
+  operation command. Creation does not check agent availability or start work.
+  Sanitize backend errors and direct callers to `describe_mission` before retrying
+  uncertain writes. Keep the advertised schema aligned with strict decoding,
+  including nullable optional collections and open JSON Schema documents.
 - Preserve `missions://artifacts/{id}` and its `/files/{file_id}` resource shape.
   Validate record IDs and artifact membership before retrieving bytes. IDs are
   never filesystem paths. Empty files need explicit blob content.

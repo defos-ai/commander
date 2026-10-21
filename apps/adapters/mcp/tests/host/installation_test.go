@@ -66,7 +66,7 @@ func TestMCPAgentGuidanceDiscovery(t *testing.T) {
 	for _, tool := range result.Tools {
 		available[tool.Name] = true
 	}
-	for _, name := range []string{"list_missions", "describe_mission", "list_agents", "describe_agent", "describe_action", "get_agent_catalog", "start_operation", "assign_task", "resolve_continuation", "complete_operation"} {
+	for _, name := range []string{"list_missions", "describe_mission", "create_mission", "list_agents", "describe_agent", "describe_action", "get_agent_catalog", "start_operation", "assign_task", "resolve_continuation", "complete_operation"} {
 		if !available[name] {
 			t.Errorf("installation needs %s even before business agents register", name)
 		}

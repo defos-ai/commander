@@ -66,6 +66,24 @@ this variable to MCP; native/Docker all-in-one read it from their environment.
 No catalog request is made during startup, and a catalog failure does not block
 installation from a direct GitHub URL or reference.
 
+### Create missions
+
+Use `create_mission` to save a reusable definition. Pass the same flat JSON
+definition accepted by the [HTTP API](api/README.md#create-missions): `name`,
+`objective`, `input_schema` and `output_schema` are required; action lists,
+steps and rules are optional. The tool returns the created mission as JSON.
+
+Shared validation checks schemas, action lists and rules. Actions can refer to
+capabilities that are not installed yet. Creation neither runs work nor installs
+agents, and needs no running controller. Use `describe_mission` to inspect the
+saved definition before starting an operation.
+
+Existing names return a tool error, including identical submissions; the original
+definition stays unchanged. Creation has a 10-second deadline and never retries
+automatically. After an uncertain error, read `describe_mission` by name before
+resubmitting. Invalid definitions use MCP invalid-params errors. Keep secret
+values in the managed-secret flow, outside mission definitions and chat.
+
 ### Operation workflow
 
 1. Use `list_missions` and `describe_mission` to choose a mission and read its

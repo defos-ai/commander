@@ -97,6 +97,24 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
+	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objective, input_schema, output_schema and optional action lists, steps and rules. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
+		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			err := config.MissionStore.Create(ctx, request)
+			switch {
+			case err == nil:
+				return request.Clone(), nil
+			case errors.Is(err, missions.ErrMissionExists):
+				return missions.Mission{}, missions.ErrMissionExists
+			case errors.Is(err, context.DeadlineExceeded):
+				return missions.Mission{}, errors.New("mission creation timed out; read describe_mission before retrying")
+			case errors.Is(err, context.Canceled):
+				return missions.Mission{}, errors.New("mission creation canceled; read describe_mission before retrying")
+			default:
+				return missions.Mission{}, errors.New("mission creation failed; read describe_mission before retrying")
+			}
+		})
 	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until the mission's required_actions, step requirements and queued optional actions are ready. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
 		func(ctx context.Context, request StartOperationRequest) (operationResult, error) {
 			return commandOperation(execution.Start(ctx, commands.StartOperationCommand(request)))
@@ -217,6 +235,48 @@ var missionStepProperty = map[string]any{
 
 var stringProperty = map[string]any{"type": "string", "minLength": 1}
 var operationSchema = objectSchema(map[string]any{"operation_id": stringProperty}, "operation_id")
+
+func createMissionSchema() string {
+	nonblank := map[string]any{"type": "string", "pattern": `\S`}
+	actionName := map[string]any{"type": "string", "pattern": `^\S(?:[\s\S]*\S)?$`}
+	actionNames := map[string]any{"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true}
+	step := objectSchema(map[string]any{
+		"id": nonblank, "objective": nonblank,
+		"agent_types":      map[string]any{"type": []string{"array", "null"}, "items": nonblank},
+		"required_actions": map[string]any{"type": []string{"array", "null"}, "items": nonblank},
+	}, "id", "objective")
+	rule := objectSchema(map[string]any{
+		"for_actions": map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
+		"params": map[string]any{
+			"type": []string{"object", "null"}, "additionalProperties": false,
+			"properties": map[string]any{"decision_by": map[string]any{"type": []string{"string", "null"}, "enum": []any{nil, "", "model"}}},
+		},
+	}, "for_actions")
+	return objectSchema(map[string]any{
+		"name": map[string]any{
+			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
+			"description": "Nonblank exact name. Existing names cannot be replaced.",
+		},
+		"objective": nonblank,
+		"required_actions": map[string]any{
+			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
+			"description": "Actions required for execution, including capabilities not installed yet. Step requirements also participate in preflight.",
+		},
+		"optional_actions": actionNames,
+		"starting_actions": map[string]any{
+			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
+			"description": "Initial action guidance. Each name must appear in required_actions; creation does not queue tasks.",
+		},
+		"steps": map[string]any{"type": []string{"array", "null"}, "items": json.RawMessage(step)},
+		"rules": map[string]any{
+			"type": []string{"object", "null"}, "additionalProperties": json.RawMessage(rule),
+			"propertyNames": map[string]any{"enum": []string{"aggregate-results", "decide-next-actions", "same-agent"}},
+			"description":   "Mission rules. decide-next-actions requires params.decision_by=model. Other rules reject a nonempty decision_by. Shared validation checks rule and action-list constraints.",
+		},
+		"input_schema":  map[string]any{"type": "object", "description": "Locally resolvable JSON Schema for mission input; {} allows any value. External references are rejected."},
+		"output_schema": map[string]any{"type": "object", "description": "Locally resolvable JSON Schema for mission output; {} allows any value. External references are rejected."},
+	}, "name", "objective", "input_schema", "output_schema")
+}
 
 func objectSchema(properties map[string]any, required ...string) string {
 	data, err := json.Marshal(map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false})
