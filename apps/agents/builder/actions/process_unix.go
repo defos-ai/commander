@@ -9,7 +9,7 @@ import (
 	"syscall"
 )
 
-// Cancel Git's transport helpers as well as its parent before removing a checkout.
+// Cancel child helpers as well as the parent before removing temporary files.
 func configureCommand(command *exec.Cmd) {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error {

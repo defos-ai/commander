@@ -31,6 +31,9 @@ type gitFixtureState struct {
 
 func TestMain(m *testing.M) {
 	name := filepath.Base(os.Args[0])
+	if name == "codex" || name == "codex.exe" || name == "go" || name == "go.exe" {
+		os.Exit(runBuildFixture(strings.TrimSuffix(name, ".exe")))
+	}
 	if (name == "git" || name == "git.exe") && len(os.Args) > 1 && os.Args[1] == "-c" {
 		os.Exit(runGitFixture())
 	}

@@ -1,13 +1,14 @@
 # Builder Agent
 
-The `builder-agent` prepares source workspaces for creating Commander agents.
-Its first action, `checkout-template`, clones the
-[example agent](https://github.com/defos-ai/commander-example-agent) and returns
-a workspace ID and the exact template revision.
+The `builder-agent` creates Commander agents with Codex, checks them with Go,
+and exports their source as an artifact. `checkout-template` clones the
+[example agent](https://github.com/defos-ai/commander-example-agent);
+`build-agent` implements the requested behavior in that workspace.
 
 ## Run
 
-Install Git, then run from the repository root with Go 1.26.7+:
+Install Git, Go 1.26.7+ and [Codex CLI](https://learn.chatgpt.com/docs/non-interactive-mode), then run
+from the repository root:
 
 ```sh
 go run ./apps/agents/builder/cmd
@@ -15,8 +16,8 @@ go run ./apps/agents/builder/cmd
 
 Connect the [controller](../../controllers/README.md#quick-start) to the same
 `BUS_URL` and `STORAGE_URL`. Both default to local directories under `state/`.
-The builder registers as `builder-agent-{id}`. If Git is missing,
-`checkout-template` reports it as a missing requirement.
+The builder registers as `builder-agent-{id}`. Each action reports its own missing
+executables or managed secrets without preventing the host from starting.
 
 To assign its instance suffix, use `--agent-id-suffix=a1b2c3d4` or
 `COMMANDER_AGENT_ID_SUFFIX`. The flag takes precedence; an explicit empty flag
@@ -28,18 +29,31 @@ the fixed public template; it requires no GitHub token. Each call creates a
 separate checkout under `state/builder-workspaces/<workspace_id>/source`.
 Change the root with `--workspace-dir` or `BUILDER_WORKSPACE_DIR`.
 
+Then request `build-agent` on the same builder with:
+
+```json
+{"workspace_id":"<checkout result>","instructions":"Create an agent that checks JSON responses against a schema."}
+```
+
+It uses the managed `CODEX_API_KEY`, runs Codex and Go tests/build, and returns
+the workspace ID, source file count and a `source.tar.gz` artifact. Supply the
+key through Playground's secret form or Admin's agent secrets page; never put it
+in the instructions. The bundled `build-agent` mission connects checkout and
+build with a `same-agent` rule and model review after each stage. Ask Playground
+to build an agent and describe its actions and expected behavior.
+
 ## Bundled deployment
 
 The repository [Compose stack](../../../compose.yaml) and
 [Playground all-in-one](../../playground/README.md#native-one-executable) start
 builder and spawner agents from the current build, without downloading packages.
 
-Compose runs the builder with Git installed and a `builder-workspaces` volume
+Compose runs the builder with Git, Go and Codex installed and a `builder-workspaces` volume
 at `/home/commander/workspaces`; checkouts survive container recreation. Playground
 all-in-one embeds the builder host and keeps its workspaces in temporary session
-state, deleted on exit. The all-in-one Docker image includes Git; native
-installations use Git from the host. Missing Git makes `checkout-template`
-unavailable without preventing startup.
+state, deleted on exit. The all-in-one Docker image includes these tools; native
+installations use tools from the host. Missing tools make only the affected
+actions unavailable without preventing startup.
 
 ## Release package
 
@@ -54,7 +68,9 @@ run `spawn-agent` with:
 This package provides native executables for Linux, macOS and Windows on
 amd64/arm64, plus the `linux/amd64` image
 `ghcr.io/defos-ai/commander-builder-agent`, pinned by digest in the manifest.
-The builder image includes Git; native executables require Git on the host.
+The builder image includes Git, Go and Codex CLI 0.114.0, pinned for compatibility
+with its unprivileged container sandbox. Native executables require these tools
+on the host.
 Existing releases are unchanged; use the source command until publication.
 See [agent packages](../../../docs/agent-packages.md).
 
@@ -84,14 +100,18 @@ environment key and is validated before providers start.
 
 Successful workspaces remain on disk for later work; all-in-one removes them
 on exit. Failed or cancelled checkouts are removed. Workspace IDs refer to this
-builder's local storage, so they cannot be handed to another builder instance.
+builder's local storage, so use the mission's `same-agent` rule for checkout and
+build instead of handing them to another builder instance.
 
 Checkout does not execute template code. Git uses isolated configuration without
 host credentials, hooks, proxies or submodule checkout. It needs direct HTTPS
 access to GitHub.
 
-Codex builds, source artifacts, GitHub publication and generated-agent startup
-are the next stages.
+Codex runs with its workspace-write sandbox and temporary configuration. Go
+checks use `GOWORK=off` and a clean environment without the Codex key, but execute
+generated code as the builder's operating-system user. Use a builder deployment
+you trust for code execution. GitHub publication and generated-agent startup
+remain separate stages.
 
 ## Development
 
@@ -103,4 +123,4 @@ go test -race -count=1 -timeout=3m ./apps/agents/builder/...
 go vet ./apps/agents/builder/...
 ```
 
-Tests use local Git repositories and need no network or model key.
+Tests use local fixtures and need no network or paid model requests.

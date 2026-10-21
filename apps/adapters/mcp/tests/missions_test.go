@@ -16,7 +16,7 @@ func TestMissions(t *testing.T) {
 		Missions []map[string]string `json:"missions"`
 	}
 	a.call("list_missions", object{}, &catalog)
-	if len(catalog.Missions) != 5 {
+	if len(catalog.Missions) != 6 {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
 	summaries := make(map[string]map[string]string, len(catalog.Missions))
@@ -26,7 +26,7 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[summary["name"]] = summary
 	}
-	for _, name := range []string{"fixture-affinity", "fixture-use-agent", "install-agent"} {
+	for _, name := range []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
 			t.Fatalf("missing agent mission: %s", name)
 		}

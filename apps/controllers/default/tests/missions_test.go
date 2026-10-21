@@ -115,6 +115,30 @@ func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
 	}
 }
 
+func TestBuildAgentMissionKeepsWorkspaceStagesOnOneBuilder(t *testing.T) {
+	mission := defaultMissions(t)["build-agent"]
+	stages := []string{"checkout-template", "build-agent"}
+	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.StartingActions, stages[:1]) {
+		t.Fatalf("build mission lost its checkout prerequisite: %+v", mission)
+	}
+	affinity, decision := mission.Rules[missions.SameAgent], mission.Rules[missions.DecideNextActions]
+	if len(mission.Rules) != 2 || !slices.Equal(affinity.ForActions, stages) || !slices.Equal(decision.ForActions, stages) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("build stages need local workspace affinity and model review: %+v", mission.Rules)
+	}
+	input := json.RawMessage(`{"instructions":"Create a JSON validation agent."}`)
+	if err := mission.ValidateInput(input); err != nil {
+		t.Fatal(err)
+	}
+	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the agent and validated its source."}`)); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{`{}`, `{"instructions":" "}`, `{"instructions":"Build an agent","CODEX_API_KEY":"value"}`} {
+		if err := mission.ValidateInput(json.RawMessage(invalid)); err == nil {
+			t.Fatalf("invalid build input accepted: %s", invalid)
+		}
+	}
+}
+
 func defaultMissions(t *testing.T) map[string]missions.Mission {
 	t.Helper()
 	var definitions []json.RawMessage

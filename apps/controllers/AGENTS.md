@@ -68,6 +68,11 @@
   stable resolution and retry pinning to the spawner; an omitted version means stable.
   Its optional `visibility` input is `public` or `private`, defaulting to public;
   clients preserve it when assigning `spawn-agent`. Never accept tokens in mission input.
+- The bundled `build-agent` mission starts checkout with `{}`, then model review
+  assigns the returned workspace ID and original instructions to `build-agent`.
+  Keep `same-agent` on both stages because workspace files are local, and model
+  review on both results. Build exports source; publication and spawning remain
+  separate operations. Managed `CODEX_API_KEY` goes through the secret flow.
 
 ## Validation
 

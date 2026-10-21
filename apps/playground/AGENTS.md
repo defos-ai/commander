@@ -20,7 +20,7 @@
   ownership without duplicating a local API connection.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
-  embeds Admin, includes Chromium/fonts and Git, and uses a real non-root user's home plus
+  embeds Admin, includes Chromium/fonts, Git, Go and Codex, and uses a real non-root user's home plus
   an init process for browser children. Keep browser packages aligned with the
   browser image.
 
@@ -198,19 +198,20 @@
   `--admin-url` after the image name for another published port or host.
   Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
   non-root and pass this setting through native bootstrap. Retain Chromium,
-  fonts and Git for child agents. State remains temporary; adding image
+  fonts and Git for child agents, and Go/Codex for the embedded builder. State remains temporary; adding image
   dependencies must not change session persistence. Container ports cannot be
   published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
-  Embed `install-agent` and both website missions. The native quick start installs
+  Embed `build-agent`, `install-agent` and both website missions. The native quick start installs
   the web agent before using `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.
   Wait for the embedded builder and spawner to register. The web agent
   owns HTTP work and remains ready without Chromium; the browser advertises rendering
-  requirements. The builder discovers Git itself; missing Git makes its action
-  unavailable without failing all-in-one startup. Keep readiness in the agent.
+  requirements. The builder discovers Git, Go and Codex itself; missing tools or
+  managed `CODEX_API_KEY` make the relevant action unavailable without failing
+  all-in-one startup. Keep readiness in the agent.
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.

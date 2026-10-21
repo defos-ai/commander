@@ -1,5 +1,65 @@
 [
   {
+    "name": "build-agent",
+    "objective": "Build a Commander agent from the operator's instructions. Read checkout-template and build-agent schemas and readiness first. Assign checkout-template with {} input, then review its result and resolve its continuation with build-agent using the returned workspace_id and the original mission instructions. The same-agent rule keeps both stages on the builder that owns the workspace; do not invent a workspace ID or route the build to another instance. If CODEX_API_KEY is missing, direct the operator to the local secret form or Admin Secrets; never request or include secret values in chat, questions or action input. Review the saved build result and source.tar.gz artifact, resolve the build continuation with no follow-up actions, and complete with workspace_id and a concise summary of the generated agent and validation. Report failures and limitations accurately. This mission builds and exports source; it does not publish to GitHub, install or run the generated agent.",
+    "required_actions": [
+      "checkout-template",
+      "build-agent"
+    ],
+    "starting_actions": [
+      "checkout-template"
+    ],
+    "rules": {
+      "same-agent": {
+        "for_actions": [
+          "checkout-template",
+          "build-agent"
+        ]
+      },
+      "decide-next-actions": {
+        "for_actions": [
+          "checkout-template",
+          "build-agent"
+        ],
+        "params": {
+          "decision_by": "model"
+        }
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "The agent to create, including its actions and expected behavior. Never include secret values."
+        }
+      },
+      "required": [
+        "instructions"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "workspace_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "summary"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "install-agent",
     "objective": "Install one agent from a GitHub package reference or repository URL. The spawner resolves an omitted version or @stable and saves the exact version for retries; explicit @vMAJOR.MINOR.PATCH pins are also accepted. Read spawn-agent's schema and readiness, then assign spawn-agent with the mission input, preserving the supplied visibility; omitted visibility means public. Private repositories use the spawner's GitHub token or the existing managed-secret form; never request token values in chat or action input. Review its saved result and resolve the continuation with no follow-up actions. Recheck the registered agent's action readiness before completing with its agent_id and any limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready.",
     "required_actions": [

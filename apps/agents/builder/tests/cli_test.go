@@ -49,7 +49,7 @@ func TestBuilderConstruction(t *testing.T) {
 			t.Fatalf("incorrect builder identity: %s / %s", snapshot.ID, snapshot.Type)
 		}
 		previousID = snapshot.ID
-		if len(snapshot.Actions) != 1 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName {
+		if len(snapshot.Actions) != 2 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName || snapshot.Actions[1].Name != builderactions.BuildAgentName {
 			t.Fatalf("unexpected default catalog: %+v", snapshot.Actions)
 		}
 	}
@@ -144,12 +144,16 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 					t.Fatal("empty CLI selection exposed default actions")
 				}
 			} else {
-				if len(snapshot.Actions) != 1 {
+				if len(snapshot.Actions) != 2 {
 					t.Fatalf("incorrect catalog length: %d", len(snapshot.Actions))
 				}
 				definition := snapshot.Actions[0]
 				if definition.Name != builderactions.CheckoutTemplateName || definition.Status != actionmodel.Unavailable || len(definition.MissingRequirements) != 1 || definition.MissingRequirements[0].Kind != actionmodel.ExecutableRequirement || definition.MissingRequirements[0].Name != "git" {
 					t.Fatalf("missing git was not advertised: %+v", definition)
+				}
+				build := snapshot.Actions[1]
+				if build.Name != builderactions.BuildAgentName || build.Status != actionmodel.Unavailable {
+					t.Fatalf("missing build tools were not advertised: %+v", build)
 				}
 			}
 			stop()
@@ -193,7 +197,7 @@ func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	for _, test := range []struct{ name, argument, suffix, expected string }{
 		{"empty workspace", "--workspace-dir=", "", "workspace-dir"},
-		{"unknown action", "--actions=build-agent", "", "unknown action"},
+		{"unknown action", "--actions=unknown-action", "", "unknown action"},
 		{"duplicate action", "--actions=checkout-template,checkout-template", "", "duplicate"},
 		{"negative heartbeat", "--heartbeat-interval=-1s", "", "heartbeat-interval"},
 		{"positional argument", "unexpected", "", "positional"},

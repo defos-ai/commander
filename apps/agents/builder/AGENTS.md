@@ -19,15 +19,18 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   A non-nil cipher takes precedence over optional `SECRETS_ENCRYPTION_KEY`;
   validate it before opening providers. Keep `Run` as the wrapper with empty
   options. Do not mutate process environment or generate keys in this host.
-- [checkout-template](actions/checkout_template.go) is the only action so far.
-  Its input is `{}`. The source URL is fixed; do not expose paths or arbitrary
-  Git URLs through task input.
+- [checkout-template](actions/checkout_template.go) accepts `{}` and uses a fixed
+  source URL; do not expose paths or arbitrary Git URLs through task input.
+- [build-agent](actions/build_agent.go) accepts the checkout's opaque workspace
+  ID and instructions. It uses managed `CODEX_API_KEY`, runs Codex and Go
+  tests/build, and exports `source.tar.gz` through the normal artifact runtime.
+  Never publish, spawn or accept secret values through this action's input.
 
 ## Workspace and process boundaries
 
-- Constructors must not clone repositories or require Git. Discovery uses
+- Constructors must not clone repositories or require executables. Discovery uses
   `environment.Environment.FindExecutable` and respects explicit scopes, including
-  an empty scope. Missing or removed Git makes only the action unavailable.
+  an empty scope. Missing tools make only the affected action unavailable.
 - Create a private, unique checkout per execution. Return an opaque workspace ID
   and exact revision, never a host path. Successful checkouts remain in configured
   storage; remove only the current incomplete checkout on errors or cancellation.
@@ -40,13 +43,18 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - Checkout must not run template code, build, publish, or launch generated agents.
   Those stages need their own actions and managed-secret declarations. Do not add
   environment fallbacks for managed secrets.
-- Workspace storage is local to the owning builder. Controller selection has no
-  workspace affinity yet. Add explicit ownership/routing or source transfer before
-  proposing multi-step work across builder instances.
+- Build uses Codex's workspace-write sandbox with temporary configuration and
+  no inherited user authentication. Independent Go checks run with `GOWORK=off`
+  and no managed key in their environment. They execute generated code as the
+  builder's operating-system user; environment isolation is not an OS sandbox.
+  Preserve redacted subprocess errors and never return raw model/tool output.
+- Workspace storage is local to the owning builder. The bundled `build-agent`
+  mission binds checkout and build with the controller's `same-agent` rule.
+  Do not route a workspace to another builder or duplicate affinity in the action.
 
 ## Deployment
 
-- [Dockerfile](docker/Dockerfile) includes Git and CA certificates, runs as
+- [Dockerfile](docker/Dockerfile) includes Git, Go, Codex and CA certificates, runs as
   UID/GID 1000, and creates `/home/commander/workspaces` with matching ownership.
   Keep `BUILDER_WORKSPACE_DIR` aligned with this writable directory.
 - [Compose](../../../compose.yaml) and Playground all-in-one start builder and
@@ -63,7 +71,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   and `builder-agent` manifest type. Never add the key
   to the shared agent environment or infer trust from type alone. Action secrets
   still use managed-secret delivery; no GitHub or model tokens are inherited.
-  Native users supply Git; both the builder and all-in-one Docker images include Git.
+  Native users supply these tools; both builder and all-in-one Docker images include them.
 - The release package uses `apps/agents/builder/<version>` in this repository
   with `agent.yaml`; its reference includes `apps/agents/builder` before
   `@<version>`. It provides six native platforms and Docker.
@@ -79,6 +87,8 @@ Follow the [agent test layout](../AGENTS.md#validation): keep tests and fixtures
 `tests/` and exercise public APIs. Use local Git fixtures; never clone the public
 template in tests. Cover discovery, strict input, isolated workspaces,
 revision output, config/credential isolation, failure cleanup and cancellation.
+Build scenarios use local executable fixtures rather than paid Codex calls;
+verify secret isolation, failed validation and source artifact contents.
 
 From the repository root:
 

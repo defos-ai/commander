@@ -1,4 +1,10 @@
 # syntax=docker/dockerfile:1
+FROM node:24.14.0-bookworm-slim AS codex
+# Keep workspace isolation compatible with default container permissions.
+RUN npm install --global --ignore-scripts --omit=dev @openai/codex@0.114.0 \
+    && mkdir /opt/codex \
+    && cp -a /usr/local/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-*/vendor/*/. /opt/codex/
+
 FROM node:24-alpine AS frontend
 WORKDIR /src
 COPY apps/admin/ui/frontend/package.json apps/admin/ui/frontend/package-lock.json ./
@@ -23,8 +29,12 @@ RUN apt-get update \
 RUN groupadd --gid 1000 commander \
     && useradd --uid 1000 --gid 1000 --create-home commander
 COPY --from=build /out/commander /usr/local/bin/commander
+COPY --from=build /usr/local/go /usr/local/go
+COPY --from=codex /opt/codex /opt/codex
 COPY --chmod=755 apps/playground/docker/entrypoint.aio.sh /usr/local/bin/commander-entrypoint
-ENV API_LISTEN_ADDRESS=0.0.0.0:4274 UI_LISTEN_ADDRESS=0.0.0.0:4275 API_RUNTIME=docker MCP_RUNTIME=docker CHROMIUM_NO_SANDBOX=true
+ENV PATH=/opt/codex/codex:/opt/codex/path:/usr/local/go/bin:${PATH} \
+    GOTOOLCHAIN=local \
+    API_LISTEN_ADDRESS=0.0.0.0:4274 UI_LISTEN_ADDRESS=0.0.0.0:4275 API_RUNTIME=docker MCP_RUNTIME=docker CHROMIUM_NO_SANDBOX=true
 EXPOSE 4274 4275
 USER 1000:1000
 WORKDIR /home/commander

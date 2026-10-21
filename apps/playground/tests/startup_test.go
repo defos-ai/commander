@@ -59,9 +59,30 @@ func testAllInOneDefaultAgents(t *testing.T) {
 	if spawner.ID == "" || spawner.Status != agents.AgentReady || spawner.Stale || len(spawner.Actions) != 1 || spawner.Actions[0].Name != "spawn-agent" || spawner.Actions[0].Status != actions.Ready {
 		t.Fatalf("default spawner is not ready to install agents: %+v", spawner)
 	}
-	if builder.ID == "" || builder.Status != agents.AgentReady || builder.Stale || len(builder.Actions) != 1 || builder.Actions[0].Name != "checkout-template" || builder.Actions[0].Status != actions.Unavailable ||
-		!slices.Equal(builder.Actions[0].MissingRequirements, []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "git"}}) {
-		t.Fatalf("default builder did not report its missing Git dependency: %+v", builder)
+	if builder.ID == "" || builder.Status != agents.AgentReady || builder.Stale || len(builder.Actions) != 2 {
+		t.Fatalf("default builder did not advertise checkout and build: %+v", builder)
+	}
+	for _, action := range builder.Actions {
+		if action.Status != actions.Unavailable {
+			t.Fatalf("builder action is ready without tools: %+v", action)
+		}
+		switch action.Name {
+		case "checkout-template":
+			if !slices.Equal(action.MissingRequirements, []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "git"}}) {
+				t.Fatalf("checkout did not report missing Git: %+v", action)
+			}
+		case "build-agent":
+			for _, tool := range []string{"go", "codex"} {
+				if !slices.Contains(action.MissingRequirements, actions.Requirement{Kind: actions.ExecutableRequirement, Name: tool}) {
+					t.Fatalf("build did not report missing %s: %+v", tool, action)
+				}
+			}
+			if !slices.Equal(action.RequiredSecrets, []string{"CODEX_API_KEY"}) {
+				t.Fatalf("build did not declare its managed key: %+v", action)
+			}
+		default:
+			t.Fatalf("unexpected builder action: %+v", action)
+		}
 	}
 	var mission missions.Mission
 	call("describe_mission", map[string]any{"mission_name": "install-agent"}, &mission)

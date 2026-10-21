@@ -86,7 +86,7 @@ func connect(t *testing.T) *api {
 			expected := expectedAgentActions(string(agent.Type))
 			ready = ready && len(expected) > 0 && !agent.Stale && agent.Status == agents.AgentReady && agent.Work == nil && len(agent.Actions) == len(expected)
 			for _, action := range agent.Actions {
-				ready = ready && action.Status == "ready"
+				ready = ready && (action.Name == "build-agent" || action.Status == "ready")
 			}
 		}
 		if ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["builder-agent"] == 1 && types["spawner-agent"] == 1 {
@@ -120,7 +120,7 @@ func expectedAgentActions(agentType string) []string {
 	case "spawner-agent":
 		return []string{"spawn-agent"}
 	case "builder-agent":
-		return []string{"checkout-template"}
+		return []string{"build-agent", "checkout-template"}
 	case "fixture-agent":
 		return []string{"fixture-echo"}
 	default:

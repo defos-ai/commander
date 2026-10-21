@@ -32,7 +32,11 @@ func TestAgentsAndActions(t *testing.T) {
 		for _, action := range agent.Actions {
 			names = append(names, action.Name)
 			expectedCatalog[action.Name] = true
-			if action.Status != actions.Ready {
+			if action.Name == "build-agent" {
+				if action.Status != actions.Unavailable || !slices.Equal(action.RequiredSecrets, []string{"CODEX_API_KEY"}) || len(action.MissingRequirements) != 1 || action.MissingRequirements[0].Kind != actions.SecretRequirement || action.MissingRequirements[0].Name != "CODEX_API_KEY" {
+					t.Fatalf("builder tools must be installed while its managed key remains missing: %+v", action)
+				}
+			} else if action.Status != actions.Ready {
 				t.Fatalf("Compose must prepare dependencies: %s: %+v", agent.ID, action)
 			}
 		}

@@ -85,7 +85,7 @@ func connect(t *testing.T) *api {
 			expected := expectedAgentActions(agent.Type)
 			ready = ready && len(expected) > 0 && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == len(expected)
 			for _, action := range agent.Actions {
-				ready = ready && action.Status == "ready"
+				ready = ready && (action.Name == "build-agent" || action.Status == "ready")
 			}
 		}
 		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1 && types["builder-agent"] == 1 && types["spawner-agent"] == 1
@@ -113,7 +113,7 @@ func expectedAgentActions(agentType string) []string {
 	case "spawner-agent":
 		return []string{"spawn-agent"}
 	case "builder-agent":
-		return []string{"checkout-template"}
+		return []string{"build-agent", "checkout-template"}
 	case "fixture-agent":
 		return []string{"fixture-echo"}
 	default:
@@ -121,7 +121,7 @@ func expectedAgentActions(agentType string) []string {
 	}
 }
 
-var expectedMissions = []string{"fixture-affinity", "fixture-use-agent", "install-agent", "review-website-no-browser", "review-website-with-browser"}
+var expectedMissions = []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "review-website-no-browser", "review-website-with-browser"}
 
 func expectedCatalogActions(agents []models.AgentResponse) []string {
 	var names []string
