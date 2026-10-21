@@ -34,8 +34,8 @@ func TestMissions(t *testing.T) {
 	}
 	var build missions.Mission
 	a.call("describe_mission", object{"mission_name": "build-agent"}, &build)
-	if !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent"}) {
-		t.Fatalf("build mission lost its optional publication action: %+v", build)
+	if !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent", "release-agent"}) {
+		t.Fatalf("build mission lost its optional publication and release actions: %+v", build)
 	}
 	var buildOperation operations.Operation
 	a.call("start_operation", object{"mission_name": "build-agent", "input": object{"instructions": "Create a fixture agent"}}, &buildOperation)

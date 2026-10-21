@@ -17,7 +17,7 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	}
 	build := read[models.MissionResponse](a, "/api/v1/missions/build-agent")
 	buildIndex := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == build.Name })
-	if buildIndex < 0 || !reflect.DeepEqual(catalog.Items[buildIndex], build) || !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent"}) {
+	if buildIndex < 0 || !reflect.DeepEqual(catalog.Items[buildIndex], build) || !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent", "release-agent"}) {
 		t.Fatalf("build mission lost its optional publication action: %+v", build)
 	}
 	assertSchema(t, a, "Mission", a.request(http.MethodGet, "/api/v1/missions/build-agent", nil))

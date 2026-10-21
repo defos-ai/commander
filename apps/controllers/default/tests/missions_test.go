@@ -115,19 +115,22 @@ func TestInstallAgentMissionNeedsOnlySpawnerAndReviewsReadiness(t *testing.T) {
 	}
 }
 
-func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublication(t *testing.T) {
+func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublicationAndRelease(t *testing.T) {
 	catalog := defaultMissions(t)
 	if _, exists := catalog["publish-agent"]; exists {
 		t.Fatal("source publication must remain an optional action in build-agent")
 	}
+	if _, exists := catalog["release-agent"]; exists {
+		t.Fatal("release must remain an optional action in build-agent")
+	}
 	mission := catalog["build-agent"]
 	stages := []string{"checkout-template", "build-agent"}
-	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.OptionalActions, []string{"publish-agent"}) || !slices.Equal(mission.StartingActions, stages[:1]) {
+	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.OptionalActions, []string{"publish-agent", "release-agent"}) || !slices.Equal(mission.StartingActions, stages[:1]) {
 		t.Fatalf("build mission lost its checkout prerequisite: %+v", mission)
 	}
 	affinity, decision := mission.Rules[missions.SameAgent], mission.Rules[missions.DecideNextActions]
 	if len(mission.Rules) != 2 || !slices.Equal(affinity.ForActions, stages) || !slices.Equal(decision.ForActions, []string{"checkout-template", "build-agent", "publish-agent"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
-		t.Fatalf("workspace stages need affinity and every result needs model review: %+v", mission.Rules)
+		t.Fatalf("workspace stages need affinity and build/publication review; release polls must continue automatically: %+v", mission.Rules)
 	}
 	input := json.RawMessage(`{"instructions":"Create a JSON validation agent."}`)
 	if err := mission.ValidateInput(input); err != nil {
@@ -150,7 +153,21 @@ func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublication(t *testin
 	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the source.","publication":{"repository_url":"https://github.com/example/json-agent"}}`)); err == nil {
 		t.Fatal("incomplete publication result accepted")
 	}
-	for _, invalid := range []string{`{}`, `{"instructions":" "}`, `{"instructions":"Build an agent","CODEX_API_KEY":"value"}`, `{"instructions":"Build an agent","repository":"example/json-agent","visibility":"internal"}`} {
+	releaseInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","repository":"example/json-agent","visibility":"public","release_version":"v0.1.0"}`)
+	if err := mission.ValidateInput(releaseInput); err != nil {
+		t.Fatalf("explicit optional release request rejected: %v", err)
+	}
+	releaseOutput := json.RawMessage(`{"workspace_id":"checkout-example","summary":"Released the reviewed source.","release":{"repository":"example/json-agent","commit_sha":"0123456789abcdef0123456789abcdef01234567","version":"v0.1.0","agent_type":"json-agent","visibility":"public","status":"released","workflow_run_id":123,"workflow_url":"https://github.com/example/json-agent/actions/runs/123","conclusion":"success","package":"github.com/example/json-agent@v0.1.0","release_url":"https://github.com/example/json-agent/releases/tag/v0.1.0"}}`)
+	if err := mission.ValidateOutput(releaseInput, releaseOutput); err != nil {
+		t.Fatalf("verified release result rejected: %v", err)
+	}
+	if err := mission.ValidateOutput(releaseInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Build finished; publication and release were skipped."}`)); err != nil {
+		t.Fatalf("release must remain optional in the result: %v", err)
+	}
+	if err := mission.ValidateOutput(releaseInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Still waiting.","release":{"repository":"example/json-agent","commit_sha":"0123456789abcdef0123456789abcdef01234567","version":"v0.1.0","agent_type":"json-agent","visibility":"public","status":"pending"}}`)); err == nil {
+		t.Fatal("pending release accepted as a finished mission report")
+	}
+	for _, invalid := range []string{`{}`, `{"instructions":" "}`, `{"instructions":"Build an agent","CODEX_API_KEY":"value"}`, `{"instructions":"Build an agent","repository":"example/json-agent","visibility":"internal"}`, `{"instructions":"Build an agent","release_version":"stable"}`, `{"instructions":"Build an agent","release_version":"v0.1.0-rc.1"}`} {
 		if err := mission.ValidateInput(json.RawMessage(invalid)); err == nil {
 			t.Fatalf("invalid build input accepted: %s", invalid)
 		}

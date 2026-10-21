@@ -84,8 +84,13 @@
   action's visibility default; if neither an explicit choice nor a default exists,
   ask Public (recommended) or Private through `ask_question` and wait for the real
   answer. Never infer approval from expiry. Managed `GITHUB_TOKEN` uses the secret
-  flow only when publication is selected. Publication returns a source commit;
-  release packaging and installation remain separate stages.
+  flow only when publication or release is selected. Publication returns a source
+  commit. Offer `release-agent` as another optional action in the same operation;
+  obtain release consent and a version independently of publication consent.
+  Keep it outside `same-agent` and `decide-next-actions`: bounded pending checks
+  propose the same action with `workflow_run_id` and continue automatically.
+  Empty terminal proposals still return to model review. Only a verified released
+  result provides a pinned package; installation remains a separate operation.
 
 ## Validation
 

@@ -59,8 +59,8 @@ func testAllInOneDefaultAgents(t *testing.T) {
 	if spawner.ID == "" || spawner.Status != agents.AgentReady || spawner.Stale || len(spawner.Actions) != 1 || spawner.Actions[0].Name != "spawn-agent" || spawner.Actions[0].Status != actions.Ready {
 		t.Fatalf("default spawner is not ready to install agents: %+v", spawner)
 	}
-	if builder.ID == "" || builder.Status != agents.AgentReady || builder.Stale || len(builder.Actions) != 3 {
-		t.Fatalf("default builder did not advertise checkout, build and publication: %+v", builder)
+	if builder.ID == "" || builder.Status != agents.AgentReady || builder.Stale || len(builder.Actions) != 4 {
+		t.Fatalf("default builder did not advertise checkout, build, publication and release: %+v", builder)
 	}
 	for _, action := range builder.Actions {
 		if action.Status != actions.Unavailable {
@@ -74,6 +74,10 @@ func testAllInOneDefaultAgents(t *testing.T) {
 		case "publish-agent":
 			if !slices.Contains(action.MissingRequirements, actions.Requirement{Kind: actions.ExecutableRequirement, Name: "git"}) || !slices.Equal(action.RequiredSecrets, []string{"GITHUB_TOKEN"}) {
 				t.Fatalf("publication did not report missing Git and its managed token: %+v", action)
+			}
+		case "release-agent":
+			if !slices.Equal(action.RequiredSecrets, []string{"GITHUB_TOKEN"}) || !slices.Equal(action.MissingRequirements, []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}) {
+				t.Fatalf("release must depend only on its managed token: %+v", action)
 			}
 		case "build-agent":
 			for _, tool := range []string{"go", "codex"} {

@@ -34,9 +34,9 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 		var names []string
 		for _, action := range agent.Actions {
 			names = append(names, action.Name)
-			if action.Name == "build-agent" || action.Name == "publish-agent" {
+			if action.Name == "build-agent" || action.Name == "publish-agent" || action.Name == "release-agent" {
 				secret := "CODEX_API_KEY"
-				if action.Name == "publish-agent" {
+				if action.Name != "build-agent" {
 					secret = "GITHUB_TOKEN"
 				}
 				if action.Status != "unavailable" || !slices.Equal(action.RequiredSecrets, []string{secret}) || len(action.MissingRequirements) != 1 || action.MissingRequirements[0].Kind != "secret" || action.MissingRequirements[0].Name != secret {

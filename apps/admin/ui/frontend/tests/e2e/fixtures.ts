@@ -63,7 +63,7 @@ export class CommanderAPI {
         { type: 'spawner-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
         ...Array(2).fill({ type: 'web-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
       ], spawnedReady: true, spawnedCatalog: true,
-      actions: ['build-agent', 'capture-page', 'check-accessibility', 'check-links', 'check-seo', 'checkout-template', 'detect-technologies', 'discover-pages', 'discover-pages-no-browser', 'publish-agent', 'spawn-agent'],
+      actions: ['build-agent', 'capture-page', 'check-accessibility', 'check-links', 'check-seo', 'checkout-template', 'detect-technologies', 'discover-pages', 'discover-pages-no-browser', 'publish-agent', 'release-agent', 'spawn-agent'],
       missions: ['build-agent', 'fixture-affinity', 'fixture-use-agent', 'install-agent', 'review-website-no-browser', 'review-website-with-browser'], controller: true,
     });
   }

@@ -103,38 +103,16 @@ func checkedRepository(result Repository, repository string) (Repository, error)
 }
 
 func (c Client) request(ctx context.Context, method, path string, body, result any) error {
-	if len(c.Token) == 0 {
-		return errors.New("GitHub token is unavailable")
-	}
-	var reader io.Reader
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return errors.New("cannot encode GitHub request")
-		}
-		reader = bytes.NewReader(encoded)
-	}
-	request, err := http.NewRequestWithContext(ctx, method, "https://api.github.com"+path, reader)
+	request, err := c.newRequest(ctx, method, path, body, "application/vnd.github+json")
 	if err != nil {
-		return errors.New("cannot prepare GitHub request")
-	}
-	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("Authorization", "Bearer "+string(c.Token))
-	request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
-	request.Header.Set("User-Agent", "Commander-Builder")
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
+		return err
 	}
 	client := http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
 	response, err := client.Do(request)
 	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		// Transport and server errors can contain authorization or remote data.
-		return errors.New("GitHub request failed; check connectivity and token permissions")
+		return requestError(ctx)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
@@ -155,4 +133,43 @@ func (c Client) request(ctx context.Context, method, path string, body, result a
 		return errors.New("GitHub returned an invalid response")
 	}
 	return nil
+}
+
+func (c Client) newRequest(ctx context.Context, method, path string, body any, accept string) (*http.Request, error) {
+	if len(c.Token) == 0 {
+		return nil, errors.New("GitHub token is unavailable")
+	}
+	for _, value := range c.Token {
+		if value <= ' ' || value >= 0x7f {
+			return nil, errors.New("GitHub token contains invalid whitespace or control characters")
+		}
+	}
+	var reader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, errors.New("cannot encode GitHub request")
+		}
+		reader = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, "https://api.github.com"+path, reader)
+	if err != nil || request.URL.Scheme != "https" || request.URL.Host != "api.github.com" || request.URL.User != nil || request.URL.Fragment != "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
+		return nil, errors.New("cannot prepare GitHub request")
+	}
+	request.Header.Set("Accept", accept)
+	request.Header.Set("Authorization", "Bearer "+string(c.Token))
+	request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
+	request.Header.Set("User-Agent", "Commander-Builder")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	return request, nil
+}
+
+func requestError(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Transport and server errors can contain authorization or remote data.
+	return errors.New("GitHub request failed; check connectivity and token permissions")
 }

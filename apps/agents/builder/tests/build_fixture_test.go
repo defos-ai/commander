@@ -217,6 +217,10 @@ func writeReleaseFixture(root, mode string) error {
 	for _, name := range []string{"make-release", "test", "build-binaries", "push", "push-stable"} {
 		files[".github/workflows/"+name+".yml"] = "name: release fixture\non: workflow_dispatch\njobs: {}\n"
 	}
+	files[".github/workflows/make-release.yml"] = buildReleaseWorkflowFixture
+	if mode == "unguarded-release" {
+		files[".github/workflows/make-release.yml"] = strings.Replace(buildReleaseWorkflowFixture, `test "$GITHUB_SHA" = "$EXPECTED_COMMIT"`, "true", 1)
+	}
 	if mode == "local-replace" {
 		files["go.mod"] = "module example.invalid/fixture\n\ngo 1.26.7\n\nreplace example.invalid/dependency => ../dependency\n"
 	}
@@ -231,6 +235,47 @@ func writeReleaseFixture(root, mode string) error {
 	}
 	return nil
 }
+
+const buildReleaseWorkflowFixture = `name: Make release
+run-name: Release agent ${{ inputs.version }} ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      version: {type: string, required: true}
+      expected_commit: {type: string, required: false}
+      request_id: {type: string, required: false}
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify requested commit
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          if [ -n "$EXPECTED_COMMIT" ]; then
+            test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          fi
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+  tests:
+    needs: prepare
+    uses: ./.github/workflows/test.yml
+  binaries:
+    needs: [prepare, tests]
+    uses: ./.github/workflows/build-binaries.yml
+  image:
+    needs: [tests, binaries]
+    uses: ./.github/workflows/push.yml
+  publish:
+    needs: [prepare, binaries, image]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo publish fixture
+  stable:
+    needs: [prepare, image, publish]
+    uses: ./.github/workflows/push-stable.yml
+`
 
 func runReleaseFixture(args []string, config buildFixtureConfig) error {
 	if len(args) < 5 || args[1] != "--version" || args[2] != "v0.1.0" || args[3] != "--repository" || args[4] != "release-check/generated-agent" {

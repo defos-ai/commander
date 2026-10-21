@@ -4,7 +4,8 @@ The `builder-agent` creates Commander agents with Codex, checks them with Go,
 and exports their source as an artifact. `checkout-template` clones the
 [example agent](https://github.com/defos-ai/commander-example-agent);
 `build-agent` implements the requested behavior. `publish-agent` publishes
-a reviewed source artifact to GitHub.
+a reviewed source artifact to GitHub. `release-agent` optionally runs and verifies
+that repository's release workflow.
 
 ## Run
 
@@ -42,7 +43,7 @@ source file count, agent type, module path, binary name and a `source.tar.gz`
 artifact. Supply the key through Playground's secret form or Admin's agent
 secrets page; never put it in the instructions. The bundled `build-agent` mission
 connects checkout and build with a `same-agent` rule and model review after each
-stage. Publication is an optional action in that mission. Ask Playground to build
+stage. Publication and release are optional actions in that mission. Ask Playground to build
 an agent and describe its actions and expected behavior.
 
 The structure check validates the agent identity, module and manifest against
@@ -56,7 +57,7 @@ succeed; those checks run when the agent is released.
 After reviewing a successful build, choose whether to publish its source to
 `owner/repository` before completing the build mission. If you agree, its optional
 `publish-agent` action uses the saved artifact ID and full file metadata, so it
-can run on any builder connected to the same storage. Only publication needs the
+can run on any builder connected to the same storage. Publication and release use the
 managed `GITHUB_TOKEN`, supplied through the secret form. Skipping it still
 completes the build with its source artifact.
 
@@ -69,6 +70,33 @@ Publication creates a repository or uses an empty one, preserves Commander
 attribution in its README, and returns the repository and commit links. It never
 changes an existing repository's visibility or overwrites conflicting history.
 Source publication does not produce a release package or install the agent.
+
+## Release the generated agent
+
+After publication, choose whether to release it and provide a version such as
+`v0.1.0`. This stays in the same build mission; finishing with source only is
+also supported. `release-agent` takes the published `repository` and `commit_sha`,
+the build's `agent_type`, and your chosen `version`. The repository's default
+branch must still point to the reviewed commit.
+
+The managed `GITHUB_TOKEN` needs repository **Actions: write** and **Contents: read**
+for dispatch and verification. Publication additionally needs Contents write and,
+for repository creation, the appropriate account permissions. The generated
+workflow uses its own GitHub Actions token to publish binaries and the Docker image;
+allow its repository access to any existing GHCR package.
+
+While CI runs, the action proposes bounded status checks using the same
+`workflow_run_id`. A successful result verifies the version tag, published
+`agent.yaml`, six native asset checksums and digest-pinned image metadata, then
+returns `github.com/owner/repository@v0.1.0`. It does not install the agent or
+pull the image. Repository visibility is preserved; GHCR access is configured
+separately.
+
+For a failed workflow, inspect its link and retry the failed jobs in that same
+GitHub run. Resume observation with its `workflow_run_id`. If dispatch is
+uncertain, inspect GitHub before creating another release task; an execution
+checkpoint prevents repeating that execution's dispatch, without guaranteeing
+exactly-once publication.
 
 ## Bundled deployment
 
@@ -139,8 +167,8 @@ Codex runs with its workspace-write sandbox and temporary configuration. Go and
 release-structure checks use `GOWORK=off` and a clean environment without the
 Codex key, but execute generated code as the builder's operating-system user.
 Use a builder deployment you trust for code execution. Source publication is
-optional within the build mission; publishing release assets and starting the
-generated agent remain later stages.
+optional within the build mission, followed by an optional verified release.
+Starting the generated agent remains a separate installation step.
 
 ## Development
 

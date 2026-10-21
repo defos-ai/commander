@@ -50,7 +50,7 @@ func TestBuilderConstruction(t *testing.T) {
 			t.Fatalf("incorrect builder identity: %s / %s", snapshot.ID, snapshot.Type)
 		}
 		previousID = snapshot.ID
-		if len(snapshot.Actions) != 3 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName || snapshot.Actions[1].Name != builderactions.BuildAgentName || snapshot.Actions[2].Name != builderactions.PublishAgentName {
+		if len(snapshot.Actions) != 4 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName || snapshot.Actions[1].Name != builderactions.BuildAgentName || snapshot.Actions[2].Name != builderactions.PublishAgentName || snapshot.Actions[3].Name != builderactions.ReleaseAgentName {
 			t.Fatalf("unexpected default catalog: %+v", snapshot.Actions)
 		}
 	}
@@ -177,7 +177,7 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 					t.Fatal("empty CLI selection exposed default actions")
 				}
 			} else {
-				if len(snapshot.Actions) != 3 {
+				if len(snapshot.Actions) != 4 {
 					t.Fatalf("incorrect catalog length: %d", len(snapshot.Actions))
 				}
 				definition := snapshot.Actions[0]
@@ -195,6 +195,10 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 					t.Fatalf("missing publication Git was not advertised: %+v", publish)
 				}
 				assertPublicationVisibilitySchema(t, publish, test.visibility)
+				release := snapshot.Actions[3]
+				if release.Name != builderactions.ReleaseAgentName || release.Status != actionmodel.Unavailable || !slices.Equal(release.RequiredSecrets, []string{"GITHUB_TOKEN"}) || !slices.Equal(release.MissingRequirements, []actionmodel.Requirement{{Kind: actionmodel.SecretRequirement, Name: "GITHUB_TOKEN"}}) {
+					t.Fatalf("release must depend only on its managed token: %+v", release)
+				}
 			}
 			stop()
 			select {

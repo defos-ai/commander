@@ -19,12 +19,12 @@ an initial task assignment. Omit `step_id` when the mission has no declared step
 
 `required_actions` declares capabilities needed before dispatch. `optional_actions`
 declares useful choices that do not block initial preflight. For example, a build
-mission requires checkout and build, while publication is optional:
+mission requires checkout and build, while publication and release are optional:
 
 ```json
 {
   "required_actions": ["checkout-template", "build-agent"],
-  "optional_actions": ["publish-agent"],
+  "optional_actions": ["publish-agent", "release-agent"],
   "starting_actions": ["checkout-template"]
 }
 ```

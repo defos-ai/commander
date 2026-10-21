@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/defos-ai/commander/apps/agents/builder/internal/releaseworkflow"
 	"github.com/defos-ai/commander/framework/agent/manifest"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -60,6 +61,11 @@ func ValidateRelease(ctx context.Context, goTool, source, scratch string, env []
 		}
 		if name == "agent.go" {
 			agentSource = data
+		}
+		if name == ".github/workflows/make-release.yml" {
+			if err := releaseworkflow.Validate(data); err != nil {
+				return PackageMetadata{}, err
+			}
 		}
 	}
 	agentType, err := releaseAgentType(agentSource)

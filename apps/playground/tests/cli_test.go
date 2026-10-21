@@ -83,7 +83,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		expected := map[int32][]string{
 			2: {"review-website-no-browser", "review-website-with-browser"},
 			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
-			4: {"web-agent-", "browser-agent-", "builder-agent-", "checkout-template", "build-agent", "publish-agent", "spawner-agent-", "spawn-agent"},
+			4: {"web-agent-", "browser-agent-", "builder-agent-", "checkout-template", "build-agent", "publish-agent", "release-agent", "spawner-agent-", "spawn-agent"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -332,7 +332,7 @@ func testAllInOneWorkflow(t *testing.T) {
 				}
 				spawnerChecks++
 			case "builder-agent":
-				if (action.Name != "checkout-template" && action.Name != "build-agent" && action.Name != "publish-agent") || action.Status != "unavailable" {
+				if (action.Name != "checkout-template" && action.Name != "build-agent" && action.Name != "publish-agent" && action.Name != "release-agent") || action.Status != "unavailable" {
 					t.Fatalf("unexpected builder action without tools: %+v", action)
 				}
 				builderChecks++
@@ -341,7 +341,7 @@ func testAllInOneWorkflow(t *testing.T) {
 			}
 		}
 	}
-	if webChecks != 5 || browserChecks != 2 || builderChecks != 3 || spawnerChecks != 1 {
+	if webChecks != 5 || browserChecks != 2 || builderChecks != 4 || spawnerChecks != 1 {
 		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, builder=%d, spawner=%d", webChecks, browserChecks, builderChecks, spawnerChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {

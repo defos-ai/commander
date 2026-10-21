@@ -20,6 +20,7 @@ func NewAgent(config agent.AgentConfig, workspaceDir string) (*agent.Agent, erro
 			"Build Commander agents from the example-agent template with Codex, verify them with Go, and return their source as an artifact",
 			"Use checkout-template followed by build-agent in one build-agent operation; same-agent placement keeps the workspace on its owning builder. Supply CODEX_API_KEY through Admin or Playground's secret form, never in action inputs. Review the source artifact before publication or installation.",
 			"After a successful build and source review, offer publish-agent as an optional continuation in the same build-agent operation. Publish only when the operator requests or agrees to it; skipping publication completes the build with its source artifact. Read publish-agent's schema: preserve explicit public/private visibility or the advertised default; without either, ask Public (recommended) or Private and wait. GITHUB_TOKEN is needed only for publication and uses the managed-secret form. Source publication does not create an installable release.",
+			"After publication, release-agent is optional in the same build-agent operation. Obtain the operator's release request and stable version before starting it, using the saved source commit and generated agent_type. Preserve workflow_run_id on automatic status checks. Inspect failed or uncertain runs; never dispatch a replacement blindly. Only status released provides a verified pinned package. Installation requires a separate operator request through install-agent; release-agent does not launch the agent.",
 		}
 	}
 	if config.Actions == nil {
@@ -46,10 +47,14 @@ func NewActions(workspaceDir string, files artifacts.ArtifactFileStore, defaultV
 	if err != nil {
 		return nil, fmt.Errorf("create publish-agent: %w", err)
 	}
-	return []action.Executor{checkout, build, publish}, nil
+	release, err := builderactions.NewReleaseAgent()
+	if err != nil {
+		return nil, fmt.Errorf("create release-agent: %w", err)
+	}
+	return []action.Executor{checkout, build, publish, release}, nil
 }
 
 // ActionNames lists the catalog without opening workspace storage.
 func ActionNames() []string {
-	return []string{builderactions.CheckoutTemplateName, builderactions.BuildAgentName, builderactions.PublishAgentName}
+	return []string{builderactions.CheckoutTemplateName, builderactions.BuildAgentName, builderactions.PublishAgentName, builderactions.ReleaseAgentName}
 }

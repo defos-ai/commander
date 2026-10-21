@@ -61,6 +61,8 @@ Implement real actions, schemas, discovery, tests, README and a matching mission
 Choose a distinct lowercase AgentType and replace the example-agent module and
 identity consistently in Go imports, CLI, Dockerfile and documentation. Keep the
 release helper's metadata/manifest commands, agent.yaml.tmpl and release workflows.
+Preserve make-release.yml's version, expected_commit and request_id inputs, request
+run-name, first-step commit guard and prepare dependencies. Every checkout uses github.sha.
 Do not leave checkout-local replace directives in go.mod. The host will check the
 generated release structure locally using temporary assets; it will not publish.
 Run ordinary Go tests and fix failures. Do not run tagged integration tests, contact

@@ -154,6 +154,7 @@ func TestBuildAgentRejectsSourceThatCannotRelease(t *testing.T) {
 		{"template-identity", "replace example-agent"},
 		{"malformed-manifest", "invalid agent.yaml"},
 		{"local-replace", "local replace directive"},
+		{"unguarded-release", "initial commit guard"},
 	} {
 		t.Run(scenario.mode, func(t *testing.T) {
 			root, workspaceID := buildWorkspace(t)

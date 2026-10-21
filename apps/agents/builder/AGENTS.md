@@ -41,11 +41,31 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   Recommend Public without selecting it implicitly. Preserve existing visibility,
   reject conflicting history, and never force-push. A source commit is not an
   installable release.
+- [release-agent](actions/release_agent.go) is an optional continuation after
+  source publication and an explicit operator release request/version. It uses
+  managed `GITHUB_TOKEN` through the fixed GitHub API origin, without local Git
+  or workspace affinity. Preserve the approved commit and generated agent type.
+  Validate the known template workflow before dispatch: its initial prepare
+  guard must reject a moved default branch, and its run name carries the
+  execution UUID for reconciliation. Checkpoints save immutable intent and a
+  dispatch-attempt marker before POST; an uncertain response never authorizes
+  another POST for that execution. Reconcile by request ID or inspect GitHub.
+  Never automatically retry failed CI or create replacement release tasks.
+  Status checks carry `workflow_run_id`, read the same run, and propose another
+  check after a bounded wait. They stay outside the mission's model-decision
+  rule so pending checks continue automatically. Empty terminal proposals return
+  to model review. Verify run identity/version, published stable release, exact
+  tag commit, bounded manifest, all six uploaded native asset SHA-256 digests
+  and expected digest-pinned image metadata before returning a package reference.
+  Do not pull images, download every binary, change visibility or install here.
 - Keep registered action implementations in `actions/`. Supporting
   code lives in `internal/build/` (Codex, Go and source archives), `internal/git/`
   (isolated Git commands) and `internal/process/` (executable checks and process
   cancellation). Keep publication support under `internal/` by purpose. Internal
   packages must not import `actions/`.
+  [internal/github](internal/github/) owns fixed-origin release API calls and
+  safe errors; [internal/releaseworkflow](internal/releaseworkflow/) checks the
+  shared template contract. This structural check is not a workflow sandbox.
 
 ## Workspace and process boundaries
 
