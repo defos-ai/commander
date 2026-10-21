@@ -109,6 +109,12 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   This checks release structure only: it does not build every native platform or
   Docker image, verify GitHub permissions, run release CI, or create a release.
   It uses no GitHub token. Actual release publication remains a later action.
+  Require nonempty manifest responsibilities and action summaries for newly built
+  agents. Preserve pure `Responsibilities()` and `ActionDescriptions()` exports;
+  the template's manifest helper evaluates them using a bounded temporary Go
+  program, an import derived from the generated module, and a clean environment.
+  The built-in package generator uses these same exports and shared action
+  description constants. Never derive metadata from discovery or runtime secrets.
 - Workspace storage is local to the owning builder. The bundled `build-agent`
   mission binds checkout and build with the controller's `same-agent` rule.
   Do not route a workspace to another builder or duplicate affinity in the action.

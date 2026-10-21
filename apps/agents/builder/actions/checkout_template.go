@@ -20,6 +20,7 @@ import (
 )
 
 const CheckoutTemplateName = "checkout-template"
+const CheckoutTemplateDescription = "Check out the public Commander example-agent template into a new local workspace. Returns its workspace ID and exact Git revision. Does not build, run or publish code; the workspace belongs to this builder instance."
 const TemplateURL = "https://github.com/defos-ai/commander-example-agent.git"
 
 type CheckoutTemplateOutput struct {
@@ -48,7 +49,7 @@ func NewCheckoutTemplate(workspaceDir string) (*CheckoutTemplate, error) {
 	return &CheckoutTemplate{
 		Base: action.NewBase(actionmodel.Action{
 			Name:         CheckoutTemplateName,
-			Description:  "Check out the public Commander example-agent template into a new local workspace. Returns its workspace ID and exact Git revision. Does not build, run or publish code; the workspace belongs to this builder instance.",
+			Description:  CheckoutTemplateDescription,
 			InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 			OutputSchema: outputSchema,
 		}),

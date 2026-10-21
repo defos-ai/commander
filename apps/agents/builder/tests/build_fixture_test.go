@@ -293,6 +293,10 @@ func runReleaseFixture(args []string, config buildFixtureConfig) error {
 		return errors.New("dry-run release assets must stay outside source")
 	}
 	value := manifest.Manifest{SchemaVersion: 1, Type: buildTestAgentType, Version: "v0.1.0", Native: map[string]manifest.NativeAsset{}, Docker: &manifest.Docker{Image: image + "@" + args[6]}}
+	if config.Mode != "missing-package-descriptions" {
+		value.Responsibilities = []string{"Count words in supplied text"}
+		value.Actions = []manifest.Action{{Name: "count-words", Description: "Return the word count of supplied text"}}
+	}
 	for _, goos := range []string{"linux", "darwin", "windows"} {
 		for _, arch := range []string{"amd64", "arm64"} {
 			asset := buildTestBinary + "_" + goos + "_" + arch

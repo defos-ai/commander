@@ -250,6 +250,9 @@ func validateReleaseManifest(ctx context.Context, goTool, source, scratch string
 	if result.Type != agentType || result.Docker == nil || result.Docker.Image != image+"@"+digest || len(result.Native) != len(expected) {
 		return errors.New("agent.yaml must match AgentType, the Docker digest and all six native release platforms")
 	}
+	if len(result.Responsibilities) == 0 || len(result.Actions) == 0 {
+		return errors.New("agent.yaml must describe the agent's responsibilities and actions before release")
+	}
 	for platform, asset := range expected {
 		if result.Native[platform] != asset {
 			return errors.New("agent.yaml must use the expected native asset names and their SHA-256 checksums")

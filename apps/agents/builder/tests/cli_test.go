@@ -53,6 +53,18 @@ func TestBuilderConstruction(t *testing.T) {
 		if len(snapshot.Actions) != 4 || snapshot.Actions[0].Name != builderactions.CheckoutTemplateName || snapshot.Actions[1].Name != builderactions.BuildAgentName || snapshot.Actions[2].Name != builderactions.PublishAgentName || snapshot.Actions[3].Name != builderactions.ReleaseAgentName {
 			t.Fatalf("unexpected default catalog: %+v", snapshot.Actions)
 		}
+		if !slices.Equal(snapshot.Responsibilities, builder.Responsibilities()) {
+			t.Fatal("published responsibilities differ from the registered builder")
+		}
+		descriptions := builder.ActionDescriptions()
+		if len(descriptions) != len(snapshot.Actions) {
+			t.Fatal("published action descriptions differ from the registered catalog")
+		}
+		for i, description := range descriptions {
+			if description.Name != snapshot.Actions[i].Name || description.Description != snapshot.Actions[i].Description {
+				t.Fatalf("published description differs from registered action %s", snapshot.Actions[i].Name)
+			}
+		}
 	}
 	config.Actions = []action.Executor{}
 	empty, err := builder.NewAgent(config, "")

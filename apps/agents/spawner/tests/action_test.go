@@ -51,6 +51,13 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 		if err := snapshot.Actions[0].Validate(); err != nil {
 			t.Fatal(err)
 		}
+		if !reflect.DeepEqual(snapshot.Responsibilities, spawner.Responsibilities()) {
+			t.Fatal("published responsibilities differ from the registered spawner")
+		}
+		descriptions := spawner.ActionDescriptions()
+		if len(descriptions) != len(snapshot.Actions) || descriptions[0].Name != snapshot.Actions[0].Name || descriptions[0].Description != snapshot.Actions[0].Description {
+			t.Fatal("published action descriptions differ from the registered catalog")
+		}
 	}
 	if len(launcher.calls) != 0 {
 		t.Fatal("construction or discovery launched a process")

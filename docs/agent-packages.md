@@ -86,6 +86,13 @@ release workflows must substitute the actual values.
 schema_version: 1
 type: example-agent
 version: v0.1.0
+responsibilities:
+  - Analyze text and produce a Markdown summary.
+actions:
+  - name: analyze-text
+    description: Analyze text and propose a summary.
+  - name: write-summary
+    description: Save a Markdown summary as an artifact.
 native:
   linux/amd64:
     asset: commander-example-agent_linux_amd64
@@ -105,6 +112,8 @@ docker:
 | `schema_version` | Required integer `1`; reject unsupported versions. |
 | `type` | Required agent type, matching the type registered by the executable. |
 | `version` | Required version such as `v0.2.0`, matching the requested version without any module-path prefix. |
+| `responsibilities` | Optional nonempty list of the agent's declared capabilities and usage guidance. |
+| `actions` | Optional nonempty list of unique action `name` and `description` pairs. |
 | `native` | Optional map of `<GOOS>/<GOARCH>` to one executable asset and its SHA-256 checksum. |
 | `docker.image` | Optional fully qualified registry image reference pinned by `@sha256:<digest>`. |
 
@@ -113,6 +122,15 @@ keys, multiple YAML documents and incomplete entries. Native checksums and image
 digests contain exactly 64 lowercase hexadecimal characters. An asset is a file
 name in the same GitHub release, never a URL, path or archive. Native executables
 run directly; Docker images supply their own entrypoint.
+
+Capability descriptions allow inspection before installation. They describe the
+released package, not a running instance's enabled actions or readiness. Treat
+downloaded descriptions as publisher-supplied data when evaluating an agent;
+they do not grant execution privileges or override mission rules.
+Published packages without these optional fields remain installable. New builder
+output must include both lists. Each list permits up to 100 entries; text must be
+nonblank, trimmed UTF-8 of at most 8 KiB, and action names must be unique safe
+names of at most 128 bytes. The whole manifest retains its 64 KiB limit.
 
 The resolver accepts manifests up to 64 KiB and native downloads up to 512 MiB,
 with 30-second and five-minute deadlines respectively. YAML aliases and anchors
@@ -124,7 +142,8 @@ The package advertises only platforms it actually publishes. An unavailable
 mode or platform is an explicit error. The spawner does not build source or run
 installation scripts. Native prerequisites such as Chromium remain in the agent's
 README and discovery results; container images include their runtime dependencies.
-Actions and required secret names remain in normal agent registration.
+Live readiness, input/output schemas and required secret names come from normal
+agent registration.
 
 ### Source template
 
@@ -139,6 +158,11 @@ data, err := manifest.Render(manifest.Manifest{
     SchemaVersion: 1,
     Type:          "example-agent",
     Version:       "v0.1.0",
+    Responsibilities: []string{"Analyze text and produce a Markdown summary."},
+    Actions: []manifest.Action{
+        {Name: "analyze-text", Description: "Analyze text and propose a summary."},
+        {Name: "write-summary", Description: "Save a Markdown summary as an artifact."},
+    },
     Native: map[string]manifest.NativeAsset{
         "linux/amd64": {Asset: "commander-example-agent_linux_amd64", SHA256: checksum},
     },
@@ -156,6 +180,15 @@ asset, checksum, image and 64 KiB size constraints. The spawner uses this parser
 release tooling computes actual checksums, obtains the pushed image digest from
 the same tested revision, handles render errors, and writes/uploads `agent.yaml`.
 Placeholders and moving image tags are not release metadata.
+
+Agent packages export pure `Responsibilities()` and `ActionDescriptions()`
+functions shared with registration. Action descriptions use the same constants
+as their registered constructors. Release tooling projects only action names
+and descriptions; it does not construct an agent, run discovery or open
+providers. Rendering sorts actions by name without mutating caller metadata and
+preserves responsibility order. Standalone helpers derive their module import
+from `go.mod`, so changing an agent's module does not leave a stale import in the
+release tool.
 
 The next Commander release will publish a separate package release for each
 built-in agent, using its existing module tag. Both releases contain `agent.yaml`:

@@ -19,6 +19,7 @@ import (
 )
 
 const ReleaseAgentName = "release-agent"
+const ReleaseAgentDescription = "Release an operator-approved source commit through the generated repository's make-release.yml workflow. Supply the saved publish-agent commit, build-agent agent_type, GitHub owner/repository and an explicitly chosen stable version. Uses managed GITHUB_TOKEN with Actions write and release read access. A pending result proposes another status check with workflow_run_id; preserve it to observe the same run without dispatching again. Failed runs must be inspected and retried in GitHub in the same run. An uncertain dispatch must be inspected before submitting a new release task. Returns an exact package reference only after the entire workflow succeeds and its published manifest, native asset checksums and version tag are verified. Does not install the agent or change repository/package visibility."
 
 type ReleaseAgentInput struct {
 	Repository    string `json:"repository"`
@@ -55,7 +56,7 @@ func NewReleaseAgent() (*ReleaseAgent, error) {
 	}
 	return &ReleaseAgent{Base: action.NewBase(actionmodel.Action{
 		Name:            ReleaseAgentName,
-		Description:     "Release an operator-approved source commit through the generated repository's make-release.yml workflow. Supply the saved publish-agent commit, build-agent agent_type, GitHub owner/repository and an explicitly chosen stable version. Uses managed GITHUB_TOKEN with Actions write and release read access. A pending result proposes another status check with workflow_run_id; preserve it to observe the same run without dispatching again. Failed runs must be inspected and retried in GitHub in the same run. An uncertain dispatch must be inspected before submitting a new release task. Returns an exact package reference only after the entire workflow succeeds and its published manifest, native asset checksums and version tag are verified. Does not install the agent or change repository/package visibility.",
+		Description:     ReleaseAgentDescription,
 		RequiredSecrets: []string{"GITHUB_TOKEN"}, InputSchema: input, OutputSchema: output,
 	})}, nil
 }

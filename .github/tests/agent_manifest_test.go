@@ -56,16 +56,39 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 				t.Fatal(err)
 			}
 			var definition struct {
-				SchemaVersion int `yaml:"schema_version"`
-				Type, Version string
-				Docker        struct{ Image string }
-				Native        map[string]struct{ Asset, SHA256 string }
+				SchemaVersion    int `yaml:"schema_version"`
+				Type, Version    string
+				Responsibilities []string
+				Actions          []struct{ Name, Description string }
+				Docker           struct{ Image string }
+				Native           map[string]struct{ Asset, SHA256 string }
 			}
 			if err := yaml.Unmarshal(data, &definition); err != nil {
 				t.Fatal(err)
 			}
 			if definition.SchemaVersion != 1 || definition.Type != name+"-agent" || definition.Version != "v0.2.0" {
 				t.Fatalf("wrong identity: %s", data)
+			}
+			if len(definition.Responsibilities) == 0 {
+				t.Fatal("manifest omitted agent responsibilities")
+			}
+			for _, responsibility := range definition.Responsibilities {
+				if strings.TrimSpace(responsibility) == "" {
+					t.Error("manifest contains a blank responsibility")
+				}
+			}
+			wantActions := map[string]bool{"spawn-agent": true}
+			if name == "builder" {
+				wantActions = map[string]bool{"checkout-template": true, "build-agent": true, "publish-agent": true, "release-agent": true}
+			}
+			if len(definition.Actions) != len(wantActions) {
+				t.Fatalf("manifest action count = %d, want %d", len(definition.Actions), len(wantActions))
+			}
+			for _, action := range definition.Actions {
+				if !wantActions[action.Name] || strings.TrimSpace(action.Description) == "" {
+					t.Errorf("manifest action lacks its registered name and description: %+v", action)
+				}
+				delete(wantActions, action.Name)
 			}
 			if want := "ghcr.io/defos-ai/commander-" + name + "-agent@" + digest; definition.Docker.Image != want {
 				t.Fatalf("image = %q, want %q", definition.Docker.Image, want)

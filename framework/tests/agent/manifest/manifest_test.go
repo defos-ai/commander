@@ -105,6 +105,43 @@ func TestManifestRenderNativeAssets(t *testing.T) {
 	}
 }
 
+func TestManifestCapabilityDescriptionsRoundTrip(t *testing.T) {
+	input := manifest.Manifest{
+		SchemaVersion: 1, Type: "example-agent", Version: "v0.1.0",
+		Responsibilities: []string{"Review a page: HTML, links and text.", "123", "true", "null", "Write a report.\nInclude findings."},
+		Actions: []manifest.Action{
+			{Name: "write-summary", Description: "Write a Markdown report with \"quoted\" findings."},
+			{Name: "analyze-text", Description: "Count words and lines.\nPreserve Unicode: café."},
+		},
+		Docker: &manifest.Docker{Image: manifestImage},
+	}
+	before := append([]manifest.Action(nil), input.Actions...)
+	rendered, err := manifest.Render(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(input.Actions, before) {
+		t.Fatal("rendering reordered the caller's action slice")
+	}
+	parsed, err := manifest.Parse(rendered, input.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(parsed.Responsibilities, input.Responsibilities) || !reflect.DeepEqual(parsed.Actions, []manifest.Action{before[1], before[0]}) {
+		t.Fatalf("description text/order did not round trip: %#v", parsed)
+	}
+	input.Actions[0], input.Actions[1] = input.Actions[1], input.Actions[0]
+	reordered, err := manifest.Render(input)
+	if err != nil || !bytes.Equal(reordered, rendered) {
+		t.Fatalf("action declaration order changed rendered bytes: %v", err)
+	}
+	input.Responsibilities, input.Actions = nil, nil
+	withoutDescriptions, err := manifest.Render(input)
+	if err != nil || bytes.Contains(withoutDescriptions, []byte("responsibilities:")) || bytes.Contains(withoutDescriptions, []byte("actions:")) {
+		t.Fatalf("omitted descriptions were rendered: %s, %v", withoutDescriptions, err)
+	}
+}
+
 func TestManifestRenderRejectsInvalidValues(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -126,6 +163,37 @@ func TestManifestRenderRejectsInvalidValues(t *testing.T) {
 		{"unpinned Docker with native", func(m *manifest.Manifest) { m.Docker.Image = "ghcr.io/defos-ai/example:latest" }},
 		{"oversized output", func(m *manifest.Manifest) {
 			m.Native["linux/amd64"] = manifest.NativeAsset{Asset: strings.Repeat("a", manifest.MaxBytes), SHA256: manifestChecksum}
+		}},
+		{"empty responsibilities", func(m *manifest.Manifest) { m.Responsibilities = []string{} }},
+		{"too many responsibilities", func(m *manifest.Manifest) { m.Responsibilities = make([]string, 101) }},
+		{"blank responsibility", func(m *manifest.Manifest) { m.Responsibilities = []string{" "} }},
+		{"untrimmed responsibility", func(m *manifest.Manifest) { m.Responsibilities = []string{"Analyze text\n"} }},
+		{"invalid UTF-8 responsibility", func(m *manifest.Manifest) { m.Responsibilities = []string{string([]byte{0xff})} }},
+		{"oversized responsibility", func(m *manifest.Manifest) { m.Responsibilities = []string{strings.Repeat("a", 8193)} }},
+		{"oversized descriptions together", func(m *manifest.Manifest) {
+			for range 8 {
+				m.Responsibilities = append(m.Responsibilities, strings.Repeat("a", 8192))
+			}
+		}},
+		{"empty actions", func(m *manifest.Manifest) { m.Actions = []manifest.Action{} }},
+		{"too many actions", func(m *manifest.Manifest) { m.Actions = make([]manifest.Action, 101) }},
+		{"duplicate actions", func(m *manifest.Manifest) {
+			m.Actions = []manifest.Action{{Name: "analyze-text", Description: "Analyze text."}, {Name: "analyze-text", Description: "Another description."}}
+		}},
+		{"unbounded action name", func(m *manifest.Manifest) {
+			m.Actions = []manifest.Action{{Name: strings.Repeat("a", 129), Description: "Analyze text."}}
+		}},
+		{"unsafe action name", func(m *manifest.Manifest) {
+			m.Actions = []manifest.Action{{Name: "analyze text", Description: "Analyze text."}}
+		}},
+		{"empty action description", func(m *manifest.Manifest) {
+			m.Actions = []manifest.Action{{Name: "analyze-text"}}
+		}},
+		{"untrimmed action description", func(m *manifest.Manifest) {
+			m.Actions = []manifest.Action{{Name: "analyze-text", Description: " Analyze text."}}
+		}},
+		{"oversized action description", func(m *manifest.Manifest) {
+			m.Actions = []manifest.Action{{Name: "analyze-text", Description: strings.Repeat("a", 8193)}}
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -184,6 +252,32 @@ func TestManifestRejectsInvalidYAMLAndSchema(t *testing.T) {
 		{"sequence native", manifestHeader + "native: []\n"},
 		{"scalar native", manifestHeader + "native: hello\n"},
 		{"sequence entry", manifestHeader + "native:\n  linux/amd64: []\n"},
+		{"null responsibilities", valid + "responsibilities: null\n"},
+		{"empty responsibilities", valid + "responsibilities: []\n"},
+		{"scalar responsibilities", valid + "responsibilities: Analyze text\n"},
+		{"mapping responsibilities", valid + "responsibilities: {name: Analyze text}\n"},
+		{"numeric responsibility", valid + "responsibilities: [123]\n"},
+		{"boolean responsibility", valid + "responsibilities: [true]\n"},
+		{"mapping responsibility entry", valid + "responsibilities: [{name: Analyze text}]\n"},
+		{"nested responsibility list", valid + "responsibilities: [[Analyze text]]\n"},
+		{"anchored responsibility list", valid + "responsibilities: &items [Analyze text]\n"},
+		{"anchored responsibility", valid + "responsibilities: [&item Analyze text]\n"},
+		{"aliased responsibility", valid + "responsibilities: [*item]\n"},
+		{"custom responsibility list tag", valid + "responsibilities: !items [Analyze text]\n"},
+		{"null actions", valid + "actions: null\n"},
+		{"empty actions", valid + "actions: []\n"},
+		{"mapping actions", valid + "actions: {name: analyze-text, description: Analyze text}\n"},
+		{"scalar action entry", valid + "actions: [analyze-text]\n"},
+		{"numeric action name", valid + "actions: [{name: 123, description: Analyze text}]\n"},
+		{"numeric action description", valid + "actions: [{name: analyze-text, description: 123}]\n"},
+		{"boolean action description", valid + "actions: [{name: analyze-text, description: true}]\n"},
+		{"missing action name", valid + "actions: [{description: Analyze text}]\n"},
+		{"missing action description", valid + "actions: [{name: analyze-text}]\n"},
+		{"unknown action field", valid + "actions: [{name: analyze-text, description: Analyze text, status: ready}]\n"},
+		{"duplicate action field", valid + "actions: [{name: analyze-text, name: other, description: Analyze text}]\n"},
+		{"anchored action entry", valid + "actions: [&item {name: analyze-text, description: Analyze text}]\n"},
+		{"nested action sequence", valid + "actions: [[{name: analyze-text, description: Analyze text}]]\n"},
+		{"too many responsibilities", valid + "responsibilities:\n" + strings.Repeat("  - Analyze text\n", 101)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := manifest.Parse([]byte(tc.data), "v0.1.0"); err == nil {

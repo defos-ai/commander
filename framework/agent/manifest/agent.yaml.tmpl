@@ -1,6 +1,19 @@
 schema_version: {{ .SchemaVersion }}
 type: {{ printf "%q" .Type }}
 version: {{ printf "%q" .Version }}
+{{- if .Responsibilities }}
+responsibilities:
+{{- range .Responsibilities }}
+  - {{ printf "%q" . }}
+{{- end }}
+{{- end }}
+{{- if .Actions }}
+actions:
+{{- range .Actions }}
+  - name: {{ printf "%q" .Name }}
+    description: {{ printf "%q" .Description }}
+{{- end }}
+{{- end }}
 {{- if .Native }}
 native:
 {{- range $platform, $asset := .Native }}

@@ -100,7 +100,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   basenames must be safe on the current host, excluding device names and trailing
   dots. Revalidate exported structs when selecting/downloading so a caller cannot
   bypass parsing.
-- The manifest contains delivery metadata only. Runtime privileges, environment,
+- The manifest contains delivery metadata and optional declared responsibilities
+  and action descriptions. These are publisher-supplied capability claims, not
+  current readiness or deployment instructions. Runtime privileges, environment,
   networks, volumes and managed secrets belong to deployment configuration.
 
 ## Downloads and ownership

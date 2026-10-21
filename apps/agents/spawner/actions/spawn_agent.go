@@ -16,6 +16,7 @@ import (
 )
 
 const SpawnAgentName = "spawn-agent"
+const SpawnAgentDescription = "Launch any compatible GitHub agent package; catalog inclusion is not required. A repository URL or omitted version selects stable; @stable and exact @vMAJOR.MINOR.PATCH references are also accepted. The spawner saves the resolved version for retries. Pass the package reference and repository visibility from the operator or catalog. Private packages use the host's GITHUB_TOKEN or request it through managed secrets; never put tokens in input. Waits for the assigned agent ID and type to announce registration and returns actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
 
 // Spawner uses execution checkpoints for action launches. A retry observes the
 // saved launch for the same command rather than starting another agent.
@@ -43,7 +44,7 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 	return action.NewFunc(action.FuncConfig[SpawnAgentInput, runtimes.Result]{
 		Action: actionmodel.Action{
 			Name:        SpawnAgentName,
-			Description: "Launch any compatible GitHub agent package; catalog inclusion is not required. A repository URL or omitted version selects stable; @stable and exact @vMAJOR.MINOR.PATCH references are also accepted. The spawner saves the resolved version for retries. Pass the package reference and repository visibility from the operator or catalog. Private packages use the host's GITHUB_TOKEN or request it through managed secrets; never put tokens in input. Waits for the assigned agent ID and type to announce registration and returns actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow.",
+			Description: SpawnAgentDescription,
 			InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{

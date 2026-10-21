@@ -25,6 +25,7 @@ import (
 )
 
 const PublishAgentName = "publish-agent"
+const PublishAgentDescription = "Publish a reviewed source.tar.gz artifact to a new or empty GitHub repository. Pass the exact saved source artifact ID and file descriptor. Choose public/private explicitly or use the schema default; without either, ask the operator once and recommend Public. Existing repository visibility is verified and never changed; existing unrelated history is never overwritten. Uses managed GITHUB_TOKEN, never token values in input. Returns repository and commit links; source publication does not create an installable agent release."
 
 type PublishAgentInput struct {
 	Repository       string                 `json:"repository"`
@@ -82,7 +83,7 @@ func NewPublishAgent(files artifacts.ArtifactFileStore, defaultVisibility string
 	}
 	return &PublishAgent{files: files, defaultVisibility: defaultVisibility, Base: action.NewBase(actionmodel.Action{
 		Name:            PublishAgentName,
-		Description:     "Publish a reviewed source.tar.gz artifact to a new or empty GitHub repository. Pass the exact saved source artifact ID and file descriptor. Choose public/private explicitly or use the schema default; without either, ask the operator once and recommend Public. Existing repository visibility is verified and never changed; existing unrelated history is never overwritten. Uses managed GITHUB_TOKEN, never token values in input. Returns repository and commit links; source publication does not create an installable agent release.",
+		Description:     PublishAgentDescription,
 		RequiredSecrets: []string{"GITHUB_TOKEN"}, InputSchema: input, OutputSchema: output,
 	})}, nil
 }

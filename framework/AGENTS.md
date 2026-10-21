@@ -155,6 +155,12 @@
   Release tooling supplies actual binary checksums and a digest-pinned image from
   the same tested revision, then writes and publishes the bytes. Keep host settings
   and secrets out of manifests.
+  Optional `responsibilities` and `actions` describe published capabilities before
+  installation. Actions contain only name and description, never runtime status
+  or schemas. Accept omitted metadata in existing releases; reject explicitly
+  empty lists, invalid text, duplicate names and unsafe YAML. Keep the 64 KiB
+  document limit, 100-entry list bounds and 8 KiB text bounds. Preserve
+  responsibility order and sort a cloned action list when rendering.
   See the [package contract](../docs/agent-packages.md#source-template).
   Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
 - [`agent/packages`](agent/packages/) owns GitHub package reference/selector

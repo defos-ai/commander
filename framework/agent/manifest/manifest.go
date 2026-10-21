@@ -3,6 +3,7 @@ package manifest
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	_ "embed"
 	"errors"
@@ -10,8 +11,10 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
+	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/distribution/reference"
@@ -27,11 +30,19 @@ var templateSource string
 var releaseTemplate = template.Must(template.New("agent.yaml").Parse(templateSource))
 
 type Manifest struct {
-	SchemaVersion int                    `yaml:"schema_version"`
-	Type          string                 `yaml:"type"`
-	Version       string                 `yaml:"version"`
-	Native        map[string]NativeAsset `yaml:"native"`
-	Docker        *Docker                `yaml:"docker"`
+	SchemaVersion    int                    `yaml:"schema_version"`
+	Type             string                 `yaml:"type"`
+	Version          string                 `yaml:"version"`
+	Responsibilities []string               `yaml:"responsibilities,omitempty"`
+	Actions          []Action               `yaml:"actions,omitempty"`
+	Native           map[string]NativeAsset `yaml:"native"`
+	Docker           *Docker                `yaml:"docker"`
+}
+
+// Action describes a published capability, independently of runtime readiness.
+type Action struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
 }
 
 type NativeAsset struct {
@@ -47,6 +58,13 @@ var (
 	versionPattern  = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 	platformPattern = regexp.MustCompile(`^[a-z0-9]+/[a-z0-9]+$`)
 	assetPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	actionPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+)
+
+const (
+	maxDescriptionItems = 100
+	maxDescriptionBytes = 8 << 10
+	maxActionNameBytes  = 128
 )
 
 // ValidVersion accepts nonzero stable vMAJOR.MINOR.PATCH release tags.
@@ -60,6 +78,8 @@ func Render(value Manifest) ([]byte, error) {
 	if err := value.Validate(); err != nil {
 		return nil, err
 	}
+	value.Actions = slices.Clone(value.Actions)
+	slices.SortFunc(value.Actions, func(a, b Action) int { return cmp.Compare(a.Name, b.Name) })
 	var output bytes.Buffer
 	if err := releaseTemplate.Execute(&output, value); err != nil {
 		return nil, fmt.Errorf("render agent manifest: %w", err)
@@ -134,6 +154,12 @@ func validateYAML(node *yaml.Node, depth int) error {
 				return fmt.Errorf("duplicate key %q", key.Value)
 			}
 			seen[key.Value] = true
+			if depth == 0 && (key.Value == "responsibilities" || key.Value == "actions") {
+				if err := validateDescriptionList(value, key.Value); err != nil {
+					return fmt.Errorf("%s: %w", key.Value, err)
+				}
+				continue
+			}
 			if depth == 0 && key.Value == "schema_version" {
 				if value.Kind != yaml.ScalarNode || value.Tag != "!!int" || value.Anchor != "" {
 					return errors.New("schema_version must be an integer")
@@ -154,6 +180,25 @@ func validateYAML(node *yaml.Node, depth int) error {
 	return nil
 }
 
+func validateDescriptionList(node *yaml.Node, field string) error {
+	if node.Kind != yaml.SequenceNode || node.Tag != "!!seq" || node.Anchor != "" || len(node.Content) == 0 || len(node.Content) > maxDescriptionItems {
+		return errors.New("expected a nonempty sequence of at most 100 entries")
+	}
+	want := yaml.ScalarNode
+	if field == "actions" {
+		want = yaml.MappingNode
+	}
+	for _, item := range node.Content {
+		if item.Kind != want {
+			return errors.New("sequence entry has an invalid shape")
+		}
+		if err := validateYAML(item, 2); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m Manifest) Validate() error {
 	if m.SchemaVersion != 1 {
 		return fmt.Errorf("unsupported agent manifest schema_version %d; expected 1", m.SchemaVersion)
@@ -165,6 +210,9 @@ func (m Manifest) Validate() error {
 	}
 	if !ValidVersion(m.Version) {
 		return errors.New("agent manifest version must be a nonzero stable vMAJOR.MINOR.PATCH tag")
+	}
+	if err := m.validateDescription(); err != nil {
+		return err
 	}
 	if m.Native == nil && m.Docker == nil {
 		return errors.New("agent manifest needs a native or Docker delivery mode")
@@ -190,6 +238,35 @@ func (m Manifest) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (m Manifest) validateDescription() error {
+	if m.Responsibilities != nil && len(m.Responsibilities) == 0 || len(m.Responsibilities) > maxDescriptionItems {
+		return errors.New("manifest responsibilities must contain 1 to 100 entries when supplied")
+	}
+	for _, text := range m.Responsibilities {
+		if !validDescription(text) {
+			return errors.New("manifest responsibilities must be trimmed, nonblank UTF-8 text of at most 8192 bytes")
+		}
+	}
+	if m.Actions != nil && len(m.Actions) == 0 || len(m.Actions) > maxDescriptionItems {
+		return errors.New("manifest actions must contain 1 to 100 entries when supplied")
+	}
+	seen := make(map[string]bool, len(m.Actions))
+	for _, action := range m.Actions {
+		if len(action.Name) > maxActionNameBytes || !actionPattern.MatchString(action.Name) || seen[action.Name] {
+			return errors.New("manifest action names must be unique safe names of at most 128 bytes")
+		}
+		seen[action.Name] = true
+		if !validDescription(action.Description) {
+			return errors.New("manifest action descriptions must be trimmed, nonblank UTF-8 text of at most 8192 bytes")
+		}
+	}
+	return nil
+}
+
+func validDescription(value string) bool {
+	return value != "" && len(value) <= maxDescriptionBytes && strings.TrimSpace(value) == value && utf8.ValidString(value)
 }
 
 func validSHA256(value string) bool {

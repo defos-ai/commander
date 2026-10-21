@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/defos-ai/commander/apps/agents/builder"
+	"github.com/defos-ai/commander/apps/agents/spawner"
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func main() {
@@ -40,6 +43,17 @@ func generate(agent, version, digest, artifacts, output string) error {
 		Docker: &manifest.Docker{
 			Image: "ghcr.io/defos-ai/commander-" + agent + "-agent@" + digest,
 		},
+	}
+	var descriptions []actions.Action
+	if agent == "builder" {
+		definition.Responsibilities = builder.Responsibilities()
+		descriptions = builder.ActionDescriptions()
+	} else {
+		definition.Responsibilities = spawner.Responsibilities()
+		descriptions = spawner.ActionDescriptions()
+	}
+	for _, description := range descriptions {
+		definition.Actions = append(definition.Actions, manifest.Action{Name: description.Name, Description: description.Description})
 	}
 	if err := definition.Validate(); err != nil {
 		return err

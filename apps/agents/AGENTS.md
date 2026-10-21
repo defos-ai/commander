@@ -37,6 +37,11 @@
 - Keep `commander-example-agent` aligned with the package contract.
   Package workflows must publish binaries, image digest and manifest from the
   same tested revision; keep action schemas and requirements in registration.
+  Export pure `Responsibilities()` and `ActionDescriptions()` functions for
+  capability metadata without constructing agents, discovery or providers. Return
+  fresh slices and share action description constants with registered constructors.
+  Release manifests project responsibilities and action names/descriptions only;
+  running hosts report actual readiness, schemas and required secret names.
 - Built-in packages use their module-path references and existing module tags:
   `github.com/defos-ai/commander/apps/agents/<name>@<version>` resolves
   `agent.yaml` from `apps/agents/<name>/<version>` in the Commander repository.

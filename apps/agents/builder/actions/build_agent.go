@@ -23,6 +23,7 @@ import (
 )
 
 const BuildAgentName = "build-agent"
+const BuildAgentDescription = "Implement the requested Commander agent with Codex in a workspace returned by checkout-template on this builder. Run Go tests and build ./cmd, then validate generated identity and release structure locally and return its source archive and package metadata. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions. Does not publish or launch the agent."
 
 type BuildAgentInput struct {
 	WorkspaceID  string `json:"workspace_id"`
@@ -60,7 +61,7 @@ func NewBuildAgent(workspaceDir string) (*BuildAgent, error) {
 	}
 	return &BuildAgent{workspaceDir: root, Base: action.NewBase(actionmodel.Action{
 		Name:            BuildAgentName,
-		Description:     "Implement the requested Commander agent with Codex in a workspace returned by checkout-template on this builder. Run Go tests and build ./cmd, then validate generated identity and release structure locally and return its source archive and package metadata. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions. Does not publish or launch the agent.",
+		Description:     BuildAgentDescription,
 		RequiredSecrets: []string{"CODEX_API_KEY"},
 		InputSchema:     json.RawMessage(`{"type":"object","properties":{"workspace_id":{"type":"string","pattern":"^checkout-[0-9]+$"},"instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"}},"required":["workspace_id","instructions"],"additionalProperties":false}`),
 		OutputSchema:    output,
