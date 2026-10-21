@@ -1,6 +1,6 @@
 //go:build unix
 
-package actions
+package process
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 )
 
 // Cancel child helpers as well as the parent before removing temporary files.
-func configureCommand(command *exec.Cmd) {
+func Configure(command *exec.Cmd) {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Cancel = func() error {
 		if command.Process == nil {

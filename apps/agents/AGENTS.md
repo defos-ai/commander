@@ -12,6 +12,10 @@
 - Keep the fixed `AgentType`, `NewAgent` constructor and action catalog in
   `agent.go`. Return the framework's `*agent.Agent` directly when the host adds no
   agent methods or state; individual action implementations belong in `actions/`.
+- Keep `actions/` for registered action implementations, their input/output types
+  and readiness logic. Put subprocess, Git, archive and other supporting code in
+  `internal/<purpose>/`. Small helpers used by one action can stay in its action
+  file. Keep tests in `tests/` and exercise the public action/host contracts.
 - Keep provider construction in each host's `cli/factory.go`; inject the bus and
   artifact file store into the runtime. Unsupported schemes must fail at startup.
 - `Run` accepts cancellation without installing signal handlers; `Main` owns

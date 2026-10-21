@@ -25,6 +25,10 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   ID and instructions. It uses managed `CODEX_API_KEY`, runs Codex and Go
   tests/build, and exports `source.tar.gz` through the normal artifact runtime.
   Never publish, spawn or accept secret values through this action's input.
+- Keep registered action implementations in `actions/`. Supporting
+  code lives in `internal/build/` (Codex, Go and source archives), `internal/git/`
+  (isolated Git commands) and `internal/process/` (executable checks and process
+  cancellation). Internal packages must not import `actions/`.
 
 ## Workspace and process boundaries
 
@@ -34,7 +38,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - Create a private, unique checkout per execution. Return an opaque workspace ID
   and exact revision, never a host path. Successful checkouts remain in configured
   storage; remove only the current incomplete checkout on errors or cancellation.
-- [git.go](actions/git.go) runs argv directly with bounded output and an isolated
+- [Git commands](internal/git/command.go) run argv directly with bounded output and an isolated
   environment. Never inherit managed secrets, Git config, credential helpers or
   proxy settings. Disable hooks/templates and recursive submodules. The temporary
   child home is removed after execution. Keep Git errors free of raw remote output.

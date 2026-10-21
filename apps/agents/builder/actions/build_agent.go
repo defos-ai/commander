@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
+	"github.com/defos-ai/commander/apps/agents/builder/internal/build"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -116,7 +118,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}
 	defer a.building.Unlock()
 	tools := a.tools.Load()
-	if tools == nil || !gitAvailable(tools.codex) || !gitAvailable(tools.goTool) {
+	if tools == nil || !process.Available(tools.codex) || !process.Available(tools.goTool) {
 		a.tools.Store(nil)
 		a.SetStatus(action.Unknown)
 		return action.Result{}, errors.New("build tools changed; run discovery again")
@@ -138,11 +140,11 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 		return action.Result{}, errors.New("create temporary build directory failed")
 	}
 	defer os.RemoveAll(scratch)
-	env, err := buildEnvironment(scratch, tools)
+	env, err := build.Environment(scratch, tools.codex, tools.goTool)
 	if err != nil {
 		return action.Result{}, err
 	}
-	if err := runCodex(ctx, tools.codex, source, scratch, env, key, input.Instructions); err != nil {
+	if err := build.RunCodex(ctx, tools.codex, source, scratch, env, key, input.Instructions); err != nil {
 		return action.Result{}, err
 	}
 	// Check the original directory again: generated files cannot redirect later
@@ -150,20 +152,20 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
 		return action.Result{}, err
 	}
-	if err := runBuildCommand(ctx, "Go tests", tools.goTool, source, env, nil, "test", "-count=1", "-timeout=2m", "./..."); err != nil {
+	if err := build.RunCommand(ctx, "Go tests", tools.goTool, source, env, nil, "test", "-count=1", "-timeout=2m", "./..."); err != nil {
 		return action.Result{}, err
 	}
 	binary := filepath.Join(scratch, "agent")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	if err := runBuildCommand(ctx, "Go build", tools.goTool, source, env, nil, "build", "-o", binary, "./cmd"); err != nil {
+	if err := build.RunCommand(ctx, "Go build", tools.goTool, source, env, nil, "build", "-o", binary, "./cmd"); err != nil {
 		return action.Result{}, err
 	}
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
 		return action.Result{}, err
 	}
-	archive, count, err := archiveSource(ctx, source, key)
+	archive, count, err := build.ArchiveSource(ctx, source, key)
 	if err != nil {
 		return action.Result{}, err
 	}

@@ -1,4 +1,4 @@
-package actions
+package build
 
 import (
 	"archive/tar"
@@ -14,7 +14,7 @@ import (
 
 // Keep source attachments bounded and use Root for every read. Never follow a
 // generated symlink into host data or include Git history and tool credentials.
-func archiveSource(ctx context.Context, source string, key []byte) ([]byte, int, error) {
+func ArchiveSource(ctx context.Context, source string, key []byte) ([]byte, int, error) {
 	const maxBytes = 16 << 20
 	root, err := os.OpenRoot(source)
 	if err != nil {

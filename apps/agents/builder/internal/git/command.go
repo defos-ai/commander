@@ -1,4 +1,4 @@
-package actions
+package git
 
 import (
 	"bytes"
@@ -9,14 +9,16 @@ import (
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
 )
 
-type gitCommand struct {
-	executable string
-	home       string
+type Command struct {
+	Executable string
+	Home       string
 }
 
-func (g gitCommand) run(ctx context.Context, directory string, args ...string) (string, error) {
+func (g Command) Run(ctx context.Context, directory string, args ...string) (string, error) {
 	// The template is public: do not inherit Git helpers, hooks, URL rewrites,
 	// proxy settings or agent secrets. Never invoke a shell or recurse submodules.
 	options := []string{
@@ -26,16 +28,16 @@ func (g gitCommand) run(ctx context.Context, directory string, args ...string) (
 		"-c", "submodule.recurse=false",
 		"-c", "http.followRedirects=false",
 	}
-	command := exec.CommandContext(ctx, g.executable, append(options, args...)...)
+	command := exec.CommandContext(ctx, g.Executable, append(options, args...)...)
 	command.Dir = directory
 	command.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + g.home,
-		"USERPROFILE=" + g.home,
-		"XDG_CONFIG_HOME=" + g.home,
-		"TMPDIR=" + g.home,
-		"TMP=" + g.home,
-		"TEMP=" + g.home,
+		"HOME=" + g.Home,
+		"USERPROFILE=" + g.Home,
+		"XDG_CONFIG_HOME=" + g.Home,
+		"TMPDIR=" + g.Home,
+		"TMP=" + g.Home,
+		"TEMP=" + g.Home,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_GLOBAL=" + os.DevNull,
 		"GIT_TERMINAL_PROMPT=0",
@@ -48,7 +50,7 @@ func (g gitCommand) run(ctx context.Context, directory string, args ...string) (
 		}
 	}
 	command.WaitDelay = time.Second
-	configureCommand(command)
+	process.Configure(command)
 	var output gitOutput
 	command.Stdout = &output
 	// Raw Git diagnostics can contain environment or server-supplied data. Return

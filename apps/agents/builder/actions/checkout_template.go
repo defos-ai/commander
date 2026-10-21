@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/defos-ai/commander/apps/agents/builder/internal/git"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -96,7 +97,7 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	if executable == nil {
 		return action.Result{}, errors.New("Git is unavailable; run discovery first")
 	}
-	if !gitAvailable(*executable) {
+	if !process.Available(*executable) {
 		a.gitUnavailable()
 		return action.Result{}, errors.New("Git is unavailable; run discovery again")
 	}
@@ -105,16 +106,11 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	result, err := a.checkout(ctx, *executable)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
 		// An executable can disappear between the readiness check and process start.
-		if !gitAvailable(*executable) {
+		if !process.Available(*executable) {
 			a.gitUnavailable()
 		}
 	}
 	return result, err
-}
-
-func gitAvailable(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0111 != 0)
 }
 
 func (a *CheckoutTemplate) checkout(ctx context.Context, executable string) (result action.Result, err error) {
@@ -136,12 +132,12 @@ func (a *CheckoutTemplate) checkout(ctx context.Context, executable string) (res
 		return result, err
 	}
 	defer func() { err = errors.Join(err, os.RemoveAll(home)) }()
-	git := gitCommand{executable: executable, home: home}
+	command := git.Command{Executable: executable, Home: home}
 	source := filepath.Join(workspace, "source")
-	if _, err = git.run(ctx, workspace, "clone", "--quiet", "--depth=1", "--single-branch", "--no-tags", "--no-recurse-submodules", "--template=", "--", TemplateURL, source); err != nil {
+	if _, err = command.Run(ctx, workspace, "clone", "--quiet", "--depth=1", "--single-branch", "--no-tags", "--no-recurse-submodules", "--template=", "--", TemplateURL, source); err != nil {
 		return result, fmt.Errorf("checkout template: %w", err)
 	}
-	revision, err := git.run(ctx, source, "rev-parse", "--verify", "HEAD^{commit}")
+	revision, err := command.Run(ctx, source, "rev-parse", "--verify", "HEAD^{commit}")
 	if err != nil {
 		return result, fmt.Errorf("read template revision: %w", err)
 	}

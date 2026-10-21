@@ -1,4 +1,4 @@
-package actions
+package build
 
 import (
 	"context"
@@ -11,16 +11,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
 )
 
-func buildEnvironment(scratch string, tools *buildTools) ([]string, error) {
+func Environment(scratch, codexExecutable, goExecutable string) ([]string, error) {
 	paths := map[string]string{
 		"HOME": "home", "USERPROFILE": "home", "XDG_CONFIG_HOME": "config", "CODEX_HOME": "codex",
 		"TMPDIR": "tmp", "TMP": "tmp", "TEMP": "tmp", "GOTMPDIR": "tmp",
 		"GOPATH": "go", "GOMODCACHE": "modules", "GOCACHE": "cache",
 	}
 	env := []string{
-		"PATH=" + filepath.Dir(tools.goTool) + string(os.PathListSeparator) + filepath.Dir(tools.codex) + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"PATH=" + filepath.Dir(goExecutable) + string(os.PathListSeparator) + filepath.Dir(codexExecutable) + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"GOWORK=off", "GOENV=off", "GOTOOLCHAIN=local", "CGO_ENABLED=0",
 		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C",
 	}
@@ -39,7 +41,7 @@ func buildEnvironment(scratch string, tools *buildTools) ([]string, error) {
 	return env, nil
 }
 
-func runCodex(ctx context.Context, executable, source, scratch string, env []string, key []byte, instructions string) error {
+func RunCodex(ctx context.Context, executable, source, scratch string, env []string, key []byte, instructions string) error {
 	// Only the Codex parent receives its API key. Its generated shell commands
 	// use the clean build environment, as do the independent Go checks below.
 	settings := make([]string, 0, len(env))
@@ -63,17 +65,17 @@ The host will independently run go test and go build, then archive the source.
 
 Requested agent:
 ` + instructions
-	return runBuildCommand(ctx, "Codex", executable, source, append(append([]string(nil), env...), "CODEX_API_KEY="+string(key)), strings.NewReader(prompt), args...)
+	return RunCommand(ctx, "Codex", executable, source, append(append([]string(nil), env...), "CODEX_API_KEY="+string(key)), strings.NewReader(prompt), args...)
 }
 
-func runBuildCommand(ctx context.Context, stage, executable, source string, env []string, stdin io.Reader, args ...string) error {
+func RunCommand(ctx context.Context, stage, executable, source string, env []string, stdin io.Reader, args ...string) error {
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir, command.Env, command.Stdin = source, env, stdin
 	// Tool diagnostics can contain source, model output or credentials. Keep them
 	// out of action errors and logs; a failed workspace remains available to fix.
 	command.Stdout, command.Stderr = io.Discard, io.Discard
 	command.WaitDelay = time.Second
-	configureCommand(command)
+	process.Configure(command)
 	err := command.Run()
 	if ctx.Err() != nil {
 		return ctx.Err()
