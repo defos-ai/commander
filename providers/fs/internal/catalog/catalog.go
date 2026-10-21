@@ -66,6 +66,18 @@ func (s *Store[T]) decode(data []byte) ([]T, error) {
 }
 
 func (s *Store[T]) Upsert(ctx context.Context, record T) error {
+	return s.save(ctx, record, nil)
+}
+
+// Create rejects existing names with conflict while holding the collection lock.
+func (s *Store[T]) Create(ctx context.Context, record T, conflict error) error {
+	if conflict == nil {
+		return errors.New("catalog creation requires a conflict error")
+	}
+	return s.save(ctx, record, conflict)
+}
+
+func (s *Store[T]) save(ctx context.Context, record T, conflict error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -80,6 +92,9 @@ func (s *Store[T]) Upsert(ctx context.Context, record T) error {
 		found := false
 		for i, current := range records {
 			if s.name(current) == s.name(record) {
+				if conflict != nil {
+					return nil, conflict
+				}
 				records[i], found = record, true
 				break
 			}

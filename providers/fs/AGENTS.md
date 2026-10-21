@@ -10,6 +10,9 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - Reuse `internal/jsonfile` for locking and publication. Shared filesystems must
   support file locks, atomic renames and hard links; process-local locking alone
   cannot protect stores shared by hosts.
+- Mission creation checks names and writes under one catalog lock, rejecting an
+  existing name even for an identical definition. Keep startup `Upsert` separate;
+  callers reconcile failed writes by reading the saved definition.
 - An operation's manifest and sibling `.json.records` directory are one saved
   snapshot. Use [`Records`](internal/jsonfile/records.go) to publish immutable,
   digest-checked record bodies through one manifest; never edit committed blobs.

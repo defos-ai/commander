@@ -3,6 +3,7 @@ package default_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -195,6 +196,10 @@ func defaultMissions(t *testing.T) map[string]missions.Mission {
 }
 
 type missionStore map[string]missions.Mission
+
+func (missionStore) Create(context.Context, missions.Mission) error {
+	return errors.New("mission import must use Upsert")
+}
 
 func (s missionStore) Upsert(_ context.Context, mission missions.Mission) error {
 	s[mission.Name] = mission.Clone()

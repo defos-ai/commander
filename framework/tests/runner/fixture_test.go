@@ -210,6 +210,10 @@ func (s *operationStore) Fail(ctx context.Context, operationID, reason string) (
 
 type missionStore struct{ mission missions.Mission }
 
+func (*missionStore) Create(context.Context, missions.Mission) error {
+	return errors.New("runner must not create missions")
+}
+
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {
 	s.mission = m.Clone()
 	return nil

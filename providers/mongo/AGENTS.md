@@ -20,6 +20,9 @@ artifact bytes and reports belong to the separate storage provider.
 - Request-derived IDs stay strings through `GetByID`. Build BSON keys and
   operators in provider code; never decode client input into a query document.
   JSON or operator-looking strings are literal values, not query syntax.
+- Mission creation uses an atomic primary-key insert and rejects every existing
+  name, including an identical definition. Keep seeding's `Upsert` replacement
+  behavior separate; only a duplicate `_id` maps to `missions.ErrMissionExists`.
 - Operations span metadata, task, question and event collections. Initialize
   collections/indexes before the first transaction; preserve unique positions and
   event keys within each operation.

@@ -41,7 +41,7 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 
 	for _, mission := range []missions.Mission{other, original} {
-		if err := catalog.Upsert(ctx, mission); err != nil {
+		if err := catalog.Create(ctx, mission); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,6 +70,17 @@ func TestMissionMongoStore(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(unchanged, original) {
 		t.Fatalf("caller changed persisted mission: %#v, error = %v", unchanged, err)
 	}
+	conflicting := original.Clone()
+	conflicting.Objective = "Replace the existing mission"
+	for _, duplicate := range []missions.Mission{original, conflicting} {
+		if err := catalog.Create(ctx, duplicate); !errors.Is(err, missions.ErrMissionExists) {
+			t.Fatalf("duplicate create = %v, want ErrMissionExists", err)
+		}
+	}
+	unchanged, err = catalog.Get(ctx, original.Name)
+	if err != nil || !reflect.DeepEqual(unchanged, original) {
+		t.Fatalf("duplicate create changed the original: %#v, error = %v", unchanged, err)
+	}
 
 	updated := original.Clone()
 	updated.Objective = "Review before release"
@@ -86,10 +97,19 @@ func TestMissionMongoStore(t *testing.T) {
 	if err := catalog.Upsert(ctx, invalid); err == nil {
 		t.Fatal("invalid mission replaced a valid one")
 	}
+	invalid.Name = "invalid"
+	if err := catalog.Create(ctx, invalid); err == nil {
+		t.Fatal("invalid mission was created")
+	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	if err := catalog.Upsert(cancelled, original); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled upsert: %v", err)
+	}
+	newMission := original.Clone()
+	newMission.Name = "cancelled"
+	if err := catalog.Create(cancelled, newMission); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled create: %v", err)
 	}
 	stored, err = catalog.Get(ctx, original.Name)
 	if err != nil || !reflect.DeepEqual(stored, updated) {
@@ -98,6 +118,48 @@ func TestMissionMongoStore(t *testing.T) {
 	items, err = catalog.List(ctx)
 	if err != nil || len(items) != 2 || !reflect.DeepEqual(items[1], other) {
 		t.Fatalf("upsert overwrote unrelated missions: %#v, error = %v", items, err)
+	}
+}
+
+func TestConcurrentMissionCreates(t *testing.T) {
+	catalogs := []*mongomissions.MissionMongoStore{
+		mongomissions.NewMissionMongoStore(openStore(t, "missions")),
+		mongomissions.NewMissionMongoStore(openStore(t, "missions")),
+	}
+	const writers = 12
+	type result struct {
+		mission missions.Mission
+		err     error
+	}
+	completed := make(chan result, writers)
+	start := make(chan struct{})
+	for i := range writers {
+		go func() {
+			<-start
+			mission := missions.Mission{Name: "shared", Objective: fmt.Sprintf("Creator %d", i), InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+			completed <- result{mission, catalogs[i%len(catalogs)].Create(t.Context(), mission)}
+		}()
+	}
+	close(start)
+	winners := 0
+	var winner missions.Mission
+	for range writers {
+		result := <-completed
+		if result.err == nil {
+			winners++
+			winner = result.mission
+		} else if !errors.Is(result.err, missions.ErrMissionExists) {
+			t.Errorf("concurrent create = %v, want ErrMissionExists", result.err)
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("concurrent create accepted %d missions, want one", winners)
+	}
+	for _, catalog := range catalogs {
+		items, err := catalog.List(t.Context())
+		if err != nil || !reflect.DeepEqual(items, []missions.Mission{winner}) {
+			t.Fatalf("concurrent create changed the winning definition: %#v, error=%v", items, err)
+		}
 	}
 }
 

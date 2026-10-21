@@ -43,6 +43,10 @@ missionStore := mongomissions.NewMissionMongoStore(database)
 err = missionStore.Upsert(ctx, mission)
 ```
 
+Use `Create` for new mission definitions; an existing name returns
+`missions.ErrMissionExists` without changing its definition. `Upsert` replaces
+definitions when seeding a catalog.
+
 The repository workspace includes this module. Private projects use
 [local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
 for the framework and this provider.

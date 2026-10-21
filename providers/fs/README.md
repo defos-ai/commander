@@ -41,6 +41,10 @@ Other constructors live in their domain directories; see [`comms`](comms/),
 [`artifacts`](artifacts/) and [`reports`](reports/) for bus and file storage.
 Close the bus after consumers stop. Stores need no close.
 
+Mission `Create` validates the definition and atomically rejects existing names
+with `missions.ErrMissionExists`. Use `Upsert` for startup seeding that may replace
+an existing definition. Operations retain their own mission snapshots.
+
 ## Encrypted secrets
 
 [`secrets.NewSecretFsStore(root)`](secrets/secret_fs_store.go) stores encrypted
