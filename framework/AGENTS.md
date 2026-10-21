@@ -87,6 +87,13 @@
 - Reconcile uncertain writes before dispatching more work. Dispatched work stays
   bound to its recorded agent and command; never reassign an unknown outcome.
   `RecoverAction` only observes work; it must not execute or republish commands.
+- [`Operation.AssessProgress`](domain/operations/progress.go) derives task counts,
+  pending model decisions and unexpired questions using one supplied time. Only
+  succeeded, failed and cancelled tasks are finished; interrupted outcomes remain
+  unknown. A settled operation is terminal with every task finished. This is a
+  saved-work view, not proof of agent idleness or permission to clean up state.
+  Terminal operations retain history but expose no actionable decisions/questions.
+  Reads never expire questions or change saved operation status.
 - Preserve immutable execution outcomes and reports. Save reports before
   completing operations. Agents upload bytes through `ArtifactFileStore`;
   controllers accept metadata through `ArtifactStore`. Bytes alone are not evidence.

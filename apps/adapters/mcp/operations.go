@@ -105,9 +105,10 @@ func addOperationTools(server *mcp.Server, config Config) {
 			Operations []operationSummary `json:"operations"`
 		}, error) {
 			items, err := config.OperationStore.List(ctx)
+			now := time.Now().UTC()
 			summaries := make([]operationSummary, 0, len(items))
 			for _, item := range items {
-				summaries = append(summaries, summarizeOperation(item))
+				summaries = append(summaries, summarizeOperation(item, now))
 			}
 			return struct {
 				Operations []operationSummary `json:"operations"`

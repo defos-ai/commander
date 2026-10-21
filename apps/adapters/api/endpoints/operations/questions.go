@@ -60,21 +60,14 @@ func registerQuestions(mux *http.ServeMux, store operations.OperationStore, comm
 }
 
 func questionsResponse(operation operations.Operation, now time.Time) models.QuestionListResponse {
-	result := models.QuestionListResponse{Items: endpoints.ListResponse(mappings.ToQuestionResponses(operation.Questions)).Items}
-	if operation.Status.Terminal() {
-		return result
+	progress := operation.AssessProgress(now)
+	result := models.QuestionListResponse{
+		Items:              endpoints.ListResponse(mappings.ToQuestionResponses(operation.Questions)).Items,
+		RemainingQuestions: progress.RemainingQuestions,
 	}
-	count := 0
-	for i, question := range operation.Questions {
-		if !question.Pending() || !question.ExpiresAt.IsZero() && !now.Before(question.ExpiresAt) {
-			continue
-		}
-		count++
-		latest := result.LastQuestion
-		if latest == nil || question.AskedAt.After(latest.AskedAt) || question.AskedAt.Equal(latest.AskedAt) && question.ID > latest.ID {
-			result.LastQuestion = &result.Items[i]
-		}
+	if progress.LastQuestion != nil {
+		question := mappings.ToQuestionResponse(*progress.LastQuestion)
+		result.LastQuestion = &question
 	}
-	result.RemainingQuestions = max(0, count-1)
 	return result
 }

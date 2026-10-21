@@ -117,24 +117,15 @@ type operationSummary struct {
 	UpdatedAt          time.Time                     `json:"updated_at"`
 }
 
-func summarizeOperation(operation operations.Operation) operationSummary {
-	summary := operationSummary{
+func summarizeOperation(operation operations.Operation, now time.Time) operationSummary {
+	progress := operation.AssessProgress(now)
+	return operationSummary{
 		ID: operation.ID, Mission: missionSummary{Name: operation.Mission.Name}, Input: operation.Input,
-		Status: operation.Status, TaskCounts: make(map[operations.TaskStatus]int),
-		Preflight: operation.Preflight,
-		Affinity:  operation.AssessAffinity(),
-		ReportID:  operation.ReportID, Error: operation.Error,
+		Status: operation.Status, TaskCounts: progress.TaskCounts,
+		Preflight: operation.Preflight, Affinity: operation.AssessAffinity(),
+		PendingDecisions: progress.PendingDecisions, PendingQuestions: progress.PendingQuestions,
+		LastQuestion: progress.LastQuestion, RemainingQuestions: progress.RemainingQuestions,
+		ReportID: operation.ReportID, Error: operation.Error,
 		CreatedAt: operation.CreatedAt, UpdatedAt: operation.UpdatedAt,
 	}
-	for _, task := range operation.Tasks {
-		summary.TaskCounts[task.Status]++
-		if c := task.Continuation; c != nil && c.Status == operations.ContinuationPending && c.DecisionBy == operations.DecisionModel {
-			summary.PendingDecisions++
-		}
-	}
-	summary.LastQuestion, summary.RemainingQuestions = pendingQuestions(operation, time.Now())
-	if summary.LastQuestion != nil {
-		summary.PendingQuestions = summary.RemainingQuestions + 1
-	}
-	return summary
 }
