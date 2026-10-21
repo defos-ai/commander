@@ -116,7 +116,7 @@ func TestMissionRulesCloneIsolatesConfiguration(t *testing.T) {
 func TestMissionRulesJSON(t *testing.T) {
 	const input = `{
 		"name": "scan",
-		"objective": "Review network services",
+		"objectives": ["Review network services", "Summarize the findings"],
 		"required_actions": ["batch-ports", "scan-ports"],
 		"optional_actions": ["report-scan"],
 		"starting_actions": ["batch-ports"],
@@ -144,6 +144,10 @@ func TestMissionRulesJSON(t *testing.T) {
 		t.Fatalf("decoded rules = %+v, want %+v", decoded.Rules, want)
 	}
 	cloned := decoded.Clone()
+	cloned.Objectives[0] = "changed-by-reader"
+	if !reflect.DeepEqual(decoded.Objectives, []string{"Review network services", "Summarize the findings"}) {
+		t.Fatal("mission clone shares objectives or changed their order")
+	}
 	cloned.OptionalActions[0] = "changed-by-reader"
 	if !reflect.DeepEqual(decoded.OptionalActions, []string{"report-scan"}) {
 		t.Fatal("mission clone shares optional action names")
@@ -184,11 +188,24 @@ func TestMissionLoadingRejectsInvalidConfiguration(t *testing.T) {
 		{"duplicate starting action", `"required_actions": ["scan-ports"], "starting_actions": ["scan-ports", "scan-ports"]`, `starting_actions contains duplicate action`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			input := `{"name":"scan","objective":"Review network services","input_schema":{},"output_schema":{},` + tc.fields + `}`
+			input := `{"name":"scan","objectives":["Review network services"],"input_schema":{},"output_schema":{},` + tc.fields + `}`
 			_, err := missions.LoadMission([]byte(input))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("LoadMission() = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestMissionLoadingRequiresNonblankObjectives(t *testing.T) {
+	for _, fields := range []string{
+		``, `,"objectives":null`, `,"objectives":[]`, `,"objectives":"Review"`,
+		`,"objectives":[null]`, `,"objectives":[""]`, `,"objectives":["Review"," \t"]`,
+		`,"objective":"Review"`,
+	} {
+		input := `{"name":"scan","input_schema":{},"output_schema":{}` + fields + `}`
+		if _, err := missions.LoadMission([]byte(input)); err == nil {
+			t.Fatalf("invalid mission objectives accepted: %s", input)
+		}
 	}
 }

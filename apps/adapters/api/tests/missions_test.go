@@ -47,7 +47,7 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 		index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == expected.name })
 		aggregate := mission.Rules["aggregate-results"]
 		decision := mission.Rules["decide-next-actions"]
-		if !reflect.DeepEqual(catalog.Items[index], mission) || mission.Objective == "" || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
+		if !reflect.DeepEqual(catalog.Items[index], mission) || len(mission.Objectives) == 0 || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
 			t.Fatalf("default mission catalog lost schemas or actions: %+v", mission)
 		}
 		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != "model" {

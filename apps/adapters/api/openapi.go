@@ -55,6 +55,12 @@ func openAPIDocument() ([]byte, error) {
 				property.Description = "JSON Schema for the accepted input or produced output. An empty object allows any JSON value."
 			}
 		}
+		if objectives := schema.Properties["objectives"]; objectives != nil {
+			objectives.Type, objectives.Types = "array", nil
+			objectives.MinItems = new(1)
+			objectives.Items.Pattern = `\S`
+			objectives.Description = "Ordered mission objectives. Include at least one nonblank objective."
+		}
 		switch model.name {
 		case "About":
 			schema.Properties["runtime"].Enum = []any{"native", "docker", "docker-compose"}
@@ -196,11 +202,10 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 			property.Items.Pattern = `\S`
 		}
 	case "CreateMissionRequest":
-		schema.Required = []string{"name", "objective", "input_schema", "output_schema"}
+		schema.Required = []string{"name", "objectives", "input_schema", "output_schema"}
 		schema.Properties["name"].Pattern = `\S`
 		schema.Properties["name"].Not = &jsonschema.Schema{Enum: []any{".", ".."}}
 		schema.Properties["name"].Description = "Nonblank mission name; the dot segments '.' and '..' are invalid. Existing names return mission_exists and are never replaced."
-		schema.Properties["objective"].Pattern = `\S`
 		for _, name := range []string{"required_actions", "optional_actions", "starting_actions"} {
 			property := schema.Properties[name]
 			property.Type, property.Types = "", []string{"array", "null"}

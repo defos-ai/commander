@@ -33,7 +33,7 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 		t.Run(scenario, func(t *testing.T) {
 			now := time.Now().UTC()
 			op := operations.Operation{ID: id.OperationID(), Status: operations.Planning, Input: json.RawMessage(`{}`),
-				Mission: missions.Mission{Name: "build", Objective: "Build an agent",
+				Mission: missions.Mission{Name: "build", Objectives: []string{"Build an agent"},
 					InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 					Rules: missions.RuleSet{missions.SameAgent: {ForActions: slices.Clone(group)}},
 				}, CreatedAt: now, UpdatedAt: now}

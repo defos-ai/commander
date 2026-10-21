@@ -16,15 +16,15 @@ import (
 
 func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testing.T) {
 	store := missionStore{
-		"review": {Name: "review", Objective: "Old objective"},
-		"other":  {Name: "other", Objective: "Keep this mission"},
+		"review": {Name: "review", Objectives: []string{"Old objective"}},
+		"other":  {Name: "other", Objectives: []string{"Keep this mission"}},
 	}
 	before := map[string]missions.Mission{"review": store["review"], "other": store["other"]}
 	path := filepath.Join(t.TempDir(), "missions.json")
-	valid := `{"name":"review","objective":"New objective","input_schema":{},"output_schema":{}}`
+	valid := `{"name":"review","objectives":["New objective"],"input_schema":{},"output_schema":{}}`
 	for _, invalid := range []string{
 		`{"name":"broken"}`,
-		`{"name":"broken","objective":"Invalid rule","input_schema":{},"output_schema":{},"rules":{"decide-next-actions":{"for_actions":["inspect"],"params":{"decision_by":"unknown"}}}}`,
+		`{"name":"broken","objectives":["Invalid rule"],"input_schema":{},"output_schema":{},"rules":{"decide-next-actions":{"for_actions":["inspect"],"params":{"decision_by":"unknown"}}}}`,
 	} {
 		if err := os.WriteFile(path, []byte("["+valid+","+invalid+"]"), 0600); err != nil {
 			t.Fatal(err)
@@ -44,7 +44,7 @@ func TestMissionImportValidatesBeforeUpdatingAndPreservesOtherMissions(t *testin
 		}
 	}
 
-	if len(store) != 2 || store["review"].Objective != "New objective" || !reflect.DeepEqual(store["other"], before["other"]) {
+	if len(store) != 2 || !slices.Equal(store["review"].Objectives, []string{"New objective"}) || !reflect.DeepEqual(store["other"], before["other"]) {
 		t.Fatalf("unexpected catalog after import: %+v", store)
 	}
 }
@@ -125,6 +125,9 @@ func TestBuildAgentMissionKeepsWorkspaceAffinityAndOptionalPublicationAndRelease
 		t.Fatal("release must remain an optional action in build-agent")
 	}
 	mission := catalog["build-agent"]
+	if len(mission.Objectives) < 2 {
+		t.Fatal("build guidance must be grouped into separate objectives")
+	}
 	stages := []string{"checkout-template", "build-agent"}
 	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.OptionalActions, []string{"publish-agent", "release-agent"}) || !slices.Equal(mission.StartingActions, stages[:1]) {
 		t.Fatalf("build mission lost its checkout prerequisite: %+v", mission)

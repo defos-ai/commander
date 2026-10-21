@@ -15,7 +15,7 @@ function requestedPath(input: RequestInfo | URL): string {
 }
 const mission: Mission = {
   name: 'review-website-with-browser',
-  objective: 'Review a website',
+  objectives: ['Review a website'],
   required_actions: ['discover-pages'],
   optional_actions: ['capture-page'],
   starting_actions: ['discover-pages'],
@@ -55,7 +55,7 @@ describe('mission API', () => {
 
   it('accepts empty catalogs and nullable Go fields without inventing missing data', async () => {
     const nullableMission = {
-      name: 'minimal', objective: 'Review', required_actions: null, starting_actions: null,
+      name: 'minimal', objectives: ['Review'], required_actions: null, starting_actions: null,
       input_schema: null, output_schema: null,
     };
     vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>()
@@ -89,6 +89,12 @@ describe('mission API', () => {
 
   it.each([
     { items: null },
+    { items: [{ ...mission, objectives: undefined, objective: 'Legacy objective' }] },
+    { items: [{ ...mission, objectives: 'Review a website' }] },
+    { items: [{ ...mission, objectives: null }] },
+    { items: [{ ...mission, objectives: [] }] },
+    { items: [{ ...mission, objectives: ['Review', ' \n '] }] },
+    { items: [{ ...mission, objectives: ['Review', 42] }] },
     { items: [{ ...mission, required_actions: 'discover-pages' }] },
     { items: [{ ...mission, optional_actions: 'capture-page' }] },
     { items: [{ ...mission, optional_actions: [42] }] },
@@ -173,7 +179,7 @@ describe('mission creation', () => {
   const definition = JSON.stringify(mission);
 
   it('posts the original JSON through the session proxy without rounding schema numbers', async () => {
-    const raw = '{\n "name":"new mission", "objective":"Review", "input_schema":{"minimum":9007199254740993}, "output_schema":{}, "optional_actions":null, "rules":null\n}';
+    const raw = '{\n "name":"new mission", "objectives":["Review"], "input_schema":{"minimum":9007199254740993}, "output_schema":{}, "optional_actions":null, "rules":null\n}';
     const saved = { ...JSON.parse(raw), required_actions: null, starting_actions: null, optional_actions: undefined, rules: undefined };
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(saved, { status: 201 }));
     vi.stubGlobal('fetch', fetch);
@@ -198,7 +204,10 @@ describe('mission creation', () => {
     vi.stubGlobal('fetch', fetch);
     await expect(createMission(url, credentials, '{ private-content')).rejects.toEqual(new MissionCreateError('invalid_json'));
     for (const patch of [null, [], { ...mission, name: ' ' }, { ...mission, name: '.' }, { ...mission, name: '..' },
-      { ...mission, objective: '' }, { ...mission, input_schema: null }, { ...mission, output_schema: [] }]) {
+      { ...mission, objectives: undefined, objective: 'Legacy objective' },
+      { ...mission, objectives: 'Review' }, { ...mission, objectives: null }, { ...mission, objectives: [] },
+      { ...mission, objectives: ['Review', ' \n '] }, { ...mission, objectives: ['Review', 42] },
+      { ...mission, objectives: [''] }, { ...mission, input_schema: null }, { ...mission, output_schema: [] }]) {
       await expect(createMission(url, credentials, JSON.stringify(patch))).rejects.toEqual(new MissionCreateError('invalid_input'));
     }
     await expect(createMission('https://other.example', credentials, definition)).rejects.toEqual(new MissionCreateError('invalid_input'));

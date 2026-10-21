@@ -6,7 +6,7 @@ import { CONNECTIONS_STORAGE_KEY } from '../src/connections/storage';
 import { parseRoute, routeHash, type Route } from '../src/navigation/routes';
 
 const connection = { id: 'saved-local', name: 'Local Commander', url: 'http://localhost:4274' };
-const mission = { name: 'review-website-with-browser', objective: 'Review website quality.', required_actions: ['discover-pages'],
+const mission = { name: 'review-website-with-browser', objectives: ['Review website quality.'], required_actions: ['discover-pages'],
   starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} };
 const operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'running',
   progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },

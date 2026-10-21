@@ -8,7 +8,7 @@ const connection = { id: 'local', name: 'Local Commander', url: 'https://command
 const credentials = { username: 'operator', url: connection.url };
 const mission: Mission = {
   name: 'review-website-with-browser',
-  objective: 'Review links and page quality.',
+  objectives: ['Review website links.', 'Assess page quality.'],
   required_actions: ['discover-pages', 'check-links'],
   optional_actions: ['capture-page'],
   starting_actions: ['discover-pages'],
@@ -23,7 +23,7 @@ const mission: Mission = {
     'same-agent': { for_actions: ['discover-pages', 'check-links'] },
   },
 };
-const otherMission: Mission = { ...mission, name: 'review-service', objective: 'Check service availability.' };
+const otherMission: Mission = { ...mission, name: 'review-service', objectives: ['Check service availability.'] };
 
 function mockAPI(respond?: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -58,6 +58,9 @@ describe('missions browser', () => {
 
     expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
     expect(screen.getByRole('heading', { name: mission.name, level: 1 })).toHaveFocus();
+    const objectives = screen.getByRole('heading', { name: 'Objectives' }).closest('section')!;
+    expect(within(objectives).getByRole('list')).toHaveClass('catalog-tags');
+    expect(within(objectives).getAllByRole('listitem').map(item => item.textContent)).toEqual(mission.objectives);
     expect(screen.getByText('Website to review')).toBeVisible();
     const optionalActions = screen.getByRole('heading', { name: 'Optional actions' }).closest('section')!;
     expect(within(optionalActions).getByText('capture-page')).toBeVisible();
@@ -80,7 +83,7 @@ describe('missions browser', () => {
 
   it('renders an empty catalog and nullable definition fields without inventing data', async () => {
     const empty: Mission = {
-      name: 'manual-review', objective: 'A manual review.', starting_actions: null, required_actions: null,
+      name: 'manual-review', objectives: ['A manual review.'], starting_actions: null, required_actions: null,
       input_schema: null, output_schema: null,
     };
     let items: Mission[] = [];
@@ -239,6 +242,7 @@ describe('missions browser', () => {
     const dialog = within(screen.getByRole('dialog', { name: 'Create mission' }));
     const editor = dialog.getByRole('textbox', { name: 'Mission definition (JSON)' });
     expect(editor).toHaveFocus();
+    expect(JSON.parse((editor as HTMLTextAreaElement).value).objectives).toEqual(['']);
     fireEvent.change(editor, { target: { value: '{invalid json' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Create mission' }));
     expect(await dialog.findByRole('alert')).toHaveTextContent('Enter valid JSON.');

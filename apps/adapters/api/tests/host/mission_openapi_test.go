@@ -73,7 +73,7 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 	if err := json.Unmarshal(document.Components.Schemas["CreateMissionRequest"], &schema); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(schema.Required, []string{"name", "objective", "input_schema", "output_schema"}) {
+	if !reflect.DeepEqual(schema.Required, []string{"name", "objectives", "input_schema", "output_schema"}) {
 		t.Fatalf("unexpected required mission fields: %v", schema.Required)
 	}
 	resolved, err := schema.Resolve(nil)
@@ -81,10 +81,16 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
-		name, fields, missionName string
-		valid                     bool
+		name, fields, missionName, objectives string
+		valid                                 bool
 	}{
 		{name: "minimal", valid: true},
+		{name: "multiple objectives", objectives: `["Build a useful agent","Verify its action contracts"]`, valid: true},
+		{name: "string objectives", objectives: `"Build a useful agent"`},
+		{name: "null objectives", objectives: `null`},
+		{name: "empty objectives", objectives: `[]`},
+		{name: "blank objective item", objectives: `["Build a useful agent"," "]`},
+		{name: "legacy objective", fields: `,"objective":"Build a useful agent"`},
 		{name: "dot name", missionName: "."},
 		{name: "parent name", missionName: ".."},
 		{name: "uninstalled actions", fields: `,"required_actions":["future-action"],"starting_actions":["future-action"]`, valid: true},
@@ -104,11 +110,18 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var value any
-			if err := json.Unmarshal([]byte(`{"name":"new-mission","objective":"Build a useful agent","input_schema":{},"output_schema":{}`+test.fields+`}`), &value); err != nil {
+			if err := json.Unmarshal([]byte(`{"name":"new-mission","objectives":["Build a useful agent"],"input_schema":{},"output_schema":{}`+test.fields+`}`), &value); err != nil {
 				t.Fatal(err)
 			}
 			if test.missionName != "" {
 				value.(map[string]any)["name"] = test.missionName
+			}
+			if test.objectives != "" {
+				var objectives any
+				if err := json.Unmarshal([]byte(test.objectives), &objectives); err != nil {
+					t.Fatal(err)
+				}
+				value.(map[string]any)["objectives"] = objectives
 			}
 			if err := resolved.Validate(value); (err == nil) != test.valid {
 				t.Fatalf("schema validation=%v, want valid=%v", err, test.valid)

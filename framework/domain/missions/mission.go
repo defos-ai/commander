@@ -24,7 +24,7 @@ type Step struct {
 	RequiredActions []string               `json:"required_actions"`
 }
 
-// Mission describes an objective independently of its operations.
+// Mission describes ordered objectives independently of its operations.
 // RequiredActions define preflight coverage. OptionalActions describe capabilities
 // checked when selected for queued work; neither list is an execution allowlist.
 // StartingActions guide initial task selection. Dispatch waits for readiness.
@@ -33,7 +33,7 @@ type Step struct {
 type Mission struct {
 	Rules           RuleSet         `json:"rules,omitempty"`
 	Name            string          `json:"name"`
-	Objective       string          `json:"objective"`
+	Objectives      []string        `json:"objectives"`
 	RequiredActions []string        `json:"required_actions"`
 	OptionalActions []string        `json:"optional_actions,omitempty"`
 	StartingActions []string        `json:"starting_actions"`
@@ -72,8 +72,13 @@ func (m Mission) Validate() error {
 	if m.Name == "." || m.Name == ".." {
 		return errors.New("mission name must not be a dot segment")
 	}
-	if strings.TrimSpace(m.Objective) == "" {
-		return errors.New("mission objective must not be empty")
+	if len(m.Objectives) == 0 {
+		return errors.New("mission objectives must contain at least one objective")
+	}
+	for _, objective := range m.Objectives {
+		if strings.TrimSpace(objective) == "" {
+			return errors.New("mission objectives must not contain blank entries")
+		}
 	}
 	for _, list := range []struct {
 		name    string
@@ -137,6 +142,7 @@ func validateActionNames(field string, names []string) error {
 }
 
 func (m Mission) Clone() Mission {
+	m.Objectives = slices.Clone(m.Objectives)
 	m.Rules = m.Rules.Clone()
 	if m.RequiredActions != nil {
 		m.RequiredActions = append([]string{}, m.RequiredActions...)

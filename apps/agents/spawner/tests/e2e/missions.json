@@ -1,7 +1,7 @@
 [
   {
     "name": "fixture-affinity",
-    "objective": "Keep repeated work on the same agent while other operations use spare agents.",
+    "objectives": ["Keep repeated work on the same agent while other operations use spare agents."],
     "required_actions": ["fixture-echo"],
     "starting_actions": ["fixture-echo"],
     "rules": {"same-agent": {"for_actions": ["fixture-echo"]}},
@@ -15,7 +15,7 @@
   },
   {
     "name": "fixture-use-agent",
-    "objective": "Execute an action on a dynamically spawned agent and retrieve its artifact.",
+    "objectives": ["Execute an action on a dynamically spawned agent and retrieve its artifact."],
     "required_actions": ["fixture-echo"],
     "starting_actions": ["fixture-echo"],
     "input_schema": {

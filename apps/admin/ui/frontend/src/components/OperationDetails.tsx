@@ -226,7 +226,9 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
         <div><dt>{t($ => $.operations.status)}</dt><dd><OperationStatus status={operation.status} /></dd></div>
         <div><dt>{t($ => $.operations.operationId)}</dt><dd><code>{operation.id}</code></dd></div>
         <div><dt>{t($ => $.operations.mission)}</dt><dd>{operation.mission.name}</dd></div>
-        <div><dt>{t($ => $.operations.objective)}</dt><dd>{operation.mission.objective}</dd></div>
+        <div><dt>{t($ => $.operations.objectives)}</dt><dd>
+          <ul className="catalog-tags">{operation.mission.objectives.map((objective, index) => <li key={index}>{objective}</li>)}</ul>
+        </dd></div>
         <div><dt>{t($ => $.operations.createdAt)}</dt><dd><Timestamp value={operation.created_at} /></dd></div>
         <div><dt>{t($ => $.operations.updatedAt)}</dt><dd><Timestamp value={operation.updated_at} /></dd></div>
         {operation.report_id && <div><dt>{t($ => $.operations.reportId)}</dt><dd className="operation-report-reference"><code>{operation.report_id}</code>

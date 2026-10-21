@@ -70,8 +70,9 @@ installation from a direct GitHub URL or reference.
 
 Use `create_mission` to save a reusable definition. Pass the same flat JSON
 definition accepted by the [HTTP API](api/README.md#create-missions): `name`,
-`objective`, `input_schema` and `output_schema` are required; action lists,
+`objectives`, `input_schema` and `output_schema` are required; action lists,
 steps and rules are optional. The tool returns the created mission as JSON.
+`objectives` contains one or more nonblank strings in presentation order.
 
 Shared validation checks schemas, action lists and rules. Actions can refer to
 capabilities that are not installed yet. Creation neither runs work nor installs

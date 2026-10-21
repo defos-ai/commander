@@ -1,6 +1,6 @@
 export interface Mission {
   name: string;
-  objective: string;
+  objectives: string[];
   required_actions: string[] | null;
   optional_actions?: string[];
   starting_actions: string[] | null;

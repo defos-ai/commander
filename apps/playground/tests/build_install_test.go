@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -165,7 +166,7 @@ func TestBuildReleaseInstallationHandoff(t *testing.T) {
 					tool, input = "describe_mission", map[string]any{"mission_name": "build-agent"}
 				case 1:
 					var received missions.Mission
-					if json.Unmarshal([]byte(last.Content), &received) != nil || received.Objective != catalog["build-agent"].Objective {
+					if json.Unmarshal([]byte(last.Content), &received) != nil || !slices.Equal(received.Objectives, catalog["build-agent"].Objectives) {
 						t.Error("model did not receive the bundled build mission")
 					}
 					tool, input = "ask_question", map[string]any{"operation_id": buildID, "task_id": releaseTaskID, "version": 1, "text": "Install this agent?", "options": []string{"Install", "Finish"}}

@@ -53,6 +53,9 @@
 - [default/data/missions.go](default/data/missions.go) validates all file definitions
   before upserting any. Preserve missions omitted from the file; no `--with-missions`
   means no import. An operation retains the mission definition saved at its start.
+  Mission `objectives` must contain at least one nonblank string. Keep separate
+  goals or instruction groups in separate entries; every entry applies. Steps
+  retain a singular `objective`. Preserve order and snapshot independence.
 - Update [default-missions.json](default/data/default-missions.json) for mission
   rules. Agents propose actions, while the controller applies these rules;
   do not move mission policy into host or agent special cases.

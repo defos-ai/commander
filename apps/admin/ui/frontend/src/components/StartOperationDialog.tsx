@@ -110,7 +110,7 @@ export function StartOperationDialog({ connection, credentials, onClose, onStart
               {missions.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
             </select>
           </div>
-          {mission && <p className="form-hint operation-command-objective">{mission.objective}</p>}
+          {mission && <ul className="catalog-tags">{mission.objectives.map((objective, index) => <li key={index}>{objective}</li>)}</ul>}
           {mission?.input_schema && <details className="operation-command-schema"><summary>{t($ => $.operationCommands.inputSchema)}</summary>
             <SchemaDetails schema={mission.input_schema} direction="input" />
           </details>}

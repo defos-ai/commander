@@ -182,11 +182,11 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	coordinator = startController()
 	stopOperations := startOperationRunner(t, coordinator, observedBus, database,
 		missions.Mission{
-			Name: "secret-distribution", Objective: "Use an agent's managed secret",
+			Name: "secret-distribution", Objectives: []string{"Use an agent's managed secret"},
 			RequiredActions: []string{"use-secret"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 		},
 		missions.Mission{
-			Name: "on-demand-secret", Objective: "Request a secret during execution",
+			Name: "on-demand-secret", Objectives: []string{"Request a secret during execution"},
 			RequiredActions: []string{"on-demand"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 		},
 	)

@@ -39,7 +39,7 @@ func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
 			t.Errorf("selector received the wrong context: %+v", selection)
 		}
 		selection.Input[0] = '['
-		selection.Mission.Objective = "modified"
+		selection.Mission.Objectives[0] = "modified"
 		selection.Mission.InputSchema[0] = '['
 		selection.Mission.Rules[missions.DecideNextActions].ForActions[0] = "modified"
 		selection.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "modified"
@@ -101,7 +101,7 @@ func TestRuleSelectionFailsBeforeSavingAnOperation(t *testing.T) {
 		err        error
 		selections int32
 	}{
-		{name: "invalid mission", mission: func(m *missions.Mission) { m.Objective = "" }},
+		{name: "invalid mission", mission: func(m *missions.Mission) { m.Objectives = nil }},
 		{name: "invalid input", mission: func(m *missions.Mission) {
 			m.InputSchema = json.RawMessage(`{"type":"object","required":["target"]}`)
 		}},

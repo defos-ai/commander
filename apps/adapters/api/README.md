@@ -56,7 +56,8 @@ curl --user "$API_USERNAME" \
   http://127.0.0.1:4274/api/v1/missions
 ```
 
-The body requires `name`, `objective`, `input_schema` and `output_schema`.
+The body requires `name`, `objectives`, `input_schema` and `output_schema`.
+`objectives` contains one or more nonblank strings in presentation order.
 Names must be nonblank and cannot be `.` or `..`.
 It also accepts `required_actions`, `optional_actions`, `starting_actions`,
 `steps` and `rules`, using the same shape returned by mission detail queries.

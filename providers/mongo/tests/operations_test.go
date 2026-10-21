@@ -611,7 +611,7 @@ func openOperations(t *testing.T) (*mongooperations.OperationMongoStore, *store.
 func newMongoOperation() operations.Operation {
 	created := time.Date(2026, time.September, 30, 12, 0, 0, 123456789, time.UTC)
 	op := operations.Operation{ID: id.OperationID(), Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
-		Mission: missions.Mission{Name: "review", Objective: "Inspect pages", RequiredActions: []string{"inspect"}, Steps: []missions.Step{{ID: "review"}}, InputSchema: json.RawMessage(`{ "type":"object", "x-example":9007199254740993 }`), OutputSchema: json.RawMessage(`{"type":"object"}`)},
+		Mission: missions.Mission{Name: "review", Objectives: []string{"Inspect pages"}, RequiredActions: []string{"inspect"}, Steps: []missions.Step{{ID: "review"}}, InputSchema: json.RawMessage(`{ "type":"object", "x-example":9007199254740993 }`), OutputSchema: json.RawMessage(`{"type":"object"}`)},
 		Input:   json.RawMessage(`{ "number":9007199254740993 }`), Tasks: []operations.Task{}, Questions: []operations.Question{}, Events: []operations.Event{}}
 	op.Events = append(op.Events, operations.Event{Sequence: 1, OperationID: op.ID, Type: operations.OperationStarted, Status: operations.Planning, CreatedAt: created})
 	return op

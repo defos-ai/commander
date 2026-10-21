@@ -30,6 +30,10 @@ requires rendering and screenshots. Install missing agents in a separate
 operation before running a website review.
 Existing operations retain their saved mission definition.
 
+Define mission goals in a required `objectives` array, with one goal or instruction
+group per entry. Admin lists them like Agent Responsibilities. Mission steps keep
+their individual `objective` strings.
+
 Start the [MCP adapter](../adapters/README.md#quick-start) and
 [agents](../agents/README.md#quick-start) with matching connections. See
 [deployment](../../docs/deployment.md) for providers, flags and persistent state.

@@ -36,7 +36,7 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 		t.Fatal(err)
 	}
 	changed := definition.Clone()
-	changed.Objective = "Replace the original objective"
+	changed.Objectives = []string{"Replace the original objectives"}
 	for _, duplicate := range []missions.Mission{definition, changed} {
 		if err := store.Create(t.Context(), duplicate); !errors.Is(err, missions.ErrMissionExists) {
 			t.Fatalf("duplicate creation must conflict: %v", err)
@@ -47,6 +47,7 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 		t.Fatal(err)
 	}
 	assertResultJSONEqual(t, stored, definition)
+	stored.Objectives[0] = "changed"
 	stored.RequiredActions[0] = "changed"
 	stored.Rules[missions.AggregateResults].ForActions[0] = "changed"
 	stored.InputSchema[0] = '['
@@ -88,7 +89,7 @@ func TestMissionCreationIsAtomicAcrossStoreInstances(t *testing.T) {
 	for i, store := range stores {
 		go func() {
 			definition := storedMission()
-			definition.Objective = fmt.Sprintf("Candidate %d", i)
+			definition.Objectives = []string{fmt.Sprintf("Candidate %d", i)}
 			<-gate
 			results <- result{definition, store.Create(t.Context(), definition)}
 		}()
@@ -119,7 +120,7 @@ func TestMissionCreationIsAtomicAcrossStoreInstances(t *testing.T) {
 
 func storedMission() missions.Mission {
 	return missions.Mission{
-		Name: "review", Objective: "Review a target", RequiredActions: []string{"inspect"},
+		Name: "review", Objectives: []string{"Review a target", "Summarize findings"}, RequiredActions: []string{"inspect"},
 		StartingActions: []string{"inspect"}, OptionalActions: []string{"publish"},
 		Rules:       missions.RuleSet{missions.AggregateResults: {ForActions: []string{"inspect"}}},
 		InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`),

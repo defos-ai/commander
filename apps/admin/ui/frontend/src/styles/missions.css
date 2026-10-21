@@ -33,7 +33,6 @@
 .mission-section { min-width: 0; }
 .mission-section h2 { font-size: 18px; margin-bottom: 14px; }
 .mission-section p { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
-.mission-objective { white-space: pre-wrap; }
 .mission-muted { color: var(--muted); }
 .mission-action-sections { display: grid; grid-template-columns: 1fr 2fr; gap: 22px; }
 .mission-action-names { display: flex; flex-wrap: wrap; gap: 7px; list-style: none; margin: 0; padding: 0; }

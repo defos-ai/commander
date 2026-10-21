@@ -45,7 +45,7 @@ export default {
   interruptedNote: 'The execution outcome is unknown. Recovery or a decision is still needed.',
   summary: 'Operation summary',
   mission: 'Mission',
-  objective: 'Objective',
+  objectives: 'Objectives',
   status: 'Status',
   operationId: 'Operation ID',
   createdAt: 'Created at',

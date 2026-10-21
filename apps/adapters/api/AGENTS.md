@@ -21,6 +21,8 @@
 
 - `POST /api/v1/missions` strictly decodes a flat API request, maps it explicitly
   to a mission and uses the shared validator before `MissionStore.Create`.
+  Root `objectives` is a required ordered array of nonblank strings; steps retain
+  singular `objective`. Preserve independent slices across explicit mappings.
   Existing names return `409 mission_exists`, including identical definitions;
   never emulate creation with a read followed by `Upsert`. Return the created
   mission and an escaped detail `Location`. Creation needs neither a controller

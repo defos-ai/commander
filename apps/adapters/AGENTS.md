@@ -61,7 +61,9 @@
 - Successful tool results carry JSON in text `content`. File references use
   resource-link blocks; do not duplicate result payloads in `structuredContent`.
 - `create_mission` accepts a flat `missions.Mission` and shares its validation
-  with the API and stores. Invalid definitions are invalid-params errors;
+  with the API and stores. Root `objectives` is a required ordered array of one
+  or more nonblank strings; step guidance keeps singular `objective`.
+  Invalid definitions are invalid-params errors;
   duplicate names are tool errors, including identical submissions. Call
   `MissionStore.Create` directly with a bounded context, never `Upsert` or an
   operation command. Creation does not check agent availability or start work.

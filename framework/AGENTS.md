@@ -48,6 +48,9 @@
   entries safely.
   Providers own uniqueness and locks. Reconcile write errors by reading the
   catalog before retrying; saved operations retain their mission snapshots.
+- Mission `objectives` is an ordered, nonempty array of nonblank strings. Clone
+  the array at snapshot boundaries and retain each entry through storage and
+  transport. Planning steps keep their own singular `objective` field.
 - Mission `required_actions` and step requirements participate in preflight;
   `optional_actions` describes expected capabilities and adds coverage only while
   its tasks are queued. Remove that extra coverage after dispatch/completion;

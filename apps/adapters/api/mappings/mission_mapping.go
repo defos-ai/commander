@@ -12,7 +12,7 @@ import (
 func ToMission(request models.CreateMissionRequest) missions.Mission {
 	mission := missions.Mission{
 		Name:            request.Name,
-		Objective:       request.Objective,
+		Objectives:      slices.Clone(request.Objectives),
 		RequiredActions: slices.Clone(request.RequiredActions),
 		OptionalActions: slices.Clone(request.OptionalActions),
 		StartingActions: slices.Clone(request.StartingActions),
@@ -52,7 +52,7 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	response := models.MissionResponse{
 		Name:            mission.Name,
-		Objective:       mission.Objective,
+		Objectives:      slices.Clone(mission.Objectives),
 		RequiredActions: slices.Clone(mission.RequiredActions),
 		OptionalActions: slices.Clone(mission.OptionalActions),
 		StartingActions: slices.Clone(mission.StartingActions),

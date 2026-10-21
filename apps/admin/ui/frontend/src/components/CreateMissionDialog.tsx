@@ -8,7 +8,7 @@ import { Dialog } from './Dialog';
 
 const initialDefinition = JSON.stringify({
   name: '',
-  objective: '',
+  objectives: [''],
   required_actions: [],
   starting_actions: [],
   input_schema: {},

@@ -57,7 +57,7 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 	}
 	t.Cleanup(func() { closeSecretController(t, coordinator) })
 	stopOperations := startOperationRunner(t, coordinator, observedBus, database, missions.Mission{
-		Name: "checkpoint-execution", Objective: "Confirm a durable intent before performing work",
+		Name: "checkpoint-execution", Objectives: []string{"Confirm a durable intent before performing work"},
 		RequiredActions: []string{"checkpoint-action"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 	})
 	files, err := fsartifacts.NewArtifactFileFsStore(filepath.Join(fixture.root, "storage"))

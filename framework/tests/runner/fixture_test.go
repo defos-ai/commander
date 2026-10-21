@@ -275,7 +275,7 @@ func fixture() runner.Config {
 	catalog.set(readyAgent(agentID))
 	return runner.Config{
 		AgentCatalog:   catalog,
-		MissionStore:   &missionStore{mission: missions.Mission{Name: "review", Objective: "Review a document", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
+		MissionStore:   &missionStore{mission: missions.Mission{Name: "review", Objectives: []string{"Review a document"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
 		OperationStore: &operationStore{records: map[string]operations.Operation{}},
 		ReportStore:    reportStore{},
 	}

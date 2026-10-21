@@ -13,7 +13,7 @@ const task: OperationTask = {
   started_at: now, finished_at: now, result: { action_name: 'discover-pages', output: { pages: ['https://defos.ai'] } },
 };
 const operation: Operation = {
-  id: 'operation-review', mission: { name: 'review-website-with-browser', objective: 'Review website quality.',
+  id: 'operation-review', mission: { name: 'review-website-with-browser', objectives: ['Review website quality.'],
     required_actions: ['discover-pages'], starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} },
   input: { url: 'https://defos.ai' }, status: 'planning', tasks: [task], questions: [], events: [], created_at: now, updated_at: now,
   progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: false },

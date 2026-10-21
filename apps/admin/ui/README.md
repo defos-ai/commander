@@ -17,7 +17,8 @@ or drag and zoom to explore. Artifact details offer image/text previews (up to
 ## Create missions
 
 Open **Missions → Create mission** and edit or paste a JSON definition. Set a name,
-objective and input/output schemas; add action names, steps and rules as needed.
+an `objectives` array with one or more nonblank entries, and input/output schemas;
+add action names, steps and rules as needed. Objectives use the same labels as agent responsibilities.
 The API validates the definition. Actions can be installed later, and saving
 does not start an operation. Keep secret values out of definitions.
 

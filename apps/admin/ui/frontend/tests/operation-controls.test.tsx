@@ -7,7 +7,7 @@ import { OperationsPage } from '../src/pages/OperationsPage';
 const connection = { id: 'test', name: 'Commander', url: 'https://commander.example.test' };
 const credentials = { username: 'operator', url: connection.url };
 const now = '2026-10-05T10:00:00Z';
-const mission = { name: 'review-website-with-browser', objective: 'Review website quality.', required_actions: [], starting_actions: [],
+const mission = { name: 'review-website-with-browser', objectives: ['Review website quality.', 'Summarize the findings.'], required_actions: [], starting_actions: [],
   input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } }, output_schema: {} };
 const operation: Operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'waiting', tasks: [], events: [],
   progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 1, settled: false },
@@ -28,7 +28,7 @@ function fixture(post?: (url: string, body: Record<string, unknown>, signal?: Ab
 }
 
 function view() { return render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); }
-async function detail() { fireEvent.click(await screen.findByRole('button', { name: `View operation ${operation.id}` })); await screen.findByText(mission.objective); }
+async function detail() { fireEvent.click(await screen.findByRole('button', { name: `View operation ${operation.id}` })); await screen.findByText(mission.objectives[0]); }
 async function startDialog() {
   fireEvent.click(await screen.findByRole('button', { name: 'Start operation' }));
   const dialog = screen.getByRole('dialog', { name: 'Start operation' });
@@ -48,6 +48,8 @@ describe('operation controls', () => {
     });
     view();
     const dialog = await startDialog();
+    expect(within(dialog).getByRole('list')).toHaveClass('catalog-tags');
+    expect(within(dialog).getAllByRole('listitem').map(item => item.textContent)).toEqual(mission.objectives);
     const input = within(dialog).getByLabelText('Mission input (JSON)');
     fireEvent.change(input, { target: { value: '{' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start operation' }));
@@ -69,6 +71,9 @@ describe('operation controls', () => {
     await act(async () => release());
 
     expect(await screen.findByRole('heading', { level: 1, name: first.operation_id })).toBeVisible();
+    const objectives = screen.getByText('Objectives', { selector: 'dt' }).closest('div')!.querySelector('dd')!;
+    expect(within(objectives).getByRole('list')).toHaveClass('catalog-tags');
+    expect(within(objectives).getAllByRole('listitem').map(item => item.textContent)).toEqual(mission.objectives);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Operation created. Commander can now plan its first task.')).toBeVisible();
     expect(api.posts().every(([url]) => upstreamURL(url).endsWith('/operations'))).toBe(true);

@@ -61,6 +61,10 @@
   and create-only name conflicts. Keep the JSON editor's text unchanged when
   submitting so large schema numbers retain precision. Validate syntax and the
   required fields locally; the shared API validator owns mission semantics.
+  Mission `objectives` is a nonempty array of nonblank text. Preserve its order,
+  search every entry and display entries with the same `catalog-tags` list as
+  agent responsibilities. Mission steps
+  retain their singular `objective`; do not accept the old root field as an alias.
   Saving does not start work or require installed actions. Open the saved detail
   after success; offer readback for duplicates and uncertain outcomes without
   retrying writes. Discard drafts on close, route or connection/session changes,

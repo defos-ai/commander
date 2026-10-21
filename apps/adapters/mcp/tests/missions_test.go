@@ -14,18 +14,20 @@ import (
 func TestMissions(t *testing.T) {
 	a := connect(t)
 	var catalog struct {
-		Missions []map[string]string `json:"missions"`
+		Missions []map[string]any `json:"missions"`
 	}
 	a.call("list_missions", object{}, &catalog)
 	if len(catalog.Missions) != 6 {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
-	summaries := make(map[string]map[string]string, len(catalog.Missions))
+	summaries := make(map[string]map[string]any, len(catalog.Missions))
 	for _, summary := range catalog.Missions {
-		if len(summary) != 2 || summary["name"] == "" || summary["objective"] == "" {
-			t.Fatalf("expected mission name and objective only: %+v", summary)
+		name, named := summary["name"].(string)
+		objectives, listed := summary["objectives"].([]any)
+		if len(summary) != 2 || !named || name == "" || !listed || len(objectives) == 0 {
+			t.Fatalf("expected mission name and objectives only: %+v", summary)
 		}
-		summaries[summary["name"]] = summary
+		summaries[name] = summary
 	}
 	for _, name := range []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
@@ -68,8 +70,13 @@ func TestMissions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("mission detail does not match the mission definition format: %v", err)
 		}
-		if mission.Name != summary["name"] || mission.Objective != summary["objective"] {
+		if mission.Name != summary["name"] || len(mission.Objectives) != len(summary["objectives"].([]any)) {
 			t.Fatalf("mission detail differs from summary: %+v", mission)
+		}
+		for index, objective := range mission.Objectives {
+			if objective != summary["objectives"].([]any)[index] {
+				t.Fatalf("mission detail objectives differ from summary: %+v", mission)
+			}
 		}
 		if !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) || len(mission.RequiredActions) != 1+len(expected.checks) {
 			t.Fatalf("incorrect website workflow: %+v", mission)

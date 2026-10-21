@@ -15,6 +15,10 @@ function isNullableStringArray(value: unknown): value is string[] | null {
   return value === null || isStringArray(value);
 }
 
+function isObjectives(value: unknown): value is string[] {
+  return isStringArray(value) && value.length > 0 && value.every(item => item.trim() !== '');
+}
+
 function isStep(value: unknown): value is MissionStep {
   return isObject(value) && typeof value.id === 'string' && typeof value.objective === 'string' &&
     isNullableStringArray(value.agent_types) && isNullableStringArray(value.required_actions);
@@ -35,7 +39,7 @@ function isMissionName(value: unknown): value is string {
 }
 
 export function isMission(value: unknown): value is Mission {
-  return isObject(value) && isMissionName(value.name) && typeof value.objective === 'string' &&
+  return isObject(value) && isMissionName(value.name) && isObjectives(value.objectives) &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.optional_actions === undefined || isStringArray(value.optional_actions)) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
@@ -73,8 +77,8 @@ export async function createMission(url: string, credentials: Session, definitio
   let input: unknown;
   try { input = JSON.parse(definition); }
   catch { throw new MissionCreateError('invalid_json'); }
-  if (!isObject(input) || !isMissionName(input.name) || typeof input.objective !== 'string' ||
-    !input.objective.trim() || !isObject(input.input_schema) || !isObject(input.output_schema)) {
+  if (!isObject(input) || !isMissionName(input.name) || !isObjectives(input.objectives) ||
+    !isObject(input.input_schema) || !isObject(input.output_schema)) {
     throw new MissionCreateError('invalid_input');
   }
   const name = input.name;

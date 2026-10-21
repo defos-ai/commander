@@ -7,7 +7,7 @@ This guide defines the data and decisions passed between them.
 
 | Concept | Meaning | Website example |
 | --- | --- | --- |
-| **Mission** | Reusable objective, input/output schemas, required and optional actions, steps and rules. | `review-website-with-browser` |
+| **Mission** | Reusable objectives, input/output schemas, required and optional actions, steps and rules. | `review-website-with-browser` |
 | **Operation** | One run with specific input and a saved copy of the mission. | Review `https://defos.ai`, up to three pages. |
 | **Task** | One action assignment. The controller selects an agent when dispatching it. | Check one page's links. |
 | **Mission step** | Optional planning guidance that tasks can reference. It is not an action name or automatic workflow. | A declared step such as `quality-review`. |
@@ -16,6 +16,10 @@ This guide defines the data and decisions passed between them.
 `list_missions` gives a summary; `describe_mission` supplies the full definition.
 `starting_actions` guides initial assignments. Starting an operation still requires
 an initial task assignment. Omit `step_id` when the mission has no declared steps.
+
+`objectives` is a required, nonempty list of nonblank strings. Give each item one
+goal or instruction group; all apply. Admin lists them in the same style as Agent
+Responsibilities. An optional mission step keeps its own singular `objective`.
 
 `required_actions` declares capabilities needed before dispatch. `optional_actions`
 declares useful choices that do not block initial preflight. For example, a build

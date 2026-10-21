@@ -5,7 +5,7 @@ import "encoding/json"
 type CreateMissionRequest struct {
 	Rules           map[string]MissionRuleRequest `json:"rules,omitempty"`
 	Name            string                        `json:"name"`
-	Objective       string                        `json:"objective"`
+	Objectives      []string                      `json:"objectives"`
 	RequiredActions []string                      `json:"required_actions,omitempty"`
 	OptionalActions []string                      `json:"optional_actions,omitempty"`
 	StartingActions []string                      `json:"starting_actions,omitempty"`
@@ -33,7 +33,7 @@ type MissionRuleParamsRequest struct {
 type MissionResponse struct {
 	Rules           map[string]MissionRuleResponse `json:"rules,omitempty"`
 	Name            string                         `json:"name"`
-	Objective       string                         `json:"objective"`
+	Objectives      []string                       `json:"objectives"`
 	RequiredActions []string                       `json:"required_actions"`
 	OptionalActions []string                       `json:"optional_actions,omitempty"`
 	StartingActions []string                       `json:"starting_actions"`

@@ -22,7 +22,7 @@ import (
 
 const missionDefinition = `{
   "name": "Research / #1?",
-  "objective": "Review actions that have not been implemented yet.",
+  "objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."],
   "required_actions": ["inspect-domain", "summarize-domain"],
   "optional_actions": ["publish-review"],
   "starting_actions": ["inspect-domain"],
@@ -90,8 +90,8 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 	}
 	for _, body := range []string{
 		missionDefinition,
-		`{"name":"minimal","objective":"Plan future work.","input_schema":{},"output_schema":{}}`,
-		`{"name":"minimal","objective":"Plan future work.","required_actions":null,"starting_actions":null,"optional_actions":null,"input_schema":{},"output_schema":{}}`,
+		`{"name":"minimal","objectives":["Plan future work."],"input_schema":{},"output_schema":{}}`,
+		`{"name":"minimal","objectives":["Plan future work."],"required_actions":null,"starting_actions":null,"optional_actions":null,"input_schema":{},"output_schema":{}}`,
 	} {
 		var value any
 		if err := json.Unmarshal([]byte(body), &value); err != nil {
@@ -101,7 +101,7 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 			t.Fatalf("discovered schema rejects a supported mission definition: %v", err)
 		}
 	}
-	for _, field := range []string{"name", "objective", "input_schema", "output_schema"} {
+	for _, field := range []string{"name", "objectives", "input_schema", "output_schema"} {
 		value := make(map[string]any, len(want))
 		for key, item := range want {
 			value[key] = item
@@ -109,6 +109,16 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		delete(value, field)
 		if err := resolved.Validate(value); err == nil {
 			t.Errorf("discovered schema does not require %s", field)
+		}
+	}
+	for _, objectives := range []any{nil, "Plan future work.", []any{}, []any{"Plan future work.", " "}} {
+		value := make(map[string]any, len(want))
+		for key, item := range want {
+			value[key] = item
+		}
+		value["objectives"] = objectives
+		if err := resolved.Validate(value); err == nil {
+			t.Errorf("discovered schema accepts invalid objectives: %#v", objectives)
 		}
 	}
 	var actual map[string]any
@@ -133,10 +143,10 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 			t.Fatal("mission lookup lost the contract or duplicate creation changed it")
 		}
 		var listing struct {
-			Missions []map[string]string `json:"missions"`
+			Missions []map[string]any `json:"missions"`
 		}
 		missionCall(t, ctx, session, "list_missions", map[string]any{}, &listing)
-		if len(listing.Missions) != 1 || len(listing.Missions[0]) != 2 || listing.Missions[0]["name"] != want["name"] || listing.Missions[0]["objective"] != want["objective"] {
+		if len(listing.Missions) != 1 || len(listing.Missions[0]) != 2 || listing.Missions[0]["name"] != want["name"] || !reflect.DeepEqual(listing.Missions[0]["objectives"], want["objectives"]) {
 			t.Fatalf("mission listing does not describe the saved definition: %+v", listing)
 		}
 		var operations struct {
@@ -159,17 +169,22 @@ func TestMCPCreateMissionRejectsInvalidDefinitions(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
 		{"array", `[]`},
 		{"empty object", `{}`},
-		{"unknown definition field", strings.Replace(missionDefinition, `"objective":`, `"unexpected": true, "objective":`, 1)},
+		{"unknown definition field", strings.Replace(missionDefinition, `"objectives":`, `"unexpected": true, "objectives":`, 1)},
 		{"unknown step field", strings.Replace(missionDefinition, `"id": "inspect"`, `"id": "inspect", "unexpected": true`, 1)},
 		{"unknown rule field", strings.Replace(missionDefinition, `"aggregate-results": {`, `"aggregate-results": {"unexpected": true,`, 1)},
 		{"unknown rule parameter", strings.Replace(missionDefinition, `"decision_by": "model"`, `"decision_by": "model", "unexpected": true`, 1)},
-		{"blank objective", strings.Replace(missionDefinition, "Review actions that have not been implemented yet.", " ", 1)},
+		{"blank objective item", strings.Replace(missionDefinition, "Review actions that have not been implemented yet.", " ", 1)},
+		{"legacy objective", strings.Replace(missionDefinition, `"objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."]`, `"objective": "Legacy single objective"`, 1)},
+		{"missing objectives", strings.Replace(missionDefinition, `"objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."],`, "", 1)},
+		{"string objectives", strings.Replace(missionDefinition, `["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."]`, `"String objectives"`, 1)},
+		{"null objectives", strings.Replace(missionDefinition, `["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."]`, `null`, 1)},
+		{"empty objectives", strings.Replace(missionDefinition, `["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."]`, `[]`, 1)},
 		{"dot name", strings.Replace(missionDefinition, `"name": "Research / #1?"`, `"name": "."`, 1)},
 		{"duplicate action", strings.Replace(missionDefinition, `"inspect-domain", "summarize-domain"`, `"inspect-domain", "inspect-domain"`, 1)},
 		{"invalid starting action", strings.Replace(missionDefinition, `"starting_actions": ["inspect-domain"]`, `"starting_actions": ["missing-action"]`, 1)},
 		{"invalid rule", strings.Replace(missionDefinition, `"decision_by": "model"`, `"decision_by": "operator"`, 1)},
 		{"invalid schema type", strings.Replace(missionDefinition, `"type": "string", "minLength": 1`, `"type": "not-a-schema-type"`, 1)},
-		{"nonobject schema", `{"name":"invalid","objective":"Rejected.","input_schema":{},"output_schema":false}`},
+		{"nonobject schema", `{"name":"invalid","objectives":["Rejected."],"input_schema":{},"output_schema":false}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Invalid-params responses can close the SDK's HTTP session.

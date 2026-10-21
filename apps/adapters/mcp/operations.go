@@ -30,8 +30,8 @@ func (r MissionRequest) Validate() error {
 }
 
 type missionListItem struct {
-	Name      string `json:"name"`
-	Objective string `json:"objective"`
+	Name       string   `json:"name"`
+	Objectives []string `json:"objectives"`
 }
 
 type OperationRequest struct {
@@ -87,7 +87,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 			items, err := config.MissionStore.List(ctx)
 			summaries := make([]missionListItem, 0, len(items))
 			for _, item := range items {
-				summaries = append(summaries, missionListItem{Name: item.Name, Objective: item.Objective})
+				summaries = append(summaries, missionListItem{Name: item.Name, Objectives: item.Objectives})
 			}
 			return struct {
 				Missions []missionListItem `json:"missions"`
@@ -97,7 +97,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
-	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objective, input_schema, output_schema and optional action lists, steps and rules. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
+	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, steps and rules. Objectives are an ordered, nonempty array of nonblank strings. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -257,7 +257,8 @@ func createMissionSchema() string {
 			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
 			"description": "Nonblank exact name. Existing names cannot be replaced.",
 		},
-		"objective": nonblank,
+		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
+			"description": "Ordered mission objectives; include at least one nonblank objective."},
 		"required_actions": map[string]any{
 			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
 			"description": "Actions required for execution, including capabilities not installed yet. Step requirements also participate in preflight.",
@@ -275,7 +276,7 @@ func createMissionSchema() string {
 		},
 		"input_schema":  map[string]any{"type": "object", "description": "Locally resolvable JSON Schema for mission input; {} allows any value. External references are rejected."},
 		"output_schema": map[string]any{"type": "object", "description": "Locally resolvable JSON Schema for mission output; {} allows any value. External references are rejected."},
-	}, "name", "objective", "input_schema", "output_schema")
+	}, "name", "objectives", "input_schema", "output_schema")
 }
 
 func objectSchema(properties map[string]any, required ...string) string {

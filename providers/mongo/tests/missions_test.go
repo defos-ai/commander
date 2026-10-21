@@ -20,7 +20,7 @@ func TestMissionMongoStore(t *testing.T) {
 	catalog := mongomissions.NewMissionMongoStore(database)
 	ctx := t.Context()
 	original := missions.Mission{
-		Name: "alpha", Objective: "Review a page",
+		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		Steps: []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
@@ -61,6 +61,7 @@ func TestMissionMongoStore(t *testing.T) {
 	if !bytes.Equal(schema, original.InputSchema) || document.Lookup("name").StringValue() != original.Name {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
+	stored.Objectives[0] = "modified by reader"
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
 	stored.InputSchema[0] = '!'
@@ -71,7 +72,7 @@ func TestMissionMongoStore(t *testing.T) {
 		t.Fatalf("caller changed persisted mission: %#v, error = %v", unchanged, err)
 	}
 	conflicting := original.Clone()
-	conflicting.Objective = "Replace the existing mission"
+	conflicting.Objectives = []string{"Replace the existing mission"}
 	for _, duplicate := range []missions.Mission{original, conflicting} {
 		if err := catalog.Create(ctx, duplicate); !errors.Is(err, missions.ErrMissionExists) {
 			t.Fatalf("duplicate create = %v, want ErrMissionExists", err)
@@ -83,7 +84,7 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 
 	updated := original.Clone()
-	updated.Objective = "Review before release"
+	updated.Objectives = []string{"Review before release"}
 	updated.OptionalActions, updated.Steps, updated.Rules = nil, nil, nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
@@ -136,7 +137,7 @@ func TestConcurrentMissionCreates(t *testing.T) {
 	for i := range writers {
 		go func() {
 			<-start
-			mission := missions.Mission{Name: "shared", Objective: fmt.Sprintf("Creator %d", i), InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+			mission := missions.Mission{Name: "shared", Objectives: []string{fmt.Sprintf("Creator %d", i)}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 			completed <- result{mission, catalogs[i%len(catalogs)].Create(t.Context(), mission)}
 		}()
 	}
@@ -171,7 +172,7 @@ func TestConcurrentMissionUpserts(t *testing.T) {
 
 	for i := range writers {
 		go func() {
-			mission := missions.Mission{Name: "shared", Objective: fmt.Sprintf("Revision %d", i), InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+			mission := missions.Mission{Name: "shared", Objectives: []string{fmt.Sprintf("Revision %d", i)}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 			if err := catalog.Upsert(t.Context(), mission); err != nil {
 				completed <- err
 				return

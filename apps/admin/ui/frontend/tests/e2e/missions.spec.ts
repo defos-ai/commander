@@ -6,7 +6,7 @@ import { test, connect } from './fixtures';
 test('create a reusable mission through Admin without installed actions or starting work', async ({ page, api }) => {
   const mission = {
     name: `ui-mission-${randomUUID()}`,
-    objective: 'Review using an action that has not been installed yet.',
+    objectives: ['Review using an action that has not been installed yet.', 'Save findings for a later review.'],
     required_actions: ['future-mission-action'],
     starting_actions: ['future-mission-action'],
     input_schema: {},
@@ -22,6 +22,9 @@ test('create a reusable mission through Admin without installed actions or start
   await create.getByRole('button', { name: 'Create mission', exact: true }).click();
   await expect(create).not.toBeVisible();
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
+  const objectives = page.getByRole('heading', { name: 'Objectives', exact: true }).locator('..').getByRole('list');
+  await expect(objectives).toHaveClass('catalog-tags');
+  await expect(objectives.getByRole('listitem')).toHaveText(mission.objectives);
   const missionURL = page.url();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
@@ -31,7 +34,7 @@ test('create a reusable mission through Admin without installed actions or start
   await page.getByRole('button', { name: 'All missions', exact: true }).click();
   await expect(page.getByRole('button', { name: `View mission ${mission.name}`, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Create mission', exact: true }).click();
-  await create.getByLabel('Mission definition (JSON)', { exact: true }).fill(JSON.stringify({ ...mission, objective: 'Attempt to overwrite the saved mission.' }, null, 2));
+  await create.getByLabel('Mission definition (JSON)', { exact: true }).fill(JSON.stringify({ ...mission, objectives: ['Attempt to overwrite the saved mission.'] }, null, 2));
   await create.getByRole('button', { name: 'Create mission', exact: true }).click();
   await expect(create.getByRole('alert')).toContainText('A mission with this name already exists');
   await create.getByRole('button', { name: 'View existing mission', exact: true }).click();
