@@ -23,7 +23,10 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   source URL; do not expose paths or arbitrary Git URLs through task input.
 - [build-agent](actions/build_agent.go) accepts the checkout's opaque workspace
   ID and instructions. It uses managed `CODEX_API_KEY`, runs Codex and Go
-  tests/build, and exports `source.tar.gz` through the normal artifact runtime.
+  tests/build, validates the generated release structure, and exports
+  `source.tar.gz` through the normal artifact runtime. Its successful output
+  records the generated `agent_type`, `module_path` and `binary` alongside the
+  workspace ID and source count.
   Never publish, spawn or accept secret values through this action's input.
 - [publish-agent](actions/publish_agent.go) consumes the saved source artifact ID
   and full file descriptor, verifies its bytes, then publishes source to GitHub.
@@ -66,6 +69,18 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   and no managed key in their environment. They execute generated code as the
   builder's operating-system user; environment isolation is not an OS sandbox.
   Preserve redacted subprocess errors and never return raw model/tool output.
+- After ordinary Go tests/build, verify release entry points and reject the
+  unchanged example identity/module or checkout-local Go replacements. Reuse the
+  template's `.github/scripts/release.go` metadata and manifest commands in the
+  clean environment, with a synthetic version, six temporary assets and a
+  temporary image digest. Treat tool output as untrusted; bound it and validate
+  names before using them as paths. Parse the resulting manifest through
+  `framework/agent/manifest` and compare its identity, platforms, asset names,
+  checksums and image with the checked metadata. Keep synthetic files out of the
+  source archive. Failures preserve the workspace, like failed Go checks.
+  This checks release structure only: it does not build every native platform or
+  Docker image, verify GitHub permissions, run release CI, or create a release.
+  It uses no GitHub token. Actual release publication remains a later action.
 - Workspace storage is local to the owning builder. The bundled `build-agent`
   mission binds checkout and build with the controller's `same-agent` rule.
   Do not route a workspace to another builder or duplicate affinity in the action.
@@ -106,7 +121,9 @@ Follow the [agent test layout](../AGENTS.md#validation): keep tests and fixtures
 template in tests. Cover discovery, strict input, isolated workspaces,
 revision output, config/credential isolation, failure cleanup and cancellation.
 Build scenarios use local executable fixtures rather than paid Codex calls;
-verify secret isolation, failed validation and source artifact contents.
+verify secret isolation, failed validation, release-structure failures and source
+artifact contents. Cover successful metadata/manifest checks without including
+synthetic release assets in the saved source.
 
 From the repository root:
 

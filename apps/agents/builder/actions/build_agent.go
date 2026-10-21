@@ -32,6 +32,9 @@ type BuildAgentInput struct {
 type BuildAgentOutput struct {
 	WorkspaceID string `json:"workspace_id"`
 	SourceFiles int    `json:"source_files"`
+	AgentType   string `json:"agent_type"`
+	ModulePath  string `json:"module_path"`
+	Binary      string `json:"binary"`
 }
 
 type buildTools struct{ codex, goTool string }
@@ -57,7 +60,7 @@ func NewBuildAgent(workspaceDir string) (*BuildAgent, error) {
 	}
 	return &BuildAgent{workspaceDir: root, Base: action.NewBase(actionmodel.Action{
 		Name:            BuildAgentName,
-		Description:     "Implement the requested Commander agent with Codex in a workspace returned by checkout-template on this builder. Run Go tests and build ./cmd, then return its source archive. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions. Does not publish or launch the agent.",
+		Description:     "Implement the requested Commander agent with Codex in a workspace returned by checkout-template on this builder. Run Go tests and build ./cmd, then validate generated identity and release structure locally and return its source archive and package metadata. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions. Does not publish or launch the agent.",
 		RequiredSecrets: []string{"CODEX_API_KEY"},
 		InputSchema:     json.RawMessage(`{"type":"object","properties":{"workspace_id":{"type":"string","pattern":"^checkout-[0-9]+$"},"instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"}},"required":["workspace_id","instructions"],"additionalProperties":false}`),
 		OutputSchema:    output,
@@ -165,6 +168,13 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
 		return action.Result{}, err
 	}
+	metadata, err := build.ValidateRelease(ctx, tools.goTool, source, scratch, env)
+	if err != nil {
+		return action.Result{}, err
+	}
+	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
+		return action.Result{}, err
+	}
 	archive, count, err := build.ArchiveSource(ctx, source, key)
 	if err != nil {
 		return action.Result{}, err
@@ -172,7 +182,10 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if err := ctx.Err(); err != nil {
 		return action.Result{}, err
 	}
-	result, err := action.JSONResult(BuildAgentOutput{WorkspaceID: input.WorkspaceID, SourceFiles: count})
+	result, err := action.JSONResult(BuildAgentOutput{
+		WorkspaceID: input.WorkspaceID, SourceFiles: count,
+		AgentType: metadata.AgentType, ModulePath: metadata.ModulePath, Binary: metadata.Binary,
+	})
 	if err != nil {
 		return action.Result{}, err
 	}

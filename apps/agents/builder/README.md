@@ -36,13 +36,20 @@ Then request `build-agent` on the same builder with:
 {"workspace_id":"<checkout result>","instructions":"Create an agent that checks JSON responses against a schema."}
 ```
 
-It uses the managed `CODEX_API_KEY`, runs Codex and Go tests/build, and returns
-the workspace ID, source file count and a `source.tar.gz` artifact. Supply the
-key through Playground's secret form or Admin's agent secrets page; never put it
-in the instructions. The bundled `build-agent` mission connects checkout and
-build with a `same-agent` rule and model review after each stage. Publication is
-an optional action in that mission. Ask Playground to build an agent and describe
-its actions and expected behavior.
+It uses the managed `CODEX_API_KEY`, runs Codex and Go tests/build, then checks
+the release structure inherited from the template. It returns the workspace ID,
+source file count, agent type, module path, binary name and a `source.tar.gz`
+artifact. Supply the key through Playground's secret form or Admin's agent
+secrets page; never put it in the instructions. The bundled `build-agent` mission
+connects checkout and build with a `same-agent` rule and model review after each
+stage. Publication is an optional action in that mission. Ask Playground to build
+an agent and describe its actions and expected behavior.
+
+The structure check validates the agent identity, module and manifest against
+the template's release entry points. A failed check preserves the workspace for
+revision. It needs no GitHub token and does not publish anything. It does not
+prove that all six native platforms, Docker builds or GitHub release jobs will
+succeed; those checks run when the agent is released.
 
 ## Publish source
 
@@ -128,11 +135,12 @@ Checkout does not execute template code. Git uses isolated configuration without
 host credentials, hooks, proxies or submodule checkout. It needs direct HTTPS
 access to GitHub.
 
-Codex runs with its workspace-write sandbox and temporary configuration. Go
-checks use `GOWORK=off` and a clean environment without the Codex key, but execute
-generated code as the builder's operating-system user. Use a builder deployment
-you trust for code execution. Source publication is optional within the build
-mission; release packaging and generated-agent startup remain later stages.
+Codex runs with its workspace-write sandbox and temporary configuration. Go and
+release-structure checks use `GOWORK=off` and a clean environment without the
+Codex key, but execute generated code as the builder's operating-system user.
+Use a builder deployment you trust for code execution. Source publication is
+optional within the build mission; publishing release assets and starting the
+generated agent remain later stages.
 
 ## Development
 

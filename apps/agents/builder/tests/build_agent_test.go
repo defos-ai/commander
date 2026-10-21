@@ -43,6 +43,9 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 	if output.WorkspaceID != checkout.WorkspaceID || bytes.Contains(result.Output, []byte(root)) || len(result.NextActions) != 0 {
 		t.Fatalf("unexpected build result: %s", result.Output)
 	}
+	if output.AgentType != buildTestAgentType || output.ModulePath != "example.invalid/fixture" || output.Binary != buildTestBinary {
+		t.Fatalf("build did not return verified release identity: %+v", output)
+	}
 	if len(result.Artifacts) != 1 || result.Artifacts[0].Name != "Agent source" || len(result.Artifacts[0].Files) != 1 {
 		t.Fatal("build must return one source artifact")
 	}
@@ -55,8 +58,13 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 		t.Fatalf("archive lost verified source: files=%v output=%+v", files, output)
 	}
 	for name, contents := range files {
-		if strings.HasPrefix(name, ".git/") || strings.HasPrefix(name, ".env") || strings.HasPrefix(name, "state/") || strings.HasPrefix(name, ".cache/") || strings.Contains(contents, buildTestSecret) {
+		if strings.HasPrefix(name, ".git/") || strings.HasPrefix(name, ".env") || strings.HasPrefix(name, "state/") || strings.HasPrefix(name, ".cache/") || strings.HasPrefix(name, ".build-") || name == "agent.yaml" || strings.HasPrefix(name, buildTestBinary+"_") || strings.Contains(contents, buildTestSecret) {
 			t.Fatalf("archive retained excluded data: %s", name)
+		}
+	}
+	for _, name := range []string{"agent.go", "LICENSE", "AGENTS.md", "agent.yaml.tmpl", "docker/Dockerfile", ".github/scripts/release.go", ".github/workflows/make-release.yml", ".github/workflows/test.yml", ".github/workflows/build-binaries.yml", ".github/workflows/push.yml", ".github/workflows/push-stable.yml"} {
+		if files[name] == "" {
+			t.Errorf("verified release source missing from artifact: %s", name)
 		}
 	}
 	calls, err := os.ReadFile(config.Calls)
@@ -64,7 +72,7 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "codex exec ") || lines[1] != "go test -count=1 -timeout=2m ./..." || !strings.HasPrefix(lines[2], "go build -o ") {
+	if len(lines) != 6 || !strings.HasPrefix(lines[0], "codex exec ") || lines[1] != "go test -count=1 -timeout=2m ./..." || !strings.HasPrefix(lines[2], "go build -o ") || lines[3] != "go mod edit -json" || !strings.HasPrefix(lines[4], "go run ./.github/scripts/release.go metadata ") || !strings.HasPrefix(lines[5], "go run ./.github/scripts/release.go manifest ") {
 		t.Fatalf("build did not verify before exporting: %q", calls)
 	}
 	assertBuildScratchRemoved(t, config)
@@ -122,11 +130,13 @@ func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				wantCalls := 3
+				wantCalls := 6
 				if mode == "fail" {
 					wantCalls = 1
 				} else if mode == "test-fail" {
 					wantCalls = 2
+				} else if mode == "build-fail" {
+					wantCalls = 3
 				}
 				if strings.Count(string(calls), "\n") != wantCalls {
 					t.Fatalf("failed build ran the wrong verification stages: %s", calls)
@@ -135,6 +145,33 @@ func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(config.Source, "README.md")); err != nil {
 				t.Fatal("failed build removed the existing source checkout")
 			}
+		})
+	}
+}
+
+func TestBuildAgentRejectsSourceThatCannotRelease(t *testing.T) {
+	for _, scenario := range []struct{ mode, reason string }{
+		{"template-identity", "replace example-agent"},
+		{"malformed-manifest", "invalid agent.yaml"},
+		{"local-replace", "local replace directive"},
+	} {
+		t.Run(scenario.mode, func(t *testing.T) {
+			root, workspaceID := buildWorkspace(t)
+			executor, config, _ := buildExecutor(t, root, workspaceID, scenario.mode)
+			result, err := executor.Run(buildSecretContext(t), buildInput(t, workspaceID))
+			if err == nil {
+				t.Fatal("build accepted source that cannot produce a compatible release")
+			}
+			if !strings.Contains(err.Error(), scenario.reason) {
+				t.Fatalf("release validation did not identify the correction needed: %v", err)
+			}
+			if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 || strings.Contains(err.Error(), buildTestSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") || strings.Contains(err.Error(), root) {
+				t.Fatalf("rejected release exposed output or raw diagnostics: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(config.Source, "README.md")); err != nil {
+				t.Fatal("release validation removed the source needed for correction")
+			}
+			assertBuildScratchRemoved(t, config)
 		})
 	}
 }

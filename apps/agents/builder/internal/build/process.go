@@ -1,6 +1,7 @@
 package build
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -57,11 +58,17 @@ func RunCodex(ctx context.Context, executable, source, scratch string, env []str
 Follow AGENTS.md and preserve the template's framework/provider contracts, license notices,
 CLI bootstrap, release packaging and external tests/ layout. Keep the ./cmd executable.
 Implement real actions, schemas, discovery, tests, README and a matching mission.
+Choose a distinct lowercase AgentType and replace the example-agent module and
+identity consistently in Go imports, CLI, Dockerfile and documentation. Keep the
+release helper's metadata/manifest commands, agent.yaml.tmpl and release workflows.
+Do not leave checkout-local replace directives in go.mod. The host will check the
+generated release structure locally using temporary assets; it will not publish.
 Run ordinary Go tests and fix failures. Do not run tagged integration tests, contact
 live application services, publish, push, deploy or start the agent. Do not read or
 write credentials, environment files, or authentication configuration. Use only
 this checkout for source files. Never include secret values in source or output.
-The host will independently run go test and go build, then archive the source.
+The host will independently run go test, go build and release structure checks,
+then archive the source.
 
 Requested agent:
 ` + instructions
@@ -69,11 +76,28 @@ Requested agent:
 }
 
 func RunCommand(ctx context.Context, stage, executable, source string, env []string, stdin io.Reader, args ...string) error {
+	return runCommand(ctx, stage, executable, source, env, stdin, io.Discard, args...)
+}
+
+// CommandOutput reads bounded structured metadata without exposing tool output
+// in errors. The caller still validates every returned field before using it.
+func CommandOutput(ctx context.Context, stage, executable, source string, env []string, args ...string) ([]byte, error) {
+	var output commandOutput
+	if err := runCommand(ctx, stage, executable, source, env, nil, &output, args...); err != nil {
+		return nil, err
+	}
+	if output.overflow {
+		return nil, fmt.Errorf("%s output exceeds 64 KiB; fix its structured output", stage)
+	}
+	return bytes.Clone(output.buffer.Bytes()), nil
+}
+
+func runCommand(ctx context.Context, stage, executable, source string, env []string, stdin io.Reader, stdout io.Writer, args ...string) error {
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir, command.Env, command.Stdin = source, env, stdin
 	// Tool diagnostics can contain source, model output or credentials. Keep them
 	// out of action errors and logs; a failed workspace remains available to fix.
-	command.Stdout, command.Stderr = io.Discard, io.Discard
+	command.Stdout, command.Stderr = stdout, io.Discard
 	command.WaitDelay = time.Second
 	process.Configure(command)
 	err := command.Run()
@@ -88,4 +112,20 @@ func RunCommand(ctx context.Context, stage, executable, source string, env []str
 		return fmt.Errorf("%s could not start; check its installation and run discovery again", stage)
 	}
 	return nil
+}
+
+type commandOutput struct {
+	buffer   bytes.Buffer
+	overflow bool
+}
+
+func (b *commandOutput) Write(data []byte) (int, error) {
+	count := len(data)
+	remaining := (64 << 10) - b.buffer.Len()
+	if count > remaining {
+		b.overflow = true
+		data = data[:remaining]
+	}
+	_, _ = b.buffer.Write(data)
+	return count, nil
 }

@@ -1,6 +1,7 @@
 package builder_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,10 +15,13 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/agent/environment"
+	"github.com/defos-ai/commander/framework/agent/manifest"
 )
 
 const buildTestSecret = "managed-codex-token-not-for-artifacts"
 const buildTestInstructions = "Create an agent that counts words. $(never-run-this)"
+const buildTestAgentType = "word-count-agent"
+const buildTestBinary = "commander-word-count-agent"
 
 type buildFixtureConfig struct {
 	Source, Mode, Started, Calls, Home string
@@ -157,6 +161,9 @@ func executeBuildFixture(tool string) error {
 		if err := os.WriteFile(filepath.Join(cwd, "cmd", "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
 			return err
 		}
+		if err := writeReleaseFixture(cwd, config.Mode); err != nil {
+			return err
+		}
 		if config.Mode == "leak" {
 			return os.WriteFile(filepath.Join(cwd, "leaked.txt"), []byte(buildTestSecret), 0600)
 		}
@@ -181,7 +188,90 @@ func executeBuildFixture(tool string) error {
 		}
 		return os.WriteFile(args[2], []byte("fixture executable"), 0700)
 	}
+	if slices.Equal(args, []string{"mod", "edit", "-json"}) {
+		module := map[string]any{"Module": map[string]string{"Path": "example.invalid/fixture"}}
+		if config.Mode == "local-replace" {
+			module["Replace"] = []any{map[string]any{"Old": map[string]string{"Path": "example.invalid/dependency"}, "New": map[string]string{"Path": "../dependency"}}}
+		}
+		return json.NewEncoder(os.Stdout).Encode(module)
+	}
+	if len(args) >= 3 && args[0] == "run" && args[1] == "./.github/scripts/release.go" {
+		return runReleaseFixture(args[2:], config)
+	}
 	return errors.New("unexpected Go verification command")
+}
+
+func writeReleaseFixture(root, mode string) error {
+	agentType := buildTestAgentType
+	if mode == "template-identity" {
+		agentType = "example-agent"
+	}
+	files := map[string]string{
+		"agent.go":                   "package generated\nconst AgentType = " + fmt.Sprintf("%q", agentType) + "\n",
+		"LICENSE":                    "MIT License\n",
+		"AGENTS.md":                  "Keep action implementations in actions and tests in tests.\n",
+		"agent.yaml.tmpl":            "schema_version: 1\ntype: {{.Type}}\nversion: {{.Version}}\n",
+		"docker/Dockerfile":          "FROM scratch\n",
+		".github/scripts/release.go": "package main\nfunc main() {}\n",
+	}
+	for _, name := range []string{"make-release", "test", "build-binaries", "push", "push-stable"} {
+		files[".github/workflows/"+name+".yml"] = "name: release fixture\non: workflow_dispatch\njobs: {}\n"
+	}
+	if mode == "local-replace" {
+		files["go.mod"] = "module example.invalid/fixture\n\ngo 1.26.7\n\nreplace example.invalid/dependency => ../dependency\n"
+	}
+	for name, contents := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runReleaseFixture(args []string, config buildFixtureConfig) error {
+	if len(args) < 5 || args[1] != "--version" || args[2] != "v0.1.0" || args[3] != "--repository" || args[4] != "release-check/generated-agent" {
+		return errors.New("release helper was not checked with the reserved dry-run identity")
+	}
+	const image = "ghcr.io/release-check/" + buildTestBinary
+	if args[0] == "metadata" && len(args) == 5 {
+		return json.NewEncoder(os.Stdout).Encode(map[string]string{"version": "v0.1.0", "type": buildTestAgentType, "binary": buildTestBinary, "image": image})
+	}
+	if args[0] != "manifest" || len(args) != 9 || args[5] != "--digest" || args[6] != "sha256:"+strings.Repeat("0", 64) || args[7] != "--assets" {
+		return errors.New("unexpected manifest verification command")
+	}
+	assets := args[8]
+	if relative, err := filepath.Rel(config.Source, assets); err != nil || filepath.IsLocal(relative) || !filepath.IsAbs(assets) {
+		return errors.New("dry-run release assets must stay outside source")
+	}
+	value := manifest.Manifest{SchemaVersion: 1, Type: buildTestAgentType, Version: "v0.1.0", Native: map[string]manifest.NativeAsset{}, Docker: &manifest.Docker{Image: image + "@" + args[6]}}
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		for _, arch := range []string{"amd64", "arm64"} {
+			asset := buildTestBinary + "_" + goos + "_" + arch
+			if goos == "windows" {
+				asset += ".exe"
+			}
+			data, err := os.ReadFile(filepath.Join(assets, asset))
+			if err != nil {
+				return err
+			}
+			if len(data) == 0 {
+				return errors.New("release probe asset must be nonempty")
+			}
+			value.Native[goos+"/"+arch] = manifest.NativeAsset{Asset: asset, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+		}
+	}
+	data, err := manifest.Render(value)
+	if err != nil {
+		return err
+	}
+	if config.Mode == "malformed-manifest" {
+		data = []byte("schema_version: 1\ntype: example-agent\nunknown: untrusted-sensitive-build-diagnostic\n")
+	}
+	return os.WriteFile(filepath.Join(assets, "agent.yaml"), data, 0600)
 }
 
 func appendBuildCall(path, value string) (err error) {
