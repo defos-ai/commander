@@ -58,6 +58,14 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   tag commit, bounded manifest, all six uploaded native asset SHA-256 digests
   and expected digest-pinned image metadata before returning a package reference.
   Do not pull images, download every binary, change visibility or install here.
+- The mission and agent responsibilities offer installation only after a verified
+  release. Honor an existing explicit choice or ask a linked **Install this agent?**
+  question and await the answer; expiry is not approval. Finish the build report
+  first, then use the existing `install-agent` mission in a separate operation
+  with the released package and visibility unchanged. Review the saved spawn
+  result and action readiness before completing installation. Keep this policy
+  shared through mission/registration metadata, usable by every MCP client.
+  Declining or failing installation does not change the saved build/release outcome.
 - Keep registered action implementations in `actions/`. Supporting
   code lives in `internal/build/` (Codex, Go and source archives), `internal/git/`
   (isolated Git commands) and `internal/process/` (executable checks and process

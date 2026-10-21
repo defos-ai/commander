@@ -90,7 +90,15 @@
   Keep it outside `same-agent` and `decide-next-actions`: bounded pending checks
   propose the same action with `workflow_run_id` and continue automatically.
   Empty terminal proposals still return to model review. Only a verified released
-  result provides a pinned package; installation remains a separate operation.
+  result provides a pinned package. Offer installation only after that result;
+  honor an explicit operator choice or ask a linked **Install this agent?**
+  question with **Install** and **Finish**, waiting for the actual answer.
+  Complete the build with its source/publication/release evidence first. Approval
+  starts the existing `install-agent` mission in a separate operation, passing
+  the exact released package and visibility to `spawn-agent`. Keep provisioning
+  out of the build's task tree. Review the saved spawn result and action readiness;
+  registration alone is insufficient, and uncertain launches require inspection.
+  Declining installation or an installation failure preserves the successful build.
 
 ## Validation
 

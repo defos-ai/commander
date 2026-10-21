@@ -98,6 +98,12 @@ uncertain, inspect GitHub before creating another release task; an execution
 checkpoint prevents repeating that execution's dispatch, without guaranteeing
 exactly-once publication.
 
+After a verified release, Commander offers **Install** or **Finish**, unless you
+already specified your choice. Installation uses the exact released version and
+visibility in a separate `install-agent` operation, then checks the agent's action
+readiness. Choosing Finish keeps the source artifact and release links. An
+installation failure leaves the successful build and release available.
+
 ## Bundled deployment
 
 The repository [Compose stack](../../../compose.yaml) and
