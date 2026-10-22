@@ -3,6 +3,8 @@
 Use one stable `v0.X.Y` or `v1.X.Y` version for Commander and every module in
 [go.work](../go.work). The examples below use `v0.2.0`; replace it with your target.
 
+See [release notes](release-notes.md) for Commander and standalone agent changes.
+
 ## Prepare and validate
 
 1. Update every internal Commander requirement in each `go.mod`, including
