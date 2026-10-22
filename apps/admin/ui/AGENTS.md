@@ -58,7 +58,10 @@
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
 - Mission creation uses authenticated `POST /api/v1/missions`, with API validation
-  and create-only name conflicts. Keep the JSON editor's text unchanged when
+  and create-only name conflicts. The dedicated `create-mission` workspace route
+  highlights Missions and returns to the catalog via **All missions**. Keep it
+  separate from mission-name routes so names such as `new` and `create` still work.
+  Keep the JSON editor's text unchanged when
   submitting so large schema numbers retain precision. Validate syntax and the
   required fields locally; the shared API validator owns mission semantics.
   Mission `objectives` is a nonempty array of nonblank text. Preserve its order,
@@ -67,7 +70,7 @@
   retain their singular `objective`; do not accept the old root field as an alias.
   Saving does not start work or require installed actions. Open the saved detail
   after success; offer readback for duplicates and uncertain outcomes without
-  retrying writes. Discard drafts on close, route or connection/session changes,
+  retrying writes. Discard drafts on page exit, reload or connection/session changes,
   abort pending requests and ignore stale responses. Never persist drafts in
   browser storage or include secret values in definitions.
 - Operation responses require the server's `progress` projection. Display its

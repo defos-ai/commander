@@ -17,6 +17,7 @@ export default {
   refresh: 'Refresh',
   createTitle: 'Create mission',
   createDescription: 'Save a reusable mission definition.',
+  createSignIn: 'Sign in to create a mission on this connection.',
   definition: 'Mission definition (JSON)',
   definitionHint: 'Set a name, objectives as a nonempty array of text, and input/output schemas. Add action names, steps and rules as needed. Keep secret values out of definitions.',
   creating: 'Saving mission…',

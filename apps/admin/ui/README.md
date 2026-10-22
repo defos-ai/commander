@@ -16,7 +16,8 @@ or drag and zoom to explore. Artifact details offer image/text previews (up to
 
 ## Create missions
 
-Open **Missions → Create mission** and edit or paste a JSON definition. Set a name,
+Open **Missions → Create mission** to edit or paste a JSON definition on its own page.
+Use **All missions** to return to the catalog. Set a name,
 an `objectives` array with one or more nonblank entries, and input/output schemas;
 add action names, steps and rules as needed. Objectives use the same labels as agent responsibilities.
 The API validates the definition. Actions can be installed later, and saving
@@ -24,7 +25,8 @@ does not start an operation. Keep secret values out of definitions.
 
 Mission names are unique; creation never replaces a saved definition. After an
 uncertain save, use **Check saved mission** before trying again. Drafts stay in
-memory and are discarded when the dialog closes or the connection changes.
+memory and are discarded when you leave or reload the page, or change the connection
+or session. A successful save opens the new mission.
 
 ## Secrets
 

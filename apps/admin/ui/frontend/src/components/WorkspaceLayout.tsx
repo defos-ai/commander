@@ -21,7 +21,7 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
   const identity = useId();
   const sidebarId = `${identity}-sidebar`;
   const contentId = `${identity}-content`;
-  const activeSection = section === 'secrets' ? 'agents' : section;
+  const activeSection = section === 'secrets' ? 'agents' : section === 'create-mission' ? 'missions' : section;
   const navigation = [
     { section: 'overview' as const, label: t($ => $.shell.nav.overview), Icon: LayoutDashboard },
     { section: 'operations' as const, label: t($ => $.shell.nav.operations), Icon: Workflow },

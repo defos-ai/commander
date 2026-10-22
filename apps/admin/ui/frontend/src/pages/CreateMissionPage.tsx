@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { createMission, MissionCreateError } from '../api/missions';
 import type { Connection, Session } from '../connections/types';
 import { useTranslation } from '../i18n';
-import { Button } from './Button';
-import { Dialog } from './Dialog';
+import { Button } from '../components/Button';
+import '../styles/missions.css';
 
 const initialDefinition = JSON.stringify({
   name: '',
@@ -15,13 +15,38 @@ const initialDefinition = JSON.stringify({
   output_schema: {},
 }, null, 2);
 
-export function CreateMissionDialog({ connection, credentials, onClose, onCreated, onInspect }: {
+type Props = {
   connection: Connection;
-  credentials: Session;
-  onClose: () => void;
-  onCreated: (name: string) => void;
-  onInspect: (name: string) => void;
-}) {
+  credentials?: Session;
+  onSignIn: () => void;
+  onBack: () => void;
+  onSelect: (name: string) => void;
+};
+
+export function CreateMissionPage(props: Props) {
+  const { t } = useTranslation();
+  const { connection, credentials, onSignIn, onBack } = props;
+  const [owner, setOwner] = useState({ connectionID: connection.id, url: connection.url, credentials, revision: 0 });
+  // Remount before a different connection or session can reuse the draft.
+  if (owner.connectionID !== connection.id || owner.url !== connection.url || owner.credentials !== credentials) {
+    setOwner({ connectionID: connection.id, url: connection.url, credentials, revision: owner.revision + 1 });
+  }
+
+  return <section className="missions-page mission-create-page">
+    <button className="missions-back" type="button" onClick={onBack}>
+      <ArrowLeft size={16} aria-hidden="true" />{t($ => $.missions.back)}
+    </button>
+    <div className="page-heading"><div><h1>{t($ => $.missions.createTitle)}</h1>
+      <p>{t($ => $.missions.createDescription)}</p>
+    </div></div>
+    {credentials ? <CreateMissionForm key={owner.revision} {...props} credentials={credentials} />
+      : <div className="notice" role="alert"><p>{t($ => $.missions.createSignIn)}</p>
+        <Button onClick={onSignIn}>{t($ => $.missions.signIn)}</Button>
+      </div>}
+  </section>;
+}
+
+function CreateMissionForm({ connection, credentials, onSignIn, onBack, onSelect }: Props & { credentials: Session }) {
   const { t } = useTranslation();
   const identity = useId();
   const editor = useRef<HTMLTextAreaElement>(null);
@@ -42,7 +67,7 @@ export function CreateMissionDialog({ connection, credentials, onClose, onCreate
 
   function close() {
     pending.current?.abort();
-    onClose();
+    onBack();
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -60,7 +85,7 @@ export function CreateMissionDialog({ connection, credentials, onClose, onCreate
     } catch { setSubmittedName(undefined); }
     try {
       const mission = await createMission(connection.url, credentials, definition, controller.signal);
-      if (!controller.signal.aborted && pending.current === controller) onCreated(mission.name);
+      if (!controller.signal.aborted && pending.current === controller) onSelect(mission.name);
     } catch (cause) {
       if (!controller.signal.aborted && pending.current === controller) {
         const failure = cause instanceof MissionCreateError ? cause : new MissionCreateError('unknown');
@@ -74,12 +99,10 @@ export function CreateMissionDialog({ connection, credentials, onClose, onCreate
     }
   }
 
-  return <Dialog open title={t($ => $.missions.createTitle)} description={t($ => $.missions.createDescription)}
-    onClose={close} className="mission-create-dialog">
-    <form className="mission-create-form" onSubmit={submit} autoComplete="off">
+  return <form className="mission-create-form" onSubmit={submit} autoComplete="off">
       <div className="form-field">
         <label htmlFor={`${identity}-definition`}>{t($ => $.missions.definition)}</label>
-        <textarea ref={editor} id={`${identity}-definition`} rows={16} value={definition} spellCheck={false}
+        <textarea ref={editor} id={`${identity}-definition`} rows={20} value={definition} spellCheck={false}
           autoCapitalize="none" disabled={submitting || locked} aria-invalid={invalid || undefined}
           aria-describedby={`${identity}-hint${error ? ` ${identity}-error` : ''}`}
           onChange={event => { setDefinition(event.target.value); setError(undefined); }} />
@@ -87,18 +110,18 @@ export function CreateMissionDialog({ connection, credentials, onClose, onCreate
       <p className="form-hint" id={`${identity}-hint`}>{t($ => $.missions.definitionHint)}</p>
       {error && <div className="notice" id={`${identity}-error`} role="alert">
         <p>{t($ => $.missions.createErrors[error.kind])}</p>
-        {submittedName && (locked || error.kind === 'conflict') && <Button variant="secondary" onClick={() => onInspect(submittedName)}>
+        {error.kind === 'authentication' && <Button onClick={onSignIn}>{t($ => $.missions.signIn)}</Button>}
+        {submittedName && (locked || error.kind === 'conflict') && <Button variant="secondary" onClick={() => onSelect(submittedName)}>
           {locked ? t($ => $.missions.checkSaved) : t($ => $.missions.viewExisting)}
         </Button>}
       </div>}
       {submitting && <p className="form-hint" role="status">{t($ => $.missions.creating)}</p>}
-      <div className="dialog-actions">
+      <div className="mission-create-actions">
         <Button variant="secondary" onClick={close}>{t($ => $.missions.cancel)}</Button>
         <Button type="submit" disabled={submitting || locked} aria-busy={submitting}>
           {submitting && <LoaderCircle className="connection-form-spinner" size={16} aria-hidden="true" />}
           {t($ => $.missions.createTitle)}
         </Button>
       </div>
-    </form>
-  </Dialog>;
+    </form>;
 }

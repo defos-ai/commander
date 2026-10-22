@@ -16,6 +16,7 @@ import { ConnectionsPage } from './pages/ConnectionsPage';
 import { ConnectionSettingsPage } from './pages/ConnectionSettingsPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { MissionsPage } from './pages/MissionsPage';
+import { CreateMissionPage } from './pages/CreateMissionPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { ControllersPage } from './pages/ControllersPage';
 import { ActionsPage } from './pages/ActionsPage';
@@ -64,7 +65,9 @@ export function App() {
 
   useEffect(() => {
     if (modal || !focusAfterTransition.current) return;
-    document.querySelector<HTMLElement>(active ? '.workspace-main' : '#connections-heading')?.focus();
+    const editor = active && section === 'create-mission'
+      ? document.querySelector<HTMLElement>('.mission-create-form textarea:not(:disabled)') : null;
+    (editor ?? document.querySelector<HTMLElement>(active ? '.workspace-main' : '#connections-heading'))?.focus();
     focusAfterTransition.current = false;
   }, [route, active, modal]);
 
@@ -92,7 +95,11 @@ export function App() {
           selectedID={selectedID} onSelect={select} view={route.connectionID ? route.view ?? 'details' : 'details'}
           onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
           onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
-        : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
+        : section === 'create-mission' ? <CreateMissionPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
+          onBack={() => navigate({ connectionID: active.id, section: 'missions' })}
+          onSelect={name => navigate({ connectionID: active.id, section: 'missions', itemID: name })} />
+        : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}
+          onCreate={() => navigate({ connectionID: active.id, section: 'create-mission' })} />
           : section === 'controllers' ? <ControllersPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
           : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}
             onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })} />

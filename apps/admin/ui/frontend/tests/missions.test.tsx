@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi } from 'vitest';
 import type { Mission } from '../src/api/types';
 import { MissionsPage } from '../src/pages/MissionsPage';
+import { CreateMissionPage } from '../src/pages/CreateMissionPage';
 
 const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
 const credentials = { username: 'operator', url: connection.url };
@@ -236,21 +237,19 @@ describe('missions browser', () => {
         : Response.json(created, { status: 201 });
       return url.endsWith('/api/v1/missions') ? Response.json({ items: [mission] }) : Response.json(created);
     });
-    render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
-    await screen.findByRole('button', { name: `View mission ${mission.name}` });
-    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
-    const dialog = within(screen.getByRole('dialog', { name: 'Create mission' }));
-    const editor = dialog.getByRole('textbox', { name: 'Mission definition (JSON)' });
+    const onSelect = vi.fn();
+    render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={onSelect} />);
+    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
     expect(editor).toHaveFocus();
     expect(JSON.parse((editor as HTMLTextAreaElement).value).objectives).toEqual(['']);
     fireEvent.change(editor, { target: { value: '{invalid json' } });
-    fireEvent.click(dialog.getByRole('button', { name: 'Create mission' }));
-    expect(await dialog.findByRole('alert')).toHaveTextContent('Enter valid JSON.');
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter valid JSON.');
     expect(submissions).toBe(0);
 
     fireEvent.change(editor, { target: { value: rejectedDraft } });
-    fireEvent.click(dialog.getByRole('button', { name: 'Create mission' }));
-    expect(await dialog.findByRole('alert')).toHaveTextContent('Check the mission definition');
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Check the mission definition');
     expect(editor).toHaveValue(rejectedDraft);
     expect(editor).toBeEnabled();
     expect(editor).toHaveFocus();
@@ -258,38 +257,32 @@ describe('missions browser', () => {
     expect(screen.queryByText('private-validation-details')).not.toBeInTheDocument();
 
     fireEvent.change(editor, { target: { value: definition } });
-    fireEvent.click(dialog.getByRole('button', { name: 'Create mission' }));
-    expect(await screen.findByRole('heading', { name: created.name, level: 1 })).toHaveFocus();
-    expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+    await waitFor(() => expect(onSelect).toHaveBeenCalledExactlyOnceWith(created.name));
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => init?.body))
       .toEqual([rejectedDraft, definition]);
   });
 
-  it('locks an uncertain save and checks its saved definition without repeating the write', async () => {
+  it('locks an uncertain save and offers its saved definition without repeating the write', async () => {
     const created = { ...mission, name: 'uncertain-review' };
     const fetch = mockAPI((url, init) => {
       if (init.method === 'POST') throw new TypeError('private-network-details');
       return url.endsWith('/api/v1/missions') ? Response.json({ items: [mission] }) : Response.json(created);
     });
-    render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
-    await screen.findByRole('button', { name: `View mission ${mission.name}` });
-    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
-    const dialog = within(screen.getByRole('dialog', { name: 'Create mission' }));
-    const editor = dialog.getByRole('textbox', { name: 'Mission definition (JSON)' });
+    const onSelect = vi.fn();
+    render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={onSelect} />);
+    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
     fireEvent.change(editor, { target: { value: JSON.stringify(created) } });
-    fireEvent.click(dialog.getByRole('button', { name: 'Create mission' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
 
-    expect(await dialog.findByRole('alert')).toHaveTextContent('The save result is unknown. Check the saved mission before trying again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('The save result is unknown. Check the saved mission before trying again.');
     expect(editor).toBeDisabled();
-    expect(dialog.getByRole('button', { name: 'Create mission' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create mission' })).toBeDisabled();
     expect(screen.queryByText('private-network-details')).not.toBeInTheDocument();
-    fireEvent.click(dialog.getByRole('button', { name: 'Check saved mission' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check saved mission' }));
 
-    expect(await screen.findByRole('heading', { name: created.name, level: 1 })).toHaveFocus();
-    expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(created.name);
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
-    expect(fetch.mock.calls.some(([url, init]) => init?.method === 'GET' && upstreamURL(url).endsWith(`/api/v1/missions/${created.name}`))).toBe(true);
   });
 
   it('discards the draft and aborts pending creation when its session or connection changes', async () => {
@@ -302,35 +295,53 @@ describe('missions browser', () => {
       signals.push(init.signal!);
       return response.promise;
     });
-    const onSignIn = vi.fn();
-    const view = render(<MissionsPage connection={connection} credentials={credentials} onSignIn={onSignIn} />);
+    const callbacks = { onSignIn: vi.fn(), onBack: vi.fn(), onSelect: vi.fn() };
+    const view = render(<CreateMissionPage connection={connection} credentials={credentials} {...callbacks} />);
     const nextConnection = { ...connection, id: 'other', url: 'https://other.example.test' };
     const sessions = [
       { connection, credentials: { ...credentials, username: 'another-operator' } },
       { connection: nextConnection, credentials: { ...credentials, url: nextConnection.url } },
     ];
     for (const [index, next] of sessions.entries()) {
-      await screen.findByRole('button', { name: `View mission ${mission.name}` });
-      fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
-      const dialog = within(screen.getByRole('dialog', { name: 'Create mission' }));
-      const editor = dialog.getByRole('textbox', { name: 'Mission definition (JSON)' });
+      const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
       expect(JSON.parse((editor as HTMLTextAreaElement).value).name).toBe('');
       fireEvent.change(editor, { target: { value: JSON.stringify({ ...mission, name: 'abandoned-review' }) } });
-      fireEvent.click(dialog.getByRole('button', { name: 'Create mission' }));
-      expect(await dialog.findByRole('status')).toHaveTextContent('Saving mission…');
+      fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+      expect(await screen.findByRole('status')).toHaveTextContent('Saving mission…');
 
-      view.rerender(<MissionsPage {...next} onSignIn={onSignIn} />);
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      view.rerender(<CreateMissionPage {...next} {...callbacks} />);
       expect(signals[index].aborted).toBe(true);
+      const resetEditor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
+      expect(JSON.parse((resetEditor as HTMLTextAreaElement).value).name).toBe('');
+      expect(resetEditor).toBeEnabled();
       await act(async () => pending[index].resolve(Response.json({ ...mission, name: 'abandoned-review' }, { status: 201 })));
 
-      expect(screen.getByRole('heading', { name: 'Missions', level: 1 })).toBeVisible();
-      expect(screen.queryByRole('heading', { name: 'abandoned-review' })).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Create mission', level: 1 })).toBeVisible();
+      expect(callbacks.onSelect).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     }
-    await screen.findByRole('button', { name: `View mission ${mission.name}` });
-    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
-    expect(JSON.parse((screen.getByRole('textbox', { name: 'Mission definition (JSON)' }) as HTMLTextAreaElement).value).name).toBe('');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(pending).toHaveLength(2);
+  });
+
+  it('aborts a pending save after cancellation and ignores its late result', async () => {
+    const response = deferredResponse();
+    let signal: AbortSignal | undefined;
+    const fetch = mockAPI((_url, init) => {
+      signal = init.signal ?? undefined;
+      return response.promise;
+    });
+    const onBack = vi.fn();
+    const onSelect = vi.fn();
+    const view = render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={onBack} onSelect={onSelect} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mission definition (JSON)' }), { target: { value: JSON.stringify(mission) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+    await screen.findByText('Saving mission…');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onBack).toHaveBeenCalledOnce();
+    view.unmount();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => response.resolve(Response.json(mission, { status: 201 })));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 });

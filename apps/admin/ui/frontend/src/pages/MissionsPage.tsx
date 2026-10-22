@@ -1,25 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, Plus, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../components/Button';
-import { CreateMissionDialog } from '../components/CreateMissionDialog';
 import { MissionDetails } from '../components/MissionDetails';
 import type { Connection, Session } from '../connections/types';
 import { useMissionQuery } from '../hooks/useMissionQuery';
 import { useTranslation } from '../i18n';
 import '../styles/missions.css';
 
-export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
+export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, onCreate }: {
   connection: Connection;
   credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;
+  onCreate?: () => void;
 }) {
   const { t } = useTranslation();
   const [localID, setLocalID] = useState<string>();
   const name = onSelect ? routeID : localID;
   const [search, setSearch] = useState('');
-  const [creating, setCreating] = useState<{ url: string; connectionID: string; credentials: Session }>();
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
   const query = useMissionQuery(connection.url, credentials, name);
@@ -32,8 +31,6 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
   useEffect(() => {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [name]);
-
-  useEffect(() => { setCreating(undefined); }, [connection.id, connection.url, credentials, name]);
 
   function select(value?: string) { focusHeading.current = true; if (onSelect) onSelect(value); else setLocalID(value); }
 
@@ -49,7 +46,7 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
         <Button variant="secondary" onClick={query.refresh} disabled={query.loading}>
           <RefreshCw size={15} aria-hidden="true" />{t($ => $.missions.refresh)}
         </Button>
-        {name === undefined && <Button onClick={() => setCreating({ url: connection.url, connectionID: connection.id, credentials })}>
+        {name === undefined && onCreate && <Button onClick={onCreate}>
           <Plus size={15} aria-hidden="true" />{t($ => $.missions.createTitle)}
         </Button>}
       </div>}
@@ -84,9 +81,5 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
         {items.length ? <Button variant="secondary" onClick={() => setSearch('')}>{t($ => $.missions.clearSearch)}</Button> : <p>{t($ => $.missions.emptyDescription)}</p>}
       </div>}
     </>}
-    {credentials && creating?.credentials === credentials && creating.url === connection.url && creating.connectionID === connection.id && name === undefined &&
-      <CreateMissionDialog connection={connection} credentials={credentials} onClose={() => setCreating(undefined)}
-        onCreated={value => { setCreating(undefined); setSearch(''); query.refresh(); select(value); }}
-        onInspect={value => { setCreating(undefined); select(value); }} />}
   </section>;
 }
