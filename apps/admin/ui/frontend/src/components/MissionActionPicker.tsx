@@ -6,6 +6,8 @@ import type { Action, Agent } from '../api/types';
 import type { Connection, Session } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
+import type { ActionDefinitionDraft } from '../missions/action-definitions';
+import { ActionDefinitionDialog } from './ActionDefinitionDialog';
 import { ActionDetails, ActionStatus } from './ActionDetails';
 import { AgentStatus } from './AgentDetails';
 import { Button } from './Button';
@@ -21,22 +23,29 @@ type Props = MissionActionSelection & {
   connection: Connection;
   credentials?: Session;
   disabled?: boolean;
+  definitions?: ActionDefinitionDraft[];
+  stepActions?: string[];
+  invalidDefinitions?: boolean;
+  onSaveDefinition?: (definition: ActionDefinitionDraft, originalName?: string) => void;
+  onRemoveDefinition?: (name: string) => void;
   onChange: (selection: MissionActionSelection) => void;
   onSignIn: () => void;
 };
 
 export function MissionActionPicker({ connection, credentials, requiredActions, optionalActions,
-  startingActions, disabled, onChange, onSignIn }: Props) {
+  startingActions, disabled, definitions = [], stepActions = [], invalidDefinitions, onSaveDefinition, onRemoveDefinition, onChange, onSignIn }: Props) {
   const { t } = useTranslation();
   const identity = useId();
   const [search, setSearch] = useState('');
+  const [definitionDialog, setDefinitionDialog] = useState<{ definition?: ActionDefinitionDraft }>();
   const query = useCatalogQuery<Action>({ url: connection.url, credentials, list: listActions, get: getAction });
   const agentQuery = useCatalogQuery<Agent>({ url: connection.url, credentials, list: listAgents, get: getAgent });
   const actions = new Map((query.items ?? []).map(action => [action.name, action]));
+  const desired = new Map(definitions.map(definition => [definition.name, definition]));
   // Retain the draft when agents disappear or the catalog cannot be loaded.
-  const names = [...new Set([...requiredActions, ...optionalActions, ...startingActions, ...actions.keys()])];
+  const names = [...new Set([...requiredActions, ...optionalActions, ...startingActions, ...stepActions, ...actions.keys(), ...desired.keys()])];
   const filter = search.trim().toLocaleLowerCase();
-  const visible = names.filter(name => `${name} ${actions.get(name)?.description ?? ''}`.toLocaleLowerCase().includes(filter))
+  const visible = names.filter(name => `${name} ${desired.get(name)?.description ?? actions.get(name)?.description ?? ''}`.toLocaleLowerCase().includes(filter))
     .sort((left, right) => left.localeCompare(right));
   const error = !credentials ? 'authentication' : query.error?.kind;
   const catalogLoaded = query.items !== undefined;
@@ -68,11 +77,15 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
           placeholder={t($ => $.missions.builder.searchActionsPlaceholder)} value={search}
           onChange={event => setSearch(event.target.value)} />
       </label>
-      {credentials && <Button variant="secondary" onClick={refresh} disabled={refreshing}>
+      <div className="mission-action-toolbar-buttons">{credentials && <Button variant="secondary" onClick={refresh} disabled={refreshing}>
         <RefreshCw size={15} aria-hidden="true" />
         {refreshing ? t($ => $.missions.builder.refreshingActions) : t($ => $.missions.builder.refreshActions)}
       </Button>}
+      {onSaveDefinition && <Button variant="secondary" disabled={disabled || invalidDefinitions} onClick={() => setDefinitionDialog({})}>
+        {t($ => $.missions.actionDefinition.createTitle)}
+      </Button>}</div>
     </div>
+    {invalidDefinitions && <p className="form-error" role="alert">{t($ => $.missions.actionDefinition.invalidDefinitions)}</p>}
     {error && <div className="notice" role="alert">
       <p>{error === 'authentication' ? t($ => $.missions.builder.actionsSignIn)
         : error === 'forbidden' ? t($ => $.missions.builder.actionsForbidden)
@@ -88,23 +101,29 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
     {visible.length > 0 ? <ul className="mission-action-list">
       {visible.map(name => {
         const action = actions.get(name);
-        const role = requiredActions.includes(name) ? 'required' : optionalActions.includes(name) ? 'optional' : 'none';
+        const definition = desired.get(name);
+        const contract: Action | undefined = definition ? { ...definition, status: 'unknown',
+          input_schema: JSON.parse(definition.input_schema), output_schema: JSON.parse(definition.output_schema) } : action;
+        const stepAction = stepActions.includes(name);
+        const role = requiredActions.includes(name) ? 'required' : optionalActions.includes(name) ? 'optional' : stepAction ? 'steps' : 'none';
         const reports = (agentQuery.items ?? []).flatMap(agent => {
           const reportedAction = agent.actions?.find(candidate => candidate.name === name);
           return reportedAction ? [{ agent, action: reportedAction }] : [];
         });
         return <li className="mission-action-item" key={name}>
           <div className="mission-action-summary"><strong>{name}</strong>
+            {definition && <span className="catalog-status" data-tone="muted">{t($ => $.missions.actionDefinition.defined)}</span>}
             {action ? action.status !== '' && action.status !== 'unknown' && <ActionStatus status={action.status} />
               : catalogLoaded && <span className="catalog-status" data-tone="muted">{t($ => $.missions.builder.notInstalled)}</span>}
           </div>
-          <p className="mission-action-description">{action?.description ?? (catalogLoaded
+          <p className="mission-action-description">{definition?.description ?? action?.description ?? (catalogLoaded
             ? t($ => $.missions.builder.retainedAction) : t($ => $.missions.builder.unavailableCatalogAction))}</p>
           {action?.status_reason && <p className="form-hint">{action.status_reason}</p>}
           <div className="mission-action-controls">
             <select className="mission-action-role" aria-label={t($ => $.missions.builder.actionRole, { name })}
               value={role} disabled={disabled} onChange={event => setRole(name, event.target.value)}>
-              <option value="none">{t($ => $.missions.builder.roleNone)}</option>
+              {stepAction ? <option value="steps">{t($ => $.missions.actionDefinition.stepRole)}</option>
+                : <option value="none" disabled={Boolean(definition)}>{t($ => $.missions.builder.roleNone)}</option>}
               <option value="required">{t($ => $.missions.builder.roleRequired)}</option>
               <option value="optional">{t($ => $.missions.builder.roleOptional)}</option>
             </select>
@@ -112,7 +131,15 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
               aria-label={t($ => $.missions.builder.startingAction, { name })} disabled={disabled || role !== 'required'}
               onChange={event => setStarting(name, event.target.checked)} />{t($ => $.missions.builder.starting)}</label>
           </div>
-          {action && <details className="mission-action-inspector">
+          {definition && <div className="mission-action-definition-controls">
+            {onSaveDefinition && <Button variant="secondary" disabled={disabled} onClick={() => setDefinitionDialog({ definition })}>
+              {t($ => $.missions.actionDefinition.edit, { name })}
+            </Button>}
+            {onRemoveDefinition && <Button variant="secondary" disabled={disabled} title={t($ => $.missions.actionDefinition.removeHint)}
+              onClick={() => onRemoveDefinition(name)}>{t($ => $.missions.actionDefinition.remove, { name })}</Button>}
+            <p className="form-hint">{t($ => $.missions.actionDefinition.deselectHint)}</p>
+          </div>}
+          {contract && <details className="mission-action-inspector">
             <summary>{t($ => $.missions.builder.inspectAction, { name })}</summary>
             <section className="mission-action-agents"><h3>{t($ => $.missions.builder.agentReports)}</h3>
               {agentQuery.error ? <p className="catalog-muted">{t($ => $.missions.builder.agentReportsUnavailable)}</p>
@@ -132,11 +159,17 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
                     </ul>}
                   </li>)}</ul> : <p className="catalog-muted">{t($ => $.missions.builder.noAgentReports)}</p>}
             </section>
-            <ActionDetails action={action} />
+            <ActionDetails action={contract} />
           </details>}
         </li>;
       })}
     </ul> : !query.loading && !error && <p className="catalog-muted">{filter
       ? t($ => $.missions.builder.noMatchingActions) : t($ => $.missions.builder.noActions)}</p>}
+    {definitionDialog && !disabled && onSaveDefinition && <ActionDefinitionDialog definition={definitionDialog.definition}
+      onClose={() => setDefinitionDialog(undefined)} onSave={definition => {
+        onSaveDefinition(definition, definitionDialog.definition?.name);
+        setSearch(definition.name);
+        setDefinitionDialog(undefined);
+      }} />}
   </section>;
 }

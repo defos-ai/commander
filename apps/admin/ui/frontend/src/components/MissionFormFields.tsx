@@ -1,6 +1,7 @@
 import { useId, type RefObject } from 'react';
 import type { Connection, Session } from '../connections/types';
 import type { MissionDraft } from '../missions/draft';
+import { readActionDefinitions, writeActionDefinition, removeActionDefinition, type ActionDefinitionDraft } from '../missions/action-definitions';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { MissionActionPicker } from './MissionActionPicker';
@@ -18,6 +19,16 @@ type Props = {
 export function MissionFormFields({ draft, onChange, connection, credentials, disabled, nameInput, onSignIn }: Props) {
   const { t } = useTranslation();
   const identity = useId();
+  let definitions: ActionDefinitionDraft[] = [];
+  let invalidDefinitions = false;
+  try { definitions = readActionDefinitions(draft.action_definitions); }
+  catch { invalidDefinitions = true; }
+  let stepActions: string[] = [];
+  try {
+    const steps: unknown = JSON.parse(draft.steps);
+    if (Array.isArray(steps)) stepActions = steps.flatMap(step => Array.isArray(step?.required_actions)
+      ? step.required_actions.filter((name: unknown): name is string => typeof name === 'string') : []);
+  } catch { /* Advanced JSON stays editable while incomplete. */ }
   const advanced = [
     { field: 'input_schema', label: t($ => $.missions.builder.inputSchema) },
     { field: 'output_schema', label: t($ => $.missions.builder.outputSchema) },
@@ -52,6 +63,15 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
       </Button>
     </section>
     <MissionActionPicker connection={connection} credentials={credentials} disabled={disabled} onSignIn={onSignIn}
+      definitions={definitions} invalidDefinitions={invalidDefinitions} stepActions={stepActions}
+      onSaveDefinition={(definition, originalName) => {
+        const actionDefinitions = writeActionDefinition(draft.action_definitions, definition, originalName);
+        const selected = originalName !== undefined || draft.required_actions.includes(definition.name)
+          || draft.optional_actions.includes(definition.name) || stepActions.includes(definition.name);
+        onChange({ ...draft, action_definitions: actionDefinitions,
+          required_actions: selected ? draft.required_actions : [...draft.required_actions, definition.name] });
+      }}
+      onRemoveDefinition={name => onChange({ ...draft, action_definitions: removeActionDefinition(draft.action_definitions, name) })}
       requiredActions={draft.required_actions} optionalActions={draft.optional_actions} startingActions={draft.starting_actions}
       onChange={selection => onChange({ ...draft, required_actions: selection.requiredActions,
         optional_actions: selection.optionalActions, starting_actions: selection.startingActions })} />

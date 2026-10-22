@@ -47,7 +47,7 @@ function valueEnd(source: string, start: number): number {
   if (source[start] === '"') return stringEnd(source, start);
   if (source[start] !== '{' && source[start] !== '[') {
     let end = start;
-    while (end < source.length && !/[\s,}]/.test(source[end])) end++;
+    while (end < source.length && !/[\s,}\]]/.test(source[end])) end++;
     return end;
   }
   let depth = 1;
@@ -82,6 +82,8 @@ function document(source: string): Document {
   }
   return { value, fields, open };
 }
+
+export { document as readJSONObject, valueEnd as jsonValueEnd, whitespace as skipJSONWhitespace };
 
 function strings(value: unknown, nullable = false): value is string[] | undefined | null {
   return (nullable && value == null) || (Array.isArray(value) && value.every(entry => typeof entry === 'string'));

@@ -19,6 +19,10 @@ or drag and zoom to explore. Artifact details offer image/text previews (up to
 Open **Missions → Create mission**. Set a name and objectives, then search registered
 actions and choose **Required** or **Optional**. Mark required actions as starting
 actions when they should begin the work. Inspect an action for its readiness and schemas.
+Choose **Define action** for a capability an agent should implement later. Give it
+a name, description, input/output object schemas and any required secret names.
+Add, edit or remove definitions in the draft; new actions are selected as required.
+Removing a definition keeps its action selected and preserves planning references.
 Use **Advanced settings** for schemas, rules, planning steps and action definitions,
 or switch to **JSON** to edit the full definition. Switching views preserves schema
 numbers, string escapes and fields you have not changed. Use **All missions** to

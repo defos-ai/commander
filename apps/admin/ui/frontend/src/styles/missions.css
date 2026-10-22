@@ -15,6 +15,15 @@
 .mission-objective .form-field { flex: 1; }
 .mission-create-form .mission-objective-input { font: 400 13px/1.6 var(--font-sans); min-height: 72px; }
 .mission-action-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mission-action-toolbar-buttons, .mission-action-definition-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.mission-action-definition-controls .form-hint { flex-basis: 100%; }
+.dialog.mission-action-dialog { width: min(720px, calc(100% - 29px)); }
+.mission-action-definition-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.mission-action-definition-form > :not(.mission-action-definition-schema) { grid-column: 1 / -1; }
+.mission-action-definition-form .form-field { min-width: 0; }
+.mission-action-definition-form textarea { width: 100%; padding: 13px; border: 1px solid #bcbcb4; border-radius: 4px; background: var(--panel); color: var(--ink); resize: vertical; font: 400 13px/1.6 var(--font-sans); }
+.mission-action-definition-schema textarea { font: 400 12px/1.6 var(--font-mono); min-height: 150px; tab-size: 2; }
+.mission-action-definition-form textarea[aria-invalid='true'] { border-color: var(--red); }
 .mission-action-list { list-style: none; padding: 0; margin: 0; max-height: 460px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
 .mission-action-item { display: grid; gap: 10px; padding: 16px; }
 .mission-action-item + .mission-action-item { border-top: 1px solid var(--line); }
@@ -97,6 +106,7 @@
 .mission-schema summary { color: var(--muted); cursor: pointer; font-size: 12px; padding: 4px 0; }
 .mission-schema pre { max-height: 378px; overflow: auto; padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font: 400 11px/1.7 var(--font-mono); }
 @media (max-width: 760px) {
+  .mission-action-definition-form { grid-template-columns: 1fr; }
   .mission-objective { align-items: stretch; flex-direction: column; }
   .mission-objective > .button { align-self: flex-start; }
   .mission-row { padding: 18px; gap: 14px; }

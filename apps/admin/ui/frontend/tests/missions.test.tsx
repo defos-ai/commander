@@ -376,6 +376,97 @@ describe('missions browser', () => {
     expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });
 
+  it('authors action contracts without registering actions or saving the mission until requested', async () => {
+    const existing = String.raw`{"name":"existing-action","input_schema":{"type":"object","properties":{"id":{"const":9007199254740995},"path":{"const":"\u0062\\existing"}}},"output_schema":{"type":"object"}}`;
+    const inputSchema = String.raw`{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}}`;
+    const source = `{"name":"defined-review","objectives":["Review a future capability."],"required_actions":[],"starting_actions":[],"input_schema":{},"output_schema":{},"rules":{"same-agent":{"for_actions":["existing-action"]}},"steps":[{"id":"review","objective":"Review evidence.","agent_types":[],"required_actions":["existing-action"]}],"action_definitions":[${existing}]}`;
+    const onSelect = vi.fn();
+    const fetch = mockAPI((_url, init) => init.method === 'POST'
+      ? Response.json(JSON.parse(init.body as string), { status: 201 }) : Response.json({ items: [] }));
+    const callbacks = { onSignIn: vi.fn(), onBack: vi.fn(), onSelect };
+    const view = render(<CreateMissionPage connection={connection} credentials={credentials} {...callbacks} />);
+    fireEvent.change(creationJSONEditor(), { target: { value: source } });
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('steps');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit definition existing-action' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save definition' }));
+    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('steps');
+
+    const define = screen.getByRole('button', { name: 'Define action' });
+    define.focus();
+    fireEvent.click(define);
+    let dialog = within(screen.getByRole('dialog', { name: 'Define action' }));
+    expect(dialog.getByRole('textbox', { name: 'Action name' })).toHaveFocus();
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Action name' }), { target: { value: 'cancelled-action' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(define).toHaveFocus();
+    expect(screen.queryByRole('combobox', { name: 'Role for cancelled-action' })).not.toBeInTheDocument();
+
+    fireEvent.click(define);
+    dialog = within(screen.getByRole('dialog', { name: 'Define action' }));
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Action name' }), { target: { value: 'existing-action' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Add action' }));
+    expect(dialog.getByRole('alert')).toHaveTextContent('An action with this name is already defined in this mission.');
+    expect(dialog.getByRole('textbox', { name: 'Action name' })).toHaveFocus();
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Action name' }), { target: { value: 'future-action' } });
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Description' }), { target: { value: 'Review a future capability.' } });
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Action input schema (JSON)' }), { target: { value: inputSchema } });
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Action output schema (JSON)' }), { target: { value: '{invalid' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Add action' }));
+    expect(dialog.getByRole('alert')).toHaveTextContent('Enter valid JSON with "type": "object" for the action output schema.');
+    expect(dialog.getByRole('textbox', { name: 'Action output schema (JSON)' })).toHaveValue('{invalid');
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Action output schema (JSON)' }), { target: { value: '{"type":"object"}' } });
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Required secret names' }), { target: { value: 'REVIEW_TOKEN\nSITE_TOKEN' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Add action' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Role for future-action' })).toHaveValue('required');
+    expect(screen.getByRole('checkbox', { name: 'Start with future-action' })).not.toBeChecked();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search actions' }), { target: { value: '' } });
+    expect(screen.getAllByText('Defined in this mission')).toHaveLength(2);
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit definition future-action' }));
+    dialog = within(screen.getByRole('dialog'));
+    const name = dialog.getByRole('textbox', { name: 'Action name' });
+    expect(name).toHaveValue('future-action');
+    expect(name).toHaveAttribute('readonly');
+    expect(dialog.getByRole('textbox', { name: 'Action input schema (JSON)' })).toHaveValue(inputSchema);
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Description' }), { target: { value: 'Keep precise review evidence.' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Save definition' }));
+    const editor = creationJSONEditor();
+    expect((editor as HTMLTextAreaElement).value).toContain(existing);
+    expect((editor as HTMLTextAreaElement).value).toContain(inputSchema);
+    expect(JSON.parse((editor as HTMLTextAreaElement).value).required_actions).toEqual(['future-action']);
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove definition existing-action' }));
+    expect(screen.queryByRole('button', { name: 'Edit definition existing-action' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('steps');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Role for future-action' }), { target: { value: 'optional' } });
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalledExactlyOnceWith('defined-review'));
+    const posts = fetch.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts).toHaveLength(1);
+    const saved = posts[0][1]!.body as string;
+    expect(saved).toContain(inputSchema);
+    expect(JSON.parse(saved)).toMatchObject({
+      required_actions: [], optional_actions: ['future-action'], starting_actions: [],
+      rules: { 'same-agent': { for_actions: ['existing-action'] } },
+      steps: [{ id: 'review', objective: 'Review evidence.', agent_types: [], required_actions: ['existing-action'] }],
+      action_definitions: [{ name: 'future-action', description: 'Keep precise review evidence.', required_secrets: ['REVIEW_TOKEN', 'SITE_TOKEN'] }],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Define action' }));
+    fireEvent.change(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Action name' }), { target: { value: 'abandoned-action' } });
+    view.rerender(<CreateMissionPage connection={connection} credentials={{ ...credentials }} {...callbacks} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveValue('');
+    expect(screen.queryByRole('combobox', { name: 'Role for abandoned-action' })).not.toBeInTheDocument();
+  });
+
   it('still saves JSON when the action catalog cannot be loaded', async () => {
     const onSelect = vi.fn();
     const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => init.method === 'POST'

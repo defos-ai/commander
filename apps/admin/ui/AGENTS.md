@@ -72,6 +72,19 @@
   moving from Form to JSON or submitting. Preserve untouched fields, numeric tokens
   and string escapes; reject unrepresentable JSON-to-Form transitions without
   altering the source. Keep invalid advanced drafts editable and block submission.
+  **Define action** opens a local draft dialog for desired contracts. It must use
+  a portal and stop submit propagation so adding a definition cannot submit the
+  mission form. Add/edit/remove never calls the API or installs actions. New
+  definitions become required unless already referenced; edits preserve roles.
+  Keep names read-only when
+  editing so steps and rules retain their references. Definitions stay referenced
+  by required/optional actions or planning steps in the picker. Step-only contracts
+  must not be promoted to root required actions when edited. Removing a definition keeps the action selections,
+  rules and steps intact; remove its selection separately if no longer needed.
+  Preserve raw schema tokens, untouched definitions and unknown properties when
+  editing the array. Reject duplicates and invalid structure without overwriting
+  it; malformed advanced JSON remains repairable there. Discard unsaved dialogs
+  on cancellation, mode/route or connection/session changes and restore focus.
   Keep the JSON editor's text unchanged when
   submitting so large schema numbers retain precision. Validate syntax and the
   required fields locally; the shared API validator owns mission semantics.
