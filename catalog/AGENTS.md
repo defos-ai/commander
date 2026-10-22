@@ -12,11 +12,12 @@ Read the [root guide](../AGENTS.md) and
 - Visibility describes the GitHub repository; package trust and Docker image
   visibility are separate. Commander client integration owns catalog lookup and
   passes the selected package and visibility unchanged to `spawn-agent`; never load the
-  catalog in spawner. Private actions use environment `GITHUB_TOKEN` first,
+  catalog in spawner. Private installs use environment `GITHUB_TOKEN` first,
   then a managed secret scoped to `spawner-agent` through the existing
   Playground/Admin exchange. Public or omitted visibility stays anonymous.
   The spawner owns public and private `stable` resolution and saves the exact pin
-  for retries. Catalog loading and Docker image pulls remain anonymous.
+  for retries. Catalog loading remains anonymous; private GHCR pulls may reuse
+  the installation token. Other registries and public installs remain anonymous.
 - Describe implemented capabilities. Builder prepares source through
   `checkout-template`, uses `build-agent` for Codex generation, Go validation
   and source artifacts, then optionally publishes a reviewed artifact through
@@ -35,7 +36,7 @@ Read the [root guide](../AGENTS.md) and
   with each entry's package and visibility. Version resolution belongs to the
   spawner. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading
   is lazy and catalog failure must not prevent direct installs. Spawner action
-  and CLI inputs accept GitHub URLs, bare references, `@stable` or exact pins;
+  inputs accept GitHub URLs, bare references, `@stable` or exact pins;
   aliases remain discovery names, not installation inputs.
 
 ## Validation

@@ -1,143 +1,107 @@
 # Local setup and configuration
 
-Start with [the root quick start](../README.md#quick-start). Compose is a local
-development setup; production deployment is not yet documented.
+For the fastest start, use the [Docker or binary quick start](../README.md#quick-start).
+Use Compose to develop against persistent local services.
 
 ## All-in-one Docker
 
-[Run Playground's all-in-one image](../apps/playground/README.md#docker-recommended)
-with `-p 127.0.0.1:4275:4275` before the image name. Completed operation rows link
-to their details in Admin at `http://localhost:4275`. Use `/admin`
-for the prefilled connection link anytime and `/credentials` for the API login.
-For another published port or host, pass `--admin-url` with the browser address
-after the image name. Admin reaches the API inside the container;
-publish `4274` only if other tools need it. Exiting removes the session's results.
+```sh
+docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
+```
+
+Open [Admin](http://localhost:4275), or use `/admin` in Playground.
+Use `/credentials` for the API login. Exiting deletes the session's results.
+
+For another host or published port, pass `--admin-url=<browser-facing URL>` after
+the image name. Publish API port `4274` only if another tool needs it.
 
 ## Local Compose
 
-From the repository root, start the stack and launch Playground:
+From the repository root:
 
 ```sh
-docker compose up --build --wait &&
-docker compose run --build --rm --no-deps playground
+docker compose up --build --wait && docker compose run --build --rm --no-deps playground
 ```
 
-Compose runs MCP, the API and Admin, one controller, and builder and spawner
-agents. The builder checks out the agent template. Use Playground or another
-connected MCP client to request additional agents before starting work that needs
-their actions: web agents run HTTP checks and the browser renders pages.
-It uses RabbitMQ for messaging, MongoDB for the database, and MinIO for file
-storage. See [RabbitMQ](../providers/rabbitmq/README.md#quick-start),
-[MongoDB](../providers/mongo/README.md), and [S3](../providers/s3/README.md) for
-connection details. Bundled infrastructure credentials are for local development.
+Builder and spawner are ready to use. Ask chat to install other agents when needed.
+Compose supplies RabbitMQ, MongoDB and MinIO, using local development credentials.
 
-Connect another AI client to `http://localhost:4273/mcp` with the same bearer token using the
-[adapter guide](../apps/adapters/README.md#quick-start). For a temporary session
-without Compose, use [Playground's all-in-one mode](../apps/playground/README.md#native-one-executable),
-which generates and shares its MCP token automatically.
+| Connect to… | Address | Get credentials |
+| --- | --- | --- |
+| Admin | <http://localhost:4275> | `docker compose exec api commander-api credentials` |
+| HTTP API | <http://localhost:4274> | Same API login |
+| MCP | <http://localhost:4273/mcp> | `docker compose exec mcp commander-mcp credentials` |
 
-The API listens on `4274` and admin UI on `4275`. Compose generates an API password
-on each container start; set `API_PASSWORD` to preserve your own password. The
-[UI quick start](../apps/admin/ui/README.md#quick-start) shows retrieval and port overrides.
-Playground's `/admin` link follows the published `COMMANDER_UI_PORT`; set
-`COMMANDER_ADMIN_URL` when accessing Admin through another host or proxy.
+Playground receives the MCP token automatically. To connect another client, follow
+[the MCP guide](../apps/adapters/README.md#quick-start).
 
-The one-shot `mcp-credentials` initializer saves a shared MCP token in a named
-Docker volume. MCP and Playground mount it read-only and export it to their
-process environments. Playground connects automatically, and the token survives
-restarts. Set `MCP_TOKEN` before starting Compose to replace it;
-`COMMANDER_MCP_TOKEN` overrides it for Playground. Retrieve the running token with
-`docker compose exec mcp commander-mcp credentials`; add `--raw` for only the token.
-API credentials remain in its process environment.
+Set `API_PASSWORD` before launch to keep a fixed API password across restarts.
+The MCP token is saved in a volume; set `MCP_TOKEN` to supply your own.
+Add `--raw` to a credentials command for just its password or token.
 
 ### Secret encryption
 
-Compose enables secret management automatically. The `secrets-key` initializer
-saves one encryption key in its own volume; API, builder and spawner mount it
-read-only and load it into `SECRETS_ENCRYPTION_KEY`. Restarts reuse the key. Set that variable before
-the first start to supply your own 64-character hex key; a later conflicting value
-fails startup instead of replacing the saved key.
+Compose generates and saves `SECRETS_ENCRYPTION_KEY` automatically. To supply your
+own, set a 64-character hex value before the first start. A conflicting value on
+later starts is rejected.
 
-Back up this key volume with MongoDB and restore them together. Do not delete the
-key volume while keeping the database: a new key cannot decrypt existing secrets.
-The spawner automatically supplies it to the official
-`github.com/defos-ai/commander/apps/agents/builder@<version>` package with manifest
-type `builder-agent`. Other spawned packages, MCP, the Compose Playground client
-and the controller do not receive it. Docker administrators can inspect the
-builder's environment. A separately started builder needs the same key configured
-for managed secrets; `checkout-template` does not need it.
+**Back up the `secrets-key` volume with MongoDB and restore them together.** A new
+key cannot decrypt existing secrets. All-in-one generates a temporary session key.
+For separately deployed agents using managed secrets, configure the same key as
+the API. See [secret setup](../framework/secrets/README.md).
 
 ## Configuration
 
 ### Spawned agents
 
-The [spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket
-to start released images as sibling containers on the Compose network. It starts
-without child agents. Through chat or MCP, request `spawn-agent` with an exact
-package reference, such as `github.com/defos-ai/commander-web-agent@v0.2.0`,
-then start the mission after the new agent is ready. See the
-[runtime spawning example](../apps/agents/spawner/README.md#during-a-mission).
-Launching packages needs Internet access for GitHub manifests and uncached image
-pulls. Children receive bus/storage settings, without the socket or secrets
-encryption key, except for the [trusted builder bootstrap](#secret-encryption).
+Ask Playground to install an agent from a trusted GitHub repository or choose one
+from the [catalog](../catalog/README.md). The
+[spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket to
+launch sibling containers on the Compose network. Installation needs Internet access.
 
-Spawned containers keep running when the spawner restarts. Launch identities and
-package selections remain in controller-owned execution checkpoints in MongoDB.
-Restarting the spawner does not replay installation tasks. Spawned containers
-have no automatic restart policy; stopped or missing children need a new launch
-after the previous instance is inspected.
-See [stopping and resetting agents](#stopping-and-resetting-agents) before teardown.
+Each installation creates one instance. Check readiness before starting dependent
+work. After an uncertain launch, inspect the existing container before trying again.
+Spawned containers keep running when the spawner restarts and are
+[removed separately during teardown](#stopping-and-resetting-agents).
 
 ### Shared settings
 
-| Environment variable | CLI flag | Purpose |
-| --- | --- | --- |
-| `BUS_URL` | `--bus-url` | Messaging |
-| `DATABASE_URL` | `--database-url` | Controller/MCP database |
-| `STORAGE_URL` | `--storage-url` | Artifact files and reports |
-| `LOG_LEVEL` | `--log-level` | Log verbosity |
-| `LOG_FORMAT` | `--log-format` | `text` or `json` logs |
-| `MCP_TOKEN` | — | Required standalone MCP bearer token |
-| `COMMANDER_MCP_TOKEN` | — | Playground token for an existing MCP server |
-| `COMMANDER_ADMIN_URL` | `--admin-url` | Browser-facing Admin URL advertised by Playground |
-| `SECRETS_ENCRYPTION_KEY` | — | Encryption key for the API and agents using managed secrets; generated once by Compose |
+Set these in your shell or an untracked `.env` before running Compose:
 
-Flags override environment values. Native hosts default to `./state/bus`,
-`./state/database`, and `./state/storage`. Agents need bus and file storage only.
-Compose supplies backend settings; application images do not choose providers.
-`COMMANDER_MCP_PORT` changes the published Compose port (default `4273`).
-Run a host with `--help` for its flags. Action-specific dependencies belong in the
-[browser agent guide](https://github.com/defos-ai/commander-browser-agent); model settings belong in
-[Playground](../apps/playground/README.md).
+| Setting | Use it to… |
+| --- | --- |
+| `COMMANDER_MCP_PORT`, `COMMANDER_API_PORT`, `COMMANDER_UI_PORT` | Change published ports (`4273`, `4274`, `4275`) |
+| `COMMANDER_ADMIN_URL` | Set the browser-facing Admin link for a remote host or proxy |
+| `BUS_URL`, `DATABASE_URL`, `STORAGE_URL` | Connect hosts to different providers |
+| `LOG_LEVEL`, `LOG_FORMAT` | Choose verbosity and `text` or `json` logs |
 
-Native all-in-one uses its own Admin address; Docker all-in-one and standalone
-Playground default their links to `http://localhost:4275`. Compose supplies its
-known published address. Set `COMMANDER_ADMIN_URL` or pass `--admin-url` to
-override the link. Standalone Playground does not start Admin; the link does not
-publish a port or infer an API connection from MCP.
+Standalone hosts accept matching flags such as `--bus-url`; flags override
+environment values. Run `<executable> --help` for its options.
+Use the component guides for [API](../apps/adapters/api/README.md),
+[Admin hosting](../apps/admin/ui/README.md#connections-and-sessions),
+[spawner](../apps/agents/spawner/README.md) and
+[model settings](../apps/playground/README.md).
 
 ## State
 
-Compose creates named Docker volumes; no host `state/` directory is needed.
-It persists RabbitMQ, MongoDB, and MinIO data in their own volumes.
-Separate volumes hold the shared MCP token and the secrets encryption key.
-The controller database retains execution checkpoints. The default builder stores
-checkouts in `builder-workspaces`, which survives container recreation. Additional
-spawned builders own their workspaces inside their containers.
-Host inboxes remain transient: broker persistence does not preserve a replaced
-host's inbox.
+Compose keeps data in named Docker volumes:
 
-Compose passes `--with-missions` to load both website missions. This upserts supplied
-missions without removing others; without the flag the controller loads none.
-See [mission configuration](../apps/controllers/README.md#quick-start).
+| Volume | Keep it for… |
+| --- | --- |
+| `mongo` | Missions, operations, results, encrypted secrets and execution checkpoints |
+| `minio` | Artifact files and reports |
+| `rabbitmq` | Broker data |
+| `builder-workspaces` | The default builder's source checkouts |
+| `secrets-key` | The key needed to decrypt saved secrets |
+| `mcp-credentials` | The shared MCP token |
 
-Use `docker compose logs -f` for service logs. Spawned agents have their own
-containers: use `docker logs <container-id>` for those.
+Use `docker compose logs -f` for services and `docker logs <container-id>` for
+spawned agents. To load your own missions, see [mission setup](../apps/controllers/README.md#quick-start).
 
 ### Stopping and resetting agents
 
-Spawned containers are not Compose services: `docker compose down` does not stop
-them. To stop the default deployment and its spawned agents:
+Spawned containers are not Compose services. Stop the spawner, remove its children,
+then stop the stack:
 
 ```sh
 docker compose stop spawner-agent
@@ -145,10 +109,6 @@ for container in $(docker ps -aq --filter network=commander_default --filter lab
 docker compose down
 ```
 
-For a custom Compose project name, replace `commander_default` with that project's
-network name. New installation tasks create fresh agents; completed tasks are
-retained as history. MongoDB, artifacts, credentials
-and the default builder's workspaces remain; removing a spawned builder's
-container also removes that instance's workspaces.
-**`docker compose down --volumes` deletes the Compose stack's saved state.**
-For restart behavior and scaling limits, see [architecture](overview.md#state-and-restart-recovery).
+For a custom Compose project, replace `commander_default` with its network name.
+Saved volumes remain. Removing a spawned builder also removes that container's
+workspaces. **`docker compose down --volumes` deletes the stack's saved state.**

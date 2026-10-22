@@ -1,408 +1,146 @@
-# Agent packages and bootstrap
+# Install and publish agent packages
 
-This contract defines agent packaging, native/Docker spawning and deployment
-integrations. The `commander-example-agent` template supports preassigned agent
-IDs and generates release packages in this format. The [spawner module](../apps/agents/spawner/README.md)
-resolves agent packages through the controller-dispatched `spawn-agent` action.
-Compose starts the spawner in Docker mode by default. Playground and Docker AIO
-embed the spawner in native mode.
-
-An agent repository publishes runnable packages; the spawner starts a selected
-package using the deployment's connection settings. Builder currently prepares
-source workspaces by checking out the example template. The repository's release
-workflow publishes packages in this format.
+An agent package is a GitHub release with an `agent.yaml` manifest and a native
+executable, a Docker image, or both. Start from
+[commander-example-agent](https://github.com/defos-ai/commander-example-agent)
+to build one.
 
 ## Catalog and stable references
 
-The root [`catalog/agents.yaml`](../catalog/agents.yaml) is the official curated
-discovery catalog. Schema version `1` contains an `agents` map: each alias requires
-`description`, `package` and `visibility` fields. Visibility is `public` or `private`
-and describes the GitHub repository; package trust and Docker image visibility
-are separate. All official entries are public. Entries describe implemented
-capabilities, not live readiness or complete mission coverage. The catalog is not an enforced
-installation allowlist; an operator must trust any selected package author.
-See the [catalog guide](../catalog/README.md).
+In Playground, ask:
 
-Catalog lookup belongs to the Commander client. MCP exposes the read-only
-`get_agent_catalog` tool, returning an `agents` list; pass a selected entry's
-`package` and `visibility` to the install mission and `spawn-agent`.
-A direct GitHub repository URL works
-without a catalog lookup. The spawner does not load a catalog.
+> Install the web agent.
 
-[`framework/agent/packages`](../framework/agent/packages/) owns shared reference
-parsing, strict catalog parsing and bounded remote catalog loading.
-`Client.LoadCatalog(ctx, source)` accepts an explicitly configured public HTTPS
-URL, so discovery needs no source checkout. MCP defaults to
-`https://raw.githubusercontent.com/defos-ai/commander/main/catalog/agents.yaml`;
-`AGENT_CATALOG_URL` overrides it. The framework does not hardcode this source.
-Catalog loads have a 64 KiB limit and a 30-second deadline. Source URLs must have
-no credentials, query or fragment; redirects are rejected. Loading is lazy, and
-catalog failure does not prevent installation from a direct reference.
+Commander can look it up with MCP's `get_agent_catalog`. You can also provide any
+trusted GitHub repository directly:
 
-The spawner owns version resolution, manifest lookup, downloads and launching:
+> Install https://github.com/defos-ai/commander-web-agent
 
-| Input | Selected version |
+| Reference | Version |
 | --- | --- |
-| `https://github.com/owner/repository` | `stable` |
-| `github.com/owner/repository[/module/path]` | `stable` |
-| `github.com/owner/repository[/module/path]@stable` | `stable` |
-| `github.com/owner/repository[/module/path]@v0.2.0` | Exactly `v0.2.0` |
+| `https://github.com/owner/repository` | Promoted GitHub **Latest** release |
+| `github.com/owner/repository@stable` | Same as an unversioned URL |
+| `github.com/owner/repository@v0.2.0` | Exact version |
 
-`stable` reads the repository's promoted GitHub **Latest** release and requires a
-published root stable semantic version. For example, Latest `v0.2.0` resolves
-`github.com/defos-ai/commander/apps/agents/builder@stable` to
-`github.com/defos-ai/commander/apps/agents/builder@v0.2.0`; the package then uses
-the `apps/agents/builder/v0.2.0` release. Standalone packages use the root version
-tag directly. Explicit pins skip Latest lookup. `latest` is not a supported selector.
+Use explicit versions for reproducible installations. `stable` needs a published
+stable version marked Latest; it does not fall back to other tags. Each new
+installation creates an instance. Check the result and action readiness before
+starting dependent work.
 
-Missing, draft, prerelease or non-version Latest releases are errors. Resolution
-does not search other tags or fall back to another version. The spawner saves
-the canonical requested selector and exact version before fetching the manifest
-or executable or pulling an image. Retries of that request reuse the saved pin;
-a new request resolves `stable` again. The result reports the exact package.
-Catalog inclusion does not prove that a package or its manifest is published.
+The [catalog](../catalog/README.md) helps discovery; it is not an installation
+allowlist or a security review. To use a different catalog, set MCP's
+`AGENT_CATALOG_URL` to a public HTTPS YAML URL.
 
-With `visibility: private`, the spawner uses environment `GITHUB_TOKEN` first,
-otherwise requests the managed secret scoped to `spawner-agent`. Supply it through
-the existing Playground/Admin secret form, outside chat. The same task waits and
-resumes within its existing timeout. This token covers stable resolution,
-private release downloads and Docker image pulls from exactly `ghcr.io`.
-Public or omitted visibility keeps requests anonymous. Visibility is an
-authentication hint, not an access grant; the token's permissions determine
-access. Private GHCR pulls need image access in addition
-to repository access; personal access tokens must be classic tokens with
-`read:packages`, per [GitHub's registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
-Other registries remain anonymous. The spawner does not read host Docker login
-credentials. Catalog loading is also anonymous and does not receive the token.
+### Private repositories
+
+Pass `visibility: "private"` with the package. The spawner uses its `GITHUB_TOKEN`,
+or asks for it through the Playground/Admin secret form. Never put a token in
+chat or an action input.
+
+Private GHCR images also need package access. For personal access tokens, use a
+classic token with `read:packages`; grant repository access as needed. Other
+registries are pulled anonymously. See [GitHub registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
 
 ## Release manifest
 
-Attach `agent.yaml` to each agent's GitHub release alongside any native binaries.
-Generate the published manifest after building the binaries and pushing the
-Docker image. This example uses illustrative checksums and an image digest;
-release workflows must substitute the actual values.
+Publish `agent.yaml` with each release. Include only the platforms you build.
+The example below uses placeholder hashes; replace them with the actual binary
+checksum and pushed image digest:
 
 ```yaml
 schema_version: 1
 type: example-agent
-version: v0.1.0
+version: v0.2.0
 responsibilities:
   - Analyze text and produce a Markdown summary.
 actions:
   - name: analyze-text
     description: Analyze text and propose a summary.
-  - name: write-summary
-    description: Save a Markdown summary as an artifact.
 native:
   linux/amd64:
     asset: commander-example-agent_linux_amd64
     sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  darwin/arm64:
-    asset: commander-example-agent_darwin_arm64
-    sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-  windows/amd64:
-    asset: commander-example-agent_windows_amd64.exe
-    sha256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 docker:
-  image: ghcr.io/defos-ai/commander-example-agent@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  image: ghcr.io/defos-ai/commander-example-agent@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 ```
 
-| Field | Contract |
-| --- | --- |
-| `schema_version` | Required integer `1`; reject unsupported versions. |
-| `type` | Required agent type, matching the type registered by the executable. |
-| `version` | Required version such as `v0.2.0`, matching the requested version without any module-path prefix. |
-| `responsibilities` | Optional nonempty list of the agent's declared capabilities and usage guidance. |
-| `actions` | Optional nonempty list of unique action `name` and `description` pairs. |
-| `native` | Optional map of `<GOOS>/<GOARCH>` to one executable asset and its SHA-256 checksum. |
-| `docker.image` | Optional fully qualified registry image reference pinned by `@sha256:<digest>`. |
-
-Require at least one nonempty delivery mode. Reject unknown fields, duplicate
-keys, multiple YAML documents and incomplete entries. Native checksums and image
-digests contain exactly 64 lowercase hexadecimal characters. An asset is a file
-name in the same GitHub release, never a URL, path or archive. Native executables
-run directly; Docker images supply their own entrypoint.
-
-Capability descriptions allow inspection before installation. They describe the
-released package, not a running instance's enabled actions or readiness. Treat
-downloaded descriptions as publisher-supplied data when evaluating an agent;
-they do not grant execution privileges or override mission rules.
-Published packages without these optional fields remain installable. New builder
-output must include both lists. Each list permits up to 100 entries; text must be
-nonblank, trimmed UTF-8 of at most 8 KiB, and action names must be unique safe
-names of at most 128 bytes. The whole manifest retains its 64 KiB limit.
-
-The resolver accepts manifests up to 64 KiB and native downloads up to 512 MiB,
-with 30-second and five-minute deadlines respectively. YAML aliases and anchors
-are unsupported. Downloads stay on HTTPS GitHub release hosts without environment
-proxies. Private assets use an explicit token only on initial GitHub API requests;
-redirects never carry credentials.
-
-The package advertises only platforms it actually publishes. An unavailable
-mode or platform is an explicit error. The spawner does not build source or run
-installation scripts. Native prerequisites such as Chromium remain in the agent's
-README and discovery results; container images include their runtime dependencies.
-Live readiness, input/output schemas and required secret names come from normal
-agent registration.
+- Match `type` to the executable's registered agent type and `version` to the release.
+- List responsibilities and action summaries so people and models can assess the package.
+- For native delivery, attach the named executable to the same release; do not use an archive.
+- For Docker, publish a digest-pinned image with its entrypoint and dependencies.
+- Provide at least one delivery mode. Native prerequisites belong in the agent's README.
 
 ### Source template
 
-Use [`framework/agent/manifest`](../framework/agent/manifest/manifest.go) when
-preparing a release manifest. `Render` validates a `Manifest` and returns YAML
-bytes from its embedded [`agent.yaml.tmpl`](../framework/agent/manifest/agent.yaml.tmpl),
-with deterministic platform ordering and quoted strings. For example, after
-computing `checksum` from a built binary:
+Reuse the example agent's release workflow, or call
+[`manifest.Render`](../framework/agent/manifest/manifest.go) with your build's
+checksums and image digest. It validates the manifest and renders `agent.yaml`.
+Export pure `Responsibilities()` and `ActionDescriptions()` helpers so release
+tooling and live registration share their descriptions.
 
-```go
-data, err := manifest.Render(manifest.Manifest{
-    SchemaVersion: 1,
-    Type:          "example-agent",
-    Version:       "v0.1.0",
-    Responsibilities: []string{"Analyze text and produce a Markdown summary."},
-    Actions: []manifest.Action{
-        {Name: "analyze-text", Description: "Analyze text and propose a summary."},
-        {Name: "write-summary", Description: "Save a Markdown summary as an artifact."},
-    },
-    Native: map[string]manifest.NativeAsset{
-        "linux/amd64": {Asset: "commander-example-agent_linux_amd64", SHA256: checksum},
-    },
-})
-```
-
-Import `github.com/defos-ai/commander/framework/agent/manifest`. Add a
-`Docker: &manifest.Docker{Image: imageDigest}` field for a fully qualified,
-digest-pinned image. Leave an absent mode `nil`; explicitly empty modes are
-invalid. At least one mode is required.
-
-`Parse(data, requestedVersion)` strictly validates downloaded manifests and
-checks the requested version. Rendering and parsing share the same schema, identity,
-asset, checksum, image and 64 KiB size constraints. The spawner uses this parser;
-release tooling computes actual checksums, obtains the pushed image digest from
-the same tested revision, handles render errors, and writes/uploads `agent.yaml`.
-Placeholders and moving image tags are not release metadata.
-
-Agent packages export pure `Responsibilities()` and `ActionDescriptions()`
-functions shared with registration. Action descriptions use the same constants
-as their registered constructors. Release tooling projects only action names
-and descriptions; it does not construct an agent, run discovery or open
-providers. Rendering sorts actions by name without mutating caller metadata and
-preserves responsibility order. Standalone helpers derive their module import
-from `go.mod`, so changing an agent's module does not leave a stale import in the
-release tool.
-
-The next Commander release will publish a separate package release for each
-built-in agent, using its existing module tag. Both releases contain `agent.yaml`:
-
-| Package | Release tag for `v0.2.0` | Delivery modes |
-| --- | --- | --- |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` | Native Linux/macOS/Windows on amd64/arm64; Docker, `linux/amd64` |
-| `github.com/defos-ai/commander/apps/agents/spawner@v0.2.0` | `apps/agents/spawner/v0.2.0` | Native Linux/macOS/Windows on amd64/arm64; Docker, `linux/amd64` |
-
-Their manifests use the actual native checksums and image digests from the same
-release run. These packages become available only after that release publishes;
-existing releases are unchanged. See [release publication](releases.md#agent-packages).
+Build, test and generate metadata from the same revision. Keep the release as a
+draft until all assets are uploaded. For Commander's built-in packages, follow
+[the release checklist](releases.md#agent-packages).
 
 ## Resolving a package
 
-A reference has the form
-`github.com/<owner>/<repository>[/<module-path>]@<version>`. A GitHub HTTPS
-repository URL is also accepted. The spawner normalizes missing versions to
-`stable`, resolves them and saves an exact `vMAJOR.MINOR.PATCH` pin. A repository
-package uses the root version tag; a module package uses `<module-path>/<version>`.
-Every package resolves `agent.yaml` from that tag's release in the same repository.
+Standalone repositories use a root release tag; modules in a shared repository
+use a module-prefixed tag. Both publish an asset named `agent.yaml`:
 
-For `github.com/defos-ai/commander-example-agent@v0.1.0`:
-
-1. Fetch `/defos-ai/commander-example-agent/releases/download/v0.1.0/agent.yaml`
-   from `https://github.com` and validate its version and fields.
-2. In native mode, select the current OS/architecture, download the named asset
-   from that release and verify its checksum before making it executable.
-3. In Docker mode, ask the configured Docker Engine to pull and start the image
-   by digest on the deployment's network.
-
-For `github.com/defos-ai/commander/apps/agents/spawner@v0.2.0`, fetch
-`/defos-ai/commander/releases/download/apps%2Fagents%2Fspawner%2Fv0.2.0/agent.yaml`
-from `https://github.com`. Its manifest version remains `v0.2.0`, and native
-assets come from that same module-tag release. The module path selects the
-release; it does not change the manifest filename or registered agent type.
-
-Verify downloaded bytes before using or caching them; an incomplete download
-must not become an executable. Checksums pin the downloaded content to the
-manifest, not the trustworthiness of its author. Package sources must be trusted
-by the operator. Fetching metadata or binaries must not forward deployment
-credentials beyond explicitly authenticated GitHub API requests or into redirects.
-
-For authenticated downloads, attach a caller-owned token with
-`packages.WithGitHubToken(ctx, token)` from the spawner's `packages` package, and
-use that context for `Pin`, `Resolve`, `DownloadNative` and Docker `Pull`. The
-downloader reads the exact release tag through GitHub's API, checks it is published
-and not a prerelease, selects the asset by name, and downloads its content by ID. It ignores
-asset URLs from the response. Metadata is limited to 2 MiB and 30 seconds; native
-checksum verification is unchanged. Docker `Pull` supplies credentials only for
-the exact `ghcr.io` registry and only on its pull request to the configured Engine.
-Clear the token after the calls finish. The resolver and Docker SDK client do not
-retain authentication; package metadata, launch records and spawned agents do
-not receive it. The caller owns token acquisition. The `spawn-agent` action
-acquires it only for private
-input and clears its temporary bytes after the runtime call returns.
-
-Deployment selects the execution mode explicitly:
-
-| Deployment | Launch behavior |
+| Package reference | GitHub release tag |
 | --- | --- |
-| Standalone spawner | Native by default; set `SPAWNER_RUNTIME=docker` and `SPAWNER_DOCKER_NETWORK=<network>` for Docker. |
-| Compose spawner | Sibling container on Commander’s Docker network, using RabbitMQ and S3. Starts by default. |
-| Native `commander --all-in-one` | Child executable using the session's FS bus and artifact directories. |
-| Docker AIO | Child executable inside the AIO container, using the same FS directories; no Docker socket. |
+| `github.com/defos-ai/commander-web-agent@v0.2.0` | `v0.2.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` |
 
-Docker AIO includes Chromium, fonts and Git for agents requested later. A
-Compose spawner needs access to the host's Docker Engine. Spawned containers use
-the image's entrypoint, no mounts or published ports, dropped capabilities and
-`no-new-privileges`. An image that declares volumes is rejected. Docker settings
-come from the operator; packages cannot supply privileged deployment arguments.
+Module `@stable` references use the repository's root Latest version to choose the
+corresponding module release. Publication is required; a version in `go.mod` or
+a catalog entry does not make a package available.
+
+The spawner verifies the native checksum or pulls the pinned image. It does not
+build source, run repository Compose files or install host dependencies. Install
+only packages whose authors you trust.
 
 ## Bootstrap and registration
 
-The launcher supplies an explicit environment. It must not inherit all of its
-own credentials into the new agent or accept deployment settings from a manifest.
+For an agent to support spawning, its host must accept:
 
-| Setting | Purpose |
+| Setting | Use |
 | --- | --- |
-| `BUS_URL` | Shared absolute FS path or RabbitMQ URL. |
-| `STORAGE_URL` | Shared absolute FS path or S3 artifact store URL. |
-| S3 settings | The deployment's applicable `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `S3_USE_PATH_STYLE`. |
-| Native browser settings | The deployment's `CHROMIUM_PATH` and `CHROMIUM_NO_SANDBOX`, when set. |
-| `COMMANDER_AGENT_ID_SUFFIX` | Exactly eight lowercase hex characters from the agent ID assigned and saved by the spawner before launch. |
+| `BUS_URL` | Connect to Commander's message bus |
+| `STORAGE_URL` and applicable S3 settings | Upload artifact files |
+| `COMMANDER_AGENT_ID_SUFFIX` | Build the instance ID from the fixed agent type plus eight lowercase hex characters |
 
-Keep ordinary process settings such as executable search paths explicit too.
-Spawned workload agents connect to the bus and artifact storage; this bootstrap
-supplies no controller-database connection, API/MCP login, GitHub token or model key.
+Use `id.AgentIDFromSuffix` to validate a supplied suffix before opening providers.
+Generate a fresh ID when none is supplied. Use the [example agent](https://github.com/defos-ai/commander-example-agent)
+for the complete CLI and factory pattern.
 
-The spawner has one trusted exception: when `SECRETS_ENCRYPTION_KEY` is configured,
-it supplies that key to the resolved exact package
-`github.com/defos-ai/commander/apps/agents/builder@<version>` only when the manifest
-type is `builder-agent`. This trusts published versions under that exact module,
-not other packages claiming its type. Catalog membership and repository visibility
-do not grant access. The optional runtime `SecretBootstrap` keeps this policy
-separate from the generic environment allowlist.
+Pass only the child's required environment. Never inherit the parent's entire
+credential set. Managed-secret agents need a separately configured encryption key;
+the official builder receives it automatically in the supplied deployments.
 
-Compose supplies the persisted API/builder/spawner key; native all-in-one and
-Docker AIO use their in-memory session key. Standalone hosts must configure the
-same key as the API. Keys stay out of package files, action inputs, launch records, results
-and logs, but a Docker administrator can read the builder's environment. Docker
-retries compare key presence and value with the current bootstrap; a changed or
-removed key cannot silently reuse an existing container. Existing encrypted secret
-delivery remains responsible for action secrets after registration.
-
-The agent host combines nonempty `COMMANDER_AGENT_ID_SUFFIX` with its fixed type
-to form `AgentConfig.ID`: `0123abcd` becomes `example-agent-0123abcd`. Use
-`id.AgentIDFromSuffix` to validate and construct it. Reject full IDs, prefixes,
-uppercase hex and any value other than eight lowercase hex characters before
-opening providers. When unset or empty, the host generates a fresh ID.
-Registration and saved launch records still contain the complete ID; only the
-suffix crosses the process bootstrap boundary. No additional public configuration
-field is needed.
-
-The spawner matches the assigned ID and expected type to the child's registration
-announcement before returning the agent ID, runtime and PID or container ID.
-This observes the shared bus, not confirmation of the controller's database write.
-The controller independently persists registration and evaluates eligibility.
-Another running agent of the same type cannot satisfy this check. The spawner
-must prevent two processes from using the same ID; registration does not prove
-exclusive process ownership. The identifier is not an authentication credential.
-
-Registration and action readiness are separate results. Report missing
-requirements, including secrets or Chromium, without removing an otherwise
-successfully registered agent. A dependent mission can proceed only when its
-required actions are ready.
+Registration means the process connected. Check action readiness too: the agent
+may still need a secret, executable or configuration.
 
 ## Startup, retries and lifetime
 
-Compose and native/Docker AIO start builder and spawner agents by default, using
-the current build without package downloads. Other agents are installed through
-chat/MCP when needed. Each `spawn-agent` task requests one instance; use separate
-tasks for multiple instances. Package downloads need Internet access.
-See [Playground](../apps/playground/README.md#installing-agents).
+| Deployment | Where additional agents run |
+| --- | --- |
+| Native all-in-one | Child processes on your host |
+| Docker AIO | Child processes inside the AIO container |
+| Compose | Sibling containers on the deployment network |
 
-Controller-dispatched actions save `package-selection` and `launch-intent`
-through the framework's [execution checkpoints](abstractions.md#results-and-evidence).
-The first holds the requested selector and resolved version; the second holds
-runtime and process/container ownership metadata. Persistence is acknowledged
-before downloads or launch respectively. Invalid or conflicting checkpoints fail
-closed; no tokens or environment values are saved. Missing checkpoint capability
-cannot fall back to local files.
+Builder and spawner start by default. Additional agents are installed through
+chat/MCP in a separate `install-agent` operation, before starting work that needs
+their actions. One spawn task creates one instance; use separate tasks for more.
 
-Native downloads and child working directories still use local state.
-Docker spawning needs no local launch records or state volume.
+If installation fails with an uncertain outcome, inspect the process or container
+before requesting a new instance. A spawner restart leaves Docker children running;
+native restart recovery is not supported. Stop owned containers before removing
+their deployment network or data using the [teardown commands](deployment.md#stopping-and-resetting-agents).
 
-A stable launch request identifies an instance across retries; its agent ID must
-be allocated and recorded before starting the process/container. Requests are tied
-to their saved command identity. Repeating a package reference in two tasks
-creates two identities, not a retry. A conflicting package for an existing launch
-request fails explicitly instead of silently replacing the agent.
+## Verify your package
 
-Retries reuse the saved launch record and agent ID to find the existing instance.
-They must not start a second process with that ID. A new or replacement launch
-gets a fresh agent ID; the ID alone does not provide idempotency.
-
-The initial native implementation reconciles only processes it still owns in
-memory. Its create-only launch intents survive every restart, including clean
-shutdown; encountering an old intent reports uncertainty instead of adopting a
-PID or launching a replacement. Inspect the old instance before requesting
-replacements through a new task.
-Native restart recovery is not implemented.
-
-Docker records also hold the image digest, network and a random ownership label.
-Retries inspect the recorded container and verify its launch configuration before
-reusing it, including after a spawner restart. A fresh host then waits for a fresh
-agent announcement. Lost Create/Start responses keep the intent for reconciliation;
-they never trigger a second Create. A missing container reports uncertainty; an
-exited container requires a new launch request. Only a never-started container may
-start under its saved identity. This requires the
-manager that originally received acknowledgement for the new intent. A different
-manager may observe a verified running container, but cannot start a saved
-`created` instance. Reading checkpoints does not authorize another manager to
-start a container or the controller to redispatch work to a new agent.
-
-Reconcile uncertain launches before trying again. Retain enough ownership
-information to identify the exact instance; a PID or agent type alone is not
-proof. Report uncertainty when identity cannot be established. Bound download,
-pull and registration waits; task cancellation must not cause a blind second launch.
-
-The spawn action finishes after bootstrap and leaves the agent running. Native
-and AIO sessions own child shutdown and must await it before deleting shared FS
-state. Docker containers survive a spawner restart, with automatic container
-restarts disabled. They are not Compose services: deployment teardown must remove
-owned containers before removing their network or data. See the
-[Compose teardown commands](deployment.md#stopping-and-resetting-agents). Continuous monitoring,
-scaling, automatic upgrades and replacement are outside the spawner's role.
-
-Runtime spawning uses the bundled `install-agent` mission in a separate
-provisioning operation. Its only required action is `spawn-agent`, so it is ready
-with only the spawner registered. Start it with `{"package":"<package reference or GitHub URL>"}`,
-then assign `spawn-agent` with the same input. Review the saved result, resolve
-its model continuation with no follow-up actions, and complete provisioning.
-Recheck the agent's readiness and the target mission's preflight before work.
-Current
-[mission preflight](../framework/controller/runner/scheduler.go) blocks all
-dispatch in a mission whose required actions are unavailable, including a task
-that would spawn the missing agent.
-
-## Adoption order
-
-1. Update `commander-example-agent` to accept a preassigned agent ID suffix,
-   keep bus/storage bootstrap settings consistent, and include a manifest template.
-2. Add its binary/image release workflow. Validate and publish native assets,
-   image digest and generated `agent.yaml` from the same tested revision. Keep the
-   release unpublished until all package assets are available. Supply README and
-   AGENTS instructions, with tests and fixtures in `tests/`.
-3. Verify that an agent built from the template can be spawned natively and through
-   Docker, including exact-instance registration and repeat-request behavior.
-4. Keep the separate web/browser repositories on the same package contract.
-   Commander installation guidance pins their `v0.2.0` packages. Their source and action tests
-   stay in those repositories; Commander tests consume pinned release images or
-   Go modules for cross-host integration.
-
-The template remains the reference for manually developed and builder-generated
-agents. Its demo Compose remains useful for development; the spawner consumes
-the release manifest rather than executing repository deployment YAML.
+1. Publish the native binaries, Docker image and generated manifest.
+2. Install the pinned release in native and Docker modes you support.
+3. Check that the expected agent ID registers and its actions become ready.
+4. Add a discoverable entry to your [catalog](../catalog/README.md) when ready to share it.

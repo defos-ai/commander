@@ -1,21 +1,19 @@
 # Testing
 
-Tests use local fixtures and scripted models; no model API key or public website
-is required. Run commands below from the repository root. Coding and test-writing
-guidance lives in [AGENTS.md](AGENTS.md).
+Run commands from the repository root. Tests use local fixtures and scripted
+models; no paid model calls or public website is needed.
 
 ## Unit tests
 
-Choose the affected module:
+Choose the affected module, for example:
 
 ```sh
 go test -race -count=1 -timeout=3m ./framework/...
-go test -race -count=1 -timeout=3m ./apps/controllers/default/...
 go test -race -count=1 -timeout=3m ./apps/agents/builder/...
-go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
-go test -race -count=1 -timeout=3m ./apps/playground/...
 go vet ./framework/...
 ```
+
+Use the same commands with another module path from [go.work](../../go.work).
 
 ## Provider tests
 
@@ -23,12 +21,14 @@ go vet ./framework/...
 go test -race -count=1 -timeout=3m ./providers/fs/...
 ```
 
-Mongo, S3 and RabbitMQ suites use real local services. Follow their setup/test commands:
-[MongoDB](../../providers/mongo/README.md#development-and-testing) ·
-[S3/MinIO](../../providers/s3/README.md#development-and-testing) ·
+For service-backed tests, follow the setup commands in
+[MongoDB](../../providers/mongo/README.md#development-and-testing),
+[S3/MinIO](../../providers/s3/README.md#development-and-testing) or
 [RabbitMQ](../../providers/rabbitmq/README.md#development-and-testing).
 
 ## MCP API tests
+
+Start the FS stack, run suites sequentially, then remove test state:
 
 ```sh
 export COMPOSE_FILE=.github/composes/compose.test.yaml
@@ -37,18 +37,7 @@ go test -race -count=1 -failfast -p 1 -timeout=5m -v ./apps/adapters/api/... ./a
 docker compose down --volumes
 ```
 
-The FS stack (`commander-test`) has isolated volumes, two web agents, one
-browser agent with Chromium from pinned standalone release images, and a native
-spawner. API/MCP scenarios install a fixture agent through a controller operation,
-run an action and retrieve its artifact. A local HTTPS release server supplies the
-fixture manifest and binary. Web/browser images are pulled from GHCR during setup.
-The `fixture-affinity` scenarios install two instances, pause the selected
-instance's action readiness, and verify that its queued work waits while another
-operation uses a spare. A fixture-only HTTP gate releases the pause; it is exposed
-on loopback port `14276` (`COMMANDER_TEST_FIXTURE_URL` overrides the test client's
-address). Agent pauses time out after 30 seconds and are released during cleanup.
-
-For MongoDB/RabbitMQ/MinIO and Docker spawning (`commander-full-test`):
+For MongoDB, RabbitMQ, MinIO and Docker spawning:
 
 ```sh
 export COMPOSE_FILE=.github/composes/compose.full.test.yaml
@@ -64,38 +53,24 @@ docker ps -aq --filter network=commander-full-test_default --filter label=ai.def
 docker compose down --volumes
 ```
 
-The registry is bound to loopback. Setup publishes only the fixture image there;
-the spawner pulls its digest and launches a sibling container. Docker spawning
-requires the host Docker socket. Its containers outlive the spawner, so remove
-those on the test network before taking the stack down, including after failures.
+Run one stack at a time; their ports overlap. The full stack needs the host Docker
+socket. Remove spawned test containers and volumes even after failures. For
+failure details, run `docker compose logs` before teardown.
 
-Run only one stack locally at a time: both expose MCP on `14273` and HTTP API on
-`14274`, and fixture controls on `14276`. Keep `-p 1` so the two adapter suites use
-the stack sequentially.
-
-Tests use these endpoints and test credentials automatically. Override with
+Test endpoints and credentials are preconfigured. Override them with
 `COMMANDER_TEST_MCP_URL`, `COMMANDER_TEST_MCP_TOKEN`, `COMMANDER_TEST_API_URL`,
 `COMMANDER_TEST_API_USERNAME` and `COMMANDER_TEST_API_PASSWORD` when needed.
-Use `docker compose logs` to diagnose failures, and always run `down --volumes`.
 
 ## CI
 
-[test.yml](../../.github/workflows/test.yml) selects checks using
-[path filters](../../.github/test-paths.yml): framework and shared CI changes run
-everything; provider and application changes run their checks and affected consumers.
-Markdown-only changes skip component tests. Manual **Run workflow** and releases run every suite.
+[CI](../../.github/workflows/test.yml) selects affected suites using
+[path filters](../../.github/test-paths.yml). Manual and release runs select all
+suites. Use **Tests passed** as the required branch check.
 
-A lightweight configuration check runs first, catching new components missing
-workspace registration, a path filter or a selected test command. Run it locally:
+After changing workflow wiring, validate it locally:
 
 ```sh
 (cd .github/tests && GOWORK=off go test -count=1 -timeout=1m -run '^TestCI' .)
 ```
 
-Selected [unit checks](../../.github/workflows/test-unit.yml) must pass before
-[integration checks](../../.github/workflows/test-integration.yml) start.
-One Docker runner reuses images across provider, FS and full-stack tests. Each
-phase has separate state; API and MCP suites run sequentially.
-Web/browser unit and browser end-to-end suites run in their own repositories.
-Failures retain stack logs. Use **Tests passed** as the required
-check so intentionally skipped suites do not block documentation-only changes.
+See [AGENTS.md](AGENTS.md) before adding fixtures or changing shared-stack tests.

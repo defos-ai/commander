@@ -2,7 +2,7 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: framework and runtime for distributed agents" width="100%">
 </p>
 
-**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions. 
+**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions.
 
 Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
@@ -20,7 +20,7 @@ Run all-in-one (AIO):
 docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
-Admin UI is available at [locally](http://localhost:4275). 
+Open [Admin UI](http://localhost:4275). Get the login with `/credentials` in Playground.
 
 ### Binary
 
@@ -69,6 +69,7 @@ See [Playground](apps/playground/README.md) for native dependencies and configur
 | Build an agent or workflow | [Agents](apps/agents/README.md) · [Missions and rules](docs/abstractions.md) |
 | Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
 | Understand the architecture and limits | [Overview](docs/overview.md) |
+| Compare agent frameworks | [Comparison](docs/competitors.md) |
 | Contribute | [Contributing](CONTRIBUTING.md) · [Testing](framework/tests/README.md) |
 | Participate in the community | [Code of Conduct](CODE_OF_CONDUCT.md) |
 | Understand licensing | [AGPL-3.0-only](LICENSE) |

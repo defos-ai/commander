@@ -1,47 +1,27 @@
 # Providers
 
-Providers connect framework interfaces to messaging, databases, and file storage.
-Hosts choose each backend independently through their settings.
+Choose messaging, database and file storage independently:
 
-### Existing providers
-
-| Provider | Available implementations | Connection formats |
+| Host setting | Provider | Connection |
 | --- | --- | --- |
-| [Filesystem](fs/README.md) | Bus, database stores, artifact files, reports | Local paths, `~/path`, `file:///path`, `fs:///path` |
-| [MongoDB](mongo/README.md) | Database stores | `mongodb://`, `mongodb+srv://` |
-| [S3](s3/README.md) | Artifact files and reports | `s3://bucket/optional-prefix` |
-| [RabbitMQ](rabbitmq/README.md) | Message bus | `amqp://`, `amqps://` |
-
-Each backend is a separate Go module under
-`github.com/defos-ai/commander/providers/`: `fs`, `mongo`, `s3`, or `rabbitmq`.
-Import only the modules your host needs; there is no shared providers module.
+| `BUS_URL` | [Filesystem](fs/README.md) or [RabbitMQ](rabbitmq/README.md) | Local path, `file:///`, `fs:///`, `amqp://`, `amqps://` |
+| `DATABASE_URL` | [Filesystem](fs/README.md) or [MongoDB](mongo/README.md) | Local path, `file:///`, `fs:///`, `mongodb://`, `mongodb+srv://` |
+| `STORAGE_URL` | [Filesystem](fs/README.md) or [S3/MinIO](s3/README.md) | Local path, `file:///`, `fs:///`, `s3://bucket/prefix` |
 
 ## Quick start
 
-Choose backends independently through the host settings:
+All-in-one uses the filesystem provider. [Compose](../compose.yaml) configures
+RabbitMQ, MongoDB and MinIO automatically. For another deployment, set the URLs
+above in each host; see [deployment](../docs/deployment.md#configuration).
 
-| Setting | Selects | Available backends |
-| --- | --- | --- |
-| `BUS_URL` | Messages between apps | FS, RabbitMQ |
-| `DATABASE_URL` | Catalogs, inventory, executions, operations, artifact metadata | FS, MongoDB |
-| `STORAGE_URL` | Artifact bytes and reports | FS, S3 |
-
-All-in-one uses FS throughout.
-[`compose.yaml`](../compose.yaml) uses RabbitMQ, MongoDB and MinIO.
-See [deployment configuration](../docs/deployment.md#configuration) for host
-settings, and each provider's guide for constructors and backend setup. The
-repository [workspace](../go.work) includes all modules; private projects use
-[local module replacements](../apps/agents/README.md#develop-an-agent-in-a-private-repository).
-
-Agents upload bytes through `ArtifactFileStore`; controllers accept metadata
-through `ArtifactStore`; MCP uses both to expose accepted artifacts. Uploading
-bytes alone does not make an artifact visible through MCP. Failed or interrupted
-work can leave unreferenced files; automatic orphan cleanup is not implemented.
+Each provider is a separate Go module. Import the domain store or bus you need
+from `github.com/defos-ai/commander/providers/<provider>`.
 
 ## Development and testing
 
-Provider-specific checks live in the [FS](fs/README.md#development-and-testing),
+Follow the setup and test commands for [FS](fs/README.md#development-and-testing),
 [MongoDB](mongo/README.md#development-and-testing),
-[S3](s3/README.md#development-and-testing), and
-[RabbitMQ](rabbitmq/README.md#development-and-testing) guides. See
-[AGENTS.md](AGENTS.md) for backend implementation guidance.
+[RabbitMQ](rabbitmq/README.md#development-and-testing) or
+[S3](s3/README.md#development-and-testing).
+
+See [AGENTS.md](AGENTS.md) for provider implementation rules.

@@ -1,28 +1,15 @@
 # Filesystem provider
 
-## Overview
-
-`github.com/defos-ai/commander/providers/fs` implements the message bus, all
-database stores, artifact files, and reports using local or shared directories. It powers the
-[default local stack](../../README.md#quick-start).
-
-Hosts accept local paths, `~/path`, `file:///path`, and `fs:///path`.
-[`fs.FilesystemPath`](path.go) resolves these to absolute paths without opening
-resources; concrete constructors take paths. Shared filesystems must support
-file locks, atomic renames, and hard links.
+Store messages, database records and artifact files in local directories.
+All-in-one uses this provider automatically.
 
 ## Quick start
 
-From the repository root:
+For custom hosts, set `BUS_URL`, `DATABASE_URL` and `STORAGE_URL` to separate
+paths, such as `./state/bus`, `./state/database` and `./state/storage`.
+Absolute `file:///` and `fs:///` URLs are also supported.
 
-```sh
-docker compose up --build -d
-```
-
-To embed a store, import the domain package you need. The workspace already
-includes the module; private projects use
-[local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository).
-For example, open a mission store:
+To embed a mission store:
 
 ```go
 import (
@@ -37,83 +24,43 @@ if err != nil {
 missionStore, err := fsmissions.NewMissionFsStore(root)
 ```
 
-Other constructors live in their domain directories; see [`comms`](comms/),
-[`artifacts`](artifacts/) and [`reports`](reports/) for bus and file storage.
-Close the bus after consumers stop. Stores need no close.
+Use `Create` for a new mission; `Upsert` replaces a seeded definition.
+For an external project, follow the [local module setup](../../apps/agents/README.md#develop-an-agent-in-a-private-repository).
 
-Mission `Create` validates the definition and atomically rejects existing names
-with `missions.ErrMissionExists`. Use `Upsert` for startup seeding that may replace
-an existing definition. Operations retain their own mission snapshots.
+Keep state directories inaccessible to untrusted writers. Shared filesystems must
+support file locks, atomic renames and hard links.
 
 ## Encrypted secrets
 
-[`secrets.NewSecretFsStore(root)`](secrets/secret_fs_store.go) stores encrypted
-records in `root/secrets.json`. Encrypt values with
-[`crypto.SecretCipher`](../../framework/crypto/README.md) before saving them;
-the store does not need the encryption key. Reads preserve timestamp precision
-so records can be authenticated after reopening.
-
-Updates check the saved version. Deletion removes the encrypted value and retains
-its ID to reject delayed writes. These records are independent of operations and
-are preserved by test cleanup. Use the [secret management service](../../framework/secrets/README.md)
-or the authenticated [HTTP API](../../apps/adapters/api/README.md#secrets) to manage values.
-
-Secrets are identified by agent type and name. Earlier development records with
-profiles are incompatible; recreate those secrets in a fresh store. Existing
-records are never merged or migrated automatically.
-
-[`secrets.NewRequestFsStore(root)`](secrets/request_fs_store.go) saves requests,
-their encrypted deliveries and installation acknowledgements in
-`root/secret-requests.json`. It preserves progress across restarts and rejects
-conflicting delivery or acknowledgement retries. Expiration is explicit.
-
-Terminal requests retain their encrypted delivery snapshots. Deleting a secret
-from the secret store does not erase these copies or revoke values already
-installed in an agent. The controller uses this store for
-[delivery recovery](../../framework/secrets/README.md#request-and-delivery-tracking);
-automatic retention cleanup is not implemented.
+Use [`NewSecretFsStore`](secrets/secret_fs_store.go) with the
+[secret service](../../framework/secrets/README.md). Supply encryption keys to the
+service, not the store; back up the key separately from database files.
 
 ## Development and testing
 
-See [AGENTS.md](AGENTS.md) for filesystem and message-delivery invariants.
-
-Run from the repository root:
+From the repository root; no external services are needed:
 
 ```sh
 go test -race -count=1 -timeout=3m ./providers/fs/...
 go vet ./providers/fs/...
 ```
 
-See the [testing guide](../../framework/tests/README.md) for full-stack checks.
+Use the [testing guide](../../framework/tests/README.md) for cross-host checks.
 
 ## Delivery and recovery
 
-FS supports only `comms.TransientExclusive` inboxes. Requesting `DurableShared`
-returns `comms.ErrUnsupportedInbox`. Inbox identity is `(Topic, Name)`; a second
-active owner receives `comms.ErrInboxInUse`. Distinct names on the same topic
-receive independent copies.
+Use `TransientExclusive` inboxes; durable inboxes are unsupported. Subscribe before
+publishing. Reopening a closed inbox receives new publications only.
 
-Subscriptions start at the current topic tail and must be live before publication.
-Closing or losing the owner ends the inbox; reopening its name starts fresh.
-A message file is deleted only after all subscriptions registered at publication
-acknowledge their delivery.
-
-Closing or losing a subscription retains unsettled and rejected files for
-inspection. There is no automatic redelivery, subscription recovery, or dead-letter
-queue. Reopening the bus does not replay old commands. See the
-[message-handling guide](../../framework/comms/README.md) for consumer settlement policy.
+Inspect retained rejected or unsettled files when investigating a failure; they
+are not automatically replayed. See [messaging](../../framework/comms/README.md).
 
 ## Atomic operation records
 
-Each operation uses a manifest at `DATABASE_URL/operations/<operation-id>.json`
-and data in `<operation-id>.json.records/`. Together they form one saved operation;
-related changes commit atomically. See [`jsonfile.Records`](internal/jsonfile/records.go)
-and the [`OperationStore` contract](../../framework/domain/operations/operation_store.go)
-for persistence and recovery behavior.
+Back up each operation's `.json` manifest together with its `.json.records/`
+directory. Do not edit their contents manually.
 
 ## Artifact files and reports
 
-Accepted metadata lives at `DATABASE_URL/artifacts/<artifact-id>.json`; bytes
-live at `STORAGE_URL/artifacts/<artifact-id>/<file-id>`. Reports live at
-`STORAGE_URL/reports/<report-id>.json`. Artifact reads verify size and SHA-256.
-Repeating a report write accepts identical content and rejects a conflicting report.
+Back up `STORAGE_URL` alongside `DATABASE_URL`: artifact metadata and file bytes
+live separately. See [AGENTS.md](AGENTS.md) for storage and recovery constraints.

@@ -1,100 +1,91 @@
-# Commander UI
+# Commander Admin UI
 
-Connect to Commander APIs, run operations and review their results in a browser.
-The UI shows missions, controllers, agents and actions, including readiness and
-health. Operations support search, status filters, questions, event history and
-an execution graph of recorded tasks, artifacts and files.
-
-Start an operation with a mission and JSON input; Commander plans the first task.
-Answer pending questions with an option or your own text. Cancelling stops new
-work, but dispatched tasks may finish. After a command timeout, inspect the
-operation before retrying; the UI never retries commands automatically.
-
-Operation details refresh every 10 seconds. Select graph nodes to inspect work,
-or drag and zoom to explore. Artifact details offer image/text previews (up to
-2 MiB) and downloads (up to 100 MiB); completed reports download as JSON.
-
-## Create missions
-
-Open **Missions → Create mission**. Set a name and objectives, then search registered
-actions and choose **Required** or **Optional**. Mark required actions as starting
-actions when they should begin the work. Inspect an action for its readiness and schemas.
-Choose **Define action** for a capability an agent should implement later. Give it
-a name, description, input/output object schemas and any required secret names.
-Add, edit or remove definitions in the draft; new actions are selected as required.
-Removing a definition keeps its action selected and preserves planning references.
-Use **Advanced settings** for schemas, rules, planning steps and action definitions,
-or switch to **JSON** to edit the full definition. Switching views preserves schema
-numbers, string escapes and fields you have not changed. Use **All missions** to
-return to the catalog.
-The API validates the definition. Actions can be installed later, and saving
-does not start an operation. Keep secret values out of definitions.
-
-Mission names are unique; creation never replaces a saved definition. After an
-uncertain save, use **Check saved mission** before trying again. Drafts stay in
-memory and are discarded when you leave or reload the page, or change the connection
-or session. A successful save opens the new mission.
-
-In mission details, switch to **JSON** to view and copy the saved definition.
-The JSON view preserves schema numbers and string escapes and can be bookmarked.
-Optional `action_definitions` describes referenced capabilities to implement later,
-including object schemas and secret names. Definitions do not install actions or
-make them ready. See [mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
-
-## Secrets
-
-Open **Agents → Manage secrets** to supply values requested by agents, or add
-secrets for an agent type. You can replace or delete saved secrets and set an
-optional expiration.
-Operations waiting for declared secrets or a running action's secret request show
-**Manage secrets** in their details and execution graph. Runtime requests retain
-the task's existing deadline and disappear after installation or execution ends.
-Values are write-only and are never saved in browser storage.
-
-Secret management requires `SECRETS_ENCRYPTION_KEY` on the API and participating
-agents; see [setup and encryption](../../adapters/api/README.md#secrets).
-Saving confirms storage; delivery and agent installation happen asynchronously.
-After an uncertain write, refresh metadata before trying again.
+Run missions, answer questions and inspect operation results, screenshots and
+files in a browser.
 
 ## Quick start
 
 From the repository root:
 
 ```sh
-docker compose --profile admin up --build -d
+docker compose up --build --wait
 ```
 
-Open `http://localhost:4275` and choose **Connect** under **Local Commander detected**.
-The API URL and username (`commander`) are prefilled. Compose generates a random
-password. The dialog's **Need a password?** hint offers the command to copy:
+Open [localhost:4275](http://localhost:4275) and choose **Connect** under
+**Local Commander detected**. Get the API password in another terminal:
 
 ```sh
 docker compose exec api commander-api credentials
 ```
 
-Generated passwords change when the API container restarts;
-retrieve the new password and reconnect. For a stable password, set `API_PASSWORD`
-before starting Compose. `API_USERNAME` overrides the username; see
-[API authentication](../../adapters/api/README.md#authentication-and-health).
-
-`COMMANDER_UI_PORT` and `COMMANDER_API_PORT` change the published ports. Discovery
-checks only `http://localhost:4274`; use **Add connection** for another port or
-API, then enter a name, URL and credentials. The UI checks before saving.
+Retrieve it again after an API restart, or set `API_PASSWORD` before launch to
+keep it stable. Use **Add connection** for another API. Change the published ports
+with `COMMANDER_UI_PORT` and `COMMANDER_API_PORT`.
 
 ### All-in-one
 
-[Playground's all-in-one image](../../playground/README.md#docker-recommended)
-includes Admin. Publish `127.0.0.1:4275:4275`; Playground defaults its link to
-`http://localhost:4275`. For another published port or host, pass `--admin-url`
-with the browser address after the image name. Type `/admin` in Playground for a
-link with the local API URL and username prefilled. Existing saved connections
-are reused; enter the password to sign in. The API port need not be published.
-Use `/credentials` in Playground or `docker exec commander commander credentials api`
-for the API login.
+The [all-in-one image](../../playground/README.md#docker-recommended) and native
+`--all-in-one` include Admin. Type `/admin` for its link and `/credentials` for
+the API login. Completed operation rows link directly to their Admin details.
 
-Native `--all-in-one` also includes Admin; `/admin` uses its listening address
-automatically. Each completed operation in Playground has a review link that
-opens its details after sign-in. Remote links ask you to choose the API connection.
+Docker must publish `127.0.0.1:4275:4275`. For another port or host, pass
+`--admin-url http://YOUR_HOST:PORT` after the image name.
+
+## Review operations
+
+Choose a mission and enter its JSON input to start an operation. Open the
+execution graph to inspect tasks, results and artifacts; download the final
+report as JSON. Use **Manage secrets** when an agent needs a value.
+
+Answer questions with an option or your own text. Cancelling stops queued work;
+dispatched tasks may finish. After a command timeout, refresh the operation
+before trying again.
+
+## Create missions
+
+1. Open **Missions → Create mission** and enter a name and objectives.
+2. Search actions and mark them **Required** or **Optional**. Choose starting
+   actions to guide the first assignments.
+3. Choose **Define action** for a capability to build later. Add its input/output
+   object schemas and required secret names.
+4. Use **Advanced settings** for rules, planning steps and schemas, or **JSON** for
+   the full definition. Save to open the new mission.
+
+Actions can be installed later; saving does not start work. Keep secret values
+out of definitions. Names are unique; use **Check saved mission** after an
+uncertain save. Unsaved drafts disappear when you leave or reload the page.
+
+Open **JSON** on a saved mission to view or copy its definition. See
+[mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
+
+## Secrets
+
+Open **Agents → Manage secrets** to provide, replace or delete an agent type's
+secrets. You can also set an expiration. Values are write-only.
+
+Compose and all-in-one configure encryption automatically. Standalone hosts need
+an [encryption key](../../adapters/api/README.md#secrets). After saving, wait for
+the agent's missing requirement to clear; after an uncertain write, refresh
+metadata before retrying. Running tasks keep their existing deadline while waiting.
+
+### Connections and sessions
+
+Saved connection names and URLs stay in your browser. Passwords stay in the UI
+server's memory; restarting it requires signing in again. Use one UI backend replica.
+
+Compose configures internal API routing automatically. For another private API,
+set `UI_API_UPSTREAMS` to map the address you enter to the address the UI server
+can reach:
+
+```sh
+UI_API_UPSTREAMS=commander.internal:4274=commander.internal:4274
+```
+
+The API must allow that hostname in `API_ALLOWED_HOSTS`. Hosted Admin cannot reach
+an API on your laptop through `localhost`; use a server-reachable address.
+
+For hosting, use HTTPS and set `UI_PUBLIC_ORIGIN=https://admin.example.com`,
+including behind a reverse proxy.
 
 ### Native server
 
@@ -106,61 +97,17 @@ npm --prefix frontend run build
 go run ./backend/cmd/commander-ui
 ```
 
-Start the [API adapter](../../adapters/api/README.md) separately. Source builds serve
-`frontend/dist/`; packaged builds include the frontend in the Go binary. Override
-the files with `--static-dir` (`UI_STATIC_DIR`). Set the address with
-`--listen-address` (`UI_LISTEN_ADDRESS`); precedence is flag, environment, `PORT`,
-then `4275`. `/healthz` checks the UI server. The
-[Dockerfile](docker/Dockerfile) builds a self-contained server.
+Start the [API](../../adapters/api/README.md) separately. Set `UI_LISTEN_ADDRESS`
+to change the listener; `UI_STATIC_DIR` selects another frontend build.
 
-To build a portable Admin binary after installing frontend dependencies:
+For a portable binary with the frontend embedded:
 
 ```sh
 npm --prefix frontend run build -- --outDir ../backend/static/dist --emptyOutDir
 go build -tags embed_ui -o bin/commander-ui ./backend/cmd/commander-ui
 ```
 
-Run `./bin/commander-ui`, or copy the binary anywhere. On Windows, build with
-`-o bin/commander-ui.exe` and run `.\bin\commander-ui.exe`.
-
-### Connections and sessions
-
-Browser API requests use the UI backend on the same origin. Compose displays and
-saves `http://localhost:4274` while routing it internally to `http://api:4274`.
-Optional `UI_API_UPSTREAMS` (`--api-upstreams`) maps public hosts and ports:
-
-```sh
-UI_API_UPSTREAMS=localhost:4274=api:4274,127.0.0.1:4274=api:4274
-```
-
-Only the matching host and port change; scheme, path and query remain intact.
-Public APIs connect directly. Internal APIs require an explicit mapping; Compose
-supplies its own automatically. For another internal API, map its host and port
-to itself, for example `commander.internal:4274=commander.internal:4274`.
-Native local discovery allows loopback on port `4274`. Other local ports need a
-mapping. A hosted UI cannot discover an API on a visitor's laptop through
-`localhost`. Base paths are supported; redirects, cloud metadata addresses and
-environment HTTP proxies are blocked.
-
-Each API must allow its upstream hostname in `API_ALLOWED_HOSTS`. Browser CORS
-configuration is unnecessary because the backend sends Basic authentication.
-
-Names and URLs are saved in the browser; API passwords stay in backend memory.
-The browser receives an HttpOnly, SameSite=Strict cookie. Sessions survive reloads
-for up to eight hours. Forgetting credentials or removing a connection signs out
-only that API; restarting the backend signs out all sessions. Use one UI backend
-replica. Record URLs support reload and back/forward navigation, contain no
-credentials, and require the connection to be saved in that browser.
-
-For hosting, use HTTPS and set `UI_PUBLIC_ORIGIN` (`--public-origin`), for example
-`https://admin.example.com`, including when TLS terminates at a reverse proxy.
-Forwarded headers are not trusted. HTTPS sessions use Secure cookies; plain HTTP
-is supported only for localhost development.
-
-Saved connections refresh every 30 seconds. Liveness (`/healthz`), database
-readiness (`/readyz`) and authenticated catalog access are checked separately with
-a five-second timeout. They do not establish controller, agent, broker or file
-storage health.
+Run `./bin/commander-ui`. On Windows, build with `-o bin/commander-ui.exe`.
 
 ## Development and testing
 

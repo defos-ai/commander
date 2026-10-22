@@ -1,60 +1,40 @@
 # Commander framework
 
-## Overview
-
-The framework provides reusable agent execution, controller coordination, domain
-models and messaging contracts. Apps supply actions and host configuration;
-providers supply the bus and stores. It requires no built-in LLM or specific database.
-
-Read [core concepts](../docs/abstractions.md) for terminology and
-[architecture](../docs/overview.md) for execution flow and dependencies.
+Build agents, coordinate operations and connect your own clients. Apps provide
+host configuration; [providers](../providers/README.md) supply messaging and storage.
 
 ## Quick start
 
-Use the repository's Go workspace and start from a concrete implementation:
+Start with the component you want to extend:
 
-- [Agent](../apps/agents/README.md): register actions and run an agent, including in a private project.
-- [Controller](../apps/controllers/README.md): coordinate operations and apply mission rules.
-- [Adapter](../apps/adapters/README.md): expose operation commands and saved data to clients.
+- [Agents](../apps/agents/README.md): implement and register actions.
+- [Controllers](../apps/controllers/README.md): customize agent selection and mission rules.
+- [Adapters](../apps/adapters/README.md): expose commands and queries to clients.
 
-Import the framework packages you need and inject their interfaces. The bundled
-[providers](../providers/README.md) are optional, separate modules.
-The module path is `github.com/defos-ai/commander/framework`. Releases are not
-published yet; private projects use the
+The Go module is `github.com/defos-ai/commander/framework`. Inside this repository,
+use [go.work](../go.work); outside it, follow the
 [local module setup](../apps/agents/README.md#develop-an-agent-in-a-private-repository).
-
-Controller hosts can supply an `AgentSelector` to customize which eligible agent
-receives a task. See [agent selection](../apps/controllers/README.md#agent-selection).
-They can also supply a `RuleSelector` to choose rules for each new operation;
-see [rule selection](../apps/controllers/README.md#rule-selection).
 
 ## Action definitions
 
-[`actions.Definition`](domain/actions/definition.go) describes an action's name,
-description, input/output schemas and required secret names independently of a
-running agent. Use its validation and cloning when describing a capability before
-implementation. `actions.Action` adds runtime readiness; `Action.Definition()`
-returns an independent copy of its static contract. Executor bases retain that
-definition separately from their discovery state.
-Use [`action.ResolveSchema`](agent/action/schema.go) to compile explicit object
-schemas with the same rules as typed executors, including local references and
-default validation.
+Use [`actions.Definition`](domain/actions/definition.go) to describe an action's
+name, schemas and secret requirements before implementing it.
+[`actions.ResolveSchema`](domain/actions/schema.go) validates explicit object schemas.
+For an executable action, use the [agent action helpers](agent/action/).
 
 ## Agent package manifests
 
-Use [`agent/manifest`](agent/manifest/manifest.go) to render and parse release
-manifests with shared validation. `manifest.Render` accepts a `manifest.Manifest`
-and returns `agent.yaml` bytes using the embedded template. Release tooling
-supplies actual binary checksums and the image digest, then writes and publishes
-the returned bytes. See the [package contract](../docs/agent-packages.md#source-template)
-for API usage and the current builder/spawner packaging scope.
+Render release `agent.yaml` files with
+[`manifest.Render`](agent/manifest/manifest.go). Supply your binary checksums and
+image digest; see the [package guide](../docs/agent-packages.md#source-template).
 
 ## Reference
 
-- [Messaging](comms/README.md): consumers, inbox lifetimes and delivery limits.
-- [Wire contracts](comms/messages/README.md): routes, payloads and result acceptance.
-- [Domain interfaces](domain/): entities and storage contracts.
-- [Cryptography](crypto/README.md): secret encryption and key configuration.
-- [Secret management](secrets/README.md): encrypted storage and versioned updates.
-- [Testing](tests/README.md): unit and integration commands.
-- [Coding guidance](AGENTS.md): framework boundaries and invariants.
+| You want to… | Read |
+| --- | --- |
+| Understand missions and rules | [Core concepts](../docs/abstractions.md) |
+| Connect a message consumer | [Messaging](comms/README.md) |
+| Extend a message contract | [Wire messages](comms/messages/README.md) |
+| Encrypt and manage secrets | [Cryptography](crypto/README.md) · [Secrets](secrets/README.md) |
+| Run checks | [Testing](tests/README.md) |
+| Change framework code | [AGENTS.md](AGENTS.md) |

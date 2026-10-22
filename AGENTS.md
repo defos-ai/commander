@@ -9,6 +9,11 @@ The user's current instructions take precedence over repository guidance.
 - Keep a companion `AGENTS.md` beside every `README.md`. READMEs explain usage to
   people; agent guides describe code entry points, invariants, pitfalls and checks.
   Keep shared rules here and specific rules in the nearest relevant guide.
+- Keep human docs short and actionable: lead with the next step, show working
+  commands, and explain only the choices or limits a reader needs to act on.
+  Put implementation contracts in the nearest agent guide or link to source;
+  avoid repeating them across READMEs. Preserve essential setup, security and
+  recovery instructions, without copying every removed detail into `AGENTS.md`.
 - Prefer small, reviewable changes. Explain the scope before broad renames,
   dependency changes or refactors, and avoid unrelated cleanup.
 - Preserve uncommitted work. Do not commit, publish, change repository visibility

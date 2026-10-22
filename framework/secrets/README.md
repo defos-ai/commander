@@ -1,9 +1,12 @@
 # Secret management
 
-`secrets.Service` creates, replaces and deletes named secrets through a
-[`SecretStore`](../domain/secrets/secret_store.go). It encrypts values before
-persistence and returns only metadata. Secrets belong to an agent type,
-independently of operations.
+Secrets belong to an agent type, independently of operations. Users manage them
+through [Admin UI](../../apps/admin/ui/README.md) or the authenticated
+[HTTP API](../../apps/adapters/api/README.md#secrets); values stay out of chat.
+
+For a custom host, construct the service with an encrypted
+[FS](../../providers/fs/README.md#encrypted-secrets) or
+[MongoDB](../../providers/mongo/README.md#encrypted-secrets) store:
 
 ```go
 cipher, err := crypto.NewSecretCipher(encryptionKey)
@@ -13,38 +16,14 @@ if err != nil {
 service, err := secrets.NewService(secretStore, cipher)
 ```
 
-Use the [FS](../../providers/fs/README.md#encrypted-secrets) or
-[Mongo](../../providers/mongo/README.md#encrypted-secrets) implementation. The
-[HTTP API](../../apps/adapters/api/README.md#secrets) provides authenticated
-management endpoints.
-
-The service assigns identities, versions and timestamps. Replacement and deletion
-require the current ID and version, so stale requests cannot overwrite a newer
-value or delete a recreated secret. Optional expiration changes availability;
-expired records remain in inventory.
-
-An uncertain write may have succeeded. Read metadata before deciding what to do
-next; the service never retries automatically. Attempted metadata returned with
-`ErrWriteUncertain` is useful for reconciliation, not confirmation of persistence.
-
-Hosts own authorization and [encryption key configuration](../crypto/README.md).
-Saving a value makes it available for asynchronous delivery; the API response
-does not confirm installation.
+Use the current ID and version when replacing or deleting a value. After an
+uncertain write, read metadata before retrying. Saving confirms storage, not
+installation on an agent.
 
 ## Agent requirements
 
-Each action declares its secret names through `Action.RequiredSecrets`, for example
-`[]string{"GITHUB_TOKEN"}`. The agent's registered type identifies the scope.
-Multiple actions may require the same name.
-
-For agents that need managed secrets, configure `AgentConfig.Secrets` with a
-decryptor using the same encryption key as the API. The builder host accepts
-optional `SECRETS_ENCRYPTION_KEY`; the standalone web and browser hosts do not need it.
-The controller needs no key. It reads encrypted records from its configured
-database and sends them only within the requesting agent's registered type.
-Static declarations govern action readiness; they are not access permissions.
-
-Read a declared secret inside an action's discovery or run callback:
+Configure `AgentConfig.Secrets` with the API's encryption key. Declare names in
+`Action.RequiredSecrets` when they must be available before an action starts:
 
 ```go
 value, err := action.Secret(ctx, "GITHUB_TOKEN")
@@ -54,26 +33,17 @@ if err != nil {
 defer clear(value)
 ```
 
-Values stay in agent memory and are not exported into the process environment.
-`action.Secret` reads only the current action's declared names.
-Missing or expired secrets make the affected action unavailable; unrelated
-actions remain usable. Execution checks availability again before calling the action.
+Missing secrets block only the affected actions. Values stay in memory and are
+scoped to the agent's registered type; they are not environment variables.
 
-By default, agents request fresh declared values every 30 seconds and retry outstanding
-requests every 5 seconds. Installed values expire after at most one minute, or
-earlier when the secret itself expires. Updates arrive on refresh; deletion or
-loss of the controller blocks new use after the installed value's deadline.
-This does not cancel actions already running or revoke copies they retained.
-
-The bus and agent hosts form a trusted deployment boundary. Type/name checks
-do not authenticate an untrusted bus publisher; restrict broker and filesystem
-access. Cross-type requests, including a builder requesting another agent's
-secrets, are not supported by this runtime policy.
+Updates arrive on refresh, normally within 30 seconds. Installed copies expire
+after at most one minute. Deletion does not cancel running actions or erase copies
+they retained. Restrict broker and filesystem access to trusted hosts.
 
 ### Request a secret during execution
 
-When the need for a secret depends on the work, the action decides when to request
-it. For example, check the agent's configured environment token first, then call:
+For a secret needed only for certain inputs, let the action check its environment
+first, then request the managed value:
 
 ```go
 value, err := action.RequestSecret(ctx, "GITHUB_TOKEN")
@@ -83,53 +53,19 @@ if err != nil {
 defer clear(value)
 ```
 
-This requires a running `Agent.Serve` with `AgentConfig.Secrets` configured. It
-returns a valid cached value or requests one through the existing encrypted
-exchange and waits for installation. The name does not need `RequiredSecrets`;
-putting it there would require it before the action starts. Requests stay scoped
-to the agent type and contain no secret value.
+Use this inside `Agent.Serve` with `AgentConfig.Secrets` configured. Set a context
+deadline: the request waits for installation and does not pause the task timeout.
+Omit the name from `RequiredSecrets` if the action can start without it.
 
-The wait ends on delivery, caller cancellation or agent shutdown. Use a context
-deadline to bound it. The action remains in flight; this does not pause the
-controller's task timeout or add automatic task retries. When the last waiter
-leaves, unused on-demand requests stop refreshing; already-published requests
-expire normally. Cached values remain usable only within their lease.
-
-While waiting, the agent reports `work.missing_requirements` with `kind: secret`
-and the requested name. API/MCP task reads attach these requirements only to the
-matching running task while its agent is live and its deadline has not passed.
-This is a current observation; it does not change saved task status or preflight.
-Playground opens the same masked form used for preflight blockers, and Admin
-shows the same **Manage secrets** notice. Values go directly to the API, outside
-chat and MCP. Saving a value does not clear the wait; installation does.
-
-Completed, cancelled, interrupted and expired work does not prompt for secrets.
-Pending synchronization records remain visible in API/Admin Secrets independently;
-they do not identify waiting work by themselves.
+Playground opens a masked form; Admin offers **Manage secrets**. Submit the value
+there to resume waiting work after installation.
 
 ## Request and delivery tracking
 
-[`RequestStore`](../domain/secrets/request_store.go) stores each pending request
-with one immutable encrypted delivery and its installation acknowledgement.
-Both FS and Mongo implementations preserve this record across restarts.
+Use [`RequestStore`](../domain/secrets/request_store.go) for durable delivery
+history. Each refresh retains a request and, when available, an encrypted delivery.
+Deleting a primary secret does not erase that history; account for it when
+planning retention and backups.
 
-Save the request and delivery before publishing. Recovery reads `ListPending`,
-then reuses the saved delivery ID, timestamps and ciphertext. A changed version
-needs a fresh request; cancel the previous pending request first. Acknowledgements
-must match the request, recipient, delivery, secret ID and version, and arrive
-before the deadline. Exact replays preserve the original settlement time.
-Cancellation and expiration are explicit; listing overdue requests does not
-change them.
-
-The store records installation history. It does not check sender authorization,
-the agent's active request or the latest value in `SecretStore`. Runtime code must
-check those before using the result for readiness. Requests remain independent:
-one acknowledgement never fulfills another request for the same secret.
-
-Each refresh adds a retained request and, when available, an encrypted delivery
-snapshot. Automatic history cleanup is not implemented. Deleting the primary
-secret does not erase these copies or revoke values already installed by an agent.
-The controller reconciles pending records on startup and periodically. Agents
-keep values and active request identities in memory; a fresh agent process starts
-with a new identity and requests its own values. See the
-[wire protocol](../comms/messages/README.md#secret-synchronization-contracts).
+For exchange and persistence changes, follow [AGENTS.md](AGENTS.md) and the
+[wire guidance](../comms/messages/AGENTS.md).

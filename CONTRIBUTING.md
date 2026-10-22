@@ -19,10 +19,10 @@ Use the Go version declared in [go.work](go.work). From the repository root:
 
 ```sh
 go build -o commander ./apps/playground/cmd/commander
-./commander --all-in-one
+./commander --all-in-one --no-admin
 ```
 
-See [setup](docs/deployment.md) for Docker Compose,
+This source build runs without Admin. See [setup](docs/deployment.md) for Docker Compose,
 [agent development](apps/agents/README.md#development-and-testing) for adding
 actions or agents, and [UI development](apps/admin/ui/README.md#development-and-testing)
 for frontend and backend setup.
