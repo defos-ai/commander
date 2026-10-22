@@ -38,11 +38,10 @@ older maintenance releases do not move them backward.
 
 ## Native binaries
 
-The root release includes Linux, macOS and Windows executables for amd64 and arm64:
-
-- `commander_<os>_<arch>`
-- `commander-builder-agent_<os>_<arch>`
-- `commander-spawner-agent_<os>_<arch>`
+From v0.3.0, the root release includes only `commander_<os>_<arch>` for Linux,
+macOS and Windows on amd64 and arm64. Download standalone builder and spawner
+binaries from their [agent package releases](#agent-packages). The existing
+v0.2.0 release also includes copies of those agent binaries.
 
 Windows filenames end in `.exe`; macOS uses `darwin`. `LICENSE` and
 `checksums.txt` accompany the binaries. Binaries are unsigned; macOS builds are

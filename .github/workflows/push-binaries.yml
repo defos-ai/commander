@@ -187,25 +187,24 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           shopt -s nullglob dotglob
-          downloaded=(*)
-          if (( ${#downloaded[@]} != 18 )); then
-            echo "Expected exactly eighteen native binaries; refusing an incomplete release." >&2
+          # The shared build also contains standalone agents, published above.
+          downloaded=(commander_*)
+          if (( ${#downloaded[@]} != 6 )); then
+            echo "Expected exactly six Commander binaries; refusing an incomplete release." >&2
             exit 1
           fi
 
           binaries=()
-          for name in commander commander-spawner-agent commander-builder-agent; do
-            for os in linux darwin windows; do
-              extension=
-              if [[ "$os" == windows ]]; then extension=.exe; fi
-              for arch in amd64 arm64; do
-                binary="${name}_${os}_${arch}${extension}"
-                if [[ ! -s "$binary" || ! -f "$binary" || -L "$binary" ]]; then
-                  echo "Missing native binary: $binary" >&2
-                  exit 1
-                fi
-                binaries+=("$binary")
-              done
+          for os in linux darwin windows; do
+            extension=
+            if [[ "$os" == windows ]]; then extension=.exe; fi
+            for arch in amd64 arm64; do
+              binary="commander_${os}_${arch}${extension}"
+              if [[ ! -s "$binary" || ! -f "$binary" || -L "$binary" ]]; then
+                echo "Missing native binary: $binary" >&2
+                exit 1
+              fi
+              binaries+=("$binary")
             done
           done
           cp ../LICENSE LICENSE

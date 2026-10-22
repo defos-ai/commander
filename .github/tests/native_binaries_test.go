@@ -12,17 +12,20 @@ import (
 	"time"
 )
 
-var nativeBinaryNames = []string{
+var commanderBinaryNames = []string{
 	"commander_linux_amd64", "commander_linux_arm64",
 	"commander_darwin_amd64", "commander_darwin_arm64",
 	"commander_windows_amd64.exe", "commander_windows_arm64.exe",
+}
+
+var nativeBinaryNames = append(append([]string{}, commanderBinaryNames...),
 	"commander-spawner-agent_linux_amd64", "commander-spawner-agent_linux_arm64",
 	"commander-spawner-agent_darwin_amd64", "commander-spawner-agent_darwin_arm64",
 	"commander-spawner-agent_windows_amd64.exe", "commander-spawner-agent_windows_arm64.exe",
 	"commander-builder-agent_linux_amd64", "commander-builder-agent_linux_arm64",
 	"commander-builder-agent_darwin_amd64", "commander-builder-agent_darwin_arm64",
 	"commander-builder-agent_windows_amd64.exe", "commander-builder-agent_windows_arm64.exe",
-}
+)
 
 func agentNativeBinaryNames(agent string) []string {
 	var names []string
@@ -152,7 +155,7 @@ func TestCINativeBinaryPublication(t *testing.T) {
 			if got := strings.Contains(log, "release create"); got == draft {
 				t.Errorf("create release = %t, existing draft = %t", got, draft)
 			}
-			assets := append(append([]string{}, nativeBinaryNames...), "LICENSE")
+			assets := append(append([]string{}, commanderBinaryNames...), "LICENSE")
 			var checksums strings.Builder
 			for _, name := range assets {
 				got := f.read(t, "uploaded/"+name)
@@ -166,8 +169,8 @@ func TestCINativeBinaryPublication(t *testing.T) {
 				t.Errorf("checksums = %q, want %q", got, checksums.String())
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "uploaded"))
-			if err != nil || len(entries) != len(nativeBinaryNames)+2 {
-				t.Fatalf("release must contain eighteen binaries, license and checksums: %v, %v", entries, err)
+			if err != nil || len(entries) != len(commanderBinaryNames)+2 {
+				t.Fatalf("root release must contain only six Commander binaries, license and checksums: %v, %v", entries, err)
 			}
 			if !strings.HasSuffix(log, "release edit v0.1.0 --draft=false --latest=false\n") {
 				t.Errorf("release must await final latest promotion: %s", log)
@@ -177,14 +180,11 @@ func TestCINativeBinaryPublication(t *testing.T) {
 }
 
 func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
-	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "hidden extra", "wrong name", "wrong spawner name"} {
+	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "wrong name"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newNativeFixture(t)
 			path := filepath.Join(f.artifacts, nativeBinaryNames[0])
-			if mode == "wrong spawner name" {
-				path = filepath.Join(f.artifacts, "commander-spawner-agent_linux_amd64")
-			}
-			if mode != "extra" && mode != "hidden extra" {
+			if mode != "extra" {
 				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
 				}
@@ -198,13 +198,9 @@ func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
 			case "symlink":
 				err = os.Symlink("../LICENSE", path)
 			case "extra":
-				f.write(t, "artifacts/extra", "unexpected")
-			case "hidden extra":
-				f.write(t, "artifacts/.extra", "unexpected")
+				f.write(t, "artifacts/commander_linux_386", "unexpected")
 			case "wrong name":
 				f.write(t, "artifacts/commander_v0.1.0_linux_amd64", "old name")
-			case "wrong spawner name":
-				f.write(t, "artifacts/commander-spawner-agent_v0.1.0_linux_amd64", "wrong name")
 			}
 			if err != nil {
 				t.Fatal(err)

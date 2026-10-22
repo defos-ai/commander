@@ -215,8 +215,10 @@ aligned with dependencies. Release module tagging discovers this module through
 the workspace. The spawner is embedded in Commander and also ships standalone:
 [push-agents.yml](../../../.github/workflows/push-agents.yml) publishes
 `commander-spawner-agent`, and [build-binaries.yml](../../../.github/workflows/build-binaries.yml)
-builds its six native assets alongside Commander and builder. Keep all three executables in
-the same native build artifacts and checksum list. Agent package publication
+builds its six native assets alongside Commander and builder. Keep all three in
+the same native build artifacts. Publish standalone agent binaries and their
+checksums only in their module-tag package releases; the root release contains
+Commander binaries. Agent package publication
 attaches `agent.yaml` and native assets to `apps/agents/spawner/vMAJOR.MINOR.PATCH`,
 using the image digest and native checksums from the same tested revision.
 Image publication returns its digest to the release parent; `stable` promotion
