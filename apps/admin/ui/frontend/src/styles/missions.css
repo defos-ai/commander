@@ -30,6 +30,13 @@
 .missions-empty h2 { font-size: 20px; }
 .missions-empty p { line-height: 1.6; }
 .mission-details { display: grid; gap: 29px; }
+.mission-view-switch { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 22px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.mission-view-switch button { border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 13px; padding: 9px 13px; min-height: 36px; }
+.mission-view-switch button[aria-pressed='true'] { background: var(--stealth); color: var(--smoke); }
+.mission-view-switch button:hover:not([aria-pressed='true']) { color: var(--ink); }
+.mission-json { display: grid; gap: 14px; min-width: 0; }
+.mission-json-toolbar { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; }
+.mission-json textarea { width: 100%; min-width: 0; min-height: 360px; padding: 13px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font: 400 12px/1.6 var(--font-mono); resize: vertical; tab-size: 2; }
 .mission-section { min-width: 0; }
 .mission-section h2 { font-size: 18px; margin-bottom: 14px; }
 .mission-section p { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }

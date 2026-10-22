@@ -82,6 +82,64 @@ describe('missions browser', () => {
     expect(screen.getByRole('button', { name: 'View mission review-service' })).toBeVisible();
   });
 
+  it('shows and copies the saved JSON without rounding schema numbers or changing string escapes', async () => {
+    const definition = String.raw`{"name":"lossless-review","objectives":["Check \"quoted\" text."],"required_actions":[],"starting_actions":[],"input_schema":{"properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
+    const fetch = mockAPI(() => new Response(definition, { headers: { 'Content-Type': 'application/json' } }));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { clipboard: { writeText } }));
+    render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID="lossless-review" onSelect={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'Starting actions' });
+    const views = within(screen.getByRole('group', { name: 'Mission view' }));
+    expect(views.getByRole('button', { name: 'Details' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(views.getByRole('button', { name: 'JSON' }));
+
+    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' }) as HTMLTextAreaElement;
+    expect(editor).toHaveAttribute('readonly');
+    expect(editor).toBeEnabled();
+    expect(editor.value).toContain('9007199254740993');
+    expect(editor.value).toContain(String.raw`"\u0061\\path"`);
+    expect(editor.value).toContain(String.raw`"Check \"quoted\" text."`);
+    expect(editor.value).toMatch(/\n\s+"name":/);
+    expect(views.getByRole('button', { name: 'JSON' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy JSON' }));
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeVisible();
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(editor.value);
+    expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+  });
+
+  it('keeps saved JSON selectable when the clipboard is unavailable', async () => {
+    mockAPI();
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { clipboard: undefined }));
+    render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={mission.name} onSelect={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'JSON' }));
+    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' }) as HTMLTextAreaElement;
+    fireEvent.click(screen.getByRole('button', { name: 'Copy JSON' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Could not copy. Select the JSON and copy it manually.');
+    expect(editor).toBeEnabled();
+    expect(editor).toHaveAttribute('readonly');
+    editor.focus();
+    editor.select();
+    expect(editor.selectionStart).toBe(0);
+    expect(editor.selectionEnd).toBe(editor.value.length);
+  });
+
+  it('ignores a pending clipboard result after leaving the JSON view', async () => {
+    mockAPI();
+    let finishCopy!: () => void;
+    const writeText = vi.fn(() => new Promise<void>(resolve => { finishCopy = resolve; }));
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { clipboard: { writeText } }));
+    const props = { connection, credentials, onSignIn: vi.fn(), selectedID: mission.name, onSelect: vi.fn(), onViewChange: vi.fn() };
+    const rendered = render(<MissionsPage {...props} view="json" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy JSON' }));
+    rendered.rerender(<MissionsPage {...props} view="details" />);
+    await screen.findByRole('heading', { name: 'Starting actions' });
+    rendered.rerender(<MissionsPage {...props} view="json" />);
+    await screen.findByRole('textbox', { name: 'Mission definition (JSON)' });
+    await act(async () => finishCopy());
+    expect(screen.queryByText('Copied')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy JSON' })).toBeEnabled();
+  });
+
   it('renders an empty catalog and nullable definition fields without inventing data', async () => {
     const empty: Mission = {
       name: 'manual-review', objectives: ['A manual review.'], starting_actions: null, required_actions: null,

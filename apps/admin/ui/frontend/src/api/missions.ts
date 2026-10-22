@@ -1,6 +1,6 @@
 import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
-import { ApiError, getJSON } from './client';
+import { ApiError, getJSON, getJSONDocument } from './client';
 import type { Mission, MissionRule, MissionStep } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -56,11 +56,11 @@ export async function listMissions(url: string, credentials: Session, signal?: A
   return body.items;
 }
 
-export async function getMission(url: string, credentials: Session, name: string, signal?: AbortSignal): Promise<Mission> {
+export async function getMissionDocument(url: string, credentials: Session, name: string, signal?: AbortSignal): Promise<{ mission: Mission; definition: string }> {
   if (!isMissionName(name)) throw new ApiError('invalid_response');
-  const body = await getJSON(url, `/api/v1/missions/${encodeURIComponent(name)}`, credentials, signal);
-  if (!isMission(body) || body.name !== name) throw new ApiError('invalid_response');
-  return body;
+  const document = await getJSONDocument(url, `/api/v1/missions/${encodeURIComponent(name)}`, credentials, signal);
+  if (!isMission(document.value) || document.value.name !== name) throw new ApiError('invalid_response');
+  return { mission: document.value, definition: document.text };
 }
 
 export type MissionCreateErrorKind = 'invalid_json' | 'invalid_input' | 'conflict' | 'authentication' | 'forbidden' | 'unknown';

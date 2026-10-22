@@ -73,6 +73,13 @@
   retrying writes. Discard drafts on page exit, reload or connection/session changes,
   abort pending requests and ignore stale responses. Never persist drafts in
   browser storage or include secret values in definitions.
+- Mission details offer **Details / JSON** views. The `/missions/<name>/json`
+  route survives reload and browser history. Retain validated response text from
+  the same detail request; never reconstruct exported JSON from parsed JavaScript
+  numbers. Format whitespace only, preserving number tokens and string escapes.
+  Keep the JSON read-only and selectable, with Copy feedback and a manual-copy
+  fallback. Clear clipboard feedback when leaving the view or changing its source;
+  ignore copy results after unmount. Never refetch or mutate a mission to copy it.
 - Operation responses require the server's `progress` projection. Display its
   finished/total task counts without recounting task statuses. Interrupted work
   remains unfinished even when the operation is terminal; keep refreshing details

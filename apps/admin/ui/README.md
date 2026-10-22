@@ -28,6 +28,9 @@ uncertain save, use **Check saved mission** before trying again. Drafts stay in
 memory and are discarded when you leave or reload the page, or change the connection
 or session. A successful save opens the new mission.
 
+In mission details, switch to **JSON** to view and copy the saved definition.
+The JSON view preserves schema numbers and string escapes and can be bookmarked.
+
 ## Secrets
 
 Open **Agents → Manage secrets** to supply values requested by agents, or add

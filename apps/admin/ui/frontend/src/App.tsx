@@ -92,13 +92,15 @@ export function App() {
         : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           onBack={() => navigate({ connectionID: active.id, section: 'agents' })} />
         : section === 'operations' ? <OperationsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
-          selectedID={selectedID} onSelect={select} view={route.connectionID ? route.view ?? 'details' : 'details'}
+          selectedID={selectedID} onSelect={select} view={route.connectionID && route.view === 'graph' ? 'graph' : 'details'}
           onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
           onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
         : section === 'create-mission' ? <CreateMissionPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           onBack={() => navigate({ connectionID: active.id, section: 'missions' })}
           onSelect={name => navigate({ connectionID: active.id, section: 'missions', itemID: name })} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}
+          view={route.connectionID && route.view === 'json' ? 'json' : 'details'}
+          onViewChange={view => navigate({ connectionID: active.id, section: 'missions', itemID: selectedID, view })}
           onCreate={() => navigate({ connectionID: active.id, section: 'create-mission' })} />
           : section === 'controllers' ? <ControllersPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
           : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}

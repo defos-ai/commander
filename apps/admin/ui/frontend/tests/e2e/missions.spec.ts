@@ -12,6 +12,8 @@ test('create a reusable mission through Admin without installed actions or start
     input_schema: {},
     output_schema: {},
   };
+  const definition = JSON.stringify(mission, null, 2).replace('"input_schema": {}',
+    String.raw`"input_schema": {"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`);
   const operationIDs = async () => (await api.get<{ items: { id: string }[] }>('/operations')).items.map(item => item.id).sort();
   const before = await operationIDs();
   await connect(page);
@@ -34,7 +36,7 @@ test('create a reusable mission through Admin without installed actions or start
   await page.reload();
   await expect(page).toHaveURL(creationURL);
   await expect(create.getByRole('heading', { name: 'Create mission', exact: true })).toBeVisible();
-  await create.getByLabel('Mission definition (JSON)', { exact: true }).fill(JSON.stringify(mission, null, 2));
+  await create.getByLabel('Mission definition (JSON)', { exact: true }).fill(definition);
   await create.getByRole('button', { name: 'Create mission', exact: true }).click();
   await expect(create.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
@@ -46,6 +48,23 @@ test('create a reusable mission through Admin without installed actions or start
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
   expect(await api.get<Mission>(`/missions/${mission.name}`)).toMatchObject(mission);
+  await page.getByRole('group', { name: 'Mission view', exact: true }).getByRole('button', { name: 'JSON', exact: true }).click();
+  const jsonURL = `${missionURL}/json`;
+  await expect(page).toHaveURL(jsonURL);
+  const savedDefinition = page.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true });
+  await expect(savedDefinition).toHaveAttribute('readonly');
+  const savedJSON = await savedDefinition.inputValue();
+  expect(savedJSON).toContain('9007199254740993');
+  expect(savedJSON).toContain(String.raw`"\u0061\\path"`);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Copy JSON', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(savedJSON);
+  await page.reload();
+  await expect(page).toHaveURL(jsonURL);
+  await expect(savedDefinition).toHaveValue(savedJSON);
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page).toHaveURL(missionURL);
 
   await page.getByRole('button', { name: 'All missions', exact: true }).click();
   await expect(page.getByRole('button', { name: `View mission ${mission.name}`, exact: true })).toBeVisible();

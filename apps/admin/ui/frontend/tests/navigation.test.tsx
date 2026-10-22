@@ -63,12 +63,16 @@ describe('location navigation', () => {
       { connectionID: 'local', section: 'secrets' }, { connectionID: 'local', section: 'create-mission' },
       { connectionID: 'local', section: 'missions', itemID: 'create-mission' },
       ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
-      { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' }];
+      { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' },
+      { connectionID: 'private/team', section: 'missions', itemID: 'Résumé / a?#b', view: 'json' }];
 
     for (const route of routes) expect(parseRoute(routeHash(route))).toEqual(route);
     expect(routeHash({ connectionID: 'local', section: 'operations', itemID: operation.id, view: 'details' }))
       .toBe(`#/connections/local/operations/${operation.id}`);
+    expect(routeHash({ connectionID: 'local', section: 'missions', itemID: mission.name, view: 'details' }))
+      .toBe(`#/connections/local/missions/${mission.name}`);
     for (const hash of ['#/%', '#/connections/id/unknown', '#/connections/id/overview/item', '#/connections/id/secrets/item', '#/connections/id/create-mission/item', '#/connections/id/create-mission/', '#/connections/id/operations/',
+      '#/connections/id/missions/item/graph', '#/connections/id/operations/item/json', '#/connections/id/missions/item/json/extra',
       '#/connections/id/create-mission/item/graph', '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra',
       '#/operations/', '#/operations/id/extra', '#/operations/id?token=secret', '#/operations/id#fragment',
       '#/operations/%0A', '#/operations/%', '#/operations/' + 'a'.repeat(257)]) {
@@ -197,6 +201,34 @@ describe('location navigation', () => {
     expect(fetch.mock.calls.some(([url, init]) => init?.method === 'GET' && upstreamURL(url).endsWith(`/api/v1/missions/${created.name}`))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
     expect(await screen.findByRole('button', { name: `View mission ${created.name}` })).toBeVisible();
+  });
+
+  it('restores the saved mission JSON view through sign-in, browser history and reload', async () => {
+    const fetch = mockAPI();
+    visit({ connectionID: connection.id, section: 'missions', itemID: mission.name, view: 'json' });
+    const first = render(<App />);
+    await screen.findByRole('button', { name: 'Sign in' });
+    const jsonHash = window.location.hash;
+    await signIn();
+    expect(await screen.findByRole('textbox', { name: 'Mission definition (JSON)' })).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'JSON' })).toHaveAttribute('aria-pressed', 'true');
+    expect(window.location.hash).toBe(jsonHash);
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${connection.id}/missions/${mission.name}`);
+    act(() => { window.history.back(); });
+    expect(await screen.findByRole('textbox', { name: 'Mission definition (JSON)' })).toBeVisible();
+    expect(window.location.hash).toBe(jsonHash);
+    act(() => { window.history.forward(); });
+    expect(await screen.findByRole('heading', { name: 'Starting actions' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    first.unmount();
+    fetch.mockClear();
+    render(<App />);
+    expect(await screen.findByRole('textbox', { name: 'Mission definition (JSON)' })).toBeVisible();
+    expect(window.location.hash).toBe(jsonHash);
+    expect(screen.getByRole('button', { name: 'JSON' })).toHaveAttribute('aria-pressed', 'true');
+    expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });
 
   it('opens Secrets from operations and Agents on the same connection without sending a mutation', async () => {

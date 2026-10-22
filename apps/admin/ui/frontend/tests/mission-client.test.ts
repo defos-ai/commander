@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/api/client';
-import { createMission, getMission, listMissions, MissionCreateError } from '../src/api/missions';
+import { createMission, getMissionDocument, listMissions, MissionCreateError } from '../src/api/missions';
 import type { Mission } from '../src/api/types';
 
 const url = 'https://commander.example/proxy';
@@ -40,7 +40,7 @@ describe('mission API', () => {
     vi.stubGlobal('fetch', fetch);
 
     expect(await listMissions(`${url}/`, credentials)).toEqual([mission]);
-    expect(await getMission(url, credentials, namedMission.name)).toEqual(namedMission);
+    expect((await getMissionDocument(url, credentials, namedMission.name)).mission).toEqual(namedMission);
 
     expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
       `/api/v1/missions`, `/api/v1/missions/review%2Fwebsite%20%3F%23%C3%A9`,
@@ -63,7 +63,17 @@ describe('mission API', () => {
       .mockResolvedValueOnce(Response.json(nullableMission)));
 
     expect(await listMissions(url, credentials)).toEqual([]);
-    expect(await getMission(url, credentials, 'minimal')).toEqual(nullableMission);
+    expect((await getMissionDocument(url, credentials, 'minimal')).mission).toEqual(nullableMission);
+  });
+
+  it('retains the saved JSON definition without rounding schema numbers or dropping fields', async () => {
+    const definition = JSON.stringify(mission).replace('"output_schema":{}',
+      '"output_schema":{"minimum":9007199254740993,"multipleOf":0.10000000000000001,"default":1e+100},"future_field":{"enabled":true}');
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(definition));
+    vi.stubGlobal('fetch', fetch);
+
+    expect(await getMissionDocument(url, credentials, mission.name)).toEqual({ mission: JSON.parse(definition), definition });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -74,7 +84,7 @@ describe('mission API', () => {
       Response.json({ error: `Do not display private-upstream-details` }, { status: Number(status) }),
     ));
 
-    const error = await getMission(url, credentials, mission.name).catch(value => value);
+    const error = await getMissionDocument(url, credentials, mission.name).catch(value => value);
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ kind, message: kind });
@@ -120,13 +130,17 @@ describe('mission API', () => {
     await expect(listMissions(url, credentials)).rejects.toMatchObject({ kind: 'invalid_response' });
   });
 
-  it('rejects invalid JSON and a response for a different mission', async () => {
+  it('rejects invalid JSON, malformed definitions and a response for a different mission', async () => {
     vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(new Response('<html>Proxy page</html>'))
+      .mockResolvedValueOnce(new Response('not JSON'))
+      .mockResolvedValueOnce(Response.json({ ...mission, objectives: [] }))
       .mockResolvedValueOnce(Response.json({ ...mission, name: 'another' })));
 
     await expect(listMissions(url, credentials)).rejects.toMatchObject({ kind: 'invalid_response' });
-    await expect(getMission(url, credentials, mission.name)).rejects.toMatchObject({ kind: 'invalid_response' });
+    for (let index = 0; index < 3; index++) {
+      await expect(getMissionDocument(url, credentials, mission.name)).rejects.toMatchObject({ kind: 'invalid_response' });
+    }
   });
 
   it('rejects dot segments before requesting a different endpoint', async () => {
@@ -134,7 +148,7 @@ describe('mission API', () => {
     vi.stubGlobal('fetch', fetch);
 
     for (const name of ['.', '..', '']) {
-      await expect(getMission(url, credentials, name)).rejects.toMatchObject({ kind: 'invalid_response' });
+      await expect(getMissionDocument(url, credentials, name)).rejects.toMatchObject({ kind: 'invalid_response' });
     }
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -145,14 +159,14 @@ describe('mission API', () => {
     }));
     vi.stubGlobal('fetch', fetch);
     const controller = new AbortController();
-    const pending = listMissions(url, credentials, controller.signal);
+    const pending = getMissionDocument(url, credentials, mission.name, controller.signal);
 
     controller.abort();
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
     fetch.mockClear();
-    await expect(listMissions(url, credentials, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(getMissionDocument(url, credentials, mission.name, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -160,7 +174,7 @@ describe('mission API', () => {
     vi.useFakeTimers();
     const fetch = vi.fn<typeof globalThis.fetch>(async (_url, options) => ({
       ok: true,
-      json: () => new Promise((_resolve, reject) => {
+      text: () => new Promise((_resolve, reject) => {
         options?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
       }),
     } as Response));
