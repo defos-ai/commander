@@ -53,6 +53,7 @@ jobs:
         run: |
           go test -count=1 -timeout=3m ./framework/tests/agent/environment
           go test -count=1 -timeout=3m ./framework/tests/agent/manifest
+          go test -count=1 -timeout=3m ./providers/fs/tests -run '^TestBusSubscribersSettleTheSamePublicationIndependently$'
           go test -count=1 -timeout=3m ./apps/agents/spawner/...
           go test -tags embed_ui -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne'
       - name: Build Commander, spawner and builder

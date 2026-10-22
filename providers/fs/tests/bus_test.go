@@ -133,8 +133,26 @@ func TestBusSubscribersSettleTheSamePublicationIndependently(t *testing.T) {
 	if len(before) != 1 || len(before[0].Pending) != 2 {
 		t.Fatalf("expected two pending subscribers: %+v", before)
 	}
+	// A subscriber may still be reading the old snapshot while another settles.
+	directory, err := os.OpenRoot(filepath.Dir(before[0].path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.Close()
+	reader, err := directory.Open(filepath.Base(before[0].path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
 	if err := firstDelivery.Reject(ctx); err != nil {
 		t.Fatal(err)
+	}
+	var original []storedBusMessage
+	if err := json.NewDecoder(reader).Decode(&original); err != nil {
+		t.Fatal(err)
+	}
+	if len(original) != 1 || !slices.Equal(original[0].Pending, before[0].Pending) || len(original[0].Rejected) != 0 {
+		t.Fatal("settlement changed the snapshot held by another reader")
 	}
 	records := storedBusMessages(t, root)
 	if len(records) != 1 || len(records[0].Pending) != 1 || len(records[0].Rejected) != 1 {
