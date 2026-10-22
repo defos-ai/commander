@@ -65,7 +65,7 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 			t.Fatalf("archive retained excluded data: %s", name)
 		}
 	}
-	for _, name := range []string{"agent.go", "LICENSE", "AGENTS.md", "agent.yaml.tmpl", "docker/Dockerfile", ".github/scripts/release.go", ".github/workflows/make-release.yml", ".github/workflows/test.yml", ".github/workflows/build-binaries.yml", ".github/workflows/push.yml", ".github/workflows/push-stable.yml"} {
+	for _, name := range []string{"agent.go", "LICENSE", "AGENTS.md", "docker/Dockerfile", ".github/scripts/release.go", ".github/workflows/make-release.yml", ".github/workflows/test.yml", ".github/workflows/build-binaries.yml", ".github/workflows/push.yml", ".github/workflows/push-stable.yml"} {
 		if files[name] == "" {
 			t.Errorf("verified release source missing from artifact: %s", name)
 		}

@@ -110,7 +110,8 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   unchanged example identity/module or checkout-local Go replacements. Reuse the
   template's `.github/scripts/release.go` metadata and manifest commands in the
   clean environment, with a synthetic version, six temporary assets and a
-  temporary image digest. Treat tool output as untrusted; bound it and validate
+  temporary image digest. The framework owns manifest rendering; do not require
+  a repository-local `agent.yaml.tmpl`. Treat tool output as untrusted; bound it and validate
   names before using them as paths. Parse the resulting manifest through
   `framework/agent/manifest` and compare its identity, platforms, asset names,
   checksums and image with the checked metadata. Keep synthetic files out of the

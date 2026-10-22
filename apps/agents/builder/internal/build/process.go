@@ -73,7 +73,8 @@ Choose a distinct lowercase AgentType and replace the example-agent module and
 identity consistently in Go imports, including release helpers, CLI, Dockerfile and
 documentation. Keep pure Responsibilities() and ActionDescriptions() metadata in
 sync with the registered agent and actions. Preserve the release helper's
-metadata/manifest commands, agent.yaml.tmpl and release workflows; the generated
+metadata/manifest commands and release workflows; render agent.yaml through the
+framework/agent/manifest package. The generated
 manifest must describe the agent's responsibilities and action names/descriptions.
 Preserve make-release.yml's version, expected_commit and request_id inputs, request
 run-name, first-step commit guard and prepare dependencies. Every checkout uses github.sha.

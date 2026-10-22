@@ -48,7 +48,7 @@ func ValidateRelease(ctx context.Context, goTool, source, scratch string, env []
 	defer root.Close()
 	var agentSource []byte
 	for _, name := range []string{
-		"agent.go", "go.mod", "LICENSE", "README.md", "AGENTS.md", "agent.yaml.tmpl",
+		"agent.go", "go.mod", "LICENSE", "README.md", "AGENTS.md",
 		"docker/Dockerfile", ".github/scripts/release.go",
 		".github/workflows/make-release.yml", ".github/workflows/test.yml",
 		".github/workflows/build-binaries.yml", ".github/workflows/push.yml", ".github/workflows/push-stable.yml",

@@ -336,7 +336,6 @@ func writeReleaseFixture(root, mode string) error {
 		"agent.go":                   "package generated\nconst AgentType = " + fmt.Sprintf("%q", agentType) + "\n",
 		"LICENSE":                    "MIT License\n",
 		"AGENTS.md":                  "Keep action implementations in actions and tests in tests.\n",
-		"agent.yaml.tmpl":            "schema_version: 1\ntype: {{.Type}}\nversion: {{.Version}}\n",
 		"docker/Dockerfile":          "FROM scratch\n",
 		".github/scripts/release.go": "package main\nfunc main() {}\n",
 	}
