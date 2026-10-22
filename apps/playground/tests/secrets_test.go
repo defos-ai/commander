@@ -166,11 +166,31 @@ func assertLocalSecretPrivacy(t *testing.T, session *local.Session, key string) 
 			t.Fatal("all-in-one notices disclosed a secret or encryption key")
 		}
 	}
-	err := filepath.WalkDir(session.Directory, func(path string, entry fs.DirEntry, err error) error {
+	root, err := os.OpenRoot(session.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	files := root.FS()
+	err = fs.WalkDir(files, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		data, err := os.ReadFile(path)
+		info, err := entry.Info()
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// Empty files cannot contain private data; reading an empty provider
+		// lock file would violate its mandatory byte-range lock on Windows.
+		if info.Size() == 0 {
+			return nil
+		}
+		// Root reads permit Windows delete sharing, preserving atomic replacement
+		// while the running hosts continue writing their catalogs and logs.
+		data, err := fs.ReadFile(files, path)
 		if os.IsNotExist(err) {
 			return nil // Providers may finish an atomic file replacement during this scan.
 		}
