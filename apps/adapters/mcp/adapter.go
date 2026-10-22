@@ -97,7 +97,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 		config.CatalogURL = DefaultAgentCatalogURL
 	}
 	server := mcp.NewServer(&mcp.Implementation{
-		Name: "commander-mcp", Version: "0.1.0",
+		Name: "commander-mcp", Version: "0.2.0",
 		Icons: []mcp.Icon{{
 			Source:   "data:image/png;base64," + base64.StdEncoding.EncodeToString(serverLogo),
 			MIMEType: "image/png",

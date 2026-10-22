@@ -3,10 +3,10 @@ module github.com/defos-ai/commander/apps/agents/builder
 go 1.26.7
 
 require (
-	github.com/defos-ai/commander/framework v0.1.0
-	github.com/defos-ai/commander/providers/fs v0.1.0
-	github.com/defos-ai/commander/providers/rabbitmq v0.1.0
-	github.com/defos-ai/commander/providers/s3 v0.1.0
+	github.com/defos-ai/commander/framework v0.2.0
+	github.com/defos-ai/commander/providers/fs v0.2.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.2.0
+	github.com/defos-ai/commander/providers/s3 v0.2.0
 	go.yaml.in/yaml/v3 v3.0.4
 )
 
