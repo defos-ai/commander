@@ -28,6 +28,9 @@ For service-backed tests, follow the setup commands in
 
 ## MCP API tests
 
+The stacks use the lightweight example agent for routing, proposed actions and
+artifact checks. Web/browser-agent tests run in their own repositories.
+
 Start the FS stack, run suites sequentially, then remove test state:
 
 ```sh

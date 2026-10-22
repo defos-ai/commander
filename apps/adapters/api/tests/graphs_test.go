@@ -9,8 +9,7 @@ import (
 
 func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
 	a := connect(t)
-	url := website(t)
-	op := a.start(url)
+	op := a.start(fixtureText)
 	base := operationPath(op.ID)
 	empty := a.request(http.MethodGet, base+"/graph", nil)
 	initial := decode[models.OperationGraphResponse](t, empty, http.StatusOK)
@@ -18,23 +17,21 @@ func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
 		t.Fatalf("new graph should contain empty arrays: %+v", initial)
 	}
 	assertSchema(t, a, "OperationGraph", empty)
-	a.task(op.ID, "check-seo", url)
-	ready := a.wait(op.ID, func(op models.OperationResponse) bool { return modelDecision(op) != nil })
-	root := *modelDecision(ready)
+	root := a.task(op.ID, "analyze-text", object{"text": fixtureText})
+	finished := a.wait(op.ID, func(op models.OperationResponse) bool { return tasksSettled(op) && modelDecision(op) != nil })
+	root = finished.Tasks[0]
 	if root.Status != "succeeded" {
-		t.Fatalf("SEO task failed: %+v", root)
+		t.Fatalf("analysis task failed: %+v", root)
 	}
-	a.resolve(op.ID, root, []object{{"action_name": "capture-page", "input": object{"url": url}}})
-	finished := a.wait(op.ID, tasksSettled)
 	if len(finished.Tasks) != 2 || finished.Tasks[1].Status != "succeeded" {
-		t.Fatalf("capture branch failed: %+v", finished.Tasks)
+		t.Fatalf("proposed summary branch failed: %+v", finished.Tasks)
 	}
-	queued := a.task(op.ID, "unavailable-test-action", url)
+	queued := a.task(op.ID, "unavailable-test-action", object{})
 	snapshot := read[models.OperationResponse](a, base)
 	result := a.request(http.MethodGet, base+"/graph", nil)
 	graph := decode[models.OperationGraphResponse](t, result, http.StatusOK)
 	assertSchema(t, a, "OperationGraph", result)
-	if graph.OperationID != op.ID || graph.Status != snapshot.Status || !graph.UpdatedAt.Equal(snapshot.UpdatedAt) || len(graph.Nodes) != 6 || len(graph.Edges) != 4 {
+	if graph.OperationID != op.ID || graph.Status != snapshot.Status || !graph.UpdatedAt.Equal(snapshot.UpdatedAt) || len(graph.Nodes) != 5 || len(graph.Edges) != 3 {
 		t.Fatalf("graph lost task/file snapshot: %+v", graph)
 	}
 	nodes := map[string]models.GraphNodeResponse{}

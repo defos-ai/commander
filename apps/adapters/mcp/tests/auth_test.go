@@ -47,7 +47,7 @@ func TestMCPDeploymentMetadata(t *testing.T) {
 
 func TestUnauthorizedCleanupPreservesSavedWork(t *testing.T) {
 	a := connect(t)
-	op := a.start("https://example.test")
+	op := a.start("Saved cleanup fixture")
 	a.call("cancel_operation", object{"operation_id": op.ID}, nil)
 	client := &http.Client{
 		Timeout:       10 * time.Second,

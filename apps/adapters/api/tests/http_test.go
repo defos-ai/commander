@@ -15,7 +15,7 @@ import (
 
 func TestReadOnlyQueriesValidateIDsAndEmptyCollections(t *testing.T) {
 	a := connect(t)
-	op := a.start(website(t))
+	op := a.start(fixtureText)
 	base := operationPath(op.ID)
 	before := a.request(http.MethodGet, base, nil)
 	lastEvent := fmt.Sprint(op.Events[len(op.Events)-1].Sequence)
@@ -59,7 +59,7 @@ func TestReadOnlyQueriesValidateIDsAndEmptyCollections(t *testing.T) {
 
 func TestHTTPAuthenticationOriginMethodsAndPublicProbes(t *testing.T) {
 	a := connect(t)
-	op := a.start(website(t))
+	op := a.start(fixtureText)
 	paths := []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/unknown-controller", operationPath(op.ID), operationPath(op.ID) + "/graph", "/api/v1/reports/" + absentID, "/api/v1/artifacts/" + absentID, "/openapi.json", "/api/v1/unknown"}
 	for _, path := range paths {
 		unauthorized := a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })

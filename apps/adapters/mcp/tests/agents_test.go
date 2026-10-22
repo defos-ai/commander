@@ -23,7 +23,7 @@ func TestAgentsAndActions(t *testing.T) {
 	}
 	a.call("list_actions", object{}, &catalog)
 	expectedCatalog := map[string]bool{}
-	var webID string
+	var exampleID string
 	for _, agent := range list.Agents {
 		if agent.Stale {
 			t.Fatalf("incomplete/stale agent: %+v", agent)
@@ -48,8 +48,8 @@ func TestAgentsAndActions(t *testing.T) {
 		if !slices.Equal(names, expectedAgentActions(string(agent.Type))) {
 			t.Fatalf("agent advertises the wrong capabilities: %+v", agent)
 		}
-		if agent.Type == "web-agent" {
-			webID = agent.ID
+		if agent.Type == "example-agent" {
+			exampleID = agent.ID
 		}
 	}
 	if len(catalog.Actions) != len(expectedCatalog) {
@@ -61,12 +61,12 @@ func TestAgentsAndActions(t *testing.T) {
 		}
 	}
 	var detail agents.Agent
-	a.call("describe_agent", object{"agent_id": webID}, &detail)
-	if detail.ID != webID || detail.Status != agents.AgentReady {
+	a.call("describe_agent", object{"agent_id": exampleID}, &detail)
+	if detail.ID != exampleID || detail.Status != agents.AgentReady {
 		t.Fatalf("agent query lost identity or readiness: %+v", detail)
 	}
 	var action actions.Action
-	a.call("describe_action", object{"agent_id": detail.ID, "action_name": "check-seo"}, &action)
+	a.call("describe_action", object{"agent_id": detail.ID, "action_name": "write-summary"}, &action)
 	if len(action.InputSchema) == 0 || len(action.OutputSchema) == 0 || action.Status != actions.Ready {
 		t.Fatalf("missing schema or readiness: %+v", action)
 	}
@@ -76,8 +76,8 @@ func TestAgentsAndActions(t *testing.T) {
 	}{
 		{"list_agents", object{}},
 		{"list_actions", object{}},
-		{"describe_agent", object{"agent_id": webID}},
-		{"describe_action", object{"agent_id": webID, "action_name": "check-seo"}},
+		{"describe_agent", object{"agent_id": exampleID}},
+		{"describe_action", object{"agent_id": exampleID, "action_name": "write-summary"}},
 	} {
 		var raw json.RawMessage
 		a.call(query.name, query.args, &raw)
@@ -112,13 +112,12 @@ func TestAgentsAndActions(t *testing.T) {
 		}
 	}
 
-	url := website(t)
-	op := a.start(url)
-	assertAgentSelectionRejected(t, "assign_task", object{"operation_id": op.ID, "agent_id": detail.ID, "action_name": "check-seo", "input": object{"url": url}})
+	op := a.start("Agent query fixture")
+	assertAgentSelectionRejected(t, "assign_task", object{"operation_id": op.ID, "agent_id": detail.ID, "action_name": "write-summary", "input": summaryInput()})
 	if len(a.get(op.ID).Tasks) != 0 {
 		t.Fatal("rejected request created work")
 	}
-	assigned := a.task(op.ID, "check-seo", url)
+	assigned := a.task(op.ID, "write-summary", summaryInput())
 	settled := a.wait(op.ID, allTasksSucceeded)
 	task := settled.Tasks[0]
 	if task.ID != assigned.ID || task.AgentID == "" || task.Result == nil || len(task.Result.Output) == 0 {
@@ -126,7 +125,7 @@ func TestAgentsAndActions(t *testing.T) {
 	}
 	knownAgent := false
 	for _, agent := range list.Agents {
-		knownAgent = knownAgent || agent.ID == task.AgentID && agent.Type == "web-agent"
+		knownAgent = knownAgent || agent.ID == task.AgentID && agent.Type == "example-agent"
 	}
 	if !knownAgent {
 		t.Fatalf("controller selected an unannounced or incapable agent: %s", task.AgentID)
@@ -141,7 +140,8 @@ func TestAgentsAndActions(t *testing.T) {
 	if saved.AgentID != task.AgentID {
 		t.Fatalf("task query lost executor: %+v", saved)
 	}
-	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": "SEO reviewed", "findings": []object{}}}, nil)
+	a.resolve(op.ID, *modelDecision(settled), []object{})
+	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"summary": "Tracked action reviewed"}}, nil)
 }
 
 func assertAgentSelectionRejected(t *testing.T, name string, args object) {

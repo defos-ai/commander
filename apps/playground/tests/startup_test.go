@@ -98,7 +98,7 @@ func testAllInOneDefaultAgents(t *testing.T) {
 		t.Fatalf("installation mission needs an agent other than the spawner: %+v", mission)
 	}
 	var provision operations.Operation
-	call("start_operation", map[string]any{"mission_name": mission.Name, "input": map[string]any{"package": "github.com/defos-ai/commander-web-agent@v0.2.0"}}, &provision)
+	call("start_operation", map[string]any{"mission_name": mission.Name, "input": map[string]any{"package": "github.com/defos-ai/commander-example-agent@v0.2.0"}}, &provision)
 	if provision.Preflight == nil || !provision.Preflight.Ready || len(provision.Preflight.Actions) != 1 || provision.Preflight.Actions[0].ActionName != "spawn-agent" || !slices.Equal(provision.Preflight.Actions[0].ReadyAgentIDs, []string{spawner.ID}) || len(provision.Tasks) != 0 {
 		t.Fatalf("installation cannot start with the default agents: %+v", provision)
 	}

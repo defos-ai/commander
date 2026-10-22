@@ -22,8 +22,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	browsercli "github.com/defos-ai/commander-browser-agent/cli"
-	webcli "github.com/defos-ai/commander-web-agent/cli"
+	examplecli "github.com/defos-ai/commander-example-agent/cli"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/apps/playground/cli"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -45,13 +44,8 @@ func TestAllInOne(t *testing.T) {
 
 func testAllInOneWorkflow(t *testing.T) {
 	temporary := allInOneEnvironment(t)
-	t.Setenv("PATH", t.TempDir()) // Startup and explicit web fixtures need no Git or browser.
-	t.Setenv("CHROMIUM_PATH", filepath.Join(t.TempDir(), "missing-browser"))
-	t.Setenv("CHROMIUM_NO_SANDBOX", "false")
-	website := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `<html lang="en"><title>Release preview</title><meta name="robots" content="noindex"><h1>Preview</h1></html>`)
-	}))
-	defer website.Close()
+	t.Setenv("PATH", t.TempDir()) // Startup and the example fixture need no external tools.
+	const analysisText = "Hello Commander. Build useful agents."
 	operationID := id.New()
 	var requests atomic.Int32
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,9 +68,9 @@ func testAllInOneWorkflow(t *testing.T) {
 		}
 		request := requests.Add(1)
 		expected := map[int32][]string{
-			2: {"review-website-no-browser", "review-website-with-browser"},
+			2: {"analyze-text", "build-agent", "install-agent"},
 			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
-			4: {"web-agent-", "browser-agent-", "builder-agent-", "checkout-template", "build-agent", "publish-agent", "release-agent", "spawner-agent-", "spawn-agent"},
+			4: {"example-agent-", "analyze-text", "write-summary", "builder-agent-", "spawner-agent-"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -93,38 +87,35 @@ func testAllInOneWorkflow(t *testing.T) {
 			}
 			delta = toolDelta(name, map[string]any{})
 		case 2:
-			delta = toolDelta("describe_mission", map[string]any{"mission_name": "review-website-no-browser"})
+			delta = toolDelta("describe_mission", map[string]any{"mission_name": "analyze-text"})
 		case 4:
-			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "review-website-no-browser", "input": map[string]any{"url": website.URL}})
+			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "analyze-text", "input": map[string]any{"text": analysisText}})
 		case 5:
-			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "discover-pages-no-browser", "input": map[string]any{"url": website.URL}})
+			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "analyze-text", "input": map[string]any{"text": analysisText}})
 		case 6:
-			delta, finish = map[string]any{"content": "**Review running**"}, "stop"
+			delta, finish = map[string]any{"content": "**Analysis running**"}, "stop"
 		case 7, 9:
 			// Continuations must reach the model automatically, carrying actual
 			// results and then the operator's answer, without another chat prompt.
 			last := body.Messages[len(body.Messages)-1]
 			_, state, ok := strings.Cut(last.Content, "Current state:\n")
 			var op operations.Operation
-			if !ok || last.Role != "user" || json.Unmarshal([]byte(state), &op) != nil || op.ID != operationID || len(op.Tasks) != 4 || op.Preflight == nil || !op.Preflight.Ready {
+			if !ok || last.Role != "user" || json.Unmarshal([]byte(state), &op) != nil || op.ID != operationID || len(op.Tasks) != 2 || op.Preflight == nil || !op.Preflight.Ready {
 				t.Errorf("model did not receive saved task evidence: %s", last.Content)
 				http.Error(w, "missing operation evidence", http.StatusBadRequest)
 				return
 			}
-			var seoFound bool
+			var artifactFound bool
 			for _, task := range op.Tasks {
-				if !strings.HasPrefix(task.AgentID, "web-agent-") {
-					t.Errorf("HTTP task did not execute on the web agent: %+v", task)
+				if !strings.HasPrefix(task.AgentID, "example-agent-") || task.Status != operations.TaskSucceeded {
+					t.Errorf("task did not execute on the example agent: %+v", task)
 				}
-				if task.Status != operations.TaskSucceeded || task.ActionName == "capture-page" || task.ActionName == "check-accessibility" {
-					t.Errorf("unexpected browser-free task: %+v", task)
-				}
-				if task.ActionName == "check-seo" && task.Result != nil && bytes.Contains(task.Result.Output, []byte("Release preview")) {
-					seoFound = true
+				if task.ActionName == "write-summary" && task.Result != nil && len(task.Result.Artifacts) == 1 && len(task.Result.Artifacts[0].Files) == 1 && task.Result.Artifacts[0].Files[0].Name == "summary.md" {
+					artifactFound = true
 				}
 			}
-			if !seoFound {
-				t.Error("model did not receive saved SEO evidence")
+			if !artifactFound {
+				t.Error("model did not receive the saved summary artifact")
 			}
 			if request == 7 {
 				task := op.Tasks[0]
@@ -134,19 +125,18 @@ func testAllInOneWorkflow(t *testing.T) {
 					return
 				}
 				delta = toolDelta("ask_question", map[string]any{"operation_id": operationID, "task_id": task.ID, "version": task.Continuation.Version,
-					"text": "Is the indexing restriction intentional?", "options": []string{"No, public release", "Yes, preview only"}})
+					"text": "Accept this text summary?", "options": []string{"Revise", "Accept"}})
 			} else {
-				if len(op.Questions) != 1 || op.Questions[0].Status != operations.QuestionAnswered || op.Questions[0].Answer != "Yes, preview only" {
+				if len(op.Questions) != 1 || op.Questions[0].Status != operations.QuestionAnswered || op.Questions[0].Answer != "Accept" {
 					t.Errorf("model did not receive operator guidance: %+v", op.Questions)
 				}
-				delta = toolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{"url": website.URL,
-					"summary": "Release preview reviewed; operator confirmed intentional noindex", "findings": []any{},
-					"limitations": []string{"Rendered accessibility and screenshots were not performed"}}})
+				delta = toolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{
+					"summary": "Text analyzed; operator accepted summary.md"}})
 			}
 		case 8:
-			delta, finish = map[string]any{"content": "Please choose how to interpret the indexing restriction."}, "stop"
+			delta, finish = map[string]any{"content": "Please choose whether to accept the summary."}, "stop"
 		case 10, 11: // Completion can also produce a final background update.
-			delta, finish = map[string]any{"content": "**Review complete**\n\n- SEO evidence checked\n- Operator answer recorded"}, "stop"
+			delta, finish = map[string]any{"content": "**Analysis complete**\n\n- Summary artifact saved\n- Operator answer recorded"}, "stop"
 		default:
 			t.Errorf("unexpected model request %d", request)
 			http.Error(w, "unexpected request", http.StatusBadRequest)
@@ -197,12 +187,12 @@ func testAllInOneWorkflow(t *testing.T) {
 	})
 	wait("Temporary session · results deleted on exit")
 	welcome := output.String()
-	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try: Install the web agent, then review defos.ai"} {
+	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try:"} {
 		if !strings.Contains(welcome, want) {
 			t.Fatalf("missing startup message %q: %s", want, welcome)
 		}
 	}
-	for _, unwanted := range []string{"http://127.0.0.1:", "API listening:", "Use /credentials", "All-in-one: 1 MCP", "Try: List missions", "Try: Run review-website-no-browser"} {
+	for _, unwanted := range []string{"http://127.0.0.1:", "API listening:", "Use /credentials", "All-in-one: 1 MCP", "Try: List missions"} {
 		if strings.Contains(welcome, unwanted) {
 			t.Fatalf("startup still shows %q: %s", unwanted, welcome)
 		}
@@ -276,7 +266,21 @@ func testAllInOneWorkflow(t *testing.T) {
 	if err != nil || len(directories) != 1 {
 		t.Fatalf("locate local session: %v (%v)", directories, err)
 	}
-	stopAgents = startLocalWebHosts(t, directories[0])
+	request, err = http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/missions", strings.NewReader(exampleMission))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.SetBasicAuth("commander", "all-in-one-api-secret")
+	request.Header.Set("Content-Type", "application/json")
+	response, err = httpClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create example mission: status=%d", response.StatusCode)
+	}
+	stopAgents = startLocalExampleHost(t, directories[0])
 	var agents models.ListResponse[models.AgentResponse]
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
@@ -290,7 +294,7 @@ func testAllInOneWorkflow(t *testing.T) {
 				ready++
 			}
 		}
-		if ready == 4 {
+		if ready == 3 {
 			break
 		}
 		select {
@@ -299,26 +303,21 @@ func testAllInOneWorkflow(t *testing.T) {
 		case <-tick.C:
 		}
 	}
-	if len(agents.Items) != 4 {
+	if len(agents.Items) != 3 {
 		t.Fatalf("unexpected local agents: %+v", agents.Items)
 	}
-	var webChecks, browserChecks, builderChecks, spawnerChecks int
+	var exampleChecks, builderChecks, spawnerChecks int
 	for _, agent := range agents.Items {
-		if !regexp.MustCompile(`^(web|browser|builder|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
+		if !regexp.MustCompile(`^(example|builder|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
 			t.Fatalf("unexpected bundled agent identity: %+v", agent)
 		}
 		for _, action := range agent.Actions {
 			switch agent.Type {
-			case "browser-agent":
-				if (action.Name != "capture-page" && action.Name != "check-accessibility") || action.Status != "unavailable" {
-					t.Fatalf("unexpected browser action without Chromium: %+v", action)
+			case "example-agent":
+				if (action.Name != "analyze-text" && action.Name != "write-summary") || action.Status != "ready" {
+					t.Fatalf("unexpected example action: %+v", action)
 				}
-				browserChecks++
-			case "web-agent":
-				if action.Status != "ready" || action.Name == "capture-page" || action.Name == "check-accessibility" {
-					t.Fatalf("HTTP action depends on Chromium: %+v", action)
-				}
-				webChecks++
+				exampleChecks++
 			case "spawner-agent":
 				if action.Name != "spawn-agent" || action.Status != "ready" {
 					t.Fatalf("unexpected spawner action: %+v", action)
@@ -334,8 +333,8 @@ func testAllInOneWorkflow(t *testing.T) {
 			}
 		}
 	}
-	if webChecks != 5 || browserChecks != 2 || builderChecks != 4 || spawnerChecks != 1 {
-		t.Fatalf("unexpected local action coverage: web=%d, browser=%d, builder=%d, spawner=%d", webChecks, browserChecks, builderChecks, spawnerChecks)
+	if exampleChecks != 2 || builderChecks != 4 || spawnerChecks != 1 {
+		t.Fatalf("unexpected local action coverage: example=%d, builder=%d, spawner=%d", exampleChecks, builderChecks, spawnerChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
@@ -371,10 +370,10 @@ func testAllInOneWorkflow(t *testing.T) {
 		}
 	}
 
-	if _, err := io.WriteString(keyboard, "Review website without a browser: "+website.URL+"\r"); err != nil {
+	if _, err := io.WriteString(keyboard, "Analyze this text: "+analysisText+"\r"); err != nil {
 		t.Fatal(err)
 	}
-	wait("Yes, preview only")
+	wait("Accept this text summary?")
 	if _, err := io.WriteString(keyboard, "\x1b[B\r"); err != nil {
 		t.Fatal(err)
 	}
@@ -390,37 +389,43 @@ func testAllInOneWorkflow(t *testing.T) {
 		}
 	}
 	var report reports.Report
-	if result.IsError || json.Unmarshal(raw, &report) != nil || report.OperationID != operationID || !bytes.Contains(report.Output, []byte("operator confirmed intentional noindex")) {
+	if result.IsError || json.Unmarshal(raw, &report) != nil || report.OperationID != operationID || !bytes.Contains(report.Output, []byte("operator accepted summary.md")) {
 		t.Fatalf("Playground did not persist the mission report: %s", raw)
 	}
 	var apiOperation models.OperationResponse
 	if err := json.Unmarshal(get("/api/v1/operations/"+operationID, "all-in-one-api-secret", http.StatusOK), &apiOperation); err != nil {
 		t.Fatal(err)
 	}
-	if apiOperation.ID != operationID || apiOperation.Status != "completed" || apiOperation.ReportID != report.ID || len(apiOperation.Tasks) != 4 {
+	if apiOperation.ID != operationID || apiOperation.Status != "completed" || apiOperation.ReportID != report.ID || len(apiOperation.Tasks) != 2 {
 		t.Fatalf("API did not read the MCP operation: %+v", apiOperation)
 	}
 	progress := apiOperation.Progress
-	if progress.TotalTasks != 4 || progress.FinishedTasks != 4 || progress.PendingDecisions != 0 || progress.PendingQuestions != 0 || !progress.Settled || len(progress.TaskCounts) != 1 || progress.TaskCounts["succeeded"] != 4 {
+	if progress.TotalTasks != 2 || progress.FinishedTasks != 2 || progress.PendingDecisions != 0 || progress.PendingQuestions != 0 || !progress.Settled || len(progress.TaskCounts) != 1 || progress.TaskCounts["succeeded"] != 2 {
 		t.Fatalf("API did not expose settled progress: %+v", progress)
 	}
-	var seoFound bool
+	var artifactFound bool
 	for _, task := range apiOperation.Tasks {
-		if task.ActionName == "check-seo" && task.Status == "succeeded" && task.Result != nil && bytes.Contains(task.Result.Output, []byte("Release preview")) {
-			seoFound = true
+		if task.ActionName != "write-summary" || task.Status != "succeeded" || task.Result == nil || len(task.Result.Artifacts) != 1 || len(task.Result.Artifacts[0].Files) != 1 {
+			continue
+		}
+		artifact := task.Result.Artifacts[0]
+		file := artifact.Files[0]
+		content := get("/api/v1/artifacts/"+artifact.ID+"/files/"+file.ID, "all-in-one-api-secret", http.StatusOK)
+		if file.Name == "summary.md" && bytes.Contains(content, []byte("# Text summary")) {
+			artifactFound = true
 		}
 	}
-	if !seoFound {
-		t.Fatal("API did not read saved agent evidence")
+	if !artifactFound {
+		t.Fatal("API did not download the MCP operation's saved artifact")
 	}
 	var apiReport models.ReportResponse
 	if err := json.Unmarshal(get("/api/v1/reports/"+report.ID, "all-in-one-api-secret", http.StatusOK), &apiReport); err != nil {
 		t.Fatal(err)
 	}
-	if apiReport.ID != report.ID || apiReport.OperationID != operationID || !bytes.Contains(apiReport.Output, []byte("operator confirmed intentional noindex")) {
+	if apiReport.ID != report.ID || apiReport.OperationID != operationID || !bytes.Contains(apiReport.Output, []byte("operator accepted summary.md")) {
 		t.Fatalf("API did not read the MCP report: %+v", apiReport)
 	}
-	wait("4/4 tasks finished · Review on Admin UI")
+	wait("2/2 tasks finished · Review on Admin UI")
 	client.Close()
 	stopAgents()
 	if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {
@@ -435,7 +440,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		t.Fatal("/exit did not stop the CLI")
 	}
 
-	if requests.Load() < 10 || strings.Contains(output.String(), "**Review complete**") || !strings.Contains(output.String(), "Review complete") {
+	if requests.Load() < 10 || strings.Contains(output.String(), "**Analysis complete**") || !strings.Contains(output.String(), "Analysis complete") {
 		t.Fatalf("unexpected chat rendering: %s", output.String())
 	}
 	if strings.Contains(output.String(), "all-in-one-api-secret") || strings.Contains(output.String(), "all-in-one-mcp-secret") {
@@ -455,31 +460,39 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 }
 
-// The workflow uses released agent hosts with local fixtures. Spawner suites and
-// native/image smoke checks exercise package downloading and child ownership.
-func startLocalWebHosts(t *testing.T, directory string) func() {
+const exampleMission = `{
+  "name":"analyze-text",
+  "objectives":["Analyze text and save a summary artifact.","Ask the operator to accept the result before completing."],
+  "required_actions":["analyze-text","write-summary"],
+  "starting_actions":["analyze-text"],
+  "rules":{
+    "aggregate-results":{"for_actions":["analyze-text"]},
+    "decide-next-actions":{"for_actions":["write-summary"],"params":{"decision_by":"model"}}
+  },
+  "input_schema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false},
+  "output_schema":{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false}
+}`
+
+// Package downloading and child ownership are covered by the spawner suites.
+func startLocalExampleHost(t *testing.T, directory string) func() {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))
 	args := []string{"--bus-url=" + filepath.Join(directory, "bus"), "--storage-url=" + filepath.Join(directory, "storage")}
-	done := make(chan error, 2)
-	go func() { done <- webcli.Run(ctx, args, io.Discard) }()
-	go func() { done <- browsercli.Run(ctx, args, io.Discard) }()
+	done := make(chan error, 1)
+	go func() { done <- examplecli.Run(ctx, args, io.Discard) }()
 	var once sync.Once
 	stop := func() {
 		once.Do(func() {
 			cancel()
 			timer := time.NewTimer(10 * time.Second)
 			defer timer.Stop()
-			for range 2 {
-				select {
-				case err := <-done:
-					if err != nil && !errors.Is(err, context.Canceled) {
-						t.Errorf("stop workflow agent: %v", err)
-					}
-				case <-timer.C:
-					t.Error("workflow agents did not stop before session cleanup")
-					return
+			select {
+			case err := <-done:
+				if err != nil && !errors.Is(err, context.Canceled) {
+					t.Errorf("stop workflow agent: %v", err)
 				}
+			case <-timer.C:
+				t.Error("workflow agent did not stop before session cleanup")
 			}
 		})
 	}

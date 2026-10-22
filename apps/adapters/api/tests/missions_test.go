@@ -35,26 +35,18 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 		}
 	}
 	decode[models.OperationResponse](t, a.request(http.MethodPost, operationPath(buildOperation.ID)+"/cancel", nil), http.StatusOK)
-	for _, expected := range []struct {
-		name, discovery string
-		checks          []string
-	}{
-		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
-		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
-	} {
-		path := "/api/v1/missions/" + expected.name
-		mission := read[models.MissionResponse](a, path)
-		index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == expected.name })
-		aggregate := mission.Rules["aggregate-results"]
-		decision := mission.Rules["decide-next-actions"]
-		if !reflect.DeepEqual(catalog.Items[index], mission) || len(mission.Objectives) == 0 || len(mission.RequiredActions) != 1+len(expected.checks) || !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) {
-			t.Fatalf("default mission catalog lost schemas or actions: %+v", mission)
-		}
-		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != "model" {
-			t.Fatalf("default mission catalog lost grouping or model rules: %+v", mission.Rules)
-		}
-		assertSchema(t, a, "Mission", a.request(http.MethodGet, path, nil))
+	path := "/api/v1/missions/analyze-text"
+	mission := read[models.MissionResponse](a, path)
+	index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == mission.Name })
+	aggregate := mission.Rules["aggregate-results"]
+	decision := mission.Rules["decide-next-actions"]
+	if index < 0 || !reflect.DeepEqual(catalog.Items[index], mission) || len(mission.Objectives) == 0 || !slices.Equal(mission.RequiredActions, []string{"analyze-text", "write-summary"}) || !slices.Equal(mission.StartingActions, []string{"analyze-text"}) {
+		t.Fatalf("mission catalog lost schemas or actions: %+v", mission)
 	}
+	if len(mission.Rules) != 2 || !slices.Equal(aggregate.ForActions, []string{"analyze-text"}) || aggregate.Params != nil || !slices.Equal(decision.ForActions, []string{"write-summary"}) || decision.Params == nil || decision.Params.DecisionBy != "model" {
+		t.Fatalf("mission catalog lost grouping or model rules: %+v", mission.Rules)
+	}
+	assertSchema(t, a, "Mission", a.request(http.MethodGet, path, nil))
 	assertError(t, a.request(http.MethodGet, "/api/v1/missions/missing", nil), http.StatusNotFound, "mission_not_found")
 	for range 2 {
 		clean := a.request(http.MethodPost, "/api/v1/testing/cleanup", nil)

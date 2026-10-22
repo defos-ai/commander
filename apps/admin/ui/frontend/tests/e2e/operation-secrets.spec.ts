@@ -3,9 +3,9 @@ import { expect } from '@playwright/test';
 import type { OperationPreflight } from '../../src/api/operation-types';
 import { test, connect, publicAPIURL } from './fixtures';
 
-test('operation secret guidance stays visible in graph and opens the matching connection', async ({ page, api, website }) => {
+test('operation secret guidance stays visible in graph and opens the matching connection', async ({ page, api }) => {
   const operation = await api.post<{ id: string }>('/operations', {
-    operation_id: randomUUID(), mission_name: 'review-website-no-browser', input: { url: website, max_pages: 1 },
+    operation_id: randomUUID(), mission_name: 'analyze-text', input: { text: 'Secret guidance example' },
   }, 201);
   const operationPath = `/api/v1/operations/${operation.id}`;
   let blocked = true;

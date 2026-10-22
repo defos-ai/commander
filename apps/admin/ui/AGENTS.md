@@ -194,12 +194,13 @@ For browser changes, after installing frontend dependencies, use the isolated st
 
 ```sh
 docker compose -f .github/composes/compose.test.yaml --profile ui up --build --wait
-(cd apps/admin/ui/frontend && npx playwright install chromium && npm run test:e2e)
+(cd apps/admin/ui/frontend && npx playwright install --only-shell chromium && npm run test:e2e)
 docker compose -f .github/composes/compose.test.yaml --profile ui down --volumes
 ```
 
-Always stop this test stack, including after failures. Browser tests use one
-worker and the test-only API cleanup; run them separately from HTTP/MCP tests
-sharing that stack. Keep traces/screenshots for failures. See
+Always stop this test stack, including after failures. Admin UI browser tests
+use the lightweight example-agent workflow; never require web/browser-agent images.
+Chromium tests the Admin UI itself. Use one worker and the test-only API cleanup;
+run them separately from HTTP/MCP tests sharing that stack. Keep traces/screenshots for failures. See
 [integration CI](../../../.github/workflows/test-integration.yml) for browser dependencies
 and [test guidance](../../../framework/tests/AGENTS.md) for isolation rules.

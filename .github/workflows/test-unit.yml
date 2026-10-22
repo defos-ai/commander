@@ -131,10 +131,10 @@ jobs:
           GOWORK: 'off'
         run: |
           cp -R ../frontend/dist static/dist
-          go test -tags embed_ui -race -count=1 -timeout=1m ./...
+          go test -tags embed_ui -race -count=1 -timeout=1m ./tests -run '^TestBundledFrontend$'
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./cmd/commander-ui
       - name: Test and build bundled Playground
         working-directory: .
         run: |
-          go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/...
+          go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOneBundledAdmin$'
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander" ./apps/playground/cmd/commander

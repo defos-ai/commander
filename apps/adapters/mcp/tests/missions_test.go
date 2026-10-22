@@ -17,7 +17,7 @@ func TestMissions(t *testing.T) {
 		Missions []map[string]any `json:"missions"`
 	}
 	a.call("list_missions", object{}, &catalog)
-	if len(catalog.Missions) != 6 {
+	if len(catalog.Missions) != 7 {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
 	summaries := make(map[string]map[string]any, len(catalog.Missions))
@@ -29,7 +29,7 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[name] = summary
 	}
-	for _, name := range []string{"build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
+	for _, name := range []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
 			t.Fatalf("missing agent mission: %s", name)
 		}
@@ -53,48 +53,37 @@ func TestMissions(t *testing.T) {
 		}
 	}
 	a.call("cancel_operation", object{"operation_id": buildOperation.ID}, nil)
-	for _, expected := range []struct {
-		name, discovery string
-		checks          []string
-	}{
-		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
-		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
-	} {
-		summary := summaries[expected.name]
-		if summary == nil {
-			t.Fatalf("missing website mission: %s", expected.name)
+	summary := summaries["analyze-text"]
+	var raw json.RawMessage
+	a.call("describe_mission", object{"mission_name": "analyze-text"}, &raw)
+	mission, err := missions.LoadMission(raw)
+	if err != nil {
+		t.Fatalf("mission detail does not match the mission definition format: %v", err)
+	}
+	if mission.Name != summary["name"] || len(mission.Objectives) != len(summary["objectives"].([]any)) {
+		t.Fatalf("mission detail differs from summary: %+v", mission)
+	}
+	for index, objective := range mission.Objectives {
+		if objective != summary["objectives"].([]any)[index] {
+			t.Fatalf("mission detail objectives differ from summary: %+v", mission)
 		}
-		var raw json.RawMessage
-		a.call("describe_mission", object{"mission_name": summary["name"]}, &raw)
-		mission, err := missions.LoadMission(raw)
-		if err != nil {
-			t.Fatalf("mission detail does not match the mission definition format: %v", err)
-		}
-		if mission.Name != summary["name"] || len(mission.Objectives) != len(summary["objectives"].([]any)) {
-			t.Fatalf("mission detail differs from summary: %+v", mission)
-		}
-		for index, objective := range mission.Objectives {
-			if objective != summary["objectives"].([]any)[index] {
-				t.Fatalf("mission detail objectives differ from summary: %+v", mission)
-			}
-		}
-		if !reflect.DeepEqual(mission.StartingActions, []string{expected.discovery}) || len(mission.RequiredActions) != 1+len(expected.checks) {
-			t.Fatalf("incorrect website workflow: %+v", mission)
-		}
-		aggregate := mission.Rules[missions.AggregateResults]
-		decision := mission.Rules[missions.DecideNextActions]
-		if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{expected.discovery}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, expected.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
-			t.Fatalf("mission detail lost grouping or model rules: %+v", mission.Rules)
-		}
-		if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {
-			t.Fatal("mission schemas missing")
-		}
+	}
+	if !slices.Equal(mission.StartingActions, []string{"analyze-text"}) || !slices.Equal(mission.RequiredActions, []string{"analyze-text", "write-summary"}) {
+		t.Fatalf("incorrect fixture workflow: %+v", mission)
+	}
+	aggregate := mission.Rules[missions.AggregateResults]
+	decision := mission.Rules[missions.DecideNextActions]
+	if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{"analyze-text"}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, []string{"write-summary"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("mission detail lost grouping or model rules: %+v", mission.Rules)
+	}
+	if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {
+		t.Fatal("mission schemas missing")
 	}
 	a.fails("describe_mission", object{"mission_name": "missing"}, "unknown")
 	a.fails("start_operation", object{"mission_name": "missing", "input": object{}}, "unknown")
-	a.fails("start_operation", object{"mission_name": "review-website-with-browser", "input": object{"url": "file:///etc/passwd"}}, "input")
+	a.fails("start_operation", object{"mission_name": "analyze-text", "input": object{"text": ""}}, "input")
 	opID := id.OperationID()
-	args := object{"operation_id": opID, "mission_name": "review-website-with-browser", "input": object{"url": "https://example.test"}}
+	args := object{"operation_id": opID, "mission_name": "analyze-text", "input": object{"text": "Explicit operation identity"}}
 	var op operations.Operation
 	a.call("start_operation", args, &op)
 	if op.ID != opID || op.Status != operations.Planning {

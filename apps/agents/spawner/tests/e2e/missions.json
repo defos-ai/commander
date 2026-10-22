@@ -25,5 +25,27 @@
       "additionalProperties": false
     },
     "output_schema": {"type": "object"}
+  },
+  {
+    "name": "analyze-text",
+    "objectives": ["Analyze supplied text and save a downloadable summary.", "Review the grouped results and complete the operation."],
+    "required_actions": ["analyze-text", "write-summary"],
+    "starting_actions": ["analyze-text"],
+    "rules": {
+      "aggregate-results": {"for_actions": ["analyze-text"]},
+      "decide-next-actions": {"for_actions": ["write-summary"], "params": {"decision_by": "model"}}
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {"text": {"type": "string", "minLength": 1, "pattern": "\\S"}},
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {"summary": {"type": "string", "minLength": 1}},
+      "required": ["summary"],
+      "additionalProperties": false
+    }
   }
 ]

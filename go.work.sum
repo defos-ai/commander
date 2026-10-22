@@ -5,10 +5,8 @@ github.com/bits-and-blooms/bitset v1.22.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6
 github.com/charmbracelet/harmonica v0.2.0/go.mod h1:KSri/1RMQOZLbw7AHqgcBycp8pgJnQMYYT8QZRqZ1Ao=
 github.com/containerd/typeurl/v2 v2.2.0/go.mod h1:8XOOxnyatxSWuG8OfsZXVnAF4iZfedjS/8UHSPJnX4g=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
-github.com/defos-ai/commander-browser-agent v0.2.0 h1:t7G1k9F6oZn1EfoKu17vmTflV1PtWmtIO2xHy0CzRqc=
-github.com/defos-ai/commander-browser-agent v0.2.0/go.mod h1:aUGkM+Kz0Rsl6JIYGCQsnAKhDtPj9yk1TdVYi0/I1ls=
-github.com/defos-ai/commander-web-agent v0.2.0 h1:2So56C6Z36b+yn9tJ+U/J9aZbLMsyXHlbE7AuhriHNY=
-github.com/defos-ai/commander-web-agent v0.2.0/go.mod h1:KgoEoCJZWU9S+N/WVrJclAU3cYKdsGH3UCziEf+fZsc=
+github.com/defos-ai/commander-example-agent v0.2.0 h1:CoVK2jlzB6XnJrZ1E6hkfFmkiUsOkfj2JVY1dG6alDg=
+github.com/defos-ai/commander-example-agent v0.2.0/go.mod h1:hlS7VXJ/bN/wjr6mS8OPMPBG/wCsOtN33hFbm2Kkwgg=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q=
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=

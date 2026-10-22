@@ -43,7 +43,7 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 					t.Fatalf("builder tools must be installed while its managed key remains missing: %+v", action)
 				}
 			} else if action.Status != "ready" {
-				t.Fatalf("Compose must install browser/dependencies: %s: %+v", agent.ID, action)
+				t.Fatalf("test stack capability is unavailable: %s: %+v", agent.ID, action)
 			}
 		}
 		slices.Sort(names)

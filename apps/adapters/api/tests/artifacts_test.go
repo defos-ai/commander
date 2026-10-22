@@ -1,37 +1,35 @@
 package api_test
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"image/png"
 	"mime"
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 )
 
-func TestArtifactDownloadsPreserveScreenshotBytesAndOwnership(t *testing.T) {
+func TestArtifactDownloadsPreserveBytesAndOwnership(t *testing.T) {
 	a := connect(t)
-	url := website(t)
-	left, right := a.start(url), a.start(url+"/about")
-	a.task(left.ID, "capture-page", url)
-	a.task(right.ID, "capture-page", url+"/about")
+	left, right := a.start(fixtureText), a.start("Independent input")
+	a.task(left.ID, "write-summary", summaryInput())
+	a.task(right.ID, "write-summary", summaryInput())
 	var previous *models.ArtifactResponse
 	for _, op := range []models.OperationResponse{left, right} {
 		finished := a.wait(op.ID, tasksSettled)
 		task := finished.Tasks[0]
 		if task.Status != "succeeded" || task.Result == nil || len(task.Result.Artifacts) != 1 {
-			t.Fatalf("browser failed to produce screenshots: %+v", task)
+			t.Fatalf("summary action did not publish an artifact: %+v", task)
 		}
 		artifact := task.Result.Artifacts[0]
 		base := "/api/v1/artifacts/" + artifact.ID
 		metadata := a.request(http.MethodGet, base, nil)
 		saved := decode[models.ArtifactResponse](t, metadata, http.StatusOK)
-		if !reflect.DeepEqual(saved, artifact) || saved.AgentID != task.AgentID || saved.CommandID != task.CommandID || len(saved.Files) != 2 {
+		if !reflect.DeepEqual(saved, artifact) || saved.AgentID != task.AgentID || saved.CommandID != task.CommandID || len(saved.Files) != 1 {
 			t.Fatalf("artifact ownership/grouping differs: %+v", saved)
 		}
 		assertSchema(t, a, "Artifact", metadata)
@@ -50,9 +48,8 @@ func TestArtifactDownloadsPreserveScreenshotBytesAndOwnership(t *testing.T) {
 			if err != nil || kind != "attachment" || params["filename"] != file.Name {
 				t.Fatalf("download filename: %q: %v", result.header.Get("Content-Disposition"), err)
 			}
-			image, err := png.DecodeConfig(bytes.NewReader([]byte(result.body)))
-			if err != nil || image.Width <= 0 || image.Height <= 0 {
-				t.Fatalf("artifact is not a screenshot PNG: %+v: %v", image, err)
+			if file.Name != "summary.md" || file.MediaType != "text/markdown" || !strings.HasPrefix(result.body, "# Text summary\n") {
+				t.Fatalf("download lost the agent's artifact descriptor or bytes: %+v", file)
 			}
 			head := a.request(http.MethodHead, path, nil)
 			if head.status != http.StatusOK || head.body != "" || head.header.Get("Content-Length") != result.header.Get("Content-Length") || head.header.Get("Content-Disposition") != result.header.Get("Content-Disposition") {
@@ -68,7 +65,7 @@ func TestArtifactDownloadsPreserveScreenshotBytesAndOwnership(t *testing.T) {
 		}
 		assertError(t, a.request(http.MethodGet, base+"/files/"+absentID, nil), http.StatusNotFound, "artifact_file_not_found")
 		previous = &saved
-		a.complete(op.ID, url, "Reviewed screenshot evidence for "+op.ID)
+		a.complete(op.ID, "Reviewed summary evidence for "+op.ID)
 	}
 	for _, invalid := range []string{"not-a-uuid", "00000000-0000-4000-8000-000000ABCDEF"} {
 		assertError(t, a.request(http.MethodGet, "/api/v1/artifacts/"+invalid, nil), http.StatusBadRequest, "invalid_artifact_id")

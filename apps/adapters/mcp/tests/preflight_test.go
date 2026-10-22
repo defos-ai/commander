@@ -19,12 +19,9 @@ func assertMissionPreflight(t *testing.T, a *api, op operationDetail, expectedAc
 		t.Fatalf("mission readiness missing: %+v", op)
 	}
 	for _, coverage := range op.Preflight.Actions {
-		if op.Mission.Name == "review-website-no-browser" && (coverage.ActionName == "capture-page" || coverage.ActionName == "check-accessibility") {
-			t.Fatalf("browser-free preflight requires rendered work: %+v", coverage)
-		}
 		expectedIDs := []string{}
 		for _, agent := range inventory.Agents {
-			if string(agent.Type) == expectedExecutorType(coverage.ActionName) {
+			if agent.Type == "example-agent" {
 				expectedIDs = append(expectedIDs, agent.ID)
 			}
 		}
@@ -36,7 +33,7 @@ func assertMissionPreflight(t *testing.T, a *api, op operationDetail, expectedAc
 		}
 	}
 	var definition actions.Action
-	a.call("describe_action", object{"action_name": "capture-page"}, &definition)
+	a.call("describe_action", object{"action_name": "analyze-text"}, &definition)
 	if len(definition.MissingRequirements) != 0 {
 		t.Fatalf("machine requirements leaked into the shared catalog: %+v", definition)
 	}

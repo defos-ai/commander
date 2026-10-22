@@ -279,22 +279,24 @@ go build -o commander ./apps/playground/cmd/commander
 ```
 
 For native packaging, build the frontend as shown in [README.md](README.md#native-one-executable),
-then run `go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/...`
+then run `go test -tags embed_ui -race -count=1 -timeout=1m -run '^TestAllInOneBundledAdmin$' ./apps/playground/tests`
 and `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
 
 Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
-behavior changes. The suite includes all-in-one coverage without a paid model
-or host browser. Keep tests offline with pinned standalone web/browser modules as
-local fixture hosts. These imports are only for tests; production launches released
-executables through the spawner. For transport or workflow changes, also use the
+behavior changes. The all-in-one workflow uses the pinned lightweight
+`commander-example-agent` module and creates its fixture mission through the API.
+Keep coverage of controller dispatch, automatic proposals, operator answers,
+artifacts and reports across MCP and HTTP, without paid models or host tools.
+Web/browser behavior and Chromium belong to their standalone suites; do not add
+those test dependencies here. Production launches released executables through
+the spawner. For transport or workflow changes, also use the
 [adapter integration tests](../../framework/tests/README.md#mcp-api-tests).
 
 For image changes, build both Dockerfiles from the repository root. Verify the
 all-in-one image starts without a model key, serves Admin assets and `/healthz`
 through published port `4275`, and authenticates/proxies to its API without
 publishing `4274`. Check the default Admin link, explicit `--admin-url`,
-`--no-admin`, explicit credential overrides, headless
-Chromium against a local fixture and clean SIGTERM shutdown. Keep Docker lifecycle
+`--no-admin`, explicit credential overrides and clean SIGTERM shutdown. Keep Docker lifecycle
 in shell/CI rather than Go test fixtures.
 
 [Native release builds](../../.github/workflows/build-binaries.yml) run environment

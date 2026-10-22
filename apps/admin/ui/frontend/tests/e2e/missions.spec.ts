@@ -17,7 +17,7 @@ test('create a reusable mission through Admin without installed actions or start
     input_schema: JSON.parse(missionInputSchema),
     output_schema: {},
   };
-  const expectedMission = { ...mission, objectives: [mission.objectives[0], 'Keep evidence for a later review.'], optional_actions: ['check-seo'] };
+  const expectedMission = { ...mission, objectives: [mission.objectives[0], 'Keep evidence for a later review.'], optional_actions: ['analyze-text'] };
   const operationIDs = async () => (await api.get<{ items: { id: string }[] }>('/operations')).items.map(item => item.id).sort();
   const actionNames = async () => (await api.get<{ items: { name: string }[] }>('/actions')).items.map(item => item.name).sort();
   const before = await operationIDs();
@@ -71,13 +71,13 @@ test('create a reusable mission through Admin without installed actions or start
   await create.locator('summary').filter({ hasText: /^Advanced settings$/ }).click();
   await create.getByRole('textbox', { name: 'Input schema (JSON)', exact: true }).fill(missionInputSchema);
   await create.getByRole('searchbox', { name: 'Search actions', exact: true }).fill('');
-  await create.getByRole('combobox', { name: 'Role for check-seo', exact: true }).selectOption('optional');
-  const inspector = create.locator('summary').filter({ hasText: /^Inspect check-seo$/ }).locator('..');
+  await create.getByRole('combobox', { name: 'Role for analyze-text', exact: true }).selectOption('optional');
+  const inspector = create.locator('summary').filter({ hasText: /^Inspect analyze-text$/ }).locator('..');
   await inspector.locator('summary').first().click();
   const reports = inspector.getByRole('heading', { name: 'Agent reports', exact: true }).locator('..');
-  const webAgents = (await api.get<{ items: { id: string; type: string }[] }>('/agents')).items.filter(agent => agent.type === 'web-agent');
-  expect(webAgents).toHaveLength(2);
-  for (const agent of webAgents) {
+  const exampleAgents = (await api.get<{ items: { id: string; type: string }[] }>('/agents')).items.filter(agent => agent.type === 'example-agent');
+  expect(exampleAgents).toHaveLength(2);
+  for (const agent of exampleAgents) {
     const report = reports.getByRole('listitem').filter({ has: page.getByText(agent.id, { exact: true }) });
     await expect(report.getByText('Agent status', { exact: true })).toBeVisible();
     const actionReadiness = report.getByText('Reported action readiness', { exact: true }).locator('..');

@@ -22,8 +22,6 @@ x-agent: &agent
   pull_policy: never
   command: ["--heartbeat-interval=1s"]
   environment: *environment
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
   depends_on:
     controller:
       condition: service_started
@@ -228,27 +226,16 @@ services:
       retries: 12
       start_period: 5s
 
-  browser-agent:
+  example-agent-1:
     <<: *agent
-    image: commander-browser-agent:test
+    image: commander-example-agent:test
     build:
-      context: https://github.com/defos-ai/commander-browser-agent.git#a793fbd1175fb58b04a4572b290c215d293b25c1
-      dockerfile: docker/Dockerfile
-    shm_size: 256mb
-    environment:
-      <<: *environment
-      CHROMIUM_NO_SANDBOX: "true"
-
-  web-agent-1:
-    <<: *agent
-    image: commander-web-agent:test
-    build:
-      context: https://github.com/defos-ai/commander-web-agent.git#e17ffafd298cd4b6e46d2c61db6473aa90774ffd
+      context: https://github.com/defos-ai/commander-example-agent.git#71823ec22f91905e3e0de40a8ea77dcf0aa5354f
       dockerfile: docker/Dockerfile
 
-  web-agent-2:
+  example-agent-2:
     <<: *agent
-    image: commander-web-agent:test
+    image: commander-example-agent:test
 
   builder-agent:
     <<: *agent

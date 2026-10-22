@@ -28,7 +28,7 @@ jobs:
       contains(fromJSON(inputs.changes), 'api-full') ||
       contains(fromJSON(inputs.changes), 'mcp-fs') ||
       contains(fromJSON(inputs.changes), 'mcp-full') ||
-      contains(fromJSON(inputs.changes), 'browser')
+      contains(fromJSON(inputs.changes), 'ui-e2e')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -38,24 +38,24 @@ jobs:
             contains(fromJSON(inputs.changes), 'controller-mongo') || contains(fromJSON(inputs.changes), 'api-full') }}
       RUN_FS: >-
         ${{ inputs.all || contains(fromJSON(inputs.changes), 'api-fs') ||
-            contains(fromJSON(inputs.changes), 'mcp-fs') || contains(fromJSON(inputs.changes), 'browser') }}
+            contains(fromJSON(inputs.changes), 'mcp-fs') || contains(fromJSON(inputs.changes), 'ui-e2e') }}
       RUN_FULL: >-
         ${{ inputs.all || contains(fromJSON(inputs.changes), 'api-full') ||
             contains(fromJSON(inputs.changes), 'mcp-full') }}
-      RUN_BROWSER: ${{ inputs.all || contains(fromJSON(inputs.changes), 'browser') }}
+      RUN_UI_E2E: ${{ inputs.all || contains(fromJSON(inputs.changes), 'ui-e2e') }}
     steps:
       - uses: actions/checkout@v7
         id: checkout
       - uses: ./.github/actions/setup-go
       - uses: ./.github/actions/setup-node
-        if: env.RUN_BROWSER == 'true'
-      - name: Install Chromium
-        if: env.RUN_BROWSER == 'true'
+        if: env.RUN_UI_E2E == 'true'
+      - name: Install Chromium for Admin UI tests
+        if: env.RUN_UI_E2E == 'true'
         working-directory: apps/admin/ui/frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
 
-      # Both stacks reuse local images. Standalone agents build from pinned
-      # source commits so testing does not depend on their release publication.
+      # Both stacks reuse local images. The lightweight example agent is pinned
+      # to source so tests do not depend on another release being published.
       - name: Build shared test images
         if: env.RUN_FS == 'true' || env.RUN_FULL == 'true' || inputs.all || contains(fromJSON(inputs.changes), 's3')
         uses: ./.github/actions/build-test-images
@@ -63,8 +63,8 @@ jobs:
           compose-file: .github/composes/compose.full.test.yaml
           targets: >-
             ${{ format('{0}{1}{2}',
-                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,builder-agent,spawner-agent,browser-agent,web-agent-1,fixture-releases,fixture-agent' || 'minio,minio-init',
-                env.RUN_BROWSER == 'true' && ',ui' || '',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,builder-agent,spawner-agent,example-agent-1,fixture-releases,fixture-agent' || 'minio,minio-init',
+                env.RUN_UI_E2E == 'true' && ',ui' || '',
                 (env.RUN_FS == 'true' || env.RUN_FULL == 'true') &&
                 (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}
 
@@ -132,7 +132,7 @@ jobs:
         if: env.RUN_FS == 'true'
         env:
           COMPOSE_FILE: .github/composes/compose.test.yaml
-          COMPOSE_PROFILES: ${{ env.RUN_BROWSER == 'true' && 'ui' || '' }}
+          COMPOSE_PROFILES: ${{ env.RUN_UI_E2E == 'true' && 'ui' || '' }}
         run: docker compose up --no-build --wait --wait-timeout 180
       - name: Test API with FS
         if: inputs.all || contains(fromJSON(inputs.changes), 'api-fs')
@@ -140,8 +140,8 @@ jobs:
       - name: Test MCP with FS
         if: inputs.all || contains(fromJSON(inputs.changes), 'mcp-fs')
         run: go test -race -count=1 -failfast -timeout=5m -v ./apps/adapters/mcp/tests
-      - name: Run browser tests
-        if: env.RUN_BROWSER == 'true'
+      - name: Test Admin UI in Chromium
+        if: env.RUN_UI_E2E == 'true'
         working-directory: apps/admin/ui/frontend
         run: npm run test:e2e
       - name: Collect FS stack logs
@@ -209,7 +209,7 @@ jobs:
             docker compose -f "$compose_file" --profile ui down --volumes || status=$?
           done
           exit "$status"
-      - name: Upload integration logs and browser results
+      - name: Upload integration logs and Admin UI results
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:

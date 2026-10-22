@@ -141,6 +141,6 @@
 - Settle active work before fixture cleanup. Expose cleanup only with `ENV=tests`;
   preserve catalogs, registrations, deliveries, bus state and host memory. Late
   results must not recreate removed artifacts. Tests do not manage Docker or volumes.
-- The stacks use pinned standalone web/browser release images. Their own
+- The stacks use pinned source builds of the lightweight example agent. Standalone
   repositories run agent-specific suites. Always stop the Commander test stack
   after testing, including after failures.

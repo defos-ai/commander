@@ -135,7 +135,7 @@ mcp-full:
   - *rabbitmq
   - *s3
 
-browser:
+ui-e2e:
   - *shared
   - 'apps/admin/ui/**'
   - *api
