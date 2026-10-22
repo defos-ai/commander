@@ -43,13 +43,6 @@ func TestAllInOne(t *testing.T) {
 	t.Run("invalid MCP token starts no local hosts", testAllInOneMCPFailure)
 }
 
-func TestSpawnAgentsFlagRemoved(t *testing.T) {
-	err := cli.Run(t.Context(), []string{"--all-in-one", "--spawn-agents=github.com/defos-ai/commander-web-agent@v0.2.0"}, strings.NewReader(""), io.Discard, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -spawn-agents") {
-		t.Fatalf("removed startup flag: got %v", err)
-	}
-}
-
 func testAllInOneWorkflow(t *testing.T) {
 	temporary := allInOneEnvironment(t)
 	t.Setenv("PATH", t.TempDir()) // Startup and explicit web fixtures need no Git or browser.

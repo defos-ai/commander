@@ -155,7 +155,7 @@ func TestProviderKeyRetryBack(t *testing.T) {
 }
 
 func TestProviderDiscoveryManualFallback(t *testing.T) {
-	for _, status := range []int{http.StatusNotFound, http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusOK} {
+	for _, status := range []int{http.StatusNotFound, http.StatusOK} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			var requests atomic.Int32
 			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

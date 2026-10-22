@@ -8,13 +8,15 @@ import (
 )
 
 func TestAgentIDFromSuffix(t *testing.T) {
-	for _, agentType := range []string{"browser", "browser-agent", "custom-browser-agent", strings.Repeat("a", 48)} {
-		for _, suffix := range []string{"00000000", "ffffffff", "a1b2c3d4"} {
-			value, err := id.AgentIDFromSuffix(agentType, suffix)
-			want := strings.TrimSuffix(agentType, "-agent") + "-agent-" + suffix
-			if err != nil || value != want || !id.ValidAgent(value) {
-				t.Fatalf("AgentIDFromSuffix(%q, %q) = %q, %v; want %q", agentType, suffix, value, err, want)
-			}
+	for _, test := range []struct{ agentType, suffix, want string }{
+		{"browser", "00000000", "browser-agent-00000000"},
+		{"browser-agent", "ffffffff", "browser-agent-ffffffff"},
+		{"custom-browser-agent", "a1b2c3d4", "custom-browser-agent-a1b2c3d4"},
+		{strings.Repeat("a", 48), "a1b2c3d4", strings.Repeat("a", 48) + "-agent-a1b2c3d4"},
+	} {
+		value, err := id.AgentIDFromSuffix(test.agentType, test.suffix)
+		if err != nil || value != test.want || !id.ValidAgent(value) {
+			t.Fatalf("AgentIDFromSuffix(%q, %q) = %q, %v; want %q", test.agentType, test.suffix, value, err, test.want)
 		}
 	}
 }

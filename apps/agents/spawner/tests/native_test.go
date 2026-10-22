@@ -446,32 +446,6 @@ func awaitChildReport(t *testing.T, ctx context.Context, directory string) child
 	}
 }
 
-func TestNativeRestartDoesNotRelaunchRecordedRequest(t *testing.T) {
-	fixture := newNativeFixture(t, "", 5*time.Second)
-	ctx, requestID, _ := newSpawnCheckpoints(t)
-	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference); err != nil {
-		t.Fatal(err)
-	}
-	if err := fixture.manager.Close(); err != nil {
-		t.Fatal(err)
-	}
-	restarted, err := native.NewManager(t.Context(), fixture.config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer restarted.Close()
-	before := fixture.requests.Load()
-	if _, err := restarted.Spawn(ctx, requestID, fixtureModuleReference); err == nil {
-		t.Fatal("restarted manager trusted an old process identity")
-	}
-	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
-		t.Fatalf("record did not preserve its module package: %v", err)
-	}
-	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
-		t.Fatal("restarted manager relaunched a recorded request")
-	}
-}
-
 func readAgentAnnouncement(t *testing.T, ctx context.Context, subscription comms.Subscription, kind messages.MessageType, expectedID string) agent.AgentSnapshot {
 	t.Helper()
 	for {

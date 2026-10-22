@@ -190,7 +190,6 @@ func TestBrowserSessionRequestBoundaries(t *testing.T) {
 		{name: "invalid target scheme", path: proxyPath("ftp://invalid.example", "/healthz"), status: 400},
 		{name: "credentials embedded in URL", path: proxyPath("http://user:password@invalid.example", "/healthz"), status: 400},
 		{name: "credentials belong to exact URL", path: proxyPath(upstream.URL+"/other", "/api/v1/missions"), status: 401},
-		{name: "removed target registry", path: "/ui/targets", status: 404},
 		{name: "absolute path", path: proxyPath(upstream.URL, "https://evil.example/api/v1/missions"), status: 400},
 		{name: "authority path", path: proxyPath(upstream.URL, "//evil.example/api/v1/missions"), status: 400},
 		{name: "traversal", path: proxyPath(upstream.URL, "/api/v1/../../secret"), status: 400},

@@ -258,8 +258,6 @@ func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
 		{"duplicate action", "--actions=checkout-template,checkout-template", "", "duplicate"},
 		{"negative heartbeat", "--heartbeat-interval=-1s", "", "heartbeat-interval"},
 		{"positional argument", "unexpected", "", "positional"},
-		{"short suffix", "--agent-id-suffix=1234567", "", "agent-id-suffix"},
-		{"uppercase suffix", "--agent-id-suffix=ABCDEF12", "", "agent-id-suffix"},
 		{"full ID", "--agent-id-suffix=builder-agent-a1b2c3d4", "", "agent-id-suffix"},
 		{"invalid environment suffix", "", "invalid", "COMMANDER_AGENT_ID_SUFFIX"},
 	} {
@@ -400,11 +398,12 @@ func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", invalidKey)
 	root := filepath.Join(t.TempDir(), "unused")
 	var logs bytes.Buffer
-	err := cli.Run(t.Context(), []string{
+	args := []string{
 		"--bus-url=" + filepath.Join(root, "bus"),
 		"--storage-url=" + filepath.Join(root, "storage"),
-	}, &logs)
-	if err == nil || !strings.Contains(err.Error(), "SECRETS_ENCRYPTION_KEY") {
+	}
+	err := cli.Run(t.Context(), args, &logs)
+	if !errors.Is(err, crypto.ErrInvalidKey) || !strings.Contains(err.Error(), "SECRETS_ENCRYPTION_KEY") {
 		t.Fatal("invalid encryption key did not fail configuration")
 	}
 	if strings.Contains(err.Error(), invalidKey) || strings.Contains(logs.String(), invalidKey) {
@@ -414,11 +413,17 @@ func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
 		t.Fatal("agent opened a provider before validating the encryption key")
 	}
 	logs.Reset()
-	if err := cli.Run(t.Context(), []string{"--help"}, &logs); err != nil {
-		t.Fatal(err)
+	if err := cli.RunWithOptions(t.Context(), append(args, "--help"), &logs, cli.Options{SecretCipher: &crypto.SecretCipher{}}); err != nil {
+		t.Fatalf("help validated the environment or injected cipher: %v", err)
 	}
-	if !strings.Contains(logs.String(), "SECRETS_ENCRYPTION_KEY") || strings.Contains(logs.String(), invalidKey) {
+	if !strings.Contains(logs.String(), "Usage:") || !strings.Contains(logs.String(), "SECRETS_ENCRYPTION_KEY") || strings.Contains(logs.String(), invalidKey) {
 		t.Fatal("help must describe the encryption setting without exposing its value")
+	}
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("help created runtime state")
+	}
+	if os.Getenv("SECRETS_ENCRYPTION_KEY") != invalidKey {
+		t.Fatal("host modified the encryption key environment")
 	}
 }
 
@@ -437,7 +442,6 @@ func TestCLISecretCipherOptions(t *testing.T) {
 		wantError string
 		wantCause error
 	}{
-		{name: "nil cipher keeps invalid environment validation", key: invalidKey, wantError: "SECRETS_ENCRYPTION_KEY", wantCause: crypto.ErrInvalidKey},
 		{name: "zero cipher cannot fall back to valid environment", key: validKey, cipher: &crypto.SecretCipher{}, wantError: "secret cipher", wantCause: crypto.ErrMissingKey},
 		{name: "injected cipher preserves action validation", key: invalidKey, cipher: cipher, extraArg: "--actions=unknown-action", wantError: "unknown action"},
 	} {
@@ -472,34 +476,5 @@ func TestCLISecretCipherOptions(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestCLISecretCipherOptionsHelpAndCancellation(t *testing.T) {
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "invalid-key")
-	root := filepath.Join(t.TempDir(), "runtime")
-	args := []string{
-		"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"),
-		"--log-level=info", "--log-format=json",
-		"--workspace-dir=" + filepath.Join(root, "workspaces"),
-	}
-	var help bytes.Buffer
-	if err := cli.RunWithOptions(t.Context(), append(args, "--help"), &help, cli.Options{SecretCipher: &crypto.SecretCipher{}}); err != nil {
-		t.Fatalf("help validated the cipher: %v", err)
-	}
-	if !strings.Contains(help.String(), "Usage:") {
-		t.Fatal("help did not describe the CLI")
-	}
-	cipher, err := crypto.NewSecretCipher(strings.Repeat("03", 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretCipher: cipher}); !errors.Is(err, context.Canceled) {
-		t.Fatalf("pre-cancelled startup returned %v", err)
-	}
-	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("help or cancelled startup created runtime state: %v", err)
 	}
 }

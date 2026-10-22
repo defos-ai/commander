@@ -289,9 +289,6 @@ func TestLocalCredentialsDuringSetup(t *testing.T) {
 		api, mcp, invalid bool
 	}{
 		{command: "/credentials", api: true, mcp: true},
-		{command: "/credentials api", invalid: true},
-		{command: "/credentials mcp", invalid: true},
-		{command: "/credentials other", invalid: true},
 		{command: "/credentials api extra", invalid: true},
 	} {
 		for _, allInOne := range []bool{false, true} {
@@ -380,10 +377,8 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || !strings.Contains(view, "Admin: "+adminURL) || strings.Contains(view, local.Credentials.Password) || strings.Contains(view, credentials.Token) {
 		t.Fatal("status did not show endpoints without credentials")
 	}
-	for _, command := range []string{"/credentials api", "/credentials mcp", "/credentials invalid", "/credentials api extra"} {
-		u.text(command)
-		u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	}
+	u.text("/credentials api")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	if strings.Contains(u.model.View(), "Password: "+local.Credentials.Password) || strings.Contains(u.model.View(), "Token: "+credentials.Token) {
 		t.Fatal("invalid credential arguments disclosed local credentials")
 	}

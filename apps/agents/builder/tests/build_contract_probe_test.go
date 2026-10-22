@@ -47,7 +47,9 @@ func TestBuildAgentInspectsRealRegisteredActions(t *testing.T) {
 				ProbeGo: goExecutable, ProbeWorkspace: filepath.Join(control, "go.work"),
 				ProbeModuleCache: strings.TrimSpace(string(moduleCache)), ProbeCache: cache,
 			}
-			work := fmt.Sprintf("go 1.26.7\n\nuse (\n\t%q\n\t%q\n)\n", config.Source, framework)
+			// Keep versioned framework graph lookups local too: CI may have no
+			// published framework module cached, and this probe runs offline.
+			work := fmt.Sprintf("go 1.26.7\n\nuse (\n\t%q\n\t%q\n)\n\nreplace github.com/defos-ai/commander/framework v0.1.0 => %q\n", config.Source, framework, framework)
 			if err := os.WriteFile(config.ProbeWorkspace, []byte(work), 0600); err != nil {
 				t.Fatal(err)
 			}

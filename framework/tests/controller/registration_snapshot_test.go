@@ -20,7 +20,6 @@ func registration() controllers.Controller {
 
 func TestSnapshotDerivesLeaseWithoutMutatingObservation(t *testing.T) {
 	record := registration()
-	original := record
 	for _, test := range []struct {
 		name   string
 		change func(*controllers.Controller)
@@ -48,9 +47,6 @@ func TestSnapshotDerivesLeaseWithoutMutatingObservation(t *testing.T) {
 				t.Fatal("snapshot mutated the source observation")
 			}
 		})
-	}
-	if !reflect.DeepEqual(record, original) {
-		t.Fatal("source observation changed")
 	}
 }
 

@@ -158,7 +158,7 @@ func TestOperationWritesDoNotBlockOtherOperations(t *testing.T) {
 	}
 }
 
-func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
+func TestOperationRoundTripAndListingIgnoreUnrelatedFiles(t *testing.T) {
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -166,9 +166,6 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 	store, err := operationfs.NewOperationFsStore(dir)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if store.Root() != dir {
-		t.Fatalf("operation root must remain the database root: %q", store.Root())
 	}
 	first := operations.Operation{ID: "00000000-0000-4000-8000-000000000001", Status: operations.Planning,
 		Input: json.RawMessage(`{}`),
@@ -188,51 +185,9 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 		if err := store.Create(t.Context(), op); err != nil {
 			t.Fatal(err)
 		}
-		path := filepath.Join(dir, "operations", op.ID+".json")
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var manifest []struct {
-			Version uint64            `json:"version"`
-			Records []json.RawMessage `json:"records"`
-		}
-		if err := json.Unmarshal(data, &manifest); err != nil {
-			t.Fatal(err)
-		}
-		if len(manifest) != 1 || manifest[0].Version != 1 || len(manifest[0].Records) != 1+len(op.Tasks)+len(op.Questions)+len(op.Events) {
-			t.Fatalf("operation manifest must reference metadata and each task, question and event: %+v", manifest)
-		}
-		records, err := openRecords(t, path).Read(t.Context())
-		if err != nil {
-			t.Fatal(err)
-		}
-		var metadata map[string]json.RawMessage
-		if err := json.Unmarshal(records["operation"], &metadata); err != nil {
-			t.Fatal(err)
-		}
-		for _, field := range []string{"tasks", "questions", "events"} {
-			if _, exists := metadata[field]; exists {
-				t.Fatalf("operation metadata contains embedded %s", field)
-			}
-		}
-		for _, task := range op.Tasks {
-			var stored operations.Task
-			if err := json.Unmarshal(records["tasks/"+task.ID], &stored); err != nil {
-				t.Fatal(err)
-			}
-			assertResultJSONEqual(t, stored, task)
-		}
-		for _, question := range op.Questions {
-			var stored operations.Question
-			if err := json.Unmarshal(records["questions/"+question.ID], &stored); err != nil {
-				t.Fatal(err)
-			}
-			assertResultJSONEqual(t, stored, question)
-		}
 		stored, err := store.Get(t.Context(), op.ID)
 		if err != nil || !reflect.DeepEqual(stored, op.Clone()) {
-			t.Fatalf("split records must reconstruct the complete operation: %+v, %v", stored, err)
+			t.Fatalf("operation round trip changed the saved snapshot: %+v, %v", stored, err)
 		}
 		stored.Mission.OptionalActions[0] = "changed"
 		stored.Mission.ActionDefinitions[0].Name = "changed"

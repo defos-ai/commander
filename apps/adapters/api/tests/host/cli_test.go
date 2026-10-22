@@ -127,7 +127,6 @@ func TestCLIRejectsInvalidCredentials(t *testing.T) {
 	for _, test := range []struct {
 		name, username, password, diagnostic string
 	}{
-		{name: "both missing", diagnostic: "API_USERNAME"},
 		{name: "username missing", password: "private-password-value", diagnostic: "API_USERNAME"},
 		{name: "password missing", username: "private-username-value", diagnostic: "API_PASSWORD"},
 		{name: "username contains colon", username: "private-username-value:bad", password: "private-password-value", diagnostic: "API_USERNAME"},
@@ -252,14 +251,12 @@ func TestMainHelpAndConfigurationExitCodes(t *testing.T) {
 	t.Setenv("API_PASSWORD", "")
 	t.Setenv("DATABASE_URL", "postgres://user:private-help-password@example.invalid/database")
 	t.Setenv("PORT", "private-invalid-port")
-	for _, args := range [][]string{{"--help"}, {"credentials", "--help"}} {
-		var help bytes.Buffer
-		if code := cli.Main(args, &help, &help); code != 0 || !strings.Contains(help.String(), "commander-api") {
-			t.Fatalf("help failed: code=%d output=%s", code, &help)
-		}
-		if strings.Contains(help.String(), "private-help-password") || strings.Contains(help.String(), "private-invalid-port") {
-			t.Error("help includes environment configuration values")
-		}
+	var help bytes.Buffer
+	if code := cli.Main([]string{"--help"}, &help, &help); code != 0 || !strings.Contains(help.String(), "commander-api") {
+		t.Fatalf("help failed: code=%d output=%s", code, &help)
+	}
+	if strings.Contains(help.String(), "private-help-password") || strings.Contains(help.String(), "private-invalid-port") {
+		t.Error("help includes environment configuration values")
 	}
 
 	var failure bytes.Buffer

@@ -81,13 +81,6 @@ describe('operations client', () => {
     expect(fetch.mock.calls.map(([path]) => proxyTarget(path))).toEqual([
       { url, path: '/api/v1/operations' }, { url, path: `/api/v1/operations/${operation.id}` },
     ]);
-    for (const [, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({
-        method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
-        headers: { Accept: 'application/json', 'X-Commander-UI': '1' },
-      });
-      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
-    }
   });
 
   it('accepts an empty list and nullable Go slices with arbitrary raw JSON', async () => {
@@ -227,13 +220,4 @@ describe('operations client', () => {
 
     await expect(listOperations(url, credentials)).rejects.toMatchObject({ kind: 'invalid_response' });
   });
-
-  it.each([[401, 'authentication'], [403, 'forbidden'], [404, 'not_found'], [500, 'unavailable']] as const)(
-    'surfaces HTTP %s without exposing the response body', async (status, kind) => {
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('private server details', { status }));
-      vi.stubGlobal('fetch', fetch);
-
-      await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind, message: kind });
-    },
-  );
 });

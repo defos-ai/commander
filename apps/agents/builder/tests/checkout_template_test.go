@@ -14,38 +14,8 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
-func TestCheckoutTemplateRetainsIndependentWorkspaces(t *testing.T) {
-	source, revision := templateFixture(t)
-	root := t.TempDir()
-	executor := localCheckout(t, root, source)
-	first := runCheckout(t, executor)
-	second := runCheckout(t, executor)
-	if first.WorkspaceID == second.WorkspaceID {
-		t.Fatal("independent checkouts reused a workspace")
-	}
-	for _, output := range []builderactions.CheckoutTemplateOutput{first, second} {
-		if output.WorkspaceID == "" || filepath.Base(output.WorkspaceID) != output.WorkspaceID || output.WorkspaceID == "." || output.WorkspaceID == ".." {
-			t.Fatalf("workspace identifier is not an opaque directory name: %q", output.WorkspaceID)
-		}
-		if output.TemplateRevision != revision {
-			t.Fatalf("revision = %q, want %q", output.TemplateRevision, revision)
-		}
-		workspace := filepath.Join(root, output.WorkspaceID)
-		content, err := os.ReadFile(filepath.Join(workspace, "source", "README.md"))
-		if err != nil || string(content) != "Local example-agent fixture.\n" {
-			t.Fatalf("checked-out source = %q, %v", content, err)
-		}
-		if _, err := os.Stat(filepath.Join(workspace, ".home")); !os.IsNotExist(err) {
-			t.Fatalf("temporary Git home remained after success: %v", err)
-		}
-		if encoded, _ := json.Marshal(output); strings.Contains(string(encoded), root) {
-			t.Fatal("checkout result exposed the host workspace path")
-		}
-	}
-}
-
 func TestConcurrentCheckoutsKeepSourceIndependent(t *testing.T) {
-	source, _ := templateFixture(t)
+	source, revision := templateFixture(t)
 	root := t.TempDir()
 	executor := localCheckout(t, root, source)
 	type outcome struct {
@@ -71,6 +41,9 @@ func TestConcurrentCheckoutsKeepSourceIndependent(t *testing.T) {
 			t.Errorf("decode concurrent checkout: %v", err)
 			continue
 		}
+		if len(got.result.NextActions) != 0 || len(got.result.Artifacts) != 0 {
+			t.Error("checkout must only prepare source")
+		}
 		outputs = append(outputs, output)
 	}
 	if len(outputs) != 2 {
@@ -78,6 +51,25 @@ func TestConcurrentCheckoutsKeepSourceIndependent(t *testing.T) {
 	}
 	if outputs[0].WorkspaceID == outputs[1].WorkspaceID {
 		t.Fatal("concurrent checkouts shared one workspace")
+	}
+	for _, output := range outputs {
+		if output.WorkspaceID == "" || filepath.Base(output.WorkspaceID) != output.WorkspaceID || output.WorkspaceID == "." || output.WorkspaceID == ".." {
+			t.Fatalf("workspace identifier is not an opaque directory name: %q", output.WorkspaceID)
+		}
+		if output.TemplateRevision != revision {
+			t.Fatalf("revision = %q, want %q", output.TemplateRevision, revision)
+		}
+		workspace := filepath.Join(root, output.WorkspaceID)
+		content, err := os.ReadFile(filepath.Join(workspace, "source", "README.md"))
+		if err != nil || string(content) != "Local example-agent fixture.\n" {
+			t.Fatalf("checked-out source = %q, %v", content, err)
+		}
+		if _, err := os.Stat(filepath.Join(workspace, ".home")); !os.IsNotExist(err) {
+			t.Fatalf("temporary Git home remained after success: %v", err)
+		}
+		if encoded, _ := json.Marshal(output); strings.Contains(string(encoded), root) {
+			t.Fatal("checkout result exposed the host workspace path")
+		}
 	}
 	if err := os.WriteFile(filepath.Join(root, outputs[0].WorkspaceID, "source", "README.md"), []byte("Edited by the first task"), 0600); err != nil {
 		t.Fatal(err)

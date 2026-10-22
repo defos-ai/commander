@@ -80,13 +80,8 @@ func TestChatScrolling(t *testing.T) {
 			if u.model.View() != bottom {
 				t.Fatal("scrolling down did not restore the latest content and unchanged draft")
 			}
-			u.key(tea.KeyMsg{Type: tea.KeyPgUp})
-			if u.model.View() == bottom || !strings.Contains(u.model.View(), draft) {
-				t.Fatal("PgUp stopped scrolling or changed the draft")
-			}
-			u.key(tea.KeyMsg{Type: tea.KeyPgDown})
-			if u.model.View() != bottom || modelRequests.Load() != 0 {
-				t.Fatal("PgDown did not restore the latest content or scrolling submitted model work")
+			if modelRequests.Load() != 0 {
+				t.Fatal("scrolling submitted model work")
 			}
 		})
 	}

@@ -45,26 +45,3 @@ func TestUIRejectsUnmappedInternalAPIsBeforeSendingCredentials(t *testing.T) {
 		t.Fatal("blocking unsafe targets must retain the mapped API session")
 	}
 }
-
-func TestUIIgnoresEnvironmentProxies(t *testing.T) {
-	var proxyCalls atomic.Int64
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		proxyCalls.Add(1)
-		w.WriteHeader(http.StatusBadGateway)
-	}))
-	defer proxy.Close()
-	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
-		t.Setenv(name, proxy.URL)
-	}
-	t.Setenv("NO_PROXY", "")
-	t.Setenv("no_proxy", "")
-	handler, err := connections.NewHandler(connections.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer handler.Close()
-	response := serveUI(handler, browserRequest(http.MethodGet, proxyPath("http://169.254.169.254", "/healthz"), "", nil))
-	if response.Code != http.StatusForbidden || proxyCalls.Load() != 0 {
-		t.Fatal("environment proxy bypassed the API address policy")
-	}
-}

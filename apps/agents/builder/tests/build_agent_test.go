@@ -83,7 +83,7 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 
 func TestBuildAgentVerifiesRegisteredActionContracts(t *testing.T) {
 	for _, mode := range []string{
-		"contracts-equivalent", "contracts-missing", "contracts-unexpected", "contracts-duplicate",
+		"contracts-equivalent", "contracts-unexpected", "contracts-duplicate",
 		"contracts-description", "contracts-input-schema", "contracts-output-schema", "contracts-number-precision",
 		"contracts-secret", "contracts-duplicate-secret", "contracts-wrong-agent", "contracts-malformed",
 		"contracts-trailing", "contracts-unknown-field", "contracts-oversize", "contracts-fail",

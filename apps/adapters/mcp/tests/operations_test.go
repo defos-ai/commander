@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -347,6 +348,7 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	url := website(t)
 	var op operationDetail
 	a.call("start_operation", object{"mission_name": mission, "input": object{"url": url, "max_pages": 2}}, &op)
+	assertMissionPreflight(t, a, op, 1+len(checks))
 	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
 		t.Fatalf("new operation progress: %+v", op.Progress)
 	}
@@ -358,6 +360,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 	var root operations.Task
 	a.call("assign_task", object{"operation_id": op.ID, "action_name": discovery, "input": object{"url": url, "max_pages": 2}}, &root)
 	settled := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
+	if settled.Preflight == nil || !settled.Preflight.Ready {
+		t.Fatalf("ready mission lost preflight after execution: %+v", settled.Preflight)
+	}
 	if len(settled.Tasks) != 1+2*len(checks) {
 		t.Fatalf("expected discovery + two pages of %d checks; got %d tasks", len(checks), len(settled.Tasks))
 	}
@@ -367,8 +372,9 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		if task.Status != operations.TaskSucceeded || task.Result == nil {
 			t.Fatalf("unsuccessful task: %+v", task)
 		}
-		if !strings.HasPrefix(task.AgentID, expectedExecutorType(task.ActionName)+"-") {
-			t.Fatalf("controller selected an agent without the task's capability: %+v", task)
+		coverage := slices.IndexFunc(op.Preflight.Actions, func(action operations.ActionReadiness) bool { return action.ActionName == task.ActionName })
+		if coverage < 0 || !slices.Contains(op.Preflight.Actions[coverage].ReadyAgentIDs, task.AgentID) {
+			t.Fatalf("controller selected an agent outside ready coverage: %+v", task)
 		}
 		counts[task.ActionName]++
 		if mission == "review-website-no-browser" && len(task.Result.Artifacts) != 0 {

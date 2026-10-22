@@ -80,6 +80,7 @@ func TestPackageSelectors(t *testing.T) {
 		"gitlab.com/owner/repo@v1.2.3", "github.com/owner/repo@v1.2.3@stable",
 		" github.com/owner/repo@stable", "github.com/owner/repo@stable\n", "github.com//repo@stable",
 		"github.com/owner//module@stable", "github.com/owner/repo/@stable", "github.com/owner/repo/module//nested@stable",
+		"github.com/../example-agent@v1.2.3", "github.com/defos-ai/../example-agent@v1.2.3",
 		"github.com/owner/repo/../module@stable", "github.com/owner/repo/module..name@stable", "github.com/owner/repo/module.@stable",
 		"github.com/owner/repo/module.lock@stable", "github.com/owner/repo/module%2fnested@stable", `github.com/owner/repo/module\nested@stable`,
 		"http://github.com/owner/repo", "https://github.com:443/owner/repo", "https://github.com:8443/owner/repo",

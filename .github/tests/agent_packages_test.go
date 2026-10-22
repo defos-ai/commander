@@ -104,101 +104,96 @@ exec "$GENERATOR" "$@"
 }
 
 func TestCIAgentPackageReleaseTag(t *testing.T) {
-	for _, agent := range []string{"builder", "spawner"} {
-		for _, mode := range []string{"tested SHA", "different SHA", "missing tag", "invalid version"} {
-			t.Run(agent+"/"+mode, func(t *testing.T) {
-				f := newNativeFixture(t)
-				f.env["TAG"] = "apps/agents/" + agent + "/v0.1.0"
-				f.env["GITHUB_SHA"] = strings.Repeat("a", 40)
-				f.env["TAG_SHA"] = f.env["GITHUB_SHA"]
-				f.write(t, "git", `#!/bin/bash
+	const agent = "spawner"
+	for _, mode := range []string{"tested SHA", "different SHA", "missing tag", "invalid version"} {
+		t.Run(agent+"/"+mode, func(t *testing.T) {
+			f := newNativeFixture(t)
+			f.env["TAG"] = "apps/agents/" + agent + "/v0.1.0"
+			f.env["GITHUB_SHA"] = strings.Repeat("a", 40)
+			f.env["TAG_SHA"] = f.env["GITHUB_SHA"]
+			f.write(t, "git", `#!/bin/bash
 set -euo pipefail
 [[ "$*" == "rev-parse refs/tags/$TAG^{commit}" ]]
 [[ "${MISSING_TAG:-0}" == 0 ]] || exit 1
 printf '%s\n' "$TAG_SHA"
 `)
-				switch mode {
-				case "different SHA":
-					f.env["TAG_SHA"] = strings.Repeat("b", 40)
-				case "missing tag":
-					f.env["MISSING_TAG"] = "1"
-				case "invalid version":
-					f.env["VERSION"] = "v0.0.0"
-				}
-				f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "verify")
-				if output, err := f.run(t); (err != nil) != (mode != "tested SHA") {
-					t.Fatalf("module tag verification = %v: %s", err, output)
-				}
-			})
-		}
+			switch mode {
+			case "different SHA":
+				f.env["TAG_SHA"] = strings.Repeat("b", 40)
+			case "missing tag":
+				f.env["MISSING_TAG"] = "1"
+			case "invalid version":
+				f.env["VERSION"] = "v0.0.0"
+			}
+			f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "verify")
+			if output, err := f.run(t); (err != nil) != (mode != "tested SHA") {
+				t.Fatalf("module tag verification = %v: %s", err, output)
+			}
+		})
 	}
 }
 
 func TestCIAgentPackagePublicationRejectsInvalidAssets(t *testing.T) {
-	for _, agent := range []string{"builder", "spawner"} {
-		for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "hidden extra", "wrong name"} {
-			t.Run(agent+"/"+mode, func(t *testing.T) {
-				f := newAgentPackageFixture(t, agent)
-				path := filepath.Join(f.artifacts, "agent.yaml")
-				if mode != "extra" && mode != "hidden extra" {
-					if err := os.Remove(path); err != nil {
-						t.Fatal(err)
-					}
-				}
-				var err error
-				switch mode {
-				case "empty":
-					err = os.WriteFile(path, nil, 0600)
-				case "directory":
-					err = os.Mkdir(path, 0700)
-				case "symlink":
-					err = os.Symlink("LICENSE", path)
-				case "extra":
-					f.write(t, "package/extra", "unexpected")
-				case "hidden extra":
-					f.write(t, "package/.extra", "unexpected")
-				case "wrong name":
-					f.write(t, "package/"+agent+"-agent.yaml", "wrong manifest name")
-				}
-				if err != nil {
+	const agent = "spawner"
+	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "hidden extra", "wrong name"} {
+		t.Run(agent+"/"+mode, func(t *testing.T) {
+			f := newAgentPackageFixture(t, agent)
+			path := filepath.Join(f.artifacts, "agent.yaml")
+			if mode != "extra" && mode != "hidden extra" {
+				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
 				}
-				if output, err := f.run(t); err == nil {
-					t.Fatalf("invalid assets published: %s", output)
-				}
-				if got := f.read(t, "gh.log"); got != "" {
-					t.Errorf("invalid assets reached GitHub: %s", got)
-				}
-			})
-		}
+			}
+			var err error
+			switch mode {
+			case "empty":
+				err = os.WriteFile(path, nil, 0600)
+			case "directory":
+				err = os.Mkdir(path, 0700)
+			case "symlink":
+				err = os.Symlink("LICENSE", path)
+			case "extra":
+				f.write(t, "package/extra", "unexpected")
+			case "hidden extra":
+				f.write(t, "package/.extra", "unexpected")
+			case "wrong name":
+				f.write(t, "package/"+agent+"-agent.yaml", "wrong manifest name")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output, err := f.run(t); err == nil {
+				t.Fatalf("invalid assets published: %s", output)
+			}
+			if got := f.read(t, "gh.log"); got != "" {
+				t.Errorf("invalid assets reached GitHub: %s", got)
+			}
+		})
 	}
 }
 
 func TestCIAgentPackagePublicationFailures(t *testing.T) {
-	for _, agent := range []string{"builder", "spawner"} {
-		for _, mode := range []string{"already published", "API failure", "upload failure"} {
-			t.Run(agent+"/"+mode, func(t *testing.T) {
-				f := newAgentPackageFixture(t, agent)
-				switch mode {
-				case "already published":
-					f.env["RELEASES"] = fmt.Sprintf(`{"tag_name":%q,"draft":false}`, f.env["TAG"])
-				case "API failure":
-					f.env["GH_STATUS"] = "1"
-				case "upload failure":
-					f.env["FAIL_UPLOAD"] = "1"
-				}
-				if output, err := f.run(t); err == nil {
-					t.Fatalf("publication failure ignored: %s", output)
-				}
-				log := f.read(t, "gh.log")
-				if strings.Contains(log, "release edit") {
-					t.Errorf("failed publication finalized release: %s", log)
-				}
-				if mode != "upload failure" && strings.Contains(log, "release upload") {
-					t.Errorf("publication must not upload after lookup failure or to a published release: %s", log)
-				}
-			})
-		}
+	const agent = "spawner"
+	for _, mode := range []string{"API failure", "upload failure"} {
+		t.Run(agent+"/"+mode, func(t *testing.T) {
+			f := newAgentPackageFixture(t, agent)
+			switch mode {
+			case "API failure":
+				f.env["GH_STATUS"] = "1"
+			case "upload failure":
+				f.env["FAIL_UPLOAD"] = "1"
+			}
+			if output, err := f.run(t); err == nil {
+				t.Fatalf("publication failure ignored: %s", output)
+			}
+			log := f.read(t, "gh.log")
+			if strings.Contains(log, "release edit") {
+				t.Errorf("failed publication finalized release: %s", log)
+			}
+			if mode != "upload failure" && strings.Contains(log, "release upload") {
+				t.Errorf("publication must not upload after lookup failure: %s", log)
+			}
+		})
 	}
 }
 

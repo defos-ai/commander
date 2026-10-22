@@ -52,43 +52,6 @@ func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
 	}
 }
 
-func TestDockerCheckpointReusesContainerWithoutLocalRecords(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	ctx, requestID, journal := newSpawnCheckpoints(t)
-	first, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
-	if err != nil {
-		t.Fatal(err)
-	}
-	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
-	if err != nil || repeated.ContainerID != first.ContainerID || repeated.AgentID != first.AgentID {
-		t.Fatalf("repeat changed container: result=%+v error=%v", repeated, err)
-	}
-	for _, name := range []string{"package-selection", "launch-intent"} {
-		if _, found, err := journal.LoadCheckpoint(ctx, name); err != nil || !found {
-			t.Fatalf("missing controller checkpoint %s: %v", name, err)
-		}
-	}
-
-	// Another manager has only the execution checkpoint and the daemon's
-	// owned running instance; no local launch records exist.
-	config := fixture.config
-	restored, err := docker.NewManager(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer restored.Close()
-	stop := dockerHeartbeats(t, fixture, first.ContainerID)
-	defer stop()
-	result, err := restored.Spawn(ctx, requestID, fixtureReference)
-	if err != nil || result.ContainerID != first.ContainerID {
-		t.Fatalf("restored manager did not observe saved container: result=%+v error=%v", result, err)
-	}
-	creates, starts, _ := fixture.engine.counts()
-	if creates != 1 || starts != 1 {
-		t.Fatalf("repeat relaunched container: create=%d start=%d", creates, starts)
-	}
-}
-
 func TestDockerCheckpointCreatedContainerNeedsOriginalOwner(t *testing.T) {
 	fixture := newDockerManagerFixture(t)
 	ctx, requestID, _ := newSpawnCheckpoints(t)

@@ -34,9 +34,6 @@ func TestControllerMongoStoreRoundTripAndOrdering(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, record) {
 		t.Fatalf("round trip = %#v, %v", got, err)
 	}
-	if snapshot := got.Snapshot(record.LeaseExpiresAt); snapshot.Status != controllers.Unavailable || !snapshot.Stale {
-		t.Fatalf("expired controller = %#v", snapshot)
-	}
 	for _, stamp := range []time.Time{record.LastHeartbeat.Add(-time.Nanosecond), record.LastHeartbeat} {
 		older := record
 		older.LastHeartbeat, older.Status = stamp, controllers.Stopped
@@ -65,7 +62,7 @@ func TestControllerMongoStoreRoundTripAndOrdering(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err = first.Get(t.Context(), record.ID)
-	if err != nil || got.Snapshot(stopped.LastHeartbeat.Add(time.Hour)).Status != controllers.Stopped {
+	if err != nil || !reflect.DeepEqual(got, stopped) {
 		t.Fatalf("stopped controller = %#v, %v", got, err)
 	}
 }

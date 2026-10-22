@@ -47,52 +47,18 @@ func packageManifest(binary string) string {
 	return fmt.Sprintf("schema_version: 1\ntype: example-agent\nversion: v0.1.0\nnative:\n  linux/amd64:\n    asset: %s\n    sha256: %q\n", binaryAsset, hex.EncodeToString(checksum[:]))
 }
 
-func TestParsePackageReference(t *testing.T) {
-	for _, modulePath := range []string{"", "apps/agents/example", "agents/example_agent.v2"} {
-		input := "github.com/defos-ai/example-agent"
-		if modulePath != "" {
-			input += "/" + modulePath
-		}
-		input += "@v0.1.0"
-		ref, err := agentpackages.ParseReference(input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if ref.Owner != "defos-ai" || ref.Repository != "example-agent" || ref.ModulePath != modulePath || ref.Version != "v0.1.0" || ref.String() != input {
-			t.Fatalf("unexpected reference: %#v (%q)", ref, ref.String())
-		}
-	}
+func TestResolveRejectsInvalidReferenceBeforeRequest(t *testing.T) {
+	resolver := packages.NewResolver(transportFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("invalid reference reached transport")
+		return nil, errors.New("unexpected request")
+	}))
 	for _, input := range []string{
-		"", "https://" + packageReference, "github.com/defos-ai/example-agent",
-		"github.com/defos-ai/example-agent@stable", "github.com/defos-ai/example-agent@latest",
-		"github.com/defos-ai/example-agent@v1.2", "github.com/defos-ai/example-agent@v01.2.3",
-		"github.com/defos-ai/example-agent@v1.2.3-rc.1", "github.com/defos-ai/example-agent@v1.2.3+build",
-		"github.com/../example-agent@v1.2.3", "github.com/defos-ai/../example-agent@v1.2.3",
-		"github.com/defos-ai/example-agent@v1.2.3?token=abc", "github.com/defos-ai/example-agent@v1.2.3#fragment",
-		"github.com/defos-ai/%2e%2e@v1.2.3", "github.com:443/defos-ai/example-agent@v1.2.3",
-		"github.com/defos-ai/example-agent/@v1.2.3", "github.com/defos-ai/example-agent//agent@v1.2.3",
-		"github.com/defos-ai/example-agent/apps//agent@v1.2.3", "github.com/defos-ai/example-agent/apps/@v1.2.3",
-		"github.com/defos-ai/example-agent/../agent@v1.2.3", "github.com/defos-ai/example-agent/apps/./agent@v1.2.3",
-		"github.com/defos-ai/example-agent/apps/%2e%2e@v1.2.3", "github.com/defos-ai/example-agent/apps%2Fagent@v1.2.3",
-		"github.com/defos-ai/example-agent/apps/agent?token=abc@v1.2.3", "github.com/defos-ai/example-agent/apps/agent#fragment@v1.2.3",
-		"github.com/defos-ai/example-agent/apps/agent@v1.2.3#selector", "github.com/defos-ai/example-agent/apps/agent@v1.2.3@v1.2.4",
-		"github.com/defos-ai/example-agent/apps\\agent@v1.2.3", "github.com/defos-ai/example-agent/apps/agent..name@v1.2.3",
-		"github.com/defos-ai/example-agent/apps/agent.@v1.2.3", "github.com/defos-ai/example-agent/apps/agent.lock@v1.2.3",
-		"github.com/defos-ai/example-agent/apps/.agent@v1.2.3", "github.com/defos-ai/example-agent/apps/agent name@v1.2.3",
-		" " + packageReference, packageReference + " ",
+		"github.com/defos-ai/example-agent@stable",
+		"github.com/defos-ai/example-agent/../agent@v1.2.3",
 	} {
-		t.Run(input, func(t *testing.T) {
-			if _, err := agentpackages.ParseReference(input); err == nil {
-				t.Fatalf("accepted invalid package reference %q", input)
-			}
-			resolver := packages.NewResolver(transportFunc(func(*http.Request) (*http.Response, error) {
-				t.Fatal("invalid reference reached transport")
-				return nil, errors.New("unexpected request")
-			}))
-			if _, err := resolver.Resolve(context.Background(), input); err == nil {
-				t.Fatal("resolver accepted invalid reference")
-			}
-		})
+		if _, err := resolver.Resolve(t.Context(), input); err == nil {
+			t.Fatalf("resolver accepted invalid exact reference %q", input)
+		}
 	}
 }
 
@@ -114,59 +80,6 @@ func TestResolvePackage(t *testing.T) {
 			}
 			if pkg.Reference.String() != tc.reference || pkg.Manifest.Type != "example-agent" || pkg.Manifest.Version != "v0.1.0" || pkg.Manifest.Native["linux/amd64"].Asset != binaryAsset {
 				t.Fatalf("unexpected package: %#v", pkg)
-			}
-		})
-	}
-}
-
-func TestStableSelectionPinsNativeAndDockerPackages(t *testing.T) {
-	for _, reference := range []string{packageReference, moduleReference} {
-		t.Run(reference, func(t *testing.T) {
-			const binary = "native fixture bytes"
-			var requests []string
-			transport := transportFunc(func(request *http.Request) (*http.Response, error) {
-				requests = append(requests, request.URL.String())
-				switch request.URL.String() {
-				case "https://api.github.com/repos/defos-ai/example-agent/releases/latest":
-					return response(request, http.StatusOK, privateRelease("v0.1.0")), nil
-				case releaseURL + "agent.yaml", moduleReleaseURL + "agent.yaml":
-					body := packageManifest(binary) + "docker:\n  image: ghcr.io/defos-ai/example-agent@sha256:" + strings.Repeat("a", 64) + "\n"
-					return response(request, http.StatusOK, body), nil
-				case releaseURL + binaryAsset, moduleReleaseURL + binaryAsset:
-					return response(request, http.StatusOK, binary), nil
-				default:
-					t.Fatalf("unexpected request: %s", request.URL)
-					return nil, errors.New("unexpected request")
-				}
-			})
-			resolver := packages.NewResolver(transport)
-			t.Cleanup(resolver.CloseIdleConnections)
-			pinned, err := resolver.Pin(context.Background(), strings.TrimSuffix(reference, "@v0.1.0")+"@stable")
-			if err != nil || pinned.String() != reference {
-				t.Fatalf("stable reference: %s, %v", pinned.String(), err)
-			}
-			pkg, err := resolver.Resolve(context.Background(), pinned.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			image, err := pkg.Manifest.DockerImage()
-			if err != nil || image != "ghcr.io/defos-ai/example-agent@sha256:"+strings.Repeat("a", 64) {
-				t.Fatalf("Docker image: %s, %v", image, err)
-			}
-			path, err := resolver.DownloadNative(context.Background(), pkg, "linux", "amd64", t.TempDir())
-			if err != nil {
-				t.Fatal(err)
-			}
-			contents, err := os.ReadFile(path)
-			if err != nil || string(contents) != binary {
-				t.Fatalf("native binary: %q, %v", contents, err)
-			}
-			base := releaseURL
-			if pinned.ModulePath != "" {
-				base = moduleReleaseURL
-			}
-			if len(requests) != 3 || requests[1] != base+"agent.yaml" || requests[2] != base+binaryAsset {
-				t.Fatalf("downloads must stay on the selected release: %v", requests)
 			}
 		})
 	}

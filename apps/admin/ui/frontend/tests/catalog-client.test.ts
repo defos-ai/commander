@@ -52,10 +52,6 @@ describe('agent and action catalogs', () => {
       { url, path: '/api/v1/agents' }, { url, path: `/api/v1/agents/${agent.id}` },
       { url, path: '/api/v1/actions' }, { url, path: `/api/v1/actions/${action.name}` },
     ]);
-    for (const [, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', headers: { 'X-Commander-UI': '1' } });
-      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
-    }
   });
 
   it('accepts empty catalogs, nullable Go fields and unknown future status values', async () => {

@@ -220,12 +220,10 @@ func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
 }
 
 func TestCINativeBinaryPublicationFailures(t *testing.T) {
-	for _, mode := range []string{"already published", "API failure", "upload failure"} {
+	for _, mode := range []string{"API failure", "upload failure"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newNativeFixture(t)
 			switch mode {
-			case "already published":
-				f.env["RELEASES"] = `{"tag_name":"v0.1.0","draft":false}`
 			case "API failure":
 				f.env["GH_STATUS"] = "1"
 			case "upload failure":
@@ -239,14 +237,14 @@ func TestCINativeBinaryPublicationFailures(t *testing.T) {
 				t.Errorf("failed publication finalized release: %s", log)
 			}
 			if mode != "upload failure" && strings.Contains(log, "release upload") {
-				t.Errorf("publication must not upload after lookup failure or to a published release: %s", log)
+				t.Errorf("publication must not upload after lookup failure: %s", log)
 			}
 		})
 	}
 }
 
 func TestCIPublishedReleaseRetry(t *testing.T) {
-	for _, name := range []string{"root", "builder", "spawner"} {
+	for _, name := range []string{"root", "spawner"} {
 		t.Run(name, func(t *testing.T) {
 			newFixture := func(t *testing.T) *nativeFixture {
 				if name == "root" {

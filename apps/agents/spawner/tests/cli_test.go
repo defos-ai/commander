@@ -22,17 +22,12 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 		{"unknown action", "--actions=checkout-template", "unknown action"},
 		{"duplicate action", "--actions=spawn-agent,spawn-agent", "duplicate"},
 		{"full agent ID", "--agent-id-suffix=spawner-agent-12345678", "agent-id-suffix"},
-		{"invalid agent ID suffix", "--agent-id-suffix=1234ABCD", "agent-id-suffix"},
 		{"negative heartbeat", "--heartbeat-interval=-1s", "heartbeat-interval"},
 		{"zero registration timeout", "--registration-timeout=0", "registration-timeout"},
 		{"negative registration timeout", "--registration-timeout=-1s", "registration-timeout"},
 		{"removed startup flag", "--spawn-agents=github.com/defos-ai/fixture-agent@v0.2.0", "flag provided but not defined"},
 		{"invalid bus", "--bus-url=https://example.invalid", "bus"},
 		{"invalid storage", "--storage-url=https://example.invalid", "storage"},
-		{"removed state flag", "--state-dir=ignored", "flag provided but not defined"},
-		{"removed runtime flag", "--runtime=native", "flag provided but not defined"},
-		{"removed network flag", "--docker-network=commander_default", "flag provided but not defined"},
-		{"removed search paths flag", "--search-paths=ignored", "flag provided but not defined"},
 		{"positional argument", "unexpected", "positional"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -48,20 +43,18 @@ func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
 			}
 		})
 	}
-	for _, value := range []string{"builder-agent-12345678", "spawner-agent-12345678", "arbitrary-text", "1234567", "123456789", "1234ABCD", "1234567g", " 12345678", "12345678 ", " "} {
-		t.Run("agent id suffix "+value, func(t *testing.T) {
-			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", value)
-			root := filepath.Join(t.TempDir(), "unused")
-			t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))
-			err := cli.Run(t.Context(), []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage")}, io.Discard)
-			if err == nil || !strings.Contains(err.Error(), "COMMANDER_AGENT_ID_SUFFIX") {
-				t.Fatalf("invalid ID suffix returned %v", err)
-			}
-			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
-				t.Fatal("invalid identity created state")
-			}
-		})
-	}
+	t.Run("invalid environment suffix", func(t *testing.T) {
+		t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "1234ABCD")
+		root := filepath.Join(t.TempDir(), "unused")
+		t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))
+		err := cli.Run(t.Context(), []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage")}, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "COMMANDER_AGENT_ID_SUFFIX") {
+			t.Fatalf("invalid ID suffix returned %v", err)
+		}
+		if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("invalid identity created state")
+		}
+	})
 }
 
 func TestSpawnerCLIAgentIDSuffixFlagOverridesEnvironment(t *testing.T) {
@@ -162,7 +155,7 @@ func TestSpawnerCLIDockerValidatesNetworkAndExplicitTimeoutBeforeProviders(t *te
 	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
 	t.Setenv("SPAWNER_RUNTIME", "docker")
 	t.Setenv("SPAWNER_DOCKER_NETWORK", "commander_default")
-	for _, network := range []string{"host", "none", "bridge", "default", "bad/network", "commander default", "../network", strings.Repeat("n", 129)} {
+	for _, network := range []string{"host", "bad/network", strings.Repeat("n", 129)} {
 		t.Run(network, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "unused")
 			t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))

@@ -353,6 +353,11 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 	if _, err := fixture.manager.Spawn(ctx, requestID, "github.com/defos-ai/other-agent@v0.1.0"); err == nil {
 		t.Fatal("existing request accepted a conflicting package")
 	}
+	for _, name := range []string{"package-selection", "launch-intent"} {
+		if _, found, err := journal.LoadCheckpoint(ctx, name); err != nil || !found {
+			t.Fatalf("missing controller checkpoint %s: %v", name, err)
+		}
+	}
 	assertCheckpointExcludes(t, journal, "private-parent-sentinel", "private-storage-sentinel")
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)

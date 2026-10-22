@@ -88,9 +88,9 @@ describe('mission action definition drafts', () => {
       '[{"name":"a","required_secrets":["TOKEN","TOKEN"],"input_schema":{},"output_schema":{}}]'];
     for (const source of sources) {
       expect(() => readActionDefinitions(source)).toThrow('invalid_definitions');
-      expect(() => writeActionDefinition(source, draft)).toThrow('invalid_definitions');
-      expect(() => removeActionDefinition(source, 'a')).toThrow('invalid_definitions');
     }
+    expect(() => writeActionDefinition(sources[0], draft)).toThrow('invalid_definitions');
+    expect(() => removeActionDefinition(sources[0], 'a')).toThrow('invalid_definitions');
     const repairable = '[{"name":"inspect-service","input_schema":{},"output_schema":{}}]';
     expect(readActionDefinitions(writeActionDefinition(repairable, draft, draft.name))[0]).toEqual(draft);
   });

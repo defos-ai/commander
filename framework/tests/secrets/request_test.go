@@ -82,35 +82,6 @@ func TestFulfillmentRejectsUnavailableAndLateSecrets(t *testing.T) {
 	}
 }
 
-func TestRequestLifecycleIsIndependentOfAvailability(t *testing.T) {
-	request := requestFixture()
-	metadata := secretFixture().Metadata
-	if got := secrets.AvailabilityAt(&metadata, requestedAt); got != secrets.Available || request.Status != secrets.Pending {
-		t.Fatal("available secret must coexist with a pending request")
-	}
-	expired, err := request.Expire(request.ExpiresAt)
-	if err != nil || expired.Status != secrets.RequestExpired {
-		t.Fatalf("expire request = %+v, %v", expired, err)
-	}
-	if got := secrets.AvailabilityAt(&metadata, request.ExpiresAt); got != secrets.Available {
-		t.Fatal("request expiration changed secret availability")
-	}
-	metadata.ExpiresAt = requestedAt.Add(2 * time.Minute)
-	fulfilled, err := request.Fulfill(metadata, deliveryID, requestedAt.Add(time.Minute))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := secrets.AvailabilityAt(&metadata, metadata.ExpiresAt); got != secrets.Expired {
-		t.Fatalf("secret at expiration = %q", got)
-	}
-	if request.Status != secrets.Pending || fulfilled.Status != secrets.Fulfilled {
-		t.Fatal("secret expiration changed a request lifecycle")
-	}
-	if _, err := fulfilled.Expire(request.ExpiresAt); !errors.Is(err, secrets.ErrRequestClosed) {
-		t.Fatalf("expiring historical fulfillment error = %v, want closed", err)
-	}
-}
-
 func TestFulfillmentReplayAndConflicts(t *testing.T) {
 	metadata := secretFixture().Metadata
 	fulfilled, err := requestFixture().Fulfill(metadata, deliveryID, requestedAt.Add(time.Minute))
@@ -148,6 +119,9 @@ func TestFulfillmentReplayAndConflicts(t *testing.T) {
 	}
 	if _, err := fulfilled.Cancel(requestedAt.Add(2 * time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
 		t.Fatalf("cancel fulfilled request error = %v, want closed", err)
+	}
+	if _, err := fulfilled.Expire(requestFixture().ExpiresAt); !errors.Is(err, secrets.ErrRequestClosed) {
+		t.Fatalf("expire fulfilled request error = %v, want closed", err)
 	}
 }
 

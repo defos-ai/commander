@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,7 +38,7 @@ func TestNativeExecutionWaitsForCheckpointBeforeStartingAndRetainsOwnership(t *t
 	finished, stopped := make(chan outcome, 1), make(chan struct{})
 	go func() {
 		defer close(stopped)
-		result, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+		result, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
 		finished <- outcome{result: result, err: err}
 	}()
 	t.Cleanup(func() { cancel(); <-stopped })
@@ -63,13 +62,12 @@ func TestNativeExecutionWaitsForCheckpointBeforeStartingAndRetainsOwnership(t *t
 	if err := json.Unmarshal(data, &intent); err != nil {
 		t.Fatal(err)
 	}
-	if intent.Runtime != "native" || intent.RequestID != requestID || intent.Package != fixtureReference || intent.AgentID == "" {
+	if intent.Runtime != "native" || intent.RequestID != requestID || intent.Package != fixtureModuleReference || intent.AgentID == "" {
 		t.Fatalf("checkpoint lacks complete launch identity: %s", data)
 	}
 	if len(childReports(t, fixture.storage)) != 0 {
 		t.Fatal("child started before controller acknowledgement")
 	}
-	assertNoNativeLaunchRecords(t, fixture.config.Directory)
 	close(acknowledge)
 	var result runtimes.Result
 	select {
@@ -85,14 +83,13 @@ func TestNativeExecutionWaitsForCheckpointBeforeStartingAndRetainsOwnership(t *t
 		t.Fatal("child identity differs from the acknowledged checkpoint")
 	}
 	before := fixture.requests.Load()
-	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
 	if err != nil || repeated.PID != result.PID || repeated.AgentID != result.AgentID {
 		t.Fatalf("retry did not reuse the owned child: result=%+v error=%v", repeated, err)
 	}
 	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
 		t.Fatal("retry downloaded or launched another child")
 	}
-	assertNoNativeLaunchRecords(t, fixture.config.Directory)
 	if err := fixture.manager.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -110,13 +107,15 @@ func TestNativeExecutionWaitsForCheckpointBeforeStartingAndRetainsOwnership(t *t
 			t.Error(err)
 		}
 	})
-	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "uncertain") {
+	if _, err := restarted.Spawn(ctx, requestID, fixtureModuleReference); err == nil || !strings.Contains(err.Error(), "uncertain") {
 		t.Fatalf("new host did not refuse the uncertain process: %v", err)
+	}
+	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
+		t.Fatalf("checkpoint did not preserve its module package: %v", err)
 	}
 	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
 		t.Fatal("new host downloaded or relaunched the checkpointed request")
 	}
-	assertNoNativeLaunchRecords(t, restartedConfig.Directory)
 }
 
 func TestNativeExecutionUncertainCheckpointDoesNotStartOrFallback(t *testing.T) {
@@ -138,13 +137,5 @@ func TestNativeExecutionUncertainCheckpointDoesNotStartOrFallback(t *testing.T) 
 	}
 	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 0 {
 		t.Fatal("uncertain save authorized a process or another download")
-	}
-	assertNoNativeLaunchRecords(t, fixture.config.Directory)
-}
-
-func assertNoNativeLaunchRecords(t *testing.T, directory string) {
-	t.Helper()
-	if _, err := os.Stat(filepath.Join(directory, "records")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("spawn created a local launch records directory")
 	}
 }

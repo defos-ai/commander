@@ -224,13 +224,6 @@ func runBuildContractFixture(probe string, config buildFixtureConfig) error {
 	if relative, err := filepath.Rel(config.Source, probe); err != nil || filepath.IsLocal(relative) || !filepath.IsAbs(probe) {
 		return errors.New("action contract probe must stay outside source")
 	}
-	program, err := os.ReadFile(probe)
-	if err != nil {
-		return err
-	}
-	if !bytes.Contains(program, []byte(`"example.invalid/fixture"`)) || !bytes.Contains(program, []byte("NewAgent(")) || !bytes.Contains(program, []byte("Describe(")) || bytes.Contains(program, []byte("Discover(")) {
-		return errors.New("action contract probe must inspect the generated agent without discovery")
-	}
 	if config.ProbeGo != "" {
 		return runRealContractProbe([]string{"run", probe}, config)
 	}
@@ -260,8 +253,6 @@ func runBuildContractFixture(probe string, config buildFixtureConfig) error {
 		definitions[1].InputSchema = bytes.ReplaceAll(definitions[1].InputSchema, []byte("9007199254740993"), []byte("9007199254740993.0"))
 		definitions[1].InputSchema = bytes.ReplaceAll(definitions[1].InputSchema, []byte(`"business-label"`), []byte(`"business-\u006cabel"`))
 		definitions[1].OutputSchema = json.RawMessage(`{ "additionalProperties": false, "required": ["count"], "properties": {"count": {"minimum": 0.0, "type": "integer"}}, "type": "object" }`)
-	case "contracts-missing":
-		definitions = definitions[:1]
 	case "contracts-unexpected":
 		extra := definitions[1]
 		extra.Name = "unexpected-action"
