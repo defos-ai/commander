@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	missionfs "github.com/defos-ai/commander/providers/fs/missions"
 )
@@ -49,6 +50,10 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 	assertResultJSONEqual(t, stored, definition)
 	stored.Objectives[0] = "changed"
 	stored.RequiredActions[0] = "changed"
+	stored.ActionDefinitions[0].Name = "changed"
+	stored.ActionDefinitions[0].RequiredSecrets[0] = "CHANGED"
+	stored.ActionDefinitions[0].InputSchema[0] = '['
+	stored.ActionDefinitions[0].OutputSchema[0] = '['
 	stored.Rules[missions.AggregateResults].ForActions[0] = "changed"
 	stored.InputSchema[0] = '['
 	reopened, err := missionfs.NewMissionFsStore(root)
@@ -60,6 +65,7 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 		t.Fatalf("read snapshots changed saved state: %+v, %v", items, err)
 	}
 	assertResultJSONEqual(t, items[0], definition)
+	changed.ActionDefinitions = nil
 	if err := reopened.Upsert(t.Context(), changed); err != nil {
 		t.Fatalf("startup seeding can still update an existing mission: %v", err)
 	}
@@ -122,6 +128,11 @@ func storedMission() missions.Mission {
 	return missions.Mission{
 		Name: "review", Objectives: []string{"Review a target", "Summarize findings"}, RequiredActions: []string{"inspect"},
 		StartingActions: []string{"inspect"}, OptionalActions: []string{"publish"},
+		ActionDefinitions: []actions.Definition{{
+			Name: "inspect", Description: "Inspect the requested target", RequiredSecrets: []string{"INSPECTION_KEY"},
+			InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993}}}`),
+			OutputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`),
+		}},
 		Rules:       missions.RuleSet{missions.AggregateResults: {ForActions: []string{"inspect"}}},
 		InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`),
 	}

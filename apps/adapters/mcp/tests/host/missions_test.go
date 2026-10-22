@@ -26,6 +26,18 @@ const missionDefinition = `{
   "required_actions": ["inspect-domain", "summarize-domain"],
   "optional_actions": ["publish-review"],
   "starting_actions": ["inspect-domain"],
+  "action_definitions": [{
+    "name": "inspect-domain",
+    "description": "Inspect a requested domain.",
+    "input_schema": {"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993},"scale":{"type":"number","default":1.2300e-6}}},
+    "output_schema": {"type":"object","x-note":"\u0061"}
+  }, {
+    "name": "publish-review",
+    "description": "Publish a review after operator consent.",
+    "required_secrets": ["PUBLISH_TOKEN"],
+    "input_schema": {"type":"object"},
+    "output_schema": {"type":"object"}
+  }],
   "steps": [{
     "id": "inspect",
     "objective": "Inspect the requested domain.",
@@ -91,7 +103,7 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 	for _, body := range []string{
 		missionDefinition,
 		`{"name":"minimal","objectives":["Plan future work."],"input_schema":{},"output_schema":{}}`,
-		`{"name":"minimal","objectives":["Plan future work."],"required_actions":null,"starting_actions":null,"optional_actions":null,"input_schema":{},"output_schema":{}}`,
+		`{"name":"minimal","objectives":["Plan future work."],"required_actions":null,"starting_actions":null,"optional_actions":null,"action_definitions":null,"input_schema":{},"output_schema":{}}`,
 	} {
 		var value any
 		if err := json.Unmarshal([]byte(body), &value); err != nil {
@@ -99,6 +111,19 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		}
 		if err := resolved.Validate(value); err != nil {
 			t.Fatalf("discovered schema rejects a supported mission definition: %v", err)
+		}
+	}
+	for _, body := range []string{
+		strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1),
+		strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {}`, 1),
+		strings.Replace(missionDefinition, `["PUBLISH_TOKEN"]`, `["PUBLISH_TOKEN","PUBLISH_TOKEN"]`, 1),
+	} {
+		var value any
+		if err := json.Unmarshal([]byte(body), &value); err != nil {
+			t.Fatal(err)
+		}
+		if err := resolved.Validate(value); err == nil {
+			t.Fatal("discovered schema accepts an unsupported action definition")
 		}
 	}
 	for _, field := range []string{"name", "objectives", "input_schema", "output_schema"} {
@@ -122,7 +147,12 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		}
 	}
 	var actual map[string]any
-	missionCall(t, ctx, session, "create_mission", json.RawMessage(missionDefinition), &actual)
+	encoded := missionCall(t, ctx, session, "create_mission", json.RawMessage(missionDefinition), &actual)
+	for _, lexical := range []string{"9007199254740993", "1.2300e-6", `\u0061`} {
+		if !strings.Contains(encoded, lexical) {
+			t.Fatalf("action definition schema changed lexical JSON value %q: %s", lexical, encoded)
+		}
+	}
 	if !reflect.DeepEqual(actual, want) {
 		t.Fatalf("creation changed the mission contract: %+v", actual)
 	}
@@ -156,6 +186,15 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		if len(operations.Operations) != 0 {
 			t.Fatal("mission creation unexpectedly started an operation")
 		}
+		for _, tool := range []string{"list_actions", "list_agents"} {
+			var catalog map[string][]json.RawMessage
+			missionCall(t, ctx, session, tool, map[string]any{}, &catalog)
+			for _, items := range catalog {
+				if len(items) != 0 {
+					t.Fatalf("mission action definitions unexpectedly populated %s", tool)
+				}
+			}
+		}
 	}
 	read()
 	session.Close()
@@ -170,6 +209,15 @@ func TestMCPCreateMissionRejectsInvalidDefinitions(t *testing.T) {
 		{"array", `[]`},
 		{"empty object", `{}`},
 		{"unknown definition field", strings.Replace(missionDefinition, `"objectives":`, `"unexpected": true, "objectives":`, 1)},
+		{"unknown action definition field", strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "unexpected": true`, 1)},
+		{"action readiness field", strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1)},
+		{"duplicate action definition", strings.Replace(missionDefinition, `"name": "publish-review"`, `"name": "inspect-domain"`, 1)},
+		{"unreferenced action definition", strings.Replace(missionDefinition, `"name": "publish-review"`, `"name": "unreferenced-action"`, 1)},
+		{"action schema missing root type", strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {}`, 1)},
+		{"invalid action default", strings.Replace(missionDefinition, `"default":1.2300e-6`, `"default":"invalid"`, 1)},
+		{"invalid action definition schema", strings.Replace(missionDefinition, `"type":"integer"`, `"type":"invalid"`, 1)},
+		{"remote action definition reference", strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {"$ref":"https://private.example/schema"}`, 1)},
+		{"duplicate required secret", strings.Replace(missionDefinition, `["PUBLISH_TOKEN"]`, `["PUBLISH_TOKEN","PUBLISH_TOKEN"]`, 1)},
 		{"unknown step field", strings.Replace(missionDefinition, `"id": "inspect"`, `"id": "inspect", "unexpected": true`, 1)},
 		{"unknown rule field", strings.Replace(missionDefinition, `"aggregate-results": {`, `"aggregate-results": {"unexpected": true,`, 1)},
 		{"unknown rule parameter", strings.Replace(missionDefinition, `"decision_by": "model"`, `"decision_by": "model", "unexpected": true`, 1)},
@@ -265,7 +313,7 @@ func missionSession(t *testing.T, database string) (context.Context, *sdkmcp.Cli
 	return ctx, session, stop
 }
 
-func missionCall(t *testing.T, ctx context.Context, session *sdkmcp.ClientSession, tool string, arguments, output any) {
+func missionCall(t *testing.T, ctx context.Context, session *sdkmcp.ClientSession, tool string, arguments, output any) string {
 	t.Helper()
 	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: tool, Arguments: arguments})
 	if err != nil {
@@ -281,4 +329,5 @@ func missionCall(t *testing.T, ctx context.Context, session *sdkmcp.ClientSessio
 	if err := json.Unmarshal([]byte(content.Text), output); err != nil {
 		t.Fatal(err)
 	}
+	return content.Text
 }

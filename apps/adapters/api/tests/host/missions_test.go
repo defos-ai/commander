@@ -23,6 +23,18 @@ const missionDefinition = `{
   "required_actions": ["inspect-domain", "summarize-domain"],
   "optional_actions": ["publish-review"],
   "starting_actions": ["inspect-domain"],
+  "action_definitions": [{
+    "name": "inspect-domain",
+    "description": "Inspect a requested domain.",
+    "input_schema": {"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993},"scale":{"type":"number","default":1.2300e-6}}},
+    "output_schema": {"type":"object","x-note":"\u0061"}
+  }, {
+    "name": "publish-review",
+    "description": "Publish a review after operator consent.",
+    "required_secrets": ["PUBLISH_TOKEN"],
+    "input_schema": {"type":"object"},
+    "output_schema": {"type":"object"}
+  }],
   "steps": [{
     "id": "inspect",
     "objective": "Inspect the requested domain.",
@@ -69,6 +81,11 @@ func TestCreateMissionWithoutInstalledActionsPersistsAcrossRestart(t *testing.T)
 		t.Fatalf("Location=%q, want %q", created.header.Get("Location"), location)
 	}
 	assertSecurityHeaders(t, created, false)
+	for _, lexical := range []string{"9007199254740993", "1.2300e-6", `\u0061`} {
+		if !strings.Contains(created.body, lexical) {
+			t.Fatalf("action definition schema changed lexical JSON value %q: %s", lexical, created.body)
+		}
+	}
 	for _, body := range []string{missionDefinition, strings.Replace(missionDefinition, "Review an action that has not been implemented yet.", "Overwrite the saved objective.", 1)} {
 		assertAPIError(t, createMissionRequest(t, server, body), http.StatusConflict, "mission_exists")
 	}
@@ -83,6 +100,14 @@ func TestCreateMissionWithoutInstalledActionsPersistsAcrossRestart(t *testing.T)
 		}](t, server.request(t, http.MethodGet, "/api/v1/missions", authenticate))
 		if len(list.Items) != 1 || !reflect.DeepEqual(list.Items[0], want) {
 			t.Fatal("mission list did not return the created definition")
+		}
+		for _, resource := range []string{"actions", "agents", "operations"} {
+			catalog := decodeResponse[struct {
+				Items []json.RawMessage `json:"items"`
+			}](t, server.request(t, http.MethodGet, "/api/v1/"+resource, authenticate))
+			if len(catalog.Items) != 0 {
+				t.Fatalf("defining mission actions unexpectedly created %s", resource)
+			}
 		}
 	}
 	get()
@@ -104,6 +129,15 @@ func TestCreateMissionRejectsUnauthorizedAndInvalidDefinitions(t *testing.T) {
 		{"array body", "[]"},
 		{"multiple bodies", missionDefinition + "{}"},
 		{"unknown definition field", strings.Replace(missionDefinition, `"objectives":`, `"private-field": "rejected-private-value", "objectives":`, 1)},
+		{"unknown action definition field", strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "unexpected": true`, 1)},
+		{"action readiness field", strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1)},
+		{"duplicate action definition", strings.Replace(missionDefinition, `"name": "publish-review"`, `"name": "inspect-domain"`, 1)},
+		{"unreferenced action definition", strings.Replace(missionDefinition, `"name": "publish-review"`, `"name": "unreferenced-action"`, 1)},
+		{"action schema missing root type", strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {}`, 1)},
+		{"invalid action default", strings.Replace(missionDefinition, `"default":1.2300e-6`, `"default":"invalid"`, 1)},
+		{"invalid action definition schema", strings.Replace(missionDefinition, `"type":"integer"`, `"type":"invalid"`, 1)},
+		{"remote action definition reference", strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {"$ref":"https://private.example/schema"}`, 1)},
+		{"duplicate required secret", strings.Replace(missionDefinition, `["PUBLISH_TOKEN"]`, `["PUBLISH_TOKEN","PUBLISH_TOKEN"]`, 1)},
 		{"unknown step field", strings.Replace(missionDefinition, `"id": "inspect"`, `"id": "inspect", "unexpected": true`, 1)},
 		{"unknown rule field", strings.Replace(missionDefinition, `"aggregate-results": {`, `"aggregate-results": {"unexpected": true,`, 1)},
 		{"unknown rule parameter", strings.Replace(missionDefinition, `"decision_by": "model"`, `"decision_by": "model", "unexpected": true`, 1)},

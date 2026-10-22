@@ -9,13 +9,18 @@ test('create a reusable mission through Admin without installed actions or start
     objectives: ['Review using an action that has not been installed yet.', 'Save findings for a later review.'],
     required_actions: ['future-mission-action'],
     starting_actions: ['future-mission-action'],
+    action_definitions: [{ name: 'future-mission-action', description: 'Review a future capability.',
+      input_schema: { type: 'object' }, output_schema: { type: 'object', properties: { summary: { type: 'string' } } },
+      required_secrets: ['REVIEW_TOKEN'] }],
     input_schema: {},
     output_schema: {},
   };
-  const definition = JSON.stringify(mission, null, 2).replace('"input_schema": {}',
-    String.raw`"input_schema": {"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`);
+  const definition = JSON.stringify(mission, null, 2).replace(/^  "input_schema": \{\}/m,
+    String.raw`  "input_schema": {"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`);
   const operationIDs = async () => (await api.get<{ items: { id: string }[] }>('/operations')).items.map(item => item.id).sort();
+  const actionNames = async () => (await api.get<{ items: { name: string }[] }>('/actions')).items.map(item => item.name).sort();
   const before = await operationIDs();
+  const actionsBefore = await actionNames();
   await connect(page);
   await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Missions', exact: true }).click();
   const missionsURL = page.url();
@@ -54,6 +59,7 @@ test('create a reusable mission through Admin without installed actions or start
   const savedDefinition = page.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true });
   await expect(savedDefinition).toHaveAttribute('readonly');
   const savedJSON = await savedDefinition.inputValue();
+  expect(JSON.parse(savedJSON).action_definitions).toEqual(mission.action_definitions);
   expect(savedJSON).toContain('9007199254740993');
   expect(savedJSON).toContain(String.raw`"\u0061\\path"`);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -78,4 +84,5 @@ test('create a reusable mission through Admin without installed actions or start
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
   expect(await api.get<Mission>(`/missions/${mission.name}`)).toMatchObject(mission);
   expect(await operationIDs()).toEqual(before);
+  expect(await actionNames()).toEqual(actionsBefore);
 });

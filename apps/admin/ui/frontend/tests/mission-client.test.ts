@@ -18,6 +18,9 @@ const mission: Mission = {
   objectives: ['Review a website'],
   required_actions: ['discover-pages'],
   optional_actions: ['capture-page'],
+  action_definitions: [{ name: 'discover-pages', description: 'Discover pages over HTTP.',
+    input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } },
+    output_schema: { type: 'object' }, required_secrets: ['SITE_TOKEN'] }],
   starting_actions: ['discover-pages'],
   steps: [{ id: 'discover', objective: 'Find pages', agent_types: null, required_actions: ['discover-pages'] }],
   rules: {
@@ -109,6 +112,16 @@ describe('mission API', () => {
     { items: [{ ...mission, optional_actions: 'capture-page' }] },
     { items: [{ ...mission, optional_actions: [42] }] },
     { items: [{ ...mission, optional_actions: null }] },
+    { items: [{ ...mission, action_definitions: null }] },
+    { items: [{ ...mission, action_definitions: {} }] },
+    { items: [{ ...mission, action_definitions: [null] }] },
+    { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], name: 42 }] }] },
+    { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], description: 42 }] }] },
+    { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], input_schema: null }] }] },
+    { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], output_schema: [] }] }] },
+    { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], required_secrets: { SITE_TOKEN: 'value' } }] }] },
+    { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], required_secrets: [42] }] }] },
+
     { items: [{ ...mission, steps: [{ id: 'discover' }] }] },
     { items: [{ ...mission, rules: [] }] },
     { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages'] } } }] },
@@ -231,7 +244,8 @@ describe('mission creation', () => {
   it('lets the server validate optional fields and cross-field constraints', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('private-validation-details', { status: 400 }));
     vi.stubGlobal('fetch', fetch);
-    const raw = JSON.stringify({ ...mission, rules: { unknown: {} }, starting_actions: ['not-required'] });
+    const raw = JSON.stringify({ ...mission, rules: { unknown: {} }, starting_actions: ['not-required'],
+      action_definitions: [{ ...mission.action_definitions![0], name: 'unreferenced-action' }] });
 
     await expect(createMission(url, credentials, raw)).rejects.toEqual(new MissionCreateError('invalid_input'));
     expect(fetch.mock.calls[0][1]?.body).toBe(raw);

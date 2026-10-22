@@ -3,6 +3,7 @@ export interface Mission {
   objectives: string[];
   required_actions: string[] | null;
   optional_actions?: string[];
+  action_definitions?: ActionDefinition[];
   starting_actions: string[] | null;
   steps?: MissionStep[];
   rules?: Partial<Record<MissionRuleName, MissionRule>>;
@@ -24,13 +25,18 @@ export interface MissionRule {
   params?: { decision_by?: 'model' };
 }
 
-export interface Action {
+export interface ActionDefinition {
   name: string;
   description: string;
+  required_secrets?: string[];
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
+}
+
+export interface Action extends Omit<ActionDefinition, 'input_schema' | 'output_schema'> {
   status: string;
   status_reason?: string;
   missing_requirements?: ActionRequirement[] | null;
-  required_secrets?: string[];
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
 }

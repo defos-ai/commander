@@ -3,15 +3,16 @@ package models
 import "encoding/json"
 
 type CreateMissionRequest struct {
-	Rules           map[string]MissionRuleRequest `json:"rules,omitempty"`
-	Name            string                        `json:"name"`
-	Objectives      []string                      `json:"objectives"`
-	RequiredActions []string                      `json:"required_actions,omitempty"`
-	OptionalActions []string                      `json:"optional_actions,omitempty"`
-	StartingActions []string                      `json:"starting_actions,omitempty"`
-	Steps           []MissionStepRequest          `json:"steps,omitempty"`
-	InputSchema     json.RawMessage               `json:"input_schema"`
-	OutputSchema    json.RawMessage               `json:"output_schema"`
+	Rules             map[string]MissionRuleRequest `json:"rules,omitempty"`
+	Name              string                        `json:"name"`
+	Objectives        []string                      `json:"objectives"`
+	ActionDefinitions []ActionDefinitionRequest     `json:"action_definitions,omitempty"`
+	RequiredActions   []string                      `json:"required_actions,omitempty"`
+	OptionalActions   []string                      `json:"optional_actions,omitempty"`
+	StartingActions   []string                      `json:"starting_actions,omitempty"`
+	Steps             []MissionStepRequest          `json:"steps,omitempty"`
+	InputSchema       json.RawMessage               `json:"input_schema"`
+	OutputSchema      json.RawMessage               `json:"output_schema"`
 }
 
 type MissionStepRequest struct {
@@ -31,15 +32,16 @@ type MissionRuleParamsRequest struct {
 }
 
 type MissionResponse struct {
-	Rules           map[string]MissionRuleResponse `json:"rules,omitempty"`
-	Name            string                         `json:"name"`
-	Objectives      []string                       `json:"objectives"`
-	RequiredActions []string                       `json:"required_actions"`
-	OptionalActions []string                       `json:"optional_actions,omitempty"`
-	StartingActions []string                       `json:"starting_actions"`
-	Steps           []MissionStepResponse          `json:"steps,omitempty"`
-	InputSchema     json.RawMessage                `json:"input_schema"`
-	OutputSchema    json.RawMessage                `json:"output_schema"`
+	Rules             map[string]MissionRuleResponse `json:"rules,omitempty"`
+	Name              string                         `json:"name"`
+	Objectives        []string                       `json:"objectives"`
+	ActionDefinitions []ActionDefinitionResponse     `json:"action_definitions,omitempty"`
+	RequiredActions   []string                       `json:"required_actions"`
+	OptionalActions   []string                       `json:"optional_actions,omitempty"`
+	StartingActions   []string                       `json:"starting_actions"`
+	Steps             []MissionStepResponse          `json:"steps,omitempty"`
+	InputSchema       json.RawMessage                `json:"input_schema"`
+	OutputSchema      json.RawMessage                `json:"output_schema"`
 }
 
 type MissionStepResponse struct {

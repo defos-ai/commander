@@ -39,6 +39,30 @@ an optional action is scheduled, normal readiness checks and mission rules apply
 its missing secrets can then block dispatch. A step requirement or `same-agent`
 rule can still include an optional action in preflight before it is scheduled.
 
+Optional `action_definitions` describes capabilities that may be implemented later:
+
+```json
+{
+  "required_actions": ["inspect-service"],
+  "action_definitions": [
+    {
+      "name": "inspect-service",
+      "description": "Inspect the requested service.",
+      "input_schema": {"type": "object"},
+      "output_schema": {"type": "object"},
+      "required_secrets": ["SERVICE_TOKEN"]
+    }
+  ]
+}
+```
+
+Definitions reuse the static action contract: schemas explicitly declare an object
+root, references resolve locally, and defaults must validate. Up to 100 definitions
+may be supplied, with unique names referenced by required, optional or step-required
+actions. Secret declarations contain names only. Saving a definition does not build
+an agent, register an action or satisfy readiness; installed agents still provide
+the executable capabilities. Mission snapshots retain independent copies.
+
 An operation keeps its mission snapshot through updates and restarts. Callers may
 supply a canonical lowercase UUID as `operation_id`; an existing ID is a conflict.
 Operation status is `planning`, `running`, `waiting`, `completed`, `failed`, or

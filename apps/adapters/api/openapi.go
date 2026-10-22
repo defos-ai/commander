@@ -33,10 +33,12 @@ func openAPIDocument() ([]byte, error) {
 		{"About", reflect.TypeFor[models.AboutResponse]()},
 		{"MissionRuleParams", reflect.TypeFor[models.MissionRuleParamsResponse]()},
 		{"MissionRule", reflect.TypeFor[models.MissionRuleResponse]()},
+		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"MissionRuleParamsRequest", reflect.TypeFor[models.MissionRuleParamsRequest]()},
 		{"MissionRuleRequest", reflect.TypeFor[models.MissionRuleRequest]()},
 		{"MissionStepRequest", reflect.TypeFor[models.MissionStepRequest]()},
+		{"ActionDefinitionRequest", reflect.TypeFor[models.ActionDefinitionRequest]()},
 		{"CreateMissionRequest", reflect.TypeFor[models.CreateMissionRequest]()},
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
 		{"Action", reflect.TypeFor[models.ActionResponse]()},
@@ -70,6 +72,7 @@ func openAPIDocument() ([]byte, error) {
 		case "MissionRule":
 			schema.Properties["for_actions"].Description = "Actions whose executions this rule applies to."
 		case "Mission":
+			schema.Properties["action_definitions"].Description = "Desired action contracts referenced by this mission. Metadata only: defining an action does not register an executor or satisfy readiness."
 			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks, together with step required_actions."
 			schema.Properties["optional_actions"].Description = "Additional actions the mission may use. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Names are unique and must not overlap required_actions."
 			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. same-agent binds its for_actions to the first selected agent instance within each operation, with no fallback; it accepts no parameters and does not order tasks. Failures and empty proposals also require model review."
@@ -180,6 +183,22 @@ func openAPIDocument() ([]byte, error) {
 
 func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 	switch model {
+	case "ActionDefinition", "ActionDefinitionRequest":
+		schema.Properties["name"].Pattern = `^\S(?:[\s\S]*\S)?$`
+		if model == "ActionDefinitionRequest" {
+			schema.Properties["description"].Type, schema.Properties["description"].Types = "", []string{"string", "null"}
+		}
+		for _, name := range []string{"input_schema", "output_schema"} {
+			property := schema.Properties[name]
+			property.Required = []string{"type"}
+			property.Properties = map[string]*jsonschema.Schema{"type": {Const: new(any("object"))}}
+			property.Description = "Locally resolvable JSON Schema explicitly declaring root type=object. External references are rejected."
+		}
+		secrets := schema.Properties["required_secrets"]
+		secrets.Type, secrets.Types = "", []string{"array", "null"}
+		secrets.UniqueItems = true
+		secrets.Items.Pattern = `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`
+		secrets.Description = "Managed secret names, never secret values."
 	case "MissionRuleParamsRequest":
 		schema.Properties["decision_by"].Type, schema.Properties["decision_by"].Types = "", []string{"string", "null"}
 		schema.Properties["decision_by"].Enum = []any{nil, "", "model"}
@@ -216,6 +235,9 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 		schema.Properties["optional_actions"].Description = "Additional unique action names; must not overlap required_actions. Unscheduled optional actions do not block preflight."
 		schema.Properties["starting_actions"].Description = "Unique action names; each must appear in required_actions."
 		schema.Properties["steps"].Type, schema.Properties["steps"].Types = "", []string{"array", "null"}
+		schema.Properties["action_definitions"].Type, schema.Properties["action_definitions"].Types = "", []string{"array", "null"}
+		schema.Properties["action_definitions"].MaxItems = new(100)
+		schema.Properties["action_definitions"].Description = "Up to 100 desired action contracts, unique by name and referenced by required_actions, optional_actions or a step's required_actions. Metadata only: creation does not install actions, grant secrets or change readiness."
 		rules := schema.Properties["rules"]
 		rules.Type, rules.Types = "", []string{"object", "null"}
 		rules.PropertyNames = &jsonschema.Schema{Enum: []any{"aggregate-results", "decide-next-actions", "same-agent"}}
@@ -225,10 +247,10 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 
 func openAPICreateMissionPath(paths map[string]any) {
 	create := endpoints.OpenAPIQueryOperation("createMission", "Create a mission", "Mission", endpoints.OpenAPIRef("Mission"))
-	create["description"] = "Creates a reusable mission only if its exact name is absent. The shared mission validator checks action lists, steps, rules and locally resolvable JSON Schema objects. Actions need not be installed. No controller is required; creation does not run work or change existing operation snapshots. Query parameters are not accepted."
+	create["description"] = "Creates a reusable mission only if its exact name is absent. The shared mission validator checks action lists, desired action_definitions, steps, rules and locally resolvable JSON Schema objects. Actions need not be installed. Definitions are metadata and do not register actions or satisfy readiness. No controller is required; creation does not run work or change existing operation snapshots. Query parameters are not accepted."
 	create["requestBody"] = map[string]any{
 		"required":    true,
-		"description": "One JSON object, at most 1 MiB. Requires application/json; charset parameters are accepted. Unknown definition, step, rule and parameter fields are rejected. Schema objects may contain JSON Schema extension keywords. Invalid definitions return invalid_request.",
+		"description": "One JSON object, at most 1 MiB. Requires application/json; charset parameters are accepted. Unknown mission, action definition, step, rule and parameter fields are rejected. Schema objects may contain JSON Schema extension keywords. Invalid definitions return invalid_request.",
 		"content":     map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef("CreateMissionRequest")}},
 	}
 	responses := create["responses"].(map[string]any)

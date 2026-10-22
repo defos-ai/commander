@@ -11,13 +11,14 @@ import (
 
 func ToMission(request models.CreateMissionRequest) missions.Mission {
 	mission := missions.Mission{
-		Name:            request.Name,
-		Objectives:      slices.Clone(request.Objectives),
-		RequiredActions: slices.Clone(request.RequiredActions),
-		OptionalActions: slices.Clone(request.OptionalActions),
-		StartingActions: slices.Clone(request.StartingActions),
-		InputSchema:     bytes.Clone(request.InputSchema),
-		OutputSchema:    bytes.Clone(request.OutputSchema),
+		Name:              request.Name,
+		Objectives:        slices.Clone(request.Objectives),
+		ActionDefinitions: ToActionDefinitions(request.ActionDefinitions),
+		RequiredActions:   slices.Clone(request.RequiredActions),
+		OptionalActions:   slices.Clone(request.OptionalActions),
+		StartingActions:   slices.Clone(request.StartingActions),
+		InputSchema:       bytes.Clone(request.InputSchema),
+		OutputSchema:      bytes.Clone(request.OutputSchema),
 	}
 	if request.Rules != nil {
 		mission.Rules = make(missions.RuleSet, len(request.Rules))
@@ -51,13 +52,14 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 
 func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	response := models.MissionResponse{
-		Name:            mission.Name,
-		Objectives:      slices.Clone(mission.Objectives),
-		RequiredActions: slices.Clone(mission.RequiredActions),
-		OptionalActions: slices.Clone(mission.OptionalActions),
-		StartingActions: slices.Clone(mission.StartingActions),
-		InputSchema:     bytes.Clone(mission.InputSchema),
-		OutputSchema:    bytes.Clone(mission.OutputSchema),
+		Name:              mission.Name,
+		Objectives:        slices.Clone(mission.Objectives),
+		ActionDefinitions: ToActionDefinitionResponses(mission.ActionDefinitions),
+		RequiredActions:   slices.Clone(mission.RequiredActions),
+		OptionalActions:   slices.Clone(mission.OptionalActions),
+		StartingActions:   slices.Clone(mission.StartingActions),
+		InputSchema:       bytes.Clone(mission.InputSchema),
+		OutputSchema:      bytes.Clone(mission.OutputSchema),
 	}
 	if mission.Rules != nil {
 		response.Rules = make(map[string]models.MissionRuleResponse, len(mission.Rules))

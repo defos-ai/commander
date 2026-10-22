@@ -1,7 +1,7 @@
 import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
-import type { Mission, MissionRule, MissionStep } from './types';
+import type { ActionDefinition, Mission, MissionRule, MissionStep } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -34,6 +34,12 @@ function isRule(name: string, value: unknown): value is MissionRule {
   return name === 'decide-next-actions' && isObject(params) && params.decision_by === 'model';
 }
 
+function isActionDefinition(value: unknown): value is ActionDefinition {
+  return isObject(value) && typeof value.name === 'string' && value.name.trim() !== '' &&
+    typeof value.description === 'string' && isObject(value.input_schema) && isObject(value.output_schema) &&
+    (value.required_secrets === undefined || isStringArray(value.required_secrets));
+}
+
 function isMissionName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value !== '.' && value !== '..';
 }
@@ -42,6 +48,7 @@ export function isMission(value: unknown): value is Mission {
   return isObject(value) && isMissionName(value.name) && isObjectives(value.objectives) &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.optional_actions === undefined || isStringArray(value.optional_actions)) &&
+    (value.action_definitions === undefined || (Array.isArray(value.action_definitions) && value.action_definitions.every(isActionDefinition))) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
     (value.steps === undefined || (Array.isArray(value.steps) && value.steps.every(isStep))) &&

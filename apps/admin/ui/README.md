@@ -30,6 +30,9 @@ or session. A successful save opens the new mission.
 
 In mission details, switch to **JSON** to view and copy the saved definition.
 The JSON view preserves schema numbers and string escapes and can be bookmarked.
+Optional `action_definitions` describes referenced capabilities to implement later,
+including object schemas and secret names. Definitions do not install actions or
+make them ready. See [mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
 
 ## Secrets
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/defos-ai/commander/framework/domain"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -27,19 +28,21 @@ type Step struct {
 // Mission describes ordered objectives independently of its operations.
 // RequiredActions define preflight coverage. OptionalActions describe capabilities
 // checked when selected for queued work; neither list is an execution allowlist.
+// ActionDefinitions optionally describe desired contracts, without providing readiness.
 // StartingActions guide initial task selection. Dispatch waits for readiness.
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
-	Rules           RuleSet         `json:"rules,omitempty"`
-	Name            string          `json:"name"`
-	Objectives      []string        `json:"objectives"`
-	RequiredActions []string        `json:"required_actions"`
-	OptionalActions []string        `json:"optional_actions,omitempty"`
-	StartingActions []string        `json:"starting_actions"`
-	Steps           []Step          `json:"steps,omitempty"`
-	InputSchema     json.RawMessage `json:"input_schema"`
-	OutputSchema    json.RawMessage `json:"output_schema"`
+	Rules             RuleSet                  `json:"rules,omitempty"`
+	Name              string                   `json:"name"`
+	Objectives        []string                 `json:"objectives"`
+	RequiredActions   []string                 `json:"required_actions"`
+	OptionalActions   []string                 `json:"optional_actions,omitempty"`
+	ActionDefinitions []actionmodel.Definition `json:"action_definitions,omitempty"`
+	StartingActions   []string                 `json:"starting_actions"`
+	Steps             []Step                   `json:"steps,omitempty"`
+	InputSchema       json.RawMessage          `json:"input_schema"`
+	OutputSchema      json.RawMessage          `json:"output_schema"`
 }
 
 // LoadMission strictly decodes and validates one JSON definition. Unknown
@@ -115,6 +118,9 @@ func (m Mission) Validate() error {
 			}
 		}
 	}
+	if err := m.validateActionDefinitions(); err != nil {
+		return err
+	}
 	if err := m.Rules.Validate(); err != nil {
 		return err
 	}
@@ -123,6 +129,40 @@ func (m Mission) Validate() error {
 	}
 	if _, err := resolveSchema(m.OutputSchema); err != nil {
 		return fmt.Errorf("output schema: %w", err)
+	}
+	return nil
+}
+
+// Definitions are planning/build contracts, never registered executors or proof
+// of readiness. Require a reference so unused definitions do not drift in a mission.
+func (m Mission) validateActionDefinitions() error {
+	if len(m.ActionDefinitions) > 100 {
+		return errors.New("action_definitions must contain at most 100 definitions")
+	}
+	names := make([]string, len(m.ActionDefinitions))
+	for i, definition := range m.ActionDefinitions {
+		names[i] = definition.Name
+	}
+	if err := validateActionNames("action_definitions", names); err != nil {
+		return err
+	}
+	for i, definition := range m.ActionDefinitions {
+		referenced := slices.Contains(m.RequiredActions, definition.Name) || slices.Contains(m.OptionalActions, definition.Name)
+		for _, step := range m.Steps {
+			referenced = referenced || slices.Contains(step.RequiredActions, definition.Name)
+		}
+		if !referenced {
+			return fmt.Errorf("action_definitions[%d] must reference a required, optional or step action", i)
+		}
+		if err := definition.Validate(); err != nil {
+			return fmt.Errorf("action_definitions[%d]: %w", i, err)
+		}
+		if _, err := actionmodel.ResolveSchema(definition.InputSchema); err != nil {
+			return fmt.Errorf("action_definitions[%d] input_schema: %w", i, err)
+		}
+		if _, err := actionmodel.ResolveSchema(definition.OutputSchema); err != nil {
+			return fmt.Errorf("action_definitions[%d] output_schema: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -143,6 +183,10 @@ func validateActionNames(field string, names []string) error {
 
 func (m Mission) Clone() Mission {
 	m.Objectives = slices.Clone(m.Objectives)
+	m.ActionDefinitions = slices.Clone(m.ActionDefinitions)
+	for i := range m.ActionDefinitions {
+		m.ActionDefinitions[i] = m.ActionDefinitions[i].Clone()
+	}
 	m.Rules = m.Rules.Clone()
 	if m.RequiredActions != nil {
 		m.RequiredActions = append([]string{}, m.RequiredActions...)

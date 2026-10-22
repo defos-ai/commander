@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
 
@@ -22,7 +23,8 @@ func TestMissionMongoStore(t *testing.T) {
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
-		Steps: []missions.Step{{ID: "review", Objective: "Review findings"}},
+		ActionDefinitions: []actions.Definition{storedActionDefinition()},
+		Steps:             []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
 			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -61,9 +63,27 @@ func TestMissionMongoStore(t *testing.T) {
 	if !bytes.Equal(schema, original.InputSchema) || document.Lookup("name").StringValue() != original.Name {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
+	definitions, err := document.Lookup("action_definitions").Array().Values()
+	if err != nil || len(definitions) != 1 {
+		t.Fatalf("stored action definitions: %v, %v", definitions, err)
+	}
+	for _, field := range []string{"input_schema", "output_schema"} {
+		_, storedSchema := definitions[0].Document().Lookup(field).Binary()
+		want := original.ActionDefinitions[0].InputSchema
+		if field == "output_schema" {
+			want = original.ActionDefinitions[0].OutputSchema
+		}
+		if !bytes.Equal(storedSchema, want) {
+			t.Fatalf("action %s changed JSON schema bytes: %s", field, storedSchema)
+		}
+	}
 	stored.Objectives[0] = "modified by reader"
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
+	stored.ActionDefinitions[0].Name = "modified by reader"
+	stored.ActionDefinitions[0].RequiredSecrets[0] = "CHANGED"
+	stored.ActionDefinitions[0].InputSchema[0] = '!'
+	stored.ActionDefinitions[0].OutputSchema[0] = '!'
 	stored.InputSchema[0] = '!'
 	stored.Rules[missions.AggregateResults].ForActions[0] = "modified by reader"
 	stored.Rules[missions.DecideNextActions].Params.DecisionBy = "modified by reader"
@@ -86,6 +106,7 @@ func TestMissionMongoStore(t *testing.T) {
 	updated := original.Clone()
 	updated.Objectives = []string{"Review before release"}
 	updated.OptionalActions, updated.Steps, updated.Rules = nil, nil, nil
+	updated.ActionDefinitions = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +140,14 @@ func TestMissionMongoStore(t *testing.T) {
 	items, err = catalog.List(ctx)
 	if err != nil || len(items) != 2 || !reflect.DeepEqual(items[1], other) {
 		t.Fatalf("upsert overwrote unrelated missions: %#v, error = %v", items, err)
+	}
+}
+
+func storedActionDefinition() actions.Definition {
+	return actions.Definition{
+		Name: "discover", Description: "Discover the requested target", RequiredSecrets: []string{"DISCOVERY_KEY"},
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993}}}`),
+		OutputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`),
 	}
 }
 

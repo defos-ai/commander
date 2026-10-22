@@ -93,11 +93,11 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's required and optional actions, rules, steps and input/output schemas. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; rules group results, request model review or constrain placement. same-agent keeps its for_actions on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, rules, steps and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; rules group results, request model review or constrain placement. same-agent keeps its for_actions on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
-	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, steps and rules. Objectives are an ordered, nonempty array of nonblank strings. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
+	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions, steps and rules. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -240,6 +240,22 @@ func createMissionSchema() string {
 	nonblank := map[string]any{"type": "string", "pattern": `\S`}
 	actionName := map[string]any{"type": "string", "pattern": `^\S(?:[\s\S]*\S)?$`}
 	actionNames := map[string]any{"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true}
+	actionSchema := map[string]any{
+		"type": "object", "required": []string{"type"},
+		"properties":  map[string]any{"type": map[string]any{"const": "object"}},
+		"description": "Locally resolvable JSON Schema explicitly declaring root type=object. External references are rejected.",
+	}
+	definition := objectSchema(map[string]any{
+		"name":        actionName,
+		"description": map[string]any{"type": []string{"string", "null"}},
+		"required_secrets": map[string]any{
+			"type": []string{"array", "null"}, "uniqueItems": true,
+			"items":       map[string]any{"type": "string", "pattern": `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`},
+			"description": "Managed secret names, never secret values.",
+		},
+		"input_schema":  actionSchema,
+		"output_schema": actionSchema,
+	}, "name", "input_schema", "output_schema")
 	step := objectSchema(map[string]any{
 		"id": nonblank, "objective": nonblank,
 		"agent_types":      map[string]any{"type": []string{"array", "null"}, "items": nonblank},
@@ -264,6 +280,10 @@ func createMissionSchema() string {
 			"description": "Actions required for execution, including capabilities not installed yet. Step requirements also participate in preflight.",
 		},
 		"optional_actions": actionNames,
+		"action_definitions": map[string]any{
+			"type": []string{"array", "null"}, "items": json.RawMessage(definition), "maxItems": 100,
+			"description": "Desired contracts, unique by name and referenced by required_actions, optional_actions or a step's required_actions. Definitions do not install actions, grant secrets or satisfy readiness.",
+		},
 		"starting_actions": map[string]any{
 			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
 			"description": "Initial action guidance. Each name must appear in required_actions; creation does not queue tasks.",

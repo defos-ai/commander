@@ -25,7 +25,7 @@ export default {
   createDescription: 'Save a reusable mission definition.',
   createSignIn: 'Sign in to create a mission on this connection.',
   definition: 'Mission definition (JSON)',
-  definitionHint: 'Set a name, objectives as a nonempty array of text, and input/output schemas. Add action names, steps and rules as needed. Keep secret values out of definitions.',
+  definitionHint: 'Set a name, objectives as a nonempty array of text, and input/output schemas. Add action names and definitions, steps and rules as needed. Keep secret values out of definitions.',
   creating: 'Saving mission…',
   cancel: 'Cancel',
   checkSaved: 'Check saved mission',

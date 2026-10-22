@@ -8,6 +8,40 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
+func ToActionDefinitions(requests []models.ActionDefinitionRequest) []actions.Definition {
+	if requests == nil {
+		return nil
+	}
+	definitions := make([]actions.Definition, len(requests))
+	for i, request := range requests {
+		definitions[i] = actions.Definition{
+			Name:            request.Name,
+			Description:     request.Description,
+			RequiredSecrets: slices.Clone(request.RequiredSecrets),
+			InputSchema:     bytes.Clone(request.InputSchema),
+			OutputSchema:    bytes.Clone(request.OutputSchema),
+		}
+	}
+	return definitions
+}
+
+func ToActionDefinitionResponses(definitions []actions.Definition) []models.ActionDefinitionResponse {
+	if definitions == nil {
+		return nil
+	}
+	responses := make([]models.ActionDefinitionResponse, len(definitions))
+	for i, definition := range definitions {
+		responses[i] = models.ActionDefinitionResponse{
+			Name:            definition.Name,
+			Description:     definition.Description,
+			RequiredSecrets: slices.Clone(definition.RequiredSecrets),
+			InputSchema:     bytes.Clone(definition.InputSchema),
+			OutputSchema:    bytes.Clone(definition.OutputSchema),
+		}
+	}
+	return responses
+}
+
 func ToActionResponse(action actions.Action) models.ActionResponse {
 	return models.ActionResponse{
 		Name:                action.Name,

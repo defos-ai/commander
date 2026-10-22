@@ -68,6 +68,10 @@
   search every entry and display entries with the same `catalog-tags` list as
   agent responsibilities. Mission steps
   retain their singular `objective`; do not accept the old root field as an alias.
+  Optional `action_definitions` contains static contracts with object schemas and
+  secret names, separate from live action status. Preserve definitions through
+  response validation and JSON readback; the shared API owns schema compilation,
+  name uniqueness and mission references. Defining a capability does not install it.
   Saving does not start work or require installed actions. Open the saved detail
   after success; offer readback for duplicates and uncertain outcomes without
   retrying writes. Discard drafts on page exit, reload or connection/session changes,

@@ -60,9 +60,16 @@ The body requires `name`, `objectives`, `input_schema` and `output_schema`.
 `objectives` contains one or more nonblank strings in presentation order.
 Names must be nonblank and cannot be `.` or `..`.
 It also accepts `required_actions`, `optional_actions`, `starting_actions`,
-`steps` and `rules`, using the same shape returned by mission detail queries.
+`action_definitions`, `steps` and `rules`, using the same shape returned by mission detail queries.
 The API validates the definition, schemas and rules without requiring a running
 controller or installed agents. Readiness is checked when executing an operation.
+
+Use `action_definitions` to describe up to 100 capabilities to implement: `name`,
+optional `description`, `input_schema`, `output_schema` and optional
+`required_secrets` names. Names must be unique and referenced by required or
+optional actions, or a step's required actions. Both action schemas must declare
+`"type": "object"`; references resolve locally. These contracts do not install
+actions, grant secrets or make an agent ready. Never include secret values.
 
 Success returns `201` with the saved mission and its detail URL in `Location`.
 An existing name returns `409 mission_exists`, even for identical content, and

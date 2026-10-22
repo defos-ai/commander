@@ -51,6 +51,12 @@
 - Mission `objectives` is an ordered, nonempty array of nonblank strings. Clone
   the array at snapshot boundaries and retain each entry through storage and
   transport. Planning steps keep their own singular `objective` field.
+- Optional mission `action_definitions` reuses `actions.Definition` for desired
+  capabilities. Keep at most 100 unique trimmed names, each referenced by required,
+  optional or step-required actions. Compile both explicit object schemas with
+  the shared action resolver. Deep-clone definitions, schema bytes and secret names
+  in mission/operation snapshots. Definitions do not register executors, grant
+  secrets, alter live inventory or satisfy preflight readiness.
 - Mission `required_actions` and step requirements participate in preflight;
   `optional_actions` describes expected capabilities and adds coverage only while
   its tasks are queued. Remove that extra coverage after dispatch/completion;
@@ -166,8 +172,9 @@
   validation and cloning through `Definition`; keep live requirement checks in
   `Action.Validate`. Metadata validation requires JSON-object schemas; typed
   executors additionally compile their schemas and validate execution data.
-  Reuse `action.ResolveSchema` to check explicit object schemas with the same
-  local reference, default and type validation as typed executors.
+  `actions.ResolveSchema` owns explicit object schema compilation, local reference,
+  default and type validation. Executors use it through `action.ResolveSchema`;
+  mission contracts use it directly, without importing the agent runtime.
   Constructors accept action metadata and may infer schemas later, so validate
   secret declarations separately before inference. Release `manifest.Action`
   remains a name/description summary.

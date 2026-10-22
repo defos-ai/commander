@@ -63,6 +63,11 @@
 - `create_mission` accepts a flat `missions.Mission` and shares its validation
   with the API and stores. Root `objectives` is a required ordered array of one
   or more nonblank strings; step guidance keeps singular `objective`.
+  Optional `action_definitions` contains up to 100 desired contracts, unique by
+  name and referenced by required/optional actions or step requirements. Advertise
+  strict contract fields and explicit root object-schema types; shared mission
+  validation resolves schemas locally. Definitions are metadata only, never
+  installed actions, secret values or readiness evidence.
   Invalid definitions are invalid-params errors;
   duplicate names are tool errors, including identical submissions. Call
   `MissionStore.Create` directly with a bounded context, never `Upsert` or an

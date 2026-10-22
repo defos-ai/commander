@@ -173,6 +173,8 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 	first := operations.Operation{ID: "00000000-0000-4000-8000-000000000001", Status: operations.Planning,
 		Input: json.RawMessage(`{}`),
 		Mission: missions.Mission{Name: "inspect", OptionalActions: []string{"publish"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
+			RequiredActions:   []string{"inspect"},
+			ActionDefinitions: storedMission().ActionDefinitions,
 			Rules: missions.RuleSet{
 				missions.AggregateResults:  {ForActions: []string{"discover"}},
 				missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -233,6 +235,10 @@ func TestOperationFilesSplitSnapshotsAndListOnlyOperations(t *testing.T) {
 			t.Fatalf("split records must reconstruct the complete operation: %+v, %v", stored, err)
 		}
 		stored.Mission.OptionalActions[0] = "changed"
+		stored.Mission.ActionDefinitions[0].Name = "changed"
+		stored.Mission.ActionDefinitions[0].RequiredSecrets[0] = "CHANGED"
+		stored.Mission.ActionDefinitions[0].InputSchema[0] = '['
+		stored.Mission.ActionDefinitions[0].OutputSchema[0] = '['
 		stored.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
 		stored.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	}

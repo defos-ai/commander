@@ -2,6 +2,22 @@ package models
 
 import "encoding/json"
 
+type ActionDefinitionRequest struct {
+	Name            string          `json:"name"`
+	Description     string          `json:"description,omitempty"`
+	RequiredSecrets []string        `json:"required_secrets,omitempty"`
+	InputSchema     json.RawMessage `json:"input_schema"`
+	OutputSchema    json.RawMessage `json:"output_schema"`
+}
+
+type ActionDefinitionResponse struct {
+	Name            string          `json:"name"`
+	Description     string          `json:"description"`
+	RequiredSecrets []string        `json:"required_secrets,omitempty"`
+	InputSchema     json.RawMessage `json:"input_schema"`
+	OutputSchema    json.RawMessage `json:"output_schema"`
+}
+
 type ActionResponse struct {
 	Name                string                      `json:"name"`
 	Description         string                      `json:"description"`
