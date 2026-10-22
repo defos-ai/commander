@@ -161,8 +161,10 @@ services:
 
   browser-agent:
     <<: *agent
-    image: ghcr.io/defos-ai/commander-browser-agent:v0.2.0
-    pull_policy: missing
+    image: commander-browser-agent:test
+    build:
+      context: https://github.com/defos-ai/commander-browser-agent.git#a793fbd1175fb58b04a4572b290c215d293b25c1
+      dockerfile: docker/Dockerfile
     shm_size: 256mb
     environment:
       <<: *environment
@@ -170,13 +172,14 @@ services:
 
   web-agent-1:
     <<: *agent
-    image: ghcr.io/defos-ai/commander-web-agent:v0.2.0
-    pull_policy: missing
+    image: commander-web-agent:test
+    build:
+      context: https://github.com/defos-ai/commander-web-agent.git#e17ffafd298cd4b6e46d2c61db6473aa90774ffd
+      dockerfile: docker/Dockerfile
 
   web-agent-2:
     <<: *agent
-    image: ghcr.io/defos-ai/commander-web-agent:v0.2.0
-    pull_policy: missing
+    image: commander-web-agent:test
 
   builder-agent:
     <<: *agent

@@ -22,8 +22,10 @@
 ## Shared stack and cleanup
 
 - Stack-backed API and MCP packages share state. Run them sequentially (`-p 1`
-  when combined). Web/browser images come from pinned standalone releases; their
-  own repositories run action and browser-specific suites.
+  when combined). Build web/browser test images from the exact standalone Git
+  commits pinned in both test Compose files; update those pins together. Their
+  own repositories run action and browser-specific suites. Keep publication in
+  those repositories; Commander CI only builds local test images.
 - The API/MCP stacks include a spawner and local HTTPS package fixture. FS uses
   native child processes; full-provider tests use a loopback registry and Docker
   sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;
