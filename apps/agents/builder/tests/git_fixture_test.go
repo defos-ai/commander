@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -32,11 +33,14 @@ type gitFixtureState struct {
 
 func TestMain(m *testing.M) {
 	name := filepath.Base(os.Args[0])
+	// These child modes only implement the fixture protocol. Skip the race
+	// runtime's one-second shutdown delay for every simulated tool invocation;
+	// the parent test process keeps its normal race-detector shutdown below.
 	if name == "codex" || name == "codex.exe" || name == "go" || name == "go.exe" {
-		os.Exit(runBuildFixture(strings.TrimSuffix(name, ".exe")))
+		syscall.Exit(runBuildFixture(strings.TrimSuffix(name, ".exe")))
 	}
 	if (name == "git" || name == "git.exe") && len(os.Args) > 1 && os.Args[1] == "-c" {
-		os.Exit(runGitFixture())
+		syscall.Exit(runGitFixture())
 	}
 	os.Exit(m.Run())
 }

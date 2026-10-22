@@ -28,14 +28,19 @@ const buildTestBinary = "commander-word-count-agent"
 func buildRequestedActions() []actionmodel.Definition {
 	return []actionmodel.Definition{{
 		Name: "count-words", Description: "Return the word count of supplied text",
-		RequiredSecrets: []string{"SERVICE_TOKEN"},
+		RequiredSecrets: []string{"SERVICE_TOKEN", "SERVICE_ACCOUNT"},
 		InputSchema:     json.RawMessage(`{"type":"object","$defs":{"text":{"type":"string","minLength":1}},"properties":{"text":{"$ref":"#/$defs/text"},"options":{"type":"object","properties":{"language":{"type":"string","default":"en"}},"additionalProperties":false}},"required":["text"],"additionalProperties":false,"x-contract":{"sample":9007199254740993,"type":"business-label"}}`),
 		OutputSchema:    json.RawMessage(`{"type":"object","properties":{"count":{"type":"integer","minimum":0}},"required":["count"],"additionalProperties":false}`),
+	}, {
+		Name: "describe-text", Description: "Describe supplied text",
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"description":{"type":"string"}},"required":["description"]}`),
 	}}
 }
 
 type buildFixtureConfig struct {
-	Source, Mode, Started, Calls, Home string
+	Source, Mode, Started, Calls, Home                    string
+	ProbeGo, ProbeWorkspace, ProbeModuleCache, ProbeCache string
 }
 
 func buildFixtureScope(t *testing.T, config buildFixtureConfig) *environment.DiscoveryScope {
@@ -206,10 +211,91 @@ func executeBuildFixture(tool string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(module)
 	}
+	if len(args) == 2 && args[0] == "run" && strings.HasPrefix(filepath.Base(args[1]), "action-contracts-") && strings.HasSuffix(args[1], ".go") {
+		return runBuildContractFixture(args[1], config)
+	}
 	if len(args) >= 3 && args[0] == "run" && args[1] == "./.github/scripts/release.go" {
 		return runReleaseFixture(args[2:], config)
 	}
 	return errors.New("unexpected Go verification command")
+}
+
+func runBuildContractFixture(probe string, config buildFixtureConfig) error {
+	if relative, err := filepath.Rel(config.Source, probe); err != nil || filepath.IsLocal(relative) || !filepath.IsAbs(probe) {
+		return errors.New("action contract probe must stay outside source")
+	}
+	program, err := os.ReadFile(probe)
+	if err != nil {
+		return err
+	}
+	if !bytes.Contains(program, []byte(`"example.invalid/fixture"`)) || !bytes.Contains(program, []byte("NewAgent(")) || !bytes.Contains(program, []byte("Describe(")) || bytes.Contains(program, []byte("Discover(")) {
+		return errors.New("action contract probe must inspect the generated agent without discovery")
+	}
+	if config.ProbeGo != "" {
+		return runRealContractProbe([]string{"run", probe}, config)
+	}
+	switch config.Mode {
+	case "contracts-wait":
+		if err := os.WriteFile(config.Started, []byte("started"), 0600); err != nil {
+			return err
+		}
+		time.Sleep(30 * time.Second)
+		return errors.New("cancelled contract probe kept running")
+	case "contracts-fail":
+		fmt.Fprintln(os.Stdout, buildTestSecret)
+		return errors.New("untrusted-sensitive-build-diagnostic: " + buildTestSecret)
+	case "contracts-malformed":
+		_, err := fmt.Fprint(os.Stdout, `{"actions": [untrusted-sensitive-build-diagnostic`)
+		return err
+	case "contracts-oversize":
+		_, err := fmt.Fprint(os.Stdout, strings.Repeat(" ", (1<<20)+1))
+		return err
+	}
+	definitions := buildRequestedActions()
+	switch config.Mode {
+	case "contracts-equivalent":
+		slices.Reverse(definitions)
+		slices.Reverse(definitions[1].RequiredSecrets)
+		// These equivalent spellings must not round the extension's large integer.
+		definitions[1].InputSchema = bytes.ReplaceAll(definitions[1].InputSchema, []byte("9007199254740993"), []byte("9007199254740993.0"))
+		definitions[1].InputSchema = bytes.ReplaceAll(definitions[1].InputSchema, []byte(`"business-label"`), []byte(`"business-\u006cabel"`))
+		definitions[1].OutputSchema = json.RawMessage(`{ "additionalProperties": false, "required": ["count"], "properties": {"count": {"minimum": 0.0, "type": "integer"}}, "type": "object" }`)
+	case "contracts-missing":
+		definitions = definitions[:1]
+	case "contracts-unexpected":
+		extra := definitions[1]
+		extra.Name = "unexpected-action"
+		definitions = append(definitions, extra)
+	case "contracts-duplicate":
+		definitions = append(definitions, definitions[0])
+	case "contracts-description":
+		definitions[0].Description = "A different description"
+	case "contracts-input-schema":
+		definitions[0].InputSchema = json.RawMessage(`{"type":"object"}`)
+	case "contracts-output-schema":
+		definitions[0].OutputSchema = json.RawMessage(`{"type":"object"}`)
+	case "contracts-number-precision":
+		definitions[0].InputSchema = bytes.ReplaceAll(definitions[0].InputSchema, []byte("9007199254740993"), []byte("9007199254740992"))
+	case "contracts-secret":
+		definitions[0].RequiredSecrets = []string{"DIFFERENT_TOKEN"}
+	case "contracts-duplicate-secret":
+		definitions[0].RequiredSecrets = []string{"SERVICE_TOKEN", "SERVICE_TOKEN", "SERVICE_ACCOUNT"}
+	}
+	value := map[string]any{"agent_type": buildTestAgentType, "actions": definitions}
+	if config.Mode == "contracts-wrong-agent" {
+		value["agent_type"] = "another-agent"
+	}
+	if config.Mode == "contracts-unknown-field" {
+		value["untrusted-sensitive-build-diagnostic"] = buildTestSecret
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(value); err != nil {
+		return err
+	}
+	if config.Mode == "contracts-trailing" {
+		_, err := fmt.Fprintln(os.Stdout, `{"untrusted-sensitive-build-diagnostic":true}`)
+		return err
+	}
+	return nil
 }
 
 func validateBuildPrompt(prompt []byte) error {
@@ -344,7 +430,12 @@ func runReleaseFixture(args []string, config buildFixtureConfig) error {
 	value := manifest.Manifest{SchemaVersion: 1, Type: buildTestAgentType, Version: "v0.1.0", Native: map[string]manifest.NativeAsset{}, Docker: &manifest.Docker{Image: image + "@" + args[6]}}
 	if config.Mode != "missing-package-descriptions" {
 		value.Responsibilities = []string{"Count words in supplied text"}
-		value.Actions = []manifest.Action{{Name: "count-words", Description: "Return the word count of supplied text"}}
+		for _, definition := range buildRequestedActions() {
+			value.Actions = append(value.Actions, manifest.Action{Name: definition.Name, Description: definition.Description})
+		}
+		if config.Mode == "stale-manifest-actions" {
+			value.Actions[0].Description = "Stale action description"
+		}
 	}
 	for _, goos := range []string{"linux", "darwin", "windows"} {
 		for _, arch := range []string{"amd64", "arm64"} {

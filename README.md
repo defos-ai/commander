@@ -2,18 +2,9 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: framework and runtime for distributed agents" width="100%">
 </p>
 
-**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions. Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
+**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions. 
 
-## Where to use it
-
-Use Commander for complex workflows that a single AI cannot reliably coordinate alone:
-
-- **Cybersecurity:** pen-testing, 2C infrastructure, SOC alert triage, and incident response.
-- **Investigations:** collect evidence, correlate sources, and build case timelines.
-- **Development:** implement features, test changes, and review code across repositories.
-- **Sales:** research prospects, qualify leads, prepare outreach, and update CRM records.
-- **IT operations:** diagnose incidents and run approved recovery steps.
-- **Data processing:** validate datasets, enrich records, and generate reports.
+Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
 ## Quick start
 
@@ -21,20 +12,15 @@ Each option opens Playground. Choose a model, enter its API key, and ask:
 
 > Review defos.ai
 
-Fresh sessions start with builder and spawner agents. Ask Commander to run a mission; it checks available actions and installs additional agents when needed.
-
 ### Docker
 
-Run all-in-one (AIO), with Chromium and Git available for agents you install:
+Run all-in-one (AIO):
 
 ```sh
 docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
-Admin UI is available at [locally](http://localhost:4275). View credentials with `/credentials` in Playground or run in another terminal:
-```
-docker exec commander commander credentials api
-```
+Admin UI is available at [locally](http://localhost:4275). 
 
 ### Binary
 
@@ -60,7 +46,7 @@ Other architectures: [Releases](https://github.com/defos-ai/commander/releases/l
 
 ### Source
 
-Docker Compose ([setup and teardown](docs/deployment.md#local-compose)):
+Docker Compose:
 
 ```sh
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground
@@ -73,14 +59,6 @@ go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-on
 ```
 
 See [Playground](apps/playground/README.md) for native dependencies and configuration.
-
-## How it works
-
-**Commander -> Controller -> Agent**
-
-- **Commander**, your AI client chooses the mission and what work is needed.
-- **Controller**, automates the workflow and assigns tasks to available agents.
-- **Agent**, executes actions and returns results and evidence.
 
 ## Explore the project
 

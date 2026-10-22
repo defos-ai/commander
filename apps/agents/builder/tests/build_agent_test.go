@@ -75,10 +75,46 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	if len(lines) != 6 || !strings.HasPrefix(lines[0], "codex exec ") || lines[1] != "go test -count=1 -timeout=2m ./..." || !strings.HasPrefix(lines[2], "go build -o ") || lines[3] != "go mod edit -json" || !strings.HasPrefix(lines[4], "go run ./.github/scripts/release.go metadata ") || !strings.HasPrefix(lines[5], "go run ./.github/scripts/release.go manifest ") {
+	if len(lines) != 7 || !strings.HasPrefix(lines[0], "codex exec ") || lines[1] != "go test -count=1 -timeout=2m ./..." || !strings.HasPrefix(lines[2], "go build -o ") || lines[3] != "go mod edit -json" || !strings.HasPrefix(lines[4], "go run ./.github/scripts/release.go metadata ") || !strings.HasPrefix(lines[5], "go run ./.github/scripts/release.go manifest ") || !strings.HasPrefix(filepath.Base(strings.TrimPrefix(lines[6], "go run ")), "action-contracts-") || !strings.HasSuffix(lines[6], ".go") {
 		t.Fatalf("build did not verify before exporting: %q", calls)
 	}
 	assertBuildScratchRemoved(t, config)
+}
+
+func TestBuildAgentVerifiesRegisteredActionContracts(t *testing.T) {
+	for _, mode := range []string{
+		"contracts-equivalent", "contracts-missing", "contracts-unexpected", "contracts-duplicate",
+		"contracts-description", "contracts-input-schema", "contracts-output-schema", "contracts-number-precision",
+		"contracts-secret", "contracts-duplicate-secret", "contracts-wrong-agent", "contracts-malformed",
+		"contracts-trailing", "contracts-unknown-field", "contracts-oversize", "contracts-fail",
+	} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			root, workspaceID := buildWorkspace(t)
+			executor, config, _ := buildExecutor(t, root, workspaceID, mode)
+			result, err := executor.Run(buildSecretContext(t), buildInput(t, workspaceID))
+			if mode == "contracts-equivalent" {
+				if err != nil || len(result.Artifacts) != 1 {
+					t.Fatalf("equivalent registered contracts did not produce source: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("build accepted invalid or mismatched registered action contracts")
+				}
+				if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 || strings.Contains(err.Error(), buildTestSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") || strings.Contains(err.Error(), root) {
+					t.Fatalf("rejected contracts exposed output or raw diagnostics: %v", err)
+				}
+			}
+			calls, err := os.ReadFile(config.Calls)
+			if err != nil || strings.Count(string(calls), "\n") != 7 {
+				t.Fatalf("contracts were not checked after ordinary build and release validation: %s (%v)", calls, err)
+			}
+			if _, err := os.Stat(filepath.Join(config.Source, "README.md")); err != nil {
+				t.Fatal("contract verification removed the source needed for correction")
+			}
+			assertBuildScratchRemoved(t, config)
+		})
+	}
 }
 
 func TestBuildAgentRejectsInvalidActionContractsBeforeExecution(t *testing.T) {
@@ -221,7 +257,7 @@ func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				wantCalls := 6
+				wantCalls := 7
 				if mode == "fail" {
 					wantCalls = 1
 				} else if mode == "test-fail" {
@@ -247,6 +283,7 @@ func TestBuildAgentRejectsSourceThatCannotRelease(t *testing.T) {
 		{"local-replace", "local replace directive"},
 		{"unguarded-release", "initial commit guard"},
 		{"missing-package-descriptions", "responsibilities and actions"},
+		{"stale-manifest-actions", "action"},
 	} {
 		t.Run(scenario.mode, func(t *testing.T) {
 			root, workspaceID := buildWorkspace(t)
@@ -323,12 +360,31 @@ func TestBuildAgentRejectsUnsafeWorkspacesAndMissingTools(t *testing.T) {
 }
 
 func TestBuildAgentCancellationPreservesCheckout(t *testing.T) {
+	for _, stage := range []struct {
+		mode  string
+		calls int
+	}{{"wait", 1}, {"contracts-wait", 7}} {
+		t.Run(stage.mode, func(t *testing.T) {
+			testBuildAgentCancellation(t, stage.mode, stage.calls)
+		})
+	}
+}
+
+func testBuildAgentCancellation(t *testing.T, mode string, expectedCalls int) {
+	t.Helper()
 	root, workspaceID := buildWorkspace(t)
-	executor, config, _ := buildExecutor(t, root, workspaceID, "wait")
+	executor, config, _ := buildExecutor(t, root, workspaceID, mode)
 	ctx, cancel := context.WithCancel(buildSecretContext(t))
 	defer cancel()
-	finished := make(chan error, 1)
-	go func() { _, err := executor.Run(ctx, buildInput(t, workspaceID)); finished <- err }()
+	type outcome struct {
+		result action.Result
+		err    error
+	}
+	finished := make(chan outcome, 1)
+	go func() {
+		result, err := executor.Run(ctx, buildInput(t, workspaceID))
+		finished <- outcome{result, err}
+	}()
 	stopped := false
 	t.Cleanup(func() {
 		cancel()
@@ -341,7 +397,7 @@ func TestBuildAgentCancellationPreservesCheckout(t *testing.T) {
 			t.Error("cancelled build did not stop during cleanup")
 		}
 	})
-	deadline := time.NewTimer(5 * time.Second)
+	deadline := time.NewTimer(15 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
@@ -350,26 +406,29 @@ func TestBuildAgentCancellationPreservesCheckout(t *testing.T) {
 			break
 		}
 		select {
-		case err := <-finished:
+		case result := <-finished:
 			stopped = true
-			t.Fatalf("build stopped before cancellation: %v", err)
+			t.Fatalf("build stopped before cancellation: %v", result.err)
 		case <-deadline.C:
-			t.Fatal("Codex fixture did not start")
+			t.Fatal("build stage fixture did not start")
 		case <-tick.C:
 		}
 	}
 	cancel()
 	select {
-	case err := <-finished:
+	case result := <-finished:
 		stopped = true
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("build lost cancellation: %v", err)
+		if !errors.Is(result.err, context.Canceled) {
+			t.Fatalf("build lost cancellation: %v", result.err)
+		}
+		if len(result.result.Artifacts) != 0 || len(result.result.Output) != 0 || len(result.result.NextActions) != 0 {
+			t.Fatal("cancelled build returned source or output")
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("Codex child did not stop")
+		t.Fatal("build child did not stop")
 	}
 	calls, err := os.ReadFile(config.Calls)
-	if err != nil || strings.Count(string(calls), "\n") != 1 {
+	if err != nil || strings.Count(string(calls), "\n") != expectedCalls {
 		t.Fatal("cancelled build ran later verification stages")
 	}
 	if _, err := os.Stat(filepath.Join(config.Source, "README.md")); err != nil {

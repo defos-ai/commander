@@ -19,6 +19,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/releaseworkflow"
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -34,7 +35,7 @@ const releaseCheckRepository = "release-check/generated-agent"
 // ValidateRelease exercises the generated release helper and manifest against
 // synthetic assets. These checks complement local tests; they do not run CI or
 // establish that the eventual binaries or Docker image have been published.
-func ValidateRelease(ctx context.Context, goTool, source, scratch string, env []string) (PackageMetadata, error) {
+func ValidateRelease(ctx context.Context, goTool, source, scratch string, env []string, definitions []actions.Definition) (PackageMetadata, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
@@ -95,7 +96,7 @@ func ValidateRelease(ctx context.Context, goTool, source, scratch string, env []
 	if metadata.Version != releaseCheckVersion || metadata.Type != agentType || metadata.Binary != binary || metadata.Image != image || !filepath.IsLocal(metadata.Binary) || filepath.Base(metadata.Binary) != metadata.Binary {
 		return PackageMetadata{}, errors.New("release helper metadata must match AgentType, commander-<type> binary and the requested repository owner")
 	}
-	if err := validateReleaseManifest(ctx, goTool, source, scratch, env, agentType, binary, image); err != nil {
+	if err := validateReleaseManifest(ctx, goTool, source, scratch, env, agentType, binary, image, definitions); err != nil {
 		return PackageMetadata{}, err
 	}
 	return PackageMetadata{AgentType: agentType, ModulePath: module, Binary: binary}, nil
@@ -196,7 +197,7 @@ func decodeReleaseJSON(data []byte, out any, strict bool) error {
 	return nil
 }
 
-func validateReleaseManifest(ctx context.Context, goTool, source, scratch string, env []string, agentType, binary, image string) error {
+func validateReleaseManifest(ctx context.Context, goTool, source, scratch string, env []string, agentType, binary, image string, definitions []actions.Definition) error {
 	// Keep placeholders outside the exported source and remove them after this
 	// check. Their checksums test packaging, never represent native executables.
 	assets, err := os.MkdirTemp(scratch, "release-check-")
@@ -252,6 +253,18 @@ func validateReleaseManifest(ctx context.Context, goTool, source, scratch string
 	}
 	if len(result.Responsibilities) == 0 || len(result.Actions) == 0 {
 		return errors.New("agent.yaml must describe the agent's responsibilities and actions before release")
+	}
+	if len(result.Actions) != len(definitions) {
+		return errors.New("agent.yaml action summaries must match the requested action contracts")
+	}
+	summaries := make(map[string]string, len(result.Actions))
+	for _, action := range result.Actions {
+		summaries[action.Name] = action.Description
+	}
+	for _, definition := range definitions {
+		if description, exists := summaries[definition.Name]; !exists || description != definition.Description {
+			return errors.New("agent.yaml action summaries must match the requested action contracts")
+		}
 	}
 	for platform, asset := range expected {
 		if result.Native[platform] != asset {

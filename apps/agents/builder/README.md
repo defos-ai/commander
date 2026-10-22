@@ -64,8 +64,12 @@ before running Codex and includes them in its instructions. Secret names describ
 what the generated agent needs; secret values use the managed-secret form.
 
 It uses the managed `CODEX_API_KEY`, runs Codex and Go tests/build, then checks
-the release structure inherited from the template. It returns the workspace ID,
-source file count, agent type, module path, binary name and a `source.tar.gz`
+the release structure and the actions registered by the generated agent. Registered
+names, descriptions, input/output schemas and required secret names must match
+the requested contracts. Inspection calls the constructor without discovery or
+task execution; the generated agent's secret values are not needed.
+It returns the workspace ID, source file count, agent type, module path,
+binary name and a `source.tar.gz`
 artifact. Supply the key through Playground's secret form or Admin's agent
 secrets page; never put it in the instructions. The bundled `build-agent` mission
 connects checkout and build with a `same-agent` rule and model review after each
@@ -74,9 +78,11 @@ the action contracts before checkout and passes them unchanged to `build-agent`.
 Publication and release are optional actions in that mission.
 
 The structure check validates the agent identity, module and manifest against
-the template's release entry points. A failed check preserves the workspace for
-revision. It needs no GitHub token and does not publish anything. It does not
-prove that all six native platforms, Docker builds or GitHub release jobs will
+the template's release entry points, including the requested action summaries.
+A failed check preserves the workspace for revision and returns no source artifact.
+Contract matching checks declarations; the generated agent's tests still need to
+cover its behavior. Verification needs no GitHub token and does not publish anything.
+It does not prove that all six native platforms, Docker builds or GitHub release jobs will
 succeed; those checks run when the agent is released.
 
 ## Publish source

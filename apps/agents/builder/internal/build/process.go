@@ -83,8 +83,10 @@ Run ordinary Go tests and fix failures. Do not run tagged integration tests, con
 live application services, publish, push, deploy or start the agent. Do not read or
 write credentials, environment files, or authentication configuration. Use only
 this checkout for source files. Never include secret values in source or output.
-The host will independently run go test, go build and release structure checks,
-then archive the source.
+The host will independently run go test, go build and release structure checks.
+It will call NewAgent with an injected artifact store, without discovery or serving,
+and compare the registered actions with these contracts before archiving source.
+Keep NewAgent(agent.AgentConfig) free of provider startup and secret requirements.
 
 Requested agent:
 ` + instructions + "\n\nRequested action contracts (JSON):\n" + string(contracts)
@@ -98,12 +100,16 @@ func RunCommand(ctx context.Context, stage, executable, source string, env []str
 // CommandOutput reads bounded structured metadata without exposing tool output
 // in errors. The caller still validates every returned field before using it.
 func CommandOutput(ctx context.Context, stage, executable, source string, env []string, args ...string) ([]byte, error) {
-	var output commandOutput
+	return readCommandOutput(ctx, stage, executable, source, env, 64<<10, args...)
+}
+
+func readCommandOutput(ctx context.Context, stage, executable, source string, env []string, limit int, args ...string) ([]byte, error) {
+	output := commandOutput{limit: limit}
 	if err := runCommand(ctx, stage, executable, source, env, nil, &output, args...); err != nil {
 		return nil, err
 	}
 	if output.overflow {
-		return nil, fmt.Errorf("%s output exceeds 64 KiB; fix its structured output", stage)
+		return nil, fmt.Errorf("%s output exceeds %d KiB; fix its structured output", stage, limit/1024)
 	}
 	return bytes.Clone(output.buffer.Bytes()), nil
 }
@@ -133,11 +139,12 @@ func runCommand(ctx context.Context, stage, executable, source string, env []str
 type commandOutput struct {
 	buffer   bytes.Buffer
 	overflow bool
+	limit    int
 }
 
 func (b *commandOutput) Write(data []byte) (int, error) {
 	count := len(data)
-	remaining := (64 << 10) - b.buffer.Len()
+	remaining := b.limit - b.buffer.Len()
 	if count > remaining {
 		b.overflow = true
 		data = data[:remaining]

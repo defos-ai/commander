@@ -23,7 +23,7 @@ import (
 )
 
 const BuildAgentName = "build-agent"
-const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in a workspace returned by checkout-template on this builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then validate generated identity and release structure locally and return its source archive and package metadata. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
+const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in a workspace returned by checkout-template on this builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with the same-agent rule. Requires the managed CODEX_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
 
 type BuildAgentInput struct {
 	WorkspaceID  string                   `json:"workspace_id"`
@@ -200,8 +200,14 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
 		return action.Result{}, err
 	}
-	metadata, err := build.ValidateRelease(ctx, tools.goTool, source, scratch, env)
+	metadata, err := build.ValidateRelease(ctx, tools.goTool, source, scratch, env, input.Actions)
 	if err != nil {
+		return action.Result{}, err
+	}
+	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
+		return action.Result{}, err
+	}
+	if err := build.ValidateRegistration(ctx, tools.goTool, source, scratch, env, metadata, input.Actions); err != nil {
 		return action.Result{}, err
 	}
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {

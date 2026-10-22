@@ -31,7 +31,8 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   mission's instructions and actions unchanged into the build continuation.
   Declared secret names belong to the generated agent, not builder readiness;
   only managed `CODEX_API_KEY` gates this action. It runs Codex and Go
-  tests/build, validates the generated release structure, and exports
+  tests/build, validates the generated release structure and actual registration,
+  and exports
   `source.tar.gz` through the normal artifact runtime. Its successful output
   records the generated `agent_type`, `module_path` and `binary` alongside the
   workspace ID and source count.
@@ -123,6 +124,20 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   program, an import derived from the generated module, and a clean environment.
   The built-in package generator uses these same exports and shared action
   description constants. Never derive metadata from discovery or runtime secrets.
+- Before exporting source, use a temporary Go probe outside the checkout to call
+  the generated module's `NewAgent(agent.AgentConfig)` with explicit host metadata
+  and an artifact store that rejects access. Inspect `Describe().Actions`; never
+  call discovery, serving or action execution, and never require generated-agent
+  secret values. Use exclusive temporary files because Codex can write scratch.
+  Project static wire fields rather than trusting release summaries. Match the
+  constructed type to the package identity, require the exact requested action set,
+  descriptions, input/output schemas and required secret names, and reject stale
+  manifest names/descriptions too. Compare schemas structurally without float64:
+  ignore object order, whitespace and equivalent numeric spellings; retain array
+  order and extension fields. Secret-name and action-list order are insignificant.
+  Keep child output bounded to 1 MiB, inspection bounded to two minutes, diagnostics
+  redacted and the probe out of artifacts. Failures preserve source and return no
+  artifacts. Constructor inspection checks declarations, not implementation behavior.
 - Workspace storage is local to the owning builder. The bundled `build-agent`
   mission binds checkout and build with the controller's `same-agent` rule.
   Do not route a workspace to another builder or duplicate affinity in the action.
