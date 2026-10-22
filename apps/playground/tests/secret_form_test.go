@@ -184,6 +184,15 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	if strings.Contains(u.model.View(), "Agent secrets") || writes.Load() != 0 {
 		t.Fatal("cleared requirement stayed open or saved a discarded value")
 	}
+	// Clearing requirements schedules a preflight or completion review. Let it
+	// finish before teardown cancels the model request inspected by the fixture.
+	review := "Ready preflight reviewed"
+	if runtime {
+		review = "Operation reviewed"
+	}
+	u.wait("review after secret requirements clear", func(view string) bool {
+		return strings.Contains(view, review) && !strings.Contains(view, "Thinking")
+	})
 }
 
 func TestSecretFormDoesNotOverwriteAvailableValues(t *testing.T) {
