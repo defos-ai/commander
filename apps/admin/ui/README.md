@@ -16,10 +16,13 @@ or drag and zoom to explore. Artifact details offer image/text previews (up to
 
 ## Create missions
 
-Open **Missions → Create mission** to edit or paste a JSON definition on its own page.
-Use **All missions** to return to the catalog. Set a name,
-an `objectives` array with one or more nonblank entries, and input/output schemas;
-add action names, steps and rules as needed. Objectives use the same labels as agent responsibilities.
+Open **Missions → Create mission**. Set a name and objectives, then search registered
+actions and choose **Required** or **Optional**. Mark required actions as starting
+actions when they should begin the work. Inspect an action for its readiness and schemas.
+Use **Advanced settings** for schemas, rules, planning steps and action definitions,
+or switch to **JSON** to edit the full definition. Switching views preserves schema
+numbers, string escapes and fields you have not changed. Use **All missions** to
+return to the catalog.
 The API validates the definition. Actions can be installed later, and saving
 does not start an operation. Keep secret values out of definitions.
 

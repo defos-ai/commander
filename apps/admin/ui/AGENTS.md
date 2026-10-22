@@ -61,6 +61,17 @@
   and create-only name conflicts. The dedicated `create-mission` workspace route
   highlights Missions and returns to the catalog via **All missions**. Keep it
   separate from mission-name routes so names such as `new` and `create` still work.
+  Creation opens in **Form** with a name, ordered objectives and a searchable live
+  action picker. Starting actions must be required; changing their role removes
+  their starting selection. Retain selected names when agents disappear or catalog
+  reads fail, and allow saving without installed actions. Inspect uses independent
+  `/agents` snapshots for per-agent readiness, labels stale reports, and never infers
+  operation preflight or reserved capacity. Report failures must not block authoring.
+  **Advanced settings** exposes schemas, rules, steps and action definitions as raw
+  JSON; **JSON** edits the full document. Patch only changed top-level values when
+  moving from Form to JSON or submitting. Preserve untouched fields, numeric tokens
+  and string escapes; reject unrepresentable JSON-to-Form transitions without
+  altering the source. Keep invalid advanced drafts editable and block submission.
   Keep the JSON editor's text unchanged when
   submitting so large schema numbers retain precision. Validate syntax and the
   required fields locally; the shared API validator owns mission semantics.

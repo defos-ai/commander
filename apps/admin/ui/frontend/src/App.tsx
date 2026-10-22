@@ -66,7 +66,7 @@ export function App() {
   useEffect(() => {
     if (modal || !focusAfterTransition.current) return;
     const editor = active && section === 'create-mission'
-      ? document.querySelector<HTMLElement>('.mission-create-form textarea:not(:disabled)') : null;
+      ? document.querySelector<HTMLElement>('.mission-create-form [data-initial-focus]:not(:disabled)') : null;
     (editor ?? document.querySelector<HTMLElement>(active ? '.workspace-main' : '#connections-heading'))?.focus();
     focusAfterTransition.current = false;
   }, [route, active, modal]);

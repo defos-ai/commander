@@ -161,7 +161,7 @@ describe('location navigation', () => {
     const creationHash = window.location.hash;
     await signIn();
 
-    let editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
+    let editor = screen.getByRole('textbox', { name: 'Mission name' });
     expect(editor).toHaveFocus();
     expect(window.location.hash).toBe(creationHash);
     expect(creationHash).toBe(`#/connections/${connection.id}/create-mission`);
@@ -169,29 +169,31 @@ describe('location navigation', () => {
     expect(within(screen.getByRole('navigation', { name: 'Workspace navigation' })).getByRole('button', { name: 'Missions' }))
       .toHaveAttribute('aria-current', 'page');
     const savedConnections = localStorage.getItem(CONNECTIONS_STORAGE_KEY);
-    fireEvent.change(editor, { target: { value: JSON.stringify({ ...mission, name: 'private-draft' }) } });
+    fireEvent.change(editor, { target: { value: 'private-draft' } });
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
     expect(await screen.findByRole('heading', { name: 'Missions', level: 1 })).toBeVisible();
     expect(window.location.hash).toBe(`#/connections/${connection.id}/missions`);
     act(() => { window.history.back(); });
-    editor = await screen.findByRole('textbox', { name: 'Mission definition (JSON)' });
+    editor = await screen.findByRole('textbox', { name: 'Mission name' });
     expect(window.location.hash).toBe(creationHash);
-    expect(JSON.parse((editor as HTMLTextAreaElement).value).name).toBe('');
+    expect(editor).toHaveValue('');
     act(() => { window.history.forward(); });
     expect(await screen.findByRole('heading', { name: 'Missions', level: 1 })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
     expect(await screen.findByRole('heading', { name: 'Create mission', level: 1 })).toBeVisible();
     first.unmount();
     render(<App />);
-    editor = await screen.findByRole('textbox', { name: 'Mission definition (JSON)' });
+    editor = await screen.findByRole('textbox', { name: 'Mission name' });
     expect(window.location.hash).toBe(creationHash);
-    expect(JSON.parse((editor as HTMLTextAreaElement).value).name).toBe('');
+    expect(editor).toHaveValue('');
     expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).toBe(savedConnections);
     expect(JSON.stringify({ ...localStorage })).not.toContain('private-draft');
     expect(window.location.href).not.toContain('private-draft');
     expect(fetch.mock.calls.filter(([url, init]) => init?.method === 'POST' && upstreamURL(url).endsWith('/api/v1/missions'))).toHaveLength(0);
 
     const created = { ...mission, name: 'custom-review' };
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
     fireEvent.change(editor, { target: { value: JSON.stringify(created) } });
     fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
     expect(await screen.findByRole('heading', { name: created.name, level: 1 })).toBeVisible();

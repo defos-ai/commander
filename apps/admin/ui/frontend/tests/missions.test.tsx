@@ -1,7 +1,7 @@
 import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Mission } from '../src/api/types';
+import type { Action, Mission } from '../src/api/types';
 import { MissionsPage } from '../src/pages/MissionsPage';
 import { CreateMissionPage } from '../src/pages/CreateMissionPage';
 
@@ -25,9 +25,16 @@ const mission: Mission = {
   },
 };
 const otherMission: Mission = { ...mission, name: 'review-service', objectives: ['Check service availability.'] };
+const registeredActions: Action[] = [
+  { name: 'discover-pages', description: 'Discover website pages.', status: 'ready', input_schema: { type: 'object' }, output_schema: { type: 'object' } },
+  { name: 'check-links', description: 'Check HTTP links.', status: 'ready', input_schema: { type: 'object' }, output_schema: { type: 'object' } },
+  { name: 'capture-page', description: 'Capture a screenshot.', status: 'unavailable', status_reason: 'Browser is not configured.',
+    input_schema: { type: 'object' }, output_schema: { type: 'object' } },
+];
 
 function mockAPI(respond?: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    if (upstreamURL(input).endsWith('/api/v1/actions')) return Response.json({ items: registeredActions });
     if (respond) return respond(upstreamURL(input), init);
     return upstreamURL(input).endsWith('/api/v1/missions')
       ? Response.json({ items: [mission, otherMission] }) : Response.json(mission);
@@ -40,6 +47,11 @@ function deferredResponse() {
   let resolve!: (response: Response) => void;
   const promise = new Promise<Response>(complete => { resolve = complete; });
   return { promise, resolve };
+}
+
+function creationJSONEditor() {
+  fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+  return screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
 }
 
 describe('missions browser', () => {
@@ -284,6 +296,99 @@ describe('missions browser', () => {
     expect(calls).toBe(2);
   });
 
+  it('builds a mission from objectives and registered action roles without requiring readiness', async () => {
+    const onSelect = vi.fn();
+    const fetch = mockAPI((_url, init) => init.method === 'POST'
+      ? Response.json(JSON.parse(init.body as string), { status: 201 }) : Response.json({ items: [] }));
+    render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={onSelect} />);
+    expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Remove objective 1' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mission name' }), { target: { value: 'guided-review' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Objective 1' }), { target: { value: 'Find public pages.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add objective' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Objective 2' }), { target: { value: 'Capture release evidence.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add objective' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove objective 3' }));
+
+    const discover = await screen.findByRole('combobox', { name: 'Role for discover-pages' });
+    const starting = screen.getByRole('checkbox', { name: 'Start with discover-pages' });
+    expect(starting).toBeDisabled();
+    fireEvent.change(discover, { target: { value: 'required' } });
+    fireEvent.click(starting);
+    expect(starting).toBeChecked();
+    fireEvent.change(discover, { target: { value: 'optional' } });
+    expect(starting).not.toBeChecked();
+    expect(starting).toBeDisabled();
+    fireEvent.change(discover, { target: { value: 'required' } });
+    fireEvent.click(starting);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search actions' }), { target: { value: 'screenshot' } });
+    expect(screen.queryByRole('combobox', { name: 'Role for discover-pages' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Role for capture-page' }), { target: { value: 'optional' } });
+    expect(screen.getByRole('checkbox', { name: 'Start with capture-page' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search actions' }), { target: { value: '' } });
+    expect(screen.getByRole('checkbox', { name: 'Start with discover-pages' })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalledExactlyOnceWith('guided-review'));
+    const posts = fetch.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(posts[0][1]!.body as string)).toMatchObject({
+      name: 'guided-review', objectives: ['Find public pages.', 'Capture release evidence.'],
+      required_actions: ['discover-pages'], optional_actions: ['capture-page'], starting_actions: ['discover-pages'],
+    });
+  });
+
+  it('preserves advanced JSON through form edits and rejects invalid mode transitions without losing text', async () => {
+    const steps = [{ id: 'check', objective: 'Review the page.', agent_types: ['web-agent'], required_actions: ['check-links'] }];
+    const definitions = [{ name: 'capture-page', description: 'Capture requested evidence.',
+      input_schema: { type: 'object' }, output_schema: { type: 'object' }, required_secrets: ['SITE_TOKEN'] }];
+    const source = JSON.stringify({ ...mission, steps, action_definitions: definitions })
+      .replace('"default":3', String.raw`"const":9007199254740993,"description":"\u0061\\path"`);
+    const fetch = mockAPI();
+    render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={vi.fn()} />);
+    fireEvent.change(creationJSONEditor(), { target: { value: source } });
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveValue(mission.name);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mission name' }), { target: { value: 'edited-review' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Objective 2' }), { target: { value: 'Keep ordered evidence.' } });
+    fireEvent.click(screen.getByText('Advanced settings', { selector: 'summary' }));
+    const schema = screen.getByRole('textbox', { name: 'Input schema (JSON)' });
+    const schemaText = (schema as HTMLTextAreaElement).value;
+    expect(schemaText).toContain('9007199254740993');
+    expect(schemaText).toContain(String.raw`"\u0061\\path"`);
+    fireEvent.change(schema, { target: { value: '{invalid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter valid JSON with the expected field types in the advanced settings.');
+    expect(schema).toHaveValue('{invalid');
+    expect(screen.getByRole('button', { name: 'Form' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(schema, { target: { value: schemaText } });
+    const editor = creationJSONEditor();
+    const edited = (editor as HTMLTextAreaElement).value;
+    expect(edited).toContain('9007199254740993');
+    expect(edited).toContain(String.raw`"\u0061\\path"`);
+    expect(JSON.parse(edited)).toMatchObject({ name: 'edited-review', objectives: [mission.objectives[0], 'Keep ordered evidence.'],
+      rules: mission.rules, steps, action_definitions: definitions });
+    fireEvent.change(editor, { target: { value: '{invalid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('This definition cannot be shown in the form. Check its field types or continue editing JSON.');
+    expect(editor).toHaveValue('{invalid');
+    expect(screen.getByRole('button', { name: 'JSON' })).toHaveAttribute('aria-pressed', 'true');
+    expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+  });
+
+  it('still saves JSON when the action catalog cannot be loaded', async () => {
+    const onSelect = vi.fn();
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => init.method === 'POST'
+      ? Response.json(mission, { status: 201 }) : new Response(null, { status: 503 }));
+    vi.stubGlobal('fetch', fetch);
+    render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={onSelect} />);
+    await screen.findByRole('alert');
+    fireEvent.change(creationJSONEditor(), { target: { value: JSON.stringify(mission) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
+    await waitFor(() => expect(onSelect).toHaveBeenCalledExactlyOnceWith(mission.name));
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
   it('focuses the definition, preserves rejected drafts and creates only after an explicit corrected submission', async () => {
     const created = { ...mission, name: 'custom-review' };
     const rejectedDraft = JSON.stringify({ ...created, optional_actions: 'capture-page' });
@@ -297,7 +402,7 @@ describe('missions browser', () => {
     });
     const onSelect = vi.fn();
     render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={onSelect} />);
-    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
+    const editor = creationJSONEditor();
     expect(editor).toHaveFocus();
     expect(JSON.parse((editor as HTMLTextAreaElement).value).objectives).toEqual(['']);
     fireEvent.change(editor, { target: { value: '{invalid json' } });
@@ -329,7 +434,7 @@ describe('missions browser', () => {
     });
     const onSelect = vi.fn();
     render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={onSelect} />);
-    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
+    const editor = creationJSONEditor();
     fireEvent.change(editor, { target: { value: JSON.stringify(created) } });
     fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
 
@@ -361,7 +466,7 @@ describe('missions browser', () => {
       { connection: nextConnection, credentials: { ...credentials, url: nextConnection.url } },
     ];
     for (const [index, next] of sessions.entries()) {
-      const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
+      const editor = creationJSONEditor();
       expect(JSON.parse((editor as HTMLTextAreaElement).value).name).toBe('');
       fireEvent.change(editor, { target: { value: JSON.stringify({ ...mission, name: 'abandoned-review' }) } });
       fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
@@ -369,7 +474,8 @@ describe('missions browser', () => {
 
       view.rerender(<CreateMissionPage {...next} {...callbacks} />);
       expect(signals[index].aborted).toBe(true);
-      const resetEditor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' });
+      expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveValue('');
+      const resetEditor = creationJSONEditor();
       expect(JSON.parse((resetEditor as HTMLTextAreaElement).value).name).toBe('');
       expect(resetEditor).toBeEnabled();
       await act(async () => pending[index].resolve(Response.json({ ...mission, name: 'abandoned-review' }, { status: 201 })));
@@ -391,7 +497,7 @@ describe('missions browser', () => {
     const onBack = vi.fn();
     const onSelect = vi.fn();
     const view = render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={onBack} onSelect={onSelect} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Mission definition (JSON)' }), { target: { value: JSON.stringify(mission) } });
+    fireEvent.change(creationJSONEditor(), { target: { value: JSON.stringify(mission) } });
     fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
     await screen.findByText('Saving mission…');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
