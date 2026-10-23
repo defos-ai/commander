@@ -21,18 +21,20 @@ type config struct {
 
 func parseConfig(args []string, output io.Writer) (config, error) {
 	var result config
-	flags := flag.NewFlagSet("commander-ui", flag.ContinueOnError)
-	flags.SetOutput(output)
+	flags := flag.NewFlagSet("commander-admin serve", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port (UI_LISTEN_ADDRESS, then :$PORT, then :4275)")
 	flags.StringVar(&result.staticDir, "static-dir", "", "Override frontend directory (UI_STATIC_DIR; default bundled frontend, or ./frontend/dist in source builds)")
 	flags.StringVar(&result.connections.PublicOrigin, "public-origin", "", "Public UI origin behind an HTTPS reverse proxy (UI_PUBLIC_ORIGIN; otherwise use request origin)")
 	flags.StringVar(&result.connections.APIUpstreams, "api-upstreams", "", "Backend API routing as host:port=host:port pairs separated by commas (UI_API_UPSTREAMS; default direct)")
-	flags.Usage = func() {
-		fmt.Fprintln(output, "Usage: commander-ui [flags]")
-		fmt.Fprintln(output, "Serve the Commander admin frontend.")
-		flags.PrintDefaults()
-	}
+	flags.Usage = func() {}
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(output, "Usage: commander-admin serve [flags]")
+			fmt.Fprintln(output, "Serve the Admin UI; connect to an API in your browser.")
+			flags.SetOutput(output)
+			flags.PrintDefaults()
+		}
 		return config{}, err
 	}
 	if flags.NArg() != 0 {

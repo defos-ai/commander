@@ -12,6 +12,8 @@
   `backend/connections/` handles sessions, upstream mapping and the API proxy.
 - [../docker/Dockerfile](../docker/Dockerfile) embeds the built frontend in the Go server
   with `-tags embed_ui`; it needs no separate asset directory at runtime.
+- `../cmd/commander-admin` is the shared binary entry point. Its `serve` command
+  delegates to `backend/cli`; do not add a second UI executable.
 
 ## Behavior to preserve
 
@@ -172,7 +174,7 @@ npm run build
 ```
 
 For ordinary source builds, build `frontend/dist/index.html` before starting
-the server. For hot reload, run `go run ./backend/cmd/commander-ui --listen-address 127.0.0.1:4276`
+the server. For hot reload, run `go run ../cmd/commander-admin serve --listen-address 127.0.0.1:4276`
 from `apps/admin/ui`, then `npm run dev` from `frontend`. Vite serves `4275` and
 proxies `/ui` to `4276`; start a Commander API separately.
 

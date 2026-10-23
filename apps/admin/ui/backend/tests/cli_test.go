@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/admin/ui/backend/cli"
+	"github.com/defos-ai/commander/apps/admin/cli"
 )
 
 func TestCLI(t *testing.T) {
 	t.Run("help does not require a built frontend", func(t *testing.T) {
 		t.Setenv("UI_STATIC_DIR", t.TempDir())
 		var output bytes.Buffer
-		if code := cli.Main([]string{"--help"}, &output); code != 0 {
+		if code := cli.Main([]string{"serve", "--help"}, nil, &output, io.Discard); code != 0 {
 			t.Fatalf("help exit = %d: %s", code, output.String())
 		}
 		if !strings.Contains(output.String(), "UI_LISTEN_ADDRESS") || !strings.Contains(output.String(), "UI_STATIC_DIR") ||
@@ -30,7 +30,7 @@ func TestCLI(t *testing.T) {
 
 	t.Run("missing frontend fails before listening", func(t *testing.T) {
 		ready := false
-		err := cli.RunWithOptions(context.Background(), []string{"--listen-address=127.0.0.1:0", "--static-dir=" + t.TempDir()}, io.Discard, cli.Options{
+		err := cli.RunWithOptions(context.Background(), []string{"serve", "--listen-address=127.0.0.1:0", "--static-dir=" + t.TempDir()}, nil, io.Discard, io.Discard, cli.Options{
 			Ready: func(net.Addr) { ready = true },
 		})
 		if err == nil || !strings.Contains(err.Error(), "index.html") || ready {
@@ -40,14 +40,14 @@ func TestCLI(t *testing.T) {
 
 	for _, args := range [][]string{{"--unknown"}, {"--listen-address=invalid"}, {"--listen-address=:70000"}, {"--static-dir="}, {"unexpected"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			if err := cli.Run(context.Background(), args, io.Discard); err == nil {
+			if err := cli.Run(context.Background(), append([]string{"serve"}, args...), nil, io.Discard, io.Discard); err == nil {
 				t.Fatal("invalid configuration accepted")
 			}
 		})
 	}
 	t.Run("invalid api-upstreams", func(t *testing.T) {
 		ready := false
-		err := cli.RunWithOptions(context.Background(), []string{"--listen-address=127.0.0.1:0", "--static-dir=" + builtFrontend(t), "--api-upstreams=ftp://invalid"}, io.Discard, cli.Options{
+		err := cli.RunWithOptions(context.Background(), []string{"serve", "--listen-address=127.0.0.1:0", "--static-dir=" + builtFrontend(t), "--api-upstreams=ftp://invalid"}, nil, io.Discard, io.Discard, cli.Options{
 			Ready: func(net.Addr) { ready = true },
 		})
 		if err == nil || !strings.Contains(err.Error(), "api-upstreams") || ready {
@@ -90,7 +90,7 @@ func TestCLIServesAndShutsDown(t *testing.T) {
 			finished := make(chan error, 1)
 			var output bytes.Buffer
 			go func() {
-				finished <- cli.RunWithOptions(ctx, args, &output, cli.Options{Ready: func(address net.Addr) { ready <- address }})
+				finished <- cli.RunWithOptions(ctx, append([]string{"serve"}, args...), nil, io.Discard, &output, cli.Options{Ready: func(address net.Addr) { ready <- address }})
 			}()
 			var address net.Addr
 			select {

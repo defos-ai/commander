@@ -89,25 +89,36 @@ including behind a reverse proxy.
 
 ### Native server
 
-With Node 24+ and Go 1.26.7+, run from `apps/admin/ui`:
+With Node 24+ and Go 1.26.7+, run from the repository root:
 
 ```sh
-npm --prefix frontend ci
-npm --prefix frontend run build
-go run ./backend/cmd/commander-ui
+npm --prefix apps/admin/ui/frontend ci
+npm --prefix apps/admin/ui/frontend run build
+go run ./apps/admin/cmd/commander-admin serve --static-dir apps/admin/ui/frontend/dist
 ```
 
 Start the [API](../../adapters/api/README.md) separately. Set `UI_LISTEN_ADDRESS`
-to change the listener; `UI_STATIC_DIR` selects another frontend build.
+to change the listener; `UI_STATIC_DIR` selects another frontend build. Connect
+to the API in the browser; `serve` does not need CLI API credentials.
 
 For a portable binary with the frontend embedded:
 
 ```sh
-npm --prefix frontend run build -- --outDir ../backend/static/dist --emptyOutDir
-go build -tags embed_ui -o bin/commander-ui ./backend/cmd/commander-ui
+npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist --emptyOutDir
+go build -tags embed_ui -o bin/commander-admin ./apps/admin/cmd/commander-admin
 ```
 
-Run `./bin/commander-ui`. On Windows, build with `-o bin/commander-ui.exe`.
+Run `./bin/commander-admin serve`. On Windows, build with
+`-o bin/commander-admin.exe`.
+
+### Standalone Docker image
+
+```sh
+docker run --rm -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-admin:stable
+```
+
+The image defaults to `serve`. It also provides the [Admin CLI](../README.md);
+pass a command after the image name to replace `serve`.
 
 ## Development and testing
 

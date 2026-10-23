@@ -7,16 +7,20 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/defos-ai/commander/apps/admin/client"
+	uicli "github.com/defos-ai/commander/apps/admin/ui/backend/cli"
 )
 
-// Options supplies an existing session's connection without changing environment.
+// Options supplies caller-owned connection and UI readiness without changing environment.
 type Options struct {
 	Connection *client.Connection
+	// Ready receives the bound address when serve starts accepting connections.
+	Ready func(net.Addr)
 }
 
 // UsageError identifies invalid command arguments separately from runtime errors.
@@ -38,6 +42,12 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if len(args) > 0 && args[0] == "serve" {
+		return runServe(ctx, args[1:], stdout, stderr, options)
+	}
+	if len(args) == 2 && args[0] == "help" && args[1] == "serve" {
+		return runServe(ctx, []string{"--help"}, stdout, stderr, options)
 	}
 	configuration, err := configuration(args, options)
 	if errors.Is(err, flag.ErrHelp) {
@@ -70,8 +80,18 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	return &UsageError{cause: errors.New("unknown command or arguments; run commander-admin --help")}
 }
 
+func runServe(ctx context.Context, args []string, stdout, stderr io.Writer, options Options) error {
+	err := uicli.RunWithOptions(ctx, args, stderr, uicli.Options{Ready: options.Ready, Help: stdout})
+	var configuration *uicli.ConfigError
+	if errors.As(err, &configuration) {
+		return &UsageError{cause: err}
+	}
+	return err
+}
+
 func help(output io.Writer) error {
 	_, err := io.WriteString(output, `Usage: commander-admin [options] <command>
+       commander-admin serve [UI options]
 
 Administer Commander without starting Playground or configuring a model.
 
@@ -79,6 +99,7 @@ Commands:
   help                  Show this help
   missions              List, export, validate or import mission definitions
   secrets               List requests and manage agent secrets
+  serve                 Serve the Admin UI
 
 API connection:
   --api-url URL         API address (COMMANDER_API_URL; default http://localhost:4274)
@@ -89,7 +110,7 @@ Options:
   --json                Print command results as JSON
   -h, --help            Show this help
 
-Run commander-admin missions --help or secrets --help for command options.
+Run commander-admin <command> --help for command options.
 `)
 	return err
 }

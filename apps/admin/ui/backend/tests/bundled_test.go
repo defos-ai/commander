@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/admin/ui/backend/cli"
+	"github.com/defos-ai/commander/apps/admin/cli"
 )
 
 func TestBundledFrontend(t *testing.T) {
@@ -114,7 +114,7 @@ func TestBundledFrontend(t *testing.T) {
 	}
 	t.Run("blank environment does not select bundle", func(t *testing.T) {
 		t.Setenv("UI_STATIC_DIR", "")
-		err := cli.Run(t.Context(), []string{"--listen-address=127.0.0.1:0"}, io.Discard)
+		err := cli.Run(t.Context(), []string{"serve", "--listen-address=127.0.0.1:0"}, nil, io.Discard, io.Discard)
 		if err == nil || !strings.Contains(err.Error(), "static-dir") {
 			t.Fatal("explicit blank static directory was silently replaced by bundled assets")
 		}
@@ -130,7 +130,8 @@ func startBundledUI(t *testing.T, args ...string) (string, func()) {
 	var runErr error
 	go func() {
 		defer close(done)
-		runErr = cli.RunWithOptions(ctx, append(args, "--listen-address=127.0.0.1:0"), &output, cli.Options{
+		serveArgs := append([]string{"serve"}, args...)
+		runErr = cli.RunWithOptions(ctx, append(serveArgs, "--listen-address=127.0.0.1:0"), nil, io.Discard, &output, cli.Options{
 			Ready: func(address net.Addr) { ready <- address },
 		})
 	}()

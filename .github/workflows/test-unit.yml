@@ -125,14 +125,14 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
-      - name: Test and build bundled UI
+      - name: Test and build bundled Admin
         working-directory: apps/admin
         env:
           GOWORK: 'off'
         run: |
           cp -R ui/frontend/dist ui/backend/static/dist
           go test -tags embed_ui -race -count=1 -timeout=1m ./ui/backend/tests -run '^TestBundledFrontend$'
-          go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./ui/backend/cmd/commander-ui
+          go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-admin" ./cmd/commander-admin
       - name: Test and build bundled Playground
         working-directory: .
         run: |

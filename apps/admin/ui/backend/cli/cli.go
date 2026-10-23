@@ -9,9 +9,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
@@ -20,7 +17,15 @@ import (
 
 type Options struct {
 	Ready func(net.Addr)
+	// Help receives usage text; server diagnostics use the Run output writer.
+	Help io.Writer
 }
+
+// ConfigError identifies invalid UI settings before the listener starts.
+type ConfigError struct{ cause error }
+
+func (e *ConfigError) Error() string { return e.cause.Error() }
+func (e *ConfigError) Unwrap() error { return e.cause }
 
 func Run(ctx context.Context, args []string, output io.Writer) error {
 	return RunWithOptions(ctx, args, output, Options{})
@@ -30,12 +35,16 @@ func RunWithOptions(ctx context.Context, args []string, output io.Writer, option
 	if output == nil {
 		output = io.Discard
 	}
-	configuration, err := parseConfig(args, output)
+	help := options.Help
+	if help == nil {
+		help = output
+	}
+	configuration, err := parseConfig(args, help)
 	if errors.Is(err, flag.ErrHelp) {
 		return nil
 	}
 	if err != nil {
-		return err
+		return &ConfigError{cause: err}
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -47,7 +56,7 @@ func RunWithOptions(ctx context.Context, args []string, output io.Writer, option
 	defer handler.Close()
 	connectionHandler, err := connections.NewHandler(configuration.connections)
 	if err != nil {
-		return err
+		return &ConfigError{cause: err}
 	}
 	defer connectionHandler.Close()
 	routes := http.NewServeMux()
@@ -88,17 +97,4 @@ func RunWithOptions(ctx context.Context, args []string, output io.Writer, option
 		logger.Info("UI server stopped")
 		return nil
 	}
-}
-
-func Main(args []string, output io.Writer) int {
-	if output == nil {
-		output = io.Discard
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := Run(ctx, args, output); err != nil {
-		fmt.Fprintln(output, "commander-ui:", err)
-		return 1
-	}
-	return 0
 }

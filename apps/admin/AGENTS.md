@@ -9,8 +9,13 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   accepts a caller-owned connection for embedding; only `Main`
   owns process signals and exit codes. Help must work without API/model setup.
   Keep argument errors distinct from runtime failures. JSON output describes
-  command data; help remains text. Common options work around subcommands and
-  operands; `--` makes later values literal, including dash-prefixed names.
+  command data; help remains text. Mission and secret options work around
+  subcommands and operands; `--` makes later values literal, including
+  dash-prefixed names. UI flags follow `serve`.
+- `serve` delegates to `ui/backend/cli`; it uses `UI_*` settings and must not
+  load or validate `COMMANDER_API_*` credentials. Browser connections remain
+  independent of the CLI API connection. Preserve the host's ready callback,
+  caller-owned context and graceful shutdown for future Playground embedding.
 - `client/` owns the shared authenticated API transport. Connections come from
   explicit options or `COMMANDER_API_*`, never MCP inference. Do not accept a
   password flag, print credentials or expose raw network/server errors. Keep
@@ -40,8 +45,10 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   requesting a value. Keep stdin bytes unchanged, clear transient buffers, and
   return only metadata. Playground owns its existing form; keep its prompt
   triggering, dismissal and draft isolation while sharing transport and save behavior.
-- [docker/Dockerfile](docker/Dockerfile) builds the existing UI host with embedded
-  frontend assets. The published image remains `commander-admin`.
+- [docker/Dockerfile](docker/Dockerfile) builds `cmd/commander-admin` with embedded
+  frontend assets. The image entry point is `commander-admin`, with `serve` as
+  its default command; replacing the command must expose mission/secret commands.
+  Do not restore a separate `commander-ui` binary or image.
 - Playground imports the UI host from this module. Update its module requirement,
   workspace mapping and CI selection when changing Admin dependencies.
 - Keep module-wide Go checks rooted at `apps/admin`; frontend commands still run

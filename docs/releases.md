@@ -75,7 +75,7 @@ Images use `ghcr.io/defos-ai/<name>:<version>` and a moving `stable` tag:
 | --- | --- |
 | `commander-aio` | Playground, Admin and local hosts in one container |
 | `commander-playground` | Playground client for an existing MCP server |
-| `commander-admin` | Admin UI |
+| `commander-admin` | Admin UI and CLI; defaults to `serve` |
 | `commander-api` | HTTP API |
 | `commander-mcp` | MCP server |
 | `commander-controller` | Default controller |
