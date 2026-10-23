@@ -9,17 +9,17 @@ Compose and all-in-one include the default controller. To run it separately
 from the repository root with Go 1.26.7+:
 
 ```sh
-go run ./apps/controllers/default/cmd --with-missions ./apps/controllers/default/data/default-missions.json
+go run ./apps/controllers/default/cmd
 ```
 
 Connect [adapters](../adapters/README.md#quick-start) and
 [agents](../agents/README.md#quick-start) to the same providers. Run **one active
 controller per database**.
 
-`--with-missions` imports a mission file at startup, updating matching names and
-preserving other missions. Omit it to skip import. Existing operations keep the
-definition they started with. See [mission authoring](../../docs/abstractions.md)
-and [deployment](../../docs/deployment.md).
+Compose and all-in-one seed bundled missions through the API. For a separate
+deployment, use [Admin](../admin/README.md) `missions seed` or `missions import`.
+See [mission authoring](../../docs/abstractions.md) and
+[deployment](../../docs/deployment.md).
 
 ## Development and testing
 

@@ -25,6 +25,7 @@ docker compose up --build --wait && docker compose run --build --rm --no-deps pl
 
 Builder and spawner are ready to use. Ask chat to install other agents when needed.
 Compose supplies RabbitMQ, MongoDB and MinIO, using local development credentials.
+Admin adds bundled missions through the API at startup, preserving existing names.
 
 | Connect to… | Address | Get credentials |
 | --- | --- | --- |
@@ -109,7 +110,8 @@ Compose keeps data in named Docker volumes:
 | `mcp-credentials` | The shared MCP token |
 
 Use `docker compose logs -f` for services and `docker logs <container-id>` for
-spawned agents. To load your own missions, see [mission setup](../apps/controllers/README.md#quick-start).
+spawned agents. To load your own missions, use `/admin missions import <file>` in
+Playground or the [Admin CLI](../apps/admin/README.md#missions).
 
 ### Stopping and resetting agents
 

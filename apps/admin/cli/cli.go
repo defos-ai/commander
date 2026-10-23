@@ -97,7 +97,7 @@ Administer Commander without starting Playground or configuring a model.
 
 Commands:
   help                  Show this help
-  missions              List, export, validate or import mission definitions
+  missions              List, export, validate, import or seed missions
   secrets               List requests and manage agent secrets
   serve                 Serve the Admin UI
 

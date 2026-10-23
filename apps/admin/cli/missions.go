@@ -23,10 +23,10 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 	wantArguments := 1
 	if command == "export" || command == "validate" || command == "import" {
 		wantArguments = 2
-	} else if command != "list" {
+	} else if command != "list" && command != "seed" {
 		return missionUsage()
 	}
-	if len(args) != wantArguments || configuration.dryRun && command != "import" {
+	if len(args) != wantArguments || configuration.dryRun && command != "import" && command != "seed" {
 		return missionUsage()
 	}
 	var definitions []missions.Definition
@@ -64,6 +64,12 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 			return errors.Join(importError, err)
 		}
 		return importError
+	case "seed":
+		result, seedError := missions.Seed(ctx, api, configuration.dryRun)
+		if err := showImport(stdout, result, configuration.json); err != nil {
+			return errors.Join(seedError, err)
+		}
+		return seedError
 	}
 	return nil
 }
@@ -176,6 +182,7 @@ Commands:
   export NAME             Write one mission definition as JSON
   validate FILE           Validate every definition locally, without API access
   import FILE [--dry-run]  Create missing missions and preserve existing names
+  seed [--dry-run]         Add bundled missions, preserving existing names
 
 FILE accepts one mission, an array, or a list result with items. Use - for stdin.
 Imports stop on the first failure and report completed and unattempted items.

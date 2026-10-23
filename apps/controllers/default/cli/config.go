@@ -19,7 +19,6 @@ type config struct {
 	busURL           string
 	storageURL       string
 	databaseURL      string
-	withMissions     string
 	logLevel         string
 	logFormat        string
 	heartbeatTimeout time.Duration
@@ -33,7 +32,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&result.busURL, "bus-url", "", "Broker URL (BUS_URL; default ./state/bus)")
 	flags.StringVar(&result.storageURL, "storage-url", "", "Artifact and report storage URL (STORAGE_URL; default ./state/storage)")
 	flags.StringVar(&result.databaseURL, "database-url", "", "Inventory, executions and operations database URL (DATABASE_URL; default ./state/database)")
-	flags.StringVar(&result.withMissions, "with-missions", "", "JSON mission file to upsert on startup; omitted loads no missions")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Logging level: debug, info, warn, error (LOG_LEVEL)")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Logging format: json, text (LOG_FORMAT)")
 	flags.StringVar(&heartbeat, "heartbeat-timeout", controller.DefaultHeartbeatTimeout.String(), "Agent lease duration (HEARTBEAT_TIMEOUT)")

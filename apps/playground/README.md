@@ -68,6 +68,7 @@ to stop the stack and its spawned agents.
 Compose supplies the saved MCP token and API login automatically; `/admin`
 commands and secret forms need no extra login. Browser Admin still asks for it:
 use `docker compose exec api commander-api credentials`.
+Bundled missions are added automatically without replacing saved definitions.
 See [deployment](../../docs/deployment.md) for ports, password rotation and overrides.
 
 ### Installing agents

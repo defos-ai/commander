@@ -136,6 +136,11 @@
   The embedded builder's workspaces and spawned agents' private working directories
   remain beneath session state; never inherit `BUILDER_WORKSPACE_DIR` or leave
   generated source behind on exit.
+- After API readiness, all-in-one seeds bundled missions with Admin's
+  `missions.Seed` and the session API connection before returning ready. Use the
+  same create-only API import as Compose; do not write mission files, import
+  controller data, or access mission stores directly. Seed failures fail startup
+  and use normal host cleanup; never automatically retry uncertain writes.
 - Use the spawner's `RunWithOptions` to force native mode and a state directory
   beneath the session directory, including Docker AIO. Do not mutate environment
   settings or use a Docker socket. Embed the builder host from the same build,
@@ -210,7 +215,8 @@
   after stack readiness so launch cannot recreate MCP. Do not add Docker socket
   mounts or an unauthenticated token endpoint.
 - Compose's separate `api-credentials` initializer persists the local API
-  password; API and Playground mount it read-only and export it before exec.
+  password; API, Playground and the Admin mission initializer mount it read-only
+  and export it before exec.
   Reuse it across restarts, replacing it only when an explicit `API_PASSWORD`
   is configured. Rotation reruns initialization and recreates affected clients.
   Default Playground API commands/forms receive this login for `http://api:4274`.

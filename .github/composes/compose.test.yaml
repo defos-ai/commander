@@ -51,17 +51,34 @@ services:
     depends_on:
       volume-init:
         condition: service_completed_successfully
-      fixture-releases:
-        condition: service_healthy
-    command: ["--with-missions=/fixtures/missions.json"]
     volumes:
       - bus:/state/bus
       - storage:/state/storage
       - database:/state/database
-      - fixture-data:/fixtures:ro
     environment:
       <<: *environment
       DATABASE_URL: file:///state/database
+
+  missions:
+    <<: *runtime
+    read_only: true
+    image: commander-admin:test
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/admin/docker/Dockerfile
+    command: ["missions", "import", "/fixtures/missions.json"]
+    environment:
+      COMMANDER_API_URL: http://api:4274
+      COMMANDER_API_USERNAME: api-fixture-user
+      COMMANDER_API_PASSWORD: api-fixture-password
+    volumes:
+      - fixture-data:/fixtures:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      fixture-releases:
+        condition: service_healthy
 
   mcp:
     <<: *runtime
@@ -88,6 +105,8 @@ services:
     depends_on:
       controller:
         condition: service_started
+      missions:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:4273/healthz"]
       interval: 5s
@@ -138,7 +157,7 @@ services:
     <<: *runtime
     read_only: true
     profiles: [ui]
-    image: commander-admin-ui:test
+    image: commander-admin:test
     pull_policy: never
     build:
       context: ../..
@@ -150,6 +169,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      missions:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "--timeout=2", "http://127.0.0.1:4275/healthz"]
       interval: 5s

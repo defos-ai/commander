@@ -19,10 +19,13 @@ bin/commander-admin missions export build-agent > mission.json
 bin/commander-admin missions validate mission.json
 bin/commander-admin missions import mission.json --dry-run
 bin/commander-admin missions import mission.json
+bin/commander-admin missions seed
 ```
 
 Files accept one mission, an array, or JSON from `missions list --json`. Use `-`
 for stdin and `--json` for structured results. Validation works without API access.
+`seed` adds bundled missions without replacing saved definitions; use `--dry-run`
+to preview it. All-in-one and Compose run it automatically after the API is ready.
 
 Imports preserve existing names and stop on the first failure, reporting completed,
 uncertain and unattempted items. After an uncertain write, export that mission to

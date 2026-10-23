@@ -18,6 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/fixture-agent /fixtures/fixture-agent
 COPY --from=build /out/fixture-releases /usr/local/bin/fixture-releases
-COPY apps/controllers/default/data/default-missions.json /fixtures/default-missions.json
+COPY apps/admin/missions/default-missions.json /fixtures/default-missions.json
 COPY apps/agents/spawner/tests/e2e/missions.json /fixtures/spawner-missions.json
 ENTRYPOINT ["/usr/local/bin/fixture-releases"]

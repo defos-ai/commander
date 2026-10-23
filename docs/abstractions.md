@@ -42,7 +42,7 @@ For example, a build mission can require checkout and build while leaving sharin
 
 Start an operation, then assign its first task; `starting_actions` does not start
 work automatically. Editing a mission affects new operations, not existing runs.
-See the complete [bundled missions](../apps/controllers/default/data/default-missions.json).
+See the complete [bundled missions](../apps/admin/missions/default-missions.json).
 
 ### Define an action before an agent exists
 

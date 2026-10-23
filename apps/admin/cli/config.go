@@ -31,7 +31,7 @@ func configuration(args []string, options Options) (config, error) {
 	flags.StringVar(&result.connection.URL, "api-url", result.connection.URL, "Commander API URL")
 	flags.StringVar(&result.connection.Credentials.Username, "api-username", result.connection.Credentials.Username, "Commander API username")
 	flags.BoolVar(&result.json, "json", false, "Print command results as JSON")
-	flags.BoolVar(&result.dryRun, "dry-run", false, "Preview a mission import without writing")
+	flags.BoolVar(&result.dryRun, "dry-run", false, "Preview a mission import or seed without writing")
 	var err error
 	result.arguments, err = parseArguments(flags, args)
 	return result, err

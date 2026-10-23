@@ -14,11 +14,12 @@ import (
 
 	apicli "github.com/defos-ai/commander/apps/adapters/api/cli"
 	mcpcli "github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	adminclient "github.com/defos-ai/commander/apps/admin/client"
+	"github.com/defos-ai/commander/apps/admin/missions"
 	builder "github.com/defos-ai/commander/apps/agents/builder"
 	buildercli "github.com/defos-ai/commander/apps/agents/builder/cli"
 	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
-	"github.com/defos-ai/commander/apps/controllers/default/data"
 	"github.com/defos-ai/commander/apps/playground/internal/adminhost"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/framework/host"
@@ -88,10 +89,6 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err != nil {
 		return nil, err
 	}
-	missionFile := filepath.Join(s.Directory, "missions.json")
-	if err = os.WriteFile(missionFile, data.DefaultMissions, 0600); err != nil {
-		return nil, err
-	}
 	common := []string{
 		"--bus-url=" + filepath.Join(s.Directory, "bus"),
 		"--storage-url=" + filepath.Join(s.Directory, "storage"),
@@ -102,7 +99,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	defer cancelStartup()
 	controllerReady := make(chan struct{})
 	s.start("controller", func(ctx context.Context) error {
-		args := append(append([]string{}, common...), database, "--with-missions="+missionFile, "--heartbeat-timeout=45s")
+		args := append(append([]string{}, common...), database, "--heartbeat-timeout=45s")
 		return controllercli.RunWithOptions(ctx, args, s.log, controllercli.Options{Ready: func() { close(controllerReady) }})
 	})
 	if err = awaitReady(startup, controllerReady); err != nil {
@@ -133,6 +130,14 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	})
 	if err = awaitReady(startup, apiReady); err != nil {
 		return nil, err
+	}
+	api, err := adminclient.New(adminclient.Connection{URL: s.APIURL, Credentials: s.APICredentials})
+	if err != nil {
+		return nil, err
+	}
+	defer api.Close()
+	if _, err = missions.Seed(startup, api, false); err != nil {
+		return nil, fmt.Errorf("seed bundled missions: %w", err)
 	}
 	spawnerReady := make(chan struct{})
 	expected := make(map[string]string)

@@ -28,7 +28,7 @@ runs:
           for target in "${targets[@]}"; do
             case "$target" in
               controller|api|mcp|minio|builder-agent|spawner-agent|example-agent-1|fixture-releases|fixture-agent) scope="test-$target" ;;
-              ui) scope=test-admin-ui ;;
+              missions|ui) scope=test-admin ;;
               minio-init) scope=test-minio-client ;;
               *) echo "Unknown build target: $target" >&2; exit 1 ;;
             esac

@@ -36,6 +36,22 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   preserve completed results and report remaining items as not attempted. An
   uncertain acknowledgement requires inspection, never an automatic write retry.
   Import does not start operations, require installed actions or replace missions.
+- `missions.Seed` embeds [bundled missions](missions/default-missions.json), validates
+  the full batch and delegates to the same create-only API import. Keep `missions
+  seed [--dry-run]` and launcher calls on this path; the controller does not own
+  catalog initialization. Existing definitions always win, including operator edits.
+- Keep bundled mission policy in that JSON. Website reviews aggregate each discovery's
+  HTTP/browser checks before model review. `install-agent` requires only `spawn-agent`
+  and reviews the launch result and readiness; GitHub stable resolution belongs to
+  the spawner, and visibility travels unchanged without tokens in mission input.
+- `build-agent` requires operator action contracts alongside instructions, checkout
+  before build, workspace affinity on those two actions and model review on their
+  results. Publication/release stay optional, with no workspace affinity, so their
+  secrets cannot block a build. Publication needs consent; release needs its own
+  consent/version. Release polls continue automatically until terminal model review.
+  Installation is offered only after verified release, with explicit operator consent,
+  then runs in a separate `install-agent` operation. Preserve successful build evidence
+  if publication, release or installation is declined or fails.
 - `secrets/` owns the shared secret API operations used by CLI and Playground.
   Project validated metadata instead of returning raw responses. Only a typed
   `404 secret_not_found` permits creation; updates/deletes carry the observed ID

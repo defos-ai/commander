@@ -15,6 +15,7 @@ import (
 type credentialComposeService struct {
 	Image       string
 	User        string
+	Restart     string
 	Init        *bool
 	ReadOnly    bool     `yaml:"read_only"`
 	CapDrop     []string `yaml:"cap_drop"`
@@ -63,7 +64,7 @@ func newComposeCredentialFixture(t *testing.T, kind composeCredentialKind) *comp
 	if err := os.WriteFile(filepath.Join(f.dir, "secrets/key"), []byte(strings.Repeat("ab", 32)), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, binary := range []string{"commander-mcp", "commander-api", "commander"} {
+	for _, binary := range []string{"commander-mcp", "commander-api", "commander-admin", "commander"} {
 		mock := `#!/bin/sh
 set -eu
 if [ "${1:-}" = credentials ]; then
@@ -85,6 +86,7 @@ else
   case "$0" in
     *commander-mcp) printf '%s' "$MCP_TOKEN" > "$FIXTURE_DIR/observed-mcp" ;;
     *commander-api) printf '%s' "$API_PASSWORD" > "$FIXTURE_DIR/observed-api" ;;
+    *commander-admin) printf '%s' "$COMMANDER_API_PASSWORD" > "$FIXTURE_DIR/observed-api" ;;
     *)
       printf '%s' "$COMMANDER_MCP_TOKEN" > "$FIXTURE_DIR/observed-mcp"
       printf '%s' "$COMMANDER_API_PASSWORD" > "$FIXTURE_DIR/observed-api"
@@ -142,7 +144,7 @@ func (f *composeCredentialFixture) runWithEnvironment(t *testing.T, service, cre
 		"COMMANDER_API_URL": "http://api:4274",
 	}
 	variable := f.kind.variable
-	if service == "playground" {
+	if service == "playground" || service == "missions" {
 		variable = f.kind.playgroundVariable
 	}
 	values[variable] = credential
@@ -271,7 +273,11 @@ func TestCIComposeCredentialInitializationRejectsInvalidState(t *testing.T) {
 
 func TestCIComposeCredentialConsumers(t *testing.T) {
 	for _, kind := range composeCredentialKinds {
-		for _, service := range []string{kind.name, "playground"} {
+		consumers := []string{kind.name, "playground"}
+		if kind.name == "api" {
+			consumers = append(consumers, "missions")
+		}
+		for _, service := range consumers {
 			t.Run(kind.name+"/"+service, func(t *testing.T) {
 				for _, override := range []string{"", "explicit-consumer-credential"} {
 					f := newComposeCredentialFixture(t, kind)
@@ -283,7 +289,7 @@ func TestCIComposeCredentialConsumers(t *testing.T) {
 						t.Fatalf("consumer startup failed: %v", err)
 					}
 					want := "shared-test-credential"
-					if override != "" && service != "api" {
+					if override != "" && service != "api" && service != "missions" {
 						want = override
 					}
 					if f.read(t, "observed-"+kind.name) != want {
@@ -304,9 +310,9 @@ func TestCIComposeCredentialConsumers(t *testing.T) {
 					t.Fatal("application launched before reading the credential")
 				}
 				err := f.run(t, service, "explicit-without-file")
-				if service == "api" {
+				if service == "api" || service == "missions" {
 					if err == nil {
-						t.Fatal("API must always use the initializer's persisted password")
+						t.Fatal("local API consumers must always use the initializer's persisted password")
 					}
 				} else if err != nil || f.read(t, "observed-"+kind.name) != "explicit-without-file" {
 					t.Fatal("consumer must retain explicit credentials without requiring a saved file")
@@ -360,7 +366,11 @@ func TestCIComposeCredentialWiring(t *testing.T) {
 		if !slices.Equal(setup.Volumes, []string{volume}) {
 			t.Fatalf("%s credential setup must own its writable credential volume", kind.name)
 		}
-		for _, name := range []string{kind.name, "playground"} {
+		consumers := []string{kind.name, "playground"}
+		if kind.name == "api" {
+			consumers = append(consumers, "missions")
+		}
+		for _, name := range consumers {
 			service := services[name]
 			if !slices.Contains(service.Volumes, volume+":ro") ||
 				service.DependsOn[kind.name+"-credentials"].Condition != "service_completed_successfully" ||
@@ -377,11 +387,19 @@ func TestCIComposeCredentialWiring(t *testing.T) {
 	if api := services["api"]; api.Init == nil || *api.Init {
 		t.Fatal("API must remain PID 1")
 	}
-	if services["playground"].DependsOn["api"].Condition != "service_healthy" {
-		t.Fatal("Playground must wait until its local API is ready")
+	for _, name := range []string{"playground", "missions"} {
+		if services[name].DependsOn["api"].Condition != "service_healthy" {
+			t.Fatalf("%s must wait until its local API is ready", name)
+		}
+	}
+	if services["playground"].DependsOn["missions"].Condition != "service_completed_successfully" {
+		t.Fatal("Playground must wait until mission seeding finishes")
+	}
+	if missions := services["missions"]; !missions.ReadOnly || missions.Restart != "no" || missions.Image != services["ui"].Image {
+		t.Fatal("Mission seeding must run once using the Admin image with a read-only filesystem")
 	}
 	for name, service := range services {
-		if name == "api-credentials" || name == "api" || name == "playground" {
+		if name == "api-credentials" || name == "api" || name == "playground" || name == "missions" {
 			continue
 		}
 		for _, volume := range service.Volumes {

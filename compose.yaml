@@ -239,11 +239,6 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-    command:
-      - --with-missions=/data/default-missions.json
-    configs:
-      - source: default-missions
-        target: /data/default-missions.json
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
@@ -283,6 +278,8 @@ services:
         condition: service_completed_successfully
       controller:
         condition: service_started
+      missions:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       mongo:
@@ -349,10 +346,40 @@ services:
       retries: 12
       start_period: 5s
 
+  missions:
+    <<: *runtime
+    restart: "no"
+    read_only: true
+    image: commander-admin:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: apps/admin/docker/Dockerfile
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        COMMANDER_API_PASSWORD="$$(cat /run/commander-api/api-password)"
+        test -n "$$COMMANDER_API_PASSWORD"
+        export COMMANDER_API_PASSWORD
+        exec commander-admin "$$@"
+      - commander-admin
+    command: ["missions", "seed"]
+    environment:
+      COMMANDER_API_URL: http://api:4274
+      COMMANDER_API_USERNAME: ${API_USERNAME:-commander}
+    volumes:
+      - api-credentials:/run/commander-api:ro
+    depends_on:
+      api-credentials:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+
   ui:
     <<: *runtime
     read_only: true
-    image: commander-admin-ui:local
+    image: commander-admin:local
     pull_policy: never
     build:
       context: .
@@ -365,6 +392,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      missions:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "--timeout=2", "http://127.0.0.1:4275/healthz"]
       interval: 5s
@@ -496,6 +525,8 @@ services:
         condition: service_completed_successfully
       api:
         condition: service_healthy
+      missions:
+        condition: service_completed_successfully
       mcp-credentials:
         condition: service_completed_successfully
       mcp:
@@ -513,7 +544,3 @@ volumes:
   rabbitmq:
   minio:
   mongo:
-
-configs:
-  default-missions:
-    file: ./apps/controllers/default/data/default-missions.json

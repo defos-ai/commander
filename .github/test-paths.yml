@@ -97,6 +97,7 @@ controller-mongo:
 api-fs:
   - *shared
   - *api
+  - *admin
   - *controller
   - *builder
   - *spawner
@@ -105,6 +106,7 @@ api-fs:
 api-full:
   - *shared
   - *api
+  - *admin
   - *controller
   - *builder
   - *spawner
@@ -115,6 +117,8 @@ api-full:
 mcp-fs:
   - *shared
   - *mcp
+  - *api
+  - *admin
   - *controller
   - *builder
   - *spawner
@@ -123,6 +127,8 @@ mcp-fs:
 mcp-full:
   - *shared
   - *mcp
+  - *api
+  - *admin
   - *controller
   - *builder
   - *spawner

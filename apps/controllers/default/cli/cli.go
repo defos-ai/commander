@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/defos-ai/commander/apps/controllers/default/data"
 	"github.com/defos-ai/commander/framework/controller"
 	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
 	"github.com/defos-ai/commander/framework/controller/runner"
@@ -77,11 +76,6 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		defer cancel()
 		result = errors.Join(result, registration.Close(shutdown))
 	}()
-	if configuration.withMissions != "" {
-		if err := data.UpsertMissions(ctx, deps.MissionStore, configuration.withMissions); err != nil {
-			return fmt.Errorf("with-missions: %w", err)
-		}
-	}
 	// Keep routing available until the runner has suspended its accepted tasks.
 	coordination, err := controller.NewController(context.WithoutCancel(ctx), deps.Bus, controller.ControllerConfig{
 		Type: controllerType, ID: configuration.controllerID, HeartbeatTimeout: configuration.heartbeatTimeout,

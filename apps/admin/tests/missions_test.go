@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +19,8 @@ import (
 
 	"github.com/defos-ai/commander/apps/admin/cli"
 	"github.com/defos-ai/commander/apps/admin/client"
+	adminmissions "github.com/defos-ai/commander/apps/admin/missions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/host"
 )
 
@@ -144,6 +147,209 @@ func TestMissionImportStopsAfterUncertainWrite(t *testing.T) {
 	defer fixture.mu.Unlock()
 	if len(fixture.records) != 2 || !reflect.DeepEqual(fixture.requests, []string{"GET created", "POST created", "GET uncertain", "POST uncertain"}) {
 		t.Fatalf("uncertain write was retried or remaining work submitted: %v", fixture.requests)
+	}
+}
+
+func TestBundledMissionSeed(t *testing.T) {
+	fixture := newMissionAPI(t)
+	other := missionJSON("operator-mission", "Keep this mission")
+	fixture.records["operator-mission"] = json.RawMessage(other)
+	output, err := missionCommand(t, fixture.connection(), nil, "missions", "seed", "--dry-run", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result := importResult(t, output); result.Counts.WouldCreate != 4 || result.Counts.Created != 0 {
+		t.Fatalf("unexpected seed dry run: %s", output)
+	}
+	fixture.mu.Lock()
+	if len(fixture.records) != 1 {
+		t.Error("seed dry run wrote mission definitions")
+	}
+	fixture.mu.Unlock()
+
+	api, err := client.New(fixture.connection())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer api.Close()
+	result, err := adminmissions.Seed(t.Context(), api, false)
+	if err != nil || result.Counts.Created != 4 {
+		t.Fatalf("seed bundled definitions: %+v, error=%v", result, err)
+	}
+	definitions, err := adminmissions.List(t.Context(), api)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := make(map[string]missions.Mission)
+	for _, definition := range definitions {
+		mission, err := missions.LoadMission(definition.JSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog[mission.Name] = mission
+	}
+	t.Run("website checks", func(t *testing.T) { checkWebsiteMissions(t, catalog) })
+	t.Run("installation", func(t *testing.T) { checkInstallAgentMission(t, catalog) })
+	t.Run("build and optional publication", func(t *testing.T) { checkBuildAgentMission(t, catalog) })
+
+	override := missionJSON("install-agent", "Keep the operator's saved definition")
+	fixture.mu.Lock()
+	fixture.records["install-agent"] = json.RawMessage(override)
+	fixture.requests = nil
+	fixture.mu.Unlock()
+	output, err = missionCommand(t, fixture.connection(), nil, "missions", "seed", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result := importResult(t, output); result.Counts.Created != 0 || result.Counts.Skipped != 4 {
+		t.Fatalf("repeated seed did not preserve saved definitions: %s", output)
+	}
+	fixture.mu.Lock()
+	defer fixture.mu.Unlock()
+	if len(fixture.records) != 5 || string(fixture.records["install-agent"]) != override || string(fixture.records["operator-mission"]) != other {
+		t.Fatal("seed changed a saved mission")
+	}
+	for _, request := range fixture.requests {
+		if !strings.HasPrefix(request, "GET ") {
+			t.Errorf("repeated seed submitted a write: %s", request)
+		}
+	}
+}
+
+func checkWebsiteMissions(t *testing.T, websites map[string]missions.Mission) {
+	for _, test := range []struct {
+		name      string
+		discovery string
+		checks    []string
+	}{
+		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
+		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			website := websites[test.name]
+			aggregate := website.Rules[missions.AggregateResults]
+			decision := website.Rules[missions.DecideNextActions]
+			required := append([]string{test.discovery}, test.checks...)
+			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(aggregate.ForActions, []string{test.discovery}) {
+				t.Fatalf("website checks are not grouped automatic work: %+v", website)
+			}
+			if len(website.Rules) != 2 {
+				t.Fatalf("unexpected mission rules: %+v", website.Rules)
+			}
+			if !slices.Equal(decision.ForActions, test.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+				t.Fatalf("website checks are not followed by model review: %+v", decision)
+			}
+		})
+	}
+}
+
+func checkInstallAgentMission(t *testing.T, catalog map[string]missions.Mission) {
+	mission := catalog["install-agent"]
+	if !slices.Equal(mission.RequiredActions, []string{"spawn-agent"}) || !slices.Equal(mission.StartingActions, []string{"spawn-agent"}) || len(mission.Steps) != 0 {
+		t.Fatalf("agent installation must work before business agents register: %+v", mission)
+	}
+	decision := mission.Rules[missions.DecideNextActions]
+	if len(mission.Rules) != 1 || !slices.Equal(decision.ForActions, []string{"spawn-agent"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("spawn completion must trigger result and readiness review: %+v", mission.Rules)
+	}
+	for _, input := range []string{
+		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0"}`,
+		`{"package":"https://github.com/defos-ai/commander-web-agent"}`,
+		`{"package":"github.com/defos-ai/commander-web-agent"}`,
+		`{"package":"github.com/defos-ai/commander/apps/agents/builder@stable"}`,
+		`{"package":"https://github.com/example/private-agent","visibility":"private"}`,
+		`{"package":"github.com/defos-ai/commander/apps/agents/builder@v0.2.0"}`,
+		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0","visibility":"public"}`,
+		`{"package":"github.com/example/private-agent@v0.2.0","visibility":"private"}`,
+	} {
+		if err := mission.ValidateInput(json.RawMessage(input)); err != nil {
+			t.Fatalf("package rejected: %v", err)
+		}
+		if err := mission.ValidateOutput(json.RawMessage(input), json.RawMessage(`{"agent_id":"web-agent-1234abcd","limitations":["Actions still need configuration"]}`)); err != nil {
+			t.Fatalf("registration with readiness limitations rejected: %v", err)
+		}
+	}
+	for _, input := range []string{
+		`{}`,
+		`{"package":"github.com/defos-ai/commander-web-agent@latest"}`,
+		`{"package":"github.com/defos-ai/commander-web-agent@v0.2.0","environment":{"KEY":"value"}}`,
+		`{"package":"github.com/example/private-agent@v0.2.0","visibility":"internal"}`,
+		`{"package":"github.com/example/private-agent@v0.2.0","visibility":""}`,
+	} {
+		if err := mission.ValidateInput(json.RawMessage(input)); err == nil {
+			t.Fatalf("invalid installation input accepted: %s", input)
+		}
+	}
+}
+
+func checkBuildAgentMission(t *testing.T, catalog map[string]missions.Mission) {
+	if _, exists := catalog["publish-agent"]; exists {
+		t.Fatal("source publication must remain an optional action in build-agent")
+	}
+	if _, exists := catalog["release-agent"]; exists {
+		t.Fatal("release must remain an optional action in build-agent")
+	}
+	mission := catalog["build-agent"]
+	if len(mission.Objectives) < 2 {
+		t.Fatal("build guidance must be grouped into separate objectives")
+	}
+	stages := []string{"checkout-template", "build-agent"}
+	if !slices.Equal(mission.RequiredActions, stages) || !slices.Equal(mission.OptionalActions, []string{"publish-agent", "release-agent"}) || !slices.Equal(mission.StartingActions, stages[:1]) {
+		t.Fatalf("build mission lost its checkout prerequisite: %+v", mission)
+	}
+	affinity, decision := mission.Rules[missions.SameAgent], mission.Rules[missions.DecideNextActions]
+	if len(mission.Rules) != 2 || !slices.Equal(affinity.ForActions, stages) || !slices.Equal(decision.ForActions, []string{"checkout-template", "build-agent", "publish-agent"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("workspace stages need affinity and build/publication review; release polls must continue automatically: %+v", mission.Rules)
+	}
+	const requestedActions = `[{"name":"validate-json","description":"Validate supplied JSON.","input_schema":{"type":"object"},"output_schema":{"type":"object"}}]`
+	input := json.RawMessage(`{"instructions":"Create a JSON validation agent.","actions":` + requestedActions + `}`)
+	if err := mission.ValidateInput(input); err != nil {
+		t.Fatal(err)
+	}
+	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the agent and validated its source."}`)); err != nil {
+		t.Fatal(err)
+	}
+	publicationInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"public"}`)
+	if err := mission.ValidateInput(publicationInput); err != nil {
+		t.Fatalf("optional publication preferences rejected: %v", err)
+	}
+	publicationOutput := json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated and published the source.","publication":{"repository_url":"https://github.com/example/json-agent","commit_url":"https://github.com/example/json-agent/commit/0123456789abcdef0123456789abcdef01234567","commit_sha":"0123456789abcdef0123456789abcdef01234567","visibility":"public","branch":"main"}}`)
+	if err := mission.ValidateOutput(publicationInput, publicationOutput); err != nil {
+		t.Fatalf("publication result rejected: %v", err)
+	}
+	if err := mission.ValidateOutput(publicationInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the source without publishing."}`)); err != nil {
+		t.Fatalf("publication must remain optional in the result: %v", err)
+	}
+	if err := mission.ValidateOutput(input, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Generated the source.","publication":{"repository_url":"https://github.com/example/json-agent"}}`)); err == nil {
+		t.Fatal("incomplete publication result accepted")
+	}
+	releaseInput := json.RawMessage(`{"instructions":"Create a JSON validation agent.","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"public","release_version":"v0.1.0"}`)
+	if err := mission.ValidateInput(releaseInput); err != nil {
+		t.Fatalf("explicit optional release request rejected: %v", err)
+	}
+	releaseOutput := json.RawMessage(`{"workspace_id":"checkout-example","summary":"Released the reviewed source.","release":{"repository":"example/json-agent","commit_sha":"0123456789abcdef0123456789abcdef01234567","version":"v0.1.0","agent_type":"json-agent","visibility":"public","status":"released","workflow_run_id":123,"workflow_url":"https://github.com/example/json-agent/actions/runs/123","conclusion":"success","package":"github.com/example/json-agent@v0.1.0","release_url":"https://github.com/example/json-agent/releases/tag/v0.1.0"}}`)
+	if err := mission.ValidateOutput(releaseInput, releaseOutput); err != nil {
+		t.Fatalf("verified release result rejected: %v", err)
+	}
+	if err := mission.ValidateOutput(releaseInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Build finished; publication and release were skipped."}`)); err != nil {
+		t.Fatalf("release must remain optional in the result: %v", err)
+	}
+	if err := mission.ValidateOutput(releaseInput, json.RawMessage(`{"workspace_id":"checkout-example","summary":"Still waiting.","release":{"repository":"example/json-agent","commit_sha":"0123456789abcdef0123456789abcdef01234567","version":"v0.1.0","agent_type":"json-agent","visibility":"public","status":"pending"}}`)); err == nil {
+		t.Fatal("pending release accepted as a finished mission report")
+	}
+	for _, invalid := range []string{
+		`{}`,
+		`{"instructions":"Build an agent"}`,
+		`{"instructions":"Build an agent","actions":[]}`,
+		`{"instructions":" ","actions":` + requestedActions + `}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"CODEX_API_KEY":"value"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"internal"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"release_version":"stable"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"release_version":"v0.1.0-rc.1"}`,
+	} {
+		if err := mission.ValidateInput(json.RawMessage(invalid)); err == nil {
+			t.Fatalf("invalid build input accepted: %s", invalid)
+		}
 	}
 }
 
