@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
 import type { OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
+import type { Action, Agent } from '../../src/api/types';
 import { test, connect, startOperation, publicAPIURL, username, password } from './fixtures';
 
-test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api, website }) => {
+test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api }) => {
   const operation = await api.post<{ id: string }>('/operations', {
-    operation_id: randomUUID(), mission_name: 'review-website-no-browser', input: { url: website, max_pages: 1 },
+    operation_id: randomUUID(), mission_name: 'analyze-text', input: { text: 'Operation link example' },
   }, 201);
   const link = `/#/connect?${new URLSearchParams({ api: publicAPIURL, username, operation: operation.id })}`;
   await page.goto(link);
@@ -101,6 +102,9 @@ test('Playground links prefill a connection and reuse its saved session', async 
 
 test('custom-port API catalogs survive navigation and restore server sign-in across reload', async ({ page, api }) => {
   await api.ready();
+  const [agents, actions] = await Promise.all([
+    api.get<{ items: Agent[] }>('/agents'), api.get<{ items: Action[] }>('/actions'),
+  ]);
   const browserRequests: { url: string; authorization?: string }[] = [];
   page.on('request', request => browserRequests.push({ url: request.url(), authorization: request.headers().authorization }));
   const localAPIURL = 'http://localhost:4274';
@@ -154,29 +158,36 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await expect(page.getByText('Lease expires at', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/controllers\/default-controller-[^/]+$/);
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();
-  await page.getByRole('button', { name: 'View mission review-website-with-browser' }).click();
-  await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
+  const buildMission = page.getByRole('button', { name: 'View mission build-agent', exact: true });
+  await expect(buildMission.getByText('2 required actions', { exact: true })).toBeVisible();
+  await expect(buildMission.getByText('2 optional actions', { exact: true })).toBeVisible();
+  await buildMission.click();
+  const optionalActions = page.locator('.mission-section').filter({ has: page.getByRole('heading', { name: 'Optional actions', exact: true }) });
+  await expect(optionalActions.getByRole('listitem')).toHaveText(['publish-agent', 'release-agent']);
+  await page.getByRole('button', { name: 'All missions', exact: true }).click();
+  await page.getByRole('button', { name: 'View mission analyze-text' }).click();
+  await expect(page.getByRole('heading', { name: 'analyze-text', exact: true })).toBeVisible();
   const missionURL = page.url();
-  await expect(page).toHaveURL(/\/missions\/review-website-with-browser$/);
+  await expect(page).toHaveURL(/\/missions\/analyze-text$/);
 
   const rules = page.getByRole('table', { name: 'Mission rules' });
   await expect(rules.getByRole('row')).toHaveCount(3);
-  await expect(rules.getByRole('row', { name: 'Aggregate results discover-pages All direct children', exact: true })).toBeVisible();
+  await expect(rules.getByRole('row', { name: 'Aggregate results analyze-text All direct children', exact: true })).toBeVisible();
   const decisions = rules.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Decide next actions', exact: true }) });
-  await expect(decisions.getByRole('listitem')).toHaveText(['check-links', 'check-accessibility', 'capture-page', 'check-seo', 'detect-technologies']);
+  await expect(decisions.getByRole('listitem')).toHaveText(['write-summary']);
   await expect(decisions.getByRole('cell', { name: 'Model', exact: true })).toBeVisible();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(agents.items.length);
   await page.goBack();
   await expect(page).toHaveURL(missionURL);
-  await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'analyze-text', exact: true })).toBeVisible();
   await page.goForward();
-  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(agents.items.length);
   await page.goBack();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
-  await expect(page.getByRole('heading', { name: 'review-website-with-browser', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'analyze-text', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
   const browserStorage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(JSON.stringify(browserStorage)).not.toContain(password);
@@ -218,24 +229,24 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await signIn.getByLabel('Username', { exact: true }).fill(username);
   await signIn.getByLabel('Password', { exact: true }).fill(password);
   await signIn.getByRole('button', { name: 'Save connection' }).click();
-  await page.getByRole('button', { name: 'View mission review-website-with-browser' }).click();
+  await page.getByRole('button', { name: 'View mission analyze-text' }).click();
   await expect(page).toHaveURL(missionURL);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await navigation.getByRole('button', { name: 'Actions', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^View action / })).toHaveCount(7);
-  await page.getByRole('button', { name: 'View action capture-page', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'capture-page', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^View action / })).toHaveCount(actions.items.length);
+  await page.getByRole('button', { name: 'View action analyze-text', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'analyze-text', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(browserRequests.every(request => !request.authorization)).toBe(true);
   expect(browserRequests.filter(request => new URL(request.url).pathname.startsWith('/api/'))).toEqual([]);
 });
 
-test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api, website }) => {
+test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api }) => {
   await connect(page);
   await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Operations', exact: true }).click();
-  const operation = await startOperation(page, website);
+  const operation = await startOperation(page);
   const path = `/operations/${operation.id}`;
   const question = await api.post<OperationQuestion>(`${path}/questions`, {
     text: 'Which release should this review cover?', options: ['Current release', 'Next release'],
@@ -249,46 +260,31 @@ test('operation questions, automatic work, graph and downloads use the real stac
   expect(await api.get<OperationQuestion>(`${path}/questions/${question.id}`)).toMatchObject({ status: 'answered', answer: 'Current release' });
 
   // Task planning and completion belong to Commander; the admin UI monitors and guides its work.
-  const root = await api.post<OperationTask>(`${path}/tasks`, { action_name: 'discover-pages', input: { url: website, max_pages: 1 } }, 201);
-  const finished = await api.operation(operation.id, value => value.tasks?.length === 6 && value.tasks.every(task => !['queued', 'running'].includes(task.status))
+  const root = await api.post<OperationTask>(`${path}/tasks`, { action_name: 'analyze-text', input: { text: 'Commander integration example' } }, 201);
+  const finished = await api.operation(operation.id, value => value.tasks?.length === 2 && value.tasks.every(task => !['queued', 'running'].includes(task.status))
     && value.tasks.some(task => task.id === root.id && task.continuation?.status === 'pending'));
-  expect(finished.tasks?.map(task => task.status)).toEqual(Array(6).fill('succeeded'));
+  expect(finished.tasks?.map(task => task.status)).toEqual(Array(2).fill('succeeded'));
   for (const task of finished.tasks!) {
-    const type = ['capture-page', 'check-accessibility'].includes(task.action_name) ? 'browser-agent' : 'web-agent';
-    expect(task.agent_id).toMatch(new RegExp(`^${type}-[0-9a-f]{8}$`));
+    expect(task.agent_id).toMatch(/^example-agent-[0-9a-f]{8}$/);
   }
-  const artifact = finished.tasks?.flatMap(task => task.result?.artifacts ?? []).find(item => item.action_name === 'capture-page');
+  const artifact = finished.tasks?.flatMap(task => task.result?.artifacts ?? []).find(item => item.action_name === 'write-summary');
   expect(artifact).toBeDefined();
-  const file = artifact!.files!.find(item => item.name === 'desktop.png')!;
+  const file = artifact!.files!.find(item => item.name === 'summary.md')!;
 
   await page.getByRole('button', { name: 'Execution graph', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/operations/${operation.id}/graph$`));
   const graph = page.getByRole('region', { name: 'Operation execution graph' });
-  await expect(graph.getByRole('button', { name: /^Inspect Task / })).toHaveCount(6);
+  await expect(graph.getByRole('button', { name: /^Inspect Task / })).toHaveCount(2);
   await expect(graph.getByRole('button', { name: /^Inspect Artifact / })).toHaveCount(1);
-  await expect(graph.getByRole('button', { name: /^Inspect File / })).toHaveCount(2);
+  await expect(graph.getByRole('button', { name: /^Inspect File / })).toHaveCount(1);
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click({ clickCount: 2 });
   await expect(page.getByLabel('Graph zoom')).toHaveText('150%');
-  const drag = async (x: number, y: number) => {
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x - 80, y - 60, { steps: 8 });
-    await page.mouse.up();
-  };
-  const rootNode = graph.getByRole('button', { name: /^Inspect Task discover-pages / });
-  await rootNode.scrollIntoViewIfNeeded();
-  const rootBox = (await rootNode.boundingBox())!;
-  const beforePan = await graph.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }));
-  await drag(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2);
-  await expect.poll(() => graph.evaluate(element => element.scrollLeft)).toBeGreaterThan(beforePan.left);
-  await expect.poll(() => graph.evaluate(element => element.scrollTop)).toBeGreaterThan(beforePan.top);
-  await expect(page.getByRole('dialog', { name: 'Node details', exact: true })).not.toBeVisible();
-  await graph.getByRole('button', { name: /^Inspect Task capture-page / }).click();
+  await graph.getByRole('button', { name: /^Inspect Task write-summary / }).click();
   const node = page.getByRole('region', { name: 'Node details' });
-  await expect(node.getByRole('button', { name: 'Parent task discover-pages', exact: true })).toBeVisible();
-  await expect(node.getByRole('button', { name: 'Produced artifact Page screenshots', exact: true })).toBeVisible();
-  const captureTask = finished.tasks!.find(task => task.action_name === 'capture-page')!;
-  for (const [label, value] of [['Input', captureTask.input], ['Output', captureTask.result!.output]] as const) {
+  await expect(node.getByRole('button', { name: 'Parent task analyze-text', exact: true })).toBeVisible();
+  await expect(node.getByRole('button', { name: 'Produced artifact Text summary', exact: true })).toBeVisible();
+  const summaryTask = finished.tasks!.find(task => task.action_name === 'write-summary')!;
+  for (const [label, value] of [['Input', summaryTask.input], ['Output', summaryTask.result!.output]] as const) {
     const details = node.locator('details').filter({ has: page.locator('summary').filter({ hasText: new RegExp(`^${label}$`) }) });
     const summary = details.locator('summary');
     await expect(summary).toBeVisible();
@@ -300,50 +296,41 @@ test('operation questions, automatic work, graph and downloads use the real stac
   }
   await page.getByRole('dialog', { name: 'Node details', exact: true }).getByRole('button', { name: 'Close dialog' }).click();
   await page.getByRole('button', { name: 'Reset view', exact: true }).click();
-  await graph.scrollIntoViewIfNeeded();
-  const graphBox = (await graph.boundingBox())!;
-  // Start in the canvas padding and continue outside the viewport while captured.
-  await drag(graphBox.x + graphBox.width - 20, graphBox.y + 12);
-  await expect.poll(() => graph.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
-  await expect.poll(() => graph.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-  await expect(page.getByRole('dialog', { name: 'Node details', exact: true })).not.toBeVisible();
-  await page.getByRole('button', { name: 'Reset view', exact: true }).click();
   await expect(page.getByLabel('Graph zoom')).toHaveText('100%');
   await expect.poll(() => graph.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 0, top: 0 });
-  await graph.getByRole('button', { name: new RegExp(`^Inspect File desktop\\.png · file:${artifact!.id}:${file.id}$`) }).click();
+  await graph.getByRole('button', { name: new RegExp(`^Inspect File summary\\.md · file:${artifact!.id}:${file.id}$`) }).click();
   await expect(node.getByText(file.sha256, { exact: true })).toBeVisible();
   await node.getByRole('button', { name: 'View file', exact: true }).click();
   const artifactDialog = page.getByRole('dialog', { name: 'Artifact', exact: true });
-  const preview = artifactDialog.getByRole('img', { name: 'desktop.png' });
-  await expect(preview).toBeVisible();
-  await expect.poll(() => preview.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-  const screenshotDownload = page.waitForEvent('download');
-  await artifactDialog.getByRole('button', { name: 'Download desktop.png', exact: true }).click();
-  const screenshot = await screenshotDownload;
-  expect(screenshot.suggestedFilename()).toBe('desktop.png');
-  const bytes = await readFile((await screenshot.path())!);
+  const preview = artifactDialog.getByRole('region', { name: 'File preview' });
+  await expect(preview).toContainText('Text summary');
+  const summaryDownload = page.waitForEvent('download');
+  await artifactDialog.getByRole('button', { name: 'Download summary.md', exact: true }).click();
+  const summary = await summaryDownload;
+  expect(summary.suggestedFilename()).toBe('summary.md');
+  const bytes = await readFile((await summary.path())!);
   expect(bytes.length).toBe(file.size);
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(file.sha256);
   await artifactDialog.getByRole('button', { name: 'Close', exact: true }).click();
 
   const decision = finished.tasks!.find(task => task.id === root.id)!.continuation!;
   await api.post(`${path}/tasks/${root.id}/continuation/resolve`, { version: decision.version, actions: [] });
-  await api.post(`${path}/complete`, { output: { url: website, summary: 'Reviewed the current release with browser evidence.', findings: [] } });
+  await api.post(`${path}/complete`, { output: { summary: 'Analyzed the example text and saved its summary.' } });
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await page.getByRole('button', { name: 'View report', exact: true }).click();
   const reportDialog = page.getByRole('dialog', { name: 'Operation report', exact: true });
-  await expect(reportDialog.getByRole('region', { name: 'Report output' })).toContainText('Reviewed the current release with browser evidence.');
+  await expect(reportDialog.getByRole('region', { name: 'Report output' })).toContainText('Analyzed the example text and saved its summary.');
   const reportDownload = page.waitForEvent('download');
   await reportDialog.getByRole('button', { name: 'Download JSON' }).click();
   const download = await reportDownload;
   const report: Report = JSON.parse(await readFile((await download.path())!, 'utf8'));
-  expect(report).toMatchObject({ operation_id: operation.id, mission: 'review-website-with-browser', output: { summary: 'Reviewed the current release with browser evidence.' } });
+  expect(report).toMatchObject({ operation_id: operation.id, mission: 'analyze-text', output: { summary: 'Analyzed the example text and saved its summary.' } });
   expect(download.suggestedFilename()).toBe(`${report.id}.json`);
   await reportDialog.getByRole('button', { name: 'Close', exact: true }).click();
 
   await page.getByRole('button', { name: 'All operations', exact: true }).click();
-  const cancelled = await startOperation(page, website);
+  const cancelled = await startOperation(page);
   await page.getByRole('button', { name: 'Cancel operation', exact: true }).click();
   await page.getByRole('dialog', { name: 'Cancel operation', exact: true }).getByRole('button', { name: 'Cancel operation', exact: true }).click();
   await api.operation(cancelled.id, value => value.status === 'cancelled');

@@ -1,0 +1,18 @@
+schema_version: 1
+agents:
+  builder:
+    description: Builds Commander agents with Codex, validates and exports source, and publishes reviewed source artifacts to GitHub.
+    package: github.com/defos-ai/commander/apps/agents/builder@stable
+    visibility: public
+  web:
+    description: Discovers web pages and checks links, SEO, and technology signals over HTTP.
+    package: github.com/defos-ai/commander-web-agent@stable
+    visibility: public
+  browser:
+    description: Inspects rendered web pages, checks accessibility, and captures screenshots.
+    package: github.com/defos-ai/commander-browser-agent@stable
+    visibility: public
+  example:
+    description: Demonstrates Commander agent actions as a template for developing custom agents.
+    package: github.com/defos-ai/commander-example-agent@stable
+    visibility: public

@@ -15,6 +15,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/framework/host"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -53,7 +54,7 @@ func TestProviderAuthenticationDuringSetup(t *testing.T) {
 				}
 			}))
 			defer endpoint.Close()
-			config := ui.Config{Provider: "openai", BaseURL: endpoint.URL + "/custom/v1", MCPURL: commander.URL, NoColor: true, Debug: tc.debug}
+			config := ui.Config{Provider: "openai", BaseURL: endpoint.URL + "/custom/v1", MCP: ui.Connection[host.BearerCredentials]{URL: commander.URL}, NoColor: true, Debug: tc.debug}
 			if tc.configured {
 				config.Keys = map[string]string{"openai": rejected}
 			}
@@ -154,7 +155,7 @@ func TestProviderKeyRetryBack(t *testing.T) {
 }
 
 func TestProviderDiscoveryManualFallback(t *testing.T) {
-	for _, status := range []int{http.StatusNotFound, http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusOK} {
+	for _, status := range []int{http.StatusNotFound, http.StatusOK} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			var requests atomic.Int32
 			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -34,6 +34,10 @@ func (c *Controller) run() {
 				c.beginClose(fmt.Errorf("expire agent leases: %w", err))
 				return
 			}
+			if err := c.reconcileSecrets(); err != nil {
+				c.beginClose(err)
+				return
+			}
 		}
 	}
 }
@@ -42,6 +46,7 @@ func (c *Controller) consumeEvents(actions actions.ActionStore) {
 	defer close(c.eventsDone)
 	events := consumers.EventConsumer{
 		Bus: c.bus, Inventory: c.inventory, Actions: actions, Executions: c.executionStore, Artifacts: c.artifactStore, State: c.state,
+		Secrets: c.secrets,
 	}
 	consumer := comms.Consumer{
 		Subscription: c.events, Logger: c.logger,
@@ -61,6 +66,16 @@ func (c *Controller) consumeEvents(actions actions.ActionStore) {
 		return err
 	})
 	c.beginClose(err)
+}
+
+func (c *Controller) reconcileSecrets() error {
+	if c.secrets == nil {
+		return nil
+	}
+	if err := c.secrets.Reconcile(c.state.Context); err != nil {
+		return fmt.Errorf("reconcile secret delivery: %w", err)
+	}
+	return nil
 }
 
 func submit[T any](ctx context.Context, c *Controller, execute func(context.Context) (T, error)) (T, error) {

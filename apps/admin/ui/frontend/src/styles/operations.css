@@ -48,3 +48,6 @@
   .operation-filters, .operation-filters select { width: 100%; }
 }
 .operation-report-reference { display: flex; flex-wrap: wrap; align-items: center; gap: 11px; }
+.operation-secrets { display: grid; justify-items: start; gap: 10px; }
+.operation-secrets .catalog-tags { margin: 0; }
+.operation-secrets code { overflow-wrap: anywhere; }

@@ -5,6 +5,8 @@ export default {
   settings: 'Settings',
   aggregateResults: 'Aggregate results',
   decideNextActions: 'Decide next actions',
+  sameAgent: 'Same agent',
+  sameAgentSetting: 'One agent per operation; no fallback',
   allDirectChildren: 'All direct children',
   model: 'Model',
   defaults: 'Valid proposals run automatically unless a rule requires model review. Failed work and invalid or empty proposals require model review.',

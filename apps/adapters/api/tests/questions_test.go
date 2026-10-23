@@ -10,11 +10,10 @@ import (
 
 func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	a := connect(t)
-	url := website(t)
-	op := a.start(url)
+	op := a.start(fixtureText)
 	base := operationPath(op.ID)
 	first := post[models.QuestionResponse](a, base+"/questions", object{"text": "Which release matters?"}, http.StatusCreated)
-	created := a.request(http.MethodPost, base+"/questions", object{"text": "Which review matters most?", "options": []string{"Accessibility", "SEO", "Links", "Appearance"}})
+	created := a.request(http.MethodPost, base+"/questions", object{"text": "Which result matters most?", "options": []string{"Summary", "Words", "Lines", "Characters"}})
 	latest := decode[models.QuestionResponse](t, created, http.StatusCreated)
 	if created.header.Get("Location") != base+"/questions/"+latest.ID {
 		t.Fatal("question Location omitted its saved identity")
@@ -27,9 +26,9 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 		t.Fatalf("default question lifecycle: %+v", latest)
 	}
 	assertSchema(t, a, "Question", created)
-	assertError(t, a.request(http.MethodPost, base+"/tasks", object{"action_name": "check-seo", "input": object{"url": url}}), http.StatusConflict, "question_pending")
-	assertError(t, a.request(http.MethodPost, base+"/complete", object{"output": object{"url": url, "summary": "Unanswered", "findings": []object{}}}), http.StatusConflict, "question_pending")
-	answer := "Prioritize keyboard accessibility.\nKeep the review read-only."
+	assertError(t, a.request(http.MethodPost, base+"/tasks", object{"action_name": "analyze-text", "input": object{"text": fixtureText}}), http.StatusConflict, "question_pending")
+	assertError(t, a.request(http.MethodPost, base+"/complete", object{"output": object{"summary": "Unanswered"}}), http.StatusConflict, "question_pending")
+	answer := "Prioritize the summary.\nKeep the original input."
 	post[models.OperationResponse](a, base+"/questions/"+latest.ID+"/answer", object{"answer": answer}, http.StatusOK)
 	saved := read[models.QuestionResponse](a, base+"/questions/"+latest.ID)
 	if saved.Answer != answer || saved.Status != "answered" || saved.AnsweredAt == nil {
@@ -48,7 +47,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	for _, body := range []object{{"text": " "}, {"text": "Choose", "options": []string{"1", "2", "3", "4", "5"}}, {"text": "Choose", "timeout_seconds": -1}, {"text": "Choose", "task_id": absentID}} {
 		assertError(t, a.request(http.MethodPost, base+"/questions", body), http.StatusBadRequest, "invalid_request")
 	}
-	a.complete(op.ID, url, "Answered operator questions")
+	a.complete(op.ID, "Answered operator questions")
 }
 
 func TestLinkedQuestionsReturnDecisionsAfterAnswerOrExpiry(t *testing.T) {
@@ -59,13 +58,12 @@ func TestLinkedQuestionsReturnDecisionsAfterAnswerOrExpiry(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			a := connect(t)
-			url := website(t)
-			op := a.start(url)
-			a.task(op.ID, "check-seo", url)
+			op := a.start(fixtureText)
+			a.task(op.ID, "write-summary", summaryInput())
 			ready := a.wait(op.ID, func(op models.OperationResponse) bool { return modelDecision(op) != nil })
 			task := *modelDecision(ready)
 			if task.Status != "succeeded" {
-				t.Fatalf("real SEO task failed: %+v", task)
+				t.Fatalf("summary task failed: %+v", task)
 			}
 			base := operationPath(op.ID)
 			question := post[models.QuestionResponse](a, base+"/questions", object{"text": "Is this a release preview?", "options": []string{"Yes", "No"}, "task_id": task.ID, "version": task.Continuation.Version, "timeout_seconds": 3}, http.StatusCreated)
@@ -93,7 +91,7 @@ func TestLinkedQuestionsReturnDecisionsAfterAnswerOrExpiry(t *testing.T) {
 			}
 			assertError(t, a.request(http.MethodPost, base+"/questions/"+question.ID+"/answer", object{"answer": "Late replacement"}), http.StatusConflict, code)
 			a.resolve(op.ID, *decision, []object{})
-			a.complete(op.ID, url, "Reviewed question lifecycle")
+			a.complete(op.ID, "Reviewed question lifecycle")
 		})
 	}
 }

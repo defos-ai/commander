@@ -6,7 +6,6 @@
 .operation-command-form textarea { resize: vertical; font: 400 12px/1.7 var(--font-mono); }
 .operation-command-form textarea:disabled, .operation-command-form select:disabled { opacity: .65; }
 .operation-command-form textarea[aria-invalid='true'] { border-color: var(--red); }
-.operation-command-objective { white-space: pre-wrap; overflow-wrap: anywhere; }
 .operation-command-schema { min-width: 0; }
 .operation-command-schema > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 0; }
 .operation-command-schema .mission-section { margin-top: 14px; }

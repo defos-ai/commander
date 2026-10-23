@@ -1,5 +1,5 @@
 import type { Session } from '../connections/types';
-import { isAction } from './actions';
+import { isAction, isActionRequirement } from './actions';
 import { ApiError, getJSON } from './client';
 import type { Agent, AgentWork } from './types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
@@ -7,7 +7,9 @@ import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOpti
 function isWork(value: unknown): value is AgentWork {
   return isObject(value) && typeof value.action_name === 'string' &&
     isOptionalString(value.operation_id) && isOptionalString(value.task_id) &&
-    isOptionalString(value.step_id) && isOptionalString(value.command_id);
+    isOptionalString(value.step_id) && isOptionalString(value.command_id) &&
+    (value.missing_requirements === undefined || value.missing_requirements === null ||
+      (Array.isArray(value.missing_requirements) && value.missing_requirements.every(isActionRequirement)));
 }
 
 function isTimestamp(value: unknown): value is string {

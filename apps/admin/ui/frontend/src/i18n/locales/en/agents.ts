@@ -8,6 +8,7 @@ export default {
   filtered: '{{count}} of {{total}} agents',
   open: 'View agent {{id}}',
   back: 'All agents',
+  manageSecrets: 'Manage secrets',
   refresh: 'Refresh',
   refreshing: 'Refreshing…',
   polling: 'Snapshots refresh every 30 seconds.',
@@ -64,9 +65,10 @@ export default {
   actionsDescription: 'Readiness reported by this agent, including missing dependencies.',
   noActions: 'No actions reported.',
   missingRequirements: 'Missing requirements',
-  secret: 'Secret',
+  sensitive: 'Sensitive configuration',
   requirementKinds: {
     executable: 'Executable',
     configuration: 'Configuration',
+    secret: 'Secret',
   },
 } as const;

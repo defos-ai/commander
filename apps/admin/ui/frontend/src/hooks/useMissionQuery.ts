@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
-import { getMission, listMissions } from '../api/missions';
+import { getMissionDocument, listMissions } from '../api/missions';
 import type { Mission } from '../api/types';
 import type { Session } from '../connections/types';
 
-type Content = { items: Mission[] } | { mission: Mission };
+type Content = { items: Mission[] } | { mission: Mission; definition: string };
 type Result = {
   url: string;
   credentials: Session;
@@ -26,7 +26,7 @@ export function useMissionQuery(url: string, credentials: Session | undefined, n
       try {
         const content: Content = name === undefined
           ? { items: await listMissions(url, source.credentials, controller.signal) }
-          : { mission: await getMission(url, source.credentials, name, controller.signal) };
+          : await getMissionDocument(url, source.credentials, name, controller.signal);
         if (!controller.signal.aborted) setResult({ ...source, content });
       } catch (error) {
         if (!controller.signal.aborted) setResult({ ...source,

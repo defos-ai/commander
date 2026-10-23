@@ -10,6 +10,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/comms"
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
 )
@@ -35,11 +36,13 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	}
 	ctx, endService := context.WithCancelCause(ctx)
 	workersCtx, stopWorkers := context.WithCancel(ctx)
+	checkpoints := &checkpointClient{agentID: a.ID(), service: workersCtx, events: events, pending: make(map[string]checkpointWait)}
 	var heartbeatDone chan struct{}
 	var resultsDone chan struct{}
 	var eventsDone chan struct{}
 	var outcomesDone <-chan struct{}
 	var sessionsDone <-chan struct{}
+	var secretsDone chan struct{}
 	var subscription comms.Subscription
 	var eventSubscription comms.Subscription
 	var stopCommandID string
@@ -76,6 +79,9 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		if outcomesDone != nil {
 			<-outcomesDone
 		}
+		if secretsDone != nil {
+			<-secretsDone
+		}
 	}
 	announceStopped := func(ctx context.Context, commandID string) error {
 		if closer, ok := a.config.Sessions.(interface{ Close() error }); ok {
@@ -94,6 +100,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	defer func() {
 		endService(nil)
 		stopBackground()
+		a.secrets.clear()
 		// Keep the serving claim through the final announcement so a concurrent
 		// restart cannot publish its startup ahead of this stopped snapshot.
 		defer func() {
@@ -124,6 +131,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}
 	}()
 	var err error
+	a.secrets.clear()
 	subscription, err = bus.Subscribe(ctx, comms.Inbox{Topic: messages.AgentCommands(a.ID()), Name: a.ID(), Mode: comms.TransientExclusive})
 	if err != nil {
 		return err
@@ -141,6 +149,9 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	eventConsumer := comms.Consumer{
 		Subscription: eventSubscription, Logger: a.config.Logger,
 		AfterAck: func(receipt messages.Message) {
+			if receipt.Type != agentevents.ActionResultAccepted {
+				return
+			}
 			if err := confirmation.AfterAck(workersCtx, receipt); err != nil && workersCtx.Err() == nil {
 				endService(err)
 			}
@@ -148,7 +159,21 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	}
 	go func() {
 		defer close(eventsDone)
-		err := eventConsumer.Consume(workersCtx, confirmation.Consume)
+		err := eventConsumer.Consume(workersCtx, func(ctx context.Context, message messages.Message) error {
+			if message.Type == agentevents.CheckpointResponded {
+				checkpoints.receive(message)
+				return nil
+			}
+			if message.Type == agentevents.SecretDelivered {
+				if a.secrets != nil {
+					if err := a.secrets.install(message, time.Now().UTC()); err != nil {
+						a.config.Logger.Warn("secret delivery rejected", "message_id", message.ID)
+					}
+				}
+				return nil
+			}
+			return confirmation.Consume(ctx, message)
+		})
 		if workersCtx.Err() == nil {
 			endService(err)
 		}
@@ -163,8 +188,16 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	if err != nil {
 		return err
 	}
+	if a.secrets != nil {
+		a.secrets.start(workersCtx)
+		secretsDone = make(chan struct{})
+		go func() {
+			defer close(secretsDone)
+			a.synchronizeSecrets(workersCtx, events)
+		}()
+	}
 	a.config.Logger.Info("agent ready", "action_count", len(a.config.Actions))
-	runtime := agentRuntime{agent: a, events: events, shutdown: func(ctx context.Context, commandID string) error {
+	runtime := agentRuntime{agent: a, events: events, checkpoints: checkpoints, shutdown: func(ctx context.Context, commandID string) error {
 		stopCommandID = commandID
 		stopBackground()
 		// Finish shutdown before returning to the consumer for ACK. Announce

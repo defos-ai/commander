@@ -43,14 +43,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		}
 		defer func() { result = errors.Join(result, session.Close()) }()
 		ctx = session.Context
-		config.MCPURL = session.MCPURL
-		config.configureLocalAdmin(session)
-		config.MCPCredentials = session.MCPCredentials
-		config.Notices = session.Notices
-		config.LocalAPI = &ui.LocalAPI{URL: session.APIURL, Username: session.APICredentials.Username, Password: session.APICredentials.Password}
-		if config.Debug {
-			config.Notices = append(config.Notices, "Local host logs: "+session.Directory+"/hosts.log (removed on exit)")
-		}
+		config.configureLocalSession(session)
 	}
 	if file, ok := stdout.(*os.File); !ok || !isatty.IsTerminal(file.Fd()) {
 		config.NoColor = true

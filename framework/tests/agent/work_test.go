@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 			}
 			want := agent.Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID, StepID: call.Work.StepID,
 				ActionName: call.ActionName, CommandID: command.ID}
-			if snapshot.Status != agent.AgentWorking || snapshot.Work == nil || *snapshot.Work != want ||
+			if snapshot.Status != agent.AgentWorking || !reflect.DeepEqual(snapshot.Work, &want) ||
 				working.CorrelationID != "" || bytes.Contains(working.Payload, []byte("private-input")) {
 				t.Fatalf("working announcement lost work identity or exposed input: %+v", snapshot)
 			}
@@ -90,17 +91,17 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 				t.Fatal("action did not start")
 			}
 			description := readAgentState(t, ctx, a, agent.AgentWorking)
-			if description.Work == nil || *description.Work != want {
+			if !reflect.DeepEqual(description.Work, &want) {
 				t.Fatalf("runtime did not expose current work: %+v", description)
 			}
 			description.Work.TaskID = "changed-by-reader"
-			if *a.Describe().Work != want {
+			if !reflect.DeepEqual(a.Describe().Work, &want) {
 				t.Fatal("reader changed the runtime's current work")
 			}
 			record := agents.Agent{AgentSnapshot: snapshot}
 			copy := record.Clone()
 			copy.Work.TaskID = "changed-by-store-reader"
-			if *record.Work != want {
+			if !reflect.DeepEqual(record.Work, &want) {
 				t.Fatal("inventory clone shared current work")
 			}
 

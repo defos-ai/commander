@@ -15,7 +15,7 @@ import (
 
 func TestReadOnlyQueriesValidateIDsAndEmptyCollections(t *testing.T) {
 	a := connect(t)
-	op := a.start(website(t))
+	op := a.start(fixtureText)
 	base := operationPath(op.ID)
 	before := a.request(http.MethodGet, base, nil)
 	lastEvent := fmt.Sprint(op.Events[len(op.Events)-1].Sequence)
@@ -59,7 +59,7 @@ func TestReadOnlyQueriesValidateIDsAndEmptyCollections(t *testing.T) {
 
 func TestHTTPAuthenticationOriginMethodsAndPublicProbes(t *testing.T) {
 	a := connect(t)
-	op := a.start(website(t))
+	op := a.start(fixtureText)
 	paths := []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/unknown-controller", operationPath(op.ID), operationPath(op.ID) + "/graph", "/api/v1/reports/" + absentID, "/api/v1/artifacts/" + absentID, "/openapi.json", "/api/v1/unknown"}
 	for _, path := range paths {
 		unauthorized := a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
@@ -149,8 +149,8 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 		t.Fatal("OpenAPI must not publish application action permissions")
 	}
 	requirement := document.Components.Schemas["ActionRequirement"]
-	if kind := requirement.Properties["kind"]; kind == nil || len(kind.Enum) != 2 || kind.Enum[0] != "executable" || kind.Enum[1] != "configuration" {
-		t.Fatal("OpenAPI must describe executable and configuration requirements")
+	if kind := requirement.Properties["kind"]; kind == nil || len(kind.Enum) != 3 || kind.Enum[0] != "executable" || kind.Enum[1] != "configuration" || kind.Enum[2] != "secret" {
+		t.Fatal("OpenAPI must describe executable, configuration and managed secret requirements")
 	}
 	for _, path := range []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/{controller_id}", "/api/v1/operations", "/api/v1/operations/{operation_id}", "/api/v1/operations/{operation_id}/graph", "/api/v1/operations/{operation_id}/report", "/api/v1/reports/{report_id}", "/api/v1/artifacts/{artifact_id}", "/api/v1/artifacts/{artifact_id}/files/{file_id}"} {
 		if document.Paths[path].Get.Responses["200"] == nil {

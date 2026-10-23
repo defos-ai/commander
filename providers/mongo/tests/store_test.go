@@ -99,27 +99,55 @@ func TestMongoQueriesAndUpdates(t *testing.T) {
 	}
 }
 
-func TestMongoLookupTreatsIDsAsLiteralValues(t *testing.T) {
+func TestMongoFiltersTreatIDsAsLiteralValues(t *testing.T) {
 	const collection = "literal_id_tests"
 	database := openStore(t, collection)
 	ctx := t.Context()
+	type item struct {
+		ID    string `bson:"_id"`
+		Value int    `bson:"value"`
+	}
 	ids := []string{"ordinary", `{"$ne":null}`, `{"$gt":""}`, "$where", "nested.id"}
 	for _, id := range ids {
-		if err := database.Insert(ctx, collection, bson.M{"_id": id}); err != nil {
+		if err := database.Insert(ctx, collection, item{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, id := range ids {
-		var found struct {
-			ID string `bson:"_id"`
+		var matches []item
+		if err := database.Find(ctx, collection, bson.M{"_id": id}, &matches); err != nil || len(matches) != 1 || matches[0] != (item{ID: id}) {
+			t.Fatalf("find literal ID %q: matches=%+v, error=%v", id, matches, err)
 		}
-		if err := database.GetByID(ctx, collection, id, &found); err != nil || found.ID != id {
-			t.Fatalf("literal ID %q: found=%q, error=%v", id, found.ID, err)
+		replacement := item{ID: id, Value: 1}
+		result, err := database.Replace(ctx, collection, bson.M{"_id": id}, replacement, false)
+		if err != nil || result.MatchedCount != 1 || result.ModifiedCount != 1 {
+			t.Fatalf("replace literal ID %q: result=%+v, error=%v", id, result, err)
+		}
+		var found item
+		if err := database.GetByID(ctx, collection, id, &found); err != nil || found != replacement {
+			t.Fatalf("lookup replaced literal ID %q: found=%+v, error=%v", id, found, err)
 		}
 	}
+	const missingID = `{"$exists":true}`
 	var found bson.M
-	if err := database.GetByID(ctx, collection, `{"$exists":true}`, &found); !errors.Is(err, mongo.ErrNoDocuments) {
+	if err := database.GetByID(ctx, collection, missingID, &found); !errors.Is(err, mongo.ErrNoDocuments) {
 		t.Fatalf("operator-looking ID matched a different document: %v", err)
+	}
+	var matches []item
+	if err := database.Find(ctx, collection, bson.M{"_id": missingID}, &matches); err != nil || len(matches) != 0 {
+		t.Fatalf("absent literal ID matched other documents: matches=%+v, error=%v", matches, err)
+	}
+	result, err := database.Replace(ctx, collection, bson.M{"_id": missingID}, item{ID: missingID, Value: 2}, false)
+	if err != nil || result.MatchedCount != 0 || result.ModifiedCount != 0 || result.UpsertedCount != 0 {
+		t.Fatalf("absent literal ID replaced another document: result=%+v, error=%v", result, err)
+	}
+	if err := database.Find(ctx, collection, bson.D{}, &matches); err != nil || len(matches) != len(ids) {
+		t.Fatalf("unexpected remaining records: matches=%+v, error=%v", matches, err)
+	}
+	for _, doc := range matches {
+		if doc.Value != 1 {
+			t.Fatalf("literal filter changed an unrelated record: %+v", doc)
+		}
 	}
 }
 
@@ -175,6 +203,26 @@ func TestMongoConnectionRejectsInvalidConfiguration(t *testing.T) {
 				t.Fatalf("invalid configuration should return a credential-free error: %v", err)
 			}
 		})
+	}
+}
+
+func TestMongoConnectionRedactsDriverErrors(t *testing.T) {
+	const secret = "provider-private-password"
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	uri := "mongodb://user:" + secret + "@127.0.0.1:1/test?tlsCertificateKeyFilePassword=" + secret + "%zz"
+	database, err := store.Open(ctx, uri)
+	if database != nil {
+		_ = database.Close(ctx)
+	}
+	if err == nil {
+		t.Fatal("malformed URI option must fail initialization")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Error("initialization error exposed a sensitive URI option")
+	}
+	if errors.Unwrap(err) == nil {
+		t.Error("initialization error must preserve its cause for inspection")
 	}
 }
 

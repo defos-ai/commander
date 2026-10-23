@@ -2,34 +2,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Commander Web Agent",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/apps/agents/web/cmd",
-      "cwd": "${workspaceFolder}",
-      "buildFlags": "-buildvcs=false",
-      "console": "integratedTerminal",
-      "args": [
-        "-bus-url=${workspaceFolder}/state/bus",
-        "-storage-url=${workspaceFolder}/state/storage"
-      ]
-    },
-    {
-      "name": "Commander Browser Agent",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/apps/agents/browser/cmd",
-      "cwd": "${workspaceFolder}",
-      "buildFlags": "-buildvcs=false",
-      "console": "integratedTerminal",
-      "args": [
-        "-bus-url=${workspaceFolder}/state/bus",
-        "-storage-url=${workspaceFolder}/state/storage"
-      ]
-    },
-    {
       "name": "Commander Controller",
       "type": "go",
       "request": "launch",
@@ -62,7 +34,10 @@
       "host": "127.0.0.1",
       "port": 2345,
       "substitutePath": [
-        { "from": "${workspaceFolder}", "to": "/src" }
+        {
+          "from": "${workspaceFolder}",
+          "to": "/src"
+        }
       ]
     },
     {
@@ -74,7 +49,10 @@
       "host": "127.0.0.1",
       "port": 2346,
       "substitutePath": [
-        { "from": "${workspaceFolder}", "to": "/src" }
+        {
+          "from": "${workspaceFolder}",
+          "to": "/src"
+        }
       ]
     },
     {
@@ -86,43 +64,10 @@
       "host": "127.0.0.1",
       "port": 2347,
       "substitutePath": [
-        { "from": "${workspaceFolder}", "to": "/src" }
-      ]
-    },
-    {
-      "name": "Commander Docker: Browser Agent",
-      "type": "go",
-      "debugAdapter": "dlv-dap",
-      "request": "attach",
-      "mode": "remote",
-      "host": "127.0.0.1",
-      "port": 2348,
-      "substitutePath": [
-        { "from": "${workspaceFolder}", "to": "/src" }
-      ]
-    },
-    {
-      "name": "Commander Docker: Web Agent 1",
-      "type": "go",
-      "debugAdapter": "dlv-dap",
-      "request": "attach",
-      "mode": "remote",
-      "host": "127.0.0.1",
-      "port": 2349,
-      "substitutePath": [
-        { "from": "${workspaceFolder}", "to": "/src" }
-      ]
-    },
-    {
-      "name": "Commander Docker: Web Agent 2",
-      "type": "go",
-      "debugAdapter": "dlv-dap",
-      "request": "attach",
-      "mode": "remote",
-      "host": "127.0.0.1",
-      "port": 2350,
-      "substitutePath": [
-        { "from": "${workspaceFolder}", "to": "/src" }
+        {
+          "from": "${workspaceFolder}",
+          "to": "/src"
+        }
       ]
     }
   ],
@@ -132,17 +77,7 @@
       "configurations": [
         "Commander Docker: Controller",
         "Commander Docker: API",
-        "Commander Docker: MCP",
-        "Commander Docker: Browser Agent",
-        "Commander Docker: Web Agent 1",
-        "Commander Docker: Web Agent 2"
-      ]
-    },
-    {
-      "name": "Commander Docker: Both Web Agents",
-      "configurations": [
-        "Commander Docker: Web Agent 1",
-        "Commander Docker: Web Agent 2"
+        "Commander Docker: MCP"
       ]
     }
   ]

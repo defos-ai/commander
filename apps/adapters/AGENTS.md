@@ -5,6 +5,18 @@
 - Adapters query saved state through stores and send typed operation commands to
   the controller. They must not select agents, dispatch agent commands, or mutate
   operation records directly. Queries should remain usable without a live controller.
+- Operation/task/report/event loading is shared through
+  [`queries.Operations`](../../framework/queries/operations.go). Map its derived
+  views into each adapter's wire format; keep pagination validation and bounded
+  wait deadlines here. Event waits end on saved-work settlement, not terminal
+  operation status alone, and reread events after observing settlement.
+- Every operation response includes a required `progress` projection: sparse
+  nonnull `task_counts`, `total_tasks`, `finished_tasks`, `pending_decisions`,
+  `pending_questions` and `settled`. Use the query view's assessment or assess the
+  returned command snapshot once; never query again to enrich a command response.
+  Only succeeded, failed and cancelled tasks count as finished. Interrupted work
+  remains unsettled, including after the operation ends. Terminal operations
+  expose zero actionable decisions/questions without deleting their history.
 - MCP registration and input decoding start in [mcp/adapter.go](mcp/adapter.go);
   operation tools live in [mcp/operations.go](mcp/operations.go), and file resources
   in [mcp/artifacts.go](mcp/artifacts.go). HTTP-specific guidance is in
@@ -48,14 +60,66 @@
   tool execution failures use text content with `IsError`.
 - Successful tool results carry JSON in text `content`. File references use
   resource-link blocks; do not duplicate result payloads in `structuredContent`.
+- `create_mission` accepts a flat `missions.Mission` and shares its validation
+  with the API and stores. Root `objectives` is a required ordered array of one
+  or more nonblank strings; step guidance keeps singular `objective`.
+  Optional `action_definitions` contains up to 100 desired contracts, unique by
+  name and referenced by required/optional actions or step requirements. Advertise
+  strict contract fields and explicit root object-schema types; shared mission
+  validation resolves schemas locally. Definitions are metadata only, never
+  installed actions, secret values or readiness evidence.
+  Invalid definitions are invalid-params errors;
+  duplicate names are tool errors, including identical submissions. Call
+  `MissionStore.Create` directly with a bounded context, never `Upsert` or an
+  operation command. Creation does not check agent availability or start work.
+  Sanitize backend errors and direct callers to `describe_mission` before retrying
+  uncertain writes. Keep the advertised schema aligned with strict decoding,
+  including nullable optional collections and open JSON Schema documents.
 - Preserve `missions://artifacts/{id}` and its `/files/{file_id}` resource shape.
   Validate record IDs and artifact membership before retrieving bytes. IDs are
   never filesystem paths. Empty files need explicit blob content.
 - Keep summaries small and use detail tools for schemas, task input and results.
   Readiness reflects the selected agent's advertisement and current lease; catalog
   metadata alone does not establish an available executor.
+  MCP instructions direct clients to registered agent responsibilities and action
+  schemas. Keep installation guidance on the spawner's registered metadata and
+  the `install-agent` mission, not in adapter constants or known-package lists.
+  Preserve responsibilities in both `list_agents` and `describe_agent` so any
+  client can discover an agent's usage guidance.
+- MCP agent discovery lives in `mcp/catalog.go`: `get_agent_catalog` reads
+  the configured catalog and returns a sorted `agents` list with each entry's
+  package and visibility unchanged. The factory owns `CatalogClient` and closes
+  idle connections.
+  `AGENT_CATALOG_URL` defaults to the official HTTPS source; never accept it as
+  tool input or fetch metadata during startup. Catalog fetch/parse errors stay tool-local.
+  Direct GitHub URLs and references work without catalog membership; aliases are
+  discovery names only. Resolution and durable pinning belong to the spawner,
+  including private `@stable` references. Keep MCP guidance generic and follow
+  agent responsibilities; do not reintroduce a package-resolution tool or acquire
+  spawner tokens in MCP. Readiness and manifest/asset validation remain in agent
+  registration and spawning.
+  Metadata clients must remain anonymous, with no environment token forwarding.
+  Existing managed-secret handoff uses explicit preflight `agent_type` and
+  `missing_requirements` of kind `secret` for actions without ready candidates.
+  Sensitive host configuration remains kind `configuration`, even with
+  `sensitive: true`. MCP instructions direct operators to
+  Admin Secrets; never solicit secret values through chat, tools or questions,
+  or equate a saved secret with an agent becoming ready.
+- Running task queries also project `agent_type` and `missing_requirements` from
+  the assigned agent's live work. The shared query service applies
+  `operations.AssessTaskRequirements` with one assessment time per response.
+  Match the saved execution identity and retain its deadline; suppress waits for
+  terminal operations. Inventory failures omit this optional observation while
+  keeping saved results readable. Never infer a task wait from sync requests.
+  Task summaries include `deadline_at` only alongside live missing requirements;
+  detail queries retain the saved deadline even after that observation clears.
 - Continuation decisions must retain the task and business version used to reject
   stale choices. Questions record actual operator answers; expiry is not approval.
+- MCP `get_operation` and `list_operations` expose read-only `affinity` through
+  `Operation.AssessAffinity`. Preserve `for_actions`, the saved owner and any
+  history error even without live inventory. Queued tasks remain unassigned.
+  Explain `same-agent` as placement with no fallback; saved preflight is not
+  evidence of current capacity. Command responses retain their saved-state shape.
 - Keep pagination cursors bound to the resource and operation. Bound event waits
   and honor cancellation without changing saved operation state.
 
@@ -77,5 +141,6 @@
 - Settle active work before fixture cleanup. Expose cleanup only with `ENV=tests`;
   preserve catalogs, registrations, deliveries, bus state and host memory. Late
   results must not recreate removed artifacts. Tests do not manage Docker or volumes.
-- Run browser suites separately from adapter suites sharing the same stack, and
-  always stop the test stack after testing, including after failures.
+- The stacks use pinned source builds of the lightweight example agent. Standalone
+  repositories run agent-specific suites. Always stop the Commander test stack
+  after testing, including after failures.

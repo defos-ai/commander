@@ -1,34 +1,27 @@
 # S3 provider
 
-## Overview
-
-`github.com/defos-ai/commander/providers/s3` stores artifact files and immutable
-reports in Amazon S3 or a compatible service such as MinIO. App factories select it for `s3://`
-`STORAGE_URL` values. Accepted artifact metadata stays in the database.
+Store artifact files and reports in Amazon S3 or MinIO. Metadata stays in the
+database. [Compose](../../compose.yaml) configures MinIO and creates its bucket.
 
 ## Quick start
 
-Start the complete local stack with RabbitMQ, MongoDB, and MinIO:
+For an existing bucket, set:
 
 ```sh
-docker compose -f compose.full.yaml up --build -d
+STORAGE_URL=s3://your-bucket/commander
 ```
 
-Compose builds pinned MinIO sources and creates the `commander` bucket. The
-first build takes longer than subsequent starts. For an existing S3 bucket,
-set `STORAGE_URL=s3://your-bucket/optional-prefix`.
-
-| Setting | Purpose |
+| Setting | Set it for… |
 | --- | --- |
-| `AWS_REGION` | Bucket region; the provider uses `us-east-1` when SDK configuration has no region |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Environment credentials, when used |
-| `AWS_ENDPOINT_URL_S3` | Custom endpoint for MinIO or another compatible service |
-| `S3_USE_PATH_STYLE` | Set `true` for MinIO; defaults to `false` |
+| `AWS_REGION` | Your bucket's region. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Environment credentials, if not using another AWS credential source. |
+| `AWS_ENDPOINT_URL_S3` | MinIO or another compatible service. |
+| `S3_USE_PATH_STYLE=true` | MinIO. |
 
-The provider uses the AWS SDK's default configuration and credential chain.
-Keep credentials out of `STORAGE_URL`. It uses an existing bucket and does not
-create buckets or change policies. Hosts need object read/write permissions for
-the configured prefix.
+Use the AWS default credential chain; keep credentials out of `STORAGE_URL`.
+Create the bucket first and grant object read/write access to its prefix.
+
+To embed artifact file storage:
 
 ```go
 import (
@@ -43,15 +36,10 @@ if err != nil {
 files, err := s3artifacts.NewArtifactFileS3Store(storage)
 ```
 
-The repository workspace includes this module. Private projects use
-[local module replacements](../../apps/agents/README.md#develop-an-agent-in-a-private-repository)
-for the framework and this provider.
-
 ## Development and testing
 
-See [AGENTS.md](AGENTS.md) for object-storage implementation guidance.
-
-From the repository root, start isolated MinIO services and run integration tests:
+Use a dedicated test bucket or prefix with list/delete permissions too.
+From the repository root:
 
 ```sh
 docker compose -f .github/composes/compose.providers.test.yaml up --build --wait minio
@@ -64,19 +52,12 @@ go vet ./providers/s3/...
 docker compose -f .github/composes/compose.providers.test.yaml down --volumes
 ```
 
-Use a dedicated test bucket or prefix. Integration tests skip without
-`COMMANDER_TEST_S3_URL` and remove their own objects afterward; cleanup also needs
-object listing and deletion permissions. See the
-[testing guide](../../framework/tests/README.md) for full-stack checks.
-Always stop test services, including after failures.
+Tests skip without `COMMANDER_TEST_S3_URL` and delete their own objects.
+Always stop the stack, including after failures.
 
 ## Object layout and writes
 
-Object keys are `<prefix>/artifacts/<artifact-id>/<file-id>` and
-`<prefix>/reports/<report-id>.json`; omit `<prefix>/` when no prefix is configured.
-Uploads use conditional, single-object PUT requests. Multipart and resumable
-uploads are not implemented. Artifact reads verify size and SHA-256; repeating a
-report write accepts identical content and rejects conflicting content.
-
-Failed or interrupted work can leave uploaded files without accepted metadata;
-automatic orphan cleanup is not implemented.
+Keep the configured prefix dedicated to Commander. Files use `artifacts/` and
+reports use `reports/` beneath it. Failed work can leave unreferenced uploads;
+automatic orphan cleanup is unavailable. See [AGENTS.md](AGENTS.md) before
+changing object writes or cleanup.

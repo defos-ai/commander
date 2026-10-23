@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -26,8 +24,19 @@ type object = map[string]any
 
 type operationDetail struct {
 	operations.Operation
+	Progress           operationProgress    `json:"progress"`
+	Affinity           *operations.Affinity `json:"affinity"`
 	LastQuestion       *operations.Question `json:"last_question"`
 	RemainingQuestions int                  `json:"remaining_questions"`
+}
+
+type operationProgress struct {
+	TaskCounts       map[string]int `json:"task_counts"`
+	TotalTasks       int            `json:"total_tasks"`
+	FinishedTasks    int            `json:"finished_tasks"`
+	PendingDecisions int            `json:"pending_decisions"`
+	PendingQuestions int            `json:"pending_questions"`
+	Settled          bool           `json:"settled"`
 }
 
 func connect(t *testing.T) *api {
@@ -68,16 +77,17 @@ func connect(t *testing.T) *api {
 			Agents []agents.Agent `json:"agents"`
 		}
 		a.call("list_agents", object{}, &list)
-		ready := len(list.Agents) == 3
+		ready := true
 		types := map[string]int{}
 		for _, agent := range list.Agents {
 			types[string(agent.Type)]++
-			ready = ready && !agent.Stale && agent.Status == agents.AgentReady && agent.Work == nil && len(agent.Actions) == len(expectedAgentActions(string(agent.Type)))
+			expected := expectedAgentActions(string(agent.Type))
+			ready = ready && len(expected) > 0 && !agent.Stale && agent.Status == agents.AgentReady && agent.Work == nil && len(agent.Actions) == len(expected)
 			for _, action := range agent.Actions {
-				ready = ready && action.Status == "ready"
+				ready = ready && (action.Name == "build-agent" || action.Name == "publish-agent" || action.Name == "release-agent" || action.Status == "ready")
 			}
 		}
-		if ready && types["web-agent"] == 2 && types["browser-agent"] == 1 {
+		if ready && types["example-agent"] == 2 && types["builder-agent"] == 1 && types["spawner-agent"] == 1 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -85,7 +95,7 @@ func connect(t *testing.T) *api {
 			for _, agent := range list.Agents {
 				states = append(states, fmt.Sprintf("%s: status=%s stale=%t last_heartbeat=%s", agent.ID, agent.Status, agent.Stale, agent.LastHeartbeat.Format(time.RFC3339)))
 			}
-			t.Fatalf("expected two web agents and one browser agent ready after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
+			t.Fatalf("expected two example agents, one builder and one spawner ready after cleanup; found %d: [%s]; inspect controller logs for stopped event processing", len(list.Agents), strings.Join(states, "; "))
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -101,20 +111,17 @@ func connect(t *testing.T) *api {
 
 func expectedAgentActions(agentType string) []string {
 	switch agentType {
-	case "web-agent":
-		return []string{"check-links", "check-seo", "detect-technologies", "discover-pages", "discover-pages-no-browser"}
-	case "browser-agent":
-		return []string{"capture-page", "check-accessibility"}
+	case "example-agent":
+		return []string{"analyze-text", "write-summary"}
+	case "spawner-agent":
+		return []string{"spawn-agent"}
+	case "builder-agent":
+		return []string{"build-agent", "checkout-template", "publish-agent", "release-agent"}
+	case "fixture-agent":
+		return []string{"fixture-echo"}
 	default:
 		return nil
 	}
-}
-
-func expectedExecutorType(action string) string {
-	if action == "capture-page" || action == "check-accessibility" {
-		return "browser-agent"
-	}
-	return "web-agent"
 }
 
 func openSession(t *testing.T) *api {
@@ -246,10 +253,24 @@ func (a *api) call(name string, args object, out any) {
 	if result.StructuredContent != nil {
 		a.t.Fatalf("%s: result must contain JSON once, in content text only", name)
 	}
+	raw := []byte(resultText(result))
+	switch name {
+	case "start_operation", "get_operation", "resolve_continuation", "answer_question", "complete_operation", "fail_operation", "cancel_operation":
+		var payload struct {
+			Progress map[string]json.RawMessage `json:"progress"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			a.t.Fatal(err)
+		}
+		for _, field := range []string{"task_counts", "total_tasks", "finished_tasks", "pending_decisions", "pending_questions", "settled"} {
+			if value := payload.Progress[field]; len(value) == 0 || string(value) == "null" {
+				a.t.Fatalf("%s omitted progress.%s", name, field)
+			}
+		}
+	}
 	if out == nil {
 		return
 	}
-	raw := []byte(resultText(result))
 	if err := json.Unmarshal(raw, out); err != nil {
 		a.t.Fatalf("decode %s: %v; %s", name, err, raw)
 	}
@@ -273,10 +294,10 @@ func (a *api) fails(name string, args object, contains string) {
 		a.t.Fatalf("%s: want error containing %q; got isError=%v, %q", name, contains, result.IsError, resultText(result))
 	}
 }
-func (a *api) start(url string) operations.Operation {
+func (a *api) start(text string) operations.Operation {
 	a.t.Helper()
 	var op operations.Operation
-	a.call("start_operation", object{"mission_name": "review-website-with-browser", "input": object{"url": url, "max_pages": 2}}, &op)
+	a.call("start_operation", object{"mission_name": "analyze-text", "input": object{"text": text}}, &op)
 	return op
 }
 func (a *api) get(id string) operationDetail {
@@ -307,10 +328,10 @@ func (a *api) wait(id string, done func(operationDetail) bool) operationDetail {
 		}
 	}
 }
-func (a *api) task(opID, action, url string) operations.Task {
+func (a *api) task(opID, action string, input object) operations.Task {
 	a.t.Helper()
 	var task operations.Task
-	a.call("assign_task", object{"operation_id": opID, "action_name": action, "input": object{"url": url}}, &task)
+	a.call("assign_task", object{"operation_id": opID, "action_name": action, "input": input}, &task)
 	return task
 }
 func modelDecision(op operationDetail) *operations.Task {
@@ -326,35 +347,6 @@ func (a *api) resolve(opID string, task operations.Task, actions []object) {
 	a.call("resolve_continuation", object{"operation_id": opID, "task_id": task.ID, "version": task.Continuation.Version, "actions": actions}, nil)
 }
 
-// The website lives on the test host. Containers reach it through host-gateway;
-// no public websites, DNS services or model API credentials are needed.
-func website(t *testing.T) string {
-	t.Helper()
-	return serveWebsite(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/missing" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("X-Powered-By", "Express")
-		fmt.Fprint(w, `<!doctype html><html lang="en"><head><title>Commander test site</title><meta name="generator" content="WordPress 6.8"></head><body><h1>Release review</h1><a href="/about">About</a><a href="/missing">Broken link</a><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></body></html>`)
-	}))
-}
-
-func serveWebsite(t *testing.T, handler http.Handler) string {
-	t.Helper()
-	server := httptest.NewUnstartedServer(handler)
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	server.Listener.Close()
-	server.Listener = listener
-	server.Start()
-	t.Cleanup(server.Close)
-	host := os.Getenv("COMMANDER_TEST_WEBSITE_HOST")
-	if host == "" {
-		host = "host.docker.internal"
-	}
-	return "http://" + net.JoinHostPort(host, fmt.Sprint(listener.Addr().(*net.TCPAddr).Port))
+func summaryInput() object {
+	return object{"character_count": 4, "word_count": 1, "line_count": 1}
 }

@@ -3,12 +3,14 @@ package runner_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sync/atomic"
 	"testing"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -52,7 +54,7 @@ func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 		{name: "stopped agent", change: func(a *agents.Agent) { a.Status = agents.AgentStopped }},
 		{name: "undiscovered action", change: func(a *agents.Agent) { a.Actions[0].Status = actions.Unknown }},
 		{name: "missing executable", requirement: actions.Requirement{Kind: actions.ExecutableRequirement, Name: "browser"}},
-		{name: "missing configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "SERVICE_API_KEY", Secret: true}},
+		{name: "missing configuration", requirement: actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "SERVICE_API_KEY", Sensitive: true}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -113,13 +115,63 @@ func TestPreflightChecksMissionCoverageAcrossAgents(t *testing.T) {
 	})
 }
 
+func TestOptionalActionChecksReadinessOnlyWhenQueued(t *testing.T) {
+	config := fixture()
+	definition := &config.MissionStore.(*missionStore).mission
+	definition.RequiredActions = []string{"inspect"}
+	definition.OptionalActions = []string{"capture"}
+	record := readyAgent(agentID)
+	record.Actions = []actions.Action{{Name: "inspect", Status: actions.Ready}, {Name: "capture", Status: actions.Unavailable,
+		RequiredSecrets:     []string{"BROWSER_TOKEN"},
+		MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "BROWSER_TOKEN"}},
+	}}
+	catalog := &agentCatalog{}
+	catalog.set(record)
+	config.AgentCatalog = catalog
+	exec, calls := controlledExecutor()
+	r := newRunner(t, config, exec)
+	op := start(t, r)
+	if !op.Preflight.Ready || len(op.Preflight.Actions) != 1 || !slices.Equal(op.Mission.OptionalActions, []string{"capture"}) {
+		t.Fatalf("unscheduled optional action blocked initial preflight or was lost: %+v", op)
+	}
+	task := assign(t, r, op.ID, "capture")
+	closeRunner(t, r)
+	r = newRunner(t, config, exec)
+	blocked := awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+		return op.Preflight != nil && !op.Preflight.Ready && len(op.Preflight.Actions) == 2
+	})
+	coverage := blocked.Preflight.Actions[0]
+	if blocked.Status != operations.Waiting || blocked.Tasks[0].Status != operations.TaskQueued || coverage.ActionName != "capture" || len(coverage.UnavailableAgents) != 1 || !slices.Equal(coverage.UnavailableAgents[0].MissingRequirements, record.Actions[1].MissingRequirements) {
+		t.Fatalf("queued optional action lost its secret requirement across restart: %+v", blocked)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("optional action dispatched without its secret: %+v", call)
+	default:
+	}
+	record.Actions[1].Status = actions.Ready
+	record.Actions[1].MissingRequirements = nil
+	catalog.set(record)
+	call := receive(t, calls)
+	if call.call.ActionName != "capture" {
+		t.Fatalf("wrong optional action dispatched: %+v", call)
+	}
+	call.reply <- output("capture")
+	finished := awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+		return op.Tasks[0].ID == task.ID && op.Tasks[0].Status == operations.TaskSucceeded && op.Preflight.Ready && len(op.Preflight.Actions) == 1
+	})
+	if !slices.Equal(finished.Mission.OptionalActions, []string{"capture"}) {
+		t.Fatal("execution changed the mission's optional actions")
+	}
+}
+
 func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testing.T) {
 	config := fixture()
 	config.MissionStore.(*missionStore).mission.RequiredActions = []string{"inspect", "capture"}
-	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Status: agents.AgentReady,
+	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Type: "browser", Status: agents.AgentReady,
 		Actions: []actions.Action{
 			{Name: "inspect", Status: actions.Ready},
-			{Name: "capture", Status: actions.Unavailable, MissingRequirements: []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "browser"}}},
+			{Name: "capture", Status: actions.Unavailable, RequiredSecrets: []string{"BROWSER_TOKEN"}, MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "BROWSER_TOKEN"}}},
 		},
 	}}
 	catalog := &agentCatalog{}
@@ -135,6 +187,16 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	if err != nil || restored.Status != operations.Waiting || restored.Preflight.Ready || restored.Tasks[0].Status != operations.TaskQueued {
 		t.Fatalf("restart lost preflight or dispatched blocked work: %+v, %v", restored, err)
 	}
+	candidate := restored.Preflight.Actions[0].UnavailableAgents[0]
+	wantMissing := []actions.Requirement{{Kind: actions.SecretRequirement, Name: "BROWSER_TOKEN"}}
+	if candidate.AgentType != "browser" || !slices.Equal(candidate.MissingRequirements, wantMissing) {
+		t.Fatalf("restart lost managed secret requirement: %+v", candidate)
+	}
+	candidate.MissingRequirements[0].Name = "changed snapshot"
+	saved, err := r.Get(t.Context(), op.ID)
+	if err != nil || !slices.Equal(saved.Preflight.Actions[0].UnavailableAgents[0].MissingRequirements, wantMissing) {
+		t.Fatalf("reading secret requirements changed saved preflight: %+v, %v", saved.Preflight, err)
+	}
 
 	// Changing the gap proves the scheduler processed this inventory while blocked.
 	record.Actions[1].MissingRequirements[0] = actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "BROWSER_PATH"}
@@ -147,6 +209,9 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	}
 	if blocked.Tasks[0].Status != operations.TaskQueued {
 		t.Fatalf("task did not remain queued: %+v", blocked.Tasks[0])
+	}
+	if !slices.Equal(blocked.Preflight.Actions[0].UnavailableAgents[0].MissingRequirements, record.Actions[1].MissingRequirements) {
+		t.Fatal("a nonsecret requirement retained the previous managed secret wait")
 	}
 
 	record.Actions[1].Status, record.Actions[1].MissingRequirements = actions.Ready, nil
@@ -162,4 +227,78 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestPreflightExposesCurrentRequirementsOnLiveCandidates(t *testing.T) {
+	base := readyAgent(agentID)
+	base.Type = "builder"
+	base.Actions[0].Status = actions.Unavailable
+	base.Actions[0].RequiredSecrets = []string{"TOKEN", "SECOND_TOKEN", "AVAILABLE_TOKEN"}
+	base.Actions[0].MissingRequirements = []actions.Requirement{
+		{Kind: actions.SecretRequirement, Name: "TOKEN"},
+		{Kind: actions.SecretRequirement, Name: "SECOND_TOKEN"},
+		{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Sensitive: true},
+		{Kind: actions.ConfigurationRequirement, Name: "PATH"},
+		{Kind: actions.ExecutableRequirement, Name: "git"},
+	}
+	tests := []struct {
+		name   string
+		change func(*agents.Agent)
+		live   bool
+	}{
+		{name: "live candidate", live: true},
+		{name: "working candidate", change: func(a *agents.Agent) { a.Status = agents.AgentWorking }, live: true},
+		{name: "sensitive environment only", change: func(a *agents.Agent) {
+			a.Actions[0].RequiredSecrets = nil
+			a.Actions[0].MissingRequirements = []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "ENV_TOKEN", Sensitive: true}}
+		}, live: true},
+		{name: "declared but no longer missing", change: func(a *agents.Agent) {
+			a.Actions[0].MissingRequirements = nil
+		}, live: true},
+		{name: "stale candidate", change: func(a *agents.Agent) { a.Stale = true }},
+		{name: "stopped candidate", change: func(a *agents.Agent) { a.Status = agents.AgentStopped }},
+		{name: "discovering candidate", change: func(a *agents.Agent) { a.Status = agents.AgentDiscovering }},
+	}
+	mission := missions.Mission{RequiredActions: []string{"inspect"}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := base.Clone()
+			if test.change != nil {
+				test.change(&candidate)
+			}
+			original := slices.Clone(candidate.Actions[0].MissingRequirements)
+			preflight, err := (operations.Operation{Mission: mission}).AssessPreflight([]agents.Agent{candidate})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if preflight.Ready || len(preflight.Actions) != 1 || len(preflight.Actions[0].UnavailableAgents) != 1 {
+				t.Fatalf("missing requirements no longer block preflight: %+v", preflight)
+			}
+			got := preflight.Actions[0].UnavailableAgents[0]
+			var want []actions.Requirement
+			if test.live {
+				want = original
+			}
+			if got.AgentType != string(candidate.Type) || !slices.Equal(got.MissingRequirements, want) {
+				t.Fatalf("current requirements: got %+v; want type %q, requirements %v", got, candidate.Type, want)
+			}
+			if len(got.MissingRequirements) > 0 {
+				got.MissingRequirements[0].Name = "changed snapshot"
+			}
+			if !slices.Equal(candidate.Actions[0].MissingRequirements, original) {
+				t.Fatal("preflight changed the agent's last reported requirements")
+			}
+		})
+	}
+
+	t.Run("another ready agent covers the action", func(t *testing.T) {
+		ready := readyAgent("review-agent-00000002")
+		preflight, err := (operations.Operation{Mission: mission}).AssessPreflight([]agents.Agent{base, ready})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !preflight.Ready || len(preflight.Actions[0].UnavailableAgents) != 0 || !slices.Equal(preflight.Actions[0].ReadyAgentIDs, []string{ready.ID}) {
+			t.Fatalf("an available candidate did not clear the action's wait: %+v", preflight)
+		}
+	})
 }

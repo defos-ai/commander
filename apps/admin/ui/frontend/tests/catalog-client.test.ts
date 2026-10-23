@@ -8,9 +8,11 @@ const credentials = { url, username: 'operator' };
 const action: Action = {
   name: 'capture-page', description: 'Capture a page in the browser', status: 'unavailable',
   status_reason: 'Browser and API key are missing',
+  required_secrets: ['BROWSER_API_KEY'],
   missing_requirements: [
     { kind: 'executable', name: 'chromium' },
-    { kind: 'configuration', name: 'BROWSER_API_KEY', secret: true },
+    { kind: 'secret', name: 'BROWSER_API_KEY' },
+    { kind: 'configuration', name: 'LOCAL_BROWSER_KEY', sensitive: true },
   ],
   input_schema: { type: 'object', properties: { url: { type: 'string' } } }, output_schema: {},
 };
@@ -50,10 +52,6 @@ describe('agent and action catalogs', () => {
       { url, path: '/api/v1/agents' }, { url, path: `/api/v1/agents/${agent.id}` },
       { url, path: '/api/v1/actions' }, { url, path: `/api/v1/actions/${action.name}` },
     ]);
-    for (const [, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', headers: { 'X-Commander-UI': '1' } });
-      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
-    }
   });
 
   it('accepts empty catalogs, nullable Go fields and unknown future status values', async () => {
@@ -119,7 +117,7 @@ describe('agent and action catalogs', () => {
   it.each([
     { server: null },
     { work: { action_name: 'check-links', task_id: 42 } },
-    { actions: [{ ...action, missing_requirements: [{ kind: 'executable', name: 'chromium', secret: 'yes' }] }] },
+    { actions: [{ ...action, missing_requirements: [{ kind: 'executable', name: 'chromium', sensitive: 'yes' }] }] },
     { responsibilities: 'review' },
     { discovery_scope: { paths: ['/usr/bin'], services: [42] } },
     { last_heartbeat: 'not a date' },
@@ -132,7 +130,12 @@ describe('agent and action catalogs', () => {
 
   it.each([
     { status_reason: { message: 'missing' } },
+    { required_secrets: 'BROWSER_API_KEY' },
+    { required_secrets: [42] },
     { missing_requirements: [{ name: 'chromium' }] },
+    { missing_requirements: [{ kind: 'secret', name: 'token/name' }] },
+    { missing_requirements: [{ kind: 'secret', name: 'BROWSER_API_KEY', sensitive: true }] },
+    { missing_requirements: [{ kind: 'executable', name: 'chromium', sensitive: true }] },
     { input_schema: [] },
     { output_schema: true },
   ])('rejects malformed action fields before rendering: %j', async patch => {

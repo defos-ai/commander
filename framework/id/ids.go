@@ -4,12 +4,27 @@ package id
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"strings"
 )
 
 // AgentID appends -agent unless already present, followed by eight lowercase hex characters.
 func AgentID(agentType string) (string, error) {
 	return NewRuntime(strings.TrimSuffix(agentType, "-agent"), Agent)
+}
+
+// AgentIDFromSuffix combines the host's fixed type with an externally assigned
+// suffix. Only eight lowercase hexadecimal characters may come from outside.
+func AgentIDFromSuffix(agentType, suffix string) (string, error) {
+	if !validRuntimeSuffix(suffix) {
+		return "", errors.New("agent ID suffix must contain exactly 8 lowercase hex characters")
+	}
+	value := strings.TrimSuffix(agentType, "-agent") + "-agent-" + suffix
+	if !ValidAgent(value) {
+		return "", fmt.Errorf("invalid agent type %q for a runtime ID", agentType)
+	}
+	return value, nil
 }
 
 // ControllerID returns <type>-controller-<8 lowercase hex characters>.

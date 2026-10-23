@@ -59,9 +59,7 @@ func (record Agent) Clone() Agent {
 	record.Config = bytes.Clone(record.Config)
 	record.Actions = slices.Clone(record.Actions)
 	for i := range record.Actions {
-		record.Actions[i].MissingRequirements = slices.Clone(record.Actions[i].MissingRequirements)
-		record.Actions[i].InputSchema = bytes.Clone(record.Actions[i].InputSchema)
-		record.Actions[i].OutputSchema = bytes.Clone(record.Actions[i].OutputSchema)
+		record.Actions[i] = record.Actions[i].Clone()
 	}
 	return record
 }

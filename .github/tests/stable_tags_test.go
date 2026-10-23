@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,8 +16,9 @@ import (
 )
 
 var stableImageNames = []string{
-	"commander-admin", "commander-aio", "commander-api", "commander-browser-agent",
-	"commander-controller", "commander-mcp", "commander-playground", "commander-web-agent",
+	"commander-admin", "commander-aio", "commander-api",
+	"commander-builder-agent", "commander-controller", "commander-mcp", "commander-playground",
+	"commander-spawner-agent",
 }
 
 type stableFixture struct {
@@ -141,6 +143,7 @@ func TestCIStableReleaseSelection(t *testing.T) {
 		{"numeric order", "v1.10.0", `[{"tag_name":"v1.9.9"},{"tag_name":"v1.10.0"}]`, "0", "true", false},
 		{"maintenance", "v1.9.10", `[{"tag_name":"v1.9.10"},{"tag_name":"v1.10.0"}]`, "0", "false", false},
 		{"draft and prerelease ignored", "v1.10.0", `[{"tag_name":"v1.10.0"},{"tag_name":"v1.11.0","draft":true},{"tag_name":"v1.12.0","prerelease":true},{"tag_name":"v2.0.0-rc.1"}]`, "0", "true", false},
+		{"agent module releases ignored", "v1.10.0", `[{"tag_name":"v1.10.0"},{"tag_name":"apps/agents/builder/v9.0.0"},{"tag_name":"apps/agents/spawner/v9.0.0"}]`, "0", "true", false},
 		{"absent release", "v1.10.0", `[{"tag_name":"v1.9.0"}]`, "0", "", true},
 		{"API failure with output", "v1.10.0", `[{"tag_name":"v1.10.0"}]`, "1", "", true},
 		{"prerelease input", "v1.10.0-rc.1", `[{"tag_name":"v1.10.0-rc.1"}]`, "0", "", true},
@@ -267,8 +270,30 @@ func TestCIStableReleaseWiring(t *testing.T) {
 			On map[string]struct {
 				Outputs map[string]struct{ Value string }
 			}
+			Jobs map[string]struct {
+				Steps []struct {
+					Uses string
+					With map[string]string
+				}
+			}
 		}
 		readCIYAML(t, "../..", strings.TrimPrefix(job.Uses, "./"), &publisher)
+		// Check destinations too: a publish step can overwrite an independent
+		// agent's image even when it does not expose a digest output.
+		for _, job := range publisher.Jobs {
+			for _, step := range job.Steps {
+				if !strings.HasPrefix(step.Uses, "docker/build-push-action@") {
+					continue
+				}
+				for _, tag := range strings.Split(step.With["tags"], "\n") {
+					image, _, _ := strings.Cut(strings.TrimSpace(tag), ":")
+					const prefix = "ghcr.io/defos-ai/"
+					if !strings.HasPrefix(image, prefix) || !slices.Contains(stableImageNames, strings.TrimPrefix(image, prefix)) {
+						t.Errorf("image publisher %s targets image outside Commander releases: %s", name, image)
+					}
+				}
+			}
+		}
 		outputs := publisher.On["workflow_call"].Outputs
 		if len(outputs) == 0 {
 			t.Errorf("image publisher %s exposes no image digests", name)
@@ -286,7 +311,7 @@ func TestCIStableReleaseWiring(t *testing.T) {
 }
 
 func TestCIStableDigestValidation(t *testing.T) {
-	for _, invalid := range []string{"", "sha256:bad", "sha256:" + strings.Repeat("a", 63), "missing", "extra"} {
+	for _, invalid := range []string{"", "sha256:bad", "sha256:" + strings.Repeat("a", 63), "missing", "extra", "commander-web-agent", "commander-browser-agent"} {
 		t.Run(invalid, func(t *testing.T) {
 			f := newStableFixture(t)
 			switch invalid {
@@ -294,6 +319,8 @@ func TestCIStableDigestValidation(t *testing.T) {
 				delete(f.images, "commander-api")
 			case "extra":
 				f.images["unexpected"] = f.images["commander-api"]
+			case "commander-web-agent", "commander-browser-agent":
+				f.images[invalid] = f.images["commander-api"]
 			default:
 				f.images["commander-api"] = invalid
 			}

@@ -1,6 +1,8 @@
 package missions
 
 import (
+	"context"
+
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/providers/fs/internal/catalog"
 )
@@ -11,6 +13,10 @@ type MissionFsStore struct {
 }
 
 var _ missions.MissionStore = (*MissionFsStore)(nil)
+
+func (s *MissionFsStore) Create(ctx context.Context, definition missions.Mission) error {
+	return s.Store.Create(ctx, definition, missions.ErrMissionExists)
+}
 
 // NewMissionFsStore uses state/database/ when root is empty.
 func NewMissionFsStore(root string) (*MissionFsStore, error) {

@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
 
@@ -20,9 +21,10 @@ func TestMissionMongoStore(t *testing.T) {
 	catalog := mongomissions.NewMissionMongoStore(database)
 	ctx := t.Context()
 	original := missions.Mission{
-		Name: "alpha", Objective: "Review a page",
-		RequiredActions: []string{"discover", "check"}, StartingActions: []string{"discover"},
-		Steps: []missions.Step{{ID: "review", Objective: "Review findings"}},
+		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
+		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
+		ActionDefinitions: []actions.Definition{storedActionDefinition()},
+		Steps:             []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
 			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -41,7 +43,7 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 
 	for _, mission := range []missions.Mission{other, original} {
-		if err := catalog.Upsert(ctx, mission); err != nil {
+		if err := catalog.Create(ctx, mission); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -61,7 +63,27 @@ func TestMissionMongoStore(t *testing.T) {
 	if !bytes.Equal(schema, original.InputSchema) || document.Lookup("name").StringValue() != original.Name {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
+	definitions, err := document.Lookup("action_definitions").Array().Values()
+	if err != nil || len(definitions) != 1 {
+		t.Fatalf("stored action definitions: %v, %v", definitions, err)
+	}
+	for _, field := range []string{"input_schema", "output_schema"} {
+		_, storedSchema := definitions[0].Document().Lookup(field).Binary()
+		want := original.ActionDefinitions[0].InputSchema
+		if field == "output_schema" {
+			want = original.ActionDefinitions[0].OutputSchema
+		}
+		if !bytes.Equal(storedSchema, want) {
+			t.Fatalf("action %s changed JSON schema bytes: %s", field, storedSchema)
+		}
+	}
+	stored.Objectives[0] = "modified by reader"
 	stored.RequiredActions[0] = "modified by reader"
+	stored.OptionalActions[0] = "modified by reader"
+	stored.ActionDefinitions[0].Name = "modified by reader"
+	stored.ActionDefinitions[0].RequiredSecrets[0] = "CHANGED"
+	stored.ActionDefinitions[0].InputSchema[0] = '!'
+	stored.ActionDefinitions[0].OutputSchema[0] = '!'
 	stored.InputSchema[0] = '!'
 	stored.Rules[missions.AggregateResults].ForActions[0] = "modified by reader"
 	stored.Rules[missions.DecideNextActions].Params.DecisionBy = "modified by reader"
@@ -69,10 +91,22 @@ func TestMissionMongoStore(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(unchanged, original) {
 		t.Fatalf("caller changed persisted mission: %#v, error = %v", unchanged, err)
 	}
+	conflicting := original.Clone()
+	conflicting.Objectives = []string{"Replace the existing mission"}
+	for _, duplicate := range []missions.Mission{original, conflicting} {
+		if err := catalog.Create(ctx, duplicate); !errors.Is(err, missions.ErrMissionExists) {
+			t.Fatalf("duplicate create = %v, want ErrMissionExists", err)
+		}
+	}
+	unchanged, err = catalog.Get(ctx, original.Name)
+	if err != nil || !reflect.DeepEqual(unchanged, original) {
+		t.Fatalf("duplicate create changed the original: %#v, error = %v", unchanged, err)
+	}
 
 	updated := original.Clone()
-	updated.Objective = "Review before release"
-	updated.Steps, updated.Rules = nil, nil
+	updated.Objectives = []string{"Review before release"}
+	updated.OptionalActions, updated.Steps, updated.Rules = nil, nil, nil
+	updated.ActionDefinitions = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +119,19 @@ func TestMissionMongoStore(t *testing.T) {
 	if err := catalog.Upsert(ctx, invalid); err == nil {
 		t.Fatal("invalid mission replaced a valid one")
 	}
+	invalid.Name = "invalid"
+	if err := catalog.Create(ctx, invalid); err == nil {
+		t.Fatal("invalid mission was created")
+	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	if err := catalog.Upsert(cancelled, original); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled upsert: %v", err)
+	}
+	newMission := original.Clone()
+	newMission.Name = "cancelled"
+	if err := catalog.Create(cancelled, newMission); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled create: %v", err)
 	}
 	stored, err = catalog.Get(ctx, original.Name)
 	if err != nil || !reflect.DeepEqual(stored, updated) {
@@ -100,6 +143,56 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 }
 
+func storedActionDefinition() actions.Definition {
+	return actions.Definition{
+		Name: "discover", Description: "Discover the requested target", RequiredSecrets: []string{"DISCOVERY_KEY"},
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993}}}`),
+		OutputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`),
+	}
+}
+
+func TestConcurrentMissionCreates(t *testing.T) {
+	catalogs := []*mongomissions.MissionMongoStore{
+		mongomissions.NewMissionMongoStore(openStore(t, "missions")),
+		mongomissions.NewMissionMongoStore(openStore(t, "missions")),
+	}
+	const writers = 12
+	type result struct {
+		mission missions.Mission
+		err     error
+	}
+	completed := make(chan result, writers)
+	start := make(chan struct{})
+	for i := range writers {
+		go func() {
+			<-start
+			mission := missions.Mission{Name: "shared", Objectives: []string{fmt.Sprintf("Creator %d", i)}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+			completed <- result{mission, catalogs[i%len(catalogs)].Create(t.Context(), mission)}
+		}()
+	}
+	close(start)
+	winners := 0
+	var winner missions.Mission
+	for range writers {
+		result := <-completed
+		if result.err == nil {
+			winners++
+			winner = result.mission
+		} else if !errors.Is(result.err, missions.ErrMissionExists) {
+			t.Errorf("concurrent create = %v, want ErrMissionExists", result.err)
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("concurrent create accepted %d missions, want one", winners)
+	}
+	for _, catalog := range catalogs {
+		items, err := catalog.List(t.Context())
+		if err != nil || !reflect.DeepEqual(items, []missions.Mission{winner}) {
+			t.Fatalf("concurrent create changed the winning definition: %#v, error=%v", items, err)
+		}
+	}
+}
+
 func TestConcurrentMissionUpserts(t *testing.T) {
 	database := openStore(t, "missions")
 	catalog := mongomissions.NewMissionMongoStore(database)
@@ -108,7 +201,7 @@ func TestConcurrentMissionUpserts(t *testing.T) {
 
 	for i := range writers {
 		go func() {
-			mission := missions.Mission{Name: "shared", Objective: fmt.Sprintf("Revision %d", i), InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+			mission := missions.Mission{Name: "shared", Objectives: []string{fmt.Sprintf("Revision %d", i)}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 			if err := catalog.Upsert(t.Context(), mission); err != nil {
 				completed <- err
 				return

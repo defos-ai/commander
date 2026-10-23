@@ -19,7 +19,7 @@ func TestMCPRequiresBearerOnEveryRequest(t *testing.T) {
 	t.Setenv("MCP_TOKEN", token)
 	var logs bytes.Buffer
 	endpoint, client, stop := startMCP(t, nil, &logs)
-	for _, call := range []struct{ method, body string }{
+	for index, call := range []struct{ method, body string }{
 		{http.MethodPost, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`},
 		{http.MethodPost, `{"jsonrpc":"2.0","method":"notifications/initialized"}`},
 		{http.MethodPost, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`},
@@ -29,12 +29,18 @@ func TestMCPRequiresBearerOnEveryRequest(t *testing.T) {
 		{http.MethodGet, ""}, {http.MethodHead, ""}, {http.MethodPut, ""}, {http.MethodPatch, ""},
 		{http.MethodDelete, ""}, {http.MethodOptions, ""},
 	} {
-		for _, authorization := range [][]string{
-			nil, {"Bearer rejected-test-token"}, {"Basic " + token}, {"Bearer"},
-			{"Bearer " + token[:len(token)-1] + "X"}, {"Bearer " + token[:len(token)-1]}, {"Bearer " + token + "X"},
-			{"Bearer " + token, "Bearer " + token}, {"Bearer " + token + ", Bearer " + token},
-			{"Bearer " + token + " extra"}, {"Bearer\t" + token},
-		} {
+		// Exercise malformed credentials once; every protocol request must still
+		// reject missing credentials through the same authentication boundary.
+		authorizations := [][]string{nil}
+		if index == 0 {
+			authorizations = [][]string{
+				nil, {"Bearer rejected-test-token"}, {"Basic " + token}, {"Bearer"},
+				{"Bearer " + token[:len(token)-1] + "X"}, {"Bearer " + token[:len(token)-1]}, {"Bearer " + token + "X"},
+				{"Bearer " + token, "Bearer " + token}, {"Bearer " + token + ", Bearer " + token},
+				{"Bearer " + token + " extra"}, {"Bearer\t" + token},
+			}
+		}
+		for _, authorization := range authorizations {
 			request, err := http.NewRequestWithContext(t.Context(), call.method, endpoint+"/mcp", strings.NewReader(call.body))
 			if err != nil {
 				t.Fatal(err)

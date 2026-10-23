@@ -20,7 +20,8 @@ func TestActionMongoStore(t *testing.T) {
 	original := actions.Action{
 		Name: "alpha", Description: "Inspect a page", Status: actions.Unknown,
 		StatusReason:        "Readiness is determined by the agent",
-		MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Secret: true}},
+		RequiredSecrets:     []string{"API_KEY"},
+		MissingRequirements: []actions.Requirement{{Kind: actions.ConfigurationRequirement, Name: "API_KEY", Sensitive: true}},
 		InputSchema:         json.RawMessage(`{"type":"application-specific","x-example":9007199254740993}`),
 		OutputSchema:        json.RawMessage(`{"type":"object","x-example":18446744073709551615}`),
 	}
@@ -47,10 +48,16 @@ func TestActionMongoStore(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(items, []actions.Action{original, other}) {
 		t.Fatalf("catalog content or order changed: %#v, error = %v", items, err)
 	}
+	stored.RequiredSecrets[0] = "changed"
+	stored, err = catalog.Get(ctx, original.Name)
+	if err != nil || !reflect.DeepEqual(stored, original) {
+		t.Fatalf("reader changed the persisted secret declarations: %#v, error = %v", stored, err)
+	}
 
 	updated := original
 	updated.Description = "Inspect before release"
 	updated.StatusReason, updated.MissingRequirements = "", nil
+	updated.RequiredSecrets = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}

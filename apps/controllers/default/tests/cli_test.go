@@ -58,13 +58,15 @@ func TestCLIRegistersController(t *testing.T) {
 func TestCLIRejectsUnavailableProviders(t *testing.T) {
 	const secret = "provider-test-secret"
 	for _, test := range []struct {
-		name, flag, url   string
-		dependency        string
-		invalidConfig     bool
-		filesystemForm    string
-		connectionFailure bool
+		name, flag, url       string
+		dependency            string
+		invalidConfig         bool
+		filesystemForm        string
+		connectionFailure     bool
+		initializationFailure bool
 	}{
 		{name: "Mongo connection unavailable", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander?serverSelectionTimeoutMS=50", connectionFailure: true},
+		{name: "malformed Mongo query", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander?tlsCertificateKeyFilePassword=" + secret + "%zz", initializationFailure: true},
 		{name: "unsupported database", flag: "database-url", url: "postgres://user:" + secret + "@127.0.0.1:5432/commander"},
 		{name: "RabbitMQ bus unavailable", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:1", dependency: "rabbitmq"},
 		{name: "RabbitMQ TLS bus unavailable", flag: "bus-url", url: "amqps://user:" + secret + "@127.0.0.1:1", dependency: "rabbitmq"},
@@ -120,6 +122,10 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 			} else if test.connectionFailure {
 				if !mongo.IsTimeout(err) {
 					t.Errorf("expected a MongoDB connection timeout: %v", err)
+				}
+			} else if test.initializationFailure {
+				if !strings.Contains(message, "mongodb initialization failed") {
+					t.Error("startup did not identify the MongoDB initialization failure")
 				}
 			} else if test.dependency != "" {
 				var connectionError *net.OpError

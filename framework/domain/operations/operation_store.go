@@ -18,9 +18,9 @@ type OperationStore interface {
 	Create(context.Context, Operation) error
 	Get(context.Context, string) (Operation, error)
 	List(context.Context) ([]Operation, error)
-	// RefreshPreflight assesses the saved mission against the supplied inventory
-	// snapshot. Changed readiness, its version, status, and event commit together;
-	// identical readiness returns the saved operation without writing.
+	// RefreshPreflight assesses the saved mission, queued optional tasks and affinity
+	// against the supplied inventory. Readiness, version, status and event commit
+	// together; identical readiness returns the saved operation without writing.
 	RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (Operation, error)
 	// Recover validates the latest saved work, expires due questions, and records
 	// recovery together. Terminal operations without recoverable tasks only expire
@@ -42,8 +42,8 @@ type OperationStore interface {
 	// including after dispatch; a conflicting assignment returns ErrOperationConflict.
 	QueueTask(ctx context.Context, operationID string, task Task) (Operation, error)
 	// DispatchTask atomically claims a queued task using the latest operation,
-	// respecting questions, preflight, and any pinned agent. It preserves the
-	// queued command ID and saves the running task, event, status, and timestamp
+	// respecting questions, preflight, and the saved same-agent binding. It preserves
+	// the queued command ID and saves the running task, event, status, and timestamp
 	// together. A competing claim returns ErrOperationConflict without dispatching.
 	DispatchTask(ctx context.Context, operationID string, dispatch TaskDispatch) (Operation, error)
 	// FinishTask saves a running or interrupted task's outcome together with its

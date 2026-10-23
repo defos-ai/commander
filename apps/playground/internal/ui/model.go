@@ -19,18 +19,21 @@ import (
 )
 
 type Config struct {
-	Provider, Model, BaseURL, MCPURL string
-	AdminURL, AdminHint              string
-	Keys                             map[string]string
-	NoColor                          bool
-	Debug                            bool
-	Notices                          []string
-	LocalAPI                         *LocalAPI
-	MCPCredentials                   host.BearerCredentials
+	Provider, Model, BaseURL string
+	AdminURL, AdminHint      string
+	Keys                     map[string]string
+	NoColor                  bool
+	Debug                    bool
+	Notices                  []string
+	API                      Connection[host.BasicCredentials]
+	MCP                      Connection[host.BearerCredentials]
+	AllInOne                 bool
+	LocalAgentCount          int
 }
 
-type LocalAPI struct {
-	URL, Username, Password string
+type Connection[C host.Credentials] struct {
+	URL         string
+	Credentials C
 }
 type entry struct {
 	kind, text    string
@@ -47,6 +50,7 @@ type eventMessage struct {
 type Model struct {
 	setupState
 	questions            questionPanel
+	secrets              secretPanel
 	ctx                  context.Context
 	config               Config
 	input                textinput.Model
@@ -99,6 +103,10 @@ func nextTick() tea.Cmd {
 }
 
 func (m *Model) Close() {
+	m.clearSecretInputs()
+	if m.secrets.cancel != nil {
+		m.secrets.cancel()
+	}
 	if m.setupCancel != nil {
 		m.setupCancel()
 	}
@@ -111,12 +119,15 @@ func (m *Model) Close() {
 }
 
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.secretResult(message); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.setupResult(message); handled {
 		return m, cmd
 	}
 	if m.stage == stageChat && m.syncQuestion(time.Now()) {
 		m.refresh()
-		if key, ok := message.(tea.KeyMsg); ok && key.String() == "enter" {
+		if key, ok := message.(tea.KeyMsg); ok && key.String() == "enter" && !m.secrets.open {
 			// An expired question may reveal a different one. Show that change
 			// before accepting an answer intended for the previous question.
 			return m, nil
@@ -125,7 +136,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tick:
 		m.frame++
-		return m, nextTick()
+		return m, tea.Batch(nextTick(), m.syncSecrets())
 	case tea.WindowSizeMsg:
 		m.width, m.height = max(24, msg.Width), max(12, msg.Height)
 		m.input.Width = max(12, m.width-8)
@@ -137,8 +148,11 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.receive(msg.event)
-		return m, waitEvent(m.engine)
+		return m, tea.Batch(waitEvent(m.engine), m.syncSecrets())
 	case tea.MouseMsg:
+		if m.secrets.open {
+			return m, nil
+		}
 		if msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
@@ -160,6 +174,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		if m.secrets.open {
+			return m, m.secretKey(msg)
+		}
 		if m.questionKey(msg) {
 			m.refresh()
 			return m, nil
@@ -181,6 +198,14 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			value := strings.TrimSpace(m.input.Value())
+			if fields := strings.Fields(value); len(fields) > 0 && fields[0] == "/secrets" {
+				m.input.Reset()
+				if len(fields) != 1 || m.stage != stageChat {
+					m.add("notice", "Use /secrets after connecting to Commander.")
+					return m, nil
+				}
+				return m, m.openSecrets(true)
+			}
 			if value == "/exit" {
 				return m, tea.Quit
 			}
@@ -198,13 +223,20 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "pgup", "pgdown", "ctrl+u":
+		case "up", "down", "pgup", "pgdown", "ctrl+u":
+			// With native terminal selection, wheel/trackpad scrolling arrives
+			// as Up/Down too. Selectors and focused forms handle these first.
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd
 		}
 	}
 	var cmd tea.Cmd
+	if m.secrets.open {
+		// Secret-owned asynchronous input is routed by secretResult. A pending
+		// chat clipboard read must not populate a newly opened secret field.
+		return m, nil
+	}
 	if m.questions.focused && m.questions.editing {
 		m.questions.input, cmd = m.questions.input.Update(message)
 		return m, cmd

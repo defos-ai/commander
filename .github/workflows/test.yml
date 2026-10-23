@@ -33,7 +33,7 @@ jobs:
             steps.paths.outputs.s3 == 'true' || steps.paths.outputs.controller-mongo == 'true' ||
             steps.paths.outputs.api-fs == 'true' || steps.paths.outputs.api-full == 'true' ||
             steps.paths.outputs.mcp-fs == 'true' || steps.paths.outputs.mcp-full == 'true' ||
-            steps.paths.outputs.browser == 'true' }}
+            steps.paths.outputs.ui-e2e == 'true' }}
     steps:
       - uses: actions/checkout@v7
         with:

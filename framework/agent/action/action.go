@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/defos-ai/commander/framework/domain/sessions"
 	"io"
 	"slices"
 	"sync/atomic"
 
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 type Status = actionmodel.Status
@@ -41,8 +41,9 @@ type Executor interface {
 // Base publishes immutable readiness snapshots for extensions.
 // Embed *Base, implement Run, and override Discover for external dependencies.
 type Base struct {
-	definition actionmodel.Action
-	readiness  atomic.Pointer[readiness]
+	definition  actionmodel.Definition
+	sessionMode string
+	readiness   atomic.Pointer[readiness]
 }
 
 type readiness struct {
@@ -51,27 +52,25 @@ type readiness struct {
 	requirements []actionmodel.Requirement
 }
 
-func NewBase(definition actionmodel.Action) *Base {
-	definition.Status = Unknown
-	definition.StatusReason = ""
-	definition.MissingRequirements = nil
-	definition.InputSchema = bytes.Clone(definition.InputSchema)
-	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
-	return &Base{definition: definition}
+func NewBase(metadata actionmodel.Action) *Base {
+	return &Base{definition: metadata.Definition(), sessionMode: metadata.SessionMode}
 }
 
 // Action returns an independent snapshot of the action's metadata and readiness.
 func (b *Base) Action() actionmodel.Action {
-	definition := b.definition
-	if current := b.readiness.Load(); current != nil {
-		definition.Status = current.status
-		definition.StatusReason = current.reason
-		definition.MissingRequirements = current.requirements
+	snapshot := actionmodel.Action{
+		SessionMode: b.sessionMode,
+		Name:        b.definition.Name, Description: b.definition.Description,
+		RequiredSecrets: b.definition.RequiredSecrets,
+		InputSchema:     b.definition.InputSchema, OutputSchema: b.definition.OutputSchema,
+		Status: Unknown,
 	}
-	definition.MissingRequirements = slices.Clone(definition.MissingRequirements)
-	definition.InputSchema = bytes.Clone(definition.InputSchema)
-	definition.OutputSchema = bytes.Clone(definition.OutputSchema)
-	return definition
+	if current := b.readiness.Load(); current != nil {
+		snapshot.Status = current.status
+		snapshot.StatusReason = current.reason
+		snapshot.MissingRequirements = current.requirements
+	}
+	return snapshot.Clone()
 }
 
 func (b *Base) SetStatus(status Status) {

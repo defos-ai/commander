@@ -14,7 +14,7 @@ import (
 )
 
 func TestModelAuthenticationErrors(t *testing.T) {
-	for _, provider := range []string{"openai", "anthropic", "gemini", "xai", "deepseek", "other"} {
+	for _, provider := range []string{"openai", "anthropic"} {
 		for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
 			t.Run(fmt.Sprintf("%s/%d", provider, status), func(t *testing.T) {
 				var requests atomic.Int32

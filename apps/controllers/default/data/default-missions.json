@@ -1,7 +1,339 @@
 [
   {
+    "name": "build-agent",
+    "objectives": [
+      "Build the requested Commander agent, optionally publishing and releasing source in this operation. Read checkout-template and build-agent schemas and readiness. Before checkout, define requested action names, descriptions, input/output object schemas and required secret names.",
+      "Assign checkout-template with {}. Review its result, then resolve its continuation with build-agent using the returned workspace_id and original instructions and actions unchanged. Keep checkout and build on the same builder under same-agent; never invent a workspace ID. Use the local secret form or Admin Secrets for CODEX_API_KEY; never put secret values in chat, questions or inputs. Review the saved build result and source.tar.gz artifact.",
+      "Recommend sharing reviewed source, but publish only on operator agreement; a supplied repository requests publication. Otherwise ask a linked Publish or Skip question unless already declined. Await actual answers with the operation open; expiry never grants approval. Skipping completes with workspace_id and a concise summary after resolving the build continuation without follow-up actions.",
+      "For publication, read publish-agent's schema and obtain owner/repository. Preserve explicit visibility or the advertised default; without either, ask Public (recommended) or Private. Resolve the build continuation with publish-agent using the exact saved source_artifact_id, full source_file descriptor, repository and visibility. Any builder sharing artifact storage can publish without the workspace. GITHUB_TOKEN uses the managed-secret form only for publication/release; missing it must not block a source-only build. Preserve existing visibility, never force-push, and inspect uncertain publication before retrying. Save the publication result in the optional report.",
+      "Offer optional release after publication; source publication alone is valid completion. A supplied release_version requests release; otherwise ask Release or Finish. Obtain an explicit stable vMAJOR.MINOR.PATCH version, never invent one. Resolve the publication continuation with release-agent using repository, saved publication commit_sha, built agent_type and chosen version. The default branch must still match the approved commit.",
+      "Pending release checks continue automatically with the same workflow_run_id; keep the operation open. Inspect failed or uncertain runs and link the workflow; retry failed jobs in the same GitHub run, never silently dispatch a replacement. Only status released confirms an installable pinned package; review and save that verified release result in the optional report.",
+      "Offer installation only after verified release. Honor an explicit installation request or refusal; otherwise ask a linked Install this agent? question with Install and Finish. Failed or uncertain releases never authorize installation. Resolve the release continuation without follow-up actions and complete the build first, including workspace_id, summary and saved publication/release evidence, whether installation is accepted or declined.",
+      "If installation is approved, read describe_mission for install-agent and describe_action for spawn-agent. Start a separate install-agent operation with the exact verified package and visibility; assign spawn-agent with that same input through the controller. Never substitute an alias, unversioned URL, @stable or default visibility, or queue provisioning inside the build. Review the saved spawn result, resolve its continuation without follow-up actions, and recheck list_agents and action readiness before completing with agent_id and limitations. Registration alone is insufficient. Inspect uncertain launches before retrying; never silently create another instance. Installation failure preserves the successful build/release."
+    ],
+    "required_actions": [
+      "checkout-template",
+      "build-agent"
+    ],
+    "optional_actions": [
+      "publish-agent",
+      "release-agent"
+    ],
+    "starting_actions": [
+      "checkout-template"
+    ],
+    "rules": {
+      "same-agent": {
+        "for_actions": [
+          "checkout-template",
+          "build-agent"
+        ]
+      },
+      "decide-next-actions": {
+        "for_actions": [
+          "checkout-template",
+          "build-agent",
+          "publish-agent"
+        ],
+        "params": {
+          "decision_by": "model"
+        }
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "type": "string",
+          "pattern": "\\S",
+          "description": "Implementation guidance for the requested action contracts. Never include secret values."
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "description": "Requested action contracts for the generated agent. Names must be unique. Define them before checkout and pass them unchanged to build-agent; required_secrets are names, never values.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+              },
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "object"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "description": "JSON Schema for an object input, with local references only. Extension keywords are allowed."
+              },
+              "output_schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "object"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "description": "JSON Schema for an object output, with local references only. Extension keywords are allowed."
+              },
+              "required_secrets": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+                },
+                "description": "Managed secret names needed by the generated action, not by the builder. Never include values."
+              }
+            },
+            "required": [
+              "name",
+              "description",
+              "input_schema",
+              "output_schema"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$",
+          "description": "Optional GitHub owner/repository. Supplying it requests publication after a successful build and source review; otherwise ask whether to publish or skip."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "private"],
+          "description": "Optional publication visibility. Preserve an explicit choice or the action schema default; otherwise ask Public (recommended) or Private before publishing."
+        },
+        "release_version": {
+          "type": "string",
+          "not": {"const": "v0.0.0"},
+          "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+          "description": "Optional explicit request to release this version after publication. Otherwise ask whether to release or finish with source only; never infer release consent from publication alone."
+        }
+      },
+      "required": [
+        "instructions",
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "workspace_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "publication": {
+          "type": "object",
+          "properties": {
+            "repository_url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/"
+            },
+            "commit_url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/"
+            },
+            "commit_sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ]
+            },
+            "branch": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "repository_url",
+            "commit_url",
+            "commit_sha",
+            "visibility",
+            "branch"
+          ],
+          "additionalProperties": false
+        },
+        "release": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "commit_sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            },
+            "agent_type": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "released",
+                "failed",
+                "uncertain"
+              ]
+            },
+            "workflow_run_id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "workflow_url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/"
+            },
+            "conclusion": {
+              "type": "string"
+            },
+            "package": {
+              "type": "string",
+              "pattern": "^github\\.com/.+@v[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "release_url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/"
+            }
+          },
+          "required": [
+            "repository",
+            "commit_sha",
+            "version",
+            "agent_type",
+            "visibility",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "workspace_id",
+        "summary"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "install-agent",
+    "objectives": [
+      "Install one agent from a GitHub package reference or repository URL. The spawner resolves an omitted version or @stable and saves the exact version for retries; explicit @vMAJOR.MINOR.PATCH pins are also accepted.",
+      "Read spawn-agent's schema and readiness, then assign spawn-agent with the mission input, preserving the supplied visibility; omitted visibility means public. Private repositories use the spawner's GitHub token or the existing managed-secret form; never request token values in chat or action input.",
+      "Review its saved result and resolve the continuation with no follow-up actions. Recheck the registered agent's action readiness before completing with its agent_id and any limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready."
+    ],
+    "required_actions": [
+      "spawn-agent"
+    ],
+    "starting_actions": [
+      "spawn-agent"
+    ],
+    "rules": {
+      "decide-next-actions": {
+        "for_actions": [
+          "spawn-agent"
+        ],
+        "params": {
+          "decision_by": "model"
+        }
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "package": {
+          "type": "string",
+          "pattern": "^(https://)?github\\.com/[^/@?#:\\s]+/[^@?#:\\s]+(@(stable|v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)))?$",
+          "description": "GitHub repository URL or github.com/owner/repository[/module/path], optionally followed by @stable or @vMAJOR.MINOR.PATCH; omitted version means stable."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "private"],
+          "default": "public",
+          "description": "Repository visibility supplied by the catalog or operator; omitted means public. Pass it unchanged to spawn-agent."
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        }
+      },
+      "required": [
+        "agent_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "review-website-no-browser",
-    "objective": "Review a website without a browser. Start discover-pages-no-browser with mission input; let the controller run link, SEO and technology checks. Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages-no-browser at the destination, preserving max_pages; document the scope change. Review grouped results and resolve the continuation before completing. Report prioritized findings and coverage. Include limitations: no rendered accessibility or screenshots; JavaScript-generated content is not assessed. Technology versions are indicators, not vulnerability proof; SEO checks are partial. Do not modify the site.",
+    "objectives": [
+      "Review a website without a browser. Start discover-pages-no-browser with mission input; let the controller run link, SEO and technology checks.",
+      "Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages-no-browser at the destination, preserving max_pages; document the scope change.",
+      "Review grouped results and resolve the continuation before completing. Report prioritized findings and coverage. Include limitations: no rendered accessibility or screenshots; JavaScript-generated content is not assessed. Technology versions are indicators, not vulnerability proof; SEO checks are partial. Do not modify the site."
+    ],
     "required_actions": [
       "discover-pages-no-browser",
       "check-links",
@@ -103,7 +435,11 @@
   },
   {
     "name": "review-website-with-browser",
-    "objective": "Review a website before release. Start discover-pages with mission input; let the controller run page checks. Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages at the destination, preserving max_pages; document the scope change. Review grouped results and resolve the continuation before completing. Report prioritized findings, coverage and limitations. Technology versions are indicators, not vulnerability proof; SEO/accessibility checks are partial. Do not modify the site.",
+    "objectives": [
+      "Review a website before release. Start discover-pages with mission input; let the controller run page checks.",
+      "Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages at the destination, preserving max_pages; document the scope change.",
+      "Review grouped results and resolve the continuation before completing. Report prioritized findings, coverage and limitations. Technology versions are indicators, not vulnerability proof; SEO/accessibility checks are partial. Do not modify the site."
+    ],
     "required_actions": [
       "discover-pages",
       "check-links",

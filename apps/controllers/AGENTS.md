@@ -15,11 +15,15 @@
 - Keep the current one-active-controller-per-database assumption explicit.
   Registration and provider support do not implement distributed ownership or
   capacity across controllers.
+- Construct both secret and request stores from the configured database and
+  inject them into coordination. The controller routes ciphertext and must not
+  load `SECRETS_ENCRYPTION_KEY`. Framework reconciliation owns delivery retries,
+  pending request recovery and installation acknowledgements.
 
 ## Selection and durable work
 
 - [runner.AgentSelector](../../framework/controller/runner/agent_selector.go)
-  chooses only among supplied eligible candidates. Readiness, capacity
+  chooses only among supplied eligible candidates. Affinity, readiness, capacity
   checks and durable dispatch reservation remain the runner's responsibility.
 - Selection runs serially in the owner loop. Return promptly, honor cancellation,
   and do not dispatch work or retain mutable candidate snapshots. An empty ID
@@ -49,12 +53,57 @@
 - [default/data/missions.go](default/data/missions.go) validates all file definitions
   before upserting any. Preserve missions omitted from the file; no `--with-missions`
   means no import. An operation retains the mission definition saved at its start.
+  Mission `objectives` must contain at least one nonblank string. Keep separate
+  goals or instruction groups in separate entries; every entry applies. Steps
+  retain a singular `objective`. Preserve order and snapshot independence.
 - Update [default-missions.json](default/data/default-missions.json) for mission
   rules. Agents propose actions, while the controller applies these rules;
   do not move mission policy into host or agent special cases.
   The no-browser review uses `discover-pages-no-browser` and three HTTP checks;
   the with-browser review uses `discover-pages` and five checks. Keep starting
   actions, requirements and rules aligned with each discovery's proposals.
+- The bundled `install-agent` mission requires only `spawn-agent`, so a fresh
+  deployment can install packages before business actions are available. Keep
+  its model review rule: the client must inspect launch results and current
+  readiness before completing provisioning. A mission waiting on the new
+  actions cannot dispatch its own provisioning task.
+  Its `package` input accepts GitHub URLs, `@stable`, and exact versions. Leave
+  stable resolution and retry pinning to the spawner; an omitted version means stable.
+  Its optional `visibility` input is `public` or `private`, defaulting to public;
+  clients preserve it when assigning `spawn-agent`. Never accept tokens in mission input.
+- The bundled `build-agent` mission requires action contracts alongside instructions.
+  Define them from the operator's request before checkout. It starts checkout
+  with `{}`, then model review assigns the returned workspace ID and original
+  instructions and actions unchanged to `build-agent`.
+  Keep `same-agent` on both stages because workspace files are local, and model
+  review on both results. Managed `CODEX_API_KEY` goes through the secret flow.
+  After successful build review, offer the optional `publish-agent` action in
+  this operation and wait for operator agreement. Declining it completes the
+  mission with its source artifact. Declare publication in `optional_actions`,
+  outside `required_actions`, step requirements and `starting_actions`, so missing
+  `GITHUB_TOKEN` cannot block checkout/build. Action lists describe expected work;
+  they are not an execution allowlist. Normal rules and readiness apply when
+  optional work is scheduled.
+  Publication uses the saved source artifact ID and full file metadata, with
+  model review but no `same-agent` rule or local workspace dependency. Read the
+  action's visibility default; if neither an explicit choice nor a default exists,
+  ask Public (recommended) or Private through `ask_question` and wait for the real
+  answer. Never infer approval from expiry. Managed `GITHUB_TOKEN` uses the secret
+  flow only when publication or release is selected. Publication returns a source
+  commit. Offer `release-agent` as another optional action in the same operation;
+  obtain release consent and a version independently of publication consent.
+  Keep it outside `same-agent` and `decide-next-actions`: bounded pending checks
+  propose the same action with `workflow_run_id` and continue automatically.
+  Empty terminal proposals still return to model review. Only a verified released
+  result provides a pinned package. Offer installation only after that result;
+  honor an explicit operator choice or ask a linked **Install this agent?**
+  question with **Install** and **Finish**, waiting for the actual answer.
+  Complete the build with its source/publication/release evidence first. Approval
+  starts the existing `install-agent` mission in a separate operation, passing
+  the exact released package and visibility to `spawn-agent`. Keep provisioning
+  out of the build's task tree. Review the saved spawn result and action readiness;
+  registration alone is insufficient, and uncertain launches require inspection.
+  Declining installation or an installation failure preserves the successful build.
 
 ## Validation
 

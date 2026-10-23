@@ -11,6 +11,8 @@ import (
 	"github.com/defos-ai/commander/apps/playground/internal/local"
 )
 
+const defaultAdminURL = "http://localhost:4275"
+
 func validateAdminURL(raw string) error {
 	invalid := errors.New("admin-url: enter an HTTP(S) browser address without credentials, query parameters or a fragment")
 	u, err := url.Parse(raw)
@@ -49,7 +51,7 @@ func (c *config) configureLocalAdmin(session *local.Session) {
 		switch env("API_RUNTIME", "native") {
 		case "docker", "docker-compose":
 			// Match the quick-start port mapping; custom mappings can override it.
-			c.AdminURL = "http://localhost:4275"
+			c.AdminURL = defaultAdminURL
 		default:
 			c.AdminURL = session.AdminURL
 		}

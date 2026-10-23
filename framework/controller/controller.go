@@ -11,11 +11,13 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/leases"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/framework/internal/state"
 )
@@ -33,11 +35,15 @@ type ControllerConfig struct {
 	// Type identifies this controller implementation; empty selects default.
 	Type string
 	// ID identifies this process; empty generates <type>-controller-<8hex>.
-	ID                 string
-	ArtifactStore      artifacts.ArtifactStore
-	AgentStore         agentmodel.AgentStore
-	ActionStore        actionmodel.ActionStore
-	ExecutionStore     executions.ExecutionStore
+	ID             string
+	ArtifactStore  artifacts.ArtifactStore
+	AgentStore     agentmodel.AgentStore
+	ActionStore    actionmodel.ActionStore
+	ExecutionStore executions.ExecutionStore
+	// SecretStore and SecretRequestStore enable encrypted delivery together.
+	// The controller does not receive encryption keys or plaintext values.
+	SecretStore        secrets.SecretStore
+	SecretRequestStore secrets.RequestStore
 	HeartbeatTimeout   time.Duration
 	LeaseSweepInterval time.Duration
 	// Logger receives message handling events. Nil is silent.
@@ -55,6 +61,7 @@ type Controller struct {
 	logger             *slog.Logger
 	artifactStore      artifacts.ArtifactStore
 	executionStore     executions.ExecutionStore
+	secrets            *consumers.SecretEventConsumer
 	events             comms.Subscription
 	cancel             context.CancelCauseFunc
 	inventory          agentmodel.AgentStore
@@ -117,6 +124,9 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	if config.ExecutionStore == nil {
 		return nil, errors.New("controller requires an execution store")
 	}
+	if (config.SecretStore == nil) != (config.SecretRequestStore == nil) {
+		return nil, errors.New("controller secret distribution requires both secret and request stores")
+	}
 	if config.Logger == nil {
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -141,6 +151,15 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		state:      state.New(lifetime, config.HeartbeatTimeout),
 		eventsDone: make(chan struct{}), loopDone: make(chan struct{}), cleanupDone: make(chan struct{}),
 		requests: make(chan func()),
+	}
+	if config.SecretStore != nil {
+		c.secrets = &consumers.SecretEventConsumer{
+			Bus: bus, Inventory: config.AgentStore, Secrets: config.SecretStore, Requests: config.SecretRequestStore,
+		}
+	}
+	if err := c.reconcileSecrets(); err != nil {
+		cancel(err)
+		return nil, errors.Join(err, events.Close())
 	}
 	go c.run()
 	go c.consumeEvents(config.ActionStore)

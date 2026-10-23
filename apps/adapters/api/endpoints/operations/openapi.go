@@ -19,10 +19,15 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		name   string
 		typeOf reflect.Type
 	}{
+		{"AgentReadiness", reflect.TypeFor[models.AgentReadinessResponse]()},
+		{"ActionReadiness", reflect.TypeFor[models.ActionReadinessResponse]()},
+		{"Preflight", reflect.TypeFor[models.PreflightResponse]()},
+		{"Affinity", reflect.TypeFor[models.AffinityResponse]()},
 		{"Continuation", reflect.TypeFor[models.ContinuationResponse]()},
 		{"Task", reflect.TypeFor[models.TaskResponse]()},
 		{"Event", reflect.TypeFor[models.EventResponse]()},
 		{"Question", reflect.TypeFor[models.QuestionResponse]()},
+		{"OperationProgress", reflect.TypeFor[models.OperationProgressResponse]()},
 		{"Operation", reflect.TypeFor[models.OperationResponse]()},
 		{"GraphTask", reflect.TypeFor[models.GraphTaskResponse]()},
 		{"GraphArtifact", reflect.TypeFor[models.GraphArtifactResponse]()},
@@ -36,15 +41,41 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			return fmt.Errorf("describe API %s: %w", model.name, err)
 		}
 		switch model.name {
+		case "AgentReadiness":
+			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
+			schema.Properties["missing_requirements"].Description = "Missing prerequisites assessed on a live ready/working candidate. Entries with kind=secret identify declared managed secrets scoped to agent_type, distinct from sensitive host configuration. Stale or offline candidates report only their unavailability reason. Values and secret lease refresh requests are never included."
+		case "Preflight":
+			schema.Description = "Saved readiness for mission, step and same-agent actions. Before affinity binds, grouped candidates must advertise every grouped action; afterward only the bound agent satisfies grouped coverage. Capacity is assessed separately by the scheduler. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
+		case "Affinity":
+			schema.Description = "Read-only same-agent binding derived from the saved mission and task assignments, including terminal tasks. Absent without the rule. This is a placement constraint, not execution ordering or proof of agent availability."
+			schema.Properties["for_actions"].Description = "Actions bound to one agent instance within this operation."
+			schema.Properties["agent_id"].Description = "Agent selected by the first matching dispatch. Later matching tasks wait for this agent; no automatic fallback or rebinding. Absent before dispatch or when error is present."
+			schema.Properties["error"].Description = "Saved rule or dispatch history is inconsistent. Absence of agent_id in this case does not mean the group is unbound; inspect the saved tasks."
 		case "Continuation":
 			schema.Properties["status"].Enum = []any{"pending", "waiting", "resolved"}
 			schema.Properties["decision_by"].Enum = []any{"code", "model", "user"}
 		case "Task", "GraphTask":
 			schema.Properties["status"].Enum = []any{"queued", "running", "succeeded", "failed", "cancelled", "interrupted"}
+			if model.name == "Task" {
+				schema.Properties["agent_type"].Description = "Registered type of the assigned agent reporting this live execution wait; present only with missing_requirements."
+				schema.Properties["missing_requirements"].Description = "Current secret names reported by matching live running work before its saved deadline. Values are never included. These read-only requirements may change without updated_at changing; they neither alter mission preflight nor extend the task deadline."
+			}
 		case "Question":
 			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
+		case "OperationProgress":
+			schema.Description = "Read-only progress derived from this saved operation snapshot at one assessment time. Never persisted or used to infer agent idleness."
+			schema.Properties["task_counts"].Type = "object"
+			schema.Properties["task_counts"].Types = nil
+			schema.Properties["task_counts"].Description = "Counts by saved task status. Statuses with no tasks are omitted; an empty operation returns {}."
+			schema.Properties["finished_tasks"].Description = "Tasks with known outcomes: succeeded, failed or cancelled. Interrupted tasks remain unfinished even when finished_at is set."
+			schema.Properties["pending_decisions"].Description = "Pending model continuations; zero for terminal operations."
+			schema.Properties["pending_questions"].Description = "Pending unexpired questions; zero for terminal operations."
+			schema.Properties["settled"].Description = "True only when the operation is terminal and every saved task has a known finished outcome. Keep polling while false, including after cancellation or failure."
 		case "Operation", "Event", "OperationGraph":
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
+			if model.name == "Operation" {
+				schema.Properties["affinity"].Description = "Derived same-agent placement. Queued tasks remain unassigned until dispatch; affinity does not change their agent_id."
+			}
 		case "GraphNode":
 			schema.Properties["kind"].Enum = []any{"task", "artifact", "file"}
 			for _, variant := range []struct{ kind, model string }{{"task", "GraphTask"}, {"artifact", "GraphArtifact"}, {"file", "GraphFile"}} {
@@ -85,12 +116,12 @@ func openAPIOperationPaths(paths map[string]any) {
 	}{
 		{
 			path: root, id: "listOperations", summary: "List operations",
-			description: "Returns all full saved operation records without pagination, ordered by created_at descending, then ID ascending for ties.",
+			description: "Returns all full saved operation records without pagination, ordered by created_at descending, then ID ascending for ties. Active running tasks may include live agent_type and missing_requirements for their exact execution; this read-only observation does not extend deadlines.",
 			schema:      openAPIItems("Operation"),
 		},
 		{
 			path: operation, id: "getOperation", summary: "Get an operation",
-			description: "Returns the full saved operation, including its mission, preflight assessment, tasks, questions, output and events.",
+			description: "Returns the full saved operation, including its mission, preflight assessment, tasks, questions, output and events. Active running tasks may include live agent_type and missing_requirements for their exact execution; this read-only observation does not extend deadlines.",
 			schema:      endpoints.OpenAPIRef("Operation"), parameters: []any{openAPIUUIDParameter("operation_id")},
 			invalid: "invalid_operation_id", missing: "operation_not_found",
 		},

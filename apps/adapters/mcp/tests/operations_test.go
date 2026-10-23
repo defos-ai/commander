@@ -2,15 +2,14 @@ package mcp_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -19,11 +18,10 @@ import (
 )
 
 func TestConcurrentOperationsStayIsolated(t *testing.T) {
-	// Hold both requests so capacity and isolation are observable without timing races.
 	a := connect(t)
 	b := openSession(t)
-	url, entered, release := heldWebsite(t, "/first", "/second")
-	first, second := a.start(url+"/first"), b.start(url+"/second")
+	texts := []string{"First isolated operation", "Second independent operation"}
+	first, second := a.start(texts[0]), b.start(texts[1])
 	var empty struct {
 		Tasks      []operations.Task `json:"tasks"`
 		NextCursor *string           `json:"next_cursor"`
@@ -32,28 +30,22 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	if empty.Tasks == nil || len(empty.Tasks) != 0 || empty.NextCursor == nil || *empty.NextCursor != "" {
 		t.Fatalf("new operation must have an empty task list: %+v", empty)
 	}
-	a.task(first.ID, "check-seo", url+"/first")
-	b.task(second.ID, "check-seo", url+"/second")
-	for range 2 {
-		select {
-		case <-entered:
-		case <-time.After(10 * time.Second):
-			t.Fatal("both operations should make progress concurrently")
-		}
-	}
-	left, right := a.get(first.ID), b.get(second.ID)
-	if left.Tasks[0].Status != operations.TaskRunning || right.Tasks[0].Status != operations.TaskRunning || left.Tasks[0].AgentID == right.Tasks[0].AgentID {
-		t.Fatalf("capacity was not respected: first=%+v second=%+v", left.Tasks, right.Tasks)
-	}
-	assertWork(t, a, left.Tasks[0], right.Tasks[0])
-	queued := a.task(first.ID, "check-seo", url+"/extra")
-	if queued.Status != operations.TaskQueued {
-		t.Fatalf("third HTTP task exceeded the two web agents' capacity: %+v", queued)
-	}
+	// A real operator question blocks one operation while the other completes.
 	var question operations.Question
-	a.call("ask_question", object{"operation_id": first.ID, "text": "Approve the first review?", "options": []string{"Yes", "No"}}, &question)
-	assertTaskQueries(t, a, a.get(first.ID))
-	assertTaskQueries(t, b, right)
+	a.call("ask_question", object{"operation_id": first.ID, "text": "Analyze the first text?", "options": []string{"Yes", "No"}}, &question)
+	a.fails("assign_task", object{"operation_id": first.ID, "action_name": "analyze-text", "input": object{"text": texts[0]}}, "pending question")
+	b.task(second.ID, "analyze-text", object{"text": texts[1]})
+	right := b.wait(second.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
+	left := a.get(first.ID)
+	if len(left.Tasks) != 0 || len(left.Questions) != 1 || len(right.Questions) != 0 || !allTasksSucceeded(right) {
+		t.Fatalf("one operation's question affected the other: first=%+v second=%+v", left, right)
+	}
+	a.call("answer_question", object{"operation_id": first.ID, "question_id": question.ID, "answer": "Yes"}, nil)
+	a.task(first.ID, "analyze-text", object{"text": texts[0]})
+	left = a.wait(first.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
+	if len(left.Tasks) != 2 || len(right.Tasks) != 2 {
+		t.Fatalf("expected a root and proposed child per operation: first=%+v second=%+v", left.Tasks, right.Tasks)
+	}
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": right.Tasks[0].ID}, "unknown task")
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": id.New()}, "unknown task")
 	a.fails("get_task", object{"operation_id": first.ID, "task_id": "not-a-uuid"}, "UUID")
@@ -63,44 +55,38 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	a.fails("operation_tasks", object{"operation_id": first.ID, "cursor": "invalid"}, "UUID")
 	assertInvalidPageLimits(t, "operation_tasks", first.ID)
 
-	release("/second")
-	b.wait(second.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
-	b.task(second.ID, "capture-page", url+"/second")
-	right = b.wait(second.ID, allTasksSucceeded)
-	if len(right.Questions) != 0 || a.get(first.ID).Tasks[1].Status != operations.TaskQueued {
-		t.Fatal("one operation's question affected the other operation or lost its dispatch barrier")
-	}
-	release("/first")
-	a.wait(first.ID, func(op operationDetail) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	a.call("answer_question", object{"operation_id": first.ID, "question_id": question.ID, "answer": "Yes"}, nil)
-	a.wait(first.ID, allTasksSucceeded)
-	a.task(first.ID, "capture-page", url+"/first")
-	left = a.wait(first.ID, allTasksSucceeded)
-
 	artifactOwners := map[string]string{}
 	var previousArtifact *artifacts.Artifact
-	for _, op := range []operationDetail{left, right} {
+	for index, op := range []operationDetail{left, right} {
 		assertTaskQueries(t, a, op)
+		root, child := op.Tasks[0], op.Tasks[1]
+		var input struct{ Text string }
+		if err := json.Unmarshal(root.Input, &input); err != nil || input.Text != texts[index] {
+			t.Fatalf("task input crossed operation boundaries: %s (%v)", root.Input, err)
+		}
+		var proposedInput, savedInput object
+		if root.Result == nil || child.Result == nil {
+			t.Fatalf("operation lost result evidence: %+v", op.Tasks)
+		}
+		if err := json.Unmarshal(root.Result.Output, &proposedInput); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(child.Input, &savedInput); err != nil || !reflect.DeepEqual(savedInput, proposedInput) || child.ParentTaskID != root.ID {
+			t.Fatalf("child lost its parent's proposed input: %+v (%v)", child, err)
+		}
+		if len(child.Result.Artifacts) != 1 {
+			t.Fatalf("summary artifact missing: %+v", child.Result)
+		}
 		for _, task := range op.Tasks {
-			if task.OperationID != op.ID || task.Result == nil {
+			if task.OperationID != op.ID || task.Status != operations.TaskSucceeded {
 				t.Fatalf("task crossed operation boundaries: %+v", task)
-			}
-			var input, output struct{ URL string }
-			if err := json.Unmarshal(task.Input, &input); err != nil {
-				t.Fatal(err)
-			}
-			if err := json.Unmarshal(task.Result.Output, &output); err != nil || output.URL != input.URL {
-				t.Fatalf("result does not match task input: %s: %s (%v)", task.ID, task.Result.Output, err)
-			}
-			if task.ActionName == "capture-page" && len(task.Result.Artifacts) != 1 {
-				t.Fatalf("missing screenshots: %+v", task.Result)
 			}
 			for _, ref := range task.Result.Artifacts {
 				if ref.CommandID != task.CommandID || ref.AgentID != task.AgentID || artifactOwners[ref.ID] != "" {
 					t.Fatalf("incorrect artifact ownership: %+v", ref)
 				}
 				artifactOwners[ref.ID] = op.ID
-				assertScreenshots(t, a, ref)
+				assertArtifactResource(t, a, ref)
 				if previousArtifact != nil {
 					uri := "missions://artifacts/" + ref.ID + "/files/" + previousArtifact.Files[0].ID
 					invalid := openSession(t)
@@ -111,8 +97,9 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 				previousArtifact = &ref
 			}
 		}
-		summary := "Review " + op.ID
-		a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": summary, "findings": []object{}}}, nil)
+		a.resolve(op.ID, *modelDecision(op), []object{})
+		summary := "Analysis " + op.ID
+		a.call("complete_operation", object{"operation_id": op.ID, "output": object{"summary": summary}}, nil)
 		var report reports.Report
 		b.call("get_report", object{"operation_id": op.ID}, &report)
 		if report.OperationID != op.ID || !bytes.Contains(report.Output, []byte(summary)) {
@@ -121,42 +108,6 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	}
 	if len(left.Questions) != 1 || left.Questions[0].Answer != "Yes" || len(right.Questions) != 0 || len(artifactOwners) != 2 {
 		t.Fatal("questions or artifacts leaked between operations")
-	}
-}
-
-func assertWork(t *testing.T, a *api, tasks ...operations.Task) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		var list struct {
-			Agents []agents.Agent `json:"agents"`
-		}
-		a.call("list_agents", object{}, &list)
-		matched := 0
-		for _, task := range tasks {
-			for _, agent := range list.Agents {
-				if agent.ID != task.AgentID {
-					continue
-				}
-				work := agent.Work
-				if agent.Stale || agent.Status != agents.AgentWorking || work == nil || work.OperationID != task.OperationID || work.TaskID != task.ID || work.CommandID != task.CommandID || work.ActionName != task.ActionName {
-					continue
-				}
-				var detail agents.Agent
-				a.call("describe_agent", object{"agent_id": agent.ID}, &detail)
-				if !reflect.DeepEqual(detail.Work, work) {
-					t.Fatalf("agent queries disagree about current work: list=%+v detail=%+v", work, detail.Work)
-				}
-				matched++
-			}
-		}
-		if matched == len(tasks) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("agent queries did not report running tasks: %+v", list.Agents)
-		}
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -229,50 +180,6 @@ func assertTaskQueries(t *testing.T, a *api, op operationDetail) {
 	}
 }
 
-func TestCancellationWhileActionIsRunning(t *testing.T) {
-	a := connect(t)
-	url, entered, release := heldWebsite(t, "/slow", "/blocker")
-	op := a.start(url + "/slow")
-	a.call("assign_task", object{"operation_id": op.ID, "action_name": "discover-pages", "input": object{"url": url + "/slow", "max_pages": 1}}, nil)
-	select {
-	case <-entered:
-	case <-time.After(10 * time.Second):
-		t.Fatal("discovery did not start")
-	}
-	blocker := a.start(url + "/blocker")
-	a.task(blocker.ID, "check-seo", url+"/blocker")
-	select {
-	case <-entered:
-	case <-time.After(10 * time.Second):
-		t.Fatal("second agent did not start the blocking task")
-	}
-	queued := a.task(op.ID, "check-seo", url+"/queued")
-	if queued.Status != operations.TaskQueued || queued.AgentID != "" {
-		t.Fatalf("task should await capacity without an assigned agent: %+v", queued)
-	}
-
-	a.call("cancel_operation", object{"operation_id": op.ID}, nil)
-	cancelled := a.get(op.ID)
-	if cancelled.Status != operations.Cancelled || cancelled.Tasks[1].Status != operations.TaskCancelled {
-		t.Fatalf("queued work was not cancelled: %+v", cancelled)
-	}
-	release("/slow")
-	settled := a.wait(op.ID, func(op operationDetail) bool { return op.Tasks[0].Result != nil })
-
-	if settled.Status != operations.Cancelled || len(settled.Tasks) != 2 || settled.Tasks[1].Status != operations.TaskCancelled || len(settled.Tasks[0].Result.NextActions) != 5 {
-		t.Fatalf("late completion changed cancelled work: %+v", settled)
-	}
-	select {
-	case path := <-entered:
-		t.Fatalf("unexpected request after cancellation: %s", path)
-	default:
-	}
-	a.fails("assign_task", object{"operation_id": op.ID, "action_name": "check-seo", "input": object{"url": url}}, "finished")
-	release("/blocker")
-	a.wait(blocker.ID, allTasksSucceeded)
-	a.call("cancel_operation", object{"operation_id": blocker.ID}, nil)
-}
-
 func allTasksSucceeded(op operationDetail) bool {
 	if len(op.Tasks) == 0 {
 		return false
@@ -285,137 +192,53 @@ func allTasksSucceeded(op operationDetail) bool {
 	return true
 }
 
-func heldWebsite(t *testing.T, paths ...string) (string, <-chan string, func(string)) {
-	t.Helper()
-	gates := map[string]chan struct{}{}
-	for _, path := range paths {
-		gates[path] = make(chan struct{})
-	}
-	entered := make(chan string, 32)
-	url := serveWebsite(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only the first request per held path is signalled; browser requests after
-		// release are ordinary page loads. Other paths reveal accidental dispatch.
-		if gate := gates[r.URL.Path]; gate != nil {
-			select {
-			case <-gate:
-			default:
-				entered <- r.URL.Path
-				select {
-				case <-gate:
-				case <-r.Context().Done():
-					return
-				}
-			}
-		} else if r.URL.Path == "/queued" {
-			entered <- r.URL.Path
-		}
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, "<!doctype html><html lang=en><title>%s</title><h1>Review fixture</h1></html>", strings.TrimPrefix(r.URL.Path, "/"))
-	}))
-	release := func(path string) {
-		select {
-		case <-gates[path]:
-		default:
-			close(gates[path])
-		}
-	}
-	t.Cleanup(func() {
-		for _, path := range paths {
-			release(path)
-		}
-	})
-	return url, entered, release
-}
-
-func TestOperationWebsiteWorkflow(t *testing.T) {
-	for _, scenario := range []struct {
-		mission, discovery string
-		checks             []string
-	}{
-		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
-		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
-	} {
-		t.Run(scenario.mission, func(t *testing.T) {
-			testOperationWebsiteWorkflow(t, scenario.mission, scenario.discovery, scenario.checks)
-		})
-	}
-}
-
-func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, checks []string) {
-	const reportSummary = "MCP API website workflow passed"
+func TestOperationTextWorkflow(t *testing.T) {
+	const reportSummary = "MCP text workflow passed"
+	const text = "Analyze this fixture and save its summary."
 	a := connect(t)
-	url := website(t)
-	var op operations.Operation
-	a.call("start_operation", object{"mission_name": mission, "input": object{"url": url, "max_pages": 2}}, &op)
-	a.fails("assign_task", object{"operation_id": op.ID, "step_id": discovery, "action_name": discovery, "input": object{"url": url, "max_pages": 2}},
-		fmt.Sprintf(`mission %q declares no steps; omit step_id and use action_name`, mission))
+	var op operationDetail
+	a.call("start_operation", object{"mission_name": "analyze-text", "input": object{"text": text}}, &op)
+	assertMissionPreflight(t, a, op, 2)
+	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
+		t.Fatalf("new operation progress: %+v", op.Progress)
+	}
+	a.fails("assign_task", object{"operation_id": op.ID, "step_id": "analyze-text", "action_name": "analyze-text", "input": object{"text": text}},
+		`mission "analyze-text" declares no steps; omit step_id and use action_name`)
 	if rejected := a.get(op.ID); len(rejected.Tasks) != 0 {
 		t.Fatalf("invalid step queued work: %+v", rejected.Tasks)
 	}
-	var root operations.Task
-	a.call("assign_task", object{"operation_id": op.ID, "action_name": discovery, "input": object{"url": url, "max_pages": 2}}, &root)
+	root := a.task(op.ID, "analyze-text", object{"text": text})
 	settled := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
-	if len(settled.Tasks) != 1+2*len(checks) {
-		t.Fatalf("expected discovery + two pages of %d checks; got %d tasks", len(checks), len(settled.Tasks))
+	if settled.Preflight == nil || !settled.Preflight.Ready || len(settled.Tasks) != 2 {
+		t.Fatalf("ready mission lost preflight or proposed work: %+v", settled)
 	}
-	counts := map[string]int{}
-	brokenLinks := false
 	for _, task := range settled.Tasks {
 		if task.Status != operations.TaskSucceeded || task.Result == nil {
 			t.Fatalf("unsuccessful task: %+v", task)
 		}
-		if !strings.HasPrefix(task.AgentID, expectedExecutorType(task.ActionName)+"-") {
-			t.Fatalf("controller selected an agent without the task's capability: %+v", task)
+		coverage := slices.IndexFunc(op.Preflight.Actions, func(action operations.ActionReadiness) bool { return action.ActionName == task.ActionName })
+		if coverage < 0 || !slices.Contains(op.Preflight.Actions[coverage].ReadyAgentIDs, task.AgentID) {
+			t.Fatalf("controller selected an agent outside ready coverage: %+v", task)
 		}
-		counts[task.ActionName]++
-		if mission == "review-website-no-browser" && len(task.Result.Artifacts) != 0 {
-			t.Fatalf("browser-free review generated rendering artifacts: %+v", task.Result.Artifacts)
-		}
-		if task.ID != root.ID && task.ParentTaskID != root.ID {
-			t.Fatalf("child lost parent: %+v", task)
-		}
-		if task.ID != root.ID && (task.Continuation == nil || task.Continuation.Status != operations.ContinuationResolved) {
-			t.Fatalf("group member exposed a separate decision: %+v", task)
-		}
-		if task.ActionName == "capture-page" {
-			if len(task.Result.Artifacts) != 1 {
-				t.Fatalf("missing desktop/mobile screenshots: %+v", task.Result)
-			}
-			for _, ref := range task.Result.Artifacts {
-				assertScreenshots(t, a, ref)
-			}
-		}
-		if task.ActionName == "check-links" {
-			var result struct {
-				BrokenLinks int `json:"broken_links"`
-			}
-			if err := json.Unmarshal(task.Result.Output, &result); err != nil {
-				t.Fatal(err)
-			}
-			brokenLinks = brokenLinks || result.BrokenLinks > 0
+		if task.ID != root.ID && (task.ParentTaskID != root.ID || task.Continuation == nil || task.Continuation.Status != operations.ContinuationResolved) {
+			t.Fatalf("group member lost its parent or exposed a separate decision: %+v", task)
 		}
 	}
-	for _, name := range checks {
-		if counts[name] != 2 {
-			t.Fatalf("%s count=%d", name, counts[name])
-		}
+	child := settled.Tasks[1]
+	if child.ActionName != "write-summary" || len(child.Result.Artifacts) != 1 {
+		t.Fatalf("proposed action lost its artifact: %+v", child)
 	}
-	if mission == "review-website-no-browser" && (counts["capture-page"] != 0 || counts["check-accessibility"] != 0 || counts["discover-pages"] != 0) {
-		t.Fatalf("browser-free review queued browser workflow actions: %+v", counts)
-	}
-	if !brokenLinks {
-		t.Fatal("fixture's broken link was not reported")
-	}
+	assertArtifactResource(t, a, child.Result.Artifacts[0])
 	decision := modelDecision(settled)
-	if decision.ID != root.ID || len(decision.Continuation.CreatedTaskIDs) != 2*len(checks) {
-		t.Fatalf("expected one grouped decision on discovery, got %+v", decision)
+	if decision.ID != root.ID || !slices.Equal(decision.Continuation.CreatedTaskIDs, []string{child.ID}) {
+		t.Fatalf("expected one grouped decision on the root, got %+v", decision)
 	}
 	a.resolve(op.ID, *decision, []object{})
 	a.fails("resolve_continuation", object{"operation_id": op.ID, "task_id": decision.ID, "version": decision.Continuation.Version, "actions": []object{}}, "pending")
-	a.fails("complete_operation", object{"operation_id": op.ID, "output": object{"summary": "missing required fields"}}, "output")
-	var completed operations.Operation
-	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": reportSummary, "findings": []object{{"page_url": url, "check": "links", "description": "Broken /missing link"}}}}, &completed)
-	if completed.Status != operations.Completed || completed.ReportID == "" {
+	a.fails("complete_operation", object{"operation_id": op.ID, "output": object{}}, "output")
+	var completed operationDetail
+	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"summary": reportSummary}}, &completed)
+	if completed.Status != operations.Completed || completed.ReportID == "" || !completed.Progress.Settled || completed.Progress.FinishedTasks != 2 || completed.Progress.TotalTasks != 2 {
 		t.Fatalf("completion: %+v", completed)
 	}
 	var report reports.Report
@@ -424,35 +247,35 @@ func testOperationWebsiteWorkflow(t *testing.T, mission, discovery string, check
 		t.Fatalf("report=%+v", report)
 	}
 	assertEvents(t, a, op.ID)
-	a.fails("assign_task", object{"operation_id": op.ID, "action_name": "check-seo", "input": object{"url": url}}, "finished")
+	a.fails("assign_task", object{"operation_id": op.ID, "action_name": "write-summary", "input": summaryInput()}, "finished")
 }
 
 func TestOperationCancellationAndFailure(t *testing.T) {
 	for _, method := range []string{"cancel_operation", "fail_operation"} {
 		t.Run(method, func(t *testing.T) {
 			a := connect(t)
-			op := a.start("https://example.test")
-			a.task(op.ID, "unavailable-test-action", "https://example.test")
+			op := a.start("Cancelled or failed fixture")
+			a.task(op.ID, "unavailable-test-action", object{})
 			args := object{"operation_id": op.ID}
 			if method == "fail_operation" {
 				args["reason"] = "operator ended test"
 			}
-			var ended operations.Operation
+			var ended operationDetail
 			a.call(method, args, &ended)
 			expected := operations.Cancelled
 			if method == "fail_operation" {
 				expected = operations.Failed
 			}
-			if ended.Status != expected || len(ended.Tasks) != 1 || ended.Tasks[0].Status != operations.TaskCancelled {
+			if ended.Status != expected || len(ended.Tasks) != 1 || ended.Tasks[0].Status != operations.TaskCancelled || !ended.Progress.Settled || ended.Progress.FinishedTasks != 1 || ended.Progress.TotalTasks != 1 {
 				t.Fatalf("terminal operation: %+v", ended)
 			}
 			a.fails("get_report", object{"operation_id": op.ID}, "report")
-			a.fails("assign_task", object{"operation_id": op.ID, "action_name": "check-seo"}, "finished")
+			a.fails("assign_task", object{"operation_id": op.ID, "action_name": "write-summary"}, "finished")
 		})
 	}
 }
 
-func assertScreenshots(t *testing.T, a *api, expected artifacts.Artifact) {
+func assertArtifactResource(t *testing.T, a *api, expected artifacts.Artifact) {
 	t.Helper()
 	uri := "missions://artifacts/" + expected.ID
 	result, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: uri})
@@ -466,22 +289,21 @@ func assertScreenshots(t *testing.T, a *api, expected artifacts.Artifact) {
 	if err := json.Unmarshal([]byte(result.Contents[0].Text), &saved); err != nil {
 		t.Fatal(err)
 	}
-	if !saved.Equal(expected) || len(saved.Files) != 2 || saved.Name != "Page screenshots" {
-		t.Fatalf("artifact metadata lost ownership or grouped files: %+v", saved)
+	if !saved.Equal(expected) || len(saved.Files) != 1 {
+		t.Fatalf("artifact metadata lost ownership or files: %+v", saved)
 	}
-	for i, file := range saved.Files {
-		if file.Name != []string{"desktop.png", "mobile.png"}[i] {
-			t.Fatalf("unexpected screenshot file: %+v", file)
-		}
+	for _, file := range saved.Files {
 		resource, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: uri + "/files/" + file.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(resource.Contents) != 1 || resource.Contents[0].MIMEType != "image/png" || !bytes.HasPrefix(resource.Contents[0].Blob, []byte("\x89PNG\r\n\x1a\n")) {
-			t.Fatal("file resource is not a PNG screenshot")
+		if len(resource.Contents) != 1 || resource.Contents[0].MIMEType != file.MediaType || resource.Contents[0].Text == "" {
+			t.Fatal("text file resource lost content or media type")
 		}
-		if int64(len(resource.Contents[0].Blob)) != file.Size {
-			t.Fatal("file size does not match saved metadata")
+		data := []byte(resource.Contents[0].Text)
+		digest := sha256.Sum256(data)
+		if int64(len(data)) != file.Size || hex.EncodeToString(digest[:]) != file.SHA256 {
+			t.Fatal("file bytes do not match saved size and digest")
 		}
 	}
 }
@@ -549,9 +371,9 @@ func assertInvalidPageLimits(t *testing.T, tool, operationID string) {
 
 func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	a := connect(t)
-	url := website(t)
-	op := a.start(url)
-	a.task(op.ID, "check-seo", url+"/missing")
+	op := a.start("Recover an invalid action input")
+	// The JSON matches the action schema, but execution rejects inconsistent counts.
+	a.task(op.ID, "write-summary", object{"character_count": 1, "word_count": 0, "line_count": 1})
 	failed := a.wait(op.ID, func(op operationDetail) bool { return modelDecision(op) != nil })
 	parent := modelDecision(failed)
 	if parent.Status != operations.TaskFailed || parent.Error == "" {
@@ -559,7 +381,7 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	}
 
 	assertAgentSelectionRejected(t, "resolve_continuation", object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,
-		"actions": []object{{"action_name": "check-seo", "agent_id": parent.AgentID, "input": object{"url": url}}}})
+		"actions": []object{{"action_name": "write-summary", "agent_id": parent.AgentID, "input": summaryInput()}}})
 	unchanged := a.get(op.ID)
 	pending := modelDecision(unchanged)
 	if len(unchanged.Tasks) != 1 || pending == nil || pending.Continuation.Version != parent.Continuation.Version {
@@ -567,7 +389,7 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	}
 
 	decision := object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,
-		"actions": []object{{"action_name": "check-seo", "input": object{"url": url}, "reason": "Review the available page"}}}
+		"actions": []object{{"action_name": "write-summary", "input": summaryInput(), "reason": "Retry with valid analysis counts"}}}
 	a.call("resolve_continuation", decision, nil)
 	a.fails("resolve_continuation", decision, "pending")
 	continued := a.wait(op.ID, func(op operationDetail) bool { return len(op.Tasks) == 2 && modelDecision(op) != nil })
@@ -577,7 +399,7 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 		t.Fatalf("follow-up task: %+v", child)
 	}
 	a.resolve(op.ID, *child, []object{})
-	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"url": url, "summary": "Available page reviewed", "findings": []object{}, "limitations": []string{"Missing page returned HTTP 404"}}}, nil)
+	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"summary": "Recovered the failed action and reviewed its evidence"}}, nil)
 	if a.get(op.ID).Status != operations.Completed {
 		t.Fatal("operation did not complete")
 	}

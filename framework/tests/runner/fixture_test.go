@@ -210,6 +210,10 @@ func (s *operationStore) Fail(ctx context.Context, operationID, reason string) (
 
 type missionStore struct{ mission missions.Mission }
 
+func (*missionStore) Create(context.Context, missions.Mission) error {
+	return errors.New("runner must not create missions")
+}
+
 func (s *missionStore) Upsert(_ context.Context, m missions.Mission) error {
 	s.mission = m.Clone()
 	return nil
@@ -271,7 +275,7 @@ func fixture() runner.Config {
 	catalog.set(readyAgent(agentID))
 	return runner.Config{
 		AgentCatalog:   catalog,
-		MissionStore:   &missionStore{mission: missions.Mission{Name: "review", Objective: "Review a document", InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
+		MissionStore:   &missionStore{mission: missions.Mission{Name: "review", Objectives: []string{"Review a document"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
 		OperationStore: &operationStore{records: map[string]operations.Operation{}},
 		ReportStore:    reportStore{},
 	}

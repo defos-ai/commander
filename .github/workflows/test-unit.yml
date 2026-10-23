@@ -57,7 +57,7 @@ jobs:
     name: Applications
     if: >-
       ${{ inputs.all || contains(fromJSON(inputs.changes), 'controller') ||
-          contains(fromJSON(inputs.changes), 'agent') || contains(fromJSON(inputs.changes), 'web') ||
+          contains(fromJSON(inputs.changes), 'builder') || contains(fromJSON(inputs.changes), 'spawner') ||
           contains(fromJSON(inputs.changes), 'playground') ||
           contains(fromJSON(inputs.changes), 'api') || contains(fromJSON(inputs.changes), 'mcp') ||
           contains(fromJSON(inputs.changes), 'ui-backend') }}
@@ -73,16 +73,16 @@ jobs:
         run: |
           go test -race -count=1 -timeout=3m ./apps/controllers/default/...
           go vet ./apps/controllers/default/...
-      - name: Test and vet browser agent
-        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'agent') }}
+      - name: Test and vet builder agent
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'builder') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/agents/browser/...
-          go vet ./apps/agents/browser/...
-      - name: Test and vet web agent
-        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'web') }}
+          go test -race -count=1 -timeout=3m ./apps/agents/builder/...
+          go vet ./apps/agents/builder/...
+      - name: Test and vet spawner packages
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'spawner') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/agents/web/...
-          go vet ./apps/agents/web/...
+          go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
+          go vet ./apps/agents/spawner/...
       - name: Test and vet Playground, including all-in-one
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'playground') }}
         run: |
@@ -131,10 +131,10 @@ jobs:
           GOWORK: 'off'
         run: |
           cp -R ../frontend/dist static/dist
-          go test -tags embed_ui -race -count=1 -timeout=1m ./...
+          go test -tags embed_ui -race -count=1 -timeout=1m ./tests -run '^TestBundledFrontend$'
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./cmd/commander-ui
       - name: Test and build bundled Playground
         working-directory: .
         run: |
-          go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/...
+          go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOneBundledAdmin$'
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander" ./apps/playground/cmd/commander

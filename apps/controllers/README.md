@@ -1,74 +1,57 @@
 # Controllers
 
-## Overview
-
-The controller turns Commander's operation commands into agent work. It runs
-mission rules, selects exact agent instances, and saves tasks, execution
-results, questions and reports. The bundled [default host](default/) receives
-commands through the bus, restores operations after restart and opens no HTTP port.
-
-The [admin UI](../admin/ui/README.md) shows controller health under **Controllers**.
-Queued tasks wait for ready agents with capacity. The current deployment uses
-**one active controller**; the Commander LLM makes open decisions through MCP. See
-[architecture and recovery](../../docs/overview.md#state-and-restart-recovery).
+The controller assigns mission tasks to agents and saves their progress and results.
+Use Admin's **Controllers** page to check its health.
 
 ## Quick start
 
-With Go 1.26.7+, run from the repository root:
+Compose and all-in-one include the default controller. To run it separately
+from the repository root with Go 1.26.7+:
 
 ```sh
 go run ./apps/controllers/default/cmd --with-missions ./apps/controllers/default/data/default-missions.json
 ```
 
-`--with-missions` upserts definitions at each startup: matching names are updated,
-other missions are preserved. Without it, the host loads no mission file. Compose
-supplies the [website missions](default/data/default-missions.json) automatically:
-`review-website-no-browser` uses HTTP checks; `review-website-with-browser` also
-requires rendering and screenshots.
-Existing operations retain their saved mission definition.
+Connect [adapters](../adapters/README.md#quick-start) and
+[agents](../agents/README.md#quick-start) to the same providers. Run **one active
+controller per database**.
 
-Start the [MCP adapter](../adapters/README.md#quick-start) and
-[agents](../agents/README.md#quick-start) with matching connections. See
-[deployment](../../docs/deployment.md) for providers, flags and persistent state.
+`--with-missions` imports a mission file at startup, updating matching names and
+preserving other missions. Omit it to skip import. Existing operations keep the
+definition they started with. See [mission authoring](../../docs/abstractions.md)
+and [deployment](../../docs/deployment.md).
 
 ## Development and testing
 
-Customize host configuration and provider connections in
-[`default/cli/`](default/cli/). For a new host, use its module and entrypoint as a
-starting point. The [framework](../../framework/README.md) provides coordination
-and recovery; [missions](../../docs/abstractions.md#mission-rules) define
-automatic action transitions.
+Configure providers in [`default/cli/`](default/cli/). Use the
+[framework controller](../../framework/controller/) when writing another host.
 
 ### Agent selection
 
-The default is `runner.RoundRobinSelector{}`. To choose agents differently, pass a
-[`runner.AgentSelector`](../../framework/controller/runner/agent_selector.go) in
-`runner.Config.AgentSelector`. `Select(ctx, selection)` receives the task, eligible
-agents, load/capacity and last dispatched agent ID. Return a candidate's ID, or an
-empty ID to defer work. Errors and invalid IDs leave the task queued; set
-`runner.Config.Logger` for diagnostics.
-
-Report the selector's `Name()` in `controller.RegistrationConfig.AgentSelector`.
-The [default host](default/cli/cli.go) shows runtime and registration setup. See
-[AGENTS.md](AGENTS.md) for scheduler constraints when extending the runtime.
+The default is `runner.RoundRobinSelector{}`. To change selection, implement
+[`runner.AgentSelector`](../../framework/controller/runner/agent_selector.go)
+and pass it in `runner.Config.AgentSelector`. Return an eligible agent ID or
+an empty ID to defer work. [Task affinity](../../docs/abstractions.md#task-affinity)
+still applies.
 
 ### Rule selection
 
 Pass a [`runner.RuleSelector`](../../framework/controller/runner/rule_selector.go)
-in `runner.Config.RuleSelector` to choose rules from a mission and operation input.
-The default `runner.MissionRuleSelector{}` uses the mission's rules.
-Report the selector's `Name()` in `controller.RegistrationConfig.RuleSelector`.
+in `runner.Config.RuleSelector` to choose rules when an operation starts.
+The default uses the mission's rules. Return the full rule set; the saved
+selection applies throughout that operation.
 
-Return the complete rule set; clone `selection.Mission.Rules` first to extend it.
-An empty set uses default automatic behavior. The controller validates and saves
-the selection for that operation, including recovery; errors reject the start.
+For either selector, report its `Name()` in the corresponding
+`controller.RegistrationConfig` field so Admin displays it. See [AGENTS.md](AGENTS.md)
+for lifecycle and scheduling constraints.
 
 ### Run tests
 
 From the repository root:
 
 ```sh
-go test -race -count=1 ./apps/controllers/default/...
+go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+go vet ./apps/controllers/default/...
 ```
 
-See the [testing guide](../../framework/tests/README.md) for integration coverage.
+See [testing](../../framework/tests/README.md) for integration coverage.

@@ -200,5 +200,33 @@ func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error
 			return agentmodel.AgentSnapshot{}, errors.New("agent action has an invalid status")
 		}
 	}
+	if err := validateWorkRequirements(description, seen); err != nil {
+		return agentmodel.AgentSnapshot{}, err
+	}
 	return description, nil
+}
+
+func validateWorkRequirements(snapshot agentmodel.AgentSnapshot, actions map[string]bool) error {
+	work := snapshot.Work
+	if work == nil || len(work.MissingRequirements) == 0 {
+		return nil
+	}
+	if snapshot.Status != agentmodel.AgentWorking || !id.Valid(work.CommandID) || !actions[work.ActionName] {
+		return errors.New("runtime requirements must identify an executing command and action")
+	}
+	workContext := messages.WorkContext{OperationID: work.OperationID, TaskID: work.TaskID, StepID: work.StepID}
+	if err := workContext.Validate(); err != nil {
+		return err
+	}
+	seen := make(map[actionmodel.Requirement]bool, len(work.MissingRequirements))
+	for _, requirement := range work.MissingRequirements {
+		if err := requirement.Validate(); err != nil {
+			return fmt.Errorf("runtime requirement: %w", err)
+		}
+		if seen[requirement] {
+			return errors.New("runtime requirements must be unique")
+		}
+		seen[requirement] = true
+	}
+	return nil
 }

@@ -197,7 +197,7 @@ func TestCompletionClearsOnlyMatchingWork(t *testing.T) {
 				t.Fatal(err)
 			}
 			if newerWork {
-				if record.Status != agents.AgentWorking || record.Work == nil || *record.Work != *current {
+				if record.Status != agents.AgentWorking || !reflect.DeepEqual(record.Work, current) {
 					t.Fatalf("completion overwrote newer work: %+v", record)
 				}
 			} else if record.Status != agents.AgentReady || record.Work != nil {

@@ -101,6 +101,11 @@ func (m *Model) syncQuestion(now time.Time) bool {
 
 func (m *Model) focusQuestion(focused bool) {
 	m.questions.focused = focused && m.questions.current != nil
+	if m.secrets.open {
+		m.input.Blur()
+		m.questions.input.Blur()
+		return
+	}
 	if m.questions.focused {
 		m.input.Blur()
 		if m.questions.editing {

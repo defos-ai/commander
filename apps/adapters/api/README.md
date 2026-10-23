@@ -1,11 +1,10 @@
 # HTTP API adapter
 
-The API exposes Commander catalogs, saved operations, reports and artifacts over
-HTTP, and sends operation commands to the controller.
+Create missions, submit operation commands and read results from your application.
 
 ## Quick start
 
-From the repository root:
+From the repository root, with Go 1.26.7+:
 
 ```sh
 export API_USERNAME=commander
@@ -13,130 +12,113 @@ export API_PASSWORD="$(openssl rand -hex 32)"
 go run ./apps/adapters/api/cmd/commander-api
 ```
 
-Query the catalog (`curl` prompts for the API password):
+List missions; `curl` prompts for the password:
 
 ```sh
 curl --user "$API_USERNAME" http://127.0.0.1:4274/api/v1/missions
 ```
 
 Start the [controller](../../controllers/README.md#quick-start) and agents with
-matching provider settings to execute work. See [deployment](../../../docs/deployment.md)
-for provider settings and Compose.
+matching provider settings to execute work. For a complete stack, use
+[Compose](../../../docs/deployment.md).
 
 ## API reference
 
-Enable `API_SWAGGER_ENABLED=true` or pass `--swagger` for authenticated Swagger UI
-at `/docs/` and the OpenAPI document at `/openapi.json`. Both are disabled by
-default; `--swagger=false` overrides the environment. Swagger assets are local.
-The reference includes every route, request schema, response and error.
+Set `API_SWAGGER_ENABLED=true` or pass `--swagger` to enable authenticated
+Swagger at `/docs/` and OpenAPI at `/openapi.json`. Use that reference for
+routes, schemas, pagination and errors.
 
-Catalog and operation queries read saved state without executing work. Tasks and
-events use `cursor` and `limit` pagination (default 100, maximum 1,000); pass
-`next_cursor` unchanged to the next request for the same resource. Execution
-graphs show recorded tasks and their artifacts and files. Poll active graphs
-every 2–5 seconds; dispatched tasks can still finish after cancellation or failure.
+## Create missions
 
-Reports are available after completion. Artifact downloads verify file size and
-SHA-256 before returning bytes; `HEAD` returns headers only. Files are read fully
-into memory, and range requests are unsupported.
+Save a mission from a JSON file:
+
+```sh
+curl --user "$API_USERNAME" \
+  --header 'Content-Type: application/json' \
+  --data-binary @mission.json \
+  http://127.0.0.1:4274/api/v1/missions
+```
+
+Include `name`, an `objectives` array, `input_schema` and `output_schema`.
+Add required/optional actions, starting actions, steps and rules as needed.
+Use `action_definitions` for capabilities an agent should implement later;
+see [mission definitions](../../../docs/abstractions.md#mission-operation-and-task).
+
+Saving does not require installed agents or start work. Names are unique:
+an existing name returns `409 mission_exists`. After an uncertain save, read
+the mission by name before retrying. Keep secret values out of definitions.
 
 ## Operation commands
 
-Start an operation from a mission, assign actions, resolve continuations and
-questions, then complete it with output matching the mission schema. The
-controller selects agents. See the [operation workflow](../README.md#operation-workflow)
-and [decision rules](../../../docs/abstractions.md#next-actions-and-continuations).
+Follow the [operation workflow](../README.md#operation-workflow): start an
+operation, inspect preflight, assign actions, resolve questions and decisions,
+then complete it with output matching the mission schema.
 
-Nonempty command bodies require `application/json`, have a 1 MiB limit, and
-reject unknown fields. Commands time out after 10 seconds without automatic
-retries. **Query saved state before retrying an uncertain result:** accepted work
-may continue, and repeated task assignments create new tasks.
+**Read saved state before retrying a timed-out command.** Accepted work may
+continue; repeating an assignment creates another task. Cancellation stops queued
+work, while dispatched tasks may finish.
 
-Cancellation and failure stop queued work; dispatched tasks may still finish.
-Completion requires settled tasks, questions and automatic/operator continuations.
-Finished operations are read-only; further work needs a new operation.
+## Secrets
+
+Compose and all-in-one configure encryption automatically. For a standalone API,
+set `SECRETS_ENCRYPTION_KEY` to a 32-byte key encoded as 64 hex characters.
+Generate it once:
+
+```sh
+openssl rand -hex 32
+```
+
+Retain the key securely, separately from the database, and reuse it across
+restarts and trusted hosts that encrypt/decrypt secrets. Replacing the key makes
+existing encrypted values unreadable.
+
+Manage secrets through [Admin](../../admin/ui/README.md#secrets) or the authenticated
+`/api/v1/secrets` routes in Swagger. Scope each value by agent type and name.
+Values are write-only; responses contain metadata.
+
+Without a key, secret routes return `503 secrets_unavailable`; other API features
+remain available. After saving, wait for the agent's requirement to clear.
+For conflicts or uncertain writes, refresh metadata before retrying.
 
 ## Documentation and configuration
 
-Listener precedence is `--listen-address`, `API_LISTEN_ADDRESS`, `0.0.0.0:$PORT`,
-then `127.0.0.1:4274`. Containers can set `PORT=4274`.
-
-Set `BUS_URL`, `DATABASE_URL` and `STORAGE_URL` for providers, and `LOG_LEVEL` and
-`LOG_FORMAT` for logging. Corresponding CLI flags override environment values;
-run with `--help` for options. Defaults use local `./state/` directories. Container
-deployments need provider URLs and writable mounts for filesystem providers;
-the image does not prepare state directories.
+Set `BUS_URL`, `DATABASE_URL` and `STORAGE_URL` to choose providers; defaults use
+local `./state/` directories. Use writable mounts with filesystem providers in
+containers. Run `--help` for flags, which override environment settings.
 
 ### Authentication and health
 
-The standalone API requires nonblank `API_USERNAME` and `API_PASSWORD` environment
-variables before serving requests. Startup fails with copyable setup instructions
-when either is missing. Compose supplies username `commander` and generates a
-random password unless you set `API_PASSWORD`. Retrieve the running credentials:
+Standalone API requires `API_USERNAME` and `API_PASSWORD`. Compose generates a
+password; retrieve it with:
 
 ```sh
 docker compose exec api commander-api credentials
 ```
 
-Generated passwords change whenever the container restarts. Set `API_PASSWORD`
-before starting Compose for a stable password; `API_USERNAME` overrides the username.
-Native hosts can run `commander-api credentials` with the same environment settings.
-Add `--raw` to print only the password.
-Passwords are never included in startup logs or errors.
+Retrieve it again after an API restart, or set `API_PASSWORD` before launch to
+keep it stable. Add `--raw` for the password only. All-in-one Playground exposes
+its session login through `/credentials`.
 
-[Playground's all-in-one mode](../../playground/README.md#native-one-executable)
-generates a session password automatically; use `/credentials` there to view it.
+Use HTTPS for hosted deployments. Authentication is required except for public
+deployment metadata (`/aboutz`), health probes and approved CORS preflights.
 
-Use HTTPS at the reverse proxy for hosted deployments. All routes, including
-unknown routes and Swagger, require Basic authentication except approved CORS
-preflights, `/aboutz`, and public `GET`/`HEAD` probes on every host:
-
-- `/healthz`: server liveness.
-- `/readyz`: metadata database readability; does not check broker connectivity,
-  file storage or controller availability.
-
-Public `GET`/`HEAD /aboutz` describes the deployment: `runtime` is `native`,
-`docker` or `docker-compose`; `application` is `commander-api` or `commander`
-(all-in-one). Host, Origin and trusted-proxy checks still apply. It returns no
-credentials. Set `API_RUNTIME` or `--runtime` when deploying; the default is
-`native`, and the Docker images and Compose set it automatically.
-
-Responses include no-cache, content-type, framing and referrer protections;
-HTTPS responses also set HSTS.
+- `/healthz`: check whether the API server is running.
+- `/readyz`: check metadata database readability; inspect controllers and agents
+  separately before running work.
 
 ### Hosts, origins and proxies
 
-| Environment variable | CLI flag | Default |
-| --- | --- | --- |
-| `API_ALLOWED_HOSTS` | `--allowed-hosts` | `localhost,127.0.0.1,::1` |
-| `API_ALLOWED_ORIGINS` | `--allowed-origins` | `http://localhost:4275,http://127.0.0.1:4275` |
-| `API_TRUSTED_PROXIES` | `--trusted-proxies` | None |
-| `API_PROXY_HEADERS` | `--proxy-headers` | `none` |
+| Configure… | Environment variable |
+| --- | --- |
+| Listener (default `127.0.0.1:4274`) | `API_LISTEN_ADDRESS` |
+| Accepted hostnames; add your public and internal upstream names | `API_ALLOWED_HOSTS` |
+| Other browser clients; use exact origins such as `https://app.example.com` | `API_ALLOWED_ORIGINS` |
+| Reverse proxy IPs or CIDRs | `API_TRUSTED_PROXIES` |
+| Trusted headers: `forwarded`, `x-forwarded` or `x-forwarded-proto` | `API_PROXY_HEADERS` |
 
-Allowed hosts are exact hostnames/IPs without ports or wildcards; add your public
-hostname when deploying. Trusted proxies are comma-separated IPs or CIDRs matched
-against the directly connected peer. Flags override environment values.
-
-Browser requests can use the same origin or an allowed origin. Setting allowed
-origins replaces the defaults; `--allowed-origins=` restores same-origin-only
-access. Use scheme and port without a path or trailing slash; wildcards, `null`,
-credentials, queries and fragments are rejected. Origins never bypass host or
-trusted-proxy checks. Native clients may omit `Origin`.
-
-The [admin UI](../../admin/ui/README.md#connections-and-sessions) sends Basic
-authentication from its backend and needs no API CORS permission; the upstream
-hostname must still pass `API_ALLOWED_HOSTS`. Other browser clients should send
-an explicit Basic `Authorization` header with `credentials: 'omit'`; cross-origin
-cookies and browser-managed credentials are disabled. CORS permits `GET`, `HEAD`,
-`POST` and the `Authorization`, `Content-Type`, `Accept` headers. Approved
-preflights return `204`; actual requests require authentication. Approved origins
-can read `Location`, `Content-Disposition` and `WWW-Authenticate` headers.
-
-Proxy modes are `forwarded` (`Forwarded`), `x-forwarded` (`X-Forwarded-Host` and
-`X-Forwarded-Proto`), or `x-forwarded-proto` (preserves the original `Host`).
-Forwarding requires a trusted proxy configured to overwrite the selected headers.
-Each header must have one value; chains are rejected. Missing headers use the
-direct request's host and scheme; other forwarding headers are ignored.
+Configure proxies to overwrite the selected forwarding headers. Admin sends
+credentials from its backend, so it needs no API CORS permission; its upstream
+hostname must still be allowed.
 
 ## Development and testing
 

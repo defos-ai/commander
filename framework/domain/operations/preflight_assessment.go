@@ -11,29 +11,71 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
-func AssessPreflight(mission missions.Mission, records []agents.Agent) *Preflight {
-	names := slices.Clone(mission.RequiredActions)
-	for _, step := range mission.Steps {
+// AssessPreflight checks mission requirements and queued optional work against
+// saved affinity. Capacity is separate, so working agents can provide coverage.
+func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
+	boundAgentID, err := o.AffinityAgentID()
+	if err != nil {
+		return nil, err
+	}
+	group := o.Mission.Rules[missions.SameAgent].ForActions
+	commonAgents := make(map[string]bool)
+	if len(group) != 0 && boundAgentID == "" {
+		for _, record := range records {
+			commonAgents[record.ID] = providesActions(record, group)
+		}
+	}
+	names := slices.Clone(o.Mission.RequiredActions)
+	for _, step := range o.Mission.Steps {
 		names = append(names, step.RequiredActions...)
 	}
+	// Include selected optional work so missing requirements are visible while
+	// it waits for dispatch.
+	for _, task := range o.Tasks {
+		if task.Status == TaskQueued && slices.Contains(o.Mission.OptionalActions, task.ActionName) {
+			names = append(names, task.ActionName)
+		}
+	}
+	names = append(names, group...)
 	slices.Sort(names)
 	names = slices.Compact(names)
 	result := &Preflight{Ready: true, Version: 1, Actions: make([]ActionReadiness, 0, len(names))}
 	for _, name := range names {
 		readiness := ActionReadiness{ActionName: name}
+		grouped := slices.Contains(group, name)
+		foundOwner := false
 		for _, record := range records {
-			for _, action := range record.Actions {
-				if action.Name != name {
-					continue
-				}
-				candidate := AssessAgentAction(record, action)
-				if candidate.Reason == "" {
-					readiness.ReadyAgentIDs = append(readiness.ReadyAgentIDs, record.ID)
-				} else {
-					readiness.UnavailableAgents = append(readiness.UnavailableAgents, candidate)
-				}
-				break
+			if grouped && boundAgentID != "" && record.ID != boundAgentID {
+				continue
 			}
+			foundOwner = foundOwner || record.ID == boundAgentID
+			index := slices.IndexFunc(record.Actions, func(action actions.Action) bool { return action.Name == name })
+			if index < 0 {
+				if grouped && boundAgentID != "" {
+					readiness.UnavailableAgents = append(readiness.UnavailableAgents, AgentReadiness{
+						AgentID: record.ID, AgentType: string(record.Type), Reason: "Agent required by same-agent does not provide this action",
+					})
+				}
+				continue
+			}
+			var candidate AgentReadiness
+			if grouped && boundAgentID == "" && !commonAgents[record.ID] {
+				candidate = AgentReadiness{
+					AgentID: record.ID, AgentType: string(record.Type), Reason: "Agent does not provide all actions required by same-agent",
+				}
+			} else {
+				candidate = AssessAgentAction(record, record.Actions[index])
+			}
+			if candidate.Reason == "" {
+				readiness.ReadyAgentIDs = append(readiness.ReadyAgentIDs, record.ID)
+			} else {
+				readiness.UnavailableAgents = append(readiness.UnavailableAgents, candidate)
+			}
+		}
+		if grouped && boundAgentID != "" && !foundOwner {
+			readiness.UnavailableAgents = append(readiness.UnavailableAgents, AgentReadiness{
+				AgentID: boundAgentID, Reason: "Agent required by same-agent is not registered",
+			})
 		}
 		if len(readiness.ReadyAgentIDs) != 0 {
 			slices.Sort(readiness.ReadyAgentIDs)
@@ -46,18 +88,30 @@ func AssessPreflight(mission missions.Mission, records []agents.Agent) *Prefligh
 		}
 		result.Actions = append(result.Actions, readiness)
 	}
-	return result
+	return result, nil
+}
+
+func providesActions(record agents.Agent, names []string) bool {
+	for _, name := range names {
+		if !slices.ContainsFunc(record.Actions, func(action actions.Action) bool { return action.Name == name }) {
+			return false
+		}
+	}
+	return true
 }
 
 func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness {
-	result := AgentReadiness{AgentID: agent.ID, MissingRequirements: slices.Clone(action.MissingRequirements)}
+	result := AgentReadiness{AgentID: agent.ID, AgentType: string(agent.Type)}
 	switch {
 	case agent.Stale:
 		result.Reason = "Agent heartbeat has expired"
 	case agent.Status != agents.AgentReady && agent.Status != agents.AgentWorking:
 		result.Reason = "Agent is not ready"
-	case len(result.MissingRequirements) != 0:
+	case len(action.MissingRequirements) != 0:
 		result.Reason = "Action has missing requirements"
+		// Stale and non-ready agents retain their last requirements in inventory,
+		// but those snapshots must not become actionable operation guidance.
+		result.MissingRequirements = slices.Clone(action.MissingRequirements)
 	case action.Status == actions.Unknown || action.Status == "":
 		result.Reason = "Action has not been discovered"
 	case action.Status != actions.Ready:
@@ -73,7 +127,10 @@ func (o *Operation) RefreshPreflight(records []agents.Agent) (bool, error) {
 	if o.Status.Terminal() {
 		return false, ErrFinished
 	}
-	next := AssessPreflight(o.Mission, records)
+	next, err := o.AssessPreflight(records)
+	if err != nil {
+		return false, err
+	}
 	if previous := o.Preflight; previous != nil {
 		if next.Ready == previous.Ready && reflect.DeepEqual(next.Actions, previous.Actions) {
 			return false, nil

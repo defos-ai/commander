@@ -32,6 +32,39 @@ func NewMissionMongoStore(database *store.MongoStore) *MissionMongoStore {
 	return &MissionMongoStore{database: database}
 }
 
+func (s *MissionMongoStore) Create(ctx context.Context, mission missions.Mission) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := mission.Validate(); err != nil {
+		return err
+	}
+	err := s.database.Insert(ctx, collection, missionDocument{ID: mission.Name, Mission: mission})
+	if duplicateMissionID(err) {
+		return missions.ErrMissionExists
+	}
+	return err
+}
+
+// Only the mission-name primary key represents an existing mission. Preserve
+// storage errors caused by any unrelated unique index.
+func duplicateMissionID(err error) bool {
+	var failure mongo.WriteException
+	if !errors.As(err, &failure) || len(failure.WriteErrors) != 1 {
+		return false
+	}
+	write := failure.WriteErrors[0]
+	if !mongo.IsDuplicateKeyError(write) {
+		return false
+	}
+	pattern, ok := write.Raw.Lookup("keyPattern").DocumentOK()
+	if !ok {
+		return false
+	}
+	keys, err := pattern.Elements()
+	return err == nil && len(keys) == 1 && keys[0].Key() == "_id"
+}
+
 func (s *MissionMongoStore) Upsert(ctx context.Context, mission missions.Mission) error {
 	if err := ctx.Err(); err != nil {
 		return err

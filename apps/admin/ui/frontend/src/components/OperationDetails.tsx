@@ -1,19 +1,45 @@
 import type {
-  Operation, OperationArtifact, OperationContinuation, OperationNextAction,
+  Operation, OperationAffinity, OperationArtifact, OperationContinuation, OperationNextAction,
   OperationPreflight, OperationQuestion, OperationTask,
 } from '../api/operation-types';
+import type { ActionRequirement } from '../api/types';
 import { useTranslation } from '../i18n';
 import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
 import { Button } from './Button';
 import '../styles/catalog.css';
 import '../styles/operations.css';
 
-export function operationProgress(tasks: OperationTask[] | null) {
-  return { total: tasks?.length ?? 0, finished: tasks?.filter(task => task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled').length ?? 0 };
-}
-
 export function isActiveOperation(status: string) {
   return status === 'planning' || status === 'running' || status === 'waiting';
+}
+
+export function OperationSecretsNotice({ operation, onManageSecrets }: { operation: Operation; onManageSecrets?: () => void }) {
+  const { t } = useTranslation();
+  if (!isActiveOperation(operation.status)) return null;
+  const scopes = new Set<string>();
+  const addRequirements = (type: string | undefined, requirements?: ActionRequirement[] | null) => {
+    if (!type) return;
+    for (const requirement of requirements ?? []) {
+      if (requirement.kind === 'secret') scopes.add(`${type} / ${requirement.name}`);
+    }
+  };
+  for (const action of operation.preflight?.ready ? [] : operation.preflight?.actions ?? []) {
+    if (action.ready_agent_ids?.length) continue;
+    for (const agent of action.unavailable_agents ?? []) {
+      addRequirements(agent.agent_type, agent.missing_requirements);
+    }
+  }
+  for (const task of operation.tasks ?? []) {
+    if (task.status !== 'running' || !task.deadline_at || Date.parse(task.deadline_at) <= Date.now()) continue;
+    addRequirements(task.agent_type, task.missing_requirements);
+  }
+  if (!scopes.size) return null;
+  return <div className="notice operation-secrets" role="status">
+    <strong>{t($ => $.operations.secretsNeeded)}</strong>
+    <p>{t($ => $.operations.secretsNeededDescription)}</p>
+    <ul className="catalog-tags">{[...scopes].sort().map(scope => <li key={scope}><code>{scope}</code></li>)}</ul>
+    {onManageSecrets && <Button variant="secondary" onClick={onManageSecrets}>{t($ => $.operations.manageSecrets)}</Button>}
+  </div>;
 }
 
 export function OperationStatus({ status }: { status: string }) {
@@ -68,10 +94,12 @@ function Continuation({ continuation }: { continuation: OperationContinuation })
   </div>;
 }
 
-function Task({ task }: { task: OperationTask }) {
+function Task({ task, queuedFor }: { task: OperationTask; queuedFor?: string }) {
   const { t } = useTranslation();
   return <details className="operation-card"><summary>
-    <span className="operation-card-name"><span>{task.action_name}</span><code>{task.id}</code></span><TaskStatus status={task.status} />
+    <span className="operation-card-name"><span>{task.action_name}</span><code>{task.id}</code>
+      {queuedFor && <span className="catalog-muted">{t($ => $.operations.queuedForAgent, { agent: queuedFor })}</span>}
+    </span><TaskStatus status={task.status} />
   </summary><div className="operation-card-body">
     {task.status === 'interrupted' && <p className="notice">{t($ => $.operations.interruptedNote)}</p>}
     {task.error && <div className="operation-error"><h3>{t($ => $.operations.error)}</h3><p>{task.error}</p></div>}
@@ -120,6 +148,19 @@ function Question({ question, onAnswer }: { question: OperationQuestion; onAnswe
   </article>;
 }
 
+function Affinity({ affinity }: { affinity: OperationAffinity }) {
+  const { t } = useTranslation();
+  return <section className="catalog-section"><h2>{t($ => $.missionRules.sameAgent)}</h2>
+    {affinity.error ? <p className="notice" role="alert">{affinity.error}</p> : <>
+      <p className="catalog-muted">{t($ => $.operations.affinityDescription)}</p>
+      {affinity.agent_id ? <dl className="detail-list">
+        <div><dt>{t($ => $.operations.agentId)}</dt><dd><code>{affinity.agent_id}</code></dd></div>
+      </dl> : <p className="catalog-muted">{t($ => $.operations.affinityUnbound)}</p>}
+    </>}
+    <ul className="catalog-tags">{affinity.for_actions.map(action => <li key={action}><code>{action}</code></li>)}</ul>
+  </section>;
+}
+
 function Preflight({ preflight }: { preflight: OperationPreflight }) {
   const { t } = useTranslation();
   return <section className="catalog-section"><h2>{t($ => $.operations.preflight)}</h2>
@@ -134,7 +175,7 @@ function Preflight({ preflight }: { preflight: OperationPreflight }) {
           {Boolean(agent.missing_requirements?.length) && <div className="operation-nested"><h4>{t($ => $.operations.missingRequirements)}</h4>
             <ul className="catalog-tags">{agent.missing_requirements?.map((requirement, index) => {
               const { kind } = requirement;
-              return <li key={index}>{kind === 'executable' || kind === 'configuration' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>{requirement.secret && <> · {t($ => $.agents.secret)}</>}</li>;
+              return <li key={index}>{kind === 'executable' || kind === 'configuration' || kind === 'secret' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>{kind === 'configuration' && requirement.sensitive && <> · {t($ => $.agents.sensitive)}</>}</li>;
             })}</ul>
           </div>}
         </div>)}
@@ -174,17 +215,20 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
   onOpenReport?: () => void;
 }) {
   const { t } = useTranslation();
-  const progress = operationProgress(operation.tasks);
+  const progress = operation.progress;
   const artifacts = [...new Map(operation.tasks?.flatMap(task => task.result?.artifacts ?? []).map(artifact => [artifact.id, artifact])).values()];
   const events = [...operation.events ?? []].sort((a, b) => b.sequence - a.sequence);
+  const affinity = operation.affinity;
   return <div className="catalog-details operation-details">
     <section className="catalog-section"><h2>{t($ => $.operations.summary)}</h2>
-      <p className="operation-progress">{t($ => $.operations.progress, progress)}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
+      <p className="operation-progress">{t($ => $.operations.progress, { total: progress.total_tasks, finished: progress.finished_tasks })}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
       <dl className="detail-list">
         <div><dt>{t($ => $.operations.status)}</dt><dd><OperationStatus status={operation.status} /></dd></div>
         <div><dt>{t($ => $.operations.operationId)}</dt><dd><code>{operation.id}</code></dd></div>
         <div><dt>{t($ => $.operations.mission)}</dt><dd>{operation.mission.name}</dd></div>
-        <div><dt>{t($ => $.operations.objective)}</dt><dd>{operation.mission.objective}</dd></div>
+        <div><dt>{t($ => $.operations.objectives)}</dt><dd>
+          <ul className="catalog-tags">{operation.mission.objectives.map((objective, index) => <li key={index}>{objective}</li>)}</ul>
+        </dd></div>
         <div><dt>{t($ => $.operations.createdAt)}</dt><dd><Timestamp value={operation.created_at} /></dd></div>
         <div><dt>{t($ => $.operations.updatedAt)}</dt><dd><Timestamp value={operation.updated_at} /></dd></div>
         {operation.report_id && <div><dt>{t($ => $.operations.reportId)}</dt><dd className="operation-report-reference"><code>{operation.report_id}</code>
@@ -194,9 +238,12 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
       {operation.error && <div className="operation-error"><h3>{t($ => $.operations.error)}</h3><p>{operation.error}</p></div>}
       <OperationData label={t($ => $.operations.input)} value={operation.input} /><OperationData label={t($ => $.operations.output)} value={operation.output} />
     </section>
+    {affinity && <Affinity affinity={affinity} />}
     {operation.preflight && <Preflight preflight={operation.preflight} />}
     <section className="catalog-section"><h2>{t($ => $.operations.tasks)}</h2>
-      {operation.tasks?.length ? <ul className="operation-items">{operation.tasks.map(task => <li key={task.id}><Task task={task} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noTasks)}</p>}
+      {operation.tasks?.length ? <ul className="operation-items">{operation.tasks.map(task => <li key={task.id}><Task task={task}
+        queuedFor={isActiveOperation(operation.status) && task.status === 'queued' && !affinity?.error && affinity?.for_actions.includes(task.action_name)
+          ? affinity.agent_id : undefined} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noTasks)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.questions)}</h2>
       {operation.questions?.length ? <><p className="catalog-muted">{t($ => $.operations.questionStatusNote)}</p><ul className="operation-items">{operation.questions.map(question => <li key={question.id}><Question question={question}

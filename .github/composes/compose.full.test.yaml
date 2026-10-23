@@ -22,8 +22,6 @@ x-agent: &agent
   pull_policy: never
   command: ["--heartbeat-interval=1s"]
   environment: *environment
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
   depends_on:
     controller:
       condition: service_started
@@ -121,10 +119,11 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-    command: ["--with-missions=/data/default-missions.json"]
-    configs:
-      - source: default-missions
-        target: /data/default-missions.json
+      fixture-releases:
+        condition: service_healthy
+    command: ["--with-missions=/fixtures/missions.json"]
+    volumes:
+      - fixture-data:/fixtures:ro
     environment:
       <<: *environment
       DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
@@ -181,6 +180,8 @@ services:
       API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api,api-secondary
       API_ALLOWED_ORIGINS: http://localhost:14275,http://127.0.0.1:14275
       API_SWAGGER_ENABLED: "true"
+      # Fixed fixture key, only for the isolated test stack.
+      SECRETS_ENCRYPTION_KEY: &secrets-encryption-key 014ac583269fe047014ac583269fe047014ac583269fe047014ac583269fe047
     networks:
       default:
         aliases: [api-secondary]
@@ -225,33 +226,94 @@ services:
       retries: 12
       start_period: 5s
 
-  browser-agent:
+  example-agent-1:
     <<: *agent
-    image: commander-browser-agent:test
-    shm_size: 256mb
+    image: commander-example-agent:test
+    build:
+      context: https://github.com/defos-ai/commander-example-agent.git#71823ec22f91905e3e0de40a8ea77dcf0aa5354f
+      dockerfile: docker/Dockerfile
+
+  example-agent-2:
+    <<: *agent
+    image: commander-example-agent:test
+
+  builder-agent:
+    <<: *agent
+    image: commander-builder-agent:test
+    build:
+      context: ../..
+      dockerfile: apps/agents/builder/docker/Dockerfile
     environment:
       <<: *environment
-      CHROMIUM_NO_SANDBOX: "true"
+      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
+    volumes:
+      - builder-workspaces:/home/commander/workspaces
+
+  spawner-agent:
+    <<: *agent
+    image: commander-spawner-agent:test
+    user: "0:0"
     build:
       context: ../..
-      dockerfile: apps/agents/browser/docker/Dockerfile
+      dockerfile: apps/agents/spawner/docker/Dockerfile
+    environment:
+      <<: *environment
+      SPAWNER_RUNTIME: docker
+      SPAWNER_DOCKER_NETWORK: commander-full-test_default
+      SSL_CERT_FILE: /fixtures/ca.pem
+      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - fixture-data:/fixtures:ro
 
-  web-agent-1:
-    <<: *agent
-    image: commander-web-agent:test
+  fixture-releases:
+    <<: *runtime
+    image: commander-fixture-releases:test
+    pull_policy: never
     build:
       context: ../..
-      dockerfile: apps/agents/web/docker/Dockerfile
+      dockerfile: apps/agents/spawner/tests/e2e/Dockerfile
+      target: releases
+    environment:
+      FIXTURE_REGISTRY_URL: http://registry:5000
+      FIXTURE_IMAGE: localhost:15000/fixture-agent
+    volumes:
+      - fixture-data:/tls
+    ports:
+      - "127.0.0.1:14276:8080"
+    networks:
+      default:
+        aliases: [github.com, api.github.com]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/healthz"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
 
-  web-agent-2:
-    <<: *agent
-    image: commander-web-agent:test
+  registry:
+    image: registry:2
+    ports:
+      - "127.0.0.1:15000:5000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5000/v2/"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  # Built once, then pushed to the loopback-only registry by setup/CI. The
+  # spawner owns launch; Compose must not start an extra instance of this agent.
+  fixture-agent:
+    profiles: [fixtures]
+    image: commander-fixture-agent:test
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/agents/spawner/tests/e2e/Dockerfile
+      target: agent
 
 volumes:
+  builder-workspaces:
   rabbitmq:
   minio:
   mongo:
-
-configs:
-  default-missions:
-    file: ../../apps/controllers/default/data/default-missions.json
+  fixture-data:

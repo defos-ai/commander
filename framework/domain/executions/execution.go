@@ -3,6 +3,7 @@
 package executions
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -15,10 +16,11 @@ import (
 // Result means the remote outcome is unknown. Queue recovery may redeliver the
 // exact envelope to the same live instance; it never authorizes a new execution ID.
 type Execution struct {
-	Command     messages.Message  `json:"command"`
-	Result      *messages.Message `json:"result,omitempty"`
-	StartedAt   time.Time         `json:"started_at"`
-	CompletedAt *time.Time        `json:"completed_at,omitempty"`
+	Command     messages.Message           `json:"command"`
+	Checkpoints map[string]json.RawMessage `json:"checkpoints,omitempty"`
+	Result      *messages.Message          `json:"result,omitempty"`
+	StartedAt   time.Time                  `json:"started_at"`
+	CompletedAt *time.Time                 `json:"completed_at,omitempty"`
 }
 
 func (r Execution) Validate() error {
@@ -30,6 +32,14 @@ func (r Execution) Validate() error {
 	}
 	if r.StartedAt.IsZero() {
 		return errors.New("execution start time is required")
+	}
+	if len(r.Checkpoints) > MaxCheckpoints {
+		return fmt.Errorf("execution cannot contain more than %d checkpoints", MaxCheckpoints)
+	}
+	for name, data := range r.Checkpoints {
+		if err := ValidateCheckpoint(name, data); err != nil {
+			return fmt.Errorf("execution checkpoint: %w", err)
+		}
 	}
 	if (r.Result == nil) != (r.CompletedAt == nil) {
 		return errors.New("execution result and completion time must be set together")

@@ -48,7 +48,7 @@ func (c ActionConsumer) Consume(ctx context.Context, command messages.Message) e
 	}
 	var output actionmodel.ActionOutput
 	if commandErr == nil {
-		output, commandErr = c.Runtime.Execute(ctx, call, command.ID)
+		output, commandErr = c.Runtime.Execute(withCommandDeadline(ctx, command), call, command.ID)
 	}
 	if ctx.Err() != nil {
 		// Cancellation can leave external side effects. The controller keeps an

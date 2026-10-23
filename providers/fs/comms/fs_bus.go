@@ -453,7 +453,14 @@ func fsReplaceMessage(ctx context.Context, directory string, sequence uint64, da
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), fsMessagePath(directory, sequence))
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	// Like JSON collections, permit replacement while a Windows subscriber
+	// still holds a read handle to the previous recipient metadata.
+	return root.Rename(filepath.Base(file.Name()), filepath.Base(fsMessagePath(directory, sequence)))
 }
 
 func fsSyncDirectory(directory string) error {

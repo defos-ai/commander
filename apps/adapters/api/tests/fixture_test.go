@@ -6,10 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +19,7 @@ import (
 type object = map[string]any
 
 const absentID = "00000000-0000-4000-8000-000000ffffff"
+const fixtureText = "Commander keeps execution results."
 
 type api struct {
 	t        *testing.T
@@ -77,19 +77,20 @@ func connect(t *testing.T) *api {
 	}
 	for {
 		catalog := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-		ready := len(catalog.Items) == 3
+		ready := true
 		types := map[string]int{}
 		for _, agent := range catalog.Items {
 			types[agent.Type]++
-			ready = ready && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == len(expectedAgentActions(agent.Type))
+			expected := expectedAgentActions(agent.Type)
+			ready = ready && len(expected) > 0 && agent.Status == "ready" && !agent.Stale && agent.Work == nil && len(agent.Actions) == len(expected)
 			for _, action := range agent.Actions {
-				ready = ready && action.Status == "ready"
+				ready = ready && (action.Name == "build-agent" || action.Name == "publish-agent" || action.Name == "release-agent" || action.Status == "ready")
 			}
 		}
-		ready = ready && types["web-agent"] == 2 && types["browser-agent"] == 1
+		ready = ready && types["example-agent"] == 2 && types["builder-agent"] == 1 && types["spawner-agent"] == 1
 		actions := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 		missions := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-		if ready && len(actions.Items) == 7 && len(missions.Items) == 2 && missions.Items[0].Name == "review-website-no-browser" && missions.Items[1].Name == "review-website-with-browser" {
+		if ready && slices.Equal(actionNames(actions.Items), expectedCatalogActions(catalog.Items)) && slices.Equal(missionNames(missions.Items), expectedMissions) {
 			break
 		}
 		if err := pause(ctx); err != nil {
@@ -104,20 +105,44 @@ func connect(t *testing.T) *api {
 
 func expectedAgentActions(agentType string) []string {
 	switch agentType {
-	case "web-agent":
-		return []string{"check-links", "check-seo", "detect-technologies", "discover-pages", "discover-pages-no-browser"}
-	case "browser-agent":
-		return []string{"capture-page", "check-accessibility"}
+	case "example-agent":
+		return []string{"analyze-text", "write-summary"}
+	case "spawner-agent":
+		return []string{"spawn-agent"}
+	case "builder-agent":
+		return []string{"build-agent", "checkout-template", "publish-agent", "release-agent"}
+	case "fixture-agent":
+		return []string{"fixture-echo"}
 	default:
 		return nil
 	}
 }
 
-func expectedExecutorType(action string) string {
-	if action == "capture-page" || action == "check-accessibility" {
-		return "browser-agent"
+var expectedMissions = []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "review-website-no-browser", "review-website-with-browser"}
+
+func expectedCatalogActions(agents []models.AgentResponse) []string {
+	var names []string
+	for _, agent := range agents {
+		names = append(names, expectedAgentActions(agent.Type)...)
 	}
-	return "web-agent"
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
+func actionNames(actions []models.ActionResponse) []string {
+	var names []string
+	for _, action := range actions {
+		names = append(names, action.Name)
+	}
+	return names
+}
+
+func missionNames(missions []models.MissionResponse) []string {
+	var names []string
+	for _, mission := range missions {
+		names = append(names, mission.Name)
+	}
+	return names
 }
 
 func environment(name, fallback string) string {
@@ -184,6 +209,19 @@ func decode[T any](t *testing.T, result response, status int) T {
 	if err := json.Unmarshal([]byte(result.body), &value); err != nil {
 		t.Fatalf("decode response: %v: %s", err, result.body)
 	}
+	if _, ok := any(value).(models.OperationResponse); ok {
+		var payload struct {
+			Progress map[string]json.RawMessage `json:"progress"`
+		}
+		if err := json.Unmarshal([]byte(result.body), &payload); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"task_counts", "total_tasks", "finished_tasks", "pending_decisions", "pending_questions", "settled"} {
+			if raw := payload.Progress[field]; len(raw) == 0 || string(raw) == "null" {
+				t.Fatalf("operation response omitted progress.%s", field)
+			}
+		}
+	}
 	return value
 }
 
@@ -201,16 +239,20 @@ func errorCode(result response) string {
 	return payload.Error
 }
 
-func (a *api) start(url string) models.OperationResponse {
+func (a *api) start(text string) models.OperationResponse {
 	a.t.Helper()
-	return post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "review-website-with-browser", "input": object{"url": url, "max_pages": 2}}, http.StatusCreated)
+	return post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "analyze-text", "input": object{"text": text}}, http.StatusCreated)
 }
 
 func operationPath(id string) string { return "/api/v1/operations/" + id }
 
-func (a *api) task(id, action, url string) models.TaskResponse {
+func (a *api) task(id, action string, input object) models.TaskResponse {
 	a.t.Helper()
-	return post[models.TaskResponse](a, operationPath(id)+"/tasks", object{"action_name": action, "input": object{"url": url}}, http.StatusCreated)
+	return post[models.TaskResponse](a, operationPath(id)+"/tasks", object{"action_name": action, "input": input}, http.StatusCreated)
+}
+
+func summaryInput() object {
+	return object{"character_count": 12, "word_count": 2, "line_count": 1}
 }
 
 func (a *api) wait(id string, done func(models.OperationResponse) bool) models.OperationResponse {
@@ -252,9 +294,9 @@ func (a *api) resolve(id string, task models.TaskResponse, actions []object) mod
 	return post[models.OperationResponse](a, operationPath(id)+"/tasks/"+task.ID+"/continuation/resolve", object{"version": task.Continuation.Version, "actions": actions}, http.StatusOK)
 }
 
-func (a *api) complete(id, url, summary string) models.OperationResponse {
+func (a *api) complete(id, summary string) models.OperationResponse {
 	a.t.Helper()
-	return post[models.OperationResponse](a, operationPath(id)+"/complete", object{"output": object{"url": url, "summary": summary, "findings": []object{}}}, http.StatusOK)
+	return post[models.OperationResponse](a, operationPath(id)+"/complete", object{"output": object{"summary": summary}}, http.StatusOK)
 }
 
 func (a *api) settle(ctx context.Context) error {
@@ -327,32 +369,4 @@ func pause(ctx context.Context) error {
 	case <-timer.C:
 		return nil
 	}
-}
-
-// Only the website fixture runs on the host; all Commander work runs in Compose.
-func website(t *testing.T) string {
-	t.Helper()
-	return serveWebsite(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/missing" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("X-Powered-By", "Express")
-		fmt.Fprint(w, `<!doctype html><html lang="en"><head><title>Commander test site</title><meta name="generator" content="WordPress 6.8"></head><body><h1>Release review</h1><a href="/about">About</a><a href="/missing">Broken link</a><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></body></html>`)
-	}))
-}
-
-func serveWebsite(t *testing.T, handler http.Handler) string {
-	t.Helper()
-	server := httptest.NewUnstartedServer(handler)
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	server.Listener.Close()
-	server.Listener = listener
-	server.Start()
-	t.Cleanup(server.Close)
-	return "http://" + net.JoinHostPort(environment("COMMANDER_TEST_WEBSITE_HOST", "host.docker.internal"), fmt.Sprint(listener.Addr().(*net.TCPAddr).Port))
 }

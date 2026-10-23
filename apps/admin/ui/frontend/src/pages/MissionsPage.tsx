@@ -1,37 +1,50 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, Plus, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../components/Button';
 import { MissionDetails } from '../components/MissionDetails';
+import { MissionJSON } from '../components/MissionJSON';
 import type { Connection, Session } from '../connections/types';
 import { useMissionQuery } from '../hooks/useMissionQuery';
 import { useTranslation } from '../i18n';
+import type { MissionView } from '../navigation/routes';
 import '../styles/missions.css';
 
-export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
+export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, onCreate, view: routeView, onViewChange }: {
   connection: Connection;
   credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;
+  onCreate?: () => void;
+  view?: MissionView;
+  onViewChange?: (view: MissionView) => void;
 }) {
   const { t } = useTranslation();
   const [localID, setLocalID] = useState<string>();
   const name = onSelect ? routeID : localID;
   const [search, setSearch] = useState('');
+  const [localView, setLocalView] = useState<MissionView>('details');
+  const view = onViewChange ? routeView ?? 'details' : localView;
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
   const query = useMissionQuery(connection.url, credentials, name);
   const items = query.content && 'items' in query.content ? query.content.items : [];
   const mission = query.content && 'mission' in query.content ? query.content.mission : undefined;
+  const definition = query.content && 'definition' in query.content ? query.content.definition : undefined;
   const filter = search.trim().toLocaleLowerCase();
-  const visible = items.filter(item => `${item.name} ${item.objective}`.toLocaleLowerCase().includes(filter));
+  const visible = items.filter(item => [item.name, ...item.objectives].some(text => text.toLocaleLowerCase().includes(filter)));
   const error = !credentials ? 'authentication' : query.error?.kind;
 
   useEffect(() => {
     if (focusHeading.current) { heading.current?.focus(); focusHeading.current = false; }
   }, [name]);
 
-  function select(value?: string) { focusHeading.current = true; if (onSelect) onSelect(value); else setLocalID(value); }
+  function select(value?: string) {
+    focusHeading.current = true;
+    setLocalView('details');
+    if (onSelect) onSelect(value); else setLocalID(value);
+  }
+  function changeView(value: MissionView) { if (onViewChange) onViewChange(value); else setLocalView(value); }
 
   return <section className="missions-page">
     {name !== undefined && <button className="missions-back" type="button" onClick={() => select()}>
@@ -41,9 +54,14 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
       <div><h1 ref={heading} tabIndex={-1}>{name ?? t($ => $.missions.title)}</h1>
         {name === undefined && <p>{t($ => $.missions.description)}</p>}
       </div>
-      {credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.loading}>
-        <RefreshCw size={15} aria-hidden="true" />{t($ => $.missions.refresh)}
-      </Button>}
+      {credentials && <div className="page-heading-actions">
+        <Button variant="secondary" onClick={query.refresh} disabled={query.loading}>
+          <RefreshCw size={15} aria-hidden="true" />{t($ => $.missions.refresh)}
+        </Button>
+        {name === undefined && onCreate && <Button onClick={onCreate}>
+          <Plus size={15} aria-hidden="true" />{t($ => $.missions.createTitle)}
+        </Button>}
+      </div>}
     </div>
     {error ? <div className="notice" role="alert">
       <p>{t($ => $.missions.errors[error])}</p>
@@ -52,7 +70,13 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
     </div> : query.loading ? <p className="missions-loading" role="status">
       <LoaderCircle className="connection-form-spinner" size={17} aria-hidden="true" />
       {name === undefined ? t($ => $.missions.loading) : t($ => $.missions.loadingDetail)}
-    </p> : mission ? <MissionDetails mission={mission} /> : <>
+    </p> : mission ? <>
+      <div className="mission-view-switch" role="group" aria-label={t($ => $.missions.viewLabel)}>
+        <button type="button" aria-pressed={view === 'details'} onClick={() => changeView('details')}>{t($ => $.missions.details)}</button>
+        <button type="button" aria-pressed={view === 'json'} onClick={() => changeView('json')}>{t($ => $.missions.json)}</button>
+      </div>
+      {view === 'json' && definition !== undefined ? <MissionJSON key={mission.name} definition={definition} /> : <MissionDetails mission={mission} />}
+    </> : <>
       {items.length > 0 && <div className="missions-toolbar">
         <label className="mission-search"><Search size={17} aria-hidden="true" />
           <input type="search" aria-label={t($ => $.missions.search)} placeholder={t($ => $.missions.searchPlaceholder)}
@@ -63,8 +87,10 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
       {visible.length > 0 ? <ul className="mission-list">
         {visible.map(item => <li key={item.name}><button type="button" className="mission-row"
           aria-label={t($ => $.missions.open, { name: item.name })} onClick={() => select(item.name)}>
-          <span className="mission-row-main"><span className="mission-row-name">{item.name}</span><span className="mission-row-objective">{item.objective}</span>
-            <span className="mission-row-meta"><span>{t($ => $.missions.actions, { count: item.required_actions?.length ?? 0 })}</span><span>{t($ => $.missions.ruleCount, { count: Object.keys(item.rules ?? {}).length })}</span></span>
+          <span className="mission-row-main"><span className="mission-row-name">{item.name}</span><span className="mission-row-objective">{item.objectives.join(' ')}</span>
+            <span className="mission-row-meta"><span>{t($ => $.missions.actions, { count: item.required_actions?.length ?? 0 })}</span>
+              {Boolean(item.optional_actions?.length) && <span>{t($ => $.missions.optionalActionCount, { count: item.optional_actions?.length ?? 0 })}</span>}
+              <span>{t($ => $.missions.ruleCount, { count: Object.keys(item.rules ?? {}).length })}</span></span>
           </span><ArrowUpRight size={18} aria-hidden="true" />
         </button></li>)}
       </ul> : <div className="missions-empty">

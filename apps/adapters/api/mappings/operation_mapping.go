@@ -2,10 +2,12 @@ package mappings
 
 import (
 	"bytes"
+	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 func ToStartOperationCommand(request models.StartOperationRequest) controllercommands.StartOperationCommand {
@@ -35,12 +37,21 @@ func ToFailOperationCommand(operationID string, request models.FailOperationRequ
 }
 
 func ToOperationResponse(operation operations.Operation) models.OperationResponse {
+	return toOperationResponse(operation, ToTaskResponses(operation.Tasks), operation.AssessAffinity(), operation.AssessProgress(time.Now().UTC()))
+}
+
+func ToOperationViewResponse(operation queries.OperationView) models.OperationResponse {
+	return toOperationResponse(operation.Operation, ToTaskViewResponses(operation.Tasks), operation.Affinity, operation.Progress)
+}
+
+func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity, progress operations.Progress) models.OperationResponse {
 	response := models.OperationResponse{
 		ID:        operation.ID,
 		Mission:   ToMissionResponse(operation.Mission),
 		Input:     bytes.Clone(operation.Input),
 		Status:    string(operation.Status),
-		Tasks:     ToTaskResponses(operation.Tasks),
+		Progress:  toOperationProgressResponse(progress),
+		Tasks:     tasks,
 		Questions: ToQuestionResponses(operation.Questions),
 		Output:    bytes.Clone(operation.Output),
 		ReportID:  operation.ReportID,
@@ -53,16 +64,35 @@ func ToOperationResponse(operation operations.Operation) models.OperationRespons
 		preflight := ToPreflightResponse(*operation.Preflight)
 		response.Preflight = &preflight
 	}
+	if affinity != nil {
+		response.Affinity = &models.AffinityResponse{
+			ForActions: affinity.ForActions,
+			AgentID:    affinity.AgentID,
+			Error:      affinity.Error,
+		}
+	}
 	return response
 }
 
-func ToOperationResponses(operations []operations.Operation) []models.OperationResponse {
+func toOperationProgressResponse(progress operations.Progress) models.OperationProgressResponse {
+	counts := make(map[string]int, len(progress.TaskCounts))
+	for status, count := range progress.TaskCounts {
+		counts[string(status)] = count
+	}
+	return models.OperationProgressResponse{
+		TaskCounts: counts, TotalTasks: progress.TotalTasks, FinishedTasks: progress.FinishedTasks,
+		PendingDecisions: progress.PendingDecisions, PendingQuestions: progress.PendingQuestions,
+		Settled: progress.Settled,
+	}
+}
+
+func ToOperationViewResponses(operations []queries.OperationView) []models.OperationResponse {
 	if operations == nil {
 		return nil
 	}
 	responses := make([]models.OperationResponse, len(operations))
 	for i, operation := range operations {
-		responses[i] = ToOperationResponse(operation)
+		responses[i] = ToOperationViewResponse(operation)
 	}
 	return responses
 }

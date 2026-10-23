@@ -5,6 +5,8 @@ export interface Operation {
   mission: Mission;
   input: unknown;
   status: string;
+  progress: OperationProgress;
+  affinity?: OperationAffinity;
   preflight?: OperationPreflight | null;
   tasks: OperationTask[] | null;
   questions: OperationQuestion[] | null;
@@ -16,12 +18,29 @@ export interface Operation {
   updated_at: string;
 }
 
+export interface OperationProgress {
+  task_counts: Record<string, number>;
+  total_tasks: number;
+  finished_tasks: number;
+  pending_decisions: number;
+  pending_questions: number;
+  settled: boolean;
+}
+
+export interface OperationAffinity {
+  for_actions: string[];
+  agent_id?: string;
+  error?: string;
+}
+
 export interface OperationTask {
   id: string;
   operation_id: string;
   parent_task_id?: string;
   step_id?: string;
   agent_id: string;
+  agent_type?: string;
+  missing_requirements?: ActionRequirement[] | null;
   action_name: string;
   command_id?: string;
   deadline_at?: string | null;
@@ -94,6 +113,7 @@ export interface OperationActionReadiness {
 
 export interface OperationAgentReadiness {
   agent_id: string;
+  agent_type?: string;
   reason: string;
   missing_requirements?: ActionRequirement[] | null;
 }

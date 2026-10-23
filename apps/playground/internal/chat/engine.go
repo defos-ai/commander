@@ -233,6 +233,7 @@ const Help = `/help — Show this help
 /status — Show connection and queue status
 /admin — Show Admin UI link
 /credentials — Show API login and MCP token (all-in-one)
+/secrets — Provide secrets needed by watched operations
 /operations — List saved operations
 /watch <operation-id> — Follow an operation and resume model review
 /run <operation-id> <action> <json-input> — Queue an action directly through MCP
@@ -241,7 +242,7 @@ const Help = `/help — Show this help
 /clear — Clear model conversation; keep saved operations
 /exit — Exit; server-side work keeps running
 
-Try: "List missions and available agents."
-Use PgUp/PgDown to scroll chat.
+Try: "Install the web agent, then review defos.ai."
+Scroll with the wheel, trackpad or PgUp/PgDown.
 Drag to select, then copy normally: Ctrl+Shift+C in GNOME Terminal, Cmd+C in macOS Terminal, or the Copy menu.
 Ctrl+C stops a reply; Ctrl+D exits.`

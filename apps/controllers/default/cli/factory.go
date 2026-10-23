@@ -18,6 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/providers/fs"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
@@ -42,18 +43,20 @@ import (
 )
 
 type dependencies struct {
-	Bus             comms.Bus
-	ArtifactStore   artifacts.ArtifactStore
-	ExecutionStore  executions.ExecutionStore
-	AgentStore      agents.AgentStore
-	ControllerStore controllers.ControllerStore
-	MissionStore    missions.MissionStore
-	OperationStore  operations.OperationStore
-	ActionStore     actions.ActionStore
-	ReportStore     reports.ReportStore
-	mongo           *mongostore.MongoStore
-	s3              *s3store.S3Store
-	closers         []func() error
+	Bus                comms.Bus
+	ArtifactStore      artifacts.ArtifactStore
+	ExecutionStore     executions.ExecutionStore
+	AgentStore         agents.AgentStore
+	ControllerStore    controllers.ControllerStore
+	MissionStore       missions.MissionStore
+	OperationStore     operations.OperationStore
+	ActionStore        actions.ActionStore
+	ReportStore        reports.ReportStore
+	SecretStore        secrets.SecretStore
+	SecretRequestStore secrets.RequestStore
+	mongo              *mongostore.MongoStore
+	s3                 *s3store.S3Store
+	closers            []func() error
 }
 
 func (d *dependencies) Close() error {
@@ -106,6 +109,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
 	deps.ExecutionStore, err = deps.createExecutionStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.SecretStore, deps.SecretRequestStore, err = deps.createSecretStores(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}

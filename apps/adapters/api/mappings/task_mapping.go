@@ -7,6 +7,7 @@ import (
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/queries"
 )
 
 func ToAssignTaskCommand(operationID string, request models.AssignTaskRequest) controllercommands.AssignTaskCommand {
@@ -52,6 +53,24 @@ func ToTaskResponses(tasks []operations.Task) []models.TaskResponse {
 	responses := make([]models.TaskResponse, len(tasks))
 	for i, task := range tasks {
 		responses[i] = ToTaskResponse(task)
+	}
+	return responses
+}
+
+func ToTaskViewResponse(task queries.TaskView) models.TaskResponse {
+	response := ToTaskResponse(task.Task)
+	response.AgentType = task.AgentType
+	response.MissingRequirements = ToActionRequirementResponses(task.MissingRequirements)
+	return response
+}
+
+func ToTaskViewResponses(tasks []queries.TaskView) []models.TaskResponse {
+	if tasks == nil {
+		return nil
+	}
+	responses := make([]models.TaskResponse, len(tasks))
+	for i, task := range tasks {
+		responses[i] = ToTaskViewResponse(task)
 	}
 	return responses
 }

@@ -29,6 +29,53 @@ x-agent: &agent
       condition: service_healthy
 
 services:
+  secrets-key:
+    image: commander-api:local
+    pull_policy: never
+    user: "0:1000"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        umask 077
+        fail() { printf '%s\n' "$$1" >&2; exit 1; }
+        valid_key() {
+          case "$$1" in ''|*[!0-9a-fA-F]*) return 1 ;; esac
+          [ "$${#1}" -eq 64 ]
+        }
+        chgrp 1000 /run/commander-secrets
+        chmod 750 /run/commander-secrets
+        key_file=/run/commander-secrets/key
+        key="$$SECRETS_ENCRYPTION_KEY"
+        if [ -n "$$key" ]; then
+          valid_key "$$key" || fail 'SECRETS_ENCRYPTION_KEY must contain 64 hex characters.'
+          key="$$(printf '%s' "$$key" | tr 'A-F' 'a-f')"
+        fi
+        if [ -e "$$key_file" ] || [ -L "$$key_file" ]; then
+          [ -f "$$key_file" ] && [ ! -L "$$key_file" ] || fail 'Invalid saved secrets key; restore the original key.'
+          saved="$$(cat "$$key_file")"
+          valid_key "$$saved" || fail 'Invalid saved secrets key; restore the original key.'
+          saved="$$(printf '%s' "$$saved" | tr 'A-F' 'a-f')"
+          [ -z "$$key" ] || [ "$$key" = "$$saved" ] || fail 'SECRETS_ENCRYPTION_KEY differs from the saved key. Use the original key; rotation requires re-encryption.'
+        else
+          key="$${key:-$$(openssl rand -hex 32)}"
+          valid_key "$$key" || fail 'Could not generate a secrets encryption key.'
+          temporary="$$(mktemp /run/commander-secrets/.key.XXXXXX)"
+          trap 'rm -f "$$temporary"' EXIT
+          printf '%s\n' "$$key" > "$$temporary"
+          chmod 440 "$$temporary"
+          mv "$$temporary" "$$key_file"
+        fi
+        chgrp 1000 "$$key_file"
+        chmod 440 "$$key_file"
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+    volumes:
+      - secrets-key:/run/commander-secrets
+
   mcp-credentials:
     image: commander-mcp:local
     pull_policy: never
@@ -187,6 +234,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       MCP_TOKEN: ${MCP_TOKEN:-}
       MCP_RUNTIME: docker-compose
+      AGENT_CATALOG_URL: ${AGENT_CATALOG_URL:-}
     ports:
       - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
     volumes:
@@ -216,8 +264,10 @@ services:
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
         API_PASSWORD="$${API_PASSWORD:-$$(openssl rand -hex 32)}"
-        export API_PASSWORD
+        export API_PASSWORD SECRETS_ENCRYPTION_KEY
         exec commander-api
     image: commander-api:local
     pull_policy: never
@@ -236,7 +286,11 @@ services:
       API_SWAGGER_ENABLED: ${API_SWAGGER_ENABLED:-false}
     ports:
       - "127.0.0.1:${COMMANDER_API_PORT:-4274}:4274"
+    volumes:
+      - secrets-key:/run/commander-secrets:ro
     depends_on:
+      secrets-key:
+        condition: service_completed_successfully
       controller:
         condition: service_started
       rabbitmq:
@@ -275,27 +329,73 @@ services:
       retries: 12
       start_period: 5s
 
-  browser-agent:
+  builder-agent:
     <<: *agent
-    image: commander-browser-agent:local
-    shm_size: 256mb
     environment:
       <<: *environment
-      CHROMIUM_NO_SANDBOX: "true"
+      BUILDER_DEFAULT_REPO_VISIBILITY: ${BUILDER_DEFAULT_REPO_VISIBILITY:-}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        export SECRETS_ENCRYPTION_KEY
+        exec commander-builder-agent "$$@"
+      - commander-builder-agent
+    image: commander-builder-agent:local
     build:
       context: .
-      dockerfile: apps/agents/browser/docker/Dockerfile
+      dockerfile: apps/agents/builder/docker/Dockerfile
+    user: "1000:1000"
+    volumes:
+      - builder-workspaces:/home/commander/workspaces
+      - secrets-key:/run/commander-secrets:ro
+    depends_on:
+      secrets-key:
+        condition: service_completed_successfully
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
-  web-agent-1:
+  spawner-agent:
     <<: *agent
-    image: commander-web-agent:local
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        export SECRETS_ENCRYPTION_KEY
+        exec commander-spawner-agent "$$@"
+      - commander-spawner-agent
+    image: commander-spawner-agent:local
     build:
       context: .
-      dockerfile: apps/agents/web/docker/Dockerfile
-
-  web-agent-2:
-    <<: *agent
-    image: commander-web-agent:local
+      dockerfile: apps/agents/spawner/docker/Dockerfile
+    # Host Docker access belongs only to the spawner, never its child agents.
+    user: "0:0"
+    environment:
+      <<: *environment
+      SPAWNER_RUNTIME: docker
+      SPAWNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-commander}_default
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - secrets-key:/run/commander-secrets:ro
+    depends_on:
+      secrets-key:
+        condition: service_completed_successfully
+      controller:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   playground:
     profiles: [playground]
@@ -318,6 +418,9 @@ services:
     environment:
       COMMANDER_MCP_URL: http://mcp:4273/mcp
       COMMANDER_MCP_TOKEN: ${COMMANDER_MCP_TOKEN:-${MCP_TOKEN:-}}
+      COMMANDER_API_URL: ${COMMANDER_API_URL:-http://api:4274}
+      COMMANDER_API_USERNAME: ${COMMANDER_API_USERNAME:-${API_USERNAME:-commander}}
+      COMMANDER_API_PASSWORD: ${COMMANDER_API_PASSWORD:-}
       COMMANDER_ADMIN_URL: ${COMMANDER_ADMIN_URL:-http://localhost:${COMMANDER_UI_PORT:-4275}}
       COMMANDER_LLM_PROVIDER: ${COMMANDER_LLM_PROVIDER:-}
       COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-}
@@ -339,14 +442,14 @@ services:
         condition: service_completed_successfully
       mcp:
         condition: service_healthy
-      browser-agent:
+      spawner-agent:
         condition: service_started
-      web-agent-1:
-        condition: service_started
-      web-agent-2:
+      builder-agent:
         condition: service_started
 
 volumes:
+  builder-workspaces:
+  secrets-key:
   mcp-credentials:
   rabbitmq:
   minio:

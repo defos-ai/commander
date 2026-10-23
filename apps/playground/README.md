@@ -1,81 +1,40 @@
 # Playground
 
-Playground is a terminal chat with one model per session. The model acts as
-Commander through MCP: choose missions, assign work and review evidence while
-the controller applies mission rules and agents execute actions. Connect to running
-hosts or launch a temporary local demo.
+Chat with a model to run Commander missions and review results. Start a temporary
+all-in-one session, or connect to existing hosts.
 
 ## Quick start
 
 ### Docker (recommended)
 
-For a temporary all-in-one session, build and run from the repository root:
-
 ```sh
-docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
-docker run --name commander --rm -it -p 127.0.0.1:4275:4275 commander:aio
+docker run --name commander --rm -it -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
-This image includes Admin, MCP, the API, a controller, a web agent and a browser agent
-with Chromium and fonts. Completed operations show a review link to Admin at
-`http://localhost:4275`, with the local connection prefilled.
-Type `/admin` for the general Admin link anytime.
-Use `/credentials` for the API login and MCP token, or use another terminal:
+Choose a provider, enter its API key and ask:
 
-```sh
-docker exec commander commander credentials api
-docker exec commander commander credentials mcp
-```
+> Install the web agent, then review defos.ai.
 
-Generated credentials change when the container restarts. Pass `-e API_USERNAME`,
-`-e API_PASSWORD` or `-e MCP_TOKEN` to use values exported in your shell.
+The image includes Admin, builder and spawner, plus the tools needed to build
+agents and run browser checks. Other agents install on demand.
 
-Admin reaches the API inside the container; publishing API port `4274` is optional.
-Add `-p 127.0.0.1:4274:4274` if other tools need API access. For a different
-published port or host, pass `--admin-url http://YOUR_HOST:PORT` after the image
-name to override the default link. To skip Admin, pass `--no-admin`.
-Ports must be published when creating the container.
-`/exit` stops everything and deletes the session's state. Add `-e OPENAI_API_KEY`
-before the image name to use an exported key, or enter your provider's key during setup.
+Type `/admin` to open [Admin](http://localhost:4275) and `/credentials` for the
+API login. Completed operation rows link to their Admin details.
 
-For separate hosts and retained results, use Compose:
-
-```sh
-docker compose up --build --wait &&
-docker compose run --build --rm --no-deps playground
-```
-
-The `mcp-credentials` initializer saves a shared token in a named Docker volume.
-MCP and Playground mount it read-only and export it to their process environments,
-so Playground connects automatically. The token survives restarts. Set `MCP_TOKEN`
-before starting Compose to replace it; `COMMANDER_MCP_TOKEN` overrides it for
-Playground. To retrieve the running token:
-
-```sh
-docker compose exec mcp commander-mcp credentials
-```
-
-Add `--raw` to print only the token.
-`/exit` closes chat; hosts and saved work remain.
-Compose also configures `/admin` for `http://localhost:4275`, following
-`COMMANDER_UI_PORT` when changed. Set `COMMANDER_ADMIN_URL` for another browser address.
-`docker compose down` stops the hosts. See
-[deployment](../../docs/deployment.md) for connections and state.
-
-To use the lightweight image with your own hosts:
-
-```sh
-docker build -f apps/playground/docker/Dockerfile -t commander:playground .
-docker run --rm -it -e COMMANDER_MCP_TOKEN commander:playground --mcp-url https://YOUR_COMMANDER_HOST/mcp
-```
+**All-in-one deletes results, artifacts, downloaded agents and builder workspaces
+on exit.** Use Compose to retain work.
 
 ### Native: one executable
 
-[Native release binaries](../../docs/releases.md#native-binaries)
-provide `commander` for Linux, macOS and Windows (amd64/arm64), without Go.
-Download it as `commander` and run `chmod +x commander && ./commander --all-in-one`
-(`.\commander.exe --all-in-one` on Windows), or build and run with Go 1.26.7+ and Node 24+
-from the repository root:
+Download a [release binary](../../README.md#binary), then run:
+
+```sh
+./commander --all-in-one
+```
+
+On Windows: `.\commander.exe --all-in-one`.
+
+To build from source with Go 1.26.7+ and Node 24+, run from the repository root:
 
 ```sh
 npm --prefix apps/admin/ui/frontend ci
@@ -83,137 +42,126 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-This starts Admin, MCP, the HTTP API, one controller, one web agent and one browser agent using
-temporary FS state. The API listens at `http://127.0.0.1:4274` with username
-`commander` and a random password for this session. MCP gets its own random token,
-shared directly with Playground. During setup or chat, type `/credentials` to
-view the API login and MCP token. Credentials stay local and are never sent to the
-model. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` to override them; unset or
-empty values use their defaults. Generated credentials change each session.
-Type `/admin` for a link with the local API URL and username prefilled; enter the
-password shown by `/credentials`. Admin defaults to **http://127.0.0.1:4275**.
-Use `/status` to see the running addresses.
-`--no-admin` disables Admin; `UI_LISTEN_ADDRESS` changes its address.
-If Admin cannot start, Playground continues with a notice.
-`API_LISTEN_ADDRESS` changes the address (`127.0.0.1:0` chooses a free port).
-The packaged executable embeds Admin and both website missions and needs no checkout
-or Go installation. For a Go-only source build, omit `-tags embed_ui` and use
-`--no-admin`, or set `UI_STATIC_DIR` to a built frontend directory.
-Start with `review-website-no-browser` for links, SEO and technology checks.
-`review-website-with-browser` adds screenshots and rendered accessibility, requiring
-[Chromium](../agents/browser/README.md#native-agent).
-**Exiting stops these hosts and deletes the session's operations, reports and artifacts.**
-Use Compose to retain work.
+For a Go-only build, omit `-tags embed_ui` and run with `--no-admin`.
 
-`--all-in-one` chooses its own connections, ignoring `COMMANDER_MCP_URL`,
-`COMMANDER_MCP_TOKEN`, `BUS_URL`, `STORAGE_URL` and `DATABASE_URL`; it cannot be
-combined with `--mcp-url`. `--debug`
-shows the temporary host log location, which is also deleted on exit.
+Native agents use tools installed on your host: Git for checkout/publication,
+Go and Codex for builds, and [Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander)
+for browser actions. Missing tools appear in agent readiness.
+
+### Docker Compose
+
+From the repository root:
+
+```sh
+docker compose up --build --wait && docker compose run --build --rm --no-deps playground
+```
+
+Playground connects automatically. Builder and spawner start with the stack;
+additional agents run as sibling containers. `/exit` leaves hosts and results
+running. Follow [deployment teardown](../../docs/deployment.md#stopping-and-resetting-agents)
+to stop the stack and its spawned agents.
+
+Compose sets up persistent authentication and secret encryption. For API access,
+retrieve the login with `docker compose exec api commander-api credentials`.
+See [deployment](../../docs/deployment.md) for ports, state and overrides.
+
+### Installing agents
+
+Ask in chat to install an agent, using its catalog name or GitHub repository:
+
+> Install https://github.com/defos-ai/commander-browser-agent
+
+Omit the version or use `@stable` for the promoted Latest release; append
+`@v0.2.0` to pin a version. Installation needs Internet access. Use packages
+from authors you trust: native agents run as your OS user.
+
+Installing an agent does not install host dependencies. Check its readiness
+before starting a mission. See the [agent catalog](../../catalog/README.md)
+for available packages.
 
 ### Credentials
 
-For native sessions, use `/credentials` inside Playground to see generated
-credentials. These shell commands read only credentials configured in that shell:
+In all-in-one, type `/credentials` to see the API login and MCP token.
+From another terminal, for the Docker session above:
 
 ```sh
-./commander credentials api
-./commander credentials mcp
+docker exec commander commander credentials api
+docker exec commander commander credentials mcp
 ```
 
-On Windows, use `.\commander.exe`. Each command prints the selected credentials
-from `API_USERNAME` / `API_PASSWORD` or `MCP_TOKEN` and exits. In Docker, use the
-`docker exec` commands above to retrieve the running container's credentials.
-Add `--raw` to print only the API password or MCP token.
+Add `--raw` for only the password or token. Generated credentials change each
+session. Export `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` before native
+launch to override them; Docker also needs the matching `-e VARIABLE` argument.
+
+For agent secrets, enter values in the masked form that opens when needed.
+**Tab** moves between fields, **Enter** advances or saves, and **Esc** postpones.
+Use `/secrets` to reopen it, or **Agents → Manage secrets** in Admin.
+Values go directly to the API, outside the model. Running tasks keep their
+deadline while waiting.
 
 ### Model setup
 
-Choose a provider and model with **↑/↓** and **Enter**; mouse wheel, trackpad or
-**PgUp/PgDown** scroll long lists. Select a model supporting tool calls, using
-**Enter model name…** if needed.
-Missing keys are entered privately. **Other** accepts an OpenAI-compatible base
-URL, model name and optional key. Key prompts link to the provider's API key page.
-Rejected keys can be corrected in place; other discovery failures offer manual setup.
+Choose a provider and model with **↑/↓** and **Enter**. Key prompts link to the
+provider's API key page. **Other** supports an OpenAI-compatible base URL and model.
+Messages and requested tool results go to that provider and incur its API charges.
 
-To connect to an existing MCP server, paste its token when prompted or set
-`COMMANDER_MCP_TOKEN` beforehand:
+To connect to an existing MCP server:
 
 ```sh
-./commander --provider openai --model YOUR_MODEL --mcp-url http://localhost:4273/mcp
+./commander --mcp-url http://localhost:4273/mcp
 ```
+
+Paste the MCP token when prompted, or set `COMMANDER_MCP_TOKEN` before launch.
 
 | Setting | Environment | Flag |
 | --- | --- | --- |
 | MCP endpoint | `COMMANDER_MCP_URL` | `--mcp-url` |
-| MCP bearer token | `COMMANDER_MCP_TOKEN` | Hidden setup prompt |
+| MCP token | `COMMANDER_MCP_TOKEN` | Masked prompt |
+| API for agent secrets | `COMMANDER_API_URL` | `--api-url` |
+| API login | `COMMANDER_API_USERNAME`, `COMMANDER_API_PASSWORD` | Local form |
 | Admin browser address | `COMMANDER_ADMIN_URL` | `--admin-url` |
-| Provider | `COMMANDER_LLM_PROVIDER` | `--provider` |
-| Model | `COMMANDER_LLM_MODEL` | `--model` |
+| Model provider/name | `COMMANDER_LLM_PROVIDER`, `COMMANDER_LLM_MODEL` | `--provider`, `--model` |
 | Model API base URL | `COMMANDER_LLM_BASE_URL` | `--base-url` |
-| Error details | `COMMANDER_DEBUG=true` | `--debug` / `--debug=false` |
+| Redacted error details | `COMMANDER_DEBUG=true` | `--debug` |
 | Disable colors | `NO_COLOR` | `--no-color` |
 
-Flags override environment values. MCP defaults to `http://localhost:4273/mcp`.
-For existing hosts, add `--admin-url https://YOUR_ADMIN_HOST` to enable `/admin`;
-Playground does not infer Admin's address or API connection from MCP.
-MCP credentials are sent only to the configured endpoint; redirects are not followed.
-An HTTP `401` stops requests until you reconnect with the correct token. During
-setup, paste the token into the hidden input and press **Enter** to reconnect.
-**Need a token?** shows a lookup command when deployment metadata is available.
-Tokens entered here stay in memory for this session.
-Provider keys are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or
-`GOOGLE_API_KEY`), `XAI_API_KEY`, `DEEPSEEK_API_KEY` and `COMMANDER_LLM_API_KEY`
-for **Other**. Keys and chat history stay in memory; hosts save operation state.
-Messages and requested tool results go to the selected model provider, which bills
-API usage.
+Flags override environment settings. Provider keys can use `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `XAI_API_KEY`,
+`DEEPSEEK_API_KEY` or `COMMANDER_LLM_API_KEY` for Other.
 
-For model failures, rerun with `--debug` to see redacted provider errors. Requests
-are not retried automatically; saved work and queued messages remain. Send
-guidance or `/watch <operation-id>` to resume review.
+The standalone Admin link defaults to `http://localhost:4275`; setting
+`--admin-url` changes the link, not the server. Supply the API URL/login in the
+secret form if not configured. All-in-one supplies its own connections.
 
 ### Chat
 
-Try “List missions and available agents,” then:
-
-> Run review-website-no-browser for https://defos.ai with max_pages 3. Review the findings
-> and produce a report. Before completing, ask whether I want a brief or detailed report.
-
-With the Docker image or a configured browser, use `review-website-with-browser`
-to include rendered accessibility and screenshots.
-
-| Command | Effect |
+| Command | Use it to… |
 | --- | --- |
-| `/help`, `/status`, `/operations` | Show help, connection/queue state or saved operations. |
-| `/credentials` | Show the all-in-one API login and MCP token. Also available during model setup. |
-| `/admin` | Show the Admin link. Also available during model setup. |
-| `/watch <operation-id>` | Follow saved work and resume model decisions. |
-| `/run <operation-id> <action-name> <json-input>` | Queue a selected action through MCP; input must be a JSON object. Pending questions and action readiness still apply. |
-| `/cancel <operation-id>` | Cancel the operation. Dispatched tasks may finish. |
-| `/stop` or **Ctrl+C** | Stop this reply and clear queued messages; server-side work continues. |
-| `/clear` | Clear conversation after stopping the reply. |
-| `/exit` or **Ctrl+D** | Exit chat; all-in-one hosts also stop. |
+| `/help`, `/status`, `/operations` | Read help, connection status or saved operations. |
+| `/credentials`, `/admin` | Get the all-in-one login or Admin link, including during setup. |
+| `/secrets` | Reopen the masked agent-secret form. |
+| `/watch <operation-id>` | Follow work and resume model review. |
+| `/run <operation-id> <action-name> <json-input>` | Queue an action through MCP. |
+| `/cancel <operation-id>` | Cancel queued operation work. Dispatched tasks may finish. |
+| `/stop` or **Ctrl+C** | Stop the reply; server-side work continues. |
+| `/clear` | Clear the conversation. |
+| `/exit` or **Ctrl+D** | Exit; all-in-one hosts stop too. |
 
-Messages queue during replies; slash commands and operation updates remain
-responsive. Scroll chat with **PgUp/PgDown**. Wheel and trackpad scrolling are
-unavailable in terminals that translate those gestures into arrow keys.
-Drag to select output, then use your terminal's usual copy command:
-**Ctrl+Shift+C** in GNOME Terminal,
-**Cmd+C** in macOS Terminal, or **Copy** from the terminal menu.
-Selection stays in the terminal; **Ctrl+C** still stops the reply.
+Scroll with the wheel, trackpad or **PgUp/PgDown**. Drag to select, then use your
+terminal's copy command, such as **Ctrl+Shift+C** in GNOME Terminal.
+Answer questions with **↑/↓** and **Enter**, or type your own answer.
+**Tab** returns to chat.
 
-Completed operation rows include **Review on Admin UI** links to that operation.
-Local all-in-one links prefill the connection or reuse a saved one; sign in if
-needed. Remote sessions need a configured Admin address, then ask you to choose
-the API connection. Passwords and tokens never appear in links.
-
-Questions appear in a selector: use **↑/↓** and **Enter**, type a custom answer,
-or press **Tab** to return to chat. The panel shows the latest question, deadline
-and count of others waiting. Only operator input records an answer; expiry returns
-the decision to model review without approving work. With separate hosts, exiting
-leaves operations running, but model decisions wait for a session to follow them.
-
-See [website scenarios](../agents/web/README.md#try-these-in-playground)
-and the [MCP workflow](../adapters/README.md#operation-workflow).
+For failures, use `--debug` for redacted details and inspect saved work before
+retrying. Use `/watch` to resume review of an existing operation.
 
 ## Development and testing
 
-[Contributor guidance](AGENTS.md) · [Test setup](../../framework/tests/README.md)
+Build the all-in-one image locally from the repository root:
+
+```sh
+docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
+```
+
+[Contributor guidance](AGENTS.md) · [Test setup](../../framework/tests/README.md) ·
+[MCP workflow](../adapters/README.md#operation-workflow)

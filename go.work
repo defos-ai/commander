@@ -4,8 +4,8 @@ use (
 	./apps/adapters/api
 	./apps/adapters/mcp
 	./apps/admin/ui/backend
-	./apps/agents/browser
-	./apps/agents/web
+	./apps/agents/builder
+	./apps/agents/spawner
 	./apps/controllers/default
 	./apps/playground
 	./framework
@@ -17,15 +17,15 @@ use (
 
 // Resolve workspace requirements locally while Go loads the dependency graph.
 replace (
-	github.com/defos-ai/commander/apps/adapters/api v0.1.0 => ./apps/adapters/api
-	github.com/defos-ai/commander/apps/adapters/mcp v0.1.0 => ./apps/adapters/mcp
-	github.com/defos-ai/commander/apps/admin/ui/backend v0.1.0 => ./apps/admin/ui/backend
-	github.com/defos-ai/commander/apps/agents/browser v0.1.0 => ./apps/agents/browser
-	github.com/defos-ai/commander/apps/agents/web v0.1.0 => ./apps/agents/web
-	github.com/defos-ai/commander/apps/controllers/default v0.1.0 => ./apps/controllers/default
-	github.com/defos-ai/commander/framework v0.1.0 => ./framework
-	github.com/defos-ai/commander/providers/fs v0.1.0 => ./providers/fs
-	github.com/defos-ai/commander/providers/mongo v0.1.0 => ./providers/mongo
-	github.com/defos-ai/commander/providers/rabbitmq v0.1.0 => ./providers/rabbitmq
-	github.com/defos-ai/commander/providers/s3 v0.1.0 => ./providers/s3
+	github.com/defos-ai/commander/apps/adapters/api v0.2.0 => ./apps/adapters/api
+	github.com/defos-ai/commander/apps/adapters/mcp v0.2.0 => ./apps/adapters/mcp
+	github.com/defos-ai/commander/apps/admin/ui/backend v0.2.0 => ./apps/admin/ui/backend
+	github.com/defos-ai/commander/apps/agents/builder v0.2.0 => ./apps/agents/builder
+	github.com/defos-ai/commander/apps/agents/spawner v0.2.0 => ./apps/agents/spawner
+	github.com/defos-ai/commander/apps/controllers/default v0.2.0 => ./apps/controllers/default
+	github.com/defos-ai/commander/framework v0.2.0 => ./framework
+	github.com/defos-ai/commander/providers/fs v0.2.0 => ./providers/fs
+	github.com/defos-ai/commander/providers/mongo v0.2.0 => ./providers/mongo
+	github.com/defos-ai/commander/providers/rabbitmq v0.2.0 => ./providers/rabbitmq
+	github.com/defos-ai/commander/providers/s3 v0.2.0 => ./providers/s3
 )

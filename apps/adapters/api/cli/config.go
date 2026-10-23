@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/defos-ai/commander/apps/adapters/api"
+	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 )
 
@@ -28,9 +29,10 @@ type config struct {
 	swagger       bool
 	logLevel      string
 	logFormat     string
+	secretCipher  *crypto.SecretCipher
 }
 
-func parseConfig(args []string, output io.Writer, supplied *host.BasicCredentials) (config, error) {
+func parseConfig(args []string, output io.Writer, options Options) (config, error) {
 	var result config
 	var allowedHosts, allowedOrigins, trustedProxies, proxyHeaders string
 	flags := flag.NewFlagSet("commander-api", flag.ContinueOnError)
@@ -49,8 +51,9 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	flags.BoolVar(&result.swagger, "swagger", false, "Enable authenticated Swagger UI and OpenAPI document (API_SWAGGER_ENABLED; default false)")
 	flags.Usage = func() {
 		fmt.Fprintln(output, "Usage: commander-api [flags]")
-		fmt.Fprintln(output, "Read-only missions, actions, agents and controllers API; optional Swagger at /docs/.")
+		fmt.Fprintln(output, "Commander catalogs, operation commands and optional secret management; Swagger at /docs/.")
 		fmt.Fprintln(output, "API_USERNAME and API_PASSWORD must be supplied through the environment.")
+		fmt.Fprintln(output, "Set SECRETS_ENCRYPTION_KEY to enable encrypted secret management.")
 		fmt.Fprintln(output, "Use 'commander-api credentials' to display configured credentials locally.")
 		flags.PrintDefaults()
 	}
@@ -88,7 +91,7 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	if err := validateListenAddress(result.listenAddress); err != nil {
 		return config{}, err
 	}
-	credentials, err := resolveCredentials(supplied)
+	credentials, err := resolveCredentials(options.Credentials)
 	if err != nil {
 		return config{}, err
 	}
@@ -101,6 +104,20 @@ func parseConfig(args []string, output io.Writer, supplied *host.BasicCredential
 	}
 	if err := result.security.Validate(); err != nil {
 		return config{}, err
+	}
+	result.secretCipher = options.SecretCipher
+	if result.secretCipher == nil {
+		if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
+			result.secretCipher, err = crypto.NewSecretCipher(key)
+			if err != nil {
+				return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+			}
+		}
+	}
+	if result.secretCipher != nil {
+		if err := result.secretCipher.Validate(); err != nil {
+			return config{}, fmt.Errorf("secret cipher: %w", err)
+		}
 	}
 	if _, err := host.NewLogger(output, result.logLevel, result.logFormat); err != nil {
 		return config{}, err

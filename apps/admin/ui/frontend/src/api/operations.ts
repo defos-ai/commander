@@ -1,12 +1,12 @@
 import type { Session } from '../connections/types';
 import { ApiError, getJSON } from './client';
+import { isActionRequirement } from './actions';
 import { isMission } from './missions';
 import type {
-  Operation, OperationActionOutput, OperationActionReadiness, OperationAgentReadiness,
+  Operation, OperationActionOutput, OperationActionReadiness, OperationAffinity, OperationAgentReadiness,
   OperationArtifact, OperationArtifactFile, OperationContinuation, OperationEvent,
-  OperationNextAction, OperationPreflight, OperationQuestion, OperationTask,
+  OperationNextAction, OperationPreflight, OperationProgress, OperationQuestion, OperationTask,
 } from './operation-types';
-import type { ActionRequirement } from './types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 
 function isNullableArray<T>(value: unknown, isItem: (item: unknown) => item is T): value is T[] | null {
@@ -55,7 +55,7 @@ function isContinuation(value: unknown): value is OperationContinuation {
 function isTask(value: unknown): value is OperationTask {
   return isObject(value) && isIdentifier(value.id) && typeof value.operation_id === 'string' &&
     isOptionalString(value.parent_task_id) && isOptionalString(value.step_id) &&
-    typeof value.agent_id === 'string' && typeof value.action_name === 'string' &&
+    typeof value.agent_id === 'string' && typeof value.action_name === 'string' && hasScopedRequirements(value) &&
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
     isDate(value.started_at) && isOptionalDate(value.finished_at) &&
@@ -78,14 +78,17 @@ function isEvent(value: unknown): value is OperationEvent {
     isOptionalString(value.message) && isDate(value.created_at);
 }
 
-function isRequirement(value: unknown): value is ActionRequirement {
-  return isObject(value) && typeof value.kind === 'string' && typeof value.name === 'string' &&
-    (value.secret === undefined || typeof value.secret === 'boolean');
-}
-
 function isAgentReadiness(value: unknown): value is OperationAgentReadiness {
   return isObject(value) && typeof value.agent_id === 'string' && typeof value.reason === 'string' &&
-    (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isRequirement));
+    hasScopedRequirements(value);
+}
+
+function hasScopedRequirements(value: Record<string, unknown>): boolean {
+  return (
+    (value.agent_type === undefined || (typeof value.agent_type === 'string' && value.agent_type.length <= 63 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value.agent_type))) &&
+    (value.missing_requirements === undefined || isNullableArray(value.missing_requirements, isActionRequirement)) &&
+    (!value.missing_requirements?.some(requirement => requirement.kind === 'secret') || typeof value.agent_type === 'string')
+  );
 }
 
 function isActionReadiness(value: unknown): value is OperationActionReadiness {
@@ -99,10 +102,26 @@ function isPreflight(value: unknown): value is OperationPreflight {
     isNullableArray(value.actions, isActionReadiness);
 }
 
+function isAffinity(value: unknown): value is OperationAffinity {
+  return isObject(value) && Array.isArray(value.for_actions) && value.for_actions.length > 0 &&
+    value.for_actions.every(action => typeof action === 'string' && action !== '' && action.trim() === action) &&
+    new Set(value.for_actions).size === value.for_actions.length &&
+    (value.agent_id === undefined || isIdentifier(value.agent_id)) &&
+    (value.error === undefined || (typeof value.error === 'string' && value.error.trim() !== '')) &&
+    (value.error === undefined || value.agent_id === undefined);
+}
+
+function isProgress(value: unknown): value is OperationProgress {
+  return isObject(value) && isObject(value.task_counts) && Object.values(value.task_counts).every(isUnsignedInteger) &&
+    isUnsignedInteger(value.total_tasks) && isUnsignedInteger(value.finished_tasks) &&
+    isUnsignedInteger(value.pending_decisions) && isUnsignedInteger(value.pending_questions) && typeof value.settled === 'boolean';
+}
+
 export function isOperation(value: unknown): value is Operation {
   return isObject(value) && isIdentifier(value.id) && isMission(value.mission) && 'input' in value &&
     typeof value.status === 'string' && isOptionalString(value.report_id) && isOptionalString(value.error) &&
-    isDate(value.created_at) && isDate(value.updated_at) &&
+    isDate(value.created_at) && isDate(value.updated_at) && isProgress(value.progress) &&
+    (value.affinity === undefined || isAffinity(value.affinity)) &&
     (value.preflight === undefined || value.preflight === null || isPreflight(value.preflight)) &&
     isNullableArray(value.tasks, isTask) && isNullableArray(value.questions, isQuestion) &&
     isNullableArray(value.events, isEvent);

@@ -23,15 +23,22 @@ func TestMissionRulesValidation(t *testing.T) {
 		{name: "aggregate empty parameters", rules: missions.RuleSet{
 			missions.AggregateResults: {ForActions: []string{"batch-ports"}, Params: &missions.RuleParams{}},
 		}},
+		{name: "same-agent defaults", rules: missions.RuleSet{
+			missions.SameAgent: {ForActions: []string{"checkout-template", "build-agent"}},
+		}},
+		{name: "same-agent empty parameters", rules: missions.RuleSet{
+			missions.SameAgent: {ForActions: []string{"checkout-template", "build-agent"}, Params: &missions.RuleParams{}},
+		}},
 		{name: "composable rules on same action", rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"batch-ports"}},
 			missions.DecideNextActions: {ForActions: []string{"batch-ports", "scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.SameAgent:         {ForActions: []string{"batch-ports", "scan-ports"}},
 		}},
 		{name: "unknown rule", rules: missions.RuleSet{
 			"unknown": {ForActions: []string{"scan-ports"}},
 		}, want: `rule "unknown": unsupported rule`},
 		{name: "empty selectors", rules: missions.RuleSet{
-			missions.AggregateResults: {},
+			missions.SameAgent: {},
 		}, want: "for_actions must not be empty"},
 		{name: "blank selector", rules: missions.RuleSet{
 			missions.AggregateResults: {ForActions: []string{"batch-ports", " \t"}},
@@ -43,10 +50,13 @@ func TestMissionRulesValidation(t *testing.T) {
 			missions.AggregateResults: {ForActions: []string{"batch-ports\n"}},
 		}, want: "without surrounding whitespace"},
 		{name: "duplicate selector", rules: missions.RuleSet{
-			missions.AggregateResults: {ForActions: []string{"batch-ports", "batch-ports"}},
+			missions.SameAgent: {ForActions: []string{"batch-ports", "batch-ports"}},
 		}, want: `duplicate action "batch-ports"`},
 		{name: "aggregation decision parameters", rules: missions.RuleSet{
 			missions.AggregateResults: {ForActions: []string{"batch-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		}, want: "does not accept decision_by"},
+		{name: "same-agent decision parameters", rules: missions.RuleSet{
+			missions.SameAgent: {ForActions: []string{"batch-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 		}, want: "does not accept decision_by"},
 		{name: "missing decision parameters", rules: missions.RuleSet{
 			missions.DecideNextActions: {ForActions: []string{"scan-ports"}},
@@ -106,8 +116,9 @@ func TestMissionRulesCloneIsolatesConfiguration(t *testing.T) {
 func TestMissionRulesJSON(t *testing.T) {
 	const input = `{
 		"name": "scan",
-		"objective": "Review network services",
+		"objectives": ["Review network services", "Summarize the findings"],
 		"required_actions": ["batch-ports", "scan-ports"],
+		"optional_actions": ["report-scan"],
 		"starting_actions": ["batch-ports"],
 		"input_schema": {},
 		"output_schema": {},
@@ -116,7 +127,8 @@ func TestMissionRulesJSON(t *testing.T) {
 			"decide-next-actions": {
 				"for_actions": ["scan-ports"],
 				"params": {"decision_by": "model"}
-			}
+			},
+			"same-agent": {"for_actions": ["batch-ports", "scan-ports"]}
 		}
 	}`
 	decoded, err := missions.LoadMission([]byte(input))
@@ -126,9 +138,19 @@ func TestMissionRulesJSON(t *testing.T) {
 	want := missions.RuleSet{
 		missions.AggregateResults:  {ForActions: []string{"batch-ports"}},
 		missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.SameAgent:         {ForActions: []string{"batch-ports", "scan-ports"}},
 	}
 	if !reflect.DeepEqual(decoded.Rules, want) {
 		t.Fatalf("decoded rules = %+v, want %+v", decoded.Rules, want)
+	}
+	cloned := decoded.Clone()
+	cloned.Objectives[0] = "changed-by-reader"
+	if !reflect.DeepEqual(decoded.Objectives, []string{"Review network services", "Summarize the findings"}) {
+		t.Fatal("mission clone shares objectives or changed their order")
+	}
+	cloned.OptionalActions[0] = "changed-by-reader"
+	if !reflect.DeepEqual(decoded.OptionalActions, []string{"report-scan"}) {
+		t.Fatal("mission clone shares optional action names")
 	}
 	encoded, err := json.Marshal(decoded)
 	if err != nil {
@@ -146,7 +168,7 @@ func TestMissionRulesJSON(t *testing.T) {
 	}
 }
 
-func TestMissionRulesLoadingRejectsInvalidConfiguration(t *testing.T) {
+func TestMissionLoadingRejectsInvalidConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		fields string
@@ -157,13 +179,33 @@ func TestMissionRulesLoadingRejectsInvalidConfiguration(t *testing.T) {
 		{"old selector", `"rules": {"aggregate-results": {"actions": ["batch-ports"]}}`, `unknown field "actions"`},
 		{"unknown parameters", `"rules": {"decide-next-actions": {"for_actions": ["scan-ports"], "params": {"decision_by": "model", "extra": true}}}`, `unknown field "extra"`},
 		{"unsupported decision", `"rules": {"decide-next-actions": {"for_actions": ["scan-ports"], "params": {"decision_by": "other"}}}`, `decision_by must be "model"`},
+		{"duplicate required action", `"required_actions": ["scan-ports", "scan-ports"]`, `required_actions contains duplicate action`},
+		{"duplicate optional action", `"optional_actions": ["report-scan", "report-scan"]`, `optional_actions contains duplicate action`},
+		{"blank optional action", `"optional_actions": [" "]`, `optional_actions must contain nonblank names`},
+		{"untrimmed optional action", `"optional_actions": [" report-scan"]`, `without surrounding whitespace`},
+		{"overlapping action lists", `"required_actions": ["scan-ports"], "optional_actions": ["scan-ports"]`, `must not be both required and optional`},
+		{"optional starting action", `"optional_actions": ["report-scan"], "starting_actions": ["report-scan"]`, `is not a required action`},
+		{"duplicate starting action", `"required_actions": ["scan-ports"], "starting_actions": ["scan-ports", "scan-ports"]`, `starting_actions contains duplicate action`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			input := `{"name":"scan","objective":"Review network services","input_schema":{},"output_schema":{},` + tc.fields + `}`
+			input := `{"name":"scan","objectives":["Review network services"],"input_schema":{},"output_schema":{},` + tc.fields + `}`
 			_, err := missions.LoadMission([]byte(input))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("LoadMission() = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestMissionLoadingRequiresNonblankObjectives(t *testing.T) {
+	for _, fields := range []string{
+		``, `,"objectives":null`, `,"objectives":[]`, `,"objectives":"Review"`,
+		`,"objectives":[null]`, `,"objectives":[""]`, `,"objectives":["Review"," \t"]`,
+		`,"objective":"Review"`,
+	} {
+		input := `{"name":"scan","input_schema":{},"output_schema":{}` + fields + `}`
+		if _, err := missions.LoadMission([]byte(input)); err == nil {
+			t.Fatalf("invalid mission objectives accepted: %s", input)
+		}
 	}
 }

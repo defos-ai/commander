@@ -9,6 +9,11 @@ The user's current instructions take precedence over repository guidance.
 - Keep a companion `AGENTS.md` beside every `README.md`. READMEs explain usage to
   people; agent guides describe code entry points, invariants, pitfalls and checks.
   Keep shared rules here and specific rules in the nearest relevant guide.
+- Keep human docs short and actionable: lead with the next step, show working
+  commands, and explain only the choices or limits a reader needs to act on.
+  Put implementation contracts in the nearest agent guide or link to source;
+  avoid repeating them across READMEs. Preserve essential setup, security and
+  recovery instructions, without copying every removed detail into `AGENTS.md`.
 - Prefer small, reviewable changes. Explain the scope before broad renames,
   dependency changes or refactors, and avoid unrelated cleanup.
 - Preserve uncommitted work. Do not commit, publish, change repository visibility
@@ -53,10 +58,21 @@ The user's current instructions take precedence over repository guidance.
   newer-release check and serialized release concurrency so maintenance releases
   cannot move these pointers backward. Native asset names omit the version;
   use `releases/latest/download` for quick start and version URLs for pinning.
+  Web/browser images are released by their standalone repositories; keep them
+  out of Commander's image publishing and `stable` promotion.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.
-- [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO.
+- [compose.yaml](compose.yaml) uses RabbitMQ, MongoDB and MinIO. Builder and the
+  Docker spawner start by default; other agents launch on demand through chat/MCP
+  as sibling containers. Keep execution checkpoints while children exist and scope
+  teardown by deployment network plus the spawn ownership label.
+  Its `secrets-key` initializer persists the encryption key in a dedicated volume;
+  API, builder and spawner mount it read-only and export it before exec. Retain
+  saved keys across restarts and reject invalid state or conflicting overrides.
+  Keep this volume separate from `mcp-credentials` and database storage; restoring
+  encrypted data requires its original key. Do not distribute the key through
+  the shared agent environment.
   Test stacks in [.github/composes](.github/composes/)
   have separate projects and state.
   See [setup](docs/deployment.md) and the relevant component README for usage.

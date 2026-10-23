@@ -1,85 +1,89 @@
 # Adapters
 
-Adapters connect clients to Commander. The [MCP adapter](mcp/) lets an LLM choose
-missions, assign work and review evidence; the [HTTP API](api/README.md) provides
-application access. Commands go to the controller, which selects agents and runs
-mission rules. Queries read saved state.
+Connect an MCP client or an application to Commander:
+
+- **MCP:** let a model choose missions, assign work and review results.
+- **[HTTP API](api/README.md):** create missions and manage operations from your app.
 
 ## Quick start
 
-With Go 1.26.7+, run from the repository root:
+From the repository root, with Go 1.26.7+:
 
 ```sh
 export MCP_TOKEN="$(openssl rand -hex 32)"
 go run ./apps/adapters/mcp/cmd/commander-mcp
 ```
 
-Start the [controller](../controllers/README.md#quick-start) and agents with matching
-connection settings. Connect your MCP client to `http://localhost:4273/mcp` with
-`Authorization: Bearer <MCP_TOKEN>` on every request. Standalone MCP refuses to
-start without a valid token; `/healthz` and `/aboutz` stay public. `/aboutz` reports
-the runtime and application so supporting clients can suggest a token lookup command.
-Examples: [VS Code](../../.vscode/mcp.json), [Codex](../../.codex/config.toml),
-[Cursor](../../.cursor/mcp.json). See [deployment](../../docs/deployment.md) for
-Compose, providers and host configuration.
+Start the [controller](../controllers/README.md#quick-start) and agents with the
+same provider settings. For a ready-to-use stack, follow [deployment](../../docs/deployment.md).
 
-Codex and Cursor read `MCP_TOKEN` from their environment; VS Code prompts for it.
-Playground accepts a hidden token input or `COMMANDER_MCP_TOKEN`. In all-in-one mode, it generates and
-shares the token internally; `/credentials` shows it on request.
+Connect your MCP client to `http://localhost:4273/mcp` and send
+`Authorization: Bearer <MCP_TOKEN>` on every request. Client examples:
+[VS Code](../../.vscode/mcp.json), [Codex](../../.codex/config.toml),
+[Cursor](../../.cursor/mcp.json). Remote connections need HTTPS and custom-header support.
 
-To look up a Compose server's token:
+For a Compose token:
 
 ```sh
 docker compose exec mcp commander-mcp credentials
 ```
 
-Compose initializes a shared token in a named Docker volume and reuses it across
-restarts. Set `MCP_TOKEN` before starting Compose to replace it. Playground reads
-the shared token automatically; `COMMANDER_MCP_TOKEN` supplies a client override.
-Add `--raw` to print only the token for shell commands. See
-[Playground setup](../playground/README.md#docker-recommended).
+Add `--raw` to print only the token. Compose reuses its token across restarts;
+set `MCP_TOKEN` before launch to replace it. Playground connects automatically.
+In all-in-one Playground, use `/credentials`.
 
-Native `commander-mcp credentials` reads the current environment without credential
-files. Tokens are never written to logs. This is shared-token authentication: clients
-need custom-header support, and remote access needs HTTPS. OAuth sign-in and
-per-user permissions are not provided.
+### Discover agent packages
+
+Call `get_agent_catalog`, then follow the spawner's registered installation
+instructions with the selected `package` and `visibility`.
+You can also install a GitHub repository URL without a catalog entry:
+
+- Omit the version, or use `@stable`, for its promoted Latest release.
+- Use `@v1.2.3` to pin a version.
+- For private repositories, set `visibility: private`. Supply tokens through
+  managed secrets or the spawner environment; never put them in tool inputs.
+
+Set `AGENT_CATALOG_URL` on MCP to use a different public HTTPS
+[catalog](../../catalog/README.md).
+
+### Create missions
+
+Call `create_mission` with a flat mission definition containing `name`,
+`objectives`, `input_schema` and `output_schema`.
+Add actions, planning steps and rules as needed; see
+[mission definitions](../../docs/abstractions.md#mission-operation-and-task).
+Actions may be installed later. Saving a mission does not start work.
+
+Names are unique. After an uncertain save, read `describe_mission` before retrying.
+Keep secret values out of definitions and chat.
 
 ### Operation workflow
 
-1. Use `list_missions` and `describe_mission` to choose a mission and read its
-   actions, rules and schemas. `describe_action` gives an action's schema;
-   optional `agent_id` selects an instance's definition.
-2. Call `start_operation`, inspect preflight, then `assign_task` with `action_name`
-   and `input`. The controller chooses an available agent; missing required-action
-   coverage keeps tasks queued. Omit `step_id` unless the mission declares it.
-3. Follow `get_operation`. Resolve pending continuations with
-   `resolve_continuation`, supplying the current task/version and selected actions;
-   an empty array finishes the branch.
-4. Use `ask_question` for operator decisions and `answer_question` for the actual
-   response. Questions allow four options or free text and default to a two-minute
-   deadline; expiry returns the decision to the model.
-5. After reviewing evidence and resolving work, call `complete_operation` with
-   output matching the mission schema, then `get_report`. Use `fail_operation` or
-   `cancel_operation` when appropriate; dispatched tasks may still finish.
+1. Choose a mission with `list_missions` and `describe_mission`; inspect action
+   schemas with `describe_action`.
+2. Call `start_operation`, review preflight, then `assign_task` with the action
+   name and input. The controller selects the agent.
+3. Follow `get_operation`. Resolve model decisions with `resolve_continuation`;
+   use `ask_question` and `answer_question` for operator choices.
+4. Review the evidence, finish pending work, then `complete_operation` with output
+   matching the mission schema. Retrieve the result with `get_report`.
 
-See [preflight](../../docs/abstractions.md#discovery-and-preflight) and
-[continuations](../../docs/abstractions.md#next-actions-and-continuations) for the
-decision rules. Finished operations are read-only; new work needs a new operation.
+Use Playground's masked form or **Agents → Manage secrets** in Admin when secrets
+are missing. Do not send values through chat or tools.
+
+**Query saved state before retrying an uncertain command.** Accepted work may
+continue, and another assignment creates another task. Use `cancel_operation`
+to stop queued work; dispatched tasks may finish.
 
 ### Queries and artifacts
 
-Use `list_agents` / `list_actions` for discovery, `describe_agent` for readiness
-and current work, and `get_task` for full input, result and artifacts. Agent
-administration belongs to the controller.
-
-`operation_tasks` and `operation_events` take `operation_id`, optional `cursor`,
-and `limit` (default 100, maximum 1,000). Pass `next_cursor` unchanged to the next
-call for the same tool and operation. Events can wait up to 30 seconds with
-`wait_seconds`. Tool definitions describe the complete inputs and outputs.
+Use `list_agents` and `list_actions` for discovery, `describe_agent` for readiness,
+and `get_task` for full inputs, results and artifacts. For paginated task/event
+queries, pass `next_cursor` unchanged to the next call for the same operation.
 
 Read `missions://artifacts/{id}` for metadata and
-`missions://artifacts/{id}/files/{file_id}` for file content. Successful results
-contain JSON in a text `content` block; files add resource-link blocks.
+`missions://artifacts/{id}/files/{file_id}` for file content. To view screenshots
+or download files in a browser, open the operation in [Admin](../admin/ui/README.md).
 
 ## Development and testing
 

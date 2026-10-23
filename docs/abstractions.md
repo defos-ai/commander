@@ -1,86 +1,112 @@
-# Core concepts
+# Missions and rules
 
-The [architecture overview](overview.md) explains Commander → Controller → Agent.
-This guide defines the data and decisions passed between them.
+Use a mission to describe a repeatable goal, the actions it needs and how to
+handle follow-up work. Start in **Admin → Missions → Create mission**, or use
+the [HTTP API](../apps/adapters/api/README.md#create-missions) or MCP.
 
 ## Mission, operation, and task
 
-| Concept | Meaning | Website example |
-| --- | --- | --- |
-| **Mission** | Reusable objective, input/output schemas, required actions, optional steps and rules. | `review-website-with-browser` |
-| **Operation** | One run with specific input and a saved copy of the mission. | Review `https://defos.ai`, up to three pages. |
-| **Task** | One action assignment. The controller selects an agent when dispatching it. | Check one page's links. |
-| **Mission step** | Optional planning guidance that tasks can reference. It is not an action name or automatic workflow. | A declared step such as `quality-review`. |
-| **Report** | The output saved when Commander explicitly completes an operation. | Findings and limitations from the website review. |
+| Concept | Example |
+| --- | --- |
+| **Mission**: reusable objectives, action requirements and rules | Review a website |
+| **Operation**: one run of a mission | Review `https://defos.ai` |
+| **Task**: one action assignment | Check links on one page |
+| **Step**: optional planning guidance within a mission | Review accessibility |
+| **Report**: the final saved output | Findings and recommended fixes |
 
-`list_missions` gives a summary; `describe_mission` supplies the full definition.
-`starting_actions` guides initial assignments. Starting an operation still requires
-an initial task assignment. Omit `step_id` when the mission has no declared steps.
+### Create a mission
 
-An operation keeps its mission snapshot through updates and restarts. Callers may
-supply a canonical lowercase UUID as `operation_id`; an existing ID is a conflict.
-Operation status is `planning`, `running`, `waiting`, `completed`, `failed`, or
-`cancelled`. Task status is independent: `interrupted` means its execution outcome
-is unknown. Cancelling an operation stops new dispatch; running actions may finish.
+1. Write `objectives` as a list of clear goals; every item applies.
+2. Select required actions. Add useful extras as `optional_actions` so they do not
+   block the initial readiness check.
+3. Choose `starting_actions` from the required actions and define input/output schemas.
+4. Add rules where you need aggregation, model review or the same agent instance.
+5. Save the mission. In Admin, open its **JSON** view to inspect the definition.
+
+For example, a build mission can require checkout and build while leaving sharing optional:
+
+```json
+{
+  "name": "build-agent",
+  "objectives": ["Build and verify the requested agent."],
+  "required_actions": ["checkout-template", "build-agent"],
+  "optional_actions": ["publish-agent", "release-agent"],
+  "starting_actions": ["checkout-template"],
+  "input_schema": {"type": "object"},
+  "output_schema": {"type": "object"},
+  "rules": {
+    "same-agent": {"for_actions": ["checkout-template", "build-agent"]}
+  }
+}
+```
+
+Start an operation, then assign its first task; `starting_actions` does not start
+work automatically. Editing a mission affects new operations, not existing runs.
+See the complete [bundled missions](../apps/controllers/default/data/default-missions.json).
+
+### Define an action before an agent exists
+
+Add an `action_definitions` entry, or use the action dialog on the creation page:
+
+```json
+{
+  "name": "inspect-service",
+  "description": "Inspect the requested service.",
+  "input_schema": {"type": "object"},
+  "output_schema": {"type": "object"},
+  "required_secrets": ["SERVICE_TOKEN"]
+}
+```
+
+Reference its name in the mission's action lists. This describes the contract a
+builder should implement; it does not install an agent or make the action ready.
+Use secret **names**, never values, in definitions.
 
 ## Agents and actions
 
-- **Agent type** identifies an implementation, such as `web-agent` or `browser-agent`. Its generated
-  **agent ID** identifies one process. Several instances can share a type.
-- **Action** is an executable capability with input/output schemas and
-  readiness. It may use Go code, a host program or an external API.
-- **Agent snapshot** reports actions, status and current `work` (action, operation,
-  task and command IDs). Work clears when execution ends. Stale snapshots describe
-  last known state; tasks and execution records hold history.
-- **Inventory** is the controller's persisted view of those snapshots and heartbeats.
+An **agent type** identifies an implementation, such as `browser-agent`.
+An **agent ID** identifies one running instance. Its **actions** are executable
+capabilities with input/output schemas and readiness checks.
 
-Missions refer to action names. MCP **tools** are client-facing endpoints such as
-`assign_task`; they are distinct from agent actions such as `check-links`.
+Select actions by capability; the controller chooses an instance. MCP tools such
+as `assign_task` submit work to the controller rather than executing agent code directly.
 
 ## Discovery and preflight
 
-**Discovery runs on each agent:** actions check their environment and report
-`ready` or `unavailable`, with a reason and structured `missing_requirements`.
-Requirements describe executables or configuration keys; secret values
-must never appear in them. Discovery does not install dependencies or configure credentials.
+Before dispatch, Commander checks that live agents can run the required actions.
+If an operation is waiting, open its preflight details in Admin:
 
-**Preflight runs on the controller:** it checks the mission's and steps' required
-actions against live inventory. Different agents can satisfy different requirements.
-A busy agent can provide coverage, but dispatch still waits for capacity.
+| Missing requirement | Next step |
+| --- | --- |
+| Agent or action | Install a suitable agent and check its readiness |
+| Executable or configuration | Install the dependency or configure that agent's host |
+| Managed secret | Use the Playground secret form or **Admin → Agents → Manage secrets** |
 
-Missing coverage blocks new dispatch. The operation is `waiting` unless a task
-is still running. Tasks can be queued; updated inventory refreshes preflight and
-lets them resume once ready. Already dispatched tasks continue. MCP exposes the missing requirements so Commander can explain the
-blocker or ask the operator. Installation and credential configuration remain host
-operations, followed by rediscovery.
+Never paste secret values into chat. Saving a secret resumes eligible work once
+it reaches the agent. An action can also request a secret while running, using
+the same form; its task deadline still applies. See [secret setup](../framework/secrets/README.md).
 
 ## Next actions and continuations
 
-An action's optional `next_actions` proposes follow-up work as `action_name`,
-`input`, and `reason`. The controller queues valid nonempty proposals automatically
-unless mission rules require a model decision. Proposals do not select agents,
-and their list order does not establish dependencies.
+Agents can propose multiple `next_actions`. By default, the controller queues
+valid proposals automatically. Use mission rules to request a model decision instead.
+Proposal order does not create dependencies.
 
-A finished or interrupted task has a **continuation**: the decision about what
-follows. Its `decision_by` is `code`, `model`, or `user`; its status is `pending`,
-`waiting`, or `resolved`. One operation can mix all three decision makers.
+A **continuation** is the decision about what follows a task:
 
-- **Code:** the controller queues proposals or collects a group's results under mission rules.
-- **Model:** Commander reviews results, selects follow-ups, or closes the branch.
-- **User:** Commander asks a linked question and waits for operator guidance.
+| Decision maker | What happens |
+| --- | --- |
+| Code | Follow mission rules and valid proposals |
+| Model | Commander reviews results and chooses follow-ups |
+| User | Commander asks for your guidance |
 
-`resolve_continuation` saves a decision and its queued tasks atomically.
-Its explicit `version` rejects stale decisions; refresh the task before retrying.
-`actions: []` closes a branch. Children retain `parent_task_id`; the continuation
-records its current group's `created_task_ids`. Finishing all tasks still requires explicit operation
-completion, with no queued/running work or pending questions.
+When reviewing through MCP, `resolve_continuation` accepts follow-up actions;
+`actions: []` closes the branch. Refresh the task before retrying a stale decision.
+Once work and questions are resolved, explicitly complete the operation with its report.
 
 ## Mission rules
 
-Rules belong to the **mission**. Each rule's `for_actions` selects the actions whose
-executions it applies to; one entry can cover several actions with the same settings.
-For example, the website mission collects discovery's
-generated checks before asking Commander to review their results:
+Choose the action names with `for_actions`:
 
 ```json
 {
@@ -89,70 +115,63 @@ generated checks before asking Commander to review their results:
       "for_actions": ["discover-pages"]
     },
     "decide-next-actions": {
-      "for_actions": ["check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"],
+      "for_actions": ["check-links", "capture-page"],
       "params": {"decision_by": "model"}
     }
   }
 }
 ```
 
-| Rule | Behavior |
+| Rule | Use it when… |
 | --- | --- |
-| `aggregate-results` | Wait for all direct children generated by one execution before applying their rules. A group requiring review exposes one model decision. |
-| `decide-next-actions` with `decision_by: "model"` | Ask Commander to decide follow-up work instead of automatically executing proposals. |
+| `aggregate-results` | One action generates several checks and you want their direct results collected before deciding what follows |
+| `decide-next-actions` | Commander should review results instead of automatically running proposed follow-ups |
+| `same-agent` | Later actions need local state held by the same agent |
 
-Without aggregation, children continue independently. Valid proposals run
-automatically by default; failures, missing or invalid proposals return to the
-model. Rules do not invent follow-up inputs, merge outputs or wait for recursive
-descendants. They apply independently of their order in JSON. Changes affect new
-operations, which snapshot the mission when started.
+Aggregation waits for all **direct children** from one execution, not their recursive
+follow-ups. Without it, each child continues independently. Rules do not merge
+outputs or invent action inputs.
 
-A custom controller can [select rules per operation](../apps/controllers/README.md#rule-selection)
-from its mission and input. The selected set replaces the rules in that operation's
-saved mission without changing the catalog. Selection happens once at start;
-recovery keeps the saved rules.
+### Task affinity
 
-See the complete [website workflow](../apps/agents/web/README.md#workflow),
-[authoring follow-ups](../apps/agents/README.md#propose-follow-up-work), and
-[loading missions](../apps/controllers/README.md#quick-start).
+Use `same-agent` for checkout and build actions that share a local workspace:
+
+```json
+{"same-agent": {"for_actions": ["checkout-template", "build-agent"]}}
+```
+
+The first matching dispatch binds that group to one agent for the operation.
+If it becomes unavailable, work waits; it does not move to another instance.
+Affinity does not create execution order or prevent concurrency: propose dependent
+actions only after their prerequisites finish. Leave artifact-based work outside
+the group when any compatible agent can do it.
+
+For custom selection, see [controller rules](../apps/controllers/README.md#rule-selection).
 
 ## Questions
 
-A **question** requests operator guidance when Commander cannot decide. It can
-pause new work for the operation or a step and link to a continuation. Running
-tasks continue. Questions cannot be added to a finished operation.
-
-Questions have `pending`, `answered`, or `expired` status, up to four options and
-free-text answers. The default deadline is two minutes; `timeout_seconds` overrides
-it. An answer or expiration returns a linked decision to the model; neither
-executes an action. Expiration records no answer and is not approval.
-
-MCP provides `last_question` and `remaining_questions`. Playground shows one
-question at a time with keyboard selection. Question history stays in the operation.
+Commander can ask a question when a decision needs your input. Answer in
+Playground or Admin. A question can block new work; running tasks continue.
+An expired question is not approval. Answers and question history stay with the operation.
 
 ## Results and evidence
 
-| Concept | Stored information |
-| --- | --- |
-| **Action output** | Structured result and artifact references. A failed command carries an error instead. |
-| **Artifact** | Database metadata for produced evidence, including its owner and file descriptors. |
-| **Artifact file** | Bytes in file storage: screenshots, downloads or detailed JSON. Descriptors include name, media type, size and checksum. |
-| **Execution** | Durable command reservation and received outcome. A reservation does not prove execution happened. |
-| **Operation event** | An ordered record of progress, available through cursor-based queries. |
+Open a completed operation in Admin to inspect task outputs, reports and artifacts.
+Screenshots and downloads are artifact files; their internal references are not
+public browser URLs.
 
-Artifacts and reports can be read independently of the model conversation.
-See [providers](../providers/README.md) for persistence implementations and
-[recovery](overview.md#state-and-restart-recovery) for uncertain outcomes.
+For agent authors, use [artifact helpers](../framework/agent/action/artifact.go)
+to save files and [execution checkpoints](../framework/agent/action/checkpoints.go)
+to record a small immutable fact before an external side effect. Checkpoints do
+not authorize repeating that effect after an uncertain result.
+See [restart recovery](overview.md#state-and-restart-recovery).
 
 ## Messages and durable execution
 
-A **command** requests work; an **event** reports something that happened. A
-**message** is their bus envelope, with identity and correlation. A **result receipt**
-confirms that the controller persisted an agent outcome. It is separate from the
-bus acknowledgement that a message was processed.
+A bus acknowledgement confirms message handling; a result receipt confirms the
+controller saved an outcome. When a reply is lost, inspect saved progress before
+retrying. See the [messaging guide](../framework/comms/README.md) when implementing a host.
 
-See [message contracts](../framework/comms/messages/README.md) for routes and
-[message handling](../framework/comms/README.md) for acknowledgement behavior.
-
-
-Agent-owned resources that survive an action use the [runtime session contract](runtime-sessions.md), including explicit owner routing and an independent control channel.
+Agent-owned resources that survive an action use the
+[runtime session contract](runtime-sessions.md), including explicit owner routing
+and an independent control channel.

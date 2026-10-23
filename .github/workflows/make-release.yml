@@ -8,7 +8,7 @@ on:
         description: Shared stable v0 or v1 version
         type: string
         required: true
-        default: v0.1.0
+        default: v0.2.0
 
 permissions:
   contents: read
@@ -138,6 +138,8 @@ jobs:
       contents: write
     with:
       version: ${{ inputs.version }}
+      builder-digest: ${{ needs.agents.outputs.builder-digest }}
+      spawner-digest: ${{ needs.agents.outputs.spawner-digest }}
 
   stable:
     needs: [release, api, admin, mcp, controllers, agents, aio, playground]
@@ -153,8 +155,8 @@ jobs:
           "commander-admin": "${{ needs.admin.outputs.digest }}",
           "commander-mcp": "${{ needs.mcp.outputs.digest }}",
           "commander-controller": "${{ needs.controllers.outputs.digest }}",
-          "commander-browser-agent": "${{ needs.agents.outputs.browser-digest }}",
-          "commander-web-agent": "${{ needs.agents.outputs.web-digest }}",
+          "commander-builder-agent": "${{ needs.agents.outputs.builder-digest }}",
+          "commander-spawner-agent": "${{ needs.agents.outputs.spawner-digest }}",
           "commander-aio": "${{ needs.aio.outputs.digest }}",
           "commander-playground": "${{ needs.playground.outputs.digest }}"
         }

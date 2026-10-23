@@ -87,6 +87,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		Type: controllerType, ID: configuration.controllerID, HeartbeatTimeout: configuration.heartbeatTimeout,
 		ArtifactStore: deps.ArtifactStore, AgentStore: deps.AgentStore, ActionStore: deps.ActionStore,
 		ExecutionStore: deps.ExecutionStore, Logger: logger,
+		SecretStore: deps.SecretStore, SecretRequestStore: deps.SecretRequestStore,
 	})
 	if err != nil {
 		return err

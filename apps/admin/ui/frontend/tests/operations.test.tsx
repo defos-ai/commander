@@ -13,10 +13,18 @@ const task: OperationTask = {
   started_at: now, finished_at: now, result: { action_name: 'discover-pages', output: { pages: ['https://defos.ai'] } },
 };
 const operation: Operation = {
-  id: 'operation-review', mission: { name: 'review-website-with-browser', objective: 'Review website quality.',
+  id: 'operation-review', mission: { name: 'review-website-with-browser', objectives: ['Review website quality.'],
     required_actions: ['discover-pages'], starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} },
   input: { url: 'https://defos.ai' }, status: 'planning', tasks: [task], questions: [], events: [], created_at: now, updated_at: now,
+  progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: false },
 };
+const secretWait: Operation = { ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [
+  { action_name: 'build', unavailable_agents: [
+    { agent_id: 'builder-agent-1234abcd', agent_type: 'builder', reason: 'Action has missing requirements',
+      missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
+    { agent_id: 'builder-agent-2345abcd', agent_type: 'builder', reason: 'Action has missing requirements', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
+  ] },
+] } };
 
 function mockAPI(respond?: (url: string, options: RequestInit) => Response | Promise<Response>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => respond ? respond(upstreamURL(input), options)
@@ -26,8 +34,131 @@ function mockAPI(respond?: (url: string, options: RequestInit) => Response | Pro
 }
 
 describe('operations browser', () => {
+  it('shows affinity before dispatch, preserves its owner, and limits queue hints to grouped active tasks', async () => {
+    const actions = ['checkout-template', 'build-agent'];
+    const owner = 'builder-agent-1234abcd';
+    const queued = { ...task, agent_id: '', status: 'queued', finished_at: undefined, result: undefined };
+    let snapshot: Operation = {
+      ...operation, mission: { ...operation.mission, rules: { 'same-agent': { for_actions: actions } } },
+      affinity: { for_actions: actions },
+      progress: { task_counts: { queued: 2 }, total_tasks: 2, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
+      tasks: [{ ...queued, id: 'task-build', action_name: 'build-agent' }, { ...queued, id: 'task-other', action_name: 'other-action' }],
+    };
+    mockAPI(() => Response.json(snapshot));
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={operation.id}
+      onSelect={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Same agent' })).toBeVisible();
+    expect(screen.getByText('The first dispatched action selects the agent.')).toBeVisible();
+    expect(screen.getByText('These actions stay on one agent for this operation. No automatic fallback.')).toBeVisible();
+    for (const action of ['build-agent', 'other-action']) {
+      fireEvent.click(screen.getByText(action, { selector: 'summary *' }).closest('summary')!);
+    }
+    expect(screen.queryByText(`Queued for ${owner}.`)).not.toBeInTheDocument();
+
+    snapshot = { ...snapshot, affinity: { for_actions: actions, agent_id: owner }, preflight: { ready: false, version: 1, actions: [
+      { action_name: 'build-agent', unavailable_agents: [{ agent_id: owner, reason: 'Agent required by same-agent is not registered' }] },
+    ] } };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    expect(await screen.findByText(`Queued for ${owner}.`)).toBeVisible();
+    expect(screen.getAllByText(`Queued for ${owner}.`)).toHaveLength(1);
+    expect(screen.queryByText('The first dispatched action selects the agent.')).not.toBeInTheDocument();
+    const preflight = screen.getByRole('heading', { name: 'Agent readiness' }).closest('section')!;
+    fireEvent.click(within(preflight).getByText('build-agent').closest('summary')!);
+    expect(screen.getByText('Agent required by same-agent is not registered')).toBeVisible();
+
+    snapshot = { ...snapshot, status: 'completed' };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Completed', { selector: '.catalog-status' })).toBeVisible();
+    expect(screen.queryByText(`Queued for ${owner}.`)).not.toBeInTheDocument();
+    const affinity = screen.getByRole('heading', { name: 'Same agent' }).closest('section')!;
+    expect(within(affinity).getByText(owner)).toBeVisible();
+
+    snapshot = { ...snapshot, status: 'waiting', affinity: { for_actions: actions, error: 'Conflicting assignments' } };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Conflicting assignments');
+    expect(screen.queryByText(`Queued for ${owner}.`)).not.toBeInTheDocument();
+    expect(screen.queryByText('The first dispatched action selects the agent.')).not.toBeInTheDocument();
+
+    snapshot = { ...operation };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {});
+    expect(screen.queryByRole('heading', { name: 'Same agent' })).not.toBeInTheDocument();
+  });
+
+  it('reuses the secret notice for running work and clears it without a saved timestamp change', async () => {
+    let snapshot: Operation = { ...operation, status: 'running',
+      progress: { task_counts: { running: 1 }, total_tasks: 1, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
+      preflight: { ready: true, version: 1, actions: [] }, tasks: [
+      { ...task, status: 'running', finished_at: undefined, result: undefined, agent_type: 'web-agent',
+        deadline_at: new Date(Date.now() + 60_000).toISOString(), missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
+    ] };
+    mockAPI(() => Response.json(snapshot));
+    const manage = vi.fn();
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={operation.id}
+      onSelect={vi.fn()} onManageSecrets={manage} />);
+
+    expect(await screen.findByText('Secrets needed')).toBeVisible();
+    expect(screen.getAllByText('web-agent / TOKEN')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
+    expect(manage).toHaveBeenCalledTimes(1);
+
+    snapshot = { ...snapshot, tasks: [{ ...snapshot.tasks![0], missing_requirements: [] }] };
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {});
+    expect(screen.queryByText('Secrets needed')).not.toBeInTheDocument();
+  });
+
+  it('shows managed secrets in details and graph, then clears the notice when readiness recovers', async () => {
+    let snapshot = secretWait;
+    const fetch = mockAPI(url => url.endsWith('/graph')
+      ? Response.json({ operation_id: operation.id, status: snapshot.status, updated_at: now, nodes: [], edges: [] })
+      : Response.json(snapshot));
+    const manage = vi.fn();
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={operation.id}
+      onSelect={vi.fn()} onManageSecrets={manage} />);
+
+    expect(await screen.findByText('Secrets needed')).toBeVisible();
+    expect(screen.getAllByText('builder / TOKEN')).toHaveLength(1);
+    fireEvent.click(screen.getByText('build', { selector: 'summary *' }).closest('summary')!);
+    expect(screen.getAllByText('TOKEN')[0].closest('li')).toHaveTextContent('Secret: TOKEN');
+    fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
+    expect(manage).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Execution graph' }));
+    expect(await screen.findByText('No work recorded yet')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Manage secrets' })).toBeVisible();
+
+    snapshot = { ...secretWait, status: 'planning', preflight: { ...secretWait.preflight!, ready: true, version: 2 } };
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('Planning', { selector: '.catalog-status' })).toBeVisible();
+    expect(screen.queryByText('Secrets needed')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Manage secrets' })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.every(([url, init]) => !upstreamURL(url).includes('/secrets/requests') && init?.method === 'GET')).toBe(true);
+  });
+
+  it.each([
+    ...['completed', 'cancelled', 'failed'].map(status => ({ ...secretWait, status })),
+    { ...secretWait, preflight: { ...secretWait.preflight!, ready: true } },
+    { ...secretWait, preflight: { ...secretWait.preflight!, actions: [{ ...secretWait.preflight!.actions![0], ready_agent_ids: ['ready-agent'] }] } },
+    { ...secretWait, preflight: { ...secretWait.preflight!, actions: [{ action_name: 'build', unavailable_agents: [
+      { agent_id: 'builder-agent-1234abcd', reason: 'Local configuration missing',
+        missing_requirements: [{ kind: 'configuration', name: 'LOCAL_TOKEN', sensitive: true }] },
+    ] }] } },
+  ])('does not infer a secret wait from unrelated or historical requirements: %j', async snapshot => {
+    mockAPI(() => Response.json(snapshot));
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={operation.id}
+      onSelect={vi.fn()} onManageSecrets={vi.fn()} />);
+
+    expect(await screen.findByText('Review website quality.')).toBeVisible();
+    expect(screen.queryByText('Secrets needed')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Manage secrets' })).not.toBeInTheDocument();
+  });
+
   it('searches and filters operations while keeping task progress separate from mission completion', async () => {
-    const other: Operation = { ...operation, id: 'operation-completed', status: 'completed', mission: { ...operation.mission, name: 'other-review' } };
+    const other: Operation = { ...operation, id: 'operation-completed', status: 'completed', progress: { ...operation.progress, settled: true },
+      mission: { ...operation.mission, name: 'other-review' } };
     mockAPI(url => Response.json(url.endsWith('/operations') ? { items: [operation, other] } : operation));
     render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
 
@@ -84,30 +215,38 @@ describe('operations browser', () => {
     expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
   });
 
-  it('polls progress, clears unavailable snapshots, and recovers with refresh', async () => {
+  it('refreshes cancelled interrupted work until a late outcome, clears unavailable snapshots, and recovers', async () => {
     vi.useFakeTimers();
     try {
-      let snapshot = operation;
+      let snapshot: Operation = { ...operation, status: 'cancelled', tasks: [{ ...task, status: 'interrupted', result: undefined }],
+        progress: { task_counts: { interrupted: 1 }, total_tasks: 1, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false } };
       let unavailable = false;
       const fetch = mockAPI(url => unavailable ? new Response(null, { status: 503 })
         : Response.json(url.endsWith('/operations') ? { items: [snapshot] } : snapshot));
       await act(async () => { render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); });
-      fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
+      const row = screen.getByRole('button', { name: `View operation ${operation.id}` });
+      expect(within(row).getByText('Cancelled')).toBeVisible();
+      expect(within(row).getByText('0/1 tasks finished')).toBeVisible();
+      fireEvent.click(row);
       await act(async () => {});
-      snapshot = { ...operation, status: 'completed', output: { findings: ['Broken contact link'] }, report_id: 'report-123' };
+      expect(screen.getByText('0/1 tasks finished')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
+      snapshot = { ...snapshot, tasks: [{ ...snapshot.tasks![0], status: 'failed' }],
+        progress: { ...snapshot.progress, task_counts: { failed: 1 }, finished_tasks: 1, settled: true } };
 
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
 
-      expect(screen.getByText('Completed', { selector: '.catalog-status' })).toBeVisible();
-      expect(screen.getByText('report-123')).toBeVisible();
+      expect(screen.getByText('Cancelled', { selector: '.catalog-status' })).toBeVisible();
+      expect(screen.getByText('1/1 tasks finished')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
       unavailable = true;
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
       expect(screen.getByRole('alert')).toHaveTextContent('Could not load operations');
-      expect(screen.queryByText('report-123')).not.toBeInTheDocument();
+      expect(screen.queryByText('1/1 tasks finished')).not.toBeInTheDocument();
       unavailable = false;
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
       await act(async () => {});
-      expect(screen.getByText('report-123')).toBeVisible();
+      expect(screen.getByText('1/1 tasks finished')).toBeVisible();
       expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
     } finally { vi.useRealTimers(); }
   });

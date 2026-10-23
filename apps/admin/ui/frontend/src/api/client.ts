@@ -11,6 +11,10 @@ export class ApiError extends Error {
 }
 
 export async function getJSON(url: string, path: string, credentials: Session, signal?: AbortSignal): Promise<unknown> {
+  return (await getJSONDocument(url, path, credentials, signal)).value;
+}
+
+export async function getJSONDocument(url: string, path: string, credentials: Session, signal?: AbortSignal): Promise<{ value: unknown; text: string }> {
   if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
   const endpoint = proxyURL(url, path, credentials);
   const controller = new AbortController();
@@ -37,9 +41,10 @@ export async function getJSON(url: string, path: string, credentials: Session, s
       throw new ApiError(kind);
     }
     try {
-      const body: unknown = await response.json();
+      const text = await response.text();
+      const value: unknown = JSON.parse(text);
       controller.signal.throwIfAborted();
-      return body;
+      return { value, text };
     } catch {
       throw new ApiError('invalid_response');
     }

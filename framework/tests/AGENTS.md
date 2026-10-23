@@ -22,7 +22,24 @@
 ## Shared stack and cleanup
 
 - Stack-backed API and MCP packages share state. Run them sequentially (`-p 1`
-  when combined), and run browser suites separately against the same stack.
+  when combined). Use two lightweight example-agent instances from the same pinned
+  source commit in both test Compose files. Exercise Commander contracts through
+  `analyze-text` and its proposed `write-summary` artifact; action behavior belongs
+  in the standalone agent repositories. Do not add web/browser-agent hosts or Go
+  imports to Commander tests. Chromium in integration CI serves Admin UI tests only.
+- The API/MCP stacks include a spawner and local HTTPS package fixture. FS uses
+  native child processes; full-provider tests use a loopback registry and Docker
+  sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;
+  do not introduce resolver injection or deployment flags solely for these tests.
+  Fixture missions are merged with bundled missions at fixture startup. Fixture
+  agents launch only through controller-dispatched actions in the API/MCP scenarios,
+  never during spawner startup. Catalog checks must permit fixture agents left
+  running by the preceding suite without requiring one before the install scenario.
+- Affinity scenarios use the spawned fixture's bounded `resume_url` readiness
+  pause. Its only allowed target is the release fixture's `/gates/<UUID>` route;
+  both test stacks expose controls on loopback `14276`. Release gates in cleanup
+  before settling operations. Keep controls inside test fixtures; never relax
+  spawner container privileges or mutate registrations to simulate an outage.
 - Fixtures must settle active work before calling test-only cleanup (`ENV=tests`).
   Terminal operation status alone is insufficient if tasks or agent work remain.
 - Preserve [`TestCleaner`](../testing/test_cleaner.go) and
@@ -76,3 +93,6 @@ Use `.github/composes/compose.test.yaml` for FS or
 run one stack at a time because their ports overlap. Always run the corresponding
 `docker compose down --volumes` afterward, including on failure. Match affected
 [CI workflows](../../.github/workflows/) and report suites not verified.
+For the full stack, set `COMMANDER_TEST_SPAWNER_RUNTIME=docker` and remove spawned
+containers before teardown, scoped by both the test network and ownership label;
+see the testing guide for registry setup and cleanup commands.

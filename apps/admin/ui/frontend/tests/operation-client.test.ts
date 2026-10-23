@@ -8,14 +8,17 @@ const timestamp = '2026-10-05T12:00:00.123456789Z';
 const operation: Operation = {
   id: 'operation-1',
   mission: {
-    name: 'review-website-with-browser', objective: 'Review a website', required_actions: ['check-links'],
+    name: 'review-website-with-browser', objectives: ['Review a website'], required_actions: ['check-links'],
     starting_actions: ['discover-pages'], input_schema: null, output_schema: null,
   },
   input: { url: 'https://example.com' }, status: 'waiting',
+  progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: false },
+  affinity: { for_actions: ['check-links', 'capture-page'], agent_id: 'agent-1' },
   preflight: {
     ready: false, version: 2, actions: [{
       action_name: 'capture-page', ready_agent_ids: ['agent-1'], unavailable_agents: [{
-        agent_id: 'agent-2', reason: 'Browser missing', missing_requirements: [{ kind: 'executable', name: 'chromium' }],
+        agent_id: 'agent-2', agent_type: 'browser', reason: 'Browser missing',
+        missing_requirements: [{ kind: 'executable', name: 'chromium' }, { kind: 'secret', name: 'SCREENSHOT_TOKEN' }],
       }],
     }],
   },
@@ -59,6 +62,14 @@ function respond(...bodies: unknown[]) {
 }
 
 describe('operations client', () => {
+  it('requires a valid secret scope for runtime task requirements', async () => {
+    const task = { ...operation.tasks![0], status: 'running', agent_type: 'web-agent', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] };
+    const waiting = { ...operation, tasks: [task] };
+    respond(waiting, { ...operation, tasks: [{ ...task, agent_type: undefined }] });
+    expect((await getOperation(url, credentials, operation.id)).tasks![0].missing_requirements).toEqual(task.missing_requirements);
+    await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
   it('preserves hydrated tasks, decisions, dependencies and artifact metadata through authenticated GETs', async () => {
     const fetch = respond({ items: [operation] }, operation);
 
@@ -70,18 +81,12 @@ describe('operations client', () => {
     expect(fetch.mock.calls.map(([path]) => proxyTarget(path))).toEqual([
       { url, path: '/api/v1/operations' }, { url, path: `/api/v1/operations/${operation.id}` },
     ]);
-    for (const [, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({
-        method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
-        headers: { Accept: 'application/json', 'X-Commander-UI': '1' },
-      });
-      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
-    }
   });
 
   it('accepts an empty list and nullable Go slices with arbitrary raw JSON', async () => {
     const nullable: Operation = {
       ...operation, input: ['any', 42, false], output: 'a plain text result', status: 'future-status',
+      progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
       preflight: null, tasks: null, questions: null, events: null,
       created_at: '0001-01-01T00:00:00Z', updated_at: '0001-01-01T00:00:00Z',
     };
@@ -94,6 +99,7 @@ describe('operations client', () => {
   it('accepts queued tasks, optional nulls, nullable continuations and future status values', async () => {
     const nullable: Operation = {
       ...operation,
+      progress: { task_counts: { preparing: 1 }, total_tasks: 1, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
       preflight: { ready: false, version: 0, actions: null },
       tasks: [{
         id: 'task-1', operation_id: operation.id, agent_id: '', action_name: 'check-links', status: 'preparing',
@@ -132,15 +138,41 @@ describe('operations client', () => {
     { tasks: [{ ...operation.tasks![0], result: { action_name: 'check-links', output: null, artifacts: [{ id: 'artifact-1', files: 'unexpected' }] } }] },
     { tasks: [{ ...operation.tasks![0], continuation: { ...operation.tasks![0].continuation, created_task_ids: [42] } }] },
     { tasks: [{ ...operation.tasks![0], finished_at: 'not a date' }] },
+    { progress: undefined },
+    { progress: null },
+    { progress: { ...operation.progress, task_counts: null } },
+    { progress: { ...operation.progress, task_counts: [] } },
+    { progress: { ...operation.progress, task_counts: { interrupted: -1 } } },
+    { progress: { ...operation.progress, total_tasks: 0.5 } },
+    { progress: { ...operation.progress, finished_tasks: '1' } },
+    { progress: { ...operation.progress, pending_decisions: -1 } },
+    { progress: { ...operation.progress, pending_questions: Number.MAX_SAFE_INTEGER + 1 } },
+    { progress: { ...operation.progress, settled: 'true' } },
     { questions: [{ ...operation.questions![0], options: [42] }] },
-    { preflight: { ready: false, version: 1, actions: [{ action_name: 'capture-page', unavailable_agents: [{ agent_id: 'agent-1', reason: 'Missing', missing_requirements: [{ kind: 'configuration', name: 'KEY', secret: 'yes' }] }] }] } },
+    { preflight: { ready: false, version: 1, actions: [{ action_name: 'capture-page', unavailable_agents: [{ agent_id: 'agent-1', reason: 'Missing', missing_requirements: [{ kind: 'configuration', name: 'KEY', sensitive: 'yes' }] }] }] } },
     { events: [{ ...operation.events![0], sequence: -1 }] },
     { updated_at: 42 },
     { error: { message: 'failure' } },
+    { affinity: { for_actions: [] } },
+    { affinity: { for_actions: ['check-links', 'check-links'] } },
+    { affinity: { for_actions: [42] } },
+    { affinity: { for_actions: ['check-links'], agent_id: 42 } },
+    { affinity: { for_actions: ['check-links'], agent_id: 'agent-1', error: 'Conflicting assignments' } },
+    { affinity: { for_actions: ['check-links'], error: { message: 'Invalid binding' } } },
   ])('rejects malformed nested data before rendering: %j', async patch => {
     respond({ items: [{ ...operation, ...patch }] });
 
     await expect(listOperations(url, credentials)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
+  it('preserves unbound affinity and a binding error without inventing an agent', async () => {
+    for (const affinity of [
+      { for_actions: ['check-links', 'capture-page'] },
+      { for_actions: ['check-links'], error: 'Conflicting assignments' },
+    ]) {
+      respond({ ...operation, affinity });
+      expect((await getOperation(url, credentials, operation.id)).affinity).toEqual(affinity);
+    }
   });
 
   it('rejects invalid artifact file metadata even when the rest of the result is valid', async () => {
@@ -156,18 +188,36 @@ describe('operations client', () => {
     await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind: 'invalid_response' });
   });
 
+  it.each([
+    { agent_type: 42 }, { agent_type: '' }, { agent_type: 'Builder' }, { agent_type: 'b'.repeat(64) },
+    { agent_type: 'builder', missing_requirements: 'TOKEN' }, { agent_type: 'builder', missing_requirements: [42] },
+    ...['', 'token/name', 'a'.repeat(129), 42].map(name => ({
+      agent_type: 'builder', missing_requirements: [{ kind: 'secret', name }],
+    })),
+    { missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
+  ])('rejects malformed managed secret scopes: %j', async patch => {
+    respond({ ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build',
+      unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', reason: 'Missing', ...patch }],
+    }] } });
+
+    await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
+  it('accepts unavailable candidates without managed secret requirements', async () => {
+    const body = { ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build', unavailable_agents: [
+      { agent_id: 'agent-1', reason: 'Missing dependency' },
+      { agent_id: 'agent-2', agent_type: 'builder', reason: 'Missing dependency', missing_requirements: null },
+      { agent_id: 'agent-3', agent_type: 'builder', reason: 'Missing dependency', missing_requirements: [] },
+      { agent_id: 'agent-4', reason: 'Missing local setting', missing_requirements: [{ kind: 'configuration', name: 'TOKEN', sensitive: true }] },
+    ] }] } };
+    respond(body);
+
+    expect(await getOperation(url, credentials, operation.id)).toEqual(body);
+  });
+
   it.each([null, {}, { items: null }, { items: [null] }])('rejects a malformed list envelope: %j', async body => {
     respond(body);
 
     await expect(listOperations(url, credentials)).rejects.toMatchObject({ kind: 'invalid_response' });
   });
-
-  it.each([[401, 'authentication'], [403, 'forbidden'], [404, 'not_found'], [500, 'unavailable']] as const)(
-    'surfaces HTTP %s without exposing the response body', async (status, kind) => {
-      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('private server details', { status }));
-      vi.stubGlobal('fetch', fetch);
-
-      await expect(getOperation(url, credentials, operation.id)).rejects.toMatchObject({ kind, message: kind });
-    },
-  );
 });

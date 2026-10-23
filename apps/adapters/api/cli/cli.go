@@ -16,6 +16,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -27,6 +28,8 @@ type Options struct {
 	// Embedded hosts can supply a credential pair without changing process environment.
 	Credentials *host.BasicCredentials
 	Application string
+	// SecretCipher takes precedence over SECRETS_ENCRYPTION_KEY for embedded hosts.
+	SecretCipher *crypto.SecretCipher
 }
 
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
@@ -37,7 +40,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	configuration, err := parseConfig(args, stderr, options.Credentials)
+	configuration, err := parseConfig(args, stderr, options)
 	if errors.Is(err, flag.ErrHelp) {
 		return nil
 	}
@@ -95,6 +98,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ControllerStore: deps.ControllerStore,
 		ArtifactStore:   deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
+		SecretService: deps.SecretService, SecretRequestStore: deps.SecretRequestStore,
 		TestCleaner: deps.TestCleaner,
 	})
 	if err != nil {

@@ -27,11 +27,3 @@ USER 1000:1000
 WORKDIR /home/commander
 EXPOSE 2345
 ENTRYPOINT ["/usr/local/bin/dlv"]
-
-# Keep Chromium and its writable non-root home, as in the normal browser image.
-FROM runtime AS browser
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium fonts-liberation \
-    && rm -rf /var/lib/apt/lists/*
-USER 1000:1000

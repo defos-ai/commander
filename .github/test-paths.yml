@@ -1,22 +1,25 @@
 # Consumed with predicate-quantifier: some-with-excludes. Each suite matches any
 # dependency below, while Markdown-only changes never select a suite.
 # Keep owner paths and provider dependencies aligned with go.work and go.mod.
-framework: &shared
-  - 'framework/**'
-  - 'go.work'
-  - 'go.work.sum'
-  - '.dockerignore'
-  - 'compose*.yaml'
-  - '.github/**'
-  # New modules run everything until their dependencies are mapped here.
-  - 'providers/!(fs|mongo|rabbitmq|s3)/**'
-  - 'apps/!(adapters|admin|agents|controllers|playground)/**'
-  - 'apps/adapters/!(api|mcp)/**'
-  - 'apps/agents/!(browser|web)/**'
-  - 'apps/controllers/!(default)/**'
-  - 'apps/admin/!(ui)/**'
-  - 'apps/admin/ui/!(backend|frontend|docker)/**'
-  - '!**/*.md'
+framework:
+  - &shared
+    - 'framework/**'
+    - 'go.work'
+    - 'go.work.sum'
+    - '.dockerignore'
+    - 'compose*.yaml'
+    - '.github/**'
+    # New modules run everything until their dependencies are mapped here.
+    - 'providers/!(fs|mongo|rabbitmq|s3)/**'
+    - 'apps/!(adapters|admin|agents|controllers|playground)/**'
+    - 'apps/adapters/!(api|mcp)/**'
+    - 'apps/agents/!(builder|spawner)/**'
+    - 'apps/controllers/!(default)/**'
+    - 'apps/admin/!(ui)/**'
+    - 'apps/admin/ui/!(backend|frontend|docker)/**'
+    - '!**/*.md'
+  # The framework parser validates the official discovery data.
+  - 'catalog/**'
 
 fs:
   - *shared
@@ -43,19 +46,19 @@ controller:
     - *s3
   - &controller 'apps/controllers/default/**'
 
-agent:
+builder:
   - *shared
   - *fs
   - *rabbitmq
   - *s3
-  - &agent 'apps/agents/browser/**'
+  - &builder 'apps/agents/builder/**'
 
-web:
+spawner:
   - *shared
   - *fs
   - *rabbitmq
   - *s3
-  - &web 'apps/agents/web/**'
+  - &spawner 'apps/agents/spawner/**'
 
 api:
   - *shared
@@ -82,8 +85,8 @@ playground:
   - *shared
   - *providers
   - *controller
-  - *agent
-  - *web
+  - *builder
+  - *spawner
   - *api
   - *mcp
   - *ui-backend
@@ -100,16 +103,16 @@ api-fs:
   - *shared
   - *api
   - *controller
-  - *agent
-  - *web
+  - *builder
+  - *spawner
   - *fs
 
 api-full:
   - *shared
   - *api
   - *controller
-  - *agent
-  - *web
+  - *builder
+  - *spawner
   - *mongo
   - *rabbitmq
   - *s3
@@ -118,25 +121,23 @@ mcp-fs:
   - *shared
   - *mcp
   - *controller
-  - *agent
-  - *web
+  - *builder
+  - *spawner
   - *fs
 
 mcp-full:
   - *shared
   - *mcp
   - *controller
-  - *agent
-  - *web
+  - *builder
+  - *spawner
   - *mongo
   - *rabbitmq
   - *s3
 
-browser:
+ui-e2e:
   - *shared
   - 'apps/admin/ui/**'
   - *api
   - *controller
-  - *agent
-  - *web
   - *fs

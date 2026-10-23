@@ -3,12 +3,14 @@ package runner
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -59,7 +61,7 @@ func (r *Runner) dispatchQueued() {
 			if err := r.checkSessionCreation(task, records, false); err != nil {
 				continue
 			}
-			agentID, err := r.selectAgent(ctx, task, records, used)
+			agentID, err := r.selectAgent(ctx, s.operation, task, records, used)
 			if err != nil && r.ctx.Err() == nil {
 				r.logger.Warn("Agent selection failed", "operation_id", s.operation.ID, "task_id", task.ID, "selector", r.selector.Name(), "error", err)
 			}
@@ -86,15 +88,38 @@ func (r *Runner) dispatchQueued() {
 	}
 }
 
-func (r *Runner) selectAgent(ctx context.Context, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
+func (r *Runner) selectAgent(ctx context.Context, operation operations.Operation, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
 	owner, err := sessionOwner(task, records)
 	if err != nil {
 		return "", err
+	}
+	var affinityCandidates []string
+	grouped := slices.Contains(operation.Mission.Rules[missions.SameAgent].ForActions, task.ActionName)
+	if grouped {
+		boundAgentID, err := operation.AffinityAgentID()
+		if err != nil {
+			return "", err
+		}
+		if boundAgentID != "" {
+			// A preceding dispatch in this scheduler pass may have just bound
+			// the group; the saved preflight can still list unbound candidates.
+			affinityCandidates = []string{boundAgentID}
+		} else if operation.Preflight != nil {
+			for _, readiness := range operation.Preflight.Actions {
+				if readiness.ActionName == task.ActionName {
+					affinityCandidates = readiness.ReadyAgentIDs
+					break
+				}
+			}
+		}
 	}
 	selection := AgentSelection{PreviousAgentID: r.lastAgent}
 	eligible := make(map[string]bool)
 	for _, record := range records {
 		if owner != "" && record.ID != owner {
+			continue
+		}
+		if grouped && !slices.Contains(affinityCandidates, record.ID) {
 			continue
 		}
 		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity {

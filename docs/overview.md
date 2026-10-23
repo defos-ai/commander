@@ -1,92 +1,54 @@
 # Architecture overview
 
 **Commander decides what; the controller decides who; agents execute.**
-Commander is usually an LLM in Playground or another AI client, connected through
-MCP. The current controller and agents run without their own LLMs.
+Commander is usually the model in Playground or another MCP client.
 
 ## Execution flow
 
 ```mermaid
-flowchart TD
-    User[Operator] <-->|Chat and questions| Commander[Commander: LLM in an AI client]
-    Commander <-->|MCP tools| Adapter[MCP adapter]
-    Adapter -->|Operation commands via bus| Controller[Controller]
-    Controller -->|Assigned actions via bus| Agent[Agents]
-    Agent -->|Status, current work and results via bus| Controller
-    Controller -->|Persist progress and outcomes| Database[(Database)]
-    Agent -->|Upload artifact files| Storage[(File storage)]
-    Controller -->|Save reports| Storage
-    Adapter -->|Query saved data| Database
-    Adapter -->|Read files and reports| Storage
+flowchart LR
+    User[You] <-->|Chat| Commander[Commander]
+    Commander <-->|MCP| Adapter[MCP adapter]
+    Adapter -->|Commands| Controller[Controller]
+    Controller -->|Tasks| Agents[Agents]
+    Agents -->|Results| Controller
+    Controller --> Database[(Progress and results)]
+    Agents --> Storage[(Artifact files)]
 ```
 
-For the included website reviews:
+For a website review:
 
-1. Commander chooses `review-website-no-browser` for HTTP checks or
-   `review-website-with-browser` for rendered checks too, then assigns its starting action.
-2. The controller checks required actions against live agents and selects a ready
-   instance with free capacity. Assignments specify an action and input, not an agent ID.
-3. Discovery proposes checks for each page. The controller queues those checks
-   automatically; mission rules collect their results for one model decision.
-   The controller sends HTTP checks to web
-   agents and rendering checks to the browser agent.
-4. Agents publish results. The controller saves outcomes and artifact metadata
-   before confirming acceptance; file bytes stay in storage.
-5. Commander reviews collected results, requests operator guidance if needed,
-   and explicitly completes the operation with a report.
+1. Ask Commander to review a site.
+2. Commander installs any missing agents and starts the review mission.
+3. The controller sends checks to ready agents. Mission rules determine when
+   Commander reviews their results.
+4. Open the completed operation in Admin to inspect findings and screenshots.
 
-MCP exposes operation commands and queries, including agent readiness and current
-`work`. The controller owns instance selection and agent administration. Adapters
-expose client APIs; controllers and agents consume messages. See
-[core concepts](abstractions.md) for tasks, mission rules, questions and evidence.
+Learn how to [create missions and choose rules](abstractions.md),
+[build agents](../apps/agents/README.md), or [connect another client](../apps/adapters/README.md).
 
 ## Dependencies
 
-```mermaid
-flowchart TD
-    Apps[Applications: adapters, controllers, agents, Playground] --> Framework[Framework: runtimes, domain, messaging]
-    Apps --> Providers[Providers: FS, RabbitMQ, MongoDB, S3]
-    Providers --> Contracts[Framework interfaces and domain models]
-    Framework --> Contracts
-```
+| If you want to… | Start here |
+| --- | --- |
+| Extend runtimes or domain contracts | [Framework](../framework/README.md) |
+| Add actions or change dispatch | [Agents](../apps/agents/README.md) · [Controllers](../apps/controllers/README.md) |
+| Add a client integration | [Adapters](../apps/adapters/README.md) |
+| Change messaging or storage | [Providers](../providers/README.md) |
 
-Hosts construct providers and inject interfaces. The framework imports no providers
-or applications. Runtimes communicate through shared contracts without importing
-each other; Playground can compose the hosts in all-in-one mode.
-
-| Area | Responsibility | Details |
-| --- | --- | --- |
-| `framework/` | Shared runtime behavior, domain models and interfaces | [Framework](../framework/README.md) |
-| `apps/` | Concrete hosts, actions and client experience | [Agents](../apps/agents/README.md), [controllers](../apps/controllers/README.md), [adapters](../apps/adapters/README.md), [Playground](../apps/playground/README.md) |
-| `providers/` | Messaging, database and file-storage implementations | [Providers](../providers/README.md) |
+All-in-one runs local hosts and child processes. Compose runs services and spawns
+additional agents as sibling containers. Both start with builder and spawner.
+See [setup](deployment.md) to choose a deployment.
 
 ## State and restart recovery
 
-The database stores progress, inventory and artifact metadata; file storage holds
-artifact bytes and reports. Processes also retain subscriptions, active calls and
-scheduling state: they are not entirely stateless.
-
-| Failure | Current behavior |
+| What happened? | What to do |
 | --- | --- |
-| MCP restarts | Coordination continues. Saved data remains queryable; a lost command reply does not prove the command failed. |
-| Controller restarts | It reloads operations, reconciles saved outcomes and resumes queued work. A saved dispatch may be replayed only to its original live agent using the same command ID. |
-| Agent dies | Its heartbeat expires. Undispatched tasks can use other ready agents; an unknown outcome from dispatched work is not silently rerun on a replacement. |
+| MCP or a client restarted | Reconnect and inspect the saved operation before repeating a command. Work may have continued. |
+| The controller restarted | Check the operation's progress; it recovers saved work. Investigate any interrupted task before retrying. |
+| An agent died | Inspect its tasks and external effects before assigning replacement work. Unknown outcomes are not automatically rerun elsewhere. |
+| The spawner restarted | Docker children keep running. Inspect existing launches before requesting another instance; native launch recovery is not supported. |
 
-The agent's command deduplication and pending result cache last for that process's
-lifetime. Interrupted tasks are checked against durable outcomes; if none exists,
-they remain interrupted for review. This is not an exactly-once execution guarantee.
-
-## Current scope
-
-- **One active controller per database.** Multiple-controller ownership and shared
-  capacity reservations are not implemented.
-- **Implemented providers:** filesystem bus/database/files, RabbitMQ messaging,
-  MongoDB database, and S3-compatible files/reports. Compose uses RabbitMQ,
-  MongoDB and MinIO; all-in-one uses FS throughout.
-- **Hosts use transient inboxes.** Replacing a host does not replay its old inbox.
-  RabbitMQ supports durable shared inboxes, but hosts do not activate them yet.
-  FS retains failed delivery evidence without automatic redelivery.
-
-See [message handling](../framework/comms/README.md),
-[local setup](deployment.md), and [tests](../framework/tests/README.md) for the
-current guarantees and ways to verify them.
+Saved state helps recovery, but does not guarantee an action runs exactly once.
+Keep the database, artifact storage and secrets encryption key together when
+[backing up or resetting Compose](deployment.md#state).

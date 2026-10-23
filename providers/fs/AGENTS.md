@@ -10,6 +10,9 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - Reuse `internal/jsonfile` for locking and publication. Shared filesystems must
   support file locks, atomic renames and hard links; process-local locking alone
   cannot protect stores shared by hosts.
+- Mission creation checks names and writes under one catalog lock, rejecting an
+  existing name even for an identical definition. Keep startup `Upsert` separate;
+  callers reconcile failed writes by reading the saved definition.
 - An operation's manifest and sibling `.json.records` directory are one saved
   snapshot. Use [`Records`](internal/jsonfile/records.go) to publish immutable,
   digest-checked record bodies through one manifest; never edit committed blobs.
@@ -28,6 +31,26 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - Provider roots and their ancestors are trusted host configuration. Scoped roots
   constrain one read or transaction; they do not preserve ancestor identity between
   operations. Keep those directories inaccessible to untrusted local writers.
+- [`SecretFsStore`](secrets/secret_fs_store.go) keeps encrypted secret records and
+  retired IDs in one `secrets.json` collection. One lock protects global IDs and
+  active agent-type/name pairs; deletion drops ciphertext and retains identity forever.
+  Exact retries must still confirm durability. Translate uncertain publication to
+  `secrets.ErrWriteUncertain`. Preserve timestamp nanoseconds, compare time instants,
+  and never decrypt or load encryption keys here. Secret names never become paths.
+- [`RequestFsStore`](secrets/request_fs_store.go) saves request lifecycles in a
+  separate `secret-requests.json` collection. One lock protects request IDs,
+  globally unique delivery IDs, immutable encrypted delivery snapshots and exact
+  installation evidence. Use domain `RequestRecord` transitions; exact retries
+  still publish/sync, and initial request retries never reset progress. Pending
+  lists include overdue requests until explicit expiration. Terminal records and
+  their encrypted deliveries remain retained; deleting a current secret does not
+  erase these copies or revoke installed plaintext. This store neither checks the
+  current `SecretStore` nor distributes values or performs retention cleanup.
+- [`ExecutionFsStore`](executions/execution_fs_store.go) saves named immutable
+  checkpoints under the same collection lock as terminal results. Checkpoint
+  writes require an existing claim; exact retries still publish/sync, including
+  after completion. Use domain transitions so a late checkpoint cannot extend a
+  completed execution or overwrite an earlier checkpoint.
 
 ## Bus lifecycle
 

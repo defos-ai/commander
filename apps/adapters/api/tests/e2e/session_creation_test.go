@@ -22,6 +22,15 @@ import (
 // Exercise automatic proposals through the real API, controller, filesystem
 // providers and two worker processes. The peer represents a slow external resource.
 func TestE2EAutomaticSessionCreationReservesScope(t *testing.T) {
+	for _, sameAgent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("same-agent=%t", sameAgent), func(t *testing.T) {
+			testSessionCreationReservesScope(t, sameAgent)
+		})
+	}
+}
+
+func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
+	t.Helper()
 	root, err := filepath.Abs("../../../../..")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +82,12 @@ func TestE2EAutomaticSessionCreationReservesScope(t *testing.T) {
 	address := listener.Addr().String()
 	listener.Close()
 	mission := filepath.Join(state, "missions.json")
-	if err := os.WriteFile(mission, []byte(`[{"name":"session-e2e","objective":"Connect one owned resource","required_actions":["propose-connections","connect-resource"],"starting_actions":["propose-connections"],"input_schema":{"type":"object"},"output_schema":{"type":"object"}}]`), 0600); err != nil {
+	rules := `{}`
+	if sameAgent {
+		rules = `{"same-agent":{"for_actions":["propose-connections","connect-resource"]}}`
+	}
+	definition := fmt.Sprintf(`[{"name":"session-e2e","objectives":["Connect one owned resource"],"required_actions":["propose-connections","connect-resource"],"starting_actions":["propose-connections"],"rules":%s,"input_schema":{"type":"object"},"output_schema":{"type":"object"}}]`, rules)
+	if err := os.WriteFile(mission, []byte(definition), 0600); err != nil {
 		t.Fatal(err)
 	}
 	password := id.New()
@@ -196,7 +210,14 @@ func TestE2EAutomaticSessionCreationReservesScope(t *testing.T) {
 		var operation operations.Operation
 		request("GET", path, nil, 200, &operation)
 		queued, succeeded := 0, 0
+		owner := ""
 		for _, task := range operation.Tasks {
+			if sameAgent && task.AgentID != "" {
+				if owner != "" && task.AgentID != owner {
+					t.Fatalf("session creation violated same-agent placement: %+v", operation.Tasks)
+				}
+				owner = task.AgentID
+			}
 			if task.ActionName != "connect-resource" {
 				continue
 			}

@@ -15,6 +15,9 @@ using AMQP 0-9-1. Keep broker behavior consistent with the
 - Publications are persistent and mandatory. Keep publication serialized so returns
   and confirmations correlate correctly; return `ErrUnroutable` for a missing route.
   Broker confirmation says nothing about application acceptance.
+- Close transient subscriptions by unbinding before closing their connection;
+  queue deletion alone can leave subsequent publications negatively confirmed.
+  Keep durable inbox bindings intact when their consumers stop.
 - A confirmation timeout leaves an uncertain outcome and closes the publisher
   connection so late returns cannot attach to another publication. Do not add an
   automatic publish retry or reconnect that can execute a command twice.

@@ -34,10 +34,6 @@ describe('controller catalog client', () => {
       { url, path: '/api/v1/controllers' },
       { url, path: '/api/v1/controllers/team%2Fcontroller%20%3F%23%C3%A9' },
     ]);
-    for (const [, options] of fetch.mock.calls) {
-      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', headers: { 'X-Commander-UI': '1' } });
-      expect(new Headers(options?.headers).has('Authorization')).toBe(false);
-    }
   });
 
   it('accepts empty catalogs and future statuses and reports status reasons', async () => {

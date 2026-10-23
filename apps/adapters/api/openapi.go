@@ -33,7 +33,13 @@ func openAPIDocument() ([]byte, error) {
 		{"About", reflect.TypeFor[models.AboutResponse]()},
 		{"MissionRuleParams", reflect.TypeFor[models.MissionRuleParamsResponse]()},
 		{"MissionRule", reflect.TypeFor[models.MissionRuleResponse]()},
+		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
+		{"MissionRuleParamsRequest", reflect.TypeFor[models.MissionRuleParamsRequest]()},
+		{"MissionRuleRequest", reflect.TypeFor[models.MissionRuleRequest]()},
+		{"MissionStepRequest", reflect.TypeFor[models.MissionStepRequest]()},
+		{"ActionDefinitionRequest", reflect.TypeFor[models.ActionDefinitionRequest]()},
+		{"CreateMissionRequest", reflect.TypeFor[models.CreateMissionRequest]()},
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
 		{"Action", reflect.TypeFor[models.ActionResponse]()},
 		{"Agent", reflect.TypeFor[models.AgentResponse]()},
@@ -51,6 +57,12 @@ func openAPIDocument() ([]byte, error) {
 				property.Description = "JSON Schema for the accepted input or produced output. An empty object allows any JSON value."
 			}
 		}
+		if objectives := schema.Properties["objectives"]; objectives != nil {
+			objectives.Type, objectives.Types = "array", nil
+			objectives.MinItems = new(1)
+			objectives.Items.Pattern = `\S`
+			objectives.Description = "Ordered mission objectives. Include at least one nonblank objective."
+		}
 		switch model.name {
 		case "About":
 			schema.Properties["runtime"].Enum = []any{"native", "docker", "docker-compose"}
@@ -60,9 +72,15 @@ func openAPIDocument() ([]byte, error) {
 		case "MissionRule":
 			schema.Properties["for_actions"].Description = "Actions whose executions this rule applies to."
 		case "Mission":
-			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results or decide-next-actions. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. Failures and empty proposals also require model review."
+			schema.Properties["action_definitions"].Description = "Desired action contracts referenced by this mission. Metadata only: defining an action does not register an executor or satisfy readiness."
+			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks, together with step required_actions."
+			schema.Properties["optional_actions"].Description = "Additional actions the mission may use. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Names are unique and must not overlap required_actions."
+			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. same-agent binds its for_actions to the first selected agent instance within each operation, with no fallback; it accepts no parameters and does not order tasks. Failures and empty proposals also require model review."
 		case "ActionRequirement":
-			schema.Properties["kind"].Enum = []any{"executable", "configuration"}
+			schema.Properties["kind"].Enum = []any{"executable", "configuration", "secret"}
+			schema.Properties["kind"].Description = "executable and configuration requirements need host setup. secret identifies an unavailable declared Commander-managed secret, scoped to the agent type."
+			schema.Properties["name"].Description = "Requirement identifier, never its value. Managed secret names match [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}."
+			schema.Properties["sensitive"].Description = "Marks sensitive host configuration only; it does not identify a Commander-managed secret. Managed secrets use kind=secret without this flag."
 		case "Action":
 			schema.Properties["status"].Description = "Discovered readiness, normally unknown, ready or unavailable. Check the selected agent's action state before dispatch."
 		case "Agent":
@@ -79,6 +97,7 @@ func openAPIDocument() ([]byte, error) {
 		case "Report":
 			schema.Properties["output"].Description = "Saved mission output; any JSON value, including null, arrays and scalars."
 		}
+		constrainMissionRequestSchema(schema, model.name)
 		components[model.name] = schema
 		options.TypeSchemas[model.typeOf] = schema
 	}
@@ -127,6 +146,7 @@ func openAPIDocument() ([]byte, error) {
 		detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse(catalog.missingCode, endpoints.OpenAPIRef("Error"))
 		paths["/api/v1/"+catalog.path+"/{"+catalog.parameter+"}"] = map[string]any{"get": detail}
 	}
+	openAPICreateMissionPath(paths)
 	report := endpoints.OpenAPIQueryOperation("getReport", "Get a report", "Reports", endpoints.OpenAPIRef("Report"))
 	report["description"] = "Returns the full immutable saved report directly from the report store. Reads do not execute work or change saved state."
 	report["parameters"] = []any{openAPIUUIDParameter("report_id")}
@@ -137,11 +157,17 @@ func openAPIDocument() ([]byte, error) {
 	if err := operationendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
+	if err := endpoints.RegisterSecretsOpenAPI(paths, components, options); err != nil {
+		return nil, err
+	}
+	if err := endpoints.RegisterSecretRequestsOpenAPI(paths, components, options); err != nil {
+		return nil, err
+	}
 	return json.Marshal(map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{
-			"title": "Commander API", "version": "0.1.0",
-			"description": "Read Commander catalogs, saved operation state, reports and artifacts, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"title": "Commander API", "version": "0.2.0",
+			"description": "Create reusable missions, read Commander catalogs, saved operation state, reports and artifacts, manage encrypted secrets when enabled, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},
@@ -153,6 +179,95 @@ func openAPIDocument() ([]byte, error) {
 			}},
 		},
 	})
+}
+
+func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
+	switch model {
+	case "ActionDefinition", "ActionDefinitionRequest":
+		schema.Properties["name"].Pattern = `^\S(?:[\s\S]*\S)?$`
+		if model == "ActionDefinitionRequest" {
+			schema.Properties["description"].Type, schema.Properties["description"].Types = "", []string{"string", "null"}
+		}
+		for _, name := range []string{"input_schema", "output_schema"} {
+			property := schema.Properties[name]
+			property.Required = []string{"type"}
+			property.Properties = map[string]*jsonschema.Schema{"type": {Const: new(any("object"))}}
+			property.Description = "Locally resolvable JSON Schema explicitly declaring root type=object. External references are rejected."
+		}
+		secrets := schema.Properties["required_secrets"]
+		secrets.Type, secrets.Types = "", []string{"array", "null"}
+		secrets.UniqueItems = true
+		secrets.Items.Pattern = `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`
+		secrets.Description = "Managed secret names, never secret values."
+	case "MissionRuleParamsRequest":
+		schema.Properties["decision_by"].Type, schema.Properties["decision_by"].Types = "", []string{"string", "null"}
+		schema.Properties["decision_by"].Enum = []any{nil, "", "model"}
+		schema.Properties["decision_by"].Description = "decide-next-actions requires model. Other rules reject a nonempty decision_by."
+	case "MissionRuleRequest":
+		forActions := schema.Properties["for_actions"]
+		forActions.Type, forActions.Types = "array", nil
+		forActions.MinItems = new(1)
+		forActions.UniqueItems = true
+		forActions.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
+		forActions.Description = "Nonempty, unique action names without surrounding whitespace."
+	case "MissionStepRequest":
+		schema.Required = []string{"id", "objective"}
+		schema.Properties["id"].Pattern = `\S`
+		schema.Properties["id"].Description = "Nonblank step ID, unique within this mission."
+		schema.Properties["objective"].Pattern = `\S`
+		for _, name := range []string{"agent_types", "required_actions"} {
+			property := schema.Properties[name]
+			property.Type, property.Types = "", []string{"array", "null"}
+			property.Items.Pattern = `\S`
+		}
+	case "CreateMissionRequest":
+		schema.Required = []string{"name", "objectives", "input_schema", "output_schema"}
+		schema.Properties["name"].Pattern = `\S`
+		schema.Properties["name"].Not = &jsonschema.Schema{Enum: []any{".", ".."}}
+		schema.Properties["name"].Description = "Nonblank mission name; the dot segments '.' and '..' are invalid. Existing names return mission_exists and are never replaced."
+		for _, name := range []string{"required_actions", "optional_actions", "starting_actions"} {
+			property := schema.Properties[name]
+			property.Type, property.Types = "", []string{"array", "null"}
+			property.UniqueItems = true
+			property.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
+		}
+		schema.Properties["required_actions"].Description = "Unique action names without surrounding whitespace, including actions not currently installed. Checked during preflight together with step required_actions."
+		schema.Properties["optional_actions"].Description = "Additional unique action names; must not overlap required_actions. Unscheduled optional actions do not block preflight."
+		schema.Properties["starting_actions"].Description = "Unique action names; each must appear in required_actions."
+		schema.Properties["steps"].Type, schema.Properties["steps"].Types = "", []string{"array", "null"}
+		schema.Properties["action_definitions"].Type, schema.Properties["action_definitions"].Types = "", []string{"array", "null"}
+		schema.Properties["action_definitions"].MaxItems = new(100)
+		schema.Properties["action_definitions"].Description = "Up to 100 desired action contracts, unique by name and referenced by required_actions, optional_actions or a step's required_actions. Metadata only: creation does not install actions, grant secrets or change readiness."
+		rules := schema.Properties["rules"]
+		rules.Type, rules.Types = "", []string{"object", "null"}
+		rules.PropertyNames = &jsonschema.Schema{Enum: []any{"aggregate-results", "decide-next-actions", "same-agent"}}
+		rules.Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. decide-next-actions requires params.decision_by=model. Shared mission validation checks cross-field constraints and resolves schema references locally; external schema references are rejected."
+	}
+}
+
+func openAPICreateMissionPath(paths map[string]any) {
+	create := endpoints.OpenAPIQueryOperation("createMission", "Create a mission", "Mission", endpoints.OpenAPIRef("Mission"))
+	create["description"] = "Creates a reusable mission only if its exact name is absent. The shared mission validator checks action lists, desired action_definitions, steps, rules and locally resolvable JSON Schema objects. Actions need not be installed. Definitions are metadata and do not register actions or satisfy readiness. No controller is required; creation does not run work or change existing operation snapshots. Query parameters are not accepted."
+	create["requestBody"] = map[string]any{
+		"required":    true,
+		"description": "One JSON object, at most 1 MiB. Requires application/json; charset parameters are accepted. Unknown mission, action definition, step, rule and parameter fields are rejected. Schema objects may contain JSON Schema extension keywords. Invalid definitions return invalid_request.",
+		"content":     map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef("CreateMissionRequest")}},
+	}
+	responses := create["responses"].(map[string]any)
+	delete(responses, "200")
+	success := endpoints.OpenAPIResponse("Created mission definition", endpoints.OpenAPIRef("Mission"))
+	success["headers"] = map[string]any{"Location": map[string]any{
+		"description": "Relative URL of the created mission, with the name escaped as one path segment.", "required": true,
+		"schema": map[string]any{"type": "string", "format": "uri-reference"},
+	}}
+	responses["201"] = success
+	responses["400"] = endpoints.OpenAPIResponse("invalid_request or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	responses["409"] = endpoints.OpenAPIResponse("mission_exists. The existing definition is unchanged.", endpoints.OpenAPIRef("Error"))
+	responses["413"] = endpoints.OpenAPIResponse("request_too_large", endpoints.OpenAPIRef("Error"))
+	responses["415"] = endpoints.OpenAPIResponse("unsupported_media_type", endpoints.OpenAPIRef("Error"))
+	responses["503"] = endpoints.OpenAPIResponse("request_canceled. Creation may have succeeded; read the mission by name before retrying.", endpoints.OpenAPIRef("Error"))
+	responses["504"] = endpoints.OpenAPIResponse("request_timeout after at most 10 seconds. Creation may have succeeded; read the mission by name before retrying. Requests are never retried automatically.", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/missions"].(map[string]any)["post"] = create
 }
 
 func openAPIUUIDParameter(name string) map[string]any {

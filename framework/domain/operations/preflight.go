@@ -20,6 +20,7 @@ type ActionReadiness struct {
 
 type AgentReadiness struct {
 	AgentID             string                `json:"agent_id"`
+	AgentType           string                `json:"agent_type,omitempty"`
 	Reason              string                `json:"reason"`
 	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
 }

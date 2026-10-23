@@ -8,8 +8,8 @@ import (
 )
 
 func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
-		methodNotAllowed(w, "GET, HEAD, POST")
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
+		methodNotAllowed(w, "GET, HEAD, POST, PUT, DELETE")
 		return
 	}
 	target, err := normalizeBase(r.URL.Query().Get("url"))
@@ -20,7 +20,7 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
 	key := target.String()
 	upstream, client := h.resolveTarget(target)
 	address, public, err := endpoint(upstream, r.URL.Query().Get("path"))
-	if err != nil || (public && r.Method == http.MethodPost) {
+	if err != nil || (public && r.Method != http.MethodGet && r.Method != http.MethodHead) {
 		fail(w, http.StatusBadRequest, "Invalid API endpoint.")
 		return
 	}

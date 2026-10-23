@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Bot, LoaderCircle, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bot, KeyRound, LoaderCircle, RefreshCw, Search } from 'lucide-react';
 import { getAgent, listAgents } from '../api/agents';
 import type { Agent } from '../api/types';
 import { AgentDetails, AgentStatus } from '../components/AgentDetails';
@@ -9,12 +9,13 @@ import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
 import '../styles/catalog.css';
 
-export function AgentsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect }: {
+export function AgentsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, onManageSecrets }: {
   connection: Connection;
   credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;
+  onManageSecrets?: () => void;
 }) {
   const { t } = useTranslation();
   const [localID, setLocalID] = useState<string>();
@@ -42,9 +43,14 @@ export function AgentsPage({ connection, credentials, onSignIn, selectedID: rout
       <div><h1 ref={heading} tabIndex={-1}>{selectedID ?? t($ => $.agents.title)}</h1>
         {selectedID === undefined && <p>{t($ => $.agents.description)}</p>}
       </div>
-      {credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.loading || query.refreshing}>
-        <RefreshCw size={15} aria-hidden="true" />{query.refreshing ? t($ => $.agents.refreshing) : t($ => $.agents.refresh)}
-      </Button>}
+      <div className="page-heading-actions">
+        {onManageSecrets && <Button variant="secondary" onClick={onManageSecrets}>
+          <KeyRound size={15} aria-hidden="true" />{t($ => $.agents.manageSecrets)}
+        </Button>}
+        {credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.loading || query.refreshing}>
+          <RefreshCw size={15} aria-hidden="true" />{query.refreshing ? t($ => $.agents.refreshing) : t($ => $.agents.refresh)}
+        </Button>}
+      </div>
     </div>
     {error ? <div className="notice" role="alert">
       <p>{t($ => $.agents.errors[error])}</p>
