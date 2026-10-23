@@ -27,7 +27,7 @@ var (
 	ErrAuthentication   = errors.New("API login rejected; check the API username and password")
 	ErrWriteUncertain   = errors.New("API write could not be confirmed; check saved state before submitting again")
 	ErrInvalidResponse  = errors.New("API returned an invalid JSON response")
-	ErrResponseTooLarge = errors.New("API response exceeds the 4 MiB limit")
+	ErrResponseTooLarge = errors.New("API response exceeds the configured size limit")
 )
 
 type Connection struct {
@@ -68,6 +68,12 @@ type Client struct {
 	endpoint    string
 	credentials host.BasicCredentials
 	http        *http.Client
+}
+
+// Response contains a successful response. The caller owns and may clear Data.
+type Response struct {
+	StatusCode int
+	Data       []byte
 }
 
 // New accepts an operator-configured API URL, including a reverse-proxy prefix.
@@ -113,18 +119,28 @@ func (c *Client) Close()         { c.http.CloseIdleConnections() }
 // Request sends one JSON request. The caller owns body and any returned bytes.
 // Mutation failures may represent a completed write; this client never retries them.
 func (c *Client) Request(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+	response, err := c.Do(ctx, method, path, body, maxResponseBytes)
+	return response.Data, err
+}
+
+// Do sends one JSON request with a response limit between 1 byte and 4 MiB.
+// Mutation failures may represent a completed write; they are never retried.
+func (c *Client) Do(ctx context.Context, method, path string, body []byte, responseLimit int) (Response, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return Response{}, err
 	}
 	if !validMethod(method) || !validPath(path) {
-		return nil, errors.New("invalid API request method or path")
+		return Response{}, errors.New("invalid API request method or path")
+	}
+	if responseLimit < 1 || responseLimit > maxResponseBytes {
+		return Response{}, errors.New("API response limit must be between 1 byte and 4 MiB")
 	}
 	if len(body) > maxResponseBytes || len(body) > 0 && !json.Valid(body) {
-		return nil, errors.New("API request body must be JSON within the 4 MiB limit")
+		return Response{}, errors.New("API request body must be JSON within the 4 MiB limit")
 	}
 	request, err := http.NewRequestWithContext(ctx, method, c.endpoint+path, bytes.NewReader(body))
 	if err != nil {
-		return nil, errors.New("could not create API request")
+		return Response{}, errors.New("could not create API request")
 	}
 	request.SetBasicAuth(c.credentials.Username, c.credentials.Password)
 	request.Header.Set("Accept", "application/json")
@@ -134,26 +150,26 @@ func (c *Client) Request(ctx context.Context, method, path string, body []byte) 
 	mutation := method != http.MethodGet && method != http.MethodHead
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, requestFailure(ctx, mutation, errors.New("could not connect to API; check the API URL"))
+		return Response{}, requestFailure(ctx, mutation, errors.New("could not connect to API; check the API URL"))
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, responseError(response, mutation)
+		return Response{}, responseError(response, mutation)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	data, err := io.ReadAll(io.LimitReader(response.Body, int64(responseLimit)+1))
 	if err != nil {
 		clear(data)
-		return nil, requestFailure(ctx, mutation, errors.New("could not read the API response"))
+		return Response{}, requestFailure(ctx, mutation, errors.New("could not read the API response"))
 	}
-	if len(data) > maxResponseBytes {
+	if len(data) > responseLimit {
 		clear(data)
-		return nil, requestFailure(ctx, mutation, ErrResponseTooLarge)
+		return Response{}, requestFailure(ctx, mutation, ErrResponseTooLarge)
 	}
 	if method != http.MethodHead && response.StatusCode != http.StatusNoContent && !json.Valid(data) {
 		clear(data)
-		return nil, requestFailure(ctx, mutation, ErrInvalidResponse)
+		return Response{}, requestFailure(ctx, mutation, ErrInvalidResponse)
 	}
-	return data, nil
+	return Response{StatusCode: response.StatusCode, Data: data}, nil
 }
 
 func requestFailure(ctx context.Context, mutation bool, failure error) error {

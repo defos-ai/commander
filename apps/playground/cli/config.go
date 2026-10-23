@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/defos-ai/commander/apps/playground/internal/api"
+	"github.com/defos-ai/commander/apps/admin/client"
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	"github.com/defos-ai/commander/apps/playground/internal/local"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
@@ -129,7 +129,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 		}
 		c.API.Credentials = host.BasicCredentials{Username: username, Password: os.Getenv("COMMANDER_API_PASSWORD")}
 		if c.API.URL != "" {
-			if err := api.ValidateURL(c.API.URL); err != nil {
+			if err := client.ValidateURL(c.API.URL); err != nil {
 				return c, fmt.Errorf("api-url: %w", err)
 			}
 		}

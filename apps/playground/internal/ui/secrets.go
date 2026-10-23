@@ -10,7 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
-	api "github.com/defos-ai/commander/apps/playground/internal/api"
+	"github.com/defos-ai/commander/apps/admin/client"
+	adminsecrets "github.com/defos-ai/commander/apps/admin/secrets"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/host"
 )
@@ -34,7 +35,7 @@ type secretField struct {
 	label    string
 	input    textinput.Model
 	key      secrets.Key
-	metadata *api.Metadata
+	metadata *adminsecrets.Metadata
 }
 
 type secretPanel struct {
@@ -76,7 +77,7 @@ func (m *Model) secretInputCommand(command tea.Cmd) tea.Cmd {
 
 type secretResult struct {
 	generation uint64
-	metadata   []*api.Metadata
+	metadata   []*adminsecrets.Metadata
 	saved      int
 	write      bool
 	err        error
@@ -232,7 +233,7 @@ func (m *Model) secretContext() (context.Context, uint64) {
 
 func (m *Model) loadSecrets() tea.Cmd {
 	panel := &m.secrets
-	client, err := api.New(panel.connection.URL, panel.connection.Credentials)
+	api, err := client.New(client.Connection{URL: panel.connection.URL, Credentials: panel.connection.Credentials})
 	if err != nil {
 		m.connectSecrets(err.Error())
 		return m.secretInputCommand(textinput.Blink)
@@ -242,10 +243,10 @@ func (m *Model) loadSecrets() tea.Cmd {
 	ctx, generation := m.secretContext()
 	keys := append([]secrets.Key(nil), panel.keys...)
 	return func() tea.Msg {
-		defer client.Close()
+		defer api.Close()
 		result := secretResult{generation: generation}
 		for _, key := range keys {
-			metadata, err := client.Metadata(ctx, key)
+			metadata, err := adminsecrets.Get(ctx, api, key)
 			if err != nil {
 				result.err = err
 				break
@@ -294,7 +295,7 @@ func (m *Model) secretResult(message tea.Msg) (tea.Cmd, bool) {
 		return nil, true
 	}
 	if result.err != nil {
-		if errors.Is(result.err, api.ErrAuthentication) {
+		if errors.Is(result.err, client.ErrAuthentication) {
 			panel.connection.Credentials.Password = ""
 		}
 		m.connectSecrets(result.err.Error())
@@ -322,7 +323,7 @@ func (m *Model) secretResult(message tea.Msg) (tea.Cmd, bool) {
 
 func (m *Model) saveSecrets() tea.Cmd {
 	panel := &m.secrets
-	client, err := api.New(panel.connection.URL, panel.connection.Credentials)
+	api, err := client.New(client.Connection{URL: panel.connection.URL, Credentials: panel.connection.Credentials})
 	if err != nil {
 		m.finishSecrets(err.Error())
 		return nil
@@ -330,7 +331,7 @@ func (m *Model) saveSecrets() tea.Cmd {
 	type write struct {
 		key      secrets.Key
 		value    string
-		metadata *api.Metadata
+		metadata *adminsecrets.Metadata
 	}
 	writes := make([]write, len(panel.fields))
 	for i, field := range panel.fields {
@@ -340,11 +341,11 @@ func (m *Model) saveSecrets() tea.Cmd {
 	panel.stage, panel.message = secretSaving, "Saving secrets…"
 	ctx, generation := m.secretContext()
 	return func() tea.Msg {
-		defer client.Close()
+		defer api.Close()
 		defer clear(writes)
 		result := secretResult{generation: generation, write: true}
 		for i, value := range writes {
-			if result.err = client.Save(ctx, value.key, value.value, value.metadata); result.err != nil {
+			if _, result.err = adminsecrets.Save(ctx, api, value.key, value.value, value.metadata); result.err != nil {
 				break
 			}
 			writes[i].value = ""

@@ -33,6 +33,9 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	if stdout == nil {
 		stdout = io.Discard
 	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -40,6 +43,9 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	if errors.Is(err, flag.ErrHelp) {
 		if len(configuration.arguments) > 0 && configuration.arguments[0] == "missions" {
 			return missionHelp(stdout)
+		}
+		if len(configuration.arguments) > 0 && configuration.arguments[0] == "secrets" {
+			return secretHelp(stdout)
 		}
 		return help(stdout)
 	}
@@ -52,8 +58,14 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	if configuration.arguments[0] == "missions" {
 		return runMissions(ctx, configuration, stdin, stdout)
 	}
+	if configuration.arguments[0] == "secrets" {
+		return runSecrets(ctx, configuration, stdin, stdout, stderr)
+	}
 	if len(configuration.arguments) == 2 && configuration.arguments[0] == "help" && configuration.arguments[1] == "missions" {
 		return missionHelp(stdout)
+	}
+	if len(configuration.arguments) == 2 && configuration.arguments[0] == "help" && configuration.arguments[1] == "secrets" {
+		return secretHelp(stdout)
 	}
 	return &UsageError{cause: errors.New("unknown command or arguments; run commander-admin --help")}
 }
@@ -66,6 +78,7 @@ Administer Commander without starting Playground or configuring a model.
 Commands:
   help                  Show this help
   missions              List, export, validate or import mission definitions
+  secrets               List requests and manage agent secrets
 
 API connection:
   --api-url URL         API address (COMMANDER_API_URL; default http://localhost:4274)
@@ -76,7 +89,7 @@ Options:
   --json                Print command results as JSON
   -h, --help            Show this help
 
-Run commander-admin missions --help for mission commands.
+Run commander-admin missions --help or secrets --help for command options.
 `)
 	return err
 }

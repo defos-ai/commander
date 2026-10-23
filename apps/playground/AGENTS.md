@@ -8,8 +8,9 @@
   The spawner launches agent packages requested through chat/MCP as native children.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
-- [`internal/api/secrets.go`](internal/api/secrets.go) supplies the local secret
-  form's authenticated API transport. Keep values outside chat and MCP.
+- [`../admin/client`](../admin/client/) supplies authenticated API transport;
+  [`../admin/secrets`](../admin/secrets/) owns secret metadata and versioned
+  writes shared with the local masked form. Keep values outside chat and MCP.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
   replies and operation snapshots. Keep the chat engine behind its interfaces.
 - [`internal/chat/`](internal/chat/) owns conversation turns, queued input,

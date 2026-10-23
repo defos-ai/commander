@@ -40,8 +40,7 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if request.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
+		if missingSecretFormMetadata(w, request, "GITHUB_TOKEN", "OPENAI_API_KEY") {
 			return
 		}
 		if request.Method != http.MethodPost || request.URL.Path != "/api/v1/secrets" {
@@ -131,7 +130,9 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 		if r.Method != http.MethodGet {
 			writes.Add(1)
 		}
-		w.WriteHeader(http.StatusNotFound)
+		if !missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
+			http.NotFound(w, r)
+		}
 	}))
 	defer api.Close()
 	u, publish, reads := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "discarded-private-token")
@@ -227,7 +228,9 @@ func TestSecretFormClearsExpiredTaskWait(t *testing.T) {
 		if r.Method != http.MethodGet {
 			writes.Add(1)
 		}
-		w.WriteHeader(http.StatusNotFound)
+		if !missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
+			http.NotFound(w, r)
+		}
 	}))
 	defer api.Close()
 	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "expired-private-token")
@@ -261,8 +264,7 @@ func TestSecretFormConnectsRemoteAPIWithoutModelCredentials(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
+		if missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
 			return
 		}
 		var input struct{ Value string }
@@ -310,8 +312,7 @@ func TestSecretFormFailedSaveDoesNotRetryOrRetainValue(t *testing.T) {
 	const value = "private-token-from-rejected-save"
 	var writes atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			w.WriteHeader(http.StatusNotFound)
+		if missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
 			return
 		}
 		writes.Add(1)
@@ -327,7 +328,7 @@ func TestSecretFormFailedSaveDoesNotRetryOrRetainValue(t *testing.T) {
 	u.wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
 	u.text(value)
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("unconfirmed save", func(view string) bool { return strings.Contains(view, "secret save could not be confirmed") })
+	u.wait("unconfirmed save", func(view string) bool { return strings.Contains(view, "API write could not be confirmed") })
 	if strings.Contains(u.model.View(), value) || writes.Load() != 1 {
 		t.Fatal("failed save disclosed the API response or retried automatically")
 	}
@@ -370,6 +371,17 @@ func runtimeSecretFormOperation(names ...string) bridge.Operation {
 
 func writeSecretFormMetadata(w http.ResponseWriter, name string) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": "da378c90-63eb-46da-b186-552e1e144510", "agent_type": "builder-agent", "name": name, "version": 1, "status": "available"})
+}
+
+func missingSecretFormMetadata(w http.ResponseWriter, r *http.Request, names ...string) bool {
+	for _, name := range names {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets/builder-agent/"+name {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "secret_not_found"})
+			return true
+		}
+	}
+	return false
 }
 
 func secretFormUI(t *testing.T, ctx context.Context, api ui.Connection[host.BasicCredentials], private ...string) (*uiDriver, func(bridge.Operation), *atomic.Int32) {
