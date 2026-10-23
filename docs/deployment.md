@@ -110,8 +110,19 @@ Compose keeps data in named Docker volumes:
 | `mcp-credentials` | The shared MCP token |
 
 Use `docker compose logs -f` for services and `docker logs <container-id>` for
-spawned agents. To load your own missions, use `/admin missions import <file>` in
-Playground or the [Admin CLI](../apps/admin/README.md#missions).
+spawned agents.
+
+### Import missions
+
+With the stack running, import a mission file from your host:
+
+```sh
+docker compose run --rm --no-deps -v "$PWD/mission.json:/mission.json:ro" missions missions import /mission.json
+```
+
+Existing mission names are preserved. Native Playground can use
+`/admin missions import FILE`; paths refer to Playground's filesystem.
+See [Admin mission commands](../apps/admin/README.md#missions) for validation and export.
 
 ### Stopping and resetting agents
 

@@ -72,7 +72,7 @@ The user's current instructions take precedence over repository guidance.
   saved keys across restarts and reject invalid state or conflicting overrides.
   Keep this volume separate from `api-credentials`, `mcp-credentials` and database
   storage; restoring encrypted data requires its original key. API and MCP login
-  initializers retain their separate credentials across restarts. API and
+  initializers retain their separate credentials across restarts. API,
   Playground and the Admin mission initializer read the local API password from
   a read-only mount; do not reuse it for a custom API destination or automatically
   sign in browser Admin. Admin seeds bundled missions through the API, preserving

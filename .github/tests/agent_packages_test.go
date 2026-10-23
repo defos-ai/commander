@@ -201,7 +201,7 @@ func TestCIAgentPackageStageRejectsInvalidBinaries(t *testing.T) {
 	for _, mode := range []string{"missing", "empty", "directory", "symlink"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newNativeFixture(t)
-			path := filepath.Join(f.artifacts, nativeBinaryNames[6])
+			path := filepath.Join(f.artifacts, agentNativeBinaryNames("spawner")[0])
 			if err := os.Remove(path); err != nil {
 				t.Fatal(err)
 			}

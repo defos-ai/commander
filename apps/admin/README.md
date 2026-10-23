@@ -24,6 +24,8 @@ bin/commander-admin missions seed
 
 Files accept one mission, an array, or JSON from `missions list --json`. Use `-`
 for stdin and `--json` for structured results. Validation works without API access.
+File paths use the Admin or Playground process's filesystem. In Docker, mount
+the file; see [Compose imports](../../docs/deployment.md#import-missions).
 `seed` adds bundled missions without replacing saved definitions; use `--dry-run`
 to preview it. All-in-one and Compose run it automatically after the API is ready.
 

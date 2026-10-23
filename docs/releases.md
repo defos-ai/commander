@@ -40,16 +40,18 @@ older maintenance releases do not move them backward.
 
 ## Native binaries
 
-From v0.3.0, the root release includes only `commander_<os>_<arch>` for Linux,
-macOS and Windows on amd64 and arm64. Download standalone builder and spawner
-binaries from their [agent package releases](#agent-packages). The existing
-v0.2.0 release also includes copies of those agent binaries.
+From v0.3.0, the root release includes `commander_<os>_<arch>` and
+`commander-admin_<os>_<arch>` for Linux, macOS and Windows on amd64 and arm64.
+Download standalone builder and spawner binaries from their
+[agent package releases](#agent-packages). The existing v0.2.0 release also
+includes copies of those agent binaries.
 
 Windows filenames end in `.exe`; macOS uses `darwin`. `LICENSE` and
 `checksums.txt` accompany the binaries. Binaries are unsigned; macOS builds are
 not notarized.
 
-Commander embeds the built Admin frontend. For download and run commands, use
+Commander and Admin embed the built frontend; `commander-admin serve` starts
+the standalone UI. For Commander download and run commands, use
 the [quick start](../README.md#binary). Use `releases/latest/download/<filename>`
 for the current release, or `releases/download/<version>/<filename>` to pin one.
 

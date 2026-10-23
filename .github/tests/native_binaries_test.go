@@ -18,7 +18,13 @@ var commanderBinaryNames = []string{
 	"commander_windows_amd64.exe", "commander_windows_arm64.exe",
 }
 
-var nativeBinaryNames = append(append([]string{}, commanderBinaryNames...),
+var rootBinaryNames = append(append([]string{}, commanderBinaryNames...),
+	"commander-admin_linux_amd64", "commander-admin_linux_arm64",
+	"commander-admin_darwin_amd64", "commander-admin_darwin_arm64",
+	"commander-admin_windows_amd64.exe", "commander-admin_windows_arm64.exe",
+)
+
+var nativeBinaryNames = append(append([]string{}, rootBinaryNames...),
 	"commander-spawner-agent_linux_amd64", "commander-spawner-agent_linux_arm64",
 	"commander-spawner-agent_darwin_amd64", "commander-spawner-agent_darwin_arm64",
 	"commander-spawner-agent_windows_amd64.exe", "commander-spawner-agent_windows_arm64.exe",
@@ -155,7 +161,7 @@ func TestCINativeBinaryPublication(t *testing.T) {
 			if got := strings.Contains(log, "release create"); got == draft {
 				t.Errorf("create release = %t, existing draft = %t", got, draft)
 			}
-			assets := append(append([]string{}, commanderBinaryNames...), "LICENSE")
+			assets := append(append([]string{}, rootBinaryNames...), "LICENSE")
 			var checksums strings.Builder
 			for _, name := range assets {
 				got := f.read(t, "uploaded/"+name)
@@ -169,8 +175,8 @@ func TestCINativeBinaryPublication(t *testing.T) {
 				t.Errorf("checksums = %q, want %q", got, checksums.String())
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "uploaded"))
-			if err != nil || len(entries) != len(commanderBinaryNames)+2 {
-				t.Fatalf("root release must contain only six Commander binaries, license and checksums: %v, %v", entries, err)
+			if err != nil || len(entries) != len(rootBinaryNames)+2 {
+				t.Fatalf("root release must contain Commander and Admin binaries, license and checksums: %v, %v", entries, err)
 			}
 			if !strings.HasSuffix(log, "release edit v0.1.0 --draft=false --latest=false\n") {
 				t.Errorf("release must await final latest promotion: %s", log)
@@ -180,10 +186,13 @@ func TestCINativeBinaryPublication(t *testing.T) {
 }
 
 func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
-	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "wrong name"} {
+	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "wrong name", "missing Admin"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newNativeFixture(t)
-			path := filepath.Join(f.artifacts, nativeBinaryNames[0])
+			path := filepath.Join(f.artifacts, commanderBinaryNames[0])
+			if mode == "missing Admin" {
+				path = filepath.Join(f.artifacts, "commander-admin_linux_amd64")
+			}
 			if mode != "extra" {
 				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
@@ -321,6 +330,10 @@ case "${@: -1}" in
     [[ " $* " == *' -tags embed_ui '* ]]
     prefix=commander
     ;;
+  ./apps/admin/cmd/commander-admin)
+    [[ " $* " == *' -tags embed_ui '* ]]
+    prefix=commander-admin
+    ;;
   ./apps/agents/spawner/cmd) prefix=commander-spawner-agent ;;
   ./apps/agents/builder/cmd) prefix=commander-builder-agent ;;
   *) exit 1 ;;
@@ -338,10 +351,10 @@ chmod +x "$2"
 				t.Fatalf("build failed: %v: %s", err, output)
 			}
 			entries, err := os.ReadDir(filepath.Join(f.dir, "dist"))
-			if err != nil || len(entries) != 3 {
-				t.Fatalf("build must produce Commander, spawner and builder binaries: %v, %v", entries, err)
+			if err != nil || len(entries) != 4 {
+				t.Fatalf("build must produce Commander, Admin, spawner and builder binaries: %v, %v", entries, err)
 			}
-			for _, prefix := range []string{"commander", "commander-spawner-agent", "commander-builder-agent"} {
+			for _, prefix := range []string{"commander", "commander-admin", "commander-spawner-agent", "commander-builder-agent"} {
 				name := prefix + "_" + platform
 				if goos == "windows" {
 					name += ".exe"
