@@ -34,11 +34,12 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   and version. Preserve future expiry and renew expired values without expiry.
   Require exact success statuses and bound individual metadata responses to
   64 KiB. Conflicts require fresh metadata; unconfirmed writes are never retried.
-- Secret commands accept values through a hidden terminal prompt or explicit
-  `--stdin`, never arguments or model input. Read metadata before requesting a
-  value. Keep stdin bytes unchanged, clear transient buffers, and return only
-  metadata. Playground owns its existing form; keep its prompt triggering,
-  dismissal and draft isolation while sharing transport and save behavior.
+- Secret commands detect terminal input: use a hidden prompt for terminals and
+  read piped/redirected input directly, never arguments or model input. Do not
+  probe for available bytes; pipes may deliver later. Read metadata before
+  requesting a value. Keep stdin bytes unchanged, clear transient buffers, and
+  return only metadata. Playground owns its existing form; keep its prompt
+  triggering, dismissal and draft isolation while sharing transport and save behavior.
 - [docker/Dockerfile](docker/Dockerfile) builds the existing UI host with embedded
   frontend assets. The published image remains `commander-admin`.
 - Playground imports the UI host from this module. Update its module requirement,

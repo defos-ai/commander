@@ -36,8 +36,13 @@ bin/commander-admin secrets set builder-agent CODEX_API_KEY
 bin/commander-admin secrets delete builder-agent CODEX_API_KEY
 ```
 
-`set` opens a hidden terminal prompt. Use `--stdin` for long, piped or multiline values;
-input preserves newlines. Values never appear in output. `--json` returns metadata.
+`set` opens a hidden terminal prompt or reads piped/redirected input automatically:
+
+```sh
+printf '%s' "$CODEX_API_KEY" | bin/commander-admin secrets set builder-agent CODEX_API_KEY
+```
+
+Piped input preserves newlines. Values never appear in output. `--json` returns metadata.
 Changes use the observed ID/version; inspect metadata after an uncertain write
 before submitting again. Saving a value does not confirm agent readiness.
 

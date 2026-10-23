@@ -10,11 +10,10 @@ import (
 )
 
 type config struct {
-	connection  client.Connection
-	arguments   []string
-	json        bool
-	dryRun      bool
-	secretStdin bool
+	connection client.Connection
+	arguments  []string
+	json       bool
+	dryRun     bool
 }
 
 func configuration(args []string, options Options) (config, error) {
@@ -33,7 +32,6 @@ func configuration(args []string, options Options) (config, error) {
 	flags.StringVar(&result.connection.Credentials.Username, "api-username", result.connection.Credentials.Username, "Commander API username")
 	flags.BoolVar(&result.json, "json", false, "Print command results as JSON")
 	flags.BoolVar(&result.dryRun, "dry-run", false, "Preview a mission import without writing")
-	flags.BoolVar(&result.secretStdin, "stdin", false, "Read a secret value from stdin")
 	var err error
 	result.arguments, err = parseArguments(flags, args)
 	return result, err

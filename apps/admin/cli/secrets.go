@@ -106,7 +106,7 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 		_, err := fmt.Fprintf(stdout, "Deleted %s · %s.\n", key.Scope.AgentType, key.Name)
 		return err
 	}
-	value, err := readSecret(ctx, stdin, stderr, configuration.secretStdin)
+	value, err := readSecret(ctx, stdin, stderr)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 }
 
 func validSecretArguments(command string, args []string, configuration config) bool {
-	if configuration.dryRun || configuration.secretStdin && command != "set" {
+	if configuration.dryRun {
 		return false
 	}
 	switch command {
@@ -138,7 +138,7 @@ func validSecretArguments(command string, args []string, configuration config) b
 	}
 }
 
-func readSecret(ctx context.Context, stdin io.Reader, output io.Writer, fromStdin bool) ([]byte, error) {
+func readSecret(ctx context.Context, stdin io.Reader, output io.Writer) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -147,28 +147,24 @@ func readSecret(ctx context.Context, stdin io.Reader, output io.Writer, fromStdi
 	if stdin == nil {
 		return nil, &UsageError{cause: errors.New("provide a secret value on stdin or in a terminal")}
 	}
-	if !fromStdin {
-		file, ok := stdin.(*os.File)
-		if !ok || !term.IsTerminal(int(file.Fd())) {
-			return nil, &UsageError{cause: errors.New("use an interactive terminal or --stdin to supply a secret value")}
-		}
-	}
+	file, isFile := stdin.(*os.File)
+	terminal := isFile && term.IsTerminal(int(file.Fd()))
 	input, finish, err := secretReader(ctx, stdin)
 	if err != nil {
 		return nil, err
 	}
 	defer finish()
-	if fromStdin {
-		value, err = io.ReadAll(io.LimitReader(input, maxSecretInputBytes+1))
+	if terminal {
+		value, err = promptSecret(file, input, output)
 	} else {
-		value, err = promptSecret(stdin.(*os.File), input, output)
+		value, err = io.ReadAll(io.LimitReader(input, maxSecretInputBytes+1))
 	}
 	if err != nil {
 		clear(value)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if fromStdin {
+		if !terminal {
 			return nil, errors.New("could not read the secret value from stdin")
 		}
 		return nil, err
@@ -211,7 +207,7 @@ func promptSecret(file *os.File, input io.Reader, output io.Writer) (value []byt
 	// x/term caps interactive lines at 4096 runes. Count raw bytes too so a
 	// paste followed by editing cannot silently save a truncated value.
 	if counted.bytes >= 4096 {
-		return nil, &UsageError{cause: errors.New("interactive input is too long; use --stdin for longer values")}
+		return nil, &UsageError{cause: errors.New("interactive input is too long; pipe or redirect longer values")}
 	}
 	return []byte(text), nil
 }
@@ -265,14 +261,13 @@ func secretHelp(output io.Writer) error {
 	_, err := io.WriteString(output, `Usage: commander-admin secrets <command> [options]
 
 Commands:
-  list AGENT_TYPE             List saved secret metadata
+  list AGENT_TYPE              List saved secret metadata
   requests [AGENT_TYPE]        List pending request metadata
-  set AGENT_TYPE NAME          Enter a value in a masked terminal prompt
-  set AGENT_TYPE NAME --stdin  Read the exact value from stdin, including newlines
+  set AGENT_TYPE NAME          Read piped input or open a masked terminal prompt
   delete AGENT_TYPE NAME       Delete the observed secret ID and version
 
 Values are write-only. Use --json for metadata results; never pass values as arguments.
-Use --stdin for long or multiline values (UTF-8, up to 64 KiB).
+Piped or redirected input preserves exact bytes, including newlines (UTF-8, up to 64 KiB).
 After an uncertain write, inspect metadata before submitting again.
 Saving does not confirm agent readiness.
 Options: --json, --api-url URL, --api-username NAME, -h, --help.

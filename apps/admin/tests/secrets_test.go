@@ -29,16 +29,31 @@ func TestSecretCommandsPreserveValuesAndVersionedMutations(t *testing.T) {
 	const value = "secret-value-must-not-be-printed\nwith a trailing newline\n"
 	for _, current := range []string{value, "", "renewed-secret-value"} {
 		var input io.Reader = strings.NewReader(current)
+		var written <-chan error
 		if current == value {
 			reader, writer, err := os.Pipe()
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { reader.Close() })
-			if _, err := io.WriteString(writer, current); err != nil {
-				t.Fatal(err)
-			}
-			writer.Close()
+			result := make(chan error, 1)
+			finished := make(chan struct{})
+			t.Cleanup(func() {
+				writer.Close()
+				reader.Close()
+				<-finished
+			})
+			written = result
+			go func() {
+				defer close(finished)
+				defer writer.Close()
+				select {
+				case <-fixture.metadataRead:
+					_, err := io.WriteString(writer, current)
+					result <- err
+				case <-t.Context().Done():
+					result <- t.Context().Err()
+				}
+			}()
 			input = reader
 		} else if current == "" {
 			file, err := os.Open(os.DevNull)
@@ -48,9 +63,14 @@ func TestSecretCommandsPreserveValuesAndVersionedMutations(t *testing.T) {
 			t.Cleanup(func() { file.Close() })
 			input = file
 		}
-		output, err := secretCommand(t, fixture.connection(), input, "secrets", "set", "builder-agent", "GITHUB_TOKEN", "--stdin", "--json")
+		output, err := secretCommand(t, fixture.connection(), input, "secrets", "set", "builder-agent", "GITHUB_TOKEN", "--json")
 		if err != nil {
 			t.Fatalf("set secret: %v", err)
+		}
+		if written != nil {
+			if err := <-written; err != nil {
+				t.Fatalf("write piped secret: %v", err)
+			}
 		}
 		var metadata adminsecrets.Metadata
 		if json.Unmarshal(output, &metadata) != nil || metadata.ID != secretTestID || metadata.Version == 0 || metadata.Status != "available" || strings.Contains(string(output), value) || strings.Contains(string(output), "renewed-secret-value") {
@@ -95,7 +115,7 @@ func TestSecretCommandsPreserveValuesAndVersionedMutations(t *testing.T) {
 	}
 }
 
-func TestSecretCommandsRequireExplicitSafeInput(t *testing.T) {
+func TestSecretCommandsRejectUnsafeInputBeforeMutation(t *testing.T) {
 	var reads, writes atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -107,7 +127,7 @@ func TestSecretCommandsRequireExplicitSafeInput(t *testing.T) {
 	defer server.Close()
 	connection := client.Connection{URL: server.URL, Credentials: host.BasicCredentials{Username: "operator", Password: "private-password"}}
 	reader := secretReader{reads: &reads}
-	_, err := secretCommand(t, connection, reader, "secrets", "set", "builder-agent", "GITHUB_TOKEN", "--stdin")
+	_, err := secretCommand(t, connection, reader, "secrets", "set", "builder-agent", "GITHUB_TOKEN")
 	if err == nil || reads.Load() != 0 || writes.Load() != 0 {
 		t.Fatal("an unrelated 404 prompted for a value or created a secret")
 	}
@@ -115,16 +135,15 @@ func TestSecretCommandsRequireExplicitSafeInput(t *testing.T) {
 	for _, args := range [][]string{
 		{"secrets", "set", "builder-agent", "GITHUB_TOKEN", "private-positional-value"},
 		{"secrets", "set", "builder-agent", "GITHUB_TOKEN", "--value", "private-flag-value"},
-		{"secrets", "set", "builder-agent", "GITHUB_TOKEN"},
 	} {
 		output, err := secretCommand(t, fixture.connection(), reader, args...)
 		var usage *cli.UsageError
 		if !errors.As(err, &usage) || reads.Load() != 0 || strings.Contains(err.Error()+string(output), "private-") {
-			t.Fatal("a non-terminal secret input was accepted or exposed")
+			t.Fatal("a secret argument was accepted, read stdin or exposed a value")
 		}
 	}
 	for _, value := range []string{strings.Repeat("x", 64<<10+1), string([]byte{0xff})} {
-		if _, err := secretCommand(t, fixture.connection(), strings.NewReader(value), "secrets", "set", "builder-agent", "GITHUB_TOKEN", "--stdin"); err == nil {
+		if _, err := secretCommand(t, fixture.connection(), strings.NewReader(value), "secrets", "set", "builder-agent", "GITHUB_TOKEN"); err == nil {
 			t.Error("unsafe or oversized stdin secret was accepted")
 		}
 	}
@@ -214,16 +233,17 @@ func (r secretReader) Read([]byte) (int, error) {
 }
 
 type secretAPI struct {
-	server   *httptest.Server
-	mu       sync.Mutex
-	saved    *adminsecrets.Metadata
-	requests []string
-	values   []string
+	server       *httptest.Server
+	mu           sync.Mutex
+	saved        *adminsecrets.Metadata
+	requests     []string
+	values       []string
+	metadataRead chan struct{}
 }
 
 func newSecretAPI(t *testing.T) *secretAPI {
 	t.Helper()
-	fixture := &secretAPI{}
+	fixture := &secretAPI{metadataRead: make(chan struct{}, 1)}
 	fixture.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fixture.mu.Lock()
 		defer fixture.mu.Unlock()
@@ -257,6 +277,10 @@ func newSecretAPI(t *testing.T) *secretAPI {
 		}
 		if r.Method == http.MethodGet {
 			fixture.requests = append(fixture.requests, "GET secret")
+			select {
+			case fixture.metadataRead <- struct{}{}:
+			default:
+			}
 			if fixture.saved == nil {
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = io.WriteString(w, `{"error":"secret_not_found"}`)

@@ -26,7 +26,7 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 	} else if command != "list" {
 		return missionUsage()
 	}
-	if len(args) != wantArguments || configuration.dryRun && command != "import" || configuration.secretStdin {
+	if len(args) != wantArguments || configuration.dryRun && command != "import" {
 		return missionUsage()
 	}
 	var definitions []missions.Definition
