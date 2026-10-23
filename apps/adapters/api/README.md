@@ -28,6 +28,19 @@ Set `API_SWAGGER_ENABLED=true` or pass `--swagger` to enable authenticated
 Swagger at `/docs/` and OpenAPI at `/openapi.json`. Use that reference for
 routes, schemas, pagination and errors.
 
+## Application catalog reads
+
+Use this HTTP adapter for application-driven browsing; keep MCP for tools chosen
+by a model. Configure the HTTP root (including `/api/v1`) and its Basic username
+and password independently of the MCP endpoint and bearer token.
+
+Read `GET /missions`, `/missions/{mission_name}`, `/operations`,
+`/operations/{operation_id}` and `/operations/{operation_id}/report`. Lists return
+an `items` array; details return one record. Encode a mission name as one path
+segment, including any slashes or dot segments. Missing records return the typed
+404 errors in OpenAPI; an upstream proxy's generic 404 is not a missing record.
+These saved-state queries remain available without MCP or a live controller.
+
 ## Create missions
 
 Save a mission from a JSON file:
