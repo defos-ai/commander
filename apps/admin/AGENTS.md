@@ -8,12 +8,26 @@ the [UI guide](ui/AGENTS.md) for UI changes.
 - `cmd/commander-admin` is the standalone command entry point. `cli.RunWithOptions`
   accepts a caller-owned connection for embedding; only `Main`
   owns process signals and exit codes. Help must work without API/model setup.
-  Keep argument errors distinct from runtime failures. Add JSON data output with
-  resource commands, not a second machine-readable help format.
+  Keep argument errors distinct from runtime failures. JSON output describes
+  command data; help remains text. Common options work around subcommands and
+  operands; `--` makes later values literal, including dash-prefixed names.
 - `client/` owns the shared authenticated API transport. Connections come from
   explicit options or `COMMANDER_API_*`, never MCP inference. Do not accept a
   password flag, print credentials or expose raw network/server errors. Keep
   redirects/proxies disabled, responses bounded and writes free of automatic retries.
+- `missions/` validates mission files with the shared framework loader and sends
+  create-only writes through the API. Retain raw definitions when importing or
+  exporting so schema numbers, escapes and extension keywords survive. Validate
+  the complete batch and reject duplicate names before API access. Files are
+  bounded to 4 MiB and each imported definition to the API's 1 MiB request limit;
+  response validation uses the client's 4 MiB bound because API-added fields can
+  enlarge a saved definition.
+- Import checks names individually: a confirmed existing definition is skipped;
+  only `404 mission_not_found` permits a create. A racing `409 mission_exists`
+  also preserves the winner. Dry runs send no writes. Stop on the first failure,
+  preserve completed results and report remaining items as not attempted. An
+  uncertain acknowledgement requires inspection, never an automatic write retry.
+  Import does not start operations, require installed actions or replace missions.
 - [docker/Dockerfile](docker/Dockerfile) builds the existing UI host with embedded
   frontend assets. The published image remains `commander-admin`.
 - Playground imports the UI host from this module. Update its module requirement,

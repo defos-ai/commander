@@ -38,6 +38,9 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	}
 	configuration, err := configuration(args, options)
 	if errors.Is(err, flag.ErrHelp) {
+		if len(configuration.arguments) > 0 && configuration.arguments[0] == "missions" {
+			return missionHelp(stdout)
+		}
 		return help(stdout)
 	}
 	if err != nil {
@@ -45,6 +48,12 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	}
 	if len(configuration.arguments) == 0 || len(configuration.arguments) == 1 && configuration.arguments[0] == "help" {
 		return help(stdout)
+	}
+	if configuration.arguments[0] == "missions" {
+		return runMissions(ctx, configuration, stdin, stdout)
+	}
+	if len(configuration.arguments) == 2 && configuration.arguments[0] == "help" && configuration.arguments[1] == "missions" {
+		return missionHelp(stdout)
 	}
 	return &UsageError{cause: errors.New("unknown command or arguments; run commander-admin --help")}
 }
@@ -56,6 +65,7 @@ Administer Commander without starting Playground or configuring a model.
 
 Commands:
   help                  Show this help
+  missions              List, export, validate or import mission definitions
 
 API connection:
   --api-url URL         API address (COMMANDER_API_URL; default http://localhost:4274)
@@ -63,7 +73,10 @@ API connection:
   COMMANDER_API_PASSWORD supplies the password; no password flag is accepted.
 
 Options:
+  --json                Print command results as JSON
   -h, --help            Show this help
+
+Run commander-admin missions --help for mission commands.
 `)
 	return err
 }
