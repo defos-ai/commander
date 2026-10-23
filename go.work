@@ -3,7 +3,7 @@ go 1.26.7
 use (
 	./apps/adapters/api
 	./apps/adapters/mcp
-	./apps/admin/ui/backend
+	./apps/admin
 	./apps/agents/builder
 	./apps/agents/spawner
 	./apps/controllers/default
@@ -19,7 +19,7 @@ use (
 replace (
 	github.com/defos-ai/commander/apps/adapters/api v0.2.0 => ./apps/adapters/api
 	github.com/defos-ai/commander/apps/adapters/mcp v0.2.0 => ./apps/adapters/mcp
-	github.com/defos-ai/commander/apps/admin/ui/backend v0.2.0 => ./apps/admin/ui/backend
+	github.com/defos-ai/commander/apps/admin v0.2.0 => ./apps/admin
 	github.com/defos-ai/commander/apps/agents/builder v0.2.0 => ./apps/agents/builder
 	github.com/defos-ai/commander/apps/agents/spawner v0.2.0 => ./apps/agents/spawner
 	github.com/defos-ai/commander/apps/controllers/default v0.2.0 => ./apps/controllers/default

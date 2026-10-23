@@ -313,7 +313,7 @@ services:
     pull_policy: never
     build:
       context: .
-      dockerfile: apps/admin/ui/docker/Dockerfile
+      dockerfile: apps/admin/docker/Dockerfile
     environment:
       UI_PUBLIC_ORIGIN: ${UI_PUBLIC_ORIGIN:-}
       UI_API_UPSTREAMS: localhost:${COMMANDER_API_PORT:-4274}=api:4274,127.0.0.1:${COMMANDER_API_PORT:-4274}=api:4274

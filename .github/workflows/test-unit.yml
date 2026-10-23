@@ -60,7 +60,7 @@ jobs:
           contains(fromJSON(inputs.changes), 'builder') || contains(fromJSON(inputs.changes), 'spawner') ||
           contains(fromJSON(inputs.changes), 'playground') ||
           contains(fromJSON(inputs.changes), 'api') || contains(fromJSON(inputs.changes), 'mcp') ||
-          contains(fromJSON(inputs.changes), 'ui-backend') }}
+          contains(fromJSON(inputs.changes), 'admin') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -98,9 +98,9 @@ jobs:
         run: |
           go test -race -count=1 -timeout=3m ./apps/adapters/mcp/tests/host/...
           go vet ./apps/adapters/mcp/...
-      - name: Test and vet UI backend outside the workspace
-        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'ui-backend') }}
-        working-directory: apps/admin/ui/backend
+      - name: Test and vet Admin outside the workspace
+        if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'admin') }}
+        working-directory: apps/admin
         env:
           GOWORK: 'off'
         run: |
@@ -126,13 +126,13 @@ jobs:
       - name: Build
         run: npm run build
       - name: Test and build bundled UI
-        working-directory: apps/admin/ui/backend
+        working-directory: apps/admin
         env:
           GOWORK: 'off'
         run: |
-          cp -R ../frontend/dist static/dist
-          go test -tags embed_ui -race -count=1 -timeout=1m ./tests -run '^TestBundledFrontend$'
-          go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./cmd/commander-ui
+          cp -R ui/frontend/dist ui/backend/static/dist
+          go test -tags embed_ui -race -count=1 -timeout=1m ./ui/backend/tests -run '^TestBundledFrontend$'
+          go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-ui" ./ui/backend/cmd/commander-ui
       - name: Test and build bundled Playground
         working-directory: .
         run: |

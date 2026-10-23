@@ -10,7 +10,7 @@
 - Put English copy in `frontend/src/i18n/locales/en/` using typed translation selectors.
 - `backend/cli/` configures the Go host; `backend/static/` serves built assets;
   `backend/connections/` handles sessions, upstream mapping and the API proxy.
-- [docker/Dockerfile](docker/Dockerfile) embeds the built frontend in the Go server
+- [../docker/Dockerfile](../docker/Dockerfile) embeds the built frontend in the Go server
   with `-tags embed_ui`; it needs no separate asset directory at runtime.
 
 ## Behavior to preserve
@@ -179,13 +179,13 @@ proxies `/ui` to `4276`; start a Commander API separately.
 From the repository root, check the backend:
 
 ```sh
-go test -race -count=1 -timeout=1m ./apps/admin/ui/backend/...
-go vet ./apps/admin/ui/backend/...
+go test -race -count=1 -timeout=1m ./apps/admin/...
+go vet ./apps/admin/...
 ```
 
 For packaging, build assets using the [portable binary instructions](README.md#native-server),
-then run `go test -tags embed_ui -race -count=1 -timeout=1m ./apps/admin/ui/backend/...`
-and `go vet -tags embed_ui ./apps/admin/ui/backend/...` from the repository root.
+then run `go test -tags embed_ui -race -count=1 -timeout=1m ./apps/admin/...`
+and `go vet -tags embed_ui ./apps/admin/...` from the repository root.
 The tagged tests start the real server from an unrelated working directory and
 verify bundled assets, override precedence, proxy routing and shutdown. Keep the
 frontend/package CI job selected for backend changes as well as frontend changes.

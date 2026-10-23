@@ -38,7 +38,7 @@ jobs:
         id: build
         with:
           context: .
-          file: apps/admin/ui/docker/Dockerfile
+          file: apps/admin/docker/Dockerfile
           push: true
           platforms: linux/amd64
           tags: ghcr.io/defos-ai/commander-admin:${{ inputs.version }}

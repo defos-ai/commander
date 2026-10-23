@@ -15,8 +15,6 @@ framework:
     - 'apps/adapters/!(api|mcp)/**'
     - 'apps/agents/!(builder|spawner)/**'
     - 'apps/controllers/!(default)/**'
-    - 'apps/admin/!(ui)/**'
-    - 'apps/admin/ui/!(backend|frontend|docker)/**'
     - '!**/*.md'
   # The framework parser validates the official discovery data.
   - 'catalog/**'
@@ -70,16 +68,14 @@ mcp:
   - *providers
   - &mcp 'apps/adapters/mcp/**'
 
-ui-backend:
+admin:
   - *shared
-  - &ui-docker 'apps/admin/ui/docker/**'
-  - &ui-backend 'apps/admin/ui/backend/**'
+  - &admin 'apps/admin/**'
 
 frontend:
   - *shared
-  - *ui-docker
-  - *ui-backend
-  - &ui-frontend 'apps/admin/ui/frontend/**'
+  - *admin
+  - 'apps/admin/ui/frontend/**'
 
 playground:
   - *shared
@@ -89,8 +85,7 @@ playground:
   - *spawner
   - *api
   - *mcp
-  - *ui-backend
-  - *ui-frontend
+  - *admin
   - 'apps/playground/**'
 
 # Provider integration checks use the mongo, rabbitmq and s3 filters above.
@@ -137,7 +132,7 @@ mcp-full:
 
 ui-e2e:
   - *shared
-  - 'apps/admin/ui/**'
+  - *admin
   - *api
   - *controller
   - *fs

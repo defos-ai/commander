@@ -142,7 +142,7 @@ services:
     pull_policy: never
     build:
       context: ../..
-      dockerfile: apps/admin/ui/docker/Dockerfile
+      dockerfile: apps/admin/docker/Dockerfile
     environment:
       UI_API_UPSTREAMS: localhost:14274=api:4274,127.0.0.1:14274=api:4274,api-secondary:4274=api-secondary:4274
     ports:
