@@ -287,6 +287,9 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 	for _, t := range a.config.Actions {
 		description := a.describeAction(t.Action())
 		if description.Name == call.ActionName {
+			if err := a.prepareSession(ctx, call, commandID, fromServer, description.SessionMode); err != nil {
+				return ActionOutput{}, err
+			}
 			if description.Status != action.Ready {
 				return ActionOutput{}, fmt.Errorf("action %q is not ready; run discovery first", call.ActionName)
 			}
@@ -303,6 +306,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 				}
 			}
 			executionContext = action.WithCheckpoints(executionContext, checkpoints)
+			executionContext = action.WithSession(executionContext, call.Session)
 			var waits *workSecretWaits
 			if fromServer {
 				waits = &workSecretWaits{agent: a, context: executionContext, commandID: commandID,
@@ -320,6 +324,9 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			}
 			if err := ctx.Err(); err != nil {
 				return ActionOutput{}, err
+			}
+			if result.Session != nil && (call.Session == nil || result.Session.Reference != call.Session.Reference) {
+				return ActionOutput{}, errors.New("action returned a session outside its execution binding")
 			}
 			return a.packageOutput(ctx, call.ActionName, result, commandID)
 		}

@@ -35,6 +35,10 @@ func ToTaskResponse(task operations.Task) models.TaskResponse {
 		StartedAt:    task.StartedAt,
 		FinishedAt:   cloneTime(task.FinishedAt),
 	}
+	if task.SessionIntent != nil {
+		i := task.SessionIntent
+		response.SessionIntent = &models.SessionIntentResponse{Mode: string(i.Mode), ScopeID: i.ScopeID, ID: i.ID, Error: i.Error}
+	}
 	if task.Result != nil {
 		result := ToActionOutputResponse(*task.Result)
 		response.Result = &result

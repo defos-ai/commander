@@ -14,11 +14,13 @@ import (
 // Listings carry selection and progress information. Schemas, configuration and
 // evidence stay in detail queries, rather than repeating on every inventory read.
 type actionSummary struct {
+	SessionMode string `json:"session_mode,omitempty"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
 
 type agentActionSummary struct {
+	SessionMode         string                `json:"session_mode,omitempty"`
 	Name                string                `json:"name"`
 	Status              actions.Status        `json:"status"`
 	StatusReason        string                `json:"status_reason,omitempty"`
@@ -44,7 +46,7 @@ func summarizeAgent(agent agents.Agent) agentSummary {
 	items := make([]agentActionSummary, 0, len(agent.Actions))
 	for _, action := range agent.Actions {
 		items = append(items, agentActionSummary{
-			Name: action.Name, Status: action.Status, StatusReason: action.StatusReason,
+			SessionMode: action.SessionMode, Name: action.Name, Status: action.Status, StatusReason: action.StatusReason,
 			MissingRequirements: action.MissingRequirements,
 			RequiredSecrets:     slices.Clone(action.RequiredSecrets),
 		})

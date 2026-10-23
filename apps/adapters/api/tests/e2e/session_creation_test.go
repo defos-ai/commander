@@ -172,7 +172,7 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	second := start()
 	assertReserved(time.Second)
 	request("POST", second+"/tasks", map[string]any{"action_name": "connect-resource", "input": input}, 422, nil)
-	// Reservation is derived from saved work, so controller restart cannot release it.
+	// Durable admission survives controller restart before the first observation.
 	stopController()
 	stopController = startE2E(t, binaries["controller"], controllerArgs, env)
 	assertReserved(time.Second)
@@ -246,6 +246,11 @@ func waitUntil(t *testing.T, timeout time.Duration, ready func() bool) {
 }
 
 func startE2E(t *testing.T, binary string, args, env []string) func() {
+	_, stop := startE2EProcess(t, binary, args, env)
+	return stop
+}
+
+func startE2EProcess(t *testing.T, binary string, args, env []string) (*os.Process, func()) {
 	t.Helper()
 	log, err := os.CreateTemp(t.TempDir(), "process-*.log")
 	if err != nil {
@@ -278,5 +283,5 @@ func startE2E(t *testing.T, binary string, args, env []string) func() {
 			t.Logf("%s: %s", filepath.Base(binary), data)
 		}
 	})
-	return stop
+	return command.Process, stop
 }

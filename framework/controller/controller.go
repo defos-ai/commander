@@ -17,9 +17,12 @@ import (
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/framework/internal/state"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 const DefaultHeartbeatTimeout = leases.DefaultTimeout
@@ -32,6 +35,8 @@ var (
 )
 
 type ControllerConfig struct {
+	SessionStore   sessions.Store
+	OperationStore operations.OperationStore
 	// Type identifies this controller implementation; empty selects default.
 	Type string
 	// ID identifies this process; empty generates <type>-controller-<8hex>.
@@ -54,6 +59,8 @@ type ControllerConfig struct {
 // the bus. It neither owns agent runtimes nor calls a model or selects actions.
 // The host supplies controller-owned database stores.
 type Controller struct {
+	sessions           *runtimeSessions.Coordinator
+	sessionsDone       chan struct{}
 	state              *state.State
 	id                 string
 	controllerType     string
@@ -150,7 +157,14 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		leaseRegistry: registry, leaseSweepInterval: config.LeaseSweepInterval,
 		state:      state.New(lifetime, config.HeartbeatTimeout),
 		eventsDone: make(chan struct{}), loopDone: make(chan struct{}), cleanupDone: make(chan struct{}),
-		requests: make(chan func()),
+		requests: make(chan func()), sessionsDone: make(chan struct{}),
+	}
+	if config.SessionStore != nil {
+		c.sessions, err = runtimeSessions.New(config.SessionStore, config.OperationStore, config.ExecutionStore, config.AgentStore, config.ActionStore, c.controlSessionRemote)
+		if err != nil {
+			cancel(err)
+			return nil, errors.Join(err, events.Close())
+		}
 	}
 	if config.SecretStore != nil {
 		c.secrets = &consumers.SecretEventConsumer{
@@ -161,6 +175,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		cancel(err)
 		return nil, errors.Join(err, events.Close())
 	}
+	go c.reconcileSessionControls()
 	go c.run()
 	go c.consumeEvents(config.ActionStore)
 

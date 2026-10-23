@@ -63,7 +63,8 @@ func (a Action) Definition() Definition {
 
 func (a Action) definition() Definition {
 	return Definition{
-		Name: a.Name, Description: a.Description, RequiredSecrets: a.RequiredSecrets,
+		SessionMode: a.SessionMode,
+		Name:        a.Name, Description: a.Description, RequiredSecrets: a.RequiredSecrets,
 		InputSchema: a.InputSchema, OutputSchema: a.OutputSchema,
 	}
 }

@@ -246,8 +246,9 @@ func createMissionSchema() string {
 		"description": "Locally resolvable JSON Schema explicitly declaring root type=object. External references are rejected.",
 	}
 	definition := objectSchema(map[string]any{
-		"name":        actionName,
-		"description": map[string]any{"type": []string{"string", "null"}},
+		"session_mode": map[string]any{"type": "string", "enum": []string{"", "create", "use"}},
+		"name":         actionName,
+		"description":  map[string]any{"type": []string{"string", "null"}},
 		"required_secrets": map[string]any{
 			"type": []string{"array", "null"}, "uniqueItems": true,
 			"items":       map[string]any{"type": "string", "pattern": `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`},

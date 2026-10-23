@@ -11,6 +11,7 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/internal/state"
 )
 
@@ -61,7 +62,17 @@ func (c *Controller) redeliverAction(ctx context.Context, stored executions.Exec
 		if err != nil || record.Stale || (record.Status != agentmodel.AgentReady && record.Status != agentmodel.AgentWorking) {
 			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, ErrAgentNotRunning)
 		}
-		if err := (agentcommands.Client{Bus: c.bus}).Publish(ctx, current.Command); err != nil {
+		publish := (agentcommands.Client{Bus: c.bus}).Publish
+		var publishErr error
+		if c.sessions != nil {
+			publishErr = c.sessions.Publish(ctx, current.Command, publish)
+		} else {
+			publishErr = publish(ctx, current.Command)
+		}
+		if errors.Is(publishErr, sessions.ErrSessionClosed) || errors.Is(publishErr, sessions.ErrSessionAbandoned) || errors.Is(publishErr, sessions.ErrSessionClosing) {
+			return current, nil
+		}
+		if err := publishErr; err != nil {
 			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, fmt.Errorf("redeliver saved command: %w", err))
 		}
 	}

@@ -3,11 +3,11 @@ package missionsmcp
 import (
 	"context"
 	"errors"
-	"time"
 
 	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/framework/queries"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -31,22 +31,17 @@ func registerSessions(server *mcp.Server, config Config) {
 			result := struct {
 				Sessions []sessions.Session `json:"sessions"`
 			}{Sessions: []sessions.Session{}}
-			records, err := config.AgentStore.List(ctx)
+
+			items, err := (queries.Sessions{Store: config.SessionStore, Agents: config.AgentStore}).List(ctx, request.ScopeID)
 			if err != nil {
 				return result, err
 			}
-			for _, record := range records {
-				for _, item := range record.Snapshot(time.Now().UTC()).Sessions {
-					if item.ScopeID == request.ScopeID {
-						result.Sessions = append(result.Sessions, item.Clone())
-					}
-				}
-			}
+			result.Sessions = items
 			return result, nil
 		})
 	if controller, ok := config.Operations.(commands.SessionController); ok {
-		addTool(server, "control_runtime_session", "Inspect, verify or close an existing runtime session through its owning agent. Does not create a session or run a user command. Closing remains available while a task is running.",
-			`{"type":"object","additionalProperties":false,"required":["id","owner_agent_id","scope_id","method"],"properties":{"id":{"type":"string","format":"uuid"},"owner_agent_id":{"type":"string"},"scope_id":{"type":"string","format":"uuid"},"method":{"type":"string","enum":["inspect","verify","close"]}}}`,
+		addTool(server, "control_runtime_session", "Inspect, verify or close an existing runtime session, or explicitly abandon a lost session. Owner controls remain available while a task is running. Abandonment releases the scope without confirming closure or changing operation affinity.",
+			`{"type":"object","additionalProperties":false,"required":["id","owner_agent_id","scope_id","method"],"properties":{"id":{"type":"string","format":"uuid"},"owner_agent_id":{"type":"string"},"scope_id":{"type":"string","format":"uuid"},"request_id":{"type":"string","format":"uuid"},"method":{"type":"string","enum":["inspect","verify","close","abandon"]}}}`,
 			func(ctx context.Context, request sessions.Control) (sessions.Session, error) {
 				return controller.ControlSession(ctx, request)
 			})

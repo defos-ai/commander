@@ -16,6 +16,8 @@ type Reference struct {
 }
 
 type Session struct {
+	Disposition   string `json:"disposition,omitempty"`
+	ReleaseReason string `json:"release_reason,omitempty"`
 	Reference
 	Kind        string     `json:"kind"`
 	Label       string     `json:"label"`
@@ -80,18 +82,23 @@ func CloneAll(items []Session) []Session {
 
 type Control struct {
 	Reference
-	Method string `json:"method"`
+	Method    string        `json:"method"`
+	RequestID string        `json:"request_id,omitempty"`
+	Creation  *ExecutionRef `json:"creation,omitempty"`
 }
 
 func (r Control) Validate() error {
+	if r.RequestID != "" && !id.Valid(r.RequestID) {
+		return errors.New("request_id must be a canonical UUID")
+	}
 	if err := r.Reference.Validate(); err != nil {
 		return err
 	}
 	switch r.Method {
-	case "inspect", "verify", "close":
+	case "inspect", "verify", "close", "abandon":
 		return nil
 	default:
-		return errors.New("session method must be inspect, verify, or close")
+		return errors.New("session method must be inspect, verify, close, or abandon")
 	}
 }
 
@@ -102,7 +109,16 @@ func (r Control) Validate() error {
 // the final inventory announcement. It must retain Lost references; Closed is
 // reserved for an explicit close control, which authorizes replacement.
 type Provider interface {
+	Prepare(context.Context, CreationClaim) error
 	Snapshot() []Session
 	Control(context.Context, Control) (Session, error)
 	Changes() <-chan struct{}
+}
+
+func (c Control) Clone() Control {
+	if c.Creation != nil {
+		v := *c.Creation
+		c.Creation = &v
+	}
+	return c
 }

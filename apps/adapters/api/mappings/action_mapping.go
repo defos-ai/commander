@@ -17,6 +17,7 @@ func ToActionDefinitions(requests []models.ActionDefinitionRequest) []actions.De
 		definitions[i] = actions.Definition{
 			Name:            request.Name,
 			Description:     request.Description,
+			SessionMode:     request.SessionMode,
 			RequiredSecrets: slices.Clone(request.RequiredSecrets),
 			InputSchema:     bytes.Clone(request.InputSchema),
 			OutputSchema:    bytes.Clone(request.OutputSchema),
@@ -34,6 +35,7 @@ func ToActionDefinitionResponses(definitions []actions.Definition) []models.Acti
 		responses[i] = models.ActionDefinitionResponse{
 			Name:            definition.Name,
 			Description:     definition.Description,
+			SessionMode:     definition.SessionMode,
 			RequiredSecrets: slices.Clone(definition.RequiredSecrets),
 			InputSchema:     bytes.Clone(definition.InputSchema),
 			OutputSchema:    bytes.Clone(definition.OutputSchema),

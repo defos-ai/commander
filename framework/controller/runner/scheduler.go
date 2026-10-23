@@ -12,6 +12,8 @@ import (
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/sessions"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 func (r *Runner) signalScheduler() {
@@ -58,9 +60,6 @@ func (r *Runner) dispatchQueued() {
 			if task.Status != operations.TaskQueued || s.operation.BlockedByQuestion(task) {
 				continue
 			}
-			if err := r.checkSessionCreation(task, records, false); err != nil {
-				continue
-			}
 			agentID, err := r.selectAgent(ctx, s.operation, task, records, used)
 			if err != nil && r.ctx.Err() == nil {
 				r.logger.Warn("Agent selection failed", "operation_id", s.operation.ID, "task_id", task.ID, "selector", r.selector.Name(), "error", err)
@@ -71,17 +70,27 @@ func (r *Runner) dispatchQueued() {
 			if err != nil || agentID == "" {
 				continue
 			}
-			startedAt := time.Now().UTC()
-			next, err := r.store.DispatchTask(ctx, s.operation.ID, operations.TaskDispatch{
-				TaskID: task.ID, AgentID: agentID, StartedAt: startedAt, DeadlineAt: startedAt.Add(r.taskTimeout),
-			})
+
+			var next operations.Operation
+			var binding *sessions.Binding
+			if r.sessions != nil {
+				prepared, prepareErr := r.sessions.Prepare(ctx, runtimeSessions.Assignment{OperationID: s.operation.ID, TaskID: task.ID, Candidate: agentID, Timeout: r.taskTimeout})
+				err = prepareErr
+				next = prepared.Operation
+				binding = prepared.Binding
+			} else {
+				startedAt := time.Now().UTC()
+				next, err = r.store.DispatchTask(ctx, s.operation.ID, operations.TaskDispatch{TaskID: task.ID, AgentID: agentID, StartedAt: startedAt, DeadlineAt: startedAt.Add(r.taskTimeout)})
+			}
+
 			if err := s.acceptUpdate(next, err); err != nil {
 				break // Retry unsaved dispatch on the next tick.
 			}
 			task = s.operation.Tasks[taskIndex(&s.operation, task.ID)]
+			agentID = task.AgentID
 			used[agentID]++
 			r.lastAgent = agentID
-			call := actionmodel.ActionCall{ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
+			call := actionmodel.ActionCall{Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
 			r.workers++
 			go r.runTask(task, call)
 		}
@@ -89,10 +98,19 @@ func (r *Runner) dispatchQueued() {
 }
 
 func (r *Runner) selectAgent(ctx context.Context, operation operations.Operation, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
-	owner, err := sessionOwner(task, records)
-	if err != nil {
-		return "", err
+	var scopes []sessions.Scope
+	if r.sessions != nil {
+		var err error
+		scopes, err = r.sessions.ScopeRecords(ctx)
+		if err != nil {
+			return "", err
+		}
 	}
+	placement := operation.SessionPlacement(task, records, scopes)
+	if placement.Reason != "" {
+		return "", nil
+	}
+	owner := placement.OwnerAgentID
 	var affinityCandidates []string
 	grouped := slices.Contains(operation.Mission.Rules[missions.SameAgent].ForActions, task.ActionName)
 	if grouped {
@@ -129,7 +147,7 @@ func (r *Runner) selectAgent(ctx context.Context, operation operations.Operation
 			if action.Name != task.ActionName {
 				continue
 			}
-			if operations.AssessAgentAction(record, action).Reason == "" {
+			if task.MatchesSessionMode(action.SessionMode) && operations.AssessAgentAction(record, action).Reason == "" {
 				eligible[record.ID] = true
 				selection.Candidates = append(selection.Candidates, AgentCandidate{
 					Agent: record.Clone(), RunningTasks: used[record.ID], Capacity: r.capacity,

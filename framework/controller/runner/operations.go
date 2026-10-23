@@ -13,6 +13,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/id"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 func (r *Runner) Missions(ctx context.Context) ([]missions.Mission, error) {
@@ -160,6 +161,11 @@ func (r *Runner) Fail(ctx context.Context, command commands.FailOperationCommand
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
+		if r.sessions != nil {
+			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: command.OperationID}); err != nil {
+				return operations.Operation{}, err
+			}
+		}
 		return s.operation.Clone(), nil
 	})
 }
@@ -178,6 +184,11 @@ func (r *Runner) Cancel(ctx context.Context, command commands.CancelOperationCom
 		next, err := r.store.Cancel(ctx, command.OperationID)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
+		}
+		if r.sessions != nil {
+			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: command.OperationID}); err != nil {
+				return operations.Operation{}, err
+			}
 		}
 		return s.operation.Clone(), nil
 	})

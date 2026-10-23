@@ -19,11 +19,13 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	secretservice "github.com/defos-ai/commander/framework/secrets"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 )
 
 type Config struct {
+	SessionStore      sessions.Store
 	Security          SecurityConfig
 	Deployment        DeploymentConfig
 	SwaggerEnabled    bool
@@ -64,6 +66,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
 	endpoints.RegisterAgents(mux, config.AgentStore)
+	endpoints.RegisterSessions(mux, config.SessionStore, config.AgentStore, config.Operations)
 	endpoints.RegisterControllers(mux, config.ControllerStore)
 	endpoints.RegisterReports(mux, config.ReportStore)
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)

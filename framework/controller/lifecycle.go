@@ -29,6 +29,11 @@ func (c *Controller) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	select {
+	case <-c.sessionsDone:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
 	case <-c.cleanupDone:
 		return c.closeErr
 	case <-ctx.Done():

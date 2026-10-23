@@ -19,6 +19,12 @@
 
 ## Request and response rules
 
+- Runtime-session routes use `queries.Sessions` and typed controller controls;
+  see [the public contract](../../../docs/runtime-sessions.md#queries-and-controls).
+  Keep lifecycle disposition separate from observed state and preserve retained
+  history, normalized task intent and per-task placement blockers. A timed-out
+  close is uncertain; a failed close can remain queued for reconciliation.
+  Preserve `session_mode` across mission contracts, catalog and agent DTOs.
 - `POST /api/v1/missions` strictly decodes a flat API request, maps it explicitly
   to a mission and uses the shared validator before `MissionStore.Create`.
   Root `objectives` is a required ordered array of nonblank strings; steps retain

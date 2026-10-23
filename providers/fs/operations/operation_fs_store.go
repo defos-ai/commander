@@ -14,6 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
@@ -141,6 +142,12 @@ func (s *OperationFsStore) List(ctx context.Context) ([]operations.Operation, er
 func (s *OperationFsStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
 	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
 		return operation.RefreshPreflight(records)
+	})
+}
+
+func (s *OperationFsStore) RefreshSessionPreflight(ctx context.Context, operationID string, records []agents.Agent, scopes []sessions.Scope) (operations.Operation, error) {
+	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
+		return operation.RefreshPreflight(records, scopes)
 	})
 }
 

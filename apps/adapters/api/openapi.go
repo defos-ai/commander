@@ -42,6 +42,8 @@ func openAPIDocument() ([]byte, error) {
 		{"CreateMissionRequest", reflect.TypeFor[models.CreateMissionRequest]()},
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
 		{"Action", reflect.TypeFor[models.ActionResponse]()},
+		{"RuntimeSession", reflect.TypeFor[models.RuntimeSessionResponse]()},
+		{"ControlSessionRequest", reflect.TypeFor[models.ControlSessionRequest]()},
 		{"Agent", reflect.TypeFor[models.AgentResponse]()},
 		{"Controller", reflect.TypeFor[models.ControllerResponse]()},
 		{"Report", reflect.TypeFor[models.ReportResponse]()},
@@ -82,7 +84,17 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["name"].Description = "Requirement identifier, never its value. Managed secret names match [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}."
 			schema.Properties["sensitive"].Description = "Marks sensitive host configuration only; it does not identify a Commander-managed secret. Managed secrets use kind=secret without this flag."
 		case "Action":
+			schema.Properties["session_mode"].Enum = []any{"", "create", "use"}
 			schema.Properties["status"].Description = "Discovered readiness, normally unknown, ready or unavailable. Check the selected agent's action state before dispatch."
+		case "RuntimeSession":
+			schema.Properties["disposition"].Enum = []any{"reserved", "active", "closing", "released"}
+			schema.Properties["release_reason"].Enum = []any{"closed", "abandoned", "cancelled_before_effect"}
+			schema.Properties["owner_agent_id"].Description = "Exact process owner; empty while an undispatched creation is reserved."
+		case "ControlSessionRequest":
+			schema.Properties["method"].Enum = []any{"inspect", "verify", "close", "abandon"}
+			for _, field := range []string{"id", "scope_id", "request_id"} {
+				schema.Properties[field].Format = "uuid"
+			}
 		case "Agent":
 			schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
 			schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
@@ -146,6 +158,7 @@ func openAPIDocument() ([]byte, error) {
 		detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse(catalog.missingCode, endpoints.OpenAPIRef("Error"))
 		paths["/api/v1/"+catalog.path+"/{"+catalog.parameter+"}"] = map[string]any{"get": detail}
 	}
+	openAPISessionPaths(paths)
 	openAPICreateMissionPath(paths)
 	report := endpoints.OpenAPIQueryOperation("getReport", "Get a report", "Reports", endpoints.OpenAPIRef("Report"))
 	report["description"] = "Returns the full immutable saved report directly from the report store. Reads do not execute work or change saved state."
@@ -184,6 +197,7 @@ func openAPIDocument() ([]byte, error) {
 func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 	switch model {
 	case "ActionDefinition", "ActionDefinitionRequest":
+		schema.Properties["session_mode"].Enum = []any{"", "create", "use"}
 		schema.Properties["name"].Pattern = `^\S(?:[\s\S]*\S)?$`
 		if model == "ActionDefinitionRequest" {
 			schema.Properties["description"].Type, schema.Properties["description"].Types = "", []string{"string", "null"}
@@ -300,4 +314,20 @@ func openAPIArtifactPaths(paths map[string]any) {
 	responses["400"] = endpoints.OpenAPIResponse("invalid_artifact_id, invalid_file_id or invalid_request_origin", endpoints.OpenAPIRef("Error"))
 	responses["404"] = endpoints.OpenAPIResponse("artifact_not_found or artifact_file_not_found (unknown file, file not belonging to this artifact, or missing bytes)", endpoints.OpenAPIRef("Error"))
 	paths["/api/v1/artifacts/{artifact_id}/files/{file_id}"] = map[string]any{"get": file}
+}
+
+func openAPISessionPaths(paths map[string]any) {
+	list := endpoints.OpenAPIQueryOperation("listRuntimeSessions", "List durable runtime sessions in one scope", "Sessions", map[string]any{"type": "object", "properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef("RuntimeSession")}}})
+	list["parameters"] = []any{map[string]any{"name": "scope_id", "in": "query", "required": true, "schema": map[string]any{"type": "string", "format": "uuid"}}}
+	paths["/api/v1/runtime-sessions"] = map[string]any{"get": list}
+	paths["/api/v1/runtime-sessions/control"] = map[string]any{"post": map[string]any{
+		"operationId": "controlRuntimeSession", "summary": "Inspect, verify, close, or abandon a lost session", "tags": []string{"Sessions"},
+		"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef("ControlSessionRequest")}}},
+		"responses": map[string]any{
+			"200": endpoints.OpenAPIResponse("Durable session view", endpoints.OpenAPIRef("RuntimeSession")),
+			"400": endpoints.OpenAPIResponse("Invalid control request", endpoints.OpenAPIRef("Error")),
+			"422": endpoints.OpenAPIResponse("Control rejected; a failed close retains its closing intent for reconciliation", endpoints.OpenAPIRef("Error")),
+			"503": endpoints.OpenAPIResponse("session_control_uncertain or sessions_unavailable; query before retrying", endpoints.OpenAPIRef("Error")),
+		},
+	}}
 }

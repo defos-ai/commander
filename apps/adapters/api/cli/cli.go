@@ -94,7 +94,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	handler, err := api.NewHandler(api.Config{
 		Security: configuration.security, SwaggerEnabled: configuration.swagger,
 		Deployment: configuration.deployment,
-		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
+		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore, SessionStore: deps.SessionStore,
 		AgentStore: deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ControllerStore: deps.ControllerStore,
 		ArtifactStore:   deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,

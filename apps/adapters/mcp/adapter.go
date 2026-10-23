@@ -22,6 +22,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -67,6 +68,7 @@ type agentList struct {
 // the catalog; queries read saved state. Only operation commands require a
 // running controller.
 type Config struct {
+	SessionStore      sessions.Store
 	Operations        controllercommands.Operations
 	AgentStore        agentmodel.AgentStore
 	MissionStore      missions.MissionStore
@@ -123,7 +125,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			items, err := config.ActionStore.List(ctx)
 			summaries := make([]actionSummary, 0, len(items))
 			for _, item := range items {
-				summaries = append(summaries, actionSummary{item.Name, item.Description})
+				summaries = append(summaries, actionSummary{Name: item.Name, Description: item.Description, SessionMode: item.SessionMode})
 			}
 			return struct {
 				Actions []actionSummary `json:"actions"`

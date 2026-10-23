@@ -7,6 +7,7 @@ import (
 )
 
 type Preflight struct {
+	Tasks   []TaskPlacement   `json:"tasks,omitempty"`
 	Ready   bool              `json:"ready"`
 	Version uint64            `json:"version"`
 	Actions []ActionReadiness `json:"actions"`
@@ -26,6 +27,10 @@ type AgentReadiness struct {
 }
 
 func (p Preflight) Clone() Preflight {
+	p.Tasks = slices.Clone(p.Tasks)
+	for i := range p.Tasks {
+		p.Tasks[i].MissingRequirements = slices.Clone(p.Tasks[i].MissingRequirements)
+	}
 	p.Actions = slices.Clone(p.Actions)
 	for i := range p.Actions {
 		a := &p.Actions[i]

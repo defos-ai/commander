@@ -3,11 +3,13 @@ package runner
 import (
 	"context"
 	"fmt"
-	"github.com/defos-ai/commander/framework/domain"
 
 	commands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/framework/domain"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 func queuedTask(operationID, stepID, parentID string, action actionmodel.NextAction) operations.Task {
@@ -21,6 +23,16 @@ func taskIndex(op *operations.Operation, taskID string) int {
 		}
 	}
 	return -1
+}
+
+func (r *Runner) normalize(ctx context.Context, op operations.Operation, next []actionmodel.NextAction, records []agents.Agent) ([]actionmodel.NextAction, error) {
+	if len(next) == 0 {
+		return next, nil
+	}
+	if r.sessions != nil {
+		return r.sessions.Normalize(ctx, next, records, op.Mission.ActionDefinitions)
+	}
+	return runtimeSessions.Normalize(next, records, op.Mission.ActionDefinitions...), nil
 }
 
 func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuationCommand) (operations.Operation, error) {
@@ -37,27 +49,39 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 		if err != nil {
 			return operations.Operation{}, err
 		}
-		creationScopes := map[string]bool{}
-		for _, action := range command.Actions {
-			task := operations.Task{ActionName: action.ActionName, Input: action.Input}
-			scope, err := creationScope(task, records)
-			if err != nil {
-				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+
+		command.Actions, err = r.normalize(ctx, s.operation, command.Actions, records)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		scopes := map[string]bool{}
+		for _, a := range command.Actions {
+			task := operations.NewTask(command.OperationID, "", "", a)
+			if task.SessionIntent == nil {
+				continue
 			}
-			if scope != "" && creationScopes[scope] {
-				return operations.Operation{}, fmt.Errorf("%w: multiple session creations for one scope", domain.ErrInvalidInput)
+			if task.SessionIntent.Mode == "create" {
+				if scopes[task.SessionIntent.ScopeID] {
+					return operations.Operation{}, fmt.Errorf("%w: multiple creations in one scope", domain.ErrInvalidInput)
+				}
+				scopes[task.SessionIntent.ScopeID] = true
 			}
-			creationScopes[scope] = true
-			if err := r.checkSessionCreation(task, records, true); err != nil {
-				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+			if r.sessions == nil {
+				return operations.Operation{}, fmt.Errorf("%w: session persistence required", domain.ErrInvalidInput)
 			}
-			if _, err := sessionOwner(task, records); err != nil {
+			if err := r.sessions.CheckAdmission(ctx, task); err != nil {
 				return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 			}
 		}
+
 		next, err := r.store.ResolveContinuation(ctx, command.OperationID, command.TaskID, command.Version, command.Actions)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
+		}
+		if r.sessions != nil {
+			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: command.OperationID}); err != nil {
+				return operations.Operation{}, err
+			}
 		}
 		r.signalScheduler()
 		return s.operation.Clone(), nil

@@ -75,6 +75,7 @@ func (unavailableFiles) Get(context.Context, string, artifacts.ArtifactFile) ([]
 type definition struct {
   Name string ` + "`json:\"name\"`" + `
   Description string ` + "`json:\"description\"`" + `
+  SessionMode string ` + "`json:\"session_mode,omitempty\"`" + `
   RequiredSecrets []string ` + "`json:\"required_secrets,omitempty\"`" + `
   InputSchema json.RawMessage ` + "`json:\"input_schema\"`" + `
   OutputSchema json.RawMessage ` + "`json:\"output_schema\"`" + `

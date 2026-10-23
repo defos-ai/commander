@@ -44,6 +44,12 @@ func (a *Agent) serveSessions(ctx context.Context, bus comms.Bus, publisher even
 				if err == nil {
 					err = request.Validate()
 				}
+				if err == nil && request.Method == "abandon" {
+					err = errors.New("abandonment is controller-owned")
+				}
+				if err == nil && request.Creation != nil {
+					err = (sessions.CreationClaim{Reference: request.Reference, Creation: *request.Creation}).Validate()
+				}
 				if err == nil && request.OwnerAgentID != a.ID() {
 					err = errors.New("session owner mismatch")
 				}
@@ -87,4 +93,50 @@ func (a *Agent) serveSessions(ctx context.Context, bus comms.Bus, publisher even
 		}
 	}()
 	return done, nil
+}
+
+// prepareSession validates framework ownership before action input validation or
+// resource creation. The provider retains the claim for the agent's lifetime.
+func (a *Agent) prepareSession(ctx context.Context, call ActionCall, commandID string, fromServer bool, mode string) error {
+	if mode == "" {
+		if call.Session != nil {
+			return errors.New("unexpected session binding")
+		}
+		return nil
+	}
+	binding := call.Session
+	if !fromServer || binding == nil || a.config.Sessions == nil {
+		return errors.New("session actions require a framework dispatch binding and provider")
+	}
+	if err := binding.Validate(); err != nil {
+		return err
+	}
+	if binding.OwnerAgentID != a.ID() {
+		return errors.New("session binding belongs to another process")
+	}
+	intent, err := sessions.ResolveIntent(mode, call.Input)
+	if err != nil {
+		return err
+	}
+	if intent.Mode != binding.Mode || intent.ScopeID != binding.ScopeID || intent.ID != "" && intent.ID != binding.ID {
+		return errors.New("session binding disagrees with accepted action input")
+	}
+	if binding.Mode == sessions.Create {
+		if binding.Creation.CommandID != commandID || binding.Creation.TaskID != call.Work.TaskID || binding.Creation.OperationID != call.Work.OperationID {
+			return errors.New("session creation does not belong to this execution")
+		}
+		return a.config.Sessions.Prepare(ctx, binding.Claim())
+	}
+	for _, item := range a.config.Sessions.Snapshot() {
+		if item.Reference == binding.Reference {
+			if item.State == "closed" || item.State == "lost" || item.State == "failed" {
+				return errors.New("session is not usable")
+			}
+			if binding.Mode == sessions.Use && item.State != "connected" {
+				return errors.New("session is not verified and connected")
+			}
+			return nil
+		}
+	}
+	return errors.New("unknown session binding")
 }

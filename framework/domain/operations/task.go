@@ -5,6 +5,7 @@ import (
 	"time"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -22,32 +23,38 @@ const (
 // Task is one externally selected action assignment. Result is retained even if
 // the operation is cancelled while its already-dispatched work finishes.
 type Task struct {
-	ID           string                    `json:"id"`
-	OperationID  string                    `json:"operation_id"`
-	ParentTaskID string                    `json:"parent_task_id,omitempty"`
-	StepID       string                    `json:"step_id,omitempty"`
-	AgentID      string                    `json:"agent_id"`
-	ActionName   string                    `json:"action_name"`
-	CommandID    string                    `json:"command_id,omitempty"`
-	DeadlineAt   *time.Time                `json:"deadline_at,omitempty"`
-	Input        json.RawMessage           `json:"input,omitempty"`
-	Status       TaskStatus                `json:"status"`
-	Result       *actionmodel.ActionOutput `json:"result,omitempty"`
-	Continuation *Continuation             `json:"continuation,omitempty"`
-	Error        string                    `json:"error,omitempty"`
-	StartedAt    time.Time                 `json:"started_at"`
-	FinishedAt   *time.Time                `json:"finished_at,omitempty"`
+	SessionIntent *sessions.Intent          `json:"session_intent,omitempty"`
+	ID            string                    `json:"id"`
+	OperationID   string                    `json:"operation_id"`
+	ParentTaskID  string                    `json:"parent_task_id,omitempty"`
+	StepID        string                    `json:"step_id,omitempty"`
+	AgentID       string                    `json:"agent_id"`
+	ActionName    string                    `json:"action_name"`
+	CommandID     string                    `json:"command_id,omitempty"`
+	DeadlineAt    *time.Time                `json:"deadline_at,omitempty"`
+	Input         json.RawMessage           `json:"input,omitempty"`
+	Status        TaskStatus                `json:"status"`
+	Result        *actionmodel.ActionOutput `json:"result,omitempty"`
+	Continuation  *Continuation             `json:"continuation,omitempty"`
+	Error         string                    `json:"error,omitempty"`
+	StartedAt     time.Time                 `json:"started_at"`
+	FinishedAt    *time.Time                `json:"finished_at,omitempty"`
 }
 
 // NewTask constructs a queued assignment with a stable command identity.
 func NewTask(operationID, stepID, parentID string, action actionmodel.NextAction) Task {
 	taskID := id.TaskID()
-	return Task{ID: taskID, CommandID: taskID, OperationID: operationID, StepID: stepID,
+	intent := action.SessionIntent.Clone()
+	if intent != nil && intent.Mode == sessions.Create && intent.ID == "" {
+		intent.ID = taskID
+	}
+	return Task{SessionIntent: intent, ID: taskID, CommandID: taskID, OperationID: operationID, StepID: stepID,
 		ParentTaskID: parentID,
 		ActionName:   action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}
 }
 
 func (t Task) Clone() Task {
+	t.SessionIntent = t.SessionIntent.Clone()
 	t.Input = append(json.RawMessage(nil), t.Input...)
 	if t.FinishedAt != nil {
 		value := *t.FinishedAt

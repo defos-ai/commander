@@ -11,6 +11,7 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 // Assign returns immediately after recording the task. Work belongs to the
@@ -29,15 +30,32 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		if err != nil {
 			return operations.Task{}, err
 		}
-		if err := r.checkSessionCreation(task, records, true); err != nil {
-			return operations.Task{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+
+		resolved, err := r.normalize(ctx, s.operation, []actionmodel.NextAction{{ActionName: task.ActionName, Input: task.Input}}, records)
+		if err != nil {
+			return operations.Task{}, err
 		}
-		if _, err := sessionOwner(task, records); err != nil {
-			return operations.Task{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+		normalized := resolved[0]
+		task.SessionIntent = normalized.SessionIntent.Clone()
+		if task.SessionIntent != nil && task.SessionIntent.Mode == "create" {
+			task.SessionIntent.ID = task.ID
 		}
+		if r.sessions != nil {
+			if err := r.sessions.CheckAdmission(ctx, task); err != nil {
+				return operations.Task{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+			}
+		} else if task.SessionIntent != nil {
+			return operations.Task{}, errors.New("runtime session persistence is not configured")
+		}
+
 		next, err := r.store.QueueTask(ctx, command.OperationID, task)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Task{}, err
+		}
+		if r.sessions != nil {
+			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: command.OperationID}); err != nil {
+				return operations.Task{}, err
+			}
 		}
 		r.signalScheduler()
 		return s.operation.Clone().Tasks[taskIndex(&s.operation, task.ID)], nil
@@ -63,6 +81,19 @@ func (r *Runner) finishTask(s *operationState, task operations.Task, result acti
 	if runErr != nil && r.ctx.Err() != nil {
 		return
 	}
+	if runErr == nil {
+		records, err := r.catalog.Agents(r.ctx)
+		if err != nil {
+			records = nil
+		}
+		resolved, resolveErr := r.normalize(r.ctx, s.operation, result.NextActions, records)
+		if resolveErr != nil {
+			// Keep the accepted outcome and proposals, with explicit admission
+			// blockers when their contracts cannot be resolved durably.
+			resolved = runtimeSessions.Normalize(result.NextActions, nil)
+		}
+		result.NextActions = resolved
+	}
 	outcome := operations.TaskResult{TaskID: task.ID, AgentID: task.AgentID, Status: operations.TaskSucceeded, Result: &result, FinishedAt: time.Now().UTC()}
 	if runErr != nil {
 		outcome.Status, outcome.Result, outcome.Error = operations.TaskFailed, nil, runErr.Error()
@@ -74,6 +105,9 @@ func (r *Runner) finishTask(s *operationState, task operations.Task, result acti
 	saveCtx, done := context.WithTimeout(context.WithoutCancel(r.ctx), 5*time.Second)
 	defer done()
 	next, err := r.store.FinishTask(saveCtx, s.operation.ID, outcome)
+	if err == nil && r.sessions != nil {
+		err = r.sessions.Observe(saveCtx, runtimeSessions.Evidence{OperationID: s.operation.ID})
+	}
 	if err := s.acceptUpdate(next, err); err != nil {
 		s.err = errors.Join(s.err, fmt.Errorf("save task result: %w", err))
 		close(s.changed)

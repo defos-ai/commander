@@ -9,43 +9,30 @@ import (
 	events "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/sessions"
+	runtime "github.com/defos-ai/commander/framework/sessions"
 )
 
+func (c *Controller) RuntimeSessions() *runtime.Coordinator { return c.sessions }
 func (c *Controller) ControlSession(ctx context.Context, request sessions.Control) (sessions.Session, error) {
-	if err := request.Validate(); err != nil {
-		return sessions.Session{}, err
+	if c.sessions == nil {
+		return sessions.Session{}, errors.New("runtime session persistence is not configured")
 	}
-	record, err := c.inventory.Get(ctx, request.OwnerAgentID)
-	if err != nil {
-		return sessions.Session{}, err
-	}
-	record = record.Snapshot(time.Now().UTC())
-	var found *sessions.Session
-	for _, item := range record.Sessions {
-		if item.Reference == request.Reference {
-			v := item.Clone()
-			found = &v
-			break
-		}
-	}
-	if found == nil {
-		return sessions.Session{}, errors.New("unknown session or scope")
-	}
-	if found.State == "closed" || found.State == "failed" {
-		return *found, nil
-	}
-	if record.Stale || record.Status == "stopped" {
-		if request.Method == "close" {
-			return sessions.Session{}, errors.New("session owner unavailable; closure cannot be confirmed")
-		}
-		found.State, found.Reason = "lost", "Session owner is unavailable"
-		return *found, nil
+	return c.sessions.Control(ctx, request)
+}
+func (c *Controller) controlSessionRemote(ctx context.Context, request sessions.Control) (sessions.Session, error) {
+	if request.Method == "abandon" {
+		return sessions.Session{}, errors.New("abandonment is controller-owned")
 	}
 	message, err := messages.NewMessage(agentcommands.ControlSession, request.OwnerAgentID, request)
 	if err != nil {
 		return sessions.Session{}, err
 	}
-	reply, err := c.command(ctx, message, events.AgentUpdated, false)
+	if request.RequestID != "" {
+		message.ID = request.RequestID
+	}
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	reply, err := c.command(bounded, message, events.AgentUpdated, false)
 	if err != nil {
 		return sessions.Session{}, err
 	}
@@ -55,4 +42,23 @@ func (c *Controller) ControlSession(ctx context.Context, request sessions.Contro
 		}
 	}
 	return sessions.Session{}, errors.New("owner did not report the requested session")
+}
+func (c *Controller) reconcileSessionControls() {
+	defer close(c.sessionsDone)
+	if c.sessions == nil {
+		return
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.state.Context.Done():
+			return
+		case <-ticker.C:
+		}
+		err := c.sessions.ResumeControls(c.state.Context)
+		if err != nil && c.state.Context.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
+			c.logger.Warn("Reconcile session controls", "error", err)
+		}
+	}
 }

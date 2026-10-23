@@ -7,15 +7,22 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 type ActionCall struct {
+	Session    *sessions.Binding    `json:"session,omitempty"`
 	ActionName string               `json:"action_name"`
 	Input      json.RawMessage      `json:"input,omitempty"`
 	Work       messages.WorkContext `json:"work,omitzero"`
 }
 
 func (c ActionCall) Validate() error {
+	if c.Session != nil {
+		if err := c.Session.Validate(); err != nil {
+			return err
+		}
+	}
 	if err := c.Work.Validate(); err != nil {
 		return err
 	}

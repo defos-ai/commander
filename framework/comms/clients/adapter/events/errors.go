@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 type remoteError struct {
@@ -42,6 +43,7 @@ var errorCodes = []struct {
 }{
 	{"indeterminate", executions.ErrIndeterminate},
 	{"operation_write_uncertain", operations.ErrWriteUncertain},
+	{"session_write_uncertain", sessions.ErrWriteUncertain},
 	{"canceled", context.Canceled},
 	{"deadline_exceeded", context.DeadlineExceeded},
 	{"controller_closed", domain.ErrControllerClosed},
@@ -67,6 +69,12 @@ var errorCodes = []struct {
 	{"operation_active_tasks", operations.ErrActiveTasks},
 	{"operation_unresolved_work", operations.ErrUnresolvedWork},
 	{"invalid_output", domain.ErrInvalidOutput},
+	{"unknown_session", sessions.ErrUnknownSession},
+	{"scope_reserved", sessions.ErrScopeReserved},
+	{"session_closed", sessions.ErrSessionClosed},
+	{"session_abandoned", sessions.ErrSessionAbandoned},
+	{"session_closing", sessions.ErrSessionClosing},
+	{"session_conflict", sessions.ErrConflict},
 }
 
 func EncodeError(err error) *ControllerError {

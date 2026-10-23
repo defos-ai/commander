@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"fmt"
 	"reflect"
 	"slices"
 	"sort"
@@ -9,11 +10,12 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 // AssessPreflight checks mission requirements and queued optional work against
 // saved affinity. Capacity is separate, so working agents can provide coverage.
-func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
+func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]sessions.Scope) (*Preflight, error) {
 	boundAgentID, err := o.AffinityAgentID()
 	if err != nil {
 		return nil, err
@@ -32,19 +34,60 @@ func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
 	// Include selected optional work so missing requirements are visible while
 	// it waits for dispatch.
 	for _, task := range o.Tasks {
-		if task.Status == TaskQueued && slices.Contains(o.Mission.OptionalActions, task.ActionName) {
+		if task.Status == TaskQueued && (slices.Contains(o.Mission.OptionalActions, task.ActionName) || task.SessionIntent != nil) {
 			names = append(names, task.ActionName)
 		}
 	}
 	names = append(names, group...)
 	slices.Sort(names)
 	names = slices.Compact(names)
+	var scopes []sessions.Scope
+	if len(sessionScopes) > 0 {
+		scopes = sessionScopes[0]
+	}
 	result := &Preflight{Ready: true, Version: 1, Actions: make([]ActionReadiness, 0, len(names))}
+	for _, task := range o.Tasks {
+		if task.Status == TaskQueued {
+			result.Tasks = append(result.Tasks, o.SessionPlacement(task, records, scopes))
+		}
+	}
 	for _, name := range names {
+		constraintOwner, constraintErr := o.sessionConstraint(Task{ActionName: name}, scopes)
+		for _, task := range o.Tasks {
+			if task.Status == TaskQueued && task.ActionName == name && slices.Contains(group, name) && task.SessionIntent != nil && task.SessionIntent.Mode != sessions.Create {
+				owner, err := o.sessionConstraint(task, scopes)
+				if err != nil {
+					constraintErr = err
+				}
+				if constraintOwner != "" && owner != "" && constraintOwner != owner {
+					constraintErr = fmt.Errorf("placement_conflict: action tasks require different session owners")
+				}
+				if owner != "" {
+					constraintOwner = owner
+				}
+			}
+		}
+		owners := map[string]bool{}
+		if !slices.Contains(group, name) {
+			for _, task := range o.Tasks {
+				if task.Status == TaskQueued && task.ActionName == name && task.SessionIntent != nil && task.SessionIntent.Mode != sessions.Create {
+					owner, _ := sessionConstraint(task, scopes, false)
+					if owner != "" {
+						owners[owner] = true
+					}
+				}
+			}
+		}
 		readiness := ActionReadiness{ActionName: name}
 		grouped := slices.Contains(group, name)
 		foundOwner := false
 		for _, record := range records {
+			if len(owners) > 0 && !owners[record.ID] {
+				continue
+			}
+			if constraintOwner != "" && record.ID != constraintOwner {
+				continue
+			}
 			if grouped && boundAgentID != "" && record.ID != boundAgentID {
 				continue
 			}
@@ -59,6 +102,10 @@ func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
 				continue
 			}
 			var candidate AgentReadiness
+			if constraintErr != nil {
+				readiness.UnavailableAgents = append(readiness.UnavailableAgents, AgentReadiness{AgentID: record.ID, Reason: constraintErr.Error()})
+				continue
+			}
 			if grouped && boundAgentID == "" && !commonAgents[record.ID] {
 				candidate = AgentReadiness{
 					AgentID: record.ID, AgentType: string(record.Type), Reason: "Agent does not provide all actions required by same-agent",
@@ -93,7 +140,7 @@ func (o Operation) AssessPreflight(records []agents.Agent) (*Preflight, error) {
 
 func providesActions(record agents.Agent, names []string) bool {
 	for _, name := range names {
-		if !slices.ContainsFunc(record.Actions, func(action actions.Action) bool { return action.Name == name }) {
+		if !slices.ContainsFunc(record.Actions, func(a actions.Action) bool { return a.Name == name }) {
 			return false
 		}
 	}
@@ -123,16 +170,16 @@ func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness
 	return result
 }
 
-func (o *Operation) RefreshPreflight(records []agents.Agent) (bool, error) {
+func (o *Operation) RefreshPreflight(records []agents.Agent, scopes ...[]sessions.Scope) (bool, error) {
 	if o.Status.Terminal() {
 		return false, ErrFinished
 	}
-	next, err := o.AssessPreflight(records)
+	next, err := o.AssessPreflight(records, scopes...)
 	if err != nil {
 		return false, err
 	}
 	if previous := o.Preflight; previous != nil {
-		if next.Ready == previous.Ready && reflect.DeepEqual(next.Actions, previous.Actions) {
+		if next.Ready == previous.Ready && reflect.DeepEqual(next.Actions, previous.Actions) && reflect.DeepEqual(next.Tasks, previous.Tasks) {
 			return false, nil
 		}
 		next.Version = previous.Version + 1

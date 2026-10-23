@@ -98,6 +98,14 @@
 
 ## Runtime and persistence invariants
 
+- Runtime-session changes must follow [the lifecycle protocol](../docs/runtime-session-lifecycle-design.md)
+  and [provider contract](../docs/runtime-sessions.md#provider-contract). The
+  shared `sessions.Coordinator` owns admission, binding, exact execution claiming
+  and publication ordering. Persist normalized intent with automatic children.
+  Preserve scope history across inventory expiry; abandonment releases only the
+  scope, retaining existing same-agent affinity. Checkpoints remain execution facts.
+  Use [session E2Es](../apps/adapters/api/tests/e2e/session_lifecycle_test.go) for
+  public recovery, owner placement and lifecycle behavior.
 - Use existing controller and runner owner loops for runtime mutation. Update
   persistence, consumers and recovery together when changing lifecycle behavior.
 - Only one active controller per database is supported. Registration and selector
@@ -165,7 +173,7 @@
 ## Agent extension contracts
 
 - [`actions.Definition`](domain/actions/definition.go) owns static action metadata:
-  name, description, input/output schemas and required secret names. Executor
+  name, description, input/output schemas, session mode and required secret names. Executor
   bases retain this static contract separately from readiness. `actions.Action`
   is the flat inventory snapshot, and
   `Action.Definition()` returns an independent static copy. Share metadata

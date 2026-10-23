@@ -52,6 +52,11 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   after completion. Use domain transitions so a late checkpoint cannot extend a
   completed execution or overwrite an earlier checkpoint.
 
+- Session persistence uses [scope aggregates](sessions/session_fs_store.go) under
+  one collection lock. Reserve/release and retained identity evidence commit
+  together; uncertain writes retain `sessions.ErrWriteUncertain`. Reconcile
+  operation and execution stores in the framework coordinator, outside this lock.
+
 ## Bus lifecycle
 
 - Support only `TransientExclusive`; reject `DurableShared` with

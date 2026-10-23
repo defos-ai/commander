@@ -3,6 +3,7 @@ package models
 import "encoding/json"
 
 type ActionDefinitionRequest struct {
+	SessionMode     string          `json:"session_mode,omitempty"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description,omitempty"`
 	RequiredSecrets []string        `json:"required_secrets,omitempty"`
@@ -11,6 +12,7 @@ type ActionDefinitionRequest struct {
 }
 
 type ActionDefinitionResponse struct {
+	SessionMode     string          `json:"session_mode,omitempty"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
 	RequiredSecrets []string        `json:"required_secrets,omitempty"`

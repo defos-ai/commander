@@ -30,6 +30,10 @@
 
 ## MCP contracts
 
+- Runtime-session tools query durable scopes through `queries.Sessions` and send
+  controls through the controller. Preserve `request_id`, abandonment's retained
+  lost state and affinity, and `session_mode` in action summaries/contracts.
+  See [the session contract](../../docs/runtime-sessions.md#queries-and-controls).
 - Standalone MCP requires `MCP_TOKEN`; embedded hosts inject `host.BearerCredentials`
   through CLI options. Validate before opening listeners or providers. Protect
   every `/mcp` method, including notifications/resources, and keep `/healthz` public.

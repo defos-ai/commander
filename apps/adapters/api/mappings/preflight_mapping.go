@@ -9,6 +9,9 @@ import (
 
 func ToPreflightResponse(preflight operations.Preflight) models.PreflightResponse {
 	response := models.PreflightResponse{Ready: preflight.Ready, Version: preflight.Version}
+	for _, task := range preflight.Tasks {
+		response.Tasks = append(response.Tasks, models.TaskPlacementResponse{AgentType: task.AgentType, MissingRequirements: ToActionRequirementResponses(task.MissingRequirements), TaskID: task.TaskID, OwnerAgentID: task.OwnerAgentID, Reason: task.Reason})
+	}
 	if preflight.Actions != nil {
 		response.Actions = make([]models.ActionReadinessResponse, len(preflight.Actions))
 		for i, action := range preflight.Actions {

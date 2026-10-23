@@ -13,6 +13,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 // ActionExecutor dispatches new work and observes previously dispatched work.
@@ -40,6 +41,7 @@ type AgentCatalog interface {
 }
 
 type Config struct {
+	Sessions     *runtimeSessions.Coordinator
 	AgentCatalog AgentCatalog
 	// AgentSelector defaults to round-robin over eligible instances.
 	AgentSelector AgentSelector
@@ -64,6 +66,7 @@ type operationState struct {
 }
 
 type Runner struct {
+	sessions     *runtimeSessions.Coordinator
 	ctx          context.Context
 	cancel       context.CancelFunc
 	executor     ActionExecutor
@@ -127,7 +130,7 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	lifetime, cancel := context.WithCancel(ctx)
-	r := &Runner{catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
+	r := &Runner{sessions: config.Sessions, catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
 		missions: config.MissionStore, reports: config.ReportStore, selector: config.AgentSelector, ruleSelector: config.RuleSelector, logger: config.Logger, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
 	if err := r.recover(ctx); err != nil {
 		cancel()
