@@ -18,6 +18,11 @@ import (
 
 const maxSecretInputBytes = 64 << 10
 
+// SecretInputRequired allows an embedded caller to open its own masked form.
+type SecretInputRequired struct{ Key secrets.Key }
+
+func (*SecretInputRequired) Error() string { return "provide a secret value on stdin or in a terminal" }
+
 func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdout, stderr io.Writer) error {
 	args := configuration.arguments[1:]
 	if len(args) == 0 || len(args) == 1 && args[0] == "help" {
@@ -105,6 +110,9 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 		}
 		_, err := fmt.Fprintf(stdout, "Deleted %s · %s.\n", key.Scope.AgentType, key.Name)
 		return err
+	}
+	if stdin == nil {
+		return &UsageError{cause: &SecretInputRequired{Key: key}}
 	}
 	value, err := readSecret(ctx, stdin, stderr)
 	if err != nil {

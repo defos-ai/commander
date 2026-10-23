@@ -51,10 +51,6 @@ func TestAdminURLValidation(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal("explicit Admin URL did not override the environment")
 	}
-	err = cli.Run(ctx, []string{"--all-in-one", "--no-admin", "--admin-url=https://admin.example.test"}, strings.NewReader(""), io.Discard, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "--no-admin cannot") {
-		t.Fatal("disabled Admin accepted an advertised URL")
-	}
 }
 
 func TestRemoteAdminAddress(t *testing.T) {
@@ -70,15 +66,16 @@ func TestRemoteAdminAddress(t *testing.T) {
 func testAllInOneAdminAddress(t *testing.T) {
 	for _, tc := range []struct {
 		name, runtime, publicURL, hint string
-		disabled, missingAssets        bool
+		serve, missingAssets           bool
+		command                        string
 	}{
-		{name: "native default", runtime: "native"},
-		{name: "native override", runtime: "native", publicURL: "https://admin.example.test/commander/"},
-		{name: "Docker default", runtime: "docker"},
-		{name: "Docker Compose default", runtime: "docker-compose"},
-		{name: "Docker custom mapping", runtime: "docker", publicURL: "http://localhost:14275"},
-		{name: "disabled", runtime: "native", disabled: true, hint: "Admin is disabled."},
-		{name: "unavailable", runtime: "native", missingAssets: true, publicURL: "https://admin.example.test", hint: "Admin UI is unavailable."},
+		{name: "native default", runtime: "native", hint: "Start Admin with /admin serve."},
+		{name: "native runtime start", runtime: "native", command: "/admin serve"},
+		{name: "native override", runtime: "native", serve: true, publicURL: "https://admin.example.test/commander/"},
+		{name: "Docker default", runtime: "docker", serve: true},
+		{name: "Docker Compose default", runtime: "docker-compose", serve: true},
+		{name: "Docker custom mapping", runtime: "docker", serve: true, publicURL: "http://localhost:14275"},
+		{name: "unavailable", runtime: "native", serve: true, missingAssets: true, publicURL: "https://admin.example.test", hint: "Admin UI unavailable."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			allInOneEnvironment(t)
@@ -86,8 +83,8 @@ func testAllInOneAdminAddress(t *testing.T) {
 			t.Setenv("API_USERNAME", "operator+local")
 			t.Setenv("COMMANDER_ADMIN_URL", tc.publicURL)
 			args := []string{"--all-in-one"}
-			if tc.disabled {
-				args = append(args, "--no-admin")
+			if tc.serve {
+				args = append(args, "--serve-admin-ui")
 			}
 			if tc.missingAssets {
 				t.Setenv("UI_STATIC_DIR", filepath.Join(t.TempDir(), "missing"))
@@ -96,7 +93,11 @@ func testAllInOneAdminAddress(t *testing.T) {
 			if want == "" {
 				want = "username=operator%2Blocal"
 			}
-			output := lookupAdmin(t, args, want)
+			var commands []string
+			if tc.command != "" {
+				commands = append(commands, tc.command)
+			}
+			output := lookupAdmin(t, args, want, commands...)
 			for _, secret := range []string{"all-in-one-api-secret", "all-in-one-mcp-secret"} {
 				if strings.Contains(output, secret) {
 					t.Fatal("Admin lookup exposed credentials")
@@ -142,7 +143,7 @@ func testAllInOneAdminAddress(t *testing.T) {
 }
 
 // Exercise the real CLI during provider selection, without a model connection.
-func lookupAdmin(t *testing.T, args []string, want string) string {
+func lookupAdmin(t *testing.T, args []string, want string, commands ...string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -181,8 +182,13 @@ func lookupAdmin(t *testing.T, args []string, want string) string {
 		}
 	}
 	wait("Select your model provider")
-	if _, err := io.WriteString(keyboard, "/admin\r"); err != nil {
-		t.Fatal(err)
+	if len(commands) == 0 {
+		commands = []string{"/admin"}
+	}
+	for _, command := range commands {
+		if _, err := io.WriteString(keyboard, command+"\r"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	wait(want)
 	if _, err := io.WriteString(keyboard, "/exit\r"); err != nil {

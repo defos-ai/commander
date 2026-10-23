@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -23,7 +24,7 @@ import (
 func testAllInOneAdmin(t *testing.T) {
 	t.Run("serves UI and stops with session", func(t *testing.T) {
 		temporary := allInOneEnvironment(t)
-		session, stop := startLocalAdminSession(t, local.Options{})
+		session, stop := startLocalAdminSession(t, local.Options{ServeAdmin: true})
 		body, _ := fetchLocalAsset(t, session.AdminURL, "/")
 		if string(body) != "<html>Admin fixture</html>" {
 			t.Fatal("all-in-one Admin did not serve the explicit frontend directory")
@@ -60,7 +61,7 @@ func testAllInOneAdmin(t *testing.T) {
 		allInOneEnvironment(t)
 		t.Setenv("API_LISTEN_ADDRESS", "0.0.0.0:0")
 		t.Setenv("UI_LISTEN_ADDRESS", "0.0.0.0:0")
-		session, _ := startLocalAdminSession(t, local.Options{})
+		session, _ := startLocalAdminSession(t, local.Options{ServeAdmin: true})
 		for _, endpoint := range []string{session.APIURL, session.AdminURL} {
 			address, err := url.Parse(endpoint)
 			if err != nil || !net.ParseIP(address.Hostname()).IsLoopback() {
@@ -72,10 +73,11 @@ func testAllInOneAdmin(t *testing.T) {
 	for _, name := range []string{"disabled", "occupied port", "missing frontend"} {
 		t.Run(name, func(t *testing.T) {
 			allInOneEnvironment(t)
-			options := local.Options{}
+			frontend := os.Getenv("UI_STATIC_DIR")
+			options := local.Options{ServeAdmin: true}
 			switch name {
 			case "disabled":
-				options.DisableAdmin = true
+				options.ServeAdmin = false
 				// Invalid settings must be ignored when the optional host is disabled.
 				t.Setenv("UI_LISTEN_ADDRESS", "invalid-address")
 				t.Setenv("UI_STATIC_DIR", filepath.Join(t.TempDir(), "missing"))
@@ -103,8 +105,56 @@ func testAllInOneAdmin(t *testing.T) {
 					t.Fatal("Admin startup notice exposed credentials")
 				}
 			}
+			if name == "disabled" {
+				checkRuntimeAdmin(t, session, frontend)
+			}
 			stop() // An optional startup failure must not turn session shutdown into an error.
 		})
+	}
+}
+
+func checkRuntimeAdmin(t *testing.T, session *local.Session, frontend string) {
+	t.Helper()
+	if _, err := session.ServeAdmin(t.Context(), nil); err == nil {
+		t.Fatal("runtime Admin start accepted invalid UI settings")
+	}
+	fetchLocalAsset(t, session.APIURL, "/readyz")
+	startup, cancel := context.WithCancel(t.Context())
+	address, err := session.ServeAdmin(startup, []string{"--listen-address=127.0.0.1:0", "--static-dir=" + frontend})
+	cancel()
+	if err != nil || address == "" {
+		t.Fatalf("retry runtime Admin startup: %v", err)
+	}
+	fetchLocalAsset(t, address, "/healthz") // Canceling a command must not stop its server.
+	second, err := session.ServeAdmin(t.Context(), nil)
+	if err != nil || second != address || session.AdminURL != "" {
+		t.Fatalf("runtime start changed the initial URL or opened another listener: %q (%v)", second, err)
+	}
+	start := make(chan struct{})
+	finished := make(chan error, 2)
+	go func() {
+		<-start
+		_, err := session.ServeAdmin(t.Context(), nil)
+		finished <- err
+	}()
+	go func() {
+		<-start
+		finished <- session.Close()
+	}()
+	close(start)
+	for range 2 {
+		select {
+		case err := <-finished:
+			if err != nil && !errors.Is(err, context.Canceled) {
+				t.Fatalf("runtime Admin start/close: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("runtime Admin start/close did not finish")
+		}
+	}
+	assertLocalHostStopped(t, address)
+	if _, err := session.ServeAdmin(t.Context(), nil); !errors.Is(err, context.Canceled) {
+		t.Fatal("closed session restarted Admin")
 	}
 }
 
@@ -173,11 +223,13 @@ func checkLocalAdminProxy(t *testing.T, session *local.Session) {
 	}
 }
 
-func TestNoAdminRequiresAllInOne(t *testing.T) {
+func TestServeAdminUIFlagWorksWithRemotePlayground(t *testing.T) {
 	var output bytes.Buffer
-	err := cli.Run(t.Context(), []string{"--no-admin"}, strings.NewReader(""), &output, &output)
-	if err == nil || !strings.Contains(err.Error(), "--all-in-one") {
-		t.Fatal("--no-admin was accepted for a remote Playground session")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	err := cli.Run(ctx, []string{"--serve-admin-ui"}, strings.NewReader(""), &output, &output)
+	if err != context.Canceled {
+		t.Fatal("--serve-admin-ui was rejected before starting a remote Playground session")
 	}
 }
 

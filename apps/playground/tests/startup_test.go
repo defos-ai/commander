@@ -18,7 +18,7 @@ import (
 func testAllInOneDefaultAgents(t *testing.T) {
 	allInOneEnvironment(t)
 	t.Setenv("PATH", t.TempDir()) // Starting the built-in hosts must not require Git.
-	session, _ := startLocalAdminSession(t, local.Options{DisableAdmin: true})
+	session, _ := startLocalAdminSession(t, local.Options{})
 	client, err := bridge.Connect(session.Context, session.MCPURL, session.MCPCredentials)
 	if err != nil {
 		t.Fatal(err)

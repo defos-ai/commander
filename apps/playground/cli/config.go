@@ -18,7 +18,8 @@ import (
 
 type config struct {
 	ui.Config
-	NoAdmin bool
+	ServeAdminUI  bool
+	adminOverride string
 }
 
 func (c *config) configureLocalSession(session *local.Session) {
@@ -43,9 +44,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags := flag.NewFlagSet("commander", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&c.MCP.URL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
-	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for supplying agent secrets; omitted asks when needed (COMMANDER_API_URL)")
-	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller, builder and spawner; credentials are generated when unset; temporary state is removed on exit")
-	flags.BoolVar(&c.NoAdmin, "no-admin", false, "Disable Admin UI in --all-in-one mode")
+	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for Admin commands and agent secrets; omitted asks when needed (COMMANDER_API_URL)")
+	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller, builder and spawner; credentials are generated when unset; temporary state is removed on exit")
+	flags.BoolVar(&c.ServeAdminUI, "serve-admin-ui", false, "Start Admin UI now; otherwise use /admin serve later")
 	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Admin UI browser address; defaults to http://localhost:4275 or the native all-in-one address (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
 	flags.StringVar(&c.Model, "model", env("COMMANDER_LLM_MODEL", ""), "Model name; omitted asks interactively (COMMANDER_LLM_MODEL)")
@@ -83,12 +84,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	if c.AllInOne && apiProvided {
 		return c, errors.New("--all-in-one starts its own API; omit --api-url to use it")
 	}
-	if c.NoAdmin && !c.AllInOne {
-		return c, errors.New("--no-admin requires --all-in-one")
-	}
-	if c.NoAdmin && c.AdminURL != "" {
-		return c, errors.New("--no-admin cannot be combined with --admin-url or COMMANDER_ADMIN_URL")
-	}
+	c.adminOverride = c.AdminURL
 	if !c.AllInOne && c.AdminURL == "" {
 		c.AdminURL = defaultAdminURL
 	}

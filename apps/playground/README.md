@@ -34,6 +34,9 @@ Download a [release binary](../../README.md#binary), then run:
 
 On Windows: `.\commander.exe --all-in-one`.
 
+Type `/admin serve` to start Admin, or pass `--serve-admin-ui` at launch.
+The terminal session works without it.
+
 To build from source with Go 1.26.7+ and Node 24+, run from the repository root:
 
 ```sh
@@ -42,7 +45,8 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-For a Go-only build, omit `-tags embed_ui` and run with `--no-admin`.
+For a Go-only build, omit the frontend steps and `-tags embed_ui`. To serve Admin
+later, build the frontend and set `UI_STATIC_DIR` to its output directory.
 
 Native agents use tools installed on your host: Git for checkout/publication,
 Go and Codex for builds, and [Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander)
@@ -117,9 +121,10 @@ Paste the MCP token when prompted, or set `COMMANDER_MCP_TOKEN` before launch.
 | --- | --- | --- |
 | MCP endpoint | `COMMANDER_MCP_URL` | `--mcp-url` |
 | MCP token | `COMMANDER_MCP_TOKEN` | Masked prompt |
-| API for agent secrets | `COMMANDER_API_URL` | `--api-url` |
+| API for Admin commands and agent secrets | `COMMANDER_API_URL` | `--api-url` |
 | API login | `COMMANDER_API_USERNAME`, `COMMANDER_API_PASSWORD` | Local form |
 | Admin browser address | `COMMANDER_ADMIN_URL` | `--admin-url` |
+| Start Admin UI | — | `--serve-admin-ui` |
 | Model provider/name | `COMMANDER_LLM_PROVIDER`, `COMMANDER_LLM_MODEL` | `--provider`, `--model` |
 | Model API base URL | `COMMANDER_LLM_BASE_URL` | `--base-url` |
 | Redacted error details | `COMMANDER_DEBUG=true` | `--debug` |
@@ -130,8 +135,9 @@ Flags override environment settings. Provider keys can use `OPENAI_API_KEY`,
 `DEEPSEEK_API_KEY` or `COMMANDER_LLM_API_KEY` for Other.
 
 The standalone Admin link defaults to `http://localhost:4275`; setting
-`--admin-url` changes the link, not the server. Supply the API URL/login in the
-secret form if not configured. All-in-one supplies its own connections.
+`--admin-url` changes the link, not the server. Set the API URL/login for Admin
+commands, or enter them in the local form when prompted. All-in-one supplies
+its own API connection.
 
 ### Chat
 
@@ -139,6 +145,8 @@ secret form if not configured. All-in-one supplies its own connections.
 | --- | --- |
 | `/help`, `/status`, `/operations` | Read help, connection status or saved operations. |
 | `/credentials`, `/admin` | Get the all-in-one login or Admin link, including during setup. |
+| `/admin serve` | Start Admin UI for this session. |
+| `/admin help` | List Admin mission and secret commands. |
 | `/secrets` | Reopen the masked agent-secret form. |
 | `/watch <operation-id>` | Follow work and resume model review. |
 | `/run <operation-id> <action-name> <json-input>` | Queue an action through MCP. |
@@ -152,6 +160,10 @@ terminal's copy command, such as **Ctrl+Shift+C** in GNOME Terminal.
 Answer questions with **↑/↓** and **Enter**, or type your own answer.
 **Tab** returns to chat.
 
+Manage missions with `/admin missions list`, `/admin missions import FILE` or
+`/admin missions export NAME`. Use `/admin secrets set AGENT_TYPE NAME` to open
+a masked value form. These commands call the API directly, outside the model.
+
 For failures, use `--debug` for redacted details and inspect saved work before
 retrying. Use `/watch` to resume review of an existing operation.
 
@@ -162,6 +174,8 @@ Build the all-in-one image locally from the repository root:
 ```sh
 docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 ```
+
+Docker AIO starts Admin automatically; pass `--serve-admin-ui=false` to skip it.
 
 [Contributor guidance](AGENTS.md) · [Test setup](../../framework/tests/README.md) ·
 [MCP workflow](../adapters/README.md#operation-workflow)

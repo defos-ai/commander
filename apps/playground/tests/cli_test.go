@@ -158,7 +158,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- cli.Run(cliContext, []string{"--all-in-one", "--provider=other", "--model=fixture", "--base-url=" + model.URL + "/v1", "--no-color", "--debug=false"}, input, &output, &output)
+		done <- cli.Run(cliContext, []string{"--all-in-one", "--serve-admin-ui", "--provider=other", "--model=fixture", "--base-url=" + model.URL + "/v1", "--no-color", "--debug=false"}, input, &output, &output)
 	}()
 	wait := func(text string) {
 		t.Helper()

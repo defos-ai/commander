@@ -15,11 +15,14 @@ the [UI guide](ui/AGENTS.md) for UI changes.
 - `serve` delegates to `ui/backend/cli`; it uses `UI_*` settings and must not
   load or validate `COMMANDER_API_*` credentials. Browser connections remain
   independent of the CLI API connection. Preserve the host's ready callback,
-  caller-owned context and graceful shutdown for future Playground embedding.
+  caller-owned context and graceful shutdown for Playground embedding.
 - `client/` owns the shared authenticated API transport. Connections come from
   explicit options or `COMMANDER_API_*`, never MCP inference. Do not accept a
   password flag, print credentials or expose raw network/server errors. Keep
   redirects/proxies disabled, responses bounded and writes free of automatic retries.
+  `client.ConnectionError` identifies local connection setup; the CLI's
+  `SecretInputRequired` lets an embedded caller open a masked form after metadata
+  is read. Keep these distinguishable from failed or uncertain API writes.
 - `missions/` validates mission files with the shared framework loader and sends
   create-only writes through the API. Retain raw definitions when importing or
   exporting so schema numbers, escapes and extension keywords survive. Validate
@@ -43,8 +46,9 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   read piped/redirected input directly, never arguments or model input. Do not
   probe for available bytes; pipes may deliver later. Read metadata before
   requesting a value. Keep stdin bytes unchanged, clear transient buffers, and
-  return only metadata. Playground owns its existing form; keep its prompt
-  triggering, dismissal and draft isolation while sharing transport and save behavior.
+  return only metadata. Playground uses the same connection and services through
+  `/admin`; its masked form owns login/value entry rather than terminal stdin.
+  Keep automatic requirement triggering, dismissal and draft isolation intact.
 - [docker/Dockerfile](docker/Dockerfile) builds `cmd/commander-admin` with embedded
   frontend assets. The image entry point is `commander-admin`, with `serve` as
   its default command; replacing the command must expose mission/secret commands.

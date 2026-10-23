@@ -53,6 +53,9 @@ func (m *Model) refresh() {
 	m.forceBottom = false
 	m.viewport.Width = max(20, m.width-4)
 	activityLines := 0
+	if m.admin.running {
+		activityLines++
+	}
 	for _, line := range m.operationProgress() {
 		activityLines += strings.Count(line, "\n") + 1
 	}
@@ -174,6 +177,9 @@ func (m *Model) View() string {
 		content = strings.Join(lines, "\n")
 	}
 	var activity []string
+	if m.admin.running {
+		activity = append(activity, m.color(stars[m.frame%len(stars)], ReticleGreen)+" Running Admin command")
+	}
 	if m.busy {
 		activity = append(activity, m.color(stars[m.frame%len(stars)], ReticleGreen)+" "+m.activity)
 	} else if m.controls > 0 {
@@ -196,7 +202,9 @@ func (m *Model) View() string {
 
 func (m *Model) footerView() string {
 	foot := "/help · /exit"
-	if m.stage != stageChat {
+	if m.admin.running {
+		foot += " · Ctrl+C cancel Admin"
+	} else if m.stage != stageChat {
 		foot += " · /back"
 	} else if m.busy {
 		foot += " · Ctrl+C stop reply"

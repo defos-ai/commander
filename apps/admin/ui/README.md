@@ -24,9 +24,12 @@ with `COMMANDER_UI_PORT` and `COMMANDER_API_PORT`.
 
 ### All-in-one
 
-The [all-in-one image](../../playground/README.md#docker-recommended) and native
-`--all-in-one` include Admin. Type `/admin` for its link and `/credentials` for
-the API login. Completed operation rows link directly to their Admin details.
+The [all-in-one image](../../playground/README.md#docker-recommended) starts Admin
+automatically. With a native binary, type `/admin serve` or launch with
+`--all-in-one --serve-admin-ui`.
+
+Type `/admin` for its link and `/credentials` for the all-in-one API login.
+Completed operation rows link directly to their Admin details.
 
 Docker must publish `127.0.0.1:4275:4275`. For another port or host, pass
 `--admin-url http://YOUR_HOST:PORT` after the image name.

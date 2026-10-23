@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,8 +27,8 @@ func TestAdminCommandDuringSetup(t *testing.T) {
 		name, url, hint, want string
 	}{
 		{"configured", "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&username=commander", "", "Admin: http://localhost:4275/"},
-		{"unavailable", "", "Admin is disabled (--no-admin).", "Admin is disabled (--no-admin)."},
-		{"unconfigured", "", "", "Set --admin-url to the address of your Admin UI."},
+		{"unavailable", "", "Admin UI could not start. Try /admin serve.", "Admin UI could not start. Try /admin serve."},
+		{"unconfigured", "", "", "Start Admin with /admin serve."},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			model := ui.New(t.Context(), ui.Config{AdminURL: test.url, AdminHint: test.hint, NoColor: true}, io.Discard)
@@ -47,7 +48,7 @@ func TestAdminCommandDuringSetup(t *testing.T) {
 			}
 			submit("/back")
 			submit("/help")
-			if !strings.Contains(model.View(), "/admin — Show Admin UI link") {
+			if !strings.Contains(model.View(), "/admin [command] — Admin UI, missions and secrets") {
 				t.Fatal("setup help did not list Admin")
 			}
 			submit("/admin")
@@ -63,7 +64,26 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	defer cancel()
 	const adminURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&username=commander"
 	const password, token = "private-admin-password", "private-admin-token"
-	var toolCalls, modelCalls atomic.Int32
+	const missionName, missionObjective = "local-admin-mission", "Local CLI mission objective"
+	var toolCalls, modelCalls, apiCalls, serveCalls atomic.Int32
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalls.Add(1)
+		username, actualPassword, ok := r.BasicAuth()
+		if !ok || username != "commander" || actualPassword != password {
+			t.Error("Admin command did not use Playground's API credentials")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/missions" {
+			t.Errorf("unexpected Admin API request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"items":[{"name":%q,"objectives":[%q],"required_actions":["review"],"starting_actions":["review"],"input_schema":{"type":"object"},"output_schema":{}}]}`, missionName, missionObjective)
+	}))
+	defer api.Close()
+	started, release := make(chan struct{}), make(chan struct{})
 	server := mcp.NewServer(&mcp.Implementation{Name: "admin-command-fixture", Version: "1"}, nil)
 	server.AddTool(&mcp.Tool{Name: "list_operations", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		toolCalls.Add(1)
@@ -77,7 +97,7 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 		if err != nil {
 			t.Error("could not inspect model request")
 		}
-		for _, private := range []string{adminURL, "Usage: /admin", password, token} {
+		for _, private := range []string{adminURL, api.URL, "Usage: /admin", "Usage: commander-admin", missionName, missionObjective, password, token, "--listen-address=127.0.0.1:0"} {
 			if strings.Contains(string(body), private) {
 				t.Error("local Admin command or credentials reached the model")
 			}
@@ -103,7 +123,21 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 		Keys: map[string]string{"other": "test-only"}, NoColor: true, AdminURL: adminURL,
 		LocalAgentCount: 4,
 		AllInOne:        true,
-		API:             ui.Connection[host.BasicCredentials]{URL: "http://localhost:4274", Credentials: host.BasicCredentials{Username: "commander", Password: password}},
+		API:             ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: password}},
+		ServeAdmin: func(ctx context.Context, args []string) (string, error) {
+			if serveCalls.Add(1) == 1 {
+				close(started)
+			}
+			if len(args) != 1 || args[0] != "--listen-address=127.0.0.1:0" {
+				t.Error("Admin serve did not pass local options to its host")
+			}
+			select {
+			case <-release:
+				return "http://localhost:43275", nil
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		},
 	})
 	defer u.model.Close()
 	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 80})
@@ -114,7 +148,9 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 		u.text(command)
 		u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	}
-	u.wait("help including Admin", func(view string) bool { return strings.Contains(view, "/admin — Show Admin UI link") })
+	u.wait("help including Admin", func(view string) bool {
+		return strings.Contains(view, "/admin [command] — Admin UI, missions and secrets")
+	})
 	view := u.model.View()
 	if !strings.Contains(view, "Usage: /admin") || strings.Count(view, "Admin: "+adminURL) != 2 {
 		t.Fatal("Admin command is not repeatable or did not preserve its link")
@@ -122,6 +158,36 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	if modelCalls.Load() != 0 || toolCalls.Load() != 0 {
 		t.Fatal("Admin command or help called the model or MCP tools")
 	}
+	u.text("/admin help")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("local Admin CLI help", func(view string) bool { return strings.Contains(view, "Usage: commander-admin") })
+	u.text("/admin missions list --json")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("local mission JSON", func(view string) bool { return strings.Contains(view, missionObjective) })
+	if apiCalls.Load() != 1 {
+		t.Fatal("Admin mission command did not make exactly one API request")
+	}
+	u.text("/admin serve --listen-address=127.0.0.1:0")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("Admin serve callback did not start")
+	}
+	u.text("/admin serve --listen-address=127.0.0.1:0")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.model.View(), "An Admin command is running") || serveCalls.Load() != 1 {
+		t.Fatal("concurrent Admin command was not rejected")
+	}
+	close(release)
+	wantURL := "http://localhost:43275/#/connect?api=" + url.QueryEscape(api.URL) + "&username=commander"
+	u.wait("ready Admin link", func(view string) bool { return strings.Contains(view, "Admin: "+wantURL) })
+	u.text("/status")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.model.View(), wantURL) || serveCalls.Load() != 1 || modelCalls.Load() != 0 || toolCalls.Load() != 0 {
+		t.Fatal("Admin result did not update its link locally")
+	}
+	view = u.model.View()
 	for _, private := range []string{password, token} {
 		if strings.Contains(view, private) {
 			t.Fatal("Admin command disclosed credentials")
@@ -252,7 +318,7 @@ func TestAdminCompletionWithoutURLIsSilent(t *testing.T) {
 	}
 	u.text("/admin")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), "Set --admin-url to the address of your Admin UI.") {
+	if !strings.Contains(u.model.View(), "Start Admin with /admin serve.") {
 		t.Fatal("explicit Admin lookup did not explain missing configuration")
 	}
 }

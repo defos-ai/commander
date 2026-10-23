@@ -41,7 +41,7 @@ func testAllInOneSecrets(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			session, stop := startLocalAdminSession(t, local.Options{DisableAdmin: true})
+			session, stop := startLocalAdminSession(t, local.Options{})
 			assertLocalSecretEnvironment(t, test.key, !test.unset)
 			created := localSecretRequest(t, session, http.MethodPost, "/api/v1/secrets",
 				`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+localSecretValue+`"}`, http.StatusCreated)
@@ -99,7 +99,7 @@ func testAllInOneSecrets(t *testing.T) {
 				}
 				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 				defer cancel()
-				session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: true})
+				session, err := local.StartWithOptions(ctx, local.Options{})
 				if session != nil {
 					t.Cleanup(func() { _ = session.Close() })
 					t.Fatal("invalid encryption key started a local session")

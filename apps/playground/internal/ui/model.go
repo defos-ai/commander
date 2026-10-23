@@ -29,6 +29,7 @@ type Config struct {
 	MCP                      Connection[host.BearerCredentials]
 	AllInOne                 bool
 	LocalAgentCount          int
+	ServeAdmin               func(context.Context, []string) (string, error)
 }
 
 type Connection[C host.Credentials] struct {
@@ -51,6 +52,7 @@ type Model struct {
 	setupState
 	questions            questionPanel
 	secrets              secretPanel
+	admin                adminCommandState
 	ctx                  context.Context
 	config               Config
 	input                textinput.Model
@@ -103,6 +105,10 @@ func nextTick() tea.Cmd {
 }
 
 func (m *Model) Close() {
+	if m.admin.cancel != nil {
+		m.admin.cancel()
+		<-m.admin.done
+	}
 	m.clearSecretInputs()
 	if m.secrets.cancel != nil {
 		m.secrets.cancel()
@@ -119,6 +125,9 @@ func (m *Model) Close() {
 }
 
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.adminResult(message); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.secretResult(message); handled {
 		return m, cmd
 	}
@@ -188,6 +197,10 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+d":
 			return m, tea.Quit
 		case "ctrl+c":
+			if m.admin.running {
+				m.admin.cancel()
+				return m, nil
+			}
 			if m.stage != stageChat {
 				return m, tea.Quit
 			}
@@ -208,6 +221,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if value == "/exit" {
 				return m, tea.Quit
+			}
+			if cmd, handled := m.adminCommand(value); handled {
+				return m, cmd
 			}
 			if m.localCommand(value) {
 				return m, nil

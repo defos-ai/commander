@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/defos-ai/commander/apps/playground/internal/adminhost"
 	"github.com/defos-ai/commander/apps/playground/internal/local"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
 	"github.com/mattn/go-isatty"
@@ -37,13 +38,27 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
-		session, err := local.StartWithOptions(ctx, local.Options{DisableAdmin: config.NoAdmin})
+		session, err := local.StartWithOptions(ctx, local.Options{ServeAdmin: config.ServeAdminUI})
 		if err != nil {
 			return err
 		}
 		defer func() { result = errors.Join(result, session.Close()) }()
 		ctx = session.Context
 		config.configureLocalSession(session)
+	} else {
+		admin := adminhost.New(ctx, io.Discard, "")
+		defer func() { result = errors.Join(result, admin.Close()) }()
+		config.configureAdminServer(admin.Start)
+		if config.ServeAdminUI {
+			address, err := config.ServeAdmin(ctx, nil)
+			if err != nil {
+				config.AdminURL = ""
+				config.AdminHint = "Admin UI unavailable. Use /admin serve to try again."
+				config.Notices = append(config.Notices, config.AdminHint)
+			} else {
+				config.Config.SetAdminURL(address)
+			}
+		}
 	}
 	if file, ok := stdout.(*os.File); !ok || !isatty.IsTerminal(file.Fd()) {
 		config.NoColor = true

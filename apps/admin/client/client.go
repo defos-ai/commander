@@ -35,6 +35,12 @@ type Connection struct {
 	Credentials host.BasicCredentials
 }
 
+// ConnectionError lets an embedded client request local connection settings.
+type ConnectionError struct{ cause error }
+
+func (e *ConnectionError) Error() string { return e.cause.Error() }
+func (e *ConnectionError) Unwrap() error { return e.cause }
+
 func (Connection) String() string   { return "Commander API connection" }
 func (Connection) GoString() string { return "Commander API connection" }
 
@@ -80,10 +86,10 @@ type Response struct {
 // It never derives the destination from model output or a remote MCP address.
 func New(connection Connection) (*Client, error) {
 	if err := ValidateURL(connection.URL); err != nil {
-		return nil, err
+		return nil, &ConnectionError{cause: err}
 	}
 	if connection.Credentials.Validate() != nil {
-		return nil, errors.New("API username and password must be set and valid")
+		return nil, &ConnectionError{cause: errors.New("API username and password must be set and valid")}
 	}
 	transport := &http.Transport{
 		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,

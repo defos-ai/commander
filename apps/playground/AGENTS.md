@@ -6,6 +6,9 @@
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
   Admin, MCP, API, controller, builder and spawner hosts for `--all-in-one`.
   The spawner launches agent packages requested through chat/MCP as native children.
+- [`internal/adminhost/`](internal/adminhost/) owns the optional UI listener for
+  native and remote sessions. Command cancellation limits startup; Playground
+  owns the ready server until shutdown. Serialize starts and await shutdown.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
 - [`../admin/client`](../admin/client/) supplies authenticated API transport;
@@ -20,8 +23,9 @@
   credentials. Keep one connection per service; `AllInOne` identifies session
   ownership without duplicating a local API connection.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
-  Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts `--all-in-one`,
-  embeds Admin, includes Chromium/fonts, Git, Go and Codex, and uses a real non-root user's home plus
+  Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts
+  `--all-in-one --serve-admin-ui`, embeds Admin, includes Chromium/fonts, Git,
+  Go and Codex, and uses a real non-root user's home plus
   an init process for browser children. Keep browser packages aligned with the
   browser image.
 
@@ -36,14 +40,27 @@
   as data, not instructions. Never invent package references or imply installation
   grants dependencies, secrets or Docker privileges. Keep the welcome hint short
   and actionable.
-- All-in-one starts Admin through its existing CLI host after API and agent
-  readiness. Default to `127.0.0.1:4275`, honor `UI_LISTEN_ADDRESS`, and pass the
-  listen flag explicitly so `PORT` cannot expose it. `--no-admin` is all-in-one
-  only. Admin startup failures must leave MCP, API and agents running; retain a
-  short notice and host-log details. Optional Admin failures must not fail cleanup.
+- When requested, all-in-one starts Admin through its existing CLI host after
+  API and agent readiness. Default to `127.0.0.1:4275`, honor `UI_LISTEN_ADDRESS`, and pass the
+  listen flag explicitly so `PORT` cannot expose it. Native Playground starts
+  without UI unless `--serve-admin-ui` is passed; `/admin serve` can start it
+  later, including while connected to remote hosts. Repeated starts return the
+  ready link rather than creating another listener. Admin startup failures
+  must leave MCP, API and agents running; retain a short notice and host-log
+  details. Optional Admin failures must not fail cleanup.
   Stop and await Admin before removing session state. Show its ready address in
   `/status`; keep the startup banner short and never put credentials in a URL.
 - `/admin` works during setup and chat without forwarding input to the model.
+  With no subcommand it retains link lookup; `help`, `missions` and `secrets`
+  call the shared Admin CLI/services directly, never a shell or MCP tool.
+  Run commands asynchronously, cancel and await them on exit, and retain one
+  API connection. Per-command API overrides must not reuse its retained password
+  with another destination. Quote parsing groups paths without shell expansion.
+  Keep API login and secret value entry in local forms; never interpret chat
+  text as a value or stream it into the model. `/admin secrets set` opens the
+  masked form even without a watched operation; `/secrets` retains its existing
+  missing-requirement behavior. Preserve form cancellation, drafts and focus.
+  There is no top-level `commander admin` command.
   Add a short Admin review link to each completed, settled operation's progress
   row; do not add a separate chat notice. Account for wrapped progress rows when
   sizing the chat viewport. Native
@@ -53,7 +70,8 @@
   `--admin-url` / `COMMANDER_ADMIN_URL` optionally overrides the browser address;
   it does not start Admin or change listeners or port mappings. Never infer
   Admin's address from a remote MCP endpoint. Do not advertise a disabled or
-  failed local Admin.
+  failed local Admin. A local server started with `/admin serve` remains owned
+  by Playground and must stop before its session state is removed.
   Local links use `#/connect?api=...&username=...` with URL-encoded non-secret
   values; operation review links add `operation=...`. Preserve encoded query
   values when adding the destination. Never include passwords or tokens, log
@@ -82,8 +100,9 @@
   reopens dismissed requirements. Never infer the API connection from MCP or
   model/operation content. All-in-one reuses its API connection; remote mode uses
   `--api-url` / `COMMANDER_API_URL`, `COMMANDER_API_USERNAME` and
-  `COMMANDER_API_PASSWORD`, or asks locally. Keep API login and secret values out
-  of model history, MCP arguments, logs and rendered transcripts. Submit directly
+  `COMMANDER_API_PASSWORD`, or asks locally. Admin commands reuse this same
+  caller-owned API connection; never derive it from MCP. Keep API login and
+  secret values out of model history, MCP arguments, logs and rendered transcripts. Submit directly
   to the authenticated API without redirects or automatic write retries.
   Preserve chat/question drafts; the secret form owns keyboard focus while open.
   Dismissal must survive repeated snapshots of the same requirements. Clear
@@ -98,9 +117,10 @@
   `ask_question`. Preserve existing preflight review scheduling.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
-  use `UI_STATIC_DIR` for an existing frontend or `--no-admin` for a terminal-only
-  run. Keep `UI_STATIC_DIR`, `UI_PUBLIC_ORIGIN` and `UI_API_UPSTREAMS` semantics in
-  the Admin host. When no upstream mapping is supplied, map the session's exact
+  use `UI_STATIC_DIR` for an existing frontend when starting Admin. A terminal-only
+  session needs no assets. Keep `UI_STATIC_DIR`, `UI_PUBLIC_ORIGIN` and
+  `UI_API_UPSTREAMS` semantics in the Admin host. When no upstream mapping is
+  supplied, map the session's exact
   bound API address to itself so custom ports work without relaxing network
   policy. Use loopback URLs for wildcard listeners. Native tests must exercise
   both bundled and directory assets.
@@ -191,7 +211,9 @@
   mounts or an unauthenticated token endpoint.
 - The all-in-one image builds Admin assets with Node, copies them into
   `apps/admin/ui/backend/static/dist`, and compiles Commander with `-tags embed_ui`.
-  Do not copy a loose frontend directory into the runtime image. It binds Admin
+  Do not copy a loose frontend directory into the runtime image. Its entrypoint
+  opts into Admin with `--serve-admin-ui`; a later `--serve-admin-ui=false` must
+  override that default. It binds Admin
   to `0.0.0.0:4275` and the API to `0.0.0.0:4274`; document host publishing on
   `127.0.0.1` by default. Admin proxies to the API inside the same container, so
   the quick start publishes only `4275`; API publishing stays optional. MCP stays
@@ -297,8 +319,8 @@ For image changes, build both Dockerfiles from the repository root. Verify the
 all-in-one image starts without a model key, serves Admin assets and `/healthz`
 through published port `4275`, and authenticates/proxies to its API without
 publishing `4274`. Check the default Admin link, explicit `--admin-url`,
-`--no-admin`, explicit credential overrides and clean SIGTERM shutdown. Keep Docker lifecycle
-in shell/CI rather than Go test fixtures.
+`--serve-admin-ui=false`, explicit credential overrides and clean SIGTERM shutdown.
+Keep Docker lifecycle in shell/CI rather than Go test fixtures.
 
 [Native release builds](../../.github/workflows/build-binaries.yml) run environment
 discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.

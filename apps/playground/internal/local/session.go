@@ -19,6 +19,7 @@ import (
 	spawnercli "github.com/defos-ai/commander/apps/agents/spawner/cli"
 	controllercli "github.com/defos-ai/commander/apps/controllers/default/cli"
 	"github.com/defos-ai/commander/apps/controllers/default/data"
+	"github.com/defos-ai/commander/apps/playground/internal/adminhost"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
@@ -33,7 +34,7 @@ type runningHost struct {
 }
 
 type Options struct {
-	DisableAdmin bool
+	ServeAdmin bool
 }
 
 type Session struct {
@@ -51,6 +52,7 @@ type Session struct {
 	log            *os.File
 	once           sync.Once
 	closeErr       error
+	admin          *adminhost.Manager
 }
 
 // Start reuses the real application hosts without a checkout or working-directory files.
@@ -163,8 +165,13 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = s.awaitAgents(startup, expected); err != nil {
 		return nil, err
 	}
-	if !options.DisableAdmin {
-		s.startAdmin()
+	s.admin = adminhost.New(s.Context, s.log, s.APIURL)
+	if options.ServeAdmin {
+		s.AdminURL, err = s.ServeAdmin(startup, nil)
+		if err != nil {
+			fmt.Fprintf(s.log, "Admin UI startup: %v\n", err)
+			s.Notices = append(s.Notices, "Admin UI unavailable; Playground is ready. Use --debug for details.")
+		}
 	}
 	if err = s.Context.Err(); err != nil {
 		return nil, context.Cause(s.Context)
@@ -278,6 +285,9 @@ func (s *Session) awaitAgents(ctx context.Context, expected map[string]string) e
 func (s *Session) Close() error {
 	s.once.Do(func() {
 		s.cancel(context.Canceled)
+		if s.admin != nil {
+			s.closeErr = errors.Join(s.closeErr, s.admin.Close())
+		}
 		retainState := false
 		for i := len(s.hosts) - 1; i >= 0; i-- {
 			host := s.hosts[i]

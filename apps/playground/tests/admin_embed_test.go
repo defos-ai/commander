@@ -18,7 +18,7 @@ func TestAllInOneBundledAdmin(t *testing.T) {
 	if err := os.Unsetenv("UI_STATIC_DIR"); err != nil {
 		t.Fatal(err)
 	}
-	session, stop := startLocalAdminSession(t, local.Options{})
+	session, stop := startLocalAdminSession(t, local.Options{ServeAdmin: true})
 	index, _ := fetchLocalAsset(t, session.AdminURL, "/")
 	if !bytes.Contains(index, []byte("COMMANDER | Administration")) {
 		t.Fatal("bundled Admin was not served from an unrelated working directory")

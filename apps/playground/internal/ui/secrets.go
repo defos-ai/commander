@@ -40,6 +40,7 @@ type secretField struct {
 
 type secretPanel struct {
 	open       bool
+	manual     bool
 	stage      secretStage
 	fields     []secretField
 	focused    int
@@ -50,6 +51,7 @@ type secretPanel struct {
 	generation uint64
 	inputEpoch uint64
 	cancel     context.CancelFunc
+	onConnect  func() tea.Cmd
 }
 
 // Clipboard reads and cursor commands may complete after a field loses focus.
@@ -94,6 +96,9 @@ func (m *Model) pendingSecrets() map[secretRequirement]bool {
 }
 
 func (m *Model) syncSecrets() tea.Cmd {
+	if m.admin.running && !m.secrets.open {
+		return nil
+	}
 	if m.stage != stageChat {
 		return nil
 	}
@@ -104,7 +109,7 @@ func (m *Model) syncSecrets() tea.Cmd {
 		}
 	}
 	if m.secrets.open {
-		if m.secrets.stage == secretFinished || m.secrets.stage == secretSaving {
+		if m.secrets.manual || m.secrets.stage == secretFinished || m.secrets.stage == secretSaving {
 			return nil
 		}
 		current := make(map[secrets.Key]bool)
@@ -148,29 +153,58 @@ func (m *Model) openSecrets(manual bool) tea.Cmd {
 			panel.dismissed[requirement] = true
 		}
 	}
-	panel.open = true
-	panel.keys = nil
+	var ordered []secrets.Key
 	for key := range keys {
-		panel.keys = append(panel.keys, key)
+		ordered = append(ordered, key)
 	}
-	sort.Slice(panel.keys, func(i, j int) bool {
-		a, b := panel.keys[i], panel.keys[j]
+	sort.Slice(ordered, func(i, j int) bool {
+		a, b := ordered[i], ordered[j]
 		if a.Scope.AgentType != b.Scope.AgentType {
 			return a.Scope.AgentType < b.Scope.AgentType
 		}
 		return a.Name < b.Name
 	})
+	m.beginSecretPanel(ordered, false)
+	if panel.connection.URL == "" || panel.connection.Credentials.Password == "" {
+		m.connectSecrets("")
+		return m.secretInputCommand(textinput.Blink)
+	}
+	return m.loadSecrets()
+}
+
+func (m *Model) openAdminSecret(key secrets.Key) tea.Cmd {
+	if err := key.Validate(); err != nil {
+		m.add("error", err.Error())
+		return nil
+	}
+	m.beginSecretPanel([]secrets.Key{key}, true)
+	if m.secrets.connection.URL == "" || m.secrets.connection.Credentials.Password == "" {
+		m.connectSecrets("")
+		return m.secretInputCommand(textinput.Blink)
+	}
+	return m.loadSecrets()
+}
+
+func (m *Model) connectAdminAPI(message string, resume func() tea.Cmd) tea.Cmd {
+	m.beginSecretPanel(nil, true)
+	if message == client.ErrAuthentication.Error() {
+		m.secrets.connection.Credentials.Password = ""
+	}
+	m.secrets.onConnect = resume
+	m.connectSecrets(message)
+	return m.secretInputCommand(textinput.Blink)
+}
+
+func (m *Model) beginSecretPanel(keys []secrets.Key, manual bool) {
+	m.finishSecrets("")
+	panel := &m.secrets
+	panel.open, panel.manual, panel.keys = true, manual, keys
 	panel.connection = m.config.API
 	if panel.connection.Credentials.Username == "" {
 		panel.connection.Credentials.Username = "commander"
 	}
 	m.input.Blur()
 	m.questions.input.Blur()
-	if panel.connection.URL == "" || panel.connection.Credentials.Password == "" {
-		m.connectSecrets("")
-		return m.secretInputCommand(textinput.Blink)
-	}
-	return m.loadSecrets()
 }
 
 func (m *Model) newSecretField(label, value string, masked bool) secretField {
@@ -200,6 +234,7 @@ func (m *Model) connectSecrets(message string) {
 		m.newSecretField("Username", panel.connection.Credentials.Username, false),
 		m.newSecretField("API password", panel.connection.Credentials.Password, true),
 	}
+	m.focusSecret(0)
 	for i := range panel.fields {
 		if panel.fields[i].input.Value() == "" {
 			m.focusSecret(i)
@@ -285,8 +320,14 @@ func (m *Model) secretResult(message tea.Msg) (tea.Cmd, bool) {
 	}
 	if result.write {
 		text := "Secrets saved. Waiting for the agent."
+		if panel.manual {
+			text = "Secret saved."
+		}
 		if result.err != nil {
 			text = result.err.Error() + ". Reopen /secrets to check before trying again."
+			if panel.manual {
+				text = result.err.Error() + ". Check saved state before trying again."
+			}
 			if result.saved > 0 {
 				text = fmt.Sprintf("%d saved. ", result.saved) + text
 			}
@@ -305,7 +346,7 @@ func (m *Model) secretResult(message tea.Msg) (tea.Cmd, bool) {
 	m.config.API = panel.connection
 	panel.stage, panel.message = secretValues, ""
 	for i, metadata := range result.metadata {
-		if metadata != nil && metadata.Status == "available" {
+		if metadata != nil && metadata.Status == "available" && !panel.manual {
 			continue
 		}
 		key := panel.keys[i]
@@ -366,6 +407,7 @@ func (m *Model) clearSecretInputs() {
 
 func (m *Model) finishSecrets(message string) {
 	m.clearSecretInputs()
+	m.secrets.onConnect = nil
 	if m.secrets.cancel != nil {
 		m.secrets.cancel()
 	}
@@ -376,7 +418,11 @@ func (m *Model) finishSecrets(message string) {
 
 func (m *Model) dismissSecrets() {
 	if m.secrets.stage == secretSaving {
-		m.add("notice", "Save interrupted. Use /secrets to check before trying again.")
+		message := "Save interrupted. Use /secrets to check before trying again."
+		if m.secrets.manual {
+			message = "Save interrupted. Check saved state before trying again."
+		}
+		m.add("notice", message)
 	}
 	m.finishSecrets("")
 	m.secrets.open = false
@@ -412,6 +458,18 @@ func (m *Model) secretKey(key tea.KeyMsg) tea.Cmd {
 					Username: panel.fields[1].input.Value(),
 					Password: panel.fields[2].input.Value(),
 				},
+			}
+			if panel.onConnect != nil {
+				api, err := client.New(client.Connection{URL: panel.connection.URL, Credentials: panel.connection.Credentials})
+				if err != nil {
+					m.connectSecrets(err.Error())
+					return m.secretInputCommand(textinput.Blink)
+				}
+				api.Close()
+				m.config.API = panel.connection
+				resume := panel.onConnect
+				m.dismissSecrets()
+				return resume()
 			}
 			return m.loadSecrets()
 		}

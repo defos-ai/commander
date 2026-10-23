@@ -32,19 +32,6 @@ func (m *Model) localCommand(value string) bool {
 	if len(args) == 0 {
 		return false
 	}
-	if args[0] == "/admin" {
-		m.input.Reset()
-		if len(args) != 1 {
-			m.add("notice", "Usage: /admin")
-		} else if m.config.AdminURL != "" {
-			m.add("admin", "Admin:")
-		} else if m.config.AdminHint != "" {
-			m.add("notice", m.config.AdminHint)
-		} else {
-			m.add("notice", "Set --admin-url to the address of your Admin UI.")
-		}
-		return true
-	}
 	if args[0] != "/credentials" {
 		return false
 	}

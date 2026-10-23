@@ -59,3 +59,6 @@ and connect to your API in the browser. `serve` needs no `COMMANDER_API_*` setti
 
 The `commander-admin` Docker image starts the UI by default. Pass `missions` or
 `secrets` after the image name to run a CLI command instead.
+
+In Playground, use `/admin help` for the same commands and `/admin serve` to
+start the UI. Secret values use a local masked form.

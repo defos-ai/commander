@@ -220,6 +220,77 @@ func TestSecretFormDoesNotOverwriteAvailableValues(t *testing.T) {
 	}
 }
 
+func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	const password = "private-admin-api-password"
+	const value = "private-replacement-token"
+	const secretID = "da378c90-63eb-46da-b186-552e1e144510"
+	var writes atomic.Int32
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, supplied, ok := r.BasicAuth()
+		if !ok || username != "commander" || supplied != password {
+			t.Error("Admin secret form did not authenticate with its local login")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path != "/api/v1/secrets/builder-agent/GITHUB_TOKEN" {
+			t.Error("Admin secret form used an unexpected secret scope")
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method == http.MethodGet {
+			writeSecretFormMetadata(w, "GITHUB_TOKEN")
+			return
+		}
+		var input struct {
+			ID      string `json:"id"`
+			Version uint64 `json:"version"`
+			Value   string `json:"value"`
+		}
+		if r.Method != http.MethodPut || json.NewDecoder(r.Body).Decode(&input) != nil || input.ID != secretID || input.Version != 1 || input.Value != value {
+			t.Error("Admin secret form did not rotate the metadata shown to the operator")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		writes.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": secretID, "agent_type": "builder-agent", "name": "GITHUB_TOKEN", "version": 2, "status": "available"})
+	}))
+	defer api.Close()
+	u, _, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{}, password, value, api.URL)
+	defer u.model.Close()
+	u.text("/admin secrets set builder-agent GITHUB_TOKEN")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("Admin API login", func(view string) bool { return strings.Contains(view, "Connect to API") })
+	u.text(api.URL)
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.text(password)
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("available secret opened for rotation", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	// Process the periodic requirement refresh with no operation being watched.
+	afterRefresh := time.Now().Add(280 * time.Millisecond)
+	u.wait("manual form retained across requirement refresh", func(view string) bool {
+		if !strings.Contains(view, "builder-agent · GITHUB_TOKEN") {
+			t.Fatal("an unrelated requirement refresh closed the manual secret form")
+		}
+		return time.Now().After(afterRefresh)
+	})
+	u.text(value)
+	if strings.Contains(u.model.View(), value) {
+		t.Fatal("Admin secret value was not masked")
+	}
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("Admin secret rotation", func(view string) bool { return strings.Contains(view, "Secret saved.") })
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	if writes.Load() != 1 {
+		t.Fatal("Admin secret form did not rotate exactly once")
+	}
+	u.text("Normal message after Admin secret rotation")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("chat after Admin secret form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
+}
+
 func TestSecretFormClearsExpiredTaskWait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()

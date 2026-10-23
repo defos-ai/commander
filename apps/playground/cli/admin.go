@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/url"
@@ -37,26 +38,39 @@ func validateAdminURL(raw string) error {
 }
 
 func (c *config) configureLocalAdmin(session *local.Session) {
-	if c.NoAdmin {
-		c.AdminURL = ""
-		c.AdminHint = "Admin is disabled. Start without --no-admin to enable it."
-		return
-	}
+	c.configureAdminServer(session.ServeAdmin)
 	if session.AdminURL == "" {
-		c.AdminURL = ""
-		c.AdminHint = "Admin UI is unavailable. Use --debug for details."
+		if c.ServeAdminUI {
+			c.AdminURL = ""
+			c.AdminHint = "Admin UI unavailable. Use /admin serve to try again."
+		} else if c.AdminURL == "" {
+			c.AdminHint = "Start Admin with /admin serve."
+		} else {
+			c.Config.SetAdminURL(c.AdminURL)
+		}
 		return
 	}
-	if c.AdminURL == "" {
-		switch env("API_RUNTIME", "native") {
-		case "docker", "docker-compose":
-			// Match the quick-start port mapping; custom mappings can override it.
-			c.AdminURL = defaultAdminURL
-		default:
-			c.AdminURL = session.AdminURL
-		}
+	c.Config.SetAdminURL(c.adminBrowserAddress(session.AdminURL))
+}
+
+func (c *config) adminBrowserAddress(ready string) string {
+	if c.adminOverride != "" {
+		return c.adminOverride
 	}
-	// These values only prefill the form; authentication still requires a password.
-	prefill := url.Values{"api": {session.APIURL}, "username": {session.APICredentials.Username}}
-	c.AdminURL = strings.TrimRight(c.AdminURL, "/") + "/#/connect?" + prefill.Encode()
+	if c.AllInOne && (env("API_RUNTIME", "native") == "docker" || env("API_RUNTIME", "native") == "docker-compose") {
+		return defaultAdminURL
+	}
+	return ready
+}
+
+func (c *config) configureAdminServer(start func(context.Context, []string) (string, error)) {
+	// Capture the operator's plain browser override before adding prefill data.
+	settings := *c
+	c.ServeAdmin = func(ctx context.Context, args []string) (string, error) {
+		address, err := start(ctx, args)
+		if err != nil {
+			return "", err
+		}
+		return settings.adminBrowserAddress(address), nil
+	}
 }

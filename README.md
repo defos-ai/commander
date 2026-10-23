@@ -44,6 +44,8 @@ powershell -c "iwr -UseBasicParsing https://github.com/defos-ai/commander/releas
 
 Other architectures: [Releases](https://github.com/defos-ai/commander/releases/latest).
 
+Type `/admin serve` to start Admin UI, or add `--serve-admin-ui` when launching.
+
 ### Source
 
 Docker Compose:
@@ -55,7 +57,7 @@ docker compose up --build --wait && docker compose run --build --rm --no-deps pl
 Go:
 
 ```sh
-go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one --no-admin
+go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
 See [Playground](apps/playground/README.md) for native dependencies and configuration.
