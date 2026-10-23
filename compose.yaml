@@ -76,6 +76,45 @@ services:
     volumes:
       - secrets-key:/run/commander-secrets
 
+  api-credentials:
+    image: commander-api:local
+    pull_policy: never
+    user: "0:1000"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        umask 077
+        chgrp 1000 /run/commander-api
+        chmod 750 /run/commander-api
+        password_file=/run/commander-api/api-password
+        if [ -e "$$password_file" ] || [ -L "$$password_file" ]; then
+          test -f "$$password_file"
+          test -s "$$password_file"
+          test ! -L "$$password_file"
+          saved="$$(cat "$$password_file")"
+          API_PASSWORD="$$saved" commander-api credentials --raw > /dev/null
+        fi
+        if [ -n "$$API_PASSWORD" ] || [ ! -f "$$password_file" ]; then
+          temporary="$$(mktemp /run/commander-api/.api-password.XXXXXX)"
+          trap 'rm -f "$$temporary"' EXIT
+          API_PASSWORD="$${API_PASSWORD:-$$(openssl rand -hex 32)}"
+          export API_PASSWORD
+          commander-api credentials --raw > "$$temporary"
+          chmod 440 "$$temporary"
+          mv "$$temporary" "$$password_file"
+        fi
+        chgrp 1000 "$$password_file"
+        chmod 440 "$$password_file"
+    environment:
+      API_USERNAME: ${API_USERNAME:-commander}
+      API_PASSWORD: ${API_PASSWORD:-}
+    volumes:
+      - api-credentials:/run/commander-api
+
   mcp-credentials:
     image: commander-mcp:local
     pull_policy: never
@@ -266,7 +305,8 @@ services:
       - |
         SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
         test -n "$$SECRETS_ENCRYPTION_KEY"
-        API_PASSWORD="$${API_PASSWORD:-$$(openssl rand -hex 32)}"
+        API_PASSWORD="$$(cat /run/commander-api/api-password)"
+        test -n "$$API_PASSWORD"
         export API_PASSWORD SECRETS_ENCRYPTION_KEY
         exec commander-api
     image: commander-api:local
@@ -288,7 +328,10 @@ services:
       - "127.0.0.1:${COMMANDER_API_PORT:-4274}:4274"
     volumes:
       - secrets-key:/run/commander-secrets:ro
+      - api-credentials:/run/commander-api:ro
     depends_on:
+      api-credentials:
+        condition: service_completed_successfully
       secrets-key:
         condition: service_completed_successfully
       controller:
@@ -412,7 +455,17 @@ services:
       - -ec
       - |
         COMMANDER_MCP_TOKEN="$${COMMANDER_MCP_TOKEN:-$$(cat /run/commander/mcp-token)}"
-        export COMMANDER_MCP_TOKEN
+        use_shared_api=true
+        for argument in "$$@"; do
+          case "$$argument" in
+            --api-url|-api-url|--api-url=*|-api-url=*) use_shared_api=false ;;
+          esac
+        done
+        if [ "$$use_shared_api" = true ] && [ -z "$$COMMANDER_API_PASSWORD" ] && [ "$$COMMANDER_API_URL" = http://api:4274 ]; then
+          COMMANDER_API_PASSWORD="$$(cat /run/commander-api/api-password)"
+          test -n "$$COMMANDER_API_PASSWORD"
+        fi
+        export COMMANDER_MCP_TOKEN COMMANDER_API_PASSWORD
         exec commander "$$@"
       - commander
     environment:
@@ -437,7 +490,12 @@ services:
       TERM: ${TERM:-xterm-256color}
     volumes:
       - mcp-credentials:/run/commander:ro
+      - api-credentials:/run/commander-api:ro
     depends_on:
+      api-credentials:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
       mcp-credentials:
         condition: service_completed_successfully
       mcp:
@@ -450,6 +508,7 @@ services:
 volumes:
   builder-workspaces:
   secrets-key:
+  api-credentials:
   mcp-credentials:
   rabbitmq:
   minio:

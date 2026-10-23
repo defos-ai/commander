@@ -18,9 +18,9 @@ Open [localhost:4275](http://localhost:4275) and choose **Connect** under
 docker compose exec api commander-api credentials
 ```
 
-Retrieve it again after an API restart, or set `API_PASSWORD` before launch to
-keep it stable. Use **Add connection** for another API. Change the published ports
-with `COMMANDER_UI_PORT` and `COMMANDER_API_PORT`.
+Compose retains the password across restarts. Use **Add connection** for another
+API. Change the published ports with `COMMANDER_UI_PORT` and `COMMANDER_API_PORT`;
+see [deployment](../../../docs/deployment.md#local-compose) to rotate the password.
 
 ### All-in-one
 

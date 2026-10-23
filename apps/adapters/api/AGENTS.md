@@ -67,9 +67,13 @@
   `API_PASSWORD`. Embedded hosts may pass in-memory credentials through
   `RunWithOptions` using `host.BasicCredentials`; reuse framework validation before
   opening listeners or provider clients.
-  Do not introduce credential files or shared passwords. Compose supplies the
-  default username and generates a password at each container start unless
-  explicitly supplied. Playground generates its own per-session credentials.
+  Keep file loading outside the standalone host. Compose's `api-credentials`
+  initializer saves the password in a dedicated volume; API and Playground mount
+  it read-only and export it before exec. Reuse it across restarts; explicit
+  `API_PASSWORD` replaces the saved value when initialization runs again.
+  Rotation requires rerunning that initializer and recreating API and Playground,
+  not merely restarting their containers. Keep browser Admin login independent.
+  All-in-one Playground generates its own per-session credentials.
 - Only explicit local retrieval (`credentials` in the API CLI or `/credentials`
   in Playground) may display credentials; never include passwords in flags, logs,
   errors, HTTP responses or model messages. Missing standalone credentials should

@@ -32,12 +32,24 @@ Compose supplies RabbitMQ, MongoDB and MinIO, using local development credential
 | HTTP API | <http://localhost:4274> | Same API login |
 | MCP | <http://localhost:4273/mcp> | `docker compose exec mcp commander-mcp credentials` |
 
-Playground receives the MCP token automatically. To connect another client, follow
-[the MCP guide](../apps/adapters/README.md#quick-start).
+Playground receives the MCP token and local API login automatically, including
+for `/admin` commands and secret forms. Sign in to browser Admin separately.
+To connect another MCP client, follow [the MCP guide](../apps/adapters/README.md#quick-start).
 
-Set `API_PASSWORD` before launch to keep a fixed API password across restarts.
-The MCP token is saved in a volume; set `MCP_TOKEN` to supply your own.
+Compose saves the API password and MCP token in separate volumes and reuses them
+across restarts. Set `API_PASSWORD` or `MCP_TOKEN` before launch to supply your own.
 Add `--raw` to a credentials command for just its password or token.
+
+After changing `API_PASSWORD`, rerun initialization and recreate the API:
+
+```sh
+docker compose up --force-recreate --wait api
+docker compose run --rm --no-deps playground
+```
+
+Close any existing Playground session first. For a custom `COMMANDER_API_URL`,
+also supply that API's `COMMANDER_API_USERNAME` and `COMMANDER_API_PASSWORD`, or
+enter its login in Playground's local form.
 
 ### Secret encryption
 
@@ -93,6 +105,7 @@ Compose keeps data in named Docker volumes:
 | `rabbitmq` | Broker data |
 | `builder-workspaces` | The default builder's source checkouts |
 | `secrets-key` | The key needed to decrypt saved secrets |
+| `api-credentials` | The shared local API password |
 | `mcp-credentials` | The shared MCP token |
 
 Use `docker compose logs -f` for services and `docker logs <container-id>` for

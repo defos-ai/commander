@@ -25,6 +25,12 @@ func newComposeSecretsFixture(t *testing.T) *composeSecretsFixture {
 	if err := os.Mkdir(f.state, 0700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(f.dir, "api-credentials"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(f.dir, "api-credentials/api-password"), []byte("configured-api-password"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	mock := `#!/bin/sh
 set -eu
 printf '%s' "$SECRETS_ENCRYPTION_KEY" > "$FIXTURE_DIR/observed-key"
@@ -53,6 +59,7 @@ func (f *composeSecretsFixture) run(t *testing.T, service, key string, arguments
 	}
 	script = strings.ReplaceAll(script, "$$", "$")
 	script = strings.ReplaceAll(script, "/run/commander-secrets", f.state)
+	script = strings.ReplaceAll(script, "/run/commander-api", filepath.Join(f.dir, "api-credentials"))
 	// The local fixture uses the runner's group instead of the container group.
 	script = strings.ReplaceAll(script, "chgrp 1000", "chgrp "+strconv.Itoa(os.Getgid()))
 	if service != "secrets-key" {

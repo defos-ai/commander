@@ -88,16 +88,16 @@ containers. Run `--help` for flags, which override environment settings.
 
 ### Authentication and health
 
-Standalone API requires `API_USERNAME` and `API_PASSWORD`. Compose generates a
-password; retrieve it with:
+Standalone API requires `API_USERNAME` and `API_PASSWORD`. Compose generates and
+saves a password, retaining it across restarts. Retrieve its login with:
 
 ```sh
 docker compose exec api commander-api credentials
 ```
 
-Retrieve it again after an API restart, or set `API_PASSWORD` before launch to
-keep it stable. Add `--raw` for the password only. All-in-one Playground exposes
-its session login through `/credentials`.
+Add `--raw` for the password only. Set `API_PASSWORD` to supply your own; follow
+[deployment](../../../docs/deployment.md#local-compose) to apply a rotation.
+All-in-one Playground exposes its session login through `/credentials`.
 
 Use HTTPS for hosted deployments. Authentication is required except for public
 deployment metadata (`/aboutz`), health probes and approved CORS preflights.

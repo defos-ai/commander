@@ -40,8 +40,8 @@
   `GET`/`HEAD` are public and retain Host/Origin checks. Keep tokens, paths and
   shell commands out of metadata responses.
 - Secrets belong in environment variables or explicit in-memory overrides. Never
-  log them. Compose alone may bootstrap the shared MCP token from its dedicated
-  Docker volume; hosts still read process environment credentials.
+  log them. Compose alone may bootstrap the API password and MCP token from
+  separate Docker volumes; hosts still read process environment credentials.
   Use `crypto/subtle` to compare supplied credentials with configured in-memory
   values. Basic authentication must evaluate both username and password matches.
   These adapters do not store password hashes or need a password-storage KDF.

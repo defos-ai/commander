@@ -65,9 +65,10 @@ additional agents run as sibling containers. `/exit` leaves hosts and results
 running. Follow [deployment teardown](../../docs/deployment.md#stopping-and-resetting-agents)
 to stop the stack and its spawned agents.
 
-Compose sets up persistent authentication and secret encryption. For API access,
-retrieve the login with `docker compose exec api commander-api credentials`.
-See [deployment](../../docs/deployment.md) for ports, state and overrides.
+Compose supplies the saved MCP token and API login automatically; `/admin`
+commands and secret forms need no extra login. Browser Admin still asks for it:
+use `docker compose exec api commander-api credentials`.
+See [deployment](../../docs/deployment.md) for ports, password rotation and overrides.
 
 ### Installing agents
 
@@ -137,7 +138,8 @@ Flags override environment settings. Provider keys can use `OPENAI_API_KEY`,
 The standalone Admin link defaults to `http://localhost:4275`; setting
 `--admin-url` changes the link, not the server. Set the API URL/login for Admin
 commands, or enter them in the local form when prompted. All-in-one supplies
-its own API connection.
+its own API connection. Compose supplies the default internal API login; a custom
+`COMMANDER_API_URL` needs that API's own login.
 
 ### Chat
 

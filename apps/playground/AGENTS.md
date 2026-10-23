@@ -204,11 +204,19 @@
   dedicated named volume. MCP and Playground mount it read-only; their wrappers
   export credentials to process environments before exec. Reuse the saved token
   across restarts, replacing it when an explicit nonempty `MCP_TOKEN` is configured.
-  Preserve `COMMANDER_MCP_TOKEN` as a client override. This Compose bootstrap file
-  is the only exception to native/all-in-one credential-file rules. Fail before
+  Preserve `COMMANDER_MCP_TOKEN` as a client override. Compose bootstrap mounts
+  are exceptions to native/all-in-one credential-file rules. Fail before
   starting the client if its required token cannot be read. Use `run --no-deps`
   after stack readiness so launch cannot recreate MCP. Do not add Docker socket
   mounts or an unauthenticated token endpoint.
+- Compose's separate `api-credentials` initializer persists the local API
+  password; API and Playground mount it read-only and export it before exec.
+  Reuse it across restarts, replacing it only when an explicit `API_PASSWORD`
+  is configured. Rotation reruns initialization and recreates affected clients.
+  Default Playground API commands/forms receive this login for `http://api:4274`.
+  A custom `COMMANDER_API_URL` must use its own explicit credentials or local
+  login form; never send the shared password to another destination. Preserve
+  explicit client password overrides. Browser Admin still requires sign-in.
 - The all-in-one image builds Admin assets with Node, copies them into
   `apps/admin/ui/backend/static/dist`, and compiles Commander with `-tags embed_ui`.
   Do not copy a loose frontend directory into the runtime image. Its entrypoint
