@@ -27,7 +27,18 @@ func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
 		t.Fatalf("proposed summary branch failed: %+v", finished.Tasks)
 	}
 	queued := a.task(op.ID, "unavailable-test-action", object{})
-	snapshot := read[models.OperationResponse](a, base)
+	// Queue acceptance precedes the scheduler's persisted optional-action assessment.
+	snapshot := a.wait(op.ID, func(op models.OperationResponse) bool {
+		if op.Preflight == nil || op.Preflight.Ready {
+			return false
+		}
+		for _, action := range op.Preflight.Actions {
+			if action.ActionName == queued.ActionName {
+				return len(action.ReadyAgentIDs) == 0
+			}
+		}
+		return false
+	})
 	result := a.request(http.MethodGet, base+"/graph", nil)
 	graph := decode[models.OperationGraphResponse](t, result, http.StatusOK)
 	assertSchema(t, a, "OperationGraph", result)
