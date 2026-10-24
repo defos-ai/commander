@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/defos-ai/commander/apps/adapters/api/mappings"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
@@ -16,18 +17,34 @@ import (
 )
 
 func RegisterSessions(mux *http.ServeMux, store sessions.Store, agents agents.AgentStore, controller commands.Operations) {
+	query := queries.Sessions{Store: store, Agents: agents}
 	mux.HandleFunc("GET /api/v1/sessions", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
-		scope := r.URL.Query().Get("scope_id")
-		if !id.Valid(scope) {
-			WriteError(w, 400, "invalid_scope_id")
+		filter, ok := readSessionQuery(w, r)
+		if !ok {
 			return
 		}
 		if store == nil {
 			WriteError(w, 503, "sessions_unavailable")
 			return
 		}
-		items, err := (queries.Sessions{Store: store, Agents: agents}).List(r.Context(), scope)
+		items, err := query.List(r.Context(), filter)
 		WriteQueryResult(w, ListResponse(mappings.ToRuntimeSessionResponses(items)), err)
+	}))
+	mux.HandleFunc("GET /api/v1/sessions/{session_id}", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
+		if !id.Valid(r.PathValue("session_id")) {
+			WriteError(w, http.StatusBadRequest, "invalid_session_id")
+			return
+		}
+		if r.URL.RawQuery != "" {
+			WriteError(w, http.StatusBadRequest, "invalid_query")
+			return
+		}
+		if store == nil {
+			WriteError(w, http.StatusServiceUnavailable, "sessions_unavailable")
+			return
+		}
+		item, err := query.Get(r.Context(), r.PathValue("session_id"))
+		WriteQueryResult(w, mappings.ToRuntimeSessionResponse(item), err)
 	}))
 	mux.HandleFunc("POST /api/v1/sessions/control", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var input models.ControlSessionRequest
@@ -56,4 +73,28 @@ func RegisterSessions(mux *http.ServeMux, store sessions.Store, agents agents.Ag
 		}
 		WriteJSON(w, 200, mappings.ToRuntimeSessionResponse(result))
 	}))
+}
+
+func readSessionQuery(w http.ResponseWriter, r *http.Request) (sessions.Query, bool) {
+	values, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid_query")
+		return sessions.Query{}, false
+	}
+	for name, value := range values {
+		if (name != "scope_id" && name != "owner_agent_id") || len(value) != 1 || value[0] == "" {
+			WriteError(w, http.StatusBadRequest, "invalid_query")
+			return sessions.Query{}, false
+		}
+	}
+	filter := sessions.Query{ScopeID: values.Get("scope_id"), OwnerAgentID: values.Get("owner_agent_id")}
+	if filter.ScopeID != "" && !id.Valid(filter.ScopeID) {
+		WriteError(w, http.StatusBadRequest, "invalid_scope_id")
+		return sessions.Query{}, false
+	}
+	if filter.OwnerAgentID != "" && !id.ValidAgent(filter.OwnerAgentID) {
+		WriteError(w, http.StatusBadRequest, "invalid_owner_agent_id")
+		return sessions.Query{}, false
+	}
+	return filter, true
 }

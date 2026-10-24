@@ -30,7 +30,8 @@
 
 ## MCP contracts
 
-- Runtime-session tools query durable scopes through `queries.Sessions` and send
+- Runtime-session tools query retained records through `queries.Sessions` using
+  optional intersecting scope/exact-owner filters and send
   controls through the controller. Preserve `request_id`, abandonment's retained
   lost state and affinity, and `session_mode` in action summaries/contracts.
   See [the session contract](../../docs/runtime-sessions.md#queries-and-controls).

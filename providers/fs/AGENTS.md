@@ -56,6 +56,8 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   one collection lock. Reserve/release and retained identity evidence commit
   together; uncertain writes retain `sessions.ErrWriteUncertain`. Reconcile
   operation and execution stores in the framework coordinator, outside this lock.
+  Discovery filters records inside a collection view, preserving retained history
+  and returning independent records ordered by scope ID, then session ID.
 
 ## Bus lifecycle
 

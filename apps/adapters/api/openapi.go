@@ -317,9 +317,24 @@ func openAPIArtifactPaths(paths map[string]any) {
 }
 
 func openAPISessionPaths(paths map[string]any) {
-	list := endpoints.OpenAPIQueryOperation("listRuntimeSessions", "List durable runtime sessions in one scope", "Sessions", map[string]any{"type": "object", "properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef("RuntimeSession")}}})
-	list["parameters"] = []any{map[string]any{"name": "scope_id", "in": "query", "required": true, "schema": map[string]any{"type": "string", "format": "uuid"}}}
+	list := endpoints.OpenAPIQueryOperation("listRuntimeSessions", "List durable runtime sessions", "Sessions", map[string]any{"type": "object", "required": []string{"items"}, "properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef("RuntimeSession")}}})
+	list["description"] = "Lists current and retained sessions sorted by scope ID, then session ID. Optional scope and exact owner filters intersect. Omitted filters return all saved sessions. Unknown, repeated, empty or malformed query parameters are rejected. Reads do not change lifecycle state or contact the controller."
+	scope := openAPIUUIDParameter("scope_id")
+	scope["in"], scope["required"] = "query", false
+	list["parameters"] = []any{
+		scope,
+		map[string]any{"name": "owner_agent_id", "in": "query", "required": false, "description": "Exact process owner, including for retained lost or closed sessions.", "schema": map[string]any{"type": "string", "pattern": `^[a-z0-9]+(-[a-z0-9]+)*-agent-[0-9a-f]{8}$`, "maxLength": 63}},
+	}
+	list["responses"].(map[string]any)["400"] = endpoints.OpenAPIResponse("invalid_query, invalid_scope_id or invalid_owner_agent_id", endpoints.OpenAPIRef("Error"))
+	list["responses"].(map[string]any)["503"] = endpoints.OpenAPIResponse("sessions_unavailable", endpoints.OpenAPIRef("Error"))
 	paths["/api/v1/sessions"] = map[string]any{"get": list}
+	get := endpoints.OpenAPIQueryOperation("getRuntimeSession", "Get a durable runtime session by ID", "Sessions", endpoints.OpenAPIRef("RuntimeSession"))
+	get["description"] = "Returns the retained session identity, owner and lifecycle without requiring a scope or owner argument. Reads do not change saved state. Query parameters are not accepted."
+	get["parameters"] = []any{openAPIUUIDParameter("session_id")}
+	get["responses"].(map[string]any)["400"] = endpoints.OpenAPIResponse("invalid_session_id or invalid_query", endpoints.OpenAPIRef("Error"))
+	get["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("session_not_found", endpoints.OpenAPIRef("Error"))
+	get["responses"].(map[string]any)["503"] = endpoints.OpenAPIResponse("sessions_unavailable", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/sessions/{session_id}"] = map[string]any{"get": get}
 	paths["/api/v1/sessions/control"] = map[string]any{"post": map[string]any{
 		"operationId": "controlRuntimeSession", "summary": "Inspect, verify, close, or abandon a lost session", "tags": []string{"Sessions"},
 		"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef("ControlSessionRequest")}}},

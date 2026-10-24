@@ -1,10 +1,12 @@
 package sessions
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"slices"
 
 	model "github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
@@ -51,6 +53,44 @@ func (s *SessionFsStore) List(ctx context.Context) ([]model.Scope, error) {
 	err := s.file.View(ctx, func(data []byte) error { var err error; result, err = decode(data); return err })
 	return result, err
 }
+
+func (s *SessionFsStore) Find(ctx context.Context, query model.Query) ([]model.Record, error) {
+	if err := query.Validate(); err != nil {
+		return nil, err
+	}
+	result := []model.Record{}
+	err := s.file.View(ctx, func(data []byte) error {
+		scopes, err := decode(data)
+		if err != nil {
+			return err
+		}
+		for _, scope := range scopes {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if query.ScopeID != "" && scope.ID != query.ScopeID {
+				continue
+			}
+			for _, record := range scope.Records {
+				if query.Matches(record) {
+					result = append(result, record.Clone())
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.SortFunc(result, func(a, b model.Record) int {
+		if order := cmp.Compare(a.ScopeID, b.ScopeID); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return result, nil
+}
+
 func (s *SessionFsStore) Get(ctx context.Context, scopeID string) (model.Scope, error) {
 	if !id.Valid(scopeID) {
 		return model.Scope{}, model.ErrConflict

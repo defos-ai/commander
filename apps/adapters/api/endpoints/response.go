@@ -14,6 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 func ListResponse[T any](items []T) models.ListResponse[T] {
@@ -43,6 +44,8 @@ func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 		WriteError(w, http.StatusNotFound, "report_not_found")
 	case errors.Is(err, artifacts.ErrUnknownArtifact):
 		WriteError(w, http.StatusNotFound, "artifact_not_found")
+	case errors.Is(err, sessions.ErrUnknownSession):
+		WriteError(w, http.StatusNotFound, "session_not_found")
 	case errors.Is(err, context.DeadlineExceeded):
 		WriteError(w, http.StatusGatewayTimeout, "request_timeout")
 	default:

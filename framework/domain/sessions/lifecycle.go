@@ -429,6 +429,7 @@ func (s *Scope) Apply(c Change) error {
 }
 
 type Store interface {
+	QueryStore
 	Get(context.Context, string) (Scope, error)
 	List(context.Context) ([]Scope, error)
 	Apply(context.Context, Change) (Record, error)

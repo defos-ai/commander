@@ -22,6 +22,11 @@ and failure cases, read the [lifecycle design](../../docs/runtime-session-lifecy
   tasks outside it may use other owners.
 - Keep lifecycle disposition (`reserved`, `active`, `closing`, `released`) separate
   from resource state. Lease loss projects `lost` while retaining the reservation.
+- Session discovery uses `sessions.QueryStore.Find` with intersecting session,
+  scope and exact-owner criteria. Providers filter and order independent records
+  by scope ID, then session ID; `queries.Sessions` only projects owner freshness.
+  Retain released identities in discovery. ID lookup rejects ambiguous matches
+  rather than choosing a scope. Reads never change lifecycle evidence.
 - Subscribe to the independent control inbox before advertising agent readiness.
   Preserve correlated receipts, retained history, owner-specific requirements and
   meaningful per-task placement across HTTP/MCP mappings. Ordinary unconstrained

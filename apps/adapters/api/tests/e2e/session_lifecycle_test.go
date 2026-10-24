@@ -360,6 +360,61 @@ func TestE2ESessionLifecycleOwnership(t *testing.T) {
 	if fresh.ID == replacement.ID {
 		t.Fatal("closed session identity reused")
 	}
+	otherScope := id.New()
+	other := s.create(s.start("lifecycle"), otherScope)
+	var discovered struct{ Items []sessions.Session }
+	s.request("GET", "/api/v1/sessions", nil, 200, &discovered)
+	if len(discovered.Items) != 4 {
+		t.Fatalf("discovery lost retained or cross-scope sessions: %+v", discovered.Items)
+	}
+	for i, item := range discovered.Items {
+		if i > 0 {
+			previous := discovered.Items[i-1]
+			if previous.ScopeID > item.ScopeID || previous.ScopeID == item.ScopeID && previous.ID >= item.ID {
+				t.Fatal("session discovery order is not stable by scope and identity")
+			}
+		}
+		var detail sessions.Session
+		s.request("GET", "/api/v1/sessions/"+item.ID, nil, 200, &detail)
+		if detail.Reference != item.Reference || detail.Disposition != item.Disposition || detail.ReleaseReason != item.ReleaseReason {
+			t.Fatalf("ID lookup changed retained ownership/lifecycle: listed=%+v detail=%+v", item, detail)
+		}
+		if item.ID == first.ID && (detail.State != "lost" || detail.ReleaseReason != "abandoned") ||
+			item.ID == replacement.ID && (detail.State != "closed" || detail.ReleaseReason != "closed") {
+			t.Fatalf("ID lookup lost released history: %+v", detail)
+		}
+	}
+	for _, filter := range []struct{ scope, owner string }{
+		{scope: scope}, {owner: first.OwnerAgentID}, {scope: scope, owner: first.OwnerAgentID},
+		{scope: otherScope, owner: other.OwnerAgentID}, {scope: id.New()}, {owner: "fixture-agent-ffffffff"},
+	} {
+		var want []string
+		for _, item := range discovered.Items {
+			if (filter.scope == "" || item.ScopeID == filter.scope) && (filter.owner == "" || item.OwnerAgentID == filter.owner) {
+				want = append(want, item.ID)
+			}
+		}
+		var filtered struct{ Items []sessions.Session }
+		s.request("GET", "/api/v1/sessions?"+sessionFilter(filter.scope, filter.owner), nil, 200, &filtered)
+		var got []string
+		for _, item := range filtered.Items {
+			got = append(got, item.ID)
+		}
+		if strings.Join(got, ",") != strings.Join(want, ",") || filtered.Items == nil {
+			t.Fatalf("session filters did not intersect: filter=%+v got=%v want=%v", filter, got, want)
+		}
+	}
+}
+
+func sessionFilter(scope, owner string) string {
+	var values []string
+	if scope != "" {
+		values = append(values, "scope_id="+scope)
+	}
+	if owner != "" {
+		values = append(values, "owner_agent_id="+owner)
+	}
+	return strings.Join(values, "&")
 }
 
 func TestE2ESessionAffinityLookaheadAndOwnerReadiness(t *testing.T) {

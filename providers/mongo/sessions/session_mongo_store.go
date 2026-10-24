@@ -1,9 +1,11 @@
 package sessions
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 
 	model "github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
@@ -68,6 +70,43 @@ func (s *SessionMongoStore) List(ctx context.Context) ([]model.Scope, error) {
 	}
 	return result, nil
 }
+
+func (s *SessionMongoStore) Find(ctx context.Context, query model.Query) ([]model.Record, error) {
+	if err := query.Validate(); err != nil {
+		return nil, err
+	}
+	filter := bson.M{}
+	if query.ScopeID != "" {
+		filter["_id"] = query.ScopeID
+	}
+	var docs []document
+	if err := s.database.Find(ctx, collection, filter, &docs); err != nil {
+		return nil, err
+	}
+	result := []model.Record{}
+	for _, doc := range docs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		scope, err := doc.decode()
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range scope.Records {
+			if query.Matches(record) {
+				result = append(result, record.Clone())
+			}
+		}
+	}
+	slices.SortFunc(result, func(a, b model.Record) int {
+		if order := cmp.Compare(a.ScopeID, b.ScopeID); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	return result, nil
+}
+
 func (s *SessionMongoStore) Apply(ctx context.Context, c model.Change) (model.Record, error) {
 	var result model.Record
 	wrote := false

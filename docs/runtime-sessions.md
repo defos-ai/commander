@@ -29,12 +29,16 @@ its agent repository.
 
 Use authenticated HTTP:
 
-- `GET /api/v1/sessions?scope_id=<UUID>` lists current and retained sessions.
+- `GET /api/v1/sessions` lists current and retained sessions. Filter by
+  `scope_id=<UUID>`, `owner_agent_id=<agent-ID>`, or both.
+- `GET /api/v1/sessions/<session-ID>` returns its saved scope, owner and state.
 - `POST /api/v1/sessions/control` accepts
   `{id, owner_agent_id, scope_id, method, request_id?}`.
 
-MCP offers `list_runtime_sessions({scope_id})` and `control_runtime_session`
-with the same fields. Methods are `inspect`, `verify`, `close` and `abandon`.
+MCP offers `list_runtime_sessions` with the same optional filters and
+`control_runtime_session` with the control fields above. Lists are ordered by
+scope ID, then session ID, and include closed or abandoned history.
+Methods are `inspect`, `verify`, `close` and `abandon`.
 Reuse a stable UUID `request_id` when reconciling a control. After a timeout,
 inspect the saved session before retrying; a timeout does not prove closure.
 

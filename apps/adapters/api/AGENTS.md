@@ -31,6 +31,9 @@
   history, normalized task intent and per-task placement blockers. A timed-out
   close is uncertain; a failed close can remain queued for reconciliation.
   Preserve `session_mode` across mission contracts, catalog and agent DTOs.
+  Discovery accepts optional intersecting scope/owner filters and ID lookup.
+  Reject unknown, repeated or empty filters. Pass criteria to the query store;
+  HTTP handlers must not load scope collections to filter them themselves.
 - `POST /api/v1/missions` strictly decodes a flat API request, maps it explicitly
   to a mission and uses the shared validator before `MissionStore.Create`.
   Root `objectives` is a required ordered array of nonblank strings; steps retain
