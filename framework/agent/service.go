@@ -181,11 +181,12 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	if err := a.discover(ctx, scope, true); err != nil {
 		return err
 	}
-	if err := a.publishState(ctx, events, controllerevents.AgentStarted, ""); err != nil {
-		return err
-	}
+	// Control delivery must be ready before discovery can dispatch work or close.
 	sessionsDone, err = a.serveSessions(workersCtx, bus, events, endService)
 	if err != nil {
+		return err
+	}
+	if err := a.publishState(ctx, events, controllerevents.AgentStarted, ""); err != nil {
 		return err
 	}
 	if a.secrets != nil {

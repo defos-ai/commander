@@ -36,7 +36,7 @@ type sessionStack struct {
 	peer                string
 }
 
-func newSessionStack(t *testing.T, peer string) *sessionStack {
+func newSessionStack(t *testing.T, peer string, controllerSource ...string) *sessionStack {
 	t.Helper()
 	root, err := filepath.Abs("../../../../..")
 	if err != nil {
@@ -45,6 +45,9 @@ func newSessionStack(t *testing.T, peer string) *sessionStack {
 	state := t.TempDir()
 	binaries := map[string]string{}
 	for name, source := range map[string]string{"api": "./apps/adapters/api/cmd/commander-api", "controller": "./apps/controllers/default/cmd", "worker": "./apps/adapters/api/tests/e2e/fixtures/sessionworker"} {
+		if name == "controller" && len(controllerSource) != 0 {
+			source = controllerSource[0]
+		}
 		binaries[name] = filepath.Join(state, name)
 		command := exec.Command("go", "build", "-o", binaries[name], source)
 		command.Dir = root
@@ -71,7 +74,7 @@ func newSessionStack(t *testing.T, peer string) *sessionStack {
 	if configured := os.Getenv("COMMANDER_SESSION_E2E_BUS_URL"); configured != "" {
 		bus = configured // Caller-provided disposable broker, never an application bus.
 	}
-	env := append(os.Environ(), "BUS_URL="+bus, "DATABASE_URL="+database, "STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=info")
+	env := append(os.Environ(), "BUS_URL="+bus, "DATABASE_URL="+database, "STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=info", "FIXTURE_PEER="+peer)
 	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	t.Cleanup(client.CloseIdleConnections)
 	s := &sessionStack{processes: map[int]*os.Process{}, t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, controllerArgs: []string{"--heartbeat-timeout=6s"}}
@@ -195,12 +198,12 @@ func (s *sessionStack) finished(op, task string) operations.Task {
 }
 func (s *sessionStack) list(scope string) []sessions.Session {
 	var result struct{ Items []sessions.Session }
-	s.request("GET", "/api/v1/runtime-sessions?scope_id="+scope, nil, 200, &result)
+	s.request("GET", "/api/v1/sessions?scope_id="+scope, nil, 200, &result)
 	return result.Items
 }
 func (s *sessionStack) control(ref sessions.Reference, method string) sessions.Session {
 	var result sessions.Session
-	s.request("POST", "/api/v1/runtime-sessions/control", map[string]any{"id": ref.ID, "scope_id": ref.ScopeID, "owner_agent_id": ref.OwnerAgentID, "method": method, "request_id": id.New()}, 200, &result)
+	s.request("POST", "/api/v1/sessions/control", map[string]any{"id": ref.ID, "scope_id": ref.ScopeID, "owner_agent_id": ref.OwnerAgentID, "method": method, "request_id": id.New()}, 200, &result)
 	return result
 }
 func (s *sessionStack) restart() {
@@ -610,7 +613,7 @@ func TestE2ESessionCloseReceiptRecovery(t *testing.T) {
 	scope := id.New()
 	first := s.create(s.start("close-recovery"), scope)
 	request := map[string]any{"id": first.ID, "scope_id": scope, "owner_agent_id": first.OwnerAgentID, "method": "close", "request_id": id.New()}
-	s.request("POST", "/api/v1/runtime-sessions/control", request, 422, nil)
+	s.request("POST", "/api/v1/sessions/control", request, 422, nil)
 	items := s.list(scope)
 	if len(items) != 1 || items[0].Disposition != "closing" || items[0].ReleaseReason != "" {
 		t.Fatalf("failed close released the scope: %+v", items)

@@ -472,4 +472,4 @@ cases that require those integrations; it is not a claim that every case has run
 - [Checkpoint completion constraints](../framework/domain/executions/checkpoint.go)
 - [Checkpoint execution ownership checks](../framework/controller/consumers/checkpoint_consumer.go)
 - [Existing dispatch and same-process redelivery](../framework/controller/dispatch.go)
-- [Domain glossary](../GLOSSARY.md)
+- [Session terminology](../framework/sessions/AGENTS.md#terminology)

@@ -99,7 +99,8 @@
 ## Runtime and persistence invariants
 
 - Runtime-session changes must follow [the lifecycle protocol](../docs/runtime-session-lifecycle-design.md)
-  and [provider contract](../docs/runtime-sessions.md#provider-contract). The
+  and [session guide](sessions/AGENTS.md), including when changing callers outside
+  the session directory. The
   shared `sessions.Coordinator` owns admission, binding, exact execution claiming
   and publication ordering. Persist normalized intent with automatic children.
   Preserve scope history across inventory expiry; abandonment releases only the

@@ -8,13 +8,12 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/sessions"
-	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 func (r *Runner) refreshPreflight(ctx context.Context, state *operationState, records []agents.Agent) error {
 	var scopes []sessions.Scope
 	if r.sessions != nil {
-		if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: state.operation.ID}); err != nil {
+		if err := r.reconcileSessions(ctx, state); err != nil {
 			return err
 		}
 		var err error

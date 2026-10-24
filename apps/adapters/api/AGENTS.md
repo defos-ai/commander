@@ -19,6 +19,12 @@
 
 ## Request and response rules
 
+- Application catalog reads use the HTTP root including `/api/v1` and Basic
+  credentials, configured separately from MCP. Lists return `items`; details
+  return one record. Encode mission names as one path segment, including slashes
+  and dot segments. Preserve typed missing-record responses; a proxy's generic
+  404 is not evidence that a record is absent. Saved-state reads work without
+  a live controller or MCP connection.
 - Runtime-session routes use `queries.Sessions` and typed controller controls;
   see [the public contract](../../../docs/runtime-sessions.md#queries-and-controls).
   Keep lifecycle disposition separate from observed state and preserve retained

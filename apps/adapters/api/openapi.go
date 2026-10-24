@@ -319,8 +319,8 @@ func openAPIArtifactPaths(paths map[string]any) {
 func openAPISessionPaths(paths map[string]any) {
 	list := endpoints.OpenAPIQueryOperation("listRuntimeSessions", "List durable runtime sessions in one scope", "Sessions", map[string]any{"type": "object", "properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef("RuntimeSession")}}})
 	list["parameters"] = []any{map[string]any{"name": "scope_id", "in": "query", "required": true, "schema": map[string]any{"type": "string", "format": "uuid"}}}
-	paths["/api/v1/runtime-sessions"] = map[string]any{"get": list}
-	paths["/api/v1/runtime-sessions/control"] = map[string]any{"post": map[string]any{
+	paths["/api/v1/sessions"] = map[string]any{"get": list}
+	paths["/api/v1/sessions/control"] = map[string]any{"post": map[string]any{
 		"operationId": "controlRuntimeSession", "summary": "Inspect, verify, close, or abandon a lost session", "tags": []string{"Sessions"},
 		"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef("ControlSessionRequest")}}},
 		"responses": map[string]any{

@@ -50,85 +50,10 @@ key cannot decrypt existing secrets. All-in-one generates a temporary session ke
 For separately deployed agents using managed secrets, configure the same key as
 the API. See [secret setup](../framework/secrets/README.md).
 
-### Debug Compose services in VS Code
+### Debugging
 
-Open the repository root in VS Code and install the **Go** extension (`golang.go`).
-Start the debug stack from the repository root:
-
-```sh
-docker compose -f compose.yaml -f compose.debug.yaml up --build --wait
-```
-
-[The debug override](../compose.debug.yaml) replaces the controller, API and MCP
-with separate `:debug` images built by [Dockerfile.debug](../Dockerfile.debug).
-Builder, spawner, infrastructure, Admin UI and Playground use their normal images.
-The override uses the same Compose project and saved
-volumes as normal development; it replaces the existing services, rather than
-starting a second controller against their database.
-
-Each Go host starts under Delve immediately, so health checks and dependent
-services can become ready before VS Code connects. Select a **Commander Docker:**
-configuration in **Run and Debug**, set breakpoints and press **F5**. Choose
-**Commander Docker: All Services** to attach to all three processes.
-The native controller launch and local MCP attach configurations remain available.
-
-| Service | VS Code configuration | Local debugger port |
-| --- | --- | --- |
-| `controller` | Commander Docker: Controller | `2345` |
-| `api` | Commander Docker: API | `2346` |
-| `mcp` | Commander Docker: MCP | `2347` |
-
-All debugger ports bind to `127.0.0.1`. These development containers enable
-ptrace and disable the seccomp filter for Delve; use the normal Compose file for
-regular deployment. Build for the host's native architecture (including arm64
-on Apple Silicon), since debugging an emulated container may not work.
-
-Debug binaries disable optimization and inlining and retain `/src` source paths.
-[The attach configurations](../.vscode/launch.json) map the local repository to
-`/src`. If a breakpoint stays hollow, confirm the correct service is attached and
-rebuild its image after source edits. Each process needs its own breakpoints;
-stepping does not follow a broker message into another service. While paused,
-requests can time out, health checks can fail and agent leases can expire.
-
-For Playground, keep the override in the command so Compose uses the debug images:
-
-```sh
-docker compose -f compose.yaml -f compose.debug.yaml run --build --rm --no-deps playground
-```
-
-API password generation, the secrets encryption key, the shared MCP token volume
-and explicit credential overrides work as usual. In debug containers Delve occupies PID 1, so the normal
-credential commands cannot discover generated credentials automatically. These
-explicit lookups import Delve's startup environment in a shell before calling the
-credential command; they do not save credentials to files or pass them as arguments:
-
-```sh
-docker compose exec api bash -ec 'while IFS= read -r -d "" entry; do export "$entry"; done < /proc/1/environ; exec commander-api credentials'
-docker compose exec mcp bash -ec 'while IFS= read -r -d "" entry; do export "$entry"; done < /proc/1/environ; exec commander-mcp credentials'
-```
-
-To rebuild a changed service, disconnect its VS Code session, run the following
-command (replace `controller` as needed), then attach again:
-
-```sh
-docker compose -f compose.yaml -f compose.debug.yaml up -d --build --no-deps controller
-```
-
-**Disconnect** leaves a running target available for another attach; continue a paused target
-before disconnecting. **Terminate** stops the target and Delve, and the override
-disables automatic restarts; start that service again with the command above.
-To debug startup, temporarily remove `--continue` from that service's Delve
-arguments, start it with `up -d --no-deps SERVICE` (without `--wait`), then attach
-before continuing. Start its dependencies first using the normal debug command.
-
-Return to normal images, retaining saved volumes:
-
-```sh
-docker compose -f compose.yaml up --build --wait
-```
-
-See the [VS Code Go remote debugging guide](https://github.com/golang/vscode-go/blob/master/docs/debugging.md#remote-debugging)
-for attach and source mapping details.
+Use the [VS Code debugging guide](../.vscode/debug/README.md) to attach to
+the controller, API and MCP containers.
 
 ## Configuration
 

@@ -81,20 +81,15 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	}
 	address := listener.Addr().String()
 	listener.Close()
-	mission := filepath.Join(state, "missions.json")
-	rules := `{}`
+	rules := map[string]any{}
 	if sameAgent {
-		rules = `{"same-agent":{"for_actions":["propose-connections","connect-resource"]}}`
-	}
-	definition := fmt.Sprintf(`[{"name":"session-e2e","objectives":["Connect one owned resource"],"required_actions":["propose-connections","connect-resource"],"starting_actions":["propose-connections"],"rules":%s,"input_schema":{"type":"object"},"output_schema":{"type":"object"}}]`, rules)
-	if err := os.WriteFile(mission, []byte(definition), 0600); err != nil {
-		t.Fatal(err)
+		rules["same-agent"] = map[string]any{"for_actions": []string{"propose-connections", "connect-resource"}}
 	}
 	password := id.New()
 	env := append(os.Environ(), "BUS_URL="+filepath.Join(state, "bus"), "DATABASE_URL="+filepath.Join(state, "database"),
 		"STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=error")
 	startE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
-	controllerArgs := []string{"--with-missions=" + mission}
+	var controllerArgs []string
 	stopController := startE2E(t, binaries["controller"], controllerArgs, env)
 	for i := range 2 {
 		workerEnv := append(append([]string{}, env...), fmt.Sprintf("FIXTURE_AGENT_ID=fixture-agent-%08x", i+1), "FIXTURE_PEER="+peer.URL)
@@ -146,6 +141,7 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 		request("GET", "/api/v1/agents", nil, 200, &catalog)
 		return len(catalog.Items) == 2 && catalog.Items[0].Status == "ready" && catalog.Items[1].Status == "ready"
 	})
+	request("POST", "/api/v1/missions", map[string]any{"name": "session-e2e", "objectives": []string{"Connect one owned resource"}, "required_actions": []string{"propose-connections", "connect-resource"}, "starting_actions": []string{"propose-connections"}, "rules": rules, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
 	input := map[string]any{"session_scope": id.New()}
 	start := func() string {
 		var operation operations.Operation

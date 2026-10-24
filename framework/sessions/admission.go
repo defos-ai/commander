@@ -61,6 +61,22 @@ func Normalize(next []actions.NextAction, records []agents.Agent, definitions ..
 // Normalize uses mission contracts and the durable catalog only at acceptance.
 // Once saved, task intent is never reinterpreted from a later registration.
 func (c *Coordinator) Normalize(ctx context.Context, next []actions.NextAction, records []agents.Agent, definitions []actions.Definition) ([]actions.NextAction, error) {
+	known := make(map[string]bool)
+	for _, definition := range definitions {
+		known[definition.Name] = true
+	}
+	for _, record := range records {
+		for _, definition := range record.Actions {
+			known[definition.Name] = true
+		}
+	}
+	needsCatalog := false
+	for _, proposal := range next {
+		needsCatalog = needsCatalog || !known[proposal.ActionName]
+	}
+	if !needsCatalog {
+		return Normalize(next, records, definitions...), nil
+	}
 	catalog, err := c.actions.List(ctx)
 	if err != nil {
 		return nil, err
@@ -69,16 +85,7 @@ func (c *Coordinator) Normalize(ctx context.Context, next []actions.NextAction, 
 	for _, definition := range catalog {
 		// Live announcements and explicit mission contracts supersede an older
 		// last-writer catalog entry. Conflicting live contracts still block.
-		known := false
-		for _, d := range fallback {
-			known = known || d.Name == definition.Name
-		}
-		for _, agent := range records {
-			for _, a := range agent.Actions {
-				known = known || a.Name == definition.Name
-			}
-		}
-		if !known {
+		if !known[definition.Name] {
 			fallback = append(fallback, definition.Definition())
 		}
 	}

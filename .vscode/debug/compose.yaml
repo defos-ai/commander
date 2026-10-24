@@ -1,4 +1,4 @@
-# docker compose -f compose.yaml -f compose.debug.yaml up --build --wait
+# docker compose -f compose.yaml -f .vscode/debug/compose.yaml up --build --wait
 # Start immediately so health checks and dependent services can become ready.
 # VS Code attaches to the existing session; debugger ports stay on localhost.
 x-debug: &debug
@@ -8,7 +8,7 @@ x-debug: &debug
 
 x-debug-build: &debug-build
   context: .
-  dockerfile: Dockerfile.debug
+  dockerfile: .vscode/debug/Dockerfile
   target: runtime
 
 services:

@@ -60,33 +60,35 @@ type Config struct {
 }
 
 type operationState struct {
-	operation operations.Operation
-	changed   chan struct{}
-	err       error
+	sessionPending bool
+	operation      operations.Operation
+	changed        chan struct{}
+	err            error
 }
 
 type Runner struct {
-	sessions     *runtimeSessions.Coordinator
-	ctx          context.Context
-	cancel       context.CancelFunc
-	executor     ActionExecutor
-	store        operations.OperationStore
-	missions     missions.MissionStore
-	reports      reports.ReportStore
-	states       map[string]*operationState
-	taskTimeout  time.Duration
-	catalog      AgentCatalog
-	selector     AgentSelector
-	ruleSelector RuleSelector
-	logger       *slog.Logger
-	capacity     int
-	lastAgent    string
-	wake         chan struct{}
-	requests     chan func()
-	results      chan taskResult
-	workers      int
-	closeErr     error // written before done closes
-	done         chan struct{}
+	sessions       *runtimeSessions.Coordinator
+	ctx            context.Context
+	cancel         context.CancelFunc
+	executor       ActionExecutor
+	store          operations.OperationStore
+	missions       missions.MissionStore
+	reports        reports.ReportStore
+	states         map[string]*operationState
+	taskTimeout    time.Duration
+	catalog        AgentCatalog
+	selector       AgentSelector
+	ruleSelector   RuleSelector
+	logger         *slog.Logger
+	capacity       int
+	lastAgent      string
+	wake           chan struct{}
+	requests       chan func()
+	pendingResults map[string]taskResult
+	results        chan taskResult
+	workers        int
+	closeErr       error // written before done closes
+	done           chan struct{}
 }
 
 func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Runner, error) {

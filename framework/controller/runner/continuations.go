@@ -78,11 +78,7 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
-		if r.sessions != nil {
-			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: command.OperationID}); err != nil {
-				return operations.Operation{}, err
-			}
-		}
+		r.observeAccepted(ctx, s)
 		r.signalScheduler()
 		return s.operation.Clone(), nil
 	})

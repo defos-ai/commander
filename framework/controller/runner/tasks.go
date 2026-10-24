@@ -11,7 +11,6 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
-	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 // Assign returns immediately after recording the task. Work belongs to the
@@ -52,11 +51,7 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Task{}, err
 		}
-		if r.sessions != nil {
-			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: command.OperationID}); err != nil {
-				return operations.Task{}, err
-			}
-		}
+		r.observeAccepted(ctx, s)
 		r.signalScheduler()
 		return s.operation.Clone().Tasks[taskIndex(&s.operation, task.ID)], nil
 	})
@@ -81,19 +76,29 @@ func (r *Runner) finishTask(s *operationState, task operations.Task, result acti
 	if runErr != nil && r.ctx.Err() != nil {
 		return
 	}
-	if runErr == nil {
-		records, err := r.catalog.Agents(r.ctx)
-		if err != nil {
-			records = nil
+	if runErr == nil && len(result.NextActions) != 0 {
+		ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
+		records, err := r.catalog.Agents(ctx)
+		var resolved []actionmodel.NextAction
+		if err == nil {
+			resolved, err = r.normalize(ctx, s.operation, result.NextActions, records)
 		}
-		resolved, resolveErr := r.normalize(r.ctx, s.operation, result.NextActions, records)
-		if resolveErr != nil {
-			// Keep the accepted outcome and proposals, with explicit admission
-			// blockers when their contracts cannot be resolved durably.
-			resolved = runtimeSessions.Normalize(result.NextActions, nil)
+		cancel()
+		if err != nil {
+			// Keep the durable execution outcome recoverable until its proposals
+			// can be classified. A lookup outage is not an invalid action contract.
+			if r.pendingResults == nil {
+				r.pendingResults = make(map[string]taskResult)
+			}
+			if _, pending := r.pendingResults[task.ID]; !pending {
+				r.logger.Warn("Task result awaiting action contracts", "operation_id", task.OperationID, "task_id", task.ID, "error_type", fmt.Sprintf("%T", err))
+			}
+			r.pendingResults[task.ID] = taskResult{task: task.Clone(), output: result.Clone()}
+			return
 		}
 		result.NextActions = resolved
 	}
+	delete(r.pendingResults, task.ID)
 	outcome := operations.TaskResult{TaskID: task.ID, AgentID: task.AgentID, Status: operations.TaskSucceeded, Result: &result, FinishedAt: time.Now().UTC()}
 	if runErr != nil {
 		outcome.Status, outcome.Result, outcome.Error = operations.TaskFailed, nil, runErr.Error()
@@ -105,12 +110,17 @@ func (r *Runner) finishTask(s *operationState, task operations.Task, result acti
 	saveCtx, done := context.WithTimeout(context.WithoutCancel(r.ctx), 5*time.Second)
 	defer done()
 	next, err := r.store.FinishTask(saveCtx, s.operation.ID, outcome)
-	if err == nil && r.sessions != nil {
-		err = r.sessions.Observe(saveCtx, runtimeSessions.Evidence{OperationID: s.operation.ID})
-	}
 	if err := s.acceptUpdate(next, err); err != nil {
 		s.err = errors.Join(s.err, fmt.Errorf("save task result: %w", err))
 		close(s.changed)
 		s.changed = make(chan struct{})
+		return
+	}
+	r.observeAccepted(saveCtx, s)
+}
+
+func (r *Runner) retryResults() {
+	for _, result := range r.pendingResults {
+		r.finishTask(r.states[result.task.OperationID], result.task, result.output, result.err)
 	}
 }

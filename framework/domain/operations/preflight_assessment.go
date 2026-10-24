@@ -48,7 +48,12 @@ func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]se
 	result := &Preflight{Ready: true, Version: 1, Actions: make([]ActionReadiness, 0, len(names))}
 	for _, task := range o.Tasks {
 		if task.Status == TaskQueued {
-			result.Tasks = append(result.Tasks, o.SessionPlacement(task, records, scopes))
+			placement := o.SessionPlacement(task, records, scopes)
+			// Unconstrained queue changes do not change readiness. Retain session
+			// intent, owner restrictions and blockers as meaningful placement data.
+			if task.SessionIntent != nil || placement.OwnerAgentID != "" || placement.Reason != "" {
+				result.Tasks = append(result.Tasks, placement)
+			}
 		}
 	}
 	for _, name := range names {

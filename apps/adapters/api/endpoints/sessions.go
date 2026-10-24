@@ -16,7 +16,7 @@ import (
 )
 
 func RegisterSessions(mux *http.ServeMux, store sessions.Store, agents agents.AgentStore, controller commands.Operations) {
-	mux.HandleFunc("GET /api/v1/runtime-sessions", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/sessions", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
 		scope := r.URL.Query().Get("scope_id")
 		if !id.Valid(scope) {
 			WriteError(w, 400, "invalid_scope_id")
@@ -29,7 +29,7 @@ func RegisterSessions(mux *http.ServeMux, store sessions.Store, agents agents.Ag
 		items, err := (queries.Sessions{Store: store, Agents: agents}).List(r.Context(), scope)
 		WriteQueryResult(w, ListResponse(mappings.ToRuntimeSessionResponses(items)), err)
 	}))
-	mux.HandleFunc("POST /api/v1/runtime-sessions/control", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/sessions/control", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var input models.ControlSessionRequest
 		if !ReadJSON(w, r, &input, false) {
 			return

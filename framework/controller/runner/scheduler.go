@@ -47,6 +47,11 @@ func (r *Runner) dispatchQueued() {
 	sort.Strings(ids)
 	for _, id := range ids {
 		s := r.states[id]
+		if s.sessionPending {
+			if err := r.reconcileSessions(ctx, s); err != nil {
+				continue
+			}
+		}
 		if active(s) != nil {
 			continue
 		}

@@ -117,6 +117,24 @@ type fixtureAction struct {
 }
 
 func (a *fixtureAction) Run(ctx context.Context, raw json.RawMessage) (action.Result, error) {
+	if a.Action().Name == "propose-work" {
+		var input struct {
+			ActionName string `json:"action_name"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return action.Result{}, err
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, a.peer+"/propose", nil)
+		if err != nil {
+			return action.Result{}, err
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			return action.Result{}, err
+		}
+		response.Body.Close()
+		return action.Result{Output: json.RawMessage(`{}`), NextActions: []action.NextAction{{ActionName: input.ActionName, Input: json.RawMessage(`{}`)}}}, nil
+	}
 	if a.Action().Name == "propose-connections" {
 		return action.Result{Output: json.RawMessage(`{}`), NextActions: []action.NextAction{
 			{ActionName: "connect-resource", Input: raw},
@@ -223,14 +241,18 @@ func run() error {
 	owner := os.Getenv("FIXTURE_AGENT_ID")
 	resources := &resources{ctx: ctx, peer: os.Getenv("FIXTURE_PEER"), claims: map[string]sessions.CreationClaim{}, closed: map[string]bool{}, changes: make(chan struct{}, 8)}
 	var executors []action.Executor
-	for _, name := range []string{"propose-connections", "connect-resource"} {
+	for _, name := range []string{"propose-connections", "connect-resource", "propose-work"} {
 		mode := ""
 		if name == "connect-resource" {
 			mode = "create"
 		}
+		inputSchema := json.RawMessage(`{"type":"object","required":["session_scope"],"properties":{"session_scope":{"type":"string"}}}`)
+		if name == "propose-work" {
+			inputSchema = json.RawMessage(`{"type":"object","required":["action_name"],"properties":{"action_name":{"type":"string"}}}`)
+		}
 		executors = append(executors, &fixtureAction{Base: action.NewBase(actions.Action{
 			Name: name, Description: "E2E connection fixture", SessionMode: mode,
-			InputSchema:  json.RawMessage(`{"type":"object","required":["session_scope"],"properties":{"session_scope":{"type":"string"}}}`),
+			InputSchema:  inputSchema,
 			OutputSchema: json.RawMessage(`{"type":"object"}`),
 		}), owner: owner, peer: os.Getenv("FIXTURE_PEER"), resources: resources})
 	}
