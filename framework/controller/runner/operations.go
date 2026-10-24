@@ -160,6 +160,7 @@ func (r *Runner) Fail(ctx context.Context, command commands.FailOperationCommand
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
+		r.observeAccepted(ctx, s)
 		return s.operation.Clone(), nil
 	})
 }
@@ -179,6 +180,7 @@ func (r *Runner) Cancel(ctx context.Context, command commands.CancelOperationCom
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
+		r.observeAccepted(ctx, s)
 		return s.operation.Clone(), nil
 	})
 }

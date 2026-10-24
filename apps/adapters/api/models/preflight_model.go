@@ -1,6 +1,14 @@
 package models
 
+type TaskPlacementResponse struct {
+	AgentType           string                      `json:"agent_type,omitempty"`
+	MissingRequirements []ActionRequirementResponse `json:"missing_requirements,omitempty"`
+	TaskID              string                      `json:"task_id"`
+	OwnerAgentID        string                      `json:"owner_agent_id,omitempty"`
+	Reason              string                      `json:"reason,omitempty"`
+}
 type PreflightResponse struct {
+	Tasks   []TaskPlacementResponse   `json:"tasks,omitempty"`
 	Ready   bool                      `json:"ready"`
 	Version uint64                    `json:"version"`
 	Actions []ActionReadinessResponse `json:"actions"`

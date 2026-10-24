@@ -2,34 +2,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Commander Web Agent",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/apps/agents/web/cmd",
-      "cwd": "${workspaceFolder}",
-      "buildFlags": "-buildvcs=false",
-      "console": "integratedTerminal",
-      "args": [
-        "-bus-url=${workspaceFolder}/state/bus",
-        "-storage-url=${workspaceFolder}/state/storage"
-      ]
-    },
-    {
-      "name": "Commander Browser Agent",
-      "type": "go",
-      "request": "launch",
-      "mode": "debug",
-      "program": "${workspaceFolder}/apps/agents/browser/cmd",
-      "cwd": "${workspaceFolder}",
-      "buildFlags": "-buildvcs=false",
-      "console": "integratedTerminal",
-      "args": [
-        "-bus-url=${workspaceFolder}/state/bus",
-        "-storage-url=${workspaceFolder}/state/storage"
-      ]
-    },
-    {
       "name": "Commander Controller",
       "type": "go",
       "request": "launch",
@@ -52,6 +24,61 @@
       "mode": "local",
       "processId": "${command:pickGoProcess}",
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Commander Docker: Controller",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2345,
+      "substitutePath": [
+        {
+          "from": "${workspaceFolder}",
+          "to": "/src"
+        }
+      ]
+    },
+    {
+      "name": "Commander Docker: API",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2346,
+      "substitutePath": [
+        {
+          "from": "${workspaceFolder}",
+          "to": "/src"
+        }
+      ]
+    },
+    {
+      "name": "Commander Docker: MCP",
+      "type": "go",
+      "debugAdapter": "dlv-dap",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2347,
+      "substitutePath": [
+        {
+          "from": "${workspaceFolder}",
+          "to": "/src"
+        }
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Commander Docker: All Services",
+      "configurations": [
+        "Commander Docker: Controller",
+        "Commander Docker: API",
+        "Commander Docker: MCP"
+      ]
     }
   ]
 }

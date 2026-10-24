@@ -57,6 +57,12 @@ artifact bytes and reports belong to the separate storage provider.
   deletion markers. Preserve collections, indexes, catalogs and execution records;
   a delayed accepted-result write must not recreate deleted artifact metadata.
 
+- [Session scopes](sessions/session_mongo_store.go) are transactional JSON
+  aggregates in `runtime_sessions`, preserving exact timestamps and revisions.
+  Keep collection creation outside transactions and release/history in the same
+  document. Retain identities without TTL cleanup; preserve uncertain commits.
+  Lifecycle validation uses the isolated [public E2E suite](../../docs/runtime-sessions.md#e2e-checks).
+
 ## Validation
 
 Use a dedicated test database on a running replica set. Follow

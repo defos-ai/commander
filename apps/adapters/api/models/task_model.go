@@ -11,7 +11,14 @@ type AssignTaskRequest struct {
 	Input      json.RawMessage `json:"input,omitempty"`
 }
 
+type SessionIntentResponse struct {
+	Mode    string `json:"mode"`
+	ScopeID string `json:"scope_id"`
+	ID      string `json:"id,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
 type TaskResponse struct {
+	SessionIntent       *SessionIntentResponse      `json:"session_intent,omitempty"`
 	ID                  string                      `json:"id"`
 	OperationID         string                      `json:"operation_id"`
 	ParentTaskID        string                      `json:"parent_task_id,omitempty"`

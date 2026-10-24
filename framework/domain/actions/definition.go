@@ -15,6 +15,7 @@ import (
 // Schemas are JSON objects; descriptions are optional. RequiredSecrets contains
 // managed secret names, never values, resolved against the executing agent type.
 type Definition struct {
+	SessionMode     string          `json:"session_mode,omitempty"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
 	RequiredSecrets []string        `json:"required_secrets,omitempty"`
@@ -25,6 +26,9 @@ type Definition struct {
 // Validate checks shared metadata. Executors own schema compilation and execution
 // checks; a valid definition does not establish an installed or ready capability.
 func (d Definition) Validate() error {
+	if err := d.ValidateSessionMode(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(d.Name) == "" {
 		return errors.New("action requires a name")
 	}
@@ -39,6 +43,13 @@ func (d Definition) Validate() error {
 		if err := json.Unmarshal(entry.schema, &value); err != nil || value == nil {
 			return fmt.Errorf("action %s schema must be a JSON object", entry.name)
 		}
+	}
+	return nil
+}
+
+func (d Definition) ValidateSessionMode() error {
+	if d.SessionMode != "" && d.SessionMode != "create" && d.SessionMode != "use" {
+		return errors.New("session_mode must be create or use")
 	}
 	return nil
 }

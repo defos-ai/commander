@@ -15,6 +15,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	controllerconsumers "github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/domain"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -177,6 +178,19 @@ func (c *Consumer) consumeCancellation(ctx context.Context, coordinator requestC
 
 func (c *Consumer) dispatch(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case controllercommands.MethodControlSession:
+		var p sessions.Control
+		if err := domain.Decode(params, &p); err != nil {
+			return nil, err
+		}
+		if err := p.Validate(); err != nil {
+			return nil, err
+		}
+		target, ok := c.controller.(controllercommands.SessionController)
+		if !ok {
+			return nil, errors.New("controller does not support sessions")
+		}
+		return target.ControlSession(ctx, p)
 	case controllercommands.MethodDiscoverActions:
 		var p controllercommands.DiscoverActionsCommand
 		if err := domain.Decode(params, &p); err != nil {

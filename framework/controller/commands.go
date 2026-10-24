@@ -113,7 +113,7 @@ func (c *Controller) dispatchCommand(ctx, waiting context.Context, message messa
 	}
 	record = c.state.Snapshot(record, time.Now().UTC())
 	available := record.Status == agentmodel.AgentReady || record.Status == agentmodel.AgentWorking
-	if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent {
+	if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent || kind == agentcommands.ControlSession {
 		available = available || record.Status == agentmodel.AgentUnavailable
 	}
 	if record.Stale || !available {
@@ -123,6 +123,13 @@ func (c *Controller) dispatchCommand(ctx, waiting context.Context, message messa
 		return commandDispatch{}, errors.New("command is already awaiting a result")
 	}
 	if kind == agentcommands.RunAction {
+		var call actionmodel.ActionCall
+		if err := domain.Decode(message.Payload, &call); err != nil {
+			return commandDispatch{}, err
+		}
+		if call.Session != nil {
+			return commandDispatch{}, errors.New("session commands require coordinated preparation")
+		}
 		stored, claimed, err := c.executionStore.Claim(ctx, message)
 		if errors.Is(err, executions.ErrExecutionConflict) {
 			stored, err = c.executionStore.Get(ctx, agentID, message.ID)

@@ -1,0 +1,80 @@
+# docker compose -f compose.yaml -f .vscode/debug/compose.yaml up --build --wait
+# Start immediately so health checks and dependent services can become ready.
+# VS Code attaches to the existing session; debugger ports stay on localhost.
+x-debug: &debug
+  restart: "no"
+  cap_add: [SYS_PTRACE]
+  security_opt: ["no-new-privileges:true", "seccomp:unconfined"]
+
+x-debug-build: &debug-build
+  context: .
+  dockerfile: .vscode/debug/Dockerfile
+  target: runtime
+
+services:
+  secrets-key:
+    image: commander-api:debug
+
+  controller:
+    <<: *debug
+    image: commander-controller:debug
+    build:
+      <<: *debug-build
+      args:
+        PACKAGE: ./apps/controllers/default/cmd
+        BINARY: commander-controller
+    entrypoint:
+      - dlv
+      - exec
+      - /usr/local/bin/commander-controller
+      - --headless
+      - --listen=:2345
+      - --api-version=2
+      - --accept-multiclient
+      - --continue
+      - --
+    ports:
+      - "127.0.0.1:2345:2345"
+
+  api:
+    <<: *debug
+    image: commander-api:debug
+    build:
+      <<: *debug-build
+      args:
+        PACKAGE: ./apps/adapters/api/cmd/commander-api
+        BINARY: commander-api
+    # Keep credential and encryption-key setup before starting Delve.
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        API_PASSWORD="$${API_PASSWORD:-$$(openssl rand -hex 32)}"
+        export API_PASSWORD SECRETS_ENCRYPTION_KEY
+        exec dlv exec /usr/local/bin/commander-api --headless --listen=:2345 --api-version=2 --accept-multiclient --continue
+    ports:
+      - "127.0.0.1:2346:2345"
+
+  mcp-credentials:
+    # The initializer must use the image built by this override on a fresh stack.
+    image: commander-mcp:debug
+
+  mcp:
+    <<: *debug
+    image: commander-mcp:debug
+    build:
+      <<: *debug-build
+      args:
+        PACKAGE: ./apps/adapters/mcp/cmd/commander-mcp
+        BINARY: commander-mcp
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        MCP_TOKEN="$${MCP_TOKEN:-$$(cat /run/commander/mcp-token)}"
+        export MCP_TOKEN
+        exec dlv exec /usr/local/bin/commander-mcp --headless --listen=:2345 --api-version=2 --accept-multiclient --continue -- "$$@"
+      - commander-mcp
+    ports:
+      - "127.0.0.1:2347:2345"

@@ -12,6 +12,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 type Status = actionmodel.Status
@@ -24,9 +25,10 @@ const (
 )
 
 type Result struct {
-	Output      json.RawMessage `json:"output"`
-	Artifacts   []Artifact      `json:"-"`
-	NextActions []NextAction    `json:"next_actions,omitempty"`
+	Session     *sessions.Session `json:"session,omitempty"`
+	Output      json.RawMessage   `json:"output"`
+	Artifacts   []Artifact        `json:"-"`
+	NextActions []NextAction      `json:"next_actions,omitempty"`
 }
 
 // Each instance belongs to one agent. Run never chooses another action or contacts a controller.
@@ -56,7 +58,8 @@ func NewBase(metadata actionmodel.Action) *Base {
 // Action returns an independent snapshot of the action's metadata and readiness.
 func (b *Base) Action() actionmodel.Action {
 	snapshot := actionmodel.Action{
-		Name: b.definition.Name, Description: b.definition.Description,
+		SessionMode: b.definition.SessionMode,
+		Name:        b.definition.Name, Description: b.definition.Description,
 		RequiredSecrets: b.definition.RequiredSecrets,
 		InputSchema:     b.definition.InputSchema, OutputSchema: b.definition.OutputSchema,
 		Status: Unknown,

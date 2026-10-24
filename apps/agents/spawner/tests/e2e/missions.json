@@ -30,6 +30,15 @@
     "name": "analyze-text",
     "objectives": ["Analyze supplied text and save a downloadable summary.", "Review the grouped results and complete the operation."],
     "required_actions": ["analyze-text", "write-summary"],
+    "optional_actions": ["unavailable-test-action"],
+    "action_definitions": [
+      {
+        "name": "unavailable-test-action",
+        "description": "Known stateless action without an executor, for queued-work scenarios.",
+        "input_schema": {"type": "object"},
+        "output_schema": {"type": "object"}
+      }
+    ],
     "starting_actions": ["analyze-text"],
     "rules": {
       "aggregate-results": {"for_actions": ["analyze-text"]},

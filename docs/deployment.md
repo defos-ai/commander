@@ -63,6 +63,11 @@ key cannot decrypt existing secrets. All-in-one generates a temporary session ke
 For separately deployed agents using managed secrets, configure the same key as
 the API. See [secret setup](../framework/secrets/README.md).
 
+### Debugging
+
+Use the [VS Code debugging guide](../.vscode/debug/README.md) to attach to
+the controller, API and MCP containers.
+
 ## Configuration
 
 ### Spawned agents

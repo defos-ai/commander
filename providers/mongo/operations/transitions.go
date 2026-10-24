@@ -9,11 +9,18 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 func (s *OperationMongoStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
 	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
 		return operation.RefreshPreflight(records)
+	})
+}
+
+func (s *OperationMongoStore) RefreshSessionPreflight(ctx context.Context, operationID string, records []agents.Agent, scopes []sessions.Scope) (operations.Operation, error) {
+	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
+		return operation.RefreshPreflight(records, scopes)
 	})
 }
 

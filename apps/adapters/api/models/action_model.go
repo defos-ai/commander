@@ -3,6 +3,7 @@ package models
 import "encoding/json"
 
 type ActionDefinitionRequest struct {
+	SessionMode     string          `json:"session_mode,omitempty"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description,omitempty"`
 	RequiredSecrets []string        `json:"required_secrets,omitempty"`
@@ -11,6 +12,7 @@ type ActionDefinitionRequest struct {
 }
 
 type ActionDefinitionResponse struct {
+	SessionMode     string          `json:"session_mode,omitempty"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
 	RequiredSecrets []string        `json:"required_secrets,omitempty"`
@@ -19,6 +21,7 @@ type ActionDefinitionResponse struct {
 }
 
 type ActionResponse struct {
+	SessionMode         string                      `json:"session_mode,omitempty"`
 	Name                string                      `json:"name"`
 	Description         string                      `json:"description"`
 	StatusReason        string                      `json:"status_reason,omitempty"`
@@ -36,8 +39,9 @@ type ActionRequirementResponse struct {
 }
 
 type ActionOutputResponse struct {
-	ActionName  string               `json:"action_name"`
-	Output      json.RawMessage      `json:"output"`
-	Artifacts   []ArtifactResponse   `json:"artifacts,omitempty"`
-	NextActions []NextActionResponse `json:"next_actions,omitempty"`
+	Session     *RuntimeSessionResponse `json:"session,omitempty"`
+	ActionName  string                  `json:"action_name"`
+	Output      json.RawMessage         `json:"output"`
+	Artifacts   []ArtifactResponse      `json:"artifacts,omitempty"`
+	NextActions []NextActionResponse    `json:"next_actions,omitempty"`
 }

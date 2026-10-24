@@ -57,6 +57,9 @@ func NewFunc[I, O any](config FuncConfig[I, O]) (*Func[I, O], error) {
 		return nil, err
 	}
 	definition := config.Action.Definition()
+	if err := definition.ValidateSessionMode(); err != nil {
+		return nil, err
+	}
 	input, rawInput, err := funcSchema[I](definition.InputSchema)
 	if err != nil {
 		return nil, fmt.Errorf("action input schema: %w", err)

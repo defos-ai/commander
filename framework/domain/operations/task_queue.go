@@ -1,7 +1,6 @@
 package operations
 
 import (
-	"bytes"
 	"errors"
 	"time"
 
@@ -42,7 +41,7 @@ func (o *Operation) QueueTask(task Task) (bool, error) {
 		return false, errors.New("operation task limit exceeded")
 	}
 
-	task.Input = bytes.Clone(task.Input)
+	task = task.Clone()
 	o.Tasks = append(o.Tasks, task)
 	o.RefreshStatus()
 	o.AppendEvent(TaskAssigned, task.ID, "", "Task queued")
@@ -51,6 +50,9 @@ func (o *Operation) QueueTask(task Task) (bool, error) {
 }
 
 func sameAssignment(saved, incoming Task) bool {
+	if !sameJSON(saved.SessionIntent, incoming.SessionIntent) {
+		return false
+	}
 	if saved.OperationID != incoming.OperationID || saved.CommandID != incoming.CommandID || saved.StepID != incoming.StepID || saved.ParentTaskID != incoming.ParentTaskID || saved.ActionName != incoming.ActionName {
 		return false
 	}

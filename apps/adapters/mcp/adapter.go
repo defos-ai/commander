@@ -22,6 +22,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -67,6 +68,7 @@ type agentList struct {
 // the catalog; queries read saved state. Only operation commands require a
 // running controller.
 type Config struct {
+	SessionStore      sessions.Store
 	Operations        controllercommands.Operations
 	AgentStore        agentmodel.AgentStore
 	MissionStore      missions.MissionStore
@@ -106,6 +108,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 		Logger:       config.Logger,
 		Instructions: "Check list_agents and action readiness before planning work. Use get_agent_catalog to discover agents available to install; pass package and visibility unchanged to the installation workflow described by the relevant agent. Direct GitHub URLs and references outside the catalog are also supported; the spawner resolves and saves the exact release during installation. Read relevant agents' responsibilities with describe_agent and action schemas with describe_action; follow the mission and agent guidance when capabilities are missing. Find a mission with list_missions; read describe_mission and relevant action schemas before starting. Use create_mission when a new reusable definition is needed, then inspect it with describe_mission. Creation does not execute work or install agents. Use tracked operations; specify actions and input, the controller selects agents. Check preflight, follow mission rules, and resolve pending model continuations using current versions. Review failed-task recovery before ending the operation; ask before changing scope. ask_question is for active-operation decisions; general clarifications belong in chat. Only record real operator answers; expiry is not approval. Finish with complete_operation using output_schema; report limitations. Finished operations are read-only: get_report reads reports; new work needs a new operation. Inspect saved state before retrying an ambiguous failure. When active preflight has no ready candidate and lists agent_type and missing_requirements of kind secret, direct the operator to Admin UI Secrets for that agent type. Never request secret values in chat, tool inputs or ask_question. Running tasks may also expose agent_type and missing_requirements from their live exact execution; use the same Admin Secrets handoff or Playground masked form. Task waits retain their execution deadline. Saving a secret is not readiness; check preflight or task requirements before assuming work can proceed. Read artifacts with resources/read.",
 	})
+	registerSessions(server, config)
 	if config.Logger != nil {
 		server.AddReceivingMiddleware(requestLogging(config.Logger))
 	}
@@ -122,7 +125,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			items, err := config.ActionStore.List(ctx)
 			summaries := make([]actionSummary, 0, len(items))
 			for _, item := range items {
-				summaries = append(summaries, actionSummary{item.Name, item.Description})
+				summaries = append(summaries, actionSummary{Name: item.Name, Description: item.Description, SessionMode: item.SessionMode})
 			}
 			return struct {
 				Actions []actionSummary `json:"actions"`

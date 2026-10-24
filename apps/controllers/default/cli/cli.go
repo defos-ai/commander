@@ -81,6 +81,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		Type: controllerType, ID: configuration.controllerID, HeartbeatTimeout: configuration.heartbeatTimeout,
 		ArtifactStore: deps.ArtifactStore, AgentStore: deps.AgentStore, ActionStore: deps.ActionStore,
 		ExecutionStore: deps.ExecutionStore, Logger: logger,
+		SessionStore: deps.SessionStore, OperationStore: deps.OperationStore,
 		SecretStore: deps.SecretStore, SecretRequestStore: deps.SecretRequestStore,
 	})
 	if err != nil {
@@ -93,6 +94,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	}()
 	execution, err := runner.NewRunner(context.WithoutCancel(ctx), coordination, runner.Config{
 		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
+		Sessions:    coordination.RuntimeSessions(),
 		ReportStore: deps.ReportStore, AgentCatalog: coordination,
 		AgentSelector: agentSelector, RuleSelector: ruleSelector, Logger: logger,
 	})

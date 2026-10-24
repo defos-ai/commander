@@ -17,6 +17,7 @@ func ToActionDefinitions(requests []models.ActionDefinitionRequest) []actions.De
 		definitions[i] = actions.Definition{
 			Name:            request.Name,
 			Description:     request.Description,
+			SessionMode:     request.SessionMode,
 			RequiredSecrets: slices.Clone(request.RequiredSecrets),
 			InputSchema:     bytes.Clone(request.InputSchema),
 			OutputSchema:    bytes.Clone(request.OutputSchema),
@@ -34,6 +35,7 @@ func ToActionDefinitionResponses(definitions []actions.Definition) []models.Acti
 		responses[i] = models.ActionDefinitionResponse{
 			Name:            definition.Name,
 			Description:     definition.Description,
+			SessionMode:     definition.SessionMode,
 			RequiredSecrets: slices.Clone(definition.RequiredSecrets),
 			InputSchema:     bytes.Clone(definition.InputSchema),
 			OutputSchema:    bytes.Clone(definition.OutputSchema),
@@ -45,6 +47,7 @@ func ToActionDefinitionResponses(definitions []actions.Definition) []models.Acti
 func ToActionResponse(action actions.Action) models.ActionResponse {
 	return models.ActionResponse{
 		Name:                action.Name,
+		SessionMode:         action.SessionMode,
 		Description:         action.Description,
 		StatusReason:        action.StatusReason,
 		Status:              string(action.Status),
@@ -82,7 +85,13 @@ func ToActionRequirementResponses(requirements []actions.Requirement) []models.A
 }
 
 func ToActionOutputResponse(output actions.ActionOutput) models.ActionOutputResponse {
+	var session *models.RuntimeSessionResponse
+	if output.Session != nil {
+		v := ToRuntimeSessionResponse(*output.Session)
+		session = &v
+	}
 	return models.ActionOutputResponse{
+		Session:     session,
 		ActionName:  output.ActionName,
 		Output:      bytes.Clone(output.Output),
 		Artifacts:   ToArtifactResponses(output.Artifacts),

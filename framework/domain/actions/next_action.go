@@ -6,14 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 // NextAction proposes follow-up work. It does not authorize or dispatch an action.
 // The controller selects an available agent to execute it.
 type NextAction struct {
-	ActionName string          `json:"action_name"`
-	Input      json.RawMessage `json:"input,omitempty"`
-	Reason     string          `json:"reason,omitempty"`
+	// SessionIntent is overwritten by controller admission before saving proposals.
+	SessionIntent *sessions.Intent `json:"session_intent,omitempty"`
+	ActionName    string           `json:"action_name"`
+	Input         json.RawMessage  `json:"input,omitempty"`
+	Reason        string           `json:"reason,omitempty"`
 }
 
 func (a NextAction) Validate() error {
@@ -44,6 +48,7 @@ func CloneNextActions(actions []NextAction) []NextAction {
 	}
 	cloned := append([]NextAction{}, actions...)
 	for i := range cloned {
+		cloned[i].SessionIntent = cloned[i].SessionIntent.Clone()
 		cloned[i].Input = bytes.Clone(cloned[i].Input)
 	}
 	return cloned

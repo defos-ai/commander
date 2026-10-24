@@ -171,3 +171,7 @@ See [restart recovery](overview.md#state-and-restart-recovery).
 A bus acknowledgement confirms message handling; a result receipt confirms the
 controller saved an outcome. When a reply is lost, inspect saved progress before
 retrying. See the [messaging guide](../framework/comms/README.md) when implementing a host.
+
+Agent-owned resources that survive an action use the
+[runtime session contract](runtime-sessions.md), including explicit owner routing
+and an independent control channel.

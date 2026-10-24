@@ -9,6 +9,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 // recover restores state before the runner becomes available to callers. It
@@ -23,8 +24,24 @@ func (r *Runner) recover(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("recover operation %s: %w", record.ID, err)
 		}
+		if r.sessions != nil {
+			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{OperationID: operation.ID}); err != nil {
+				return err
+			}
+		}
 		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) || pendingQuestionDeadline(operation) {
 			r.states[operation.ID] = &operationState{operation: operation.Clone(), changed: make(chan struct{})}
+		}
+	}
+	if r.sessions != nil {
+		records, err := r.catalog.Agents(ctx)
+		if err != nil {
+			return err
+		}
+		for _, record := range records {
+			if err := r.sessions.Observe(ctx, runtimeSessions.Evidence{AgentID: record.ID}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -53,6 +70,14 @@ func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
 	defer cancel()
 	call := actionmodel.ActionCall{ActionName: task.ActionName, Input: task.Input,
 		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
+	if allowDispatch && r.sessions != nil {
+		prepared, err := r.sessions.Prepare(ctx, runtimeSessions.Assignment{OperationID: task.OperationID, TaskID: task.ID, Candidate: task.AgentID, Timeout: r.taskTimeout})
+		if err != nil {
+			allowDispatch = false
+		} else {
+			call.Session = prepared.Binding
+		}
+	}
 	var result actionmodel.ActionOutput
 	var err error
 	if task.Status == operations.TaskRunning && allowDispatch {

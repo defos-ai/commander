@@ -33,6 +33,9 @@ func CompareActions(expected, actual []actions.Definition) error {
 		if !exists {
 			return errors.New("generated action names do not match requested action contracts")
 		}
+		if requested.SessionMode != generated.SessionMode {
+			return fmt.Errorf("generated action %q does not match its requested session mode", requested.Name)
+		}
 		if requested.Description != generated.Description {
 			return fmt.Errorf("generated action %q does not match its requested description", requested.Name)
 		}

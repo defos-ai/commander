@@ -34,9 +34,11 @@ func (r *Runner) run() {
 			r.acceptResult(result)
 			r.signalScheduler()
 		case <-r.wake:
+			r.retryResults()
 			r.expireOperatorQuestions()
 			r.dispatchQueued()
 		case <-ticker.C:
+			r.retryResults()
 			r.expireOperatorQuestions()
 			r.dispatchQueued()
 		}

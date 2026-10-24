@@ -19,6 +19,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	secretservice "github.com/defos-ai/commander/framework/secrets"
 	frameworktesting "github.com/defos-ai/commander/framework/testing"
 	"github.com/defos-ai/commander/providers/fs"
@@ -30,6 +31,7 @@ import (
 	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
 	fsoperations "github.com/defos-ai/commander/providers/fs/operations"
 	fsreports "github.com/defos-ai/commander/providers/fs/reports"
+	fssessions "github.com/defos-ai/commander/providers/fs/sessions"
 	fstesting "github.com/defos-ai/commander/providers/fs/testing"
 	mongoactions "github.com/defos-ai/commander/providers/mongo/actions"
 	mongoagents "github.com/defos-ai/commander/providers/mongo/agents"
@@ -37,6 +39,7 @@ import (
 	mongocontrollers "github.com/defos-ai/commander/providers/mongo/controllers"
 	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
 	mongooperations "github.com/defos-ai/commander/providers/mongo/operations"
+	mongosessions "github.com/defos-ai/commander/providers/mongo/sessions"
 	mongostore "github.com/defos-ai/commander/providers/mongo/store"
 	mongotesting "github.com/defos-ai/commander/providers/mongo/testing"
 	rabbitmqcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
@@ -47,6 +50,7 @@ import (
 )
 
 type dependencies struct {
+	SessionStore       sessions.Store
 	Bus                comms.Bus
 	ArtifactStore      artifacts.ArtifactStore
 	ArtifactFileStore  artifacts.ArtifactFileStore
@@ -96,6 +100,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	deps.ReportStore, err = deps.createReportStore(ctx, configuration.storageURL)
 	if err != nil {
 		return nil, fmt.Errorf("storage-url: %w", err)
+	}
+	deps.SessionStore, err = deps.createSessionStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("session database: %w", err)
 	}
 	deps.OperationStore, err = deps.createOperationStore(ctx, configuration.databaseURL)
 	if err != nil {
@@ -429,5 +437,23 @@ func (d *dependencies) createArtifactFileStore(ctx context.Context, rawURL strin
 		return s3artifacts.NewArtifactFileS3Store(d.s3)
 	default:
 		return nil, fmt.Errorf("unsupported artifact file store scheme %q", scheme)
+	}
+}
+
+func (d *dependencies) createSessionStore(ctx context.Context, rawURL string) (sessions.Store, error) {
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fssessions.NewSessionFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongosessions.NewSessionMongoStore(ctx, d.mongo)
+	default:
+		return nil, fmt.Errorf("unsupported session store scheme %q", scheme)
 	}
 }
