@@ -231,7 +231,7 @@ func (e *Engine) run() {
 
 const Help = `/help — Show this help
 /status — Show connection and queue status
-/admin [command] — Admin UI, missions and secrets
+/admin [command] — Admin UI and commands
 /credentials — Show API login and MCP token (all-in-one)
 /secrets — Provide secrets needed by watched operations
 /operations — List saved operations

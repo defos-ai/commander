@@ -48,7 +48,7 @@ func TestAdminCommandDuringSetup(t *testing.T) {
 			}
 			submit("/back")
 			submit("/help")
-			if !strings.Contains(model.View(), "/admin [command] — Admin UI, missions and secrets") {
+			if !strings.Contains(model.View(), "/admin [command] — Admin UI and commands") {
 				t.Fatal("setup help did not list Admin")
 			}
 			submit("/admin")
@@ -74,12 +74,16 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/missions" {
+		if r.Method != http.MethodGet || (r.URL.Path != "/api/v1/missions" && r.URL.Path != "/api/v1/sessions") {
 			t.Errorf("unexpected Admin API request: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/sessions" {
+			fmt.Fprint(w, `{"items":[]}`)
+			return
+		}
 		fmt.Fprintf(w, `{"items":[{"name":%q,"objectives":[%q],"required_actions":["review"],"starting_actions":["review"],"input_schema":{"type":"object"},"output_schema":{}}]}`, missionName, missionObjective)
 	}))
 	defer api.Close()
@@ -97,7 +101,7 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 		if err != nil {
 			t.Error("could not inspect model request")
 		}
-		for _, private := range []string{adminURL, api.URL, "Usage: /admin", "Usage: commander-admin", missionName, missionObjective, password, token, "--listen-address=127.0.0.1:0"} {
+		for _, private := range []string{adminURL, api.URL, "Usage: /admin", "Usage: commander-admin", missionName, missionObjective, "No sessions.", password, token, "--listen-address=127.0.0.1:0"} {
 			if strings.Contains(string(body), private) {
 				t.Error("local Admin command or credentials reached the model")
 			}
@@ -149,7 +153,7 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 		u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	}
 	u.wait("help including Admin", func(view string) bool {
-		return strings.Contains(view, "/admin [command] — Admin UI, missions and secrets")
+		return strings.Contains(view, "/admin [command] — Admin UI and commands")
 	})
 	view := u.model.View()
 	if !strings.Contains(view, "Usage: /admin") || strings.Count(view, "Admin: "+adminURL) != 2 {
@@ -166,6 +170,12 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	u.wait("local mission JSON", func(view string) bool { return strings.Contains(view, missionObjective) })
 	if apiCalls.Load() != 1 {
 		t.Fatal("Admin mission command did not make exactly one API request")
+	}
+	u.text("/admin sessions list")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("local session discovery", func(view string) bool { return strings.Contains(view, "No sessions.") })
+	if apiCalls.Load() != 2 || modelCalls.Load() != 0 || toolCalls.Load() != 0 {
+		t.Fatal("Admin session command did not use only the configured API")
 	}
 	u.text("/admin serve --listen-address=127.0.0.1:0")
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})

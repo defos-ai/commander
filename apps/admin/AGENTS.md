@@ -9,7 +9,7 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   accepts a caller-owned connection for embedding; only `Main`
   owns process signals and exit codes. Help must work without API/model setup.
   Keep argument errors distinct from runtime failures. JSON output describes
-  command data; help remains text. Mission and secret options work around
+  command data; help remains text. Mission, secret and session options work around
   subcommands and operands; `--` makes later values literal, including
   dash-prefixed names. UI flags follow `serve`.
 - `serve` delegates to `ui/backend/cli`; it uses `UI_*` settings and must not
@@ -58,6 +58,14 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   and version. Preserve future expiry and renew expired values without expiry.
   Require exact success statuses and bound individual metadata responses to
   64 KiB. Conflicts require fresh metadata; unconfirmed writes are never retried.
+- `sessions/` owns validated session views and API controls shared by CLI and
+  Playground. Inspect uses ID lookup; controls resolve its exact saved scope and
+  process owner before sending one POST. Preserve the submitted request ID in
+  results/errors and uncertainty through `errors.Is`; an existing pending close
+  can have its own controller-owned identity. Never retry a control automatically
+  or interpret a successful request as confirmed closure. Display observed state
+  and retain abandonment's unconfirmed-closure warning. Session filters and
+  request-ID flags apply only to their corresponding session commands.
 - Secret commands detect terminal input: use a hidden prompt for terminals and
   read piped/redirected input directly, never arguments or model input. Do not
   probe for available bytes; pipes may deliver later. Read metadata before
@@ -67,7 +75,7 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   Keep automatic requirement triggering, dismissal and draft isolation intact.
 - [docker/Dockerfile](docker/Dockerfile) builds `cmd/commander-admin` with embedded
   frontend assets. The image entry point is `commander-admin`, with `serve` as
-  its default command; replacing the command must expose mission/secret commands.
+  its default command; replacing the command must expose mission/secret/session commands.
   Do not restore a separate `commander-ui` binary or image.
 - Playground imports the UI host from this module. Update its module requirement,
   workspace mapping and CI selection when changing Admin dependencies.

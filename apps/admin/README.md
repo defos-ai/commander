@@ -6,7 +6,7 @@ Build the CLI from the repository root:
 go build -o bin/commander-admin ./apps/admin/cmd/commander-admin
 ```
 
-For mission and secret commands, set `COMMANDER_API_PASSWORD` to your API password.
+For API commands, set `COMMANDER_API_PASSWORD` to your API password.
 The API URL defaults to
 `http://localhost:4274` and the username to `commander`; override them with
 `COMMANDER_API_URL` and `COMMANDER_API_USERNAME`.
@@ -52,6 +52,19 @@ Piped input preserves newlines. Values never appear in output. `--json` returns 
 Changes use the observed ID/version; inspect metadata after an uncertain write
 before submitting again. Saving a value does not confirm agent readiness.
 
+## Sessions
+
+```sh
+bin/commander-admin sessions list
+bin/commander-admin sessions list --owner-agent-id browser-agent-1234abcd
+bin/commander-admin sessions inspect SESSION_ID
+bin/commander-admin sessions close SESSION_ID
+```
+
+Use `verify` to check a resource through its owner. `abandon` releases a lost
+session without confirming closure. All commands support `--json`.
+After a failed or uncertain control, inspect saved state before submitting again.
+
 ## Admin UI
 
 ```sh
@@ -62,8 +75,8 @@ Build the frontend first, or use a binary with embedded assets; see
 [Admin UI setup](ui/README.md#native-server). Open [localhost:4275](http://localhost:4275)
 and connect to your API in the browser. `serve` needs no `COMMANDER_API_*` settings.
 
-The `commander-admin` Docker image starts the UI by default. Pass `missions` or
-`secrets` after the image name to run a CLI command instead.
+The `commander-admin` Docker image starts the UI by default. Pass `missions`,
+`secrets` or `sessions` after the image name to run a CLI command instead.
 
 In Playground, use `/admin help` for the same commands and `/admin serve` to
 start the UI. Secret values use a local masked form.

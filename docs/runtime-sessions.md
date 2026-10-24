@@ -27,6 +27,9 @@ its agent repository.
 
 ## Queries and controls
 
+Use [Admin session commands](../apps/admin/README.md#sessions), also available
+through Playground as `/admin sessions`.
+
 Use authenticated HTTP:
 
 - `GET /api/v1/sessions` lists current and retained sessions. Filter by

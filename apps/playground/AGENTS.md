@@ -51,7 +51,7 @@
   Stop and await Admin before removing session state. Show its ready address in
   `/status`; keep the startup banner short and never put credentials in a URL.
 - `/admin` works during setup and chat without forwarding input to the model.
-  With no subcommand it retains link lookup; `help`, `missions` and `secrets`
+  With no subcommand it retains link lookup; `help`, `missions`, `secrets` and `sessions`
   call the shared Admin CLI/services directly, never a shell or MCP tool.
   Run commands asynchronously, cancel and await them on exit, and retain one
   API connection. Per-command API overrides must not reuse its retained password

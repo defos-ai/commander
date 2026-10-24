@@ -149,7 +149,7 @@ its own API connection. Compose supplies the default internal API login; a custo
 | `/help`, `/status`, `/operations` | Read help, connection status or saved operations. |
 | `/credentials`, `/admin` | Get the all-in-one login or Admin link, including during setup. |
 | `/admin serve` | Start Admin UI for this session. |
-| `/admin help` | List Admin mission and secret commands. |
+| `/admin help` | List Admin commands. |
 | `/secrets` | Reopen the masked agent-secret form. |
 | `/watch <operation-id>` | Follow work and resume model review. |
 | `/run <operation-id> <action-name> <json-input>` | Queue an action through MCP. |

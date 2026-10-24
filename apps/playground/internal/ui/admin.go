@@ -56,8 +56,8 @@ func (m *Model) adminCommand(value string) (tea.Cmd, bool) {
 		}
 		return nil, true
 	}
-	if args[0] != "help" && args[0] != "missions" && args[0] != "secrets" && args[0] != "serve" && !strings.HasPrefix(args[0], "-") {
-		m.add("notice", "Usage: /admin [help|serve|missions|secrets]")
+	if args[0] != "help" && args[0] != "missions" && args[0] != "secrets" && args[0] != "sessions" && args[0] != "serve" && !strings.HasPrefix(args[0], "-") {
+		m.add("notice", "Usage: /admin [help|serve|missions|secrets|sessions]")
 		return nil, true
 	}
 	// The session has one API connection. Never pair its retained password with

@@ -57,6 +57,9 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 		if len(configuration.arguments) > 0 && configuration.arguments[0] == "secrets" {
 			return secretHelp(stdout)
 		}
+		if len(configuration.arguments) > 0 && configuration.arguments[0] == "sessions" {
+			return sessionHelp(stdout)
+		}
 		return help(stdout)
 	}
 	if err != nil {
@@ -71,11 +74,17 @@ func RunWithOptions(ctx context.Context, args []string, stdin io.Reader, stdout,
 	if configuration.arguments[0] == "secrets" {
 		return runSecrets(ctx, configuration, stdin, stdout, stderr)
 	}
+	if configuration.arguments[0] == "sessions" {
+		return runSessions(ctx, configuration, stdout)
+	}
 	if len(configuration.arguments) == 2 && configuration.arguments[0] == "help" && configuration.arguments[1] == "missions" {
 		return missionHelp(stdout)
 	}
 	if len(configuration.arguments) == 2 && configuration.arguments[0] == "help" && configuration.arguments[1] == "secrets" {
 		return secretHelp(stdout)
+	}
+	if len(configuration.arguments) == 2 && configuration.arguments[0] == "help" && configuration.arguments[1] == "sessions" {
+		return sessionHelp(stdout)
 	}
 	return &UsageError{cause: errors.New("unknown command or arguments; run commander-admin --help")}
 }
@@ -99,6 +108,7 @@ Commands:
   help                  Show this help
   missions              List, export, validate, import or seed missions
   secrets               List requests and manage agent secrets
+  sessions              Inspect and manage agent-owned sessions
   serve                 Serve the Admin UI
 
 API connection:

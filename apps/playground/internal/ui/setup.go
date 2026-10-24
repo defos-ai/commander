@@ -288,7 +288,7 @@ func (m *Model) setupInput(value string) tea.Cmd {
 	case "/help":
 		m.input.Reset()
 		help := "Use ↑/↓ and Enter to select a provider and model; mouse wheel or trackpad scroll where supported, and PgUp/PgDown also work. Choose Enter model name… for an unlisted model. Other supports OpenAI-compatible APIs. /back restarts setup; /exit quits. Override MCP with --mcp-url."
-		help += "\n\n/admin [command] — Admin UI, missions and secrets"
+		help += "\n\n/admin [command] — Admin UI and commands"
 		help += "\n\nDrag to select, then copy normally: Ctrl+Shift+C in GNOME Terminal, Cmd+C in macOS Terminal, or the Copy menu."
 		if m.config.AllInOne {
 			help += "\n\n/credentials — Show API login and MCP token"
