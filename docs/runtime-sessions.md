@@ -38,9 +38,14 @@ Use authenticated HTTP:
 - `POST /api/v1/sessions/control` accepts
   `{id, owner_agent_id, scope_id, method, request_id?}`.
 
-MCP offers `list_runtime_sessions` with the same optional filters and
-`control_runtime_session` with the control fields above. Lists are ordered by
-scope ID, then session ID, and include closed or abandoned history.
+Call MCP `list_runtime_sessions({})` to discover sessions across all scopes;
+pass optional `scope_id` and/or `owner_agent_id` filters to narrow the results.
+The `sessions` array includes references, connection metadata, state and busy
+status. Lists are ordered by scope ID, then session ID, and include closed or
+abandoned history. An empty result is `[]`. Check state, disposition and action
+readiness before using a session; listing alone does not guarantee readiness.
+
+MCP also offers `control_runtime_session` with the control fields above.
 Methods are `inspect`, `verify`, `close` and `abandon`.
 Reuse a stable UUID `request_id` when reconciling a control. After a timeout,
 inspect the saved session before retrying; a timeout does not prove closure.
@@ -54,7 +59,9 @@ Inspect `session_intent` and `preflight.tasks` for placement blockers.
 
 ## E2E checks
 
-From the repository root:
+The scenarios exercise public HTTP/MCP behavior through real hosts, including
+MCP discovery across scopes, owner filters, validation and retained session history.
+Run from the repository root:
 
 ```sh
 go test -race -count=1 -timeout=6m ./apps/adapters/api/tests/e2e -run '^TestE2E'
