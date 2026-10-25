@@ -39,7 +39,7 @@ func (r sessionQueryRequest) Validate() error {
 }
 
 func registerSessions(server *mcp.Server, config Config) {
-	addTool(server, "list_runtime_sessions", "Read current and retained agent-owned runtime sessions, optionally filtered by scope and exact owner. Filters intersect. Lease loss is reported as lost. Does not create or reconnect a session.",
+	addTool(server, "list_runtime_sessions", "Discover runtime sessions across all scopes, optionally filtered by scope_id and owner_agent_id. Filters intersect. Returns session references, connection metadata, state and busy status, including retained lost and closed sessions. Lease loss is reported as lost; listing does not guarantee readiness or create or reconnect a session.",
 		`{"type":"object","additionalProperties":false,"properties":{"scope_id":{"type":"string","format":"uuid","minLength":1},"owner_agent_id":{"type":"string","minLength":1}}}`,
 		func(ctx context.Context, request sessionQueryRequest) (struct {
 			Sessions []sessions.Session `json:"sessions"`
