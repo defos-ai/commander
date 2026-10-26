@@ -57,6 +57,9 @@
   connection. Public discovery must never forward session credentials.
 - Validate URLs before writing saved connection metadata. Persist only IDs,
   names and normalized URLs without credentials, query strings or fragments.
+- Proxy mission detail paths retain the name as one escaped parameter, including
+  encoded slashes, percent signs and backslashes. Preserve its exact escaped path
+  upstream; reject structural traversal and keep other route checks intact.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
 - Mission creation uses authenticated `POST /api/v1/missions`, with API validation

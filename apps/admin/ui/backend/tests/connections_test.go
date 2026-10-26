@@ -152,6 +152,45 @@ func TestBrowserSessionConnectionsAndProxy(t *testing.T) {
 	}
 }
 
+func TestBrowserProxyReopensEncodedMissionNames(t *testing.T) {
+	type missionResponse struct {
+		Name       string `json:"name"`
+		RequestURI string `json:"request_uri"`
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /commander/api/v1/missions", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"items":[]}`)
+	})
+	mux.HandleFunc("GET /commander/api/v1/missions/{mission_name}", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(missionResponse{Name: r.PathValue("mission_name"), RequestURI: r.RequestURI})
+	})
+	upstream := httptest.NewServer(mux)
+	defer upstream.Close()
+	handler, err := connections.NewHandler(connections.Config{APIUpstreams: localMappings(upstream.URL)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handler.Close()
+	target := upstream.URL + "/commander"
+	cookie := login(t, handler, target, nil)
+	for _, name := range []string{
+		"100% review", "a//b", "team/../review", "/leading", "trailing/",
+		"%2e%2e", "encoded%2Fslash", `review\draft`, "review?#", "review é",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := "/api/v1/missions/" + url.PathEscape(name)
+			response := serveUI(handler, browserRequest(http.MethodGet, proxyPath(target, path), "", cookie))
+			var mission missionResponse
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &mission) != nil {
+				t.Fatalf("mission readback failed: status=%d body=%s", response.Code, response.Body.String())
+			}
+			if mission.Name != name || mission.RequestURI != "/commander"+path {
+				t.Fatalf("mission name or escaped path changed: %+v", mission)
+			}
+		})
+	}
+}
+
 func TestBrowserSessionRequestBoundaries(t *testing.T) {
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +234,14 @@ func TestBrowserSessionRequestBoundaries(t *testing.T) {
 		{name: "traversal", path: proxyPath(upstream.URL, "/api/v1/../../secret"), status: 400},
 		{name: "encoded traversal", path: proxyPath(upstream.URL, "/api/v1/%2e%2e/secret"), status: 400},
 		{name: "double encoded traversal", path: proxyPath(upstream.URL, "/api/v1/%252e%252e/secret"), status: 400},
+		{name: "mission dot name", path: proxyPath(upstream.URL, "/api/v1/missions/."), status: 400},
+		{name: "mission encoded dot name", path: proxyPath(upstream.URL, "/api/v1/missions/%2e"), status: 400},
+		{name: "mission encoded parent name", path: proxyPath(upstream.URL, "/api/v1/missions/%2e%2e"), status: 400},
+		{name: "mission traversal", path: proxyPath(upstream.URL, "/api/v1/missions/../secret"), status: 400},
+		{name: "mission duplicate slash", path: proxyPath(upstream.URL, "/api/v1/missions/team//review"), status: 400},
+		{name: "mission raw backslash", path: proxyPath(upstream.URL, `/api/v1/missions/review\draft`), status: 400},
+		{name: "mission null byte", path: proxyPath(upstream.URL, "/api/v1/missions/review%00"), status: 400},
+		{name: "mission malformed escape", path: proxyPath(upstream.URL, "/api/v1/missions/review%"), status: 400},
 		{name: "unknown endpoint", path: proxyPath(upstream.URL, "/admin/secret"), status: 400},
 		{name: "about metadata is read-only", method: http.MethodPost, path: proxyPath(upstream.URL, "/aboutz"), status: 400},
 		{name: "about subpath is not public", path: proxyPath(upstream.URL, "/aboutz/secret"), status: 400},

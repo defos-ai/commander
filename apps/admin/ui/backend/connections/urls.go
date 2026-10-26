@@ -119,7 +119,10 @@ func endpoint(base *url.URL, value string) (*url.URL, bool, error) {
 	u, err := url.Parse(value)
 	if err != nil || len(value) > 8192 || u.Scheme != "" || u.Host != "" || u.User != nil ||
 		u.Opaque != "" || u.Fragment != "" || !strings.HasPrefix(u.Path, "/") ||
-		strings.ContainsAny(u.Path, "\\%\x00") || path.Clean(u.Path) != u.Path {
+		strings.Contains(value, "\\") || strings.ContainsRune(u.Path, '\x00') {
+		return nil, false, errors.New("invalid API path")
+	}
+	if !missionNamePath(u) && (strings.ContainsAny(u.Path, "\\%") || path.Clean(u.Path) != u.Path) {
 		return nil, false, errors.New("invalid API path")
 	}
 	public := u.Path == "/healthz" || u.Path == "/readyz" || u.Path == "/aboutz"
@@ -131,4 +134,15 @@ func endpoint(base *url.URL, value string) (*url.URL, bool, error) {
 	result.RawPath = base.EscapedPath() + u.EscapedPath()
 	result.RawQuery = u.RawQuery
 	return &result, public, nil
+}
+
+func missionNamePath(u *url.URL) bool {
+	// A mission name is one escaped parameter, even when its data contains
+	// slashes, percent signs or dot segments. Other routes retain structural checks.
+	name, ok := strings.CutPrefix(u.EscapedPath(), "/api/v1/missions/")
+	if !ok || strings.Contains(name, "/") {
+		return false
+	}
+	name, err := url.PathUnescape(name)
+	return err == nil && strings.TrimSpace(name) != "" && name != "." && name != ".."
 }
