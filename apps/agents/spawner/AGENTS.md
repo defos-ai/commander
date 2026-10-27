@@ -11,8 +11,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   action uses `runtimes.Runtime`
   (`Spawn`/`Close`), defined in [runtimes/runtime.go](runtimes/runtime.go).
   [runtimes/result.go](runtimes/result.go) holds its result;
-  [native.Manager](runtimes/native/manager.go) and
-  [docker.Manager](runtimes/docker/manager.go) implement the interface.
+  [native.Manager](runtimes/native/manager.go),
+  [docker.Manager](runtimes/docker/manager.go) and the injected
+  [Kubernetes Manager](runtimes/kubernetes/manager.go) implement the interface.
+  Kubernetes remains unavailable through CLI configuration.
 - Results use `RuntimeKind` and one sealed `RuntimeDetails` value:
   `NativeRuntimeDetails`, `DockerRuntimeDetails` or `KubernetesRuntimeDetails`.
   JSON places the selected payload directly under `runtime_details`, with no
@@ -201,8 +203,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 ## Planned Kubernetes runtime
 
-This is a contract for later implementation, not an available launcher. The CLI
-still rejects `SPAWNER_RUNTIME=kubernetes` and does not read Kubernetes settings.
+The injected Manager implements launch reconciliation and registration observation.
+The CLI still rejects `SPAWNER_RUNTIME=kubernetes` and reads no Kubernetes settings;
+deployment authentication, lifecycle cleanup and factory wiring remain follow-ups.
 
 Current building blocks are the [Pod builder](runtimes/kubernetes/pod.go) and
 [narrow REST client](runtimes/kubernetes/client.go); they add no Kubernetes SDK
@@ -224,12 +227,14 @@ request hash, owner labels and full package/image/request annotations preserve
 ownership without embedding credentials. Reject the official Builder package
 before construction until its separate bootstrap contract exists.
 
-Returned Pod `Spec` and `Status` retain raw JSON for later admitted-state inspection;
-construction validation does not establish that the admitted Pod is safe. Manager
-orchestration, admitted-spec validation, UID receipt persistence, registration and
-exclusive activation authority must land before CLI enablement. Gate release also
-requires a later infrastructure RBAC change granting Pod `patch`; it must not add
-Secret-read or broader workload permissions.
+Returned Pod `Spec` and `Status` retain raw JSON. [Inspection](runtimes/kubernetes/inspect.go)
+compares admitted configuration against the saved desired Pod, allowing only
+reviewed API defaults and equivalent resource quantities. Reject injected execution
+configuration, deletion, terminal/restarted containers and changed process identity.
+The API server, admission chain and node status remain trusted: scheduling gates
+control scheduler placement, not every execution path. Admission must preserve the
+gate and must not bind a node or run injected workloads before inspection; detecting
+a changed response cannot undo execution that already occurred.
 
 [`Result`](runtimes/result.go) and the [action schema](actions/spawn_agent.go)
 reserve `runtime: kubernetes` with `runtime_details` containing `namespace`,
@@ -257,30 +262,46 @@ changes must not rename an existing launch.
   Reference existing Secrets without reading their contents; package-download
   tokens do not automatically become registry credentials or child environment.
   Do not forward the spawner's entire environment or its secrets encryption key.
-- Each agent is one persistent worker Pod, using the manifest's digest-pinned
-  image and `restartPolicy: Never`. A new process needs a fresh agent ID.
-  Save the immutable launch intent before creating a scheduling-gated Pod. After
-  verifying the created Pod, save its UID in a separate immutable receipt; never
-  overwrite the intent to add server-assigned identity.
+- [Launch reconciliation](runtimes/kubernetes/spawn.go) saves the complete desired
+  Pod in immutable `launch-intent` before Create. [Checkpoint records](runtimes/kubernetes/record.go)
+  validate execution/package/configuration identity on recovery; changed configuration
+  must fail instead of renaming a launch. Each worker uses `restartPolicy: Never`.
+  A new process needs a fresh agent ID. Save the verified Pod UID in separate
+  `launch-receipt`, then its first observed running container ID/start time in
+  `launch-instance`; never overwrite an existing fact to adopt a replacement.
+  Retain positive UID/process observations in host memory even when receipt saves
+  fail; retries must not forget a known identity. Orphan receipts without their
+  intent, or a running-instance receipt alongside a gated Pod, fail closed.
 - Subscribe for registration before releasing the scheduling gate, after the UID
-  receipt is durable. Gate release must preserve exclusive launch authority and
-  address the verified Pod UID. A checkpoint alone does not grant a restarted
-  spawner permission to activate a Pod. Match the assigned agent ID and type;
+  receipt is durable. Only the Manager that received a successful intent-save
+  acknowledgement may activate that gated Pod; gate removal tests UID/resource
+  version/name. A saved checkpoint does not transfer activation authority to a
+  restarted host. [Registration observation](runtimes/kubernetes/registration.go)
+  validates fresh announcements, full assigned ID/type and action metadata.
+  [Readiness polling](runtimes/kubernetes/ready.go) requires the same running
+  process before returning cloned action metadata;
   registration observation is distinct from controller-persisted acceptance.
 - Reconcile uncertain API/checkpoint responses against the saved name, UID,
   ownership and Pod configuration. A missing, replaced or exited Pod must not
-  authorize another Create, restart or replacement under the same request.
-  `Close` will end observation and leave Pods running; stopping/removing children
-  is explicit and scoped to deployment ownership. Retain checkpoints meanwhile.
+  authorize another Create, restart or replacement under the same request. An
+  ungated Pod without its durable UID receipt remains uncertain. Observation
+  survives action cancellation; a new host requires a fresh announcement.
+  `Close` cancels observers and leaves Pods/checkpoints intact. The controller
+  decides graceful stop; explicit runtime termination, draining and UID-guarded
+  Pod deletion remain a separate follow-up required before CLI enablement.
 - Ownership must survive spawner replacement. Keep label values within 63
   characters; put full package references and digests in annotations. Distinguish
   dynamic `commander-spawner` ownership from static infrastructure workloads.
   Do not attach children to the spawner Pod with owner references or use
   cross-namespace owner references. Namespace permissions cannot enforce labels.
-- Builder support is deferred. A future launcher must reject the official
-  Builder package before Create until its workspace, namespace and encryption-key
+- Builder support is deferred. Reject the official Builder package before Create
+  until its workspace, namespace and encryption-key
   bootstrap contract is implemented. Do not extend the shared agent Secret or
   grant additional privileges as an implicit workaround.
+- Infrastructure must grant Pod `patch` before deployment can release gates.
+  Do not add Secret-read or broader workload permissions. Unit checks need no
+  Kubernetes SDK or cluster; constructor injection enables no CLI credential
+  discovery or settings reads.
 
 ## Validation
 
