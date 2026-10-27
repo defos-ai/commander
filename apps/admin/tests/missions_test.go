@@ -158,7 +158,7 @@ func TestBundledMissionSeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result := importResult(t, output); result.Counts.WouldCreate != 4 || result.Counts.Created != 0 {
+	if result := importResult(t, output); result.Counts.WouldCreate != 3 || result.Counts.Created != 0 {
 		t.Fatalf("unexpected seed dry run: %s", output)
 	}
 	fixture.mu.Lock()
@@ -173,7 +173,7 @@ func TestBundledMissionSeed(t *testing.T) {
 	}
 	defer api.Close()
 	result, err := adminmissions.Seed(t.Context(), api, false)
-	if err != nil || result.Counts.Created != 4 {
+	if err != nil || result.Counts.Created != 3 {
 		t.Fatalf("seed bundled definitions: %+v, error=%v", result, err)
 	}
 	definitions, err := adminmissions.List(t.Context(), api)
@@ -188,7 +188,7 @@ func TestBundledMissionSeed(t *testing.T) {
 		}
 		catalog[mission.Name] = mission
 	}
-	t.Run("website checks", func(t *testing.T) { checkWebsiteMissions(t, catalog) })
+	t.Run("website checks", func(t *testing.T) { checkWebsiteMission(t, catalog) })
 	t.Run("installation", func(t *testing.T) { checkInstallAgentMission(t, catalog) })
 	t.Run("build and optional publication", func(t *testing.T) { checkBuildAgentMission(t, catalog) })
 
@@ -201,12 +201,12 @@ func TestBundledMissionSeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result := importResult(t, output); result.Counts.Created != 0 || result.Counts.Skipped != 4 {
+	if result := importResult(t, output); result.Counts.Created != 0 || result.Counts.Skipped != 3 {
 		t.Fatalf("repeated seed did not preserve saved definitions: %s", output)
 	}
 	fixture.mu.Lock()
 	defer fixture.mu.Unlock()
-	if len(fixture.records) != 5 || string(fixture.records["install-agent"]) != override || string(fixture.records["operator-mission"]) != other {
+	if len(fixture.records) != 4 || string(fixture.records["install-agent"]) != override || string(fixture.records["operator-mission"]) != other {
 		t.Fatal("seed changed a saved mission")
 	}
 	for _, request := range fixture.requests {
@@ -216,30 +216,25 @@ func TestBundledMissionSeed(t *testing.T) {
 	}
 }
 
-func checkWebsiteMissions(t *testing.T, websites map[string]missions.Mission) {
-	for _, test := range []struct {
-		name      string
-		discovery string
-		checks    []string
-	}{
-		{"review-website-no-browser", "discover-pages-no-browser", []string{"check-links", "check-seo", "detect-technologies"}},
-		{"review-website-with-browser", "discover-pages", []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			website := websites[test.name]
-			aggregate := website.Rules[missions.AggregateResults]
-			decision := website.Rules[missions.DecideNextActions]
-			required := append([]string{test.discovery}, test.checks...)
-			if !slices.Equal(website.StartingActions, []string{test.discovery}) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(aggregate.ForActions, []string{test.discovery}) {
-				t.Fatalf("website checks are not grouped automatic work: %+v", website)
-			}
-			if len(website.Rules) != 2 {
-				t.Fatalf("unexpected mission rules: %+v", website.Rules)
-			}
-			if !slices.Equal(decision.ForActions, test.checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
-				t.Fatalf("website checks are not followed by model review: %+v", decision)
-			}
-		})
+func checkWebsiteMission(t *testing.T, websites map[string]missions.Mission) {
+	website := websites["review-website"]
+	discovery := []string{"discover-pages-no-browser"}
+	required := []string{"discover-pages-no-browser", "check-links", "check-seo", "detect-technologies"}
+	optional := []string{"check-accessibility", "capture-page"}
+	aggregate := website.Rules[missions.AggregateResults]
+	decision := website.Rules[missions.DecideNextActions]
+	if !slices.Equal(website.StartingActions, discovery) || !slices.Equal(website.RequiredActions, required) || !slices.Equal(aggregate.ForActions, discovery) {
+		t.Fatalf("website HTTP checks are not grouped automatic work: %+v", website)
+	}
+	if !slices.Equal(website.OptionalActions, optional) {
+		t.Fatalf("website browser checks must remain optional: %+v", website)
+	}
+	if len(website.Rules) != 2 {
+		t.Fatalf("unexpected mission rules: %+v", website.Rules)
+	}
+	checks := []string{"check-links", "check-accessibility", "capture-page", "check-seo", "detect-technologies"}
+	if !slices.Equal(decision.ForActions, checks) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+		t.Fatalf("website checks are not followed by model review: %+v", decision)
 	}
 }
 

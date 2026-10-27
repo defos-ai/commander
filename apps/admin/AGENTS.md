@@ -40,8 +40,10 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   the full batch and delegates to the same create-only API import. Keep `missions
   seed [--dry-run]` and launcher calls on this path; the controller does not own
   catalog initialization. Existing definitions always win, including operator edits.
-- Keep bundled mission policy in that JSON. Website reviews aggregate each discovery's
-  HTTP/browser checks before model review. `install-agent` requires only `spawn-agent`
+- Keep bundled mission policy in that JSON. `review-website` starts HTTP discovery
+  and aggregates its checks before model review. Browser accessibility and screenshots
+  are optional; add ready checks through the discovery continuation and report skipped
+  coverage. `install-agent` requires only `spawn-agent`
   and reviews the launch result and readiness; GitHub stable resolution belongs to
   the spawner, and visibility travels unchanged without tokens in mission input.
 - `build-agent` requires operator action contracts alongside instructions, checkout

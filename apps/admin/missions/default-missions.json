@@ -328,17 +328,22 @@
     }
   },
   {
-    "name": "review-website-no-browser",
+    "name": "review-website",
     "objectives": [
-      "Review a website without a browser. Start discover-pages-no-browser with mission input; let the controller run link, SEO and technology checks.",
+      "Review a website before release. Start discover-pages-no-browser with mission input; let the controller run link, SEO and technology checks.",
       "Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages-no-browser at the destination, preserving max_pages; document the scope change.",
-      "Review grouped results and resolve the continuation before completing. Report prioritized findings and coverage. Include limitations: no rendered accessibility or screenshots; JavaScript-generated content is not assessed. Technology versions are indicators, not vulnerability proof; SEO checks are partial. Do not modify the site."
+      "After grouped HTTP results, use the discovery continuation to add check-accessibility and capture-page when those actions are ready. Run each selected browser check once per discovered page, within max_pages, using only the url input field. Browser checks are optional: skip unavailable actions and report their missing coverage.",
+      "Review grouped results and resolve the continuation before completing. Report prioritized findings, coverage and limitations, including any missing rendered accessibility, screenshots or JavaScript-generated content coverage. Technology versions are indicators, not vulnerability proof; SEO/accessibility checks are partial. Do not modify the site."
     ],
     "required_actions": [
       "discover-pages-no-browser",
       "check-links",
       "check-seo",
       "detect-technologies"
+    ],
+    "optional_actions": [
+      "check-accessibility",
+      "capture-page"
     ],
     "starting_actions": [
       "discover-pages-no-browser"
@@ -347,114 +352,6 @@
       "aggregate-results": {
         "for_actions": [
           "discover-pages-no-browser"
-        ]
-      },
-      "decide-next-actions": {
-        "for_actions": [
-          "check-links",
-          "check-seo",
-          "detect-technologies"
-        ],
-        "params": {
-          "decision_by": "model"
-        }
-      }
-    },
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "pattern": "^https?://",
-          "description": "Website URL reachable from the agents, for example https://defos.ai."
-        },
-        "max_pages": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10,
-          "default": 3
-        }
-      },
-      "required": [
-        "url"
-      ],
-      "additionalProperties": false
-    },
-    "output_schema": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "pattern": "^https?://"
-        },
-        "summary": {
-          "type": "string",
-          "pattern": "\\S"
-        },
-        "findings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "page_url": {
-                "type": "string",
-                "pattern": "^https?://"
-              },
-              "check": {
-                "type": "string",
-                "pattern": "\\S"
-              },
-              "description": {
-                "type": "string",
-                "pattern": "\\S"
-              }
-            },
-            "required": [
-              "page_url",
-              "check",
-              "description"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "limitations": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "pattern": "\\S"
-          }
-        }
-      },
-      "required": [
-        "url",
-        "summary",
-        "findings"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "review-website-with-browser",
-    "objectives": [
-      "Review a website before release. Start discover-pages with mission input; let the controller run page checks.",
-      "Stay on the same hostname (scheme/port changes allowed). If discovery redirects elsewhere, keep the operation open and ask a linked question: review the destination or stop. On approval, retry through the continuation with discover-pages at the destination, preserving max_pages; document the scope change.",
-      "Review grouped results and resolve the continuation before completing. Report prioritized findings, coverage and limitations. Technology versions are indicators, not vulnerability proof; SEO/accessibility checks are partial. Do not modify the site."
-    ],
-    "required_actions": [
-      "discover-pages",
-      "check-links",
-      "check-accessibility",
-      "capture-page",
-      "check-seo",
-      "detect-technologies"
-    ],
-    "starting_actions": [
-      "discover-pages"
-    ],
-    "rules": {
-      "aggregate-results": {
-        "for_actions": [
-          "discover-pages"
         ]
       },
       "decide-next-actions": {

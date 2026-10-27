@@ -238,7 +238,7 @@
   Container ports cannot be published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
-  Embed `build-agent`, `install-agent` and both website missions. Within the build
+  Embed `build-agent`, `install-agent` and `review-website`. Within the build
   mission, offer optional `publish-agent` after successful build review and wait
   for operator agreement. Declining publication completes with its source artifact;
   missing `GITHUB_TOKEN` must not block checkout/build. Read the publication action
@@ -246,8 +246,8 @@
   Public (recommended) or Private and await the operator's answer.
   Never put managed GitHub/model keys in chat or question answers.
   The native quick start installs
-  the web agent before using `review-website-no-browser`;
-  `review-website-with-browser` requires discovered browser coverage. Do not create
+  the web agent before using `review-website`; browser actions are optional and
+  require discovered browser coverage before use. Do not create
   partial completion or browser fallback policy in the client.
   Wait for spawner to register. The web agent
   owns HTTP work and remains ready without Chromium; the browser advertises rendering
