@@ -203,6 +203,34 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 This is a contract for later implementation, not an available launcher. The CLI
 still rejects `SPAWNER_RUNTIME=kubernetes` and does not read Kubernetes settings.
+
+Current building blocks are the [Pod builder](runtimes/kubernetes/pod.go) and
+[narrow REST client](runtimes/kubernetes/client.go); they add no Kubernetes SDK
+dependency. The client takes an explicit HTTPS API endpoint and injected HTTP
+client; authentication remains caller-owned. It does not load kubeconfig or
+in-cluster credentials. Create/Get/Watch/ReleaseGate/Close bound requests and
+watches, sanitize errors and add no application retries or watch reconnection.
+Gate removal requires the observed Pod UID, resource version and expected
+gate.
+
+The builder requires explicit operator configuration for namespace, ServiceAccount,
+configuration/credential references, resource requests/limits and positive run-as
+UID/GID. The Pod prefix and image-pull Secret references are optional. It creates
+one gated `agent` container with a digest-pinned image, `restartPolicy: Never`, no
+token automount, volumes or owner references. Read `BUS_URL`/`STORAGE_URL` through
+required Secret key references, allow only optional S3 configuration keys from the
+ConfigMap, and set only the assigned suffix as literal environment. The compact
+request hash, owner labels and full package/image/request annotations preserve
+ownership without embedding credentials. Reject the official Builder package
+before construction until its separate bootstrap contract exists.
+
+Returned Pod `Spec` and `Status` retain raw JSON for later admitted-state inspection;
+construction validation does not establish that the admitted Pod is safe. Manager
+orchestration, admitted-spec validation, UID receipt persistence, registration and
+exclusive activation authority must land before CLI enablement. Gate release also
+requires a later infrastructure RBAC change granting Pod `patch`; it must not add
+Secret-read or broader workload permissions.
+
 [`Result`](runtimes/result.go) and the [action schema](actions/spawn_agent.go)
 reserve `runtime: kubernetes` with `runtime_details` containing `namespace`,
 `pod_name` and `pod_uid`. Native details contain only `pid`; Docker details contain
