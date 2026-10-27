@@ -18,7 +18,25 @@ STORAGE_URL=s3://your-bucket/commander
 | `AWS_ENDPOINT_URL_S3` | MinIO or another compatible service. |
 | `S3_USE_PATH_STYLE=true` | MinIO. |
 
-Use the AWS default credential chain; keep credentials out of `STORAGE_URL`.
+Without URL credentials, the AWS default credential chain supplies authentication.
+For a static key pair, you can instead set:
+
+```sh
+STORAGE_URL='s3://ACCESS_KEY_ID:URL_ENCODED_SECRET@your-bucket/commander'
+```
+
+The username is the access key ID and the password is the secret access key.
+Percent-encode reserved characters in either value, such as `/` as `%2F`, `@` as
+`%40`, and `%` as `%25`. URL credentials override other credential sources for
+this S3 client and do not use `AWS_SESSION_TOKEN`. For temporary credentials, use
+the AWS credential chain with the matching token; on AWS, prefer an IAM role.
+Treat a credential-bearing URL as a secret. Region, endpoint and path-style
+settings still use the environment variables above.
+
+Spawned agents receive the full storage URL and must support this credential
+format. Update older agents, or use a credential-free URL with AWS environment
+credentials when running them.
+
 Create the bucket first and grant object read/write access to its prefix.
 
 To embed artifact file storage:

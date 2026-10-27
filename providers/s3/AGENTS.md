@@ -6,11 +6,18 @@ reports in S3-compatible object storage; accepted metadata stays in the database
 ## Configuration and object writes
 
 - Keep AWS configuration, URL validation and SDK error mapping in
-  [`store`](store/s3_store.go). Use the default credential chain and an existing
-  bucket; opening a store must not create buckets or change policies.
+  [`store`](store/s3_store.go). Use an existing bucket; opening a store must not
+  create buckets or change policies.
 - Preserve `s3://bucket/optional-prefix`, `AWS_ENDPOINT_URL_S3` and explicit
-  `S3_USE_PATH_STYLE` handling. Keep credentials out of URLs and diagnostics;
-  wrapper errors must retain their causes without exposing SDK request secrets.
+  `S3_USE_PATH_STYLE` handling. Optional URL userinfo supplies a complete static
+  access-key/secret-key pair, percent-decoded exactly once. Reject missing/empty
+  fields and control characters without echoing supplied values. URL credentials
+  override the credential chain for that client with no ambient session token or
+  process environment mutation; URLs without userinfo retain the default chain.
+  Keep credentials and full URLs out of diagnostics; wrapper errors must retain
+  their causes without exposing SDK request secrets. Spawned agents receive the
+  storage URL through their existing environment bootstrap and need a provider
+  version supporting userinfo; do not infer support in previously released agents.
 - Keep object keys scoped to the configured prefix and the artifact/report
   namespaces. Validate keys before I/O; test cleanup must remain inside its prefix.
 - Use conditional single-object PUT with `If-None-Match: *` and SHA-256 checksums.

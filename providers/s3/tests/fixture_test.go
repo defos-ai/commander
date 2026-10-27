@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/defos-ai/commander/framework/id"
@@ -44,7 +45,12 @@ func openStore(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.LoadDefaultConfig(t.Context())
+	var options []func(*config.LoadOptions) error
+	if location.User != nil {
+		secret, _ := location.User.Password()
+		options = append(options, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(location.User.Username(), secret, "")))
+	}
+	cfg, err := config.LoadDefaultConfig(t.Context(), options...)
 	if err != nil {
 		t.Fatal(err)
 	}

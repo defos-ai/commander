@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -38,7 +39,7 @@ func Open(ctx context.Context, rawURL string) (*S3Store, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err
 	}
-	bucket, prefix, err := parseURL(rawURL)
+	location, prefix, err := parseURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +50,13 @@ func Open(ctx context.Context, rawURL string) (*S3Store, error) {
 			return nil, errors.New("S3_USE_PATH_STYLE must be a boolean")
 		}
 	}
-	cfg, err := config.LoadDefaultConfig(ctx)
+	var options []func(*config.LoadOptions) error
+	if location.User != nil {
+		secret, _ := location.User.Password()
+		// URL credentials are a complete static pair, independent of ambient tokens.
+		options = append(options, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(location.User.Username(), secret, "")))
+	}
+	cfg, err := config.LoadDefaultConfig(ctx, options...)
 	if err != nil {
 		return nil, wrapError("load S3 configuration", err)
 	}
@@ -60,7 +67,7 @@ func Open(ctx context.Context, rawURL string) (*S3Store, error) {
 		options.UsePathStyle = pathStyle
 		options.Retryer = retry.AddWithErrorCodes(options.Retryer, "ConditionalRequestConflict")
 	})
-	return &S3Store{client: client, bucket: bucket, prefix: prefix}, nil
+	return &S3Store{client: client, bucket: location.Host, prefix: prefix}, nil
 }
 
 func (s *S3Store) Put(ctx context.Context, key string, body io.ReadSeeker, size int64, mediaType, sha256Hex string) error {
@@ -157,25 +164,29 @@ func (s *S3Store) objectKey(key string) (string, error) {
 	return key, nil
 }
 
-func parseURL(rawURL string) (string, string, error) {
+func parseURL(rawURL string) (*url.URL, string, error) {
 	value, err := url.Parse(rawURL)
 	if err != nil {
-		return "", "", errors.New("invalid S3 URL; expected s3://bucket[/prefix]")
+		return nil, "", errors.New("invalid S3 URL; expected s3://[access-key:secret-key@]bucket[/prefix]")
 	}
 	if value.User != nil {
-		return "", "", errors.New("S3 URL must not contain credentials; use the AWS credential chain")
+		key := value.User.Username()
+		secret, present := value.User.Password()
+		if !present || key == "" || secret == "" || strings.ContainsFunc(key, unicode.IsControl) || strings.ContainsFunc(secret, unicode.IsControl) {
+			return nil, "", errors.New("S3 URL credentials require a nonempty access key and secret key without control characters")
+		}
 	}
 	if value.Scheme != "s3" || value.Opaque != "" || value.RawQuery != "" || value.ForceQuery || strings.Contains(rawURL, "#") {
-		return "", "", errors.New("invalid S3 URL; expected s3://bucket[/prefix] without query or fragment")
+		return nil, "", errors.New("invalid S3 URL; expected s3://[access-key:secret-key@]bucket[/prefix] without query or fragment")
 	}
 	if !validBucket(value.Host) {
-		return "", "", errors.New("S3 URL requires a valid bucket name")
+		return nil, "", errors.New("S3 URL requires a valid bucket name")
 	}
 	prefix := strings.TrimSuffix(strings.TrimPrefix(value.Path, "/"), "/")
 	if prefix != "" && !validKey(prefix) {
-		return "", "", errors.New("S3 URL prefix must not contain empty, dot, or parent segments")
+		return nil, "", errors.New("S3 URL prefix must not contain empty, dot, or parent segments")
 	}
-	return value.Host, prefix, nil
+	return value, prefix, nil
 }
 
 func validBucket(bucket string) bool {

@@ -212,7 +212,7 @@ func TestCLIRejectsUnavailableProvidersWithoutExposingCredentials(t *testing.T) 
 		{name: "unavailable RabbitMQ", flag: "bus-url", url: "amqp://user:" + secret + "@127.0.0.1:1"},
 		{name: "unavailable MongoDB", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander?serverSelectionTimeoutMS=50"},
 		{name: "malformed MongoDB query", flag: "database-url", url: "mongodb://user:" + secret + "@127.0.0.1:1/commander?tlsCertificateKeyFilePassword=" + secret + "%zz"},
-		{name: "invalid S3 credentials", flag: "storage-url", url: "s3://user:" + secret + "@artifacts/bucket"},
+		{name: "incomplete S3 credentials", flag: "storage-url", url: "s3://:" + secret + "@artifacts/bucket"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newFixture(t)
