@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
@@ -43,11 +44,21 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 		return nil, err
 	}
 	d := &dependencies{}
+	var podClient *kubernetes.Client
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, d.Close())
 		}
+		if podClient != nil {
+			err = errors.Join(err, podClient.Close())
+		}
 	}()
+	if configuration.runtime == "kubernetes" {
+		podClient, err = kubernetes.NewInClusterClient(configuration.kubernetesPod.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("Kubernetes authentication: %w", err)
+		}
+	}
 
 	d.ArtifactFileStore, err = createArtifactFileStore(ctx, configuration.storageURL)
 	if err != nil {
@@ -59,7 +70,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	}
 	d.Bus = bus
 	d.closers = append(d.closers, bus.Close)
-	if err := d.openRuntime(ctx, configuration); err != nil {
+	// Runtime construction owns the client from here, including failure cleanup.
+	runtimeClient := podClient
+	podClient = nil
+	if err := d.openRuntime(ctx, configuration, runtimeClient); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -68,12 +82,15 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	return d, nil
 }
 
-func (d *dependencies) openRuntime(ctx context.Context, configuration config) (err error) {
+func (d *dependencies) openRuntime(ctx context.Context, configuration config, podClient *kubernetes.Client) (err error) {
 	resolver := packages.NewResolver(nil)
 	d.closers = append(d.closers, func() error {
 		resolver.CloseIdleConnections()
 		return nil
 	})
+	if podClient != nil {
+		d.closers = append(d.closers, podClient.Close)
+	}
 	switch configuration.runtime {
 	case "native":
 		d.Runtime, err = native.NewManager(ctx, native.Config{
@@ -96,6 +113,14 @@ func (d *dependencies) openRuntime(ctx context.Context, configuration config) (e
 			SecretBootstrap: configuration.secretBootstrap,
 			Resolver:        resolver, Engine: engine, Network: configuration.dockerNetwork,
 			RegistrationTimeout: configuration.registrationTimeout,
+		})
+	case "kubernetes":
+		if podClient == nil {
+			return errors.New("Kubernetes runtime requires an authenticated Pod client")
+		}
+		d.Runtime, err = kubernetes.NewManager(ctx, kubernetes.ManagerConfig{
+			Pod: configuration.kubernetesPod, Bus: d.Bus, Client: podClient,
+			Resolver: resolver, RegistrationTimeout: configuration.registrationTimeout,
 		})
 	default:
 		return fmt.Errorf("unsupported spawner runtime %q", configuration.runtime)

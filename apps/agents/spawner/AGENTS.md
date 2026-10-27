@@ -14,7 +14,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [native.Manager](runtimes/native/manager.go),
   [docker.Manager](runtimes/docker/manager.go) and the injected
   [Kubernetes Manager](runtimes/kubernetes/manager.go) implement the interface.
-  Kubernetes remains unavailable through CLI configuration.
+  CLI factories select the runtime; `cli.go` stays independent of concrete clients.
 - Results use `RuntimeKind` and one sealed `RuntimeDetails` value:
   `NativeRuntimeDetails`, `DockerRuntimeDetails` or `KubernetesRuntimeDetails`.
   JSON places the selected payload directly under `runtime_details`, with no
@@ -201,11 +201,13 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   carrying `ai.defos.commander.spawn-owner` before removing the network.
   Never reset execution checkpoints while owned children exist.
 
-## Planned Kubernetes runtime
+## Kubernetes runtime
 
-The injected Manager implements launch reconciliation and registration observation.
-The CLI still rejects `SPAWNER_RUNTIME=kubernetes` and reads no Kubernetes settings;
-lifecycle cleanup and factory wiring remain follow-ups.
+`SPAWNER_RUNTIME=kubernetes` selects the injected Manager. Configuration lives in
+`cli/config.go` and `cli/kubernetes.go`; `cli/factory.go` constructs the in-cluster
+client before opening providers, then injects the bus and resolver. Reject invalid
+deployment settings before startup. Require AMQP/AMQPS and S3; other runtimes ignore
+Kubernetes settings. Shutdown closes Manager, client, resolver and bus in that order.
 
 Current building blocks are the [Pod builder](runtimes/kubernetes/pod.go) and
 [narrow REST client](runtimes/kubernetes/client.go); they add no Kubernetes SDK
@@ -247,7 +249,7 @@ only `container_id`. A result must use the payload matching its runtime. Namespa
 and Pod name follow Kubernetes DNS naming limits; Pod UID is an opaque nonempty
 string.
 
-Planned host configuration:
+Host configuration:
 
 | Setting | Deployment-owned choice |
 | --- | --- |
@@ -256,6 +258,12 @@ Planned host configuration:
 | `SPAWNER_KUBERNETES_SERVICE_ACCOUNT` | Child ServiceAccount, with token automount disabled |
 | `SPAWNER_KUBERNETES_CONFIG_MAP` | Child configuration reference in that namespace |
 | `SPAWNER_KUBERNETES_SECRET` | Child provider-credential reference in that namespace |
+| `SPAWNER_KUBERNETES_IMAGE_PULL_SECRETS` | Optional unique comma-separated existing pull Secret references |
+
+The factory supplies private child defaults: UID/GID 1000, requests `100m/128Mi`
+and limits `500m/512Mi`. These are deployment policy, not action input. Authentication
+details stay internal. Docker/Kubernetes default registration waits to 45 seconds;
+an explicit existing `--registration-timeout` overrides that default.
 
 Use `<prefix><agent-id>` as the Pod name; an empty prefix uses the assigned agent
 ID directly. Save the resolved namespace/name in the launch intent; configuration
@@ -291,8 +299,9 @@ changes must not rename an existing launch.
   ungated Pod without its durable UID receipt remains uncertain. Observation
   survives action cancellation; a new host requires a fresh announcement.
   `Close` cancels observers and leaves Pods/checkpoints intact. The controller
-  decides graceful stop; explicit runtime termination, draining and UID-guarded
-  Pod deletion remain a separate follow-up required before CLI enablement.
+  decides graceful stop through its existing protocol. Operators own Pod cleanup,
+  checking recorded UID and spawn ownership before removal. Draining and managed
+  termination/cleanup remain separate future features.
 - Ownership must survive spawner replacement. Keep label values within 63
   characters; put full package references and digests in annotations. Distinguish
   dynamic `commander-spawner` ownership from static infrastructure workloads.
@@ -304,8 +313,8 @@ changes must not rename an existing launch.
   grant additional privileges as an implicit workaround.
 - Infrastructure must grant Pod `patch` before deployment can release gates.
   Do not add Secret-read or broader workload permissions. Unit checks need no
-  Kubernetes SDK or cluster; constructor injection enables no CLI credential
-  discovery or settings reads.
+  Kubernetes SDK or cluster. Authentication settings and test injection stay out
+  of the CLI; constructor injection does not expand action input or deployment privileges.
 
 ## Validation
 

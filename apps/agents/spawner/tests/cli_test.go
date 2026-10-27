@@ -89,7 +89,7 @@ func TestSpawnerCLIValidatesEnvironmentBeforeCreatingState(t *testing.T) {
 	}{
 		{"blank state", "SPAWNER_STATE_DIR", map[string]string{"SPAWNER_STATE_DIR": " "}},
 		{"unknown runtime", "SPAWNER_RUNTIME", map[string]string{"SPAWNER_RUNTIME": "containerd"}},
-		{"kubernetes not implemented", "SPAWNER_RUNTIME", map[string]string{"SPAWNER_RUNTIME": "kubernetes"}},
+		{"kubernetes without namespace", "SPAWNER_KUBERNETES_NAMESPACE", map[string]string{"SPAWNER_RUNTIME": "kubernetes", "SPAWNER_KUBERNETES_NAMESPACE": ""}},
 		{"docker without network", "SPAWNER_DOCKER_NETWORK", map[string]string{"SPAWNER_RUNTIME": "docker"}},
 		{"invalid secrets key", "SECRETS_ENCRYPTION_KEY", map[string]string{"SECRETS_ENCRYPTION_KEY": "private-invalid-key"}},
 	} {

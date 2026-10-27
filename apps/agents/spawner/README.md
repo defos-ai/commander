@@ -35,6 +35,30 @@ For a separate Docker-mode spawner, set `SPAWNER_RUNTIME=docker` and
 `SPAWNER_DOCKER_NETWORK` to an existing network. Use AMQP and S3 addresses
 reachable from child containers. See [deployment](../../../docs/deployment.md).
 
+### Kubernetes
+
+Run inside the cluster with `SPAWNER_RUNTIME=kubernetes` and configure:
+
+| Setting | Value |
+| --- | --- |
+| `SPAWNER_KUBERNETES_NAMESPACE` | Required child namespace |
+| `SPAWNER_KUBERNETES_SERVICE_ACCOUNT` | Required child ServiceAccount |
+| `SPAWNER_KUBERNETES_CONFIG_MAP` | Required child ConfigMap reference |
+| `SPAWNER_KUBERNETES_SECRET` | Required child Secret reference |
+| `SPAWNER_KUBERNETES_POD_PREFIX` | Optional literal prefix; empty by default |
+| `SPAWNER_KUBERNETES_IMAGE_PULL_SECRETS` | Optional comma-separated pull Secret references |
+
+The spawner uses its mounted ServiceAccount credentials automatically. Its role
+needs Pod `get`, `create` and `patch` permissions in the child namespace. Use an
+AMQP/AMQPS `BUS_URL` and S3 `STORAGE_URL` for the spawner; the child Secret must
+contain `BUS_URL` and `STORAGE_URL` for the same providers. The ConfigMap may supply
+`AWS_REGION`, `AWS_ENDPOINT_URL_S3` and `S3_USE_PATH_STYLE`.
+
+Children use UID/GID 1000, requests `100m/128Mi`, and limits `500m/512Mi`; choose
+compatible images. Include any ServiceAccount pull Secret references in the
+configured list so admission matches the launch policy. Child API-token mounting
+is disabled. The official Builder package is not supported in Kubernetes yet.
+
 ### During a mission
 
 Through MCP, read the `install-agent` mission and `spawn-agent` action schemas.
@@ -58,8 +82,9 @@ Pass `"visibility":"private"`. The spawner uses its `GITHUB_TOKEN` environment
 variable, or opens the regular Playground/Admin secret form if none is set.
 Never paste a token into chat. Public installations use anonymous downloads.
 
-For private GHCR images, the token also needs package access; a classic personal
+For Docker GHCR pulls, the token also needs package access; a classic personal
 access token requires `read:packages`. Other registries use anonymous pulls.
+Kubernetes uses image-pull Secrets independently of the package-download token.
 See [GitHub's registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
 
 ## Configuration
@@ -70,22 +95,20 @@ For a separate host:
 | Setting | When to use it |
 | --- | --- |
 | `BUS_URL`, `STORAGE_URL` | Connect to the controller's providers |
-| `SPAWNER_RUNTIME=docker` | Launch containers instead of native processes |
+| `SPAWNER_RUNTIME` | Select `native` (default), `docker` or `kubernetes` |
 | `SPAWNER_DOCKER_NETWORK` | Select the Docker network; required in Docker mode |
 | `SPAWNER_STATE_DIR` | Change native downloads and working directories from `state/spawner` |
 | `SECRETS_ENCRYPTION_KEY` | Use the API's key for managed secret forms |
 | `GITHUB_TOKEN` | Preconfigure access to private GitHub packages |
 
 Children receive provider settings, not your API, MCP or model tokens. The
-official builder package also receives the secrets encryption key; Docker
+official builder package in native/Docker mode also receives the secrets encryption key; Docker
 administrators can inspect that key in its container environment.
 
 Spawn results put runtime-specific identity in `runtime_details`: `pid` for
-native processes and `container_id` for Docker containers. Kubernetes spawning
-is not implemented. Its reserved payload contains `namespace`, `pod_name` and
-`pod_uid`, but `SPAWNER_RUNTIME=kubernetes` remains unsupported. See the
-[planned runtime contract](AGENTS.md#planned-kubernetes-runtime) before preparing
-a deployment; its Kubernetes settings are not read by the current CLI.
+native processes, `container_id` for Docker containers, and `namespace`, `pod_name`
+and `pod_uid` for Kubernetes. See the [runtime contract](AGENTS.md#kubernetes-runtime)
+for ownership and recovery behavior.
 
 ## Stop or replace agents
 
@@ -94,6 +117,9 @@ a deployment; its Kubernetes settings are not read by the current CLI.
 - Docker children keep running when the spawner stops. Follow
   [scoped teardown](../../../docs/deployment.md#stopping-and-resetting-agents)
   before `docker compose down`.
+- Kubernetes Pods also survive spawner shutdown. The existing controller
+  `StopAgent` protocol requests graceful shutdown; operators remove stopped Pods
+  after verifying the saved namespace/name/UID and spawn ownership labels.
 - Keep controller execution records while children exist. If launch status is
   uncertain, inspect the process or container before requesting a replacement.
   A new task creates a new instance; retrying does not restart a stopped one.

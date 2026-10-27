@@ -14,6 +14,7 @@ import (
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
@@ -28,6 +29,7 @@ type config struct {
 	stateDir            string
 	runtime             string
 	dockerNetwork       string
+	kubernetesPod       kubernetes.Config
 	registrationTimeout time.Duration
 	logLevel            string
 	logFormat           string
@@ -48,7 +50,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	flags.StringVar(&actionNames, "actions", "", "Comma-separated action names; omitted uses the agent type's catalog, explicit empty exposes no actions; available: "+availableActions)
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL or filesystem path; overrides BUS_URL; defaults to ./state/bus")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact storage URL or filesystem path; overrides STORAGE_URL; defaults to ./state/storage")
-	flags.DurationVar(&result.registrationTimeout, "registration-timeout", 30*time.Second, "Maximum wait for each spawned agent to register; Docker defaults to 45s to allow the next heartbeat")
+	flags.DurationVar(&result.registrationTimeout, "registration-timeout", 30*time.Second, "Maximum wait for each spawned agent to register; Docker and Kubernetes default to 45s to allow the next heartbeat")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Log level: debug, info, warn, error; overrides LOG_LEVEL")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Log format: json or text; overrides LOG_FORMAT; logs are written to stderr")
 	flags.DurationVar(&result.heartbeatInterval, "heartbeat-interval", agent.DefaultHeartbeatInterval, "Heartbeat interval; zero disables heartbeats and prevents a later controller from discovering this agent")
@@ -74,8 +76,8 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	if options.Runtime != "" {
 		result.runtime = options.Runtime
 	}
-	if result.runtime != "native" && result.runtime != "docker" {
-		return config{}, errors.New("SPAWNER_RUNTIME must be native or docker")
+	if result.runtime != "native" && result.runtime != "docker" && result.runtime != "kubernetes" {
+		return config{}, errors.New("SPAWNER_RUNTIME must be native, docker or kubernetes")
 	}
 	if result.runtime == "docker" {
 		result.dockerNetwork = os.Getenv("SPAWNER_DOCKER_NETWORK")
@@ -85,9 +87,16 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		if err := docker.ValidateNetwork(result.dockerNetwork); err != nil {
 			return config{}, fmt.Errorf("SPAWNER_DOCKER_NETWORK: %w", err)
 		}
-		if !provided["registration-timeout"] {
-			result.registrationTimeout = 45 * time.Second
+	}
+	if result.runtime == "kubernetes" {
+		pod, err := kubernetesConfiguration()
+		if err != nil {
+			return config{}, err
 		}
+		result.kubernetesPod = pod
+	}
+	if (result.runtime == "docker" || result.runtime == "kubernetes") && !provided["registration-timeout"] {
+		result.registrationTimeout = 45 * time.Second
 	}
 	if result.runtime == "native" {
 		result.stateDir = host.Value("", false, "SPAWNER_STATE_DIR", filepath.Join("state", "spawner"))
@@ -141,6 +150,11 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		}
 		if connectionScheme(result.storageURL) != "s3" {
 			return config{}, errors.New("docker runtime requires an s3 storage-url reachable from spawned containers")
+		}
+	}
+	if result.runtime == "kubernetes" {
+		if err := validateKubernetesProviders(result.busURL, result.storageURL); err != nil {
+			return config{}, err
 		}
 	}
 	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
