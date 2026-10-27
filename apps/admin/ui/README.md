@@ -71,7 +71,21 @@ an [encryption key](../../adapters/api/README.md#secrets). After saving, wait fo
 the agent's missing requirement to clear; after an uncertain write, refresh
 metadata before retrying. Running tasks keep their existing deadline while waiting.
 
-### Connections and sessions
+## Sessions
+
+Open **Sessions** to find agent-owned resources, filter by scope or owner, and
+inspect connection details, activity and retained history. An agent's **Sessions**
+button filters the list to that exact owner; task details link to their saved
+session or scope.
+
+Use **Verify** to check a resource through its owner and **Close session** to
+release it. A closing session still awaits confirmation. **Abandon session**
+releases a lost or failed resource's scope without confirming closure; its old
+work and agent affinity retain their original owner. Released history is read-only.
+After an uncertain control, use **Inspect saved state** before making another
+request. Completing or cancelling an operation leaves its resources alive.
+
+## Connections
 
 Saved connection names and URLs stay in your browser. Passwords stay in the UI
 server's memory; restarting it requires signing in again. Use one UI backend replica.
@@ -90,7 +104,7 @@ an API on your laptop through `localhost`; use a server-reachable address.
 For hosting, use HTTPS and set `UI_PUBLIC_ORIGIN=https://admin.example.com`,
 including behind a reverse proxy.
 
-### Native server
+## Native server
 
 With Node 24+ and Go 1.26.7+, run from the repository root:
 

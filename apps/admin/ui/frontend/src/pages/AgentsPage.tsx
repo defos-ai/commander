@@ -9,13 +9,14 @@ import { useCatalogQuery } from '../hooks/useCatalogQuery';
 import { useTranslation } from '../i18n';
 import '../styles/catalog.css';
 
-export function AgentsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, onManageSecrets }: {
+export function AgentsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, onManageSecrets, onOpenSessions }: {
   connection: Connection;
   credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;
   onManageSecrets?: () => void;
+  onOpenSessions?: (ownerAgentID?: string) => void;
 }) {
   const { t } = useTranslation();
   const [localID, setLocalID] = useState<string>();
@@ -44,6 +45,9 @@ export function AgentsPage({ connection, credentials, onSignIn, selectedID: rout
         {selectedID === undefined && <p>{t($ => $.agents.description)}</p>}
       </div>
       <div className="page-heading-actions">
+        {onOpenSessions && <Button variant="secondary" onClick={() => onOpenSessions(selectedID)}>
+          {t($ => $.shell.nav.sessions)}
+        </Button>}
         {onManageSecrets && <Button variant="secondary" onClick={onManageSecrets}>
           <KeyRound size={15} aria-hidden="true" />{t($ => $.agents.manageSecrets)}
         </Button>}

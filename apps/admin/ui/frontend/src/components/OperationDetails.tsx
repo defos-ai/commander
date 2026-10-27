@@ -1,6 +1,6 @@
 import type {
   Operation, OperationAffinity, OperationArtifact, OperationContinuation, OperationNextAction,
-  OperationPreflight, OperationQuestion, OperationTask,
+  OperationPreflight, OperationQuestion, OperationTask, OperationTaskPlacement,
 } from '../api/operation-types';
 import type { ActionRequirement } from '../api/types';
 import { useTranslation } from '../i18n';
@@ -8,6 +8,44 @@ import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
 import { Button } from './Button';
 import '../styles/catalog.css';
 import '../styles/operations.css';
+
+export type SessionNavigationTarget = { id?: string; scope_id?: string; owner_agent_id?: string };
+
+function TaskPlacement({ placement }: { placement: OperationTaskPlacement }) {
+  const { t } = useTranslation();
+  return <>
+    {placement.owner_agent_id && <div><dt>{t($ => $.operations.sessionOwner)}</dt><dd><code>{placement.owner_agent_id}</code></dd></div>}
+    {placement.reason && <div><dt>{t($ => $.operations.sessionPlacementReason)}</dt><dd>{placement.reason}</dd></div>}
+  </>;
+}
+
+export function TaskSessions({ task, placement, onOpenSession }: {
+  task: OperationTask;
+  placement?: OperationTaskPlacement;
+  onOpenSession?: (target: SessionNavigationTarget) => void;
+}) {
+  const { t } = useTranslation();
+  const intent = task.session_intent;
+  const reported = task.result?.session;
+  if (!intent && !reported && !placement?.reason && !placement?.owner_agent_id) return null;
+  const target: SessionNavigationTarget | undefined = intent && !intent.error
+    ? { id: intent.id, scope_id: intent.scope_id, owner_agent_id: reported?.owner_agent_id || placement?.owner_agent_id || task.agent_id || undefined }
+    : reported ? { id: reported.id, scope_id: reported.scope_id, owner_agent_id: reported.owner_agent_id } : undefined;
+  return <section className="operation-nested"><h3>{t($ => $.operations.session)}</h3>
+    {intent?.error && <p className="notice" role="status">{intent.error}</p>}
+    <dl className="detail-list">
+      {intent?.mode && <div><dt>{t($ => $.operations.sessionMode)}</dt><dd>{intent.mode === 'create' || intent.mode === 'reuse' || intent.mode === 'use'
+        ? t($ => $.operations.sessionModes[intent.mode]) : intent.mode}</dd></div>}
+      {target?.id && <div><dt>{t($ => $.operations.sessionId)}</dt><dd><code>{target.id}</code></dd></div>}
+      {target?.scope_id && <div><dt>{t($ => $.operations.sessionScope)}</dt><dd><code>{target.scope_id}</code></dd></div>}
+      {placement ? <TaskPlacement placement={placement} /> : reported?.owner_agent_id && <div><dt>{t($ => $.operations.sessionOwner)}</dt><dd><code>{reported.owner_agent_id}</code></dd></div>}
+    </dl>
+    {reported && <p className="catalog-muted">{t($ => $.operations.sessionObservationNote)}</p>}
+    {target && onOpenSession && <Button variant="secondary" onClick={() => onOpenSession(target)}>
+      {target.id ? t($ => $.operations.openSession) : t($ => $.operations.viewSessions)}
+    </Button>}
+  </section>;
+}
 
 export function isActiveOperation(status: string) {
   return status === 'planning' || status === 'running' || status === 'waiting';
@@ -94,7 +132,9 @@ function Continuation({ continuation }: { continuation: OperationContinuation })
   </div>;
 }
 
-function Task({ task, queuedFor }: { task: OperationTask; queuedFor?: string }) {
+function Task({ task, queuedFor, placement, onOpenSession }: {
+  task: OperationTask; queuedFor?: string; placement?: OperationTaskPlacement; onOpenSession?: (target: SessionNavigationTarget) => void;
+}) {
   const { t } = useTranslation();
   return <details className="operation-card"><summary>
     <span className="operation-card-name"><span>{task.action_name}</span><code>{task.id}</code>
@@ -112,6 +152,7 @@ function Task({ task, queuedFor }: { task: OperationTask; queuedFor?: string }) 
       {task.finished_at && <div><dt>{t($ => $.operations.finishedAt)}</dt><dd><Timestamp value={task.finished_at} /></dd></div>}
       {task.deadline_at && <div><dt>{t($ => $.operations.deadlineAt)}</dt><dd><Timestamp value={task.deadline_at} /></dd></div>}
     </dl>
+    <TaskSessions task={task} placement={placement} onOpenSession={onOpenSession} />
     <OperationData label={t($ => $.operations.input)} value={task.input} />
     {task.result ? <>
       <OperationData label={t($ => $.operations.result)} value={task.result.output} />
@@ -181,6 +222,13 @@ function Preflight({ preflight }: { preflight: OperationPreflight }) {
         </div>)}
       </div></details>
     </li>)}</ul>
+    {Boolean(preflight.tasks?.length) && <div className="operation-nested"><h3>{t($ => $.operations.taskPlacement)}</h3>
+      <p className="catalog-muted">{t($ => $.operations.taskPlacementNote)}</p>
+      <ul className="operation-items">{preflight.tasks?.map(placement => <li key={placement.task_id}><dl className="detail-list">
+        <div><dt>{t($ => $.operations.taskId)}</dt><dd><code>{placement.task_id}</code></dd></div>
+        <TaskPlacement placement={placement} />
+      </dl></li>)}</ul>
+    </div>}
   </section>;
 }
 
@@ -208,11 +256,12 @@ function Artifact({ artifact, onOpen }: { artifact: OperationArtifact; onOpen?: 
   </details>;
 }
 
-export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenReport }: {
+export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenReport, onOpenSession }: {
   operation: Operation;
   onAnswer?: (question: OperationQuestion) => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
   onOpenReport?: () => void;
+  onOpenSession?: (target: SessionNavigationTarget) => void;
 }) {
   const { t } = useTranslation();
   const progress = operation.progress;
@@ -242,6 +291,7 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
     {operation.preflight && <Preflight preflight={operation.preflight} />}
     <section className="catalog-section"><h2>{t($ => $.operations.tasks)}</h2>
       {operation.tasks?.length ? <ul className="operation-items">{operation.tasks.map(task => <li key={task.id}><Task task={task}
+        placement={operation.preflight?.tasks?.find(placement => placement.task_id === task.id)} onOpenSession={onOpenSession}
         queuedFor={isActiveOperation(operation.status) && task.status === 'queued' && !affinity?.error && affinity?.for_actions.includes(task.action_name)
           ? affinity.agent_id : undefined} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noTasks)}</p>}
     </section>

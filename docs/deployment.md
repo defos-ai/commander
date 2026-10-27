@@ -96,7 +96,7 @@ Set these in your shell or an untracked `.env` before running Compose:
 Standalone hosts accept matching flags such as `--bus-url`; flags override
 environment values. Run `<executable> --help` for its options.
 Use the component guides for [API](../apps/adapters/api/README.md),
-[Admin hosting](../apps/admin/ui/README.md#connections-and-sessions),
+[Admin hosting](../apps/admin/ui/README.md#connections),
 [spawner](../apps/agents/spawner/README.md) and
 [model settings](../apps/playground/README.md).
 

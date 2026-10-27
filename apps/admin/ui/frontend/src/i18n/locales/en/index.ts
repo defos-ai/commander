@@ -9,6 +9,7 @@ import operationGraph from './operationGraph';
 import missionRules from './missionRules';
 import artifacts from './artifacts';
 import secrets from './secrets';
+import runtimeSessions from './runtimeSessions';
 
 export default {
   brand: 'COMMANDER',
@@ -23,6 +24,7 @@ export default {
   missionRules,
   artifacts,
   secrets,
+  runtimeSessions,
   connections: {
     introduction: 'Administration of yours Command Centers',
     title: 'Connections',
@@ -104,6 +106,7 @@ export default {
       missions: 'Missions',
       controllers: 'Controllers',
       agents: 'Agents',
+      sessions: 'Sessions',
       actions: 'Actions',
       settings: 'Connection settings',
     },

@@ -11,6 +11,9 @@ const mission = { name: 'review-website-with-browser', objectives: ['Review webs
 const operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'running',
   progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
   tasks: [], questions: [], events: [], created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
+const resourceSession = { id: '11111111-1111-4111-8111-111111111111', scope_id: '22222222-2222-4222-8222-222222222222',
+  owner_agent_id: 'shell-agent-12345678', kind: 'shell', label: 'Saved development host', state: 'connected', disposition: 'active',
+  busy: false, revision: 1, created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
 
 function mockAPI(snapshot: typeof operation & { preflight?: unknown } = operation) {
   let session: { url: string; username: string } | undefined;
@@ -31,6 +34,8 @@ function mockAPI(snapshot: typeof operation & { preflight?: unknown } = operatio
     if (url.endsWith('/operations')) return Response.json({ items: [snapshot] });
     if (url.endsWith(`/operations/${operation.id}`)) return Response.json(snapshot);
     if (url.endsWith('/secrets/requests') || url.endsWith('/agents')) return Response.json({ items: [] });
+    if (url.startsWith(`${connection.url}/api/v1/sessions?`) || url.endsWith('/api/v1/sessions')) return Response.json({ items: [resourceSession] });
+    if (url.endsWith(`/api/v1/sessions/${resourceSession.id}`)) return Response.json(resourceSession);
     if (url.endsWith('/graph')) return Response.json({ operation_id: operation.id, status: operation.status, updated_at: operation.updated_at, nodes: [], edges: [] });
     return new Response(null, { status: 404 });
   });
@@ -61,6 +66,9 @@ describe('location navigation', () => {
       { operation: 'Résumé / a?#b' },
       { connectionID: 'local', section: 'overview' }, { connectionID: 'local', section: 'settings' },
       { connectionID: 'local', section: 'secrets' }, { connectionID: 'local', section: 'create-mission' },
+      { connectionID: 'local', section: 'sessions' },
+      { connectionID: 'local', section: 'sessions', itemID: resourceSession.id,
+        sessionFilters: { scope_id: resourceSession.scope_id, owner_agent_id: resourceSession.owner_agent_id } },
       { connectionID: 'local', section: 'missions', itemID: 'create-mission' },
       ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
       { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' },
@@ -74,10 +82,42 @@ describe('location navigation', () => {
     for (const hash of ['#/%', '#/connections/id/unknown', '#/connections/id/overview/item', '#/connections/id/secrets/item', '#/connections/id/create-mission/item', '#/connections/id/create-mission/', '#/connections/id/operations/',
       '#/connections/id/missions/item/graph', '#/connections/id/operations/item/json', '#/connections/id/missions/item/json/extra',
       '#/connections/id/create-mission/item/graph', '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra',
+      '#/connections/id/sessions/item/graph', '#/connections/id/sessions?token=secret', '#/connections/id/sessions?scope_id=',
+      '#/connections/id/sessions?owner_agent_id=a&owner_agent_id=b', '#/connections/id/agents?owner_agent_id=a',
       '#/operations/', '#/operations/id/extra', '#/operations/id?token=secret', '#/operations/id#fragment',
       '#/operations/%0A', '#/operations/%', '#/operations/' + 'a'.repeat(257)]) {
       expect(parseRoute(hash)).toEqual({});
     }
+  });
+
+  it('keeps Sessions details and owner/scope filters through sign-in, list navigation, history and reload', async () => {
+    const fetch = mockAPI();
+    const filters = { scope_id: resourceSession.scope_id, owner_agent_id: resourceSession.owner_agent_id };
+    visit({ connectionID: connection.id, section: 'sessions', itemID: resourceSession.id, sessionFilters: filters });
+    const first = render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in to view sessions');
+    await signIn();
+    expect(await screen.findByText(resourceSession.label)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Sessions', level: 1 })).toBeVisible();
+    const navigation = screen.getByRole('navigation', { name: 'Workspace navigation' });
+    expect(within(navigation).getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page');
+    fireEvent.click(screen.getByRole('button', { name: 'All sessions' }));
+    const row = await screen.findByRole('button', { name: `View session ${resourceSession.id}` });
+    expect(window.location.hash).toBe(routeHash({ connectionID: connection.id, section: 'sessions', sessionFilters: filters }));
+    expect(screen.getByLabelText('Scope ID')).toHaveValue(filters.scope_id);
+    expect(screen.getByLabelText('Owner agent ID')).toHaveValue(filters.owner_agent_id);
+    fireEvent.click(row);
+    expect(await screen.findByRole('heading', { name: 'Saved session' })).toBeVisible();
+    act(() => { window.history.back(); });
+    await screen.findByRole('button', { name: `View session ${resourceSession.id}` });
+    act(() => { window.history.forward(); });
+    await screen.findByRole('heading', { name: 'Saved session' });
+    first.unmount();
+    render(<App />);
+    expect(await screen.findByText(resourceSession.label)).toBeVisible();
+    expect(parseRoute(window.location.hash)).toEqual({ connectionID: connection.id, section: 'sessions', itemID: resourceSession.id, sessionFilters: filters });
+    expect(fetch.mock.calls.every(([, init]) => !new Headers(init?.headers).has('Authorization'))).toBe(true);
+    expect(window.location.href).not.toContain('private-password');
   });
 
   it.each([

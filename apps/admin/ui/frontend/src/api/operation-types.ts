@@ -34,6 +34,7 @@ export interface OperationAffinity {
 }
 
 export interface OperationTask {
+  session_intent?: OperationSessionIntent | null;
   id: string;
   operation_id: string;
   parent_task_id?: string;
@@ -54,6 +55,7 @@ export interface OperationTask {
 }
 
 export interface OperationActionOutput {
+  session?: OperationSessionReference | null;
   action_name: string;
   output: unknown;
   artifacts?: OperationArtifact[] | null;
@@ -103,6 +105,28 @@ export interface OperationPreflight {
   ready: boolean;
   version: number;
   actions: OperationActionReadiness[] | null;
+  tasks?: OperationTaskPlacement[] | null;
+}
+
+export interface OperationSessionIntent {
+  mode: string;
+  scope_id: string;
+  id?: string;
+  error?: string;
+}
+
+export interface OperationSessionReference {
+  id: string;
+  scope_id: string;
+  owner_agent_id: string;
+}
+
+export interface OperationTaskPlacement {
+  task_id: string;
+  owner_agent_id?: string;
+  reason?: string;
+  agent_type?: string;
+  missing_requirements?: ActionRequirement[] | null;
 }
 
 export interface OperationActionReadiness {

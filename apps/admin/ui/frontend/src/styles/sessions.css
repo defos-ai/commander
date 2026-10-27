@@ -1,0 +1,20 @@
+.session-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 18px; margin-bottom: 24px; padding: 18px; border: 1px solid var(--line); border-radius: 4px; }
+.session-filter-actions, .session-control-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.session-filters > .form-hint, .session-filters > .notice { grid-column: 1 / -1; }
+.session-activity-filter { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.session-activity-filter select { min-height: 40px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); }
+.session-disposition { font: 400 11px/1.6 var(--font-mono); }
+.session-owner-link { border: 0; background: transparent; color: var(--ink); padding: 0; text-decoration: underline; text-underline-offset: 3px; font: 400 11px/1.7 var(--font-mono); overflow-wrap: anywhere; text-align: left; }
+.session-controls { margin-top: 29px; }
+.session-controls .session-control-actions { margin-top: 16px; }
+.session-controls .form-hint { margin-top: 12px; }
+.session-control-form { display: grid; gap: 16px; }
+.session-control-form code { overflow-wrap: anywhere; font: 400 11px/1.7 var(--font-mono); }
+.session-control-form .notice { display: grid; gap: 12px; }
+.session-control-form .notice .button { justify-self: start; }
+.session-confirmation { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.7; }
+.session-confirmation input { flex: 0 0 auto; margin-top: 4px; }
+.session-request-id { overflow-wrap: anywhere; }
+.session-control-guard { display: grid; gap: 12px; margin-bottom: 22px; }
+.session-control-guard .button { justify-self: start; }
+@media (max-width: 760px) { .session-filters { grid-template-columns: 1fr; padding: 14px; } }

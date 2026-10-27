@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { File, Package, Workflow } from 'lucide-react';
 import type { GraphNode, OperationGraph } from '../api/graph-types';
-import type { OperationTask } from '../api/operation-types';
+import type { OperationTask, OperationTaskPlacement } from '../api/operation-types';
 import { useTranslation } from '../i18n';
 import { Dialog } from './Dialog';
 import { GraphCanvas } from './GraphCanvas';
 import { GraphNodeDetails, graphNodeName } from './GraphNodeDetails';
 import { GRAPH_NODE_HEIGHT, GRAPH_NODE_WIDTH, layoutGraph } from './graph-layout';
-import { TaskStatus } from './OperationDetails';
+import { TaskStatus, type SessionNavigationTarget } from './OperationDetails';
 import '../styles/catalog.css';
 
 const nodeIcons = { task: Workflow, artifact: Package, file: File };
@@ -23,10 +23,12 @@ function NodeContents({ node }: { node: GraphNode }) {
   </>;
 }
 
-export function ExecutionGraph({ graph, tasks, onOpenArtifact }: {
+export function ExecutionGraph({ graph, tasks, placements, onOpenArtifact, onOpenSession }: {
   graph: OperationGraph;
   tasks?: OperationTask[] | null;
+  placements?: OperationTaskPlacement[] | null;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
+  onOpenSession?: (target: SessionNavigationTarget) => void;
 }) {
   const { t } = useTranslation();
   const [selectedID, setSelectedID] = useState<string>();
@@ -91,7 +93,9 @@ export function ExecutionGraph({ graph, tasks, onOpenArtifact }: {
       </button>)}
     </GraphCanvas>
     {selected && <Dialog open title={t($ => $.operationGraph.nodeDetails)} onClose={clearSelection} className="graph-node-dialog">
-      <GraphNodeDetails graph={graph} node={selected} taskData={taskData} onSelect={setSelectedID} onOpenArtifact={onOpenArtifact ? openArtifact : undefined} />
+      <GraphNodeDetails graph={graph} node={selected} taskData={taskData}
+        placement={taskData ? placements?.find(placement => placement.task_id === taskData.id) : undefined}
+        onSelect={setSelectedID} onOpenArtifact={onOpenArtifact ? openArtifact : undefined} onOpenSession={onOpenSession} />
     </Dialog>}
   </>;
 }

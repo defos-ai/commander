@@ -6,6 +6,7 @@ import type {
   Operation, OperationActionOutput, OperationActionReadiness, OperationAffinity, OperationAgentReadiness,
   OperationArtifact, OperationArtifactFile, OperationContinuation, OperationEvent,
   OperationNextAction, OperationPreflight, OperationProgress, OperationQuestion, OperationTask,
+  OperationSessionIntent, OperationSessionReference, OperationTaskPlacement,
 } from './operation-types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 
@@ -42,6 +43,7 @@ export function isArtifact(value: unknown): value is OperationArtifact {
 
 function isActionOutput(value: unknown): value is OperationActionOutput {
   return isObject(value) && typeof value.action_name === 'string' && 'output' in value &&
+    (value.session === undefined || value.session === null || isSessionReference(value.session)) &&
     (value.artifacts === undefined || isNullableArray(value.artifacts, isArtifact)) &&
     (value.next_actions === undefined || isNullableArray(value.next_actions, isNextAction));
 }
@@ -59,6 +61,7 @@ function isTask(value: unknown): value is OperationTask {
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
     isDate(value.started_at) && isOptionalDate(value.finished_at) &&
+    (value.session_intent === undefined || value.session_intent === null || isSessionIntent(value.session_intent)) &&
     (value.result === undefined || value.result === null || isActionOutput(value.result)) &&
     (value.continuation === undefined || value.continuation === null || isContinuation(value.continuation));
 }
@@ -99,7 +102,35 @@ function isActionReadiness(value: unknown): value is OperationActionReadiness {
 
 function isPreflight(value: unknown): value is OperationPreflight {
   return isObject(value) && typeof value.ready === 'boolean' && isUnsignedInteger(value.version) &&
-    isNullableArray(value.actions, isActionReadiness);
+    isNullableArray(value.actions, isActionReadiness) &&
+    (value.tasks === undefined || isNullableArray(value.tasks, isTaskPlacement));
+}
+
+function isUUID(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+}
+
+function isAgentID(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 63 && /^[a-z0-9]+(?:-[a-z0-9]+)*-agent-[0-9a-f]{8}$/.test(value);
+}
+
+function isSessionIntent(value: unknown): value is OperationSessionIntent {
+  if (!isObject(value) || typeof value.mode !== 'string' || typeof value.scope_id !== 'string' ||
+    !isOptionalString(value.id) || !isOptionalString(value.error)) return false;
+  // Admission retains failed automatic proposals as an error with empty identity fields.
+  if (value.error) return true;
+  return ['create', 'reuse', 'use'].includes(value.mode) && isUUID(value.scope_id) &&
+    (value.id === undefined || isUUID(value.id));
+}
+
+function isSessionReference(value: unknown): value is OperationSessionReference {
+  return isObject(value) && isUUID(value.id) && isUUID(value.scope_id) && isAgentID(value.owner_agent_id);
+}
+
+function isTaskPlacement(value: unknown): value is OperationTaskPlacement {
+  return isObject(value) && isIdentifier(value.task_id) &&
+    (value.owner_agent_id === undefined || isAgentID(value.owner_agent_id)) &&
+    isOptionalString(value.reason) && hasScopedRequirements(value);
 }
 
 function isAffinity(value: unknown): value is OperationAffinity {

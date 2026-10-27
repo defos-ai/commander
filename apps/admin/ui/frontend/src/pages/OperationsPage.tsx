@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, LoaderCircle, Plus, RefreshCw, Search, Workflow } from 'lucide-react';
 import { getOperation, listOperations } from '../api/operations';
 import type { Operation, OperationQuestion } from '../api/operation-types';
-import { isActiveOperation, OperationDetails, OperationSecretsNotice, OperationStatus } from '../components/OperationDetails';
+import { isActiveOperation, OperationDetails, OperationSecretsNotice, OperationStatus, type SessionNavigationTarget } from '../components/OperationDetails';
 import { StartOperationDialog } from '../components/StartOperationDialog';
 import { OperationCommandDialog } from '../components/OperationCommandDialog';
 import { OperationGraphPanel } from '../components/OperationGraphPanel';
@@ -24,7 +24,7 @@ type ResourceModal = { url: string; credentials: Session; operationID: string } 
   { kind: 'artifact'; artifactID: string; fileID?: string } | { kind: 'report' }
 );
 
-export function OperationsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, view: routeView, onViewChange, onManageSecrets }: {
+export function OperationsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, view: routeView, onViewChange, onManageSecrets, onOpenSession }: {
   connection: Connection;
   credentials?: Session;
   onSignIn: () => void;
@@ -33,6 +33,7 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
   view?: OperationView;
   onViewChange?: (view: OperationView) => void;
   onManageSecrets?: () => void;
+  onOpenSession?: (target: SessionNavigationTarget) => void;
 }) {
   const { t } = useTranslation();
   const [localID, setLocalID] = useState<string>();
@@ -112,8 +113,9 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
         <button type="button" aria-pressed={view === 'graph'} onClick={() => changeView('graph')}>{t($ => $.operationGraph.title)}</button>
       </div>
       <OperationSecretsNotice operation={query.item} onManageSecrets={onManageSecrets} />
-      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} tasks={query.item.tasks} onSignIn={onSignIn} onOpenArtifact={openArtifact} />
-        : <OperationDetails operation={query.item} onOpenArtifact={openArtifact} onOpenReport={openReport}
+      {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} tasks={query.item.tasks}
+        placements={query.item.preflight?.tasks} onSignIn={onSignIn} onOpenArtifact={openArtifact} onOpenSession={onOpenSession} />
+        : <OperationDetails operation={query.item} onOpenArtifact={openArtifact} onOpenReport={openReport} onOpenSession={onOpenSession}
           onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} />}
     </> : <>
       {(items.length > 0 || filter || status) && <div className="catalog-toolbar">

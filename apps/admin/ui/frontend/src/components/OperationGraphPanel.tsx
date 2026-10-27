@@ -1,19 +1,21 @@
 import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { Session } from '../connections/types';
-import type { OperationTask } from '../api/operation-types';
+import type { OperationTask, OperationTaskPlacement } from '../api/operation-types';
 import { useOperationGraph } from '../hooks/useOperationGraph';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { ExecutionGraph } from './ExecutionGraph';
-import { OperationStatus } from './OperationDetails';
+import { OperationStatus, type SessionNavigationTarget } from './OperationDetails';
 
-export function OperationGraphPanel({ url, credentials, operationID, tasks, onSignIn, onOpenArtifact }: {
+export function OperationGraphPanel({ url, credentials, operationID, tasks, placements, onSignIn, onOpenArtifact, onOpenSession }: {
   url: string;
   credentials?: Session;
   operationID: string;
   tasks?: OperationTask[] | null;
+  placements?: OperationTaskPlacement[] | null;
   onSignIn: () => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
+  onOpenSession?: (target: SessionNavigationTarget) => void;
 }) {
   const { t } = useTranslation();
   const query = useOperationGraph(url, credentials, operationID);
@@ -32,7 +34,7 @@ export function OperationGraphPanel({ url, credentials, operationID, tasks, onSi
       <p className="operation-graph-snapshot"><OperationStatus status={query.graph.status} />
         <time dateTime={query.graph.updated_at}>{t($ => $.operationGraph.updated, { time: new Date(query.graph.updated_at).toLocaleString() })}</time>
       </p>
-      <ExecutionGraph key={`${url}:${operationID}`} graph={query.graph} tasks={tasks} onOpenArtifact={onOpenArtifact} />
+      <ExecutionGraph key={`${url}:${operationID}`} graph={query.graph} tasks={tasks} placements={placements} onOpenArtifact={onOpenArtifact} onOpenSession={onOpenSession} />
       <p className="catalog-updated">{t($ => $.operationGraph.polling)}</p>
     </> : <p className="catalog-loading" role="status"><LoaderCircle className="connection-form-spinner" size={17} aria-hidden="true" />{t($ => $.operationGraph.loading)}</p>}
   </section>;

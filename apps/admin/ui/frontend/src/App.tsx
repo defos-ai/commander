@@ -22,6 +22,7 @@ import { ControllersPage } from './pages/ControllersPage';
 import { ActionsPage } from './pages/ActionsPage';
 import { OperationsPage } from './pages/OperationsPage';
 import { SecretsPage } from './pages/SecretsPage';
+import { SessionsPage } from './pages/SessionsPage';
 
 type Modal = { kind: 'connect'; connection?: Connection; localURL?: string; username?: string } | { kind: 'remove'; connection: Connection };
 
@@ -73,7 +74,8 @@ export function App() {
 
   function open(id: string) { navigate({ connectionID: id, section: operationLinkID ? 'operations' : 'overview', itemID: operationLinkID }); }
   function select(itemID?: string) {
-    if (activeID) navigate({ connectionID: activeID, section, itemID });
+    if (activeID) navigate({ connectionID: activeID, section, itemID,
+      ...(route.connectionID && section === 'sessions' ? { sessionFilters: route.sessionFilters } : {}) });
   }
   function edit(id: string) { setModal({ kind: 'connect', connection: state.connections.find(connection => connection.id === id) }); }
   function remove(id: string) {
@@ -83,7 +85,7 @@ export function App() {
   const storageNotice = !state.storageAvailable && <p className="notice" role="alert">{t($ => $.connections.storageError)}</p>;
 
   return <>
-    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'controllers', 'agents', 'actions', 'settings']}
+    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'controllers', 'agents', 'sessions', 'actions', 'settings']}
       onNavigate={destination => navigate({ connectionID: active.id, section: destination })} onBack={() => navigate({})}>
       {storageNotice}
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
@@ -91,9 +93,15 @@ export function App() {
         onEdit={() => edit(active.id)} onForget={() => state.forgetSession(active.id)} onRemove={() => remove(active.id)} />
         : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           onBack={() => navigate({ connectionID: active.id, section: 'agents' })} />
+        : section === 'sessions' ? <SessionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
+          selectedID={selectedID} onSelect={select} filters={route.connectionID ? route.sessionFilters : undefined}
+          onFiltersChange={sessionFilters => navigate({ connectionID: active.id, section: 'sessions', sessionFilters })}
+          onOpenAgent={id => navigate({ connectionID: active.id, section: 'agents', itemID: id })} />
         : section === 'operations' ? <OperationsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           selectedID={selectedID} onSelect={select} view={route.connectionID && route.view === 'graph' ? 'graph' : 'details'}
           onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
+          onOpenSession={target => navigate({ connectionID: active.id, section: 'sessions', itemID: target.id,
+            sessionFilters: { ...(target.scope_id ? { scope_id: target.scope_id } : {}), ...(target.owner_agent_id ? { owner_agent_id: target.owner_agent_id } : {}) } })}
           onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
         : section === 'create-mission' ? <CreateMissionPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           onBack={() => navigate({ connectionID: active.id, section: 'missions' })}
@@ -104,7 +112,8 @@ export function App() {
           onCreate={() => navigate({ connectionID: active.id, section: 'create-mission' })} />
           : section === 'controllers' ? <ControllersPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
           : section === 'agents' ? <AgentsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}
-            onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })} />
+            onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
+            onOpenSessions={owner => navigate({ connectionID: active.id, section: 'sessions', sessionFilters: owner ? { owner_agent_id: owner } : undefined })} />
             : section === 'actions' ? <ActionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
               : <OverviewPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}
     </WorkspaceLayout> : <ConnectionsPage connections={state.connections} statuses={Object.fromEntries(Object.entries(state.checks).map(([id, check]) => [id, check.status]))}

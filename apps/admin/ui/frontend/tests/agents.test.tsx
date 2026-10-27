@@ -41,6 +41,19 @@ function mockAPI(respond?: (url: string) => Response | Promise<Response>) {
 }
 
 describe('agents browser', () => {
+  it('opens all sessions or filters them by the selected exact agent owner', async () => {
+    mockAPI();
+    const onOpenSessions = vi.fn();
+    render(<AgentsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onOpenSessions={onOpenSessions} />);
+    await screen.findByRole('button', { name: `View agent ${agent.id}` });
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
+    expect(onOpenSessions).toHaveBeenLastCalledWith(undefined);
+    fireEvent.click(screen.getByRole('button', { name: `View agent ${agent.id}` }));
+    await screen.findByRole('heading', { name: 'Agent snapshot' });
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
+    expect(onOpenSessions).toHaveBeenLastCalledWith(agent.id);
+  });
+
   it('searches snapshots and distinguishes current work from stale reported work', async () => {
     mockAPI();
     render(<AgentsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);

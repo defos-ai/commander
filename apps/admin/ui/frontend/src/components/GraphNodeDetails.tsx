@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { GraphNode, OperationGraph } from '../api/graph-types';
-import type { OperationTask } from '../api/operation-types';
+import type { OperationTask, OperationTaskPlacement } from '../api/operation-types';
 import { useTranslation } from '../i18n';
-import { OperationData, TaskStatus } from './OperationDetails';
+import { OperationData, TaskStatus, TaskSessions, type SessionNavigationTarget } from './OperationDetails';
 import { Button } from './Button';
 
 export function graphNodeName(node: GraphNode) {
@@ -17,12 +17,14 @@ function Timestamp({ value }: { value?: string | null }) {
     : <span className="catalog-muted">{t($ => $.operations.notReported)}</span>;
 }
 
-export function GraphNodeDetails({ graph, node, taskData, onSelect, onOpenArtifact }: {
+export function GraphNodeDetails({ graph, node, taskData, placement, onSelect, onOpenArtifact, onOpenSession }: {
   graph: OperationGraph;
   node: GraphNode;
   taskData?: OperationTask;
+  placement?: OperationTaskPlacement;
   onSelect: (id: string) => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
+  onOpenSession?: (target: SessionNavigationTarget) => void;
 }) {
   const { t } = useTranslation();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -50,6 +52,7 @@ export function GraphNodeDetails({ graph, node, taskData, onSelect, onOpenArtifa
         {node.task.status === 'interrupted' && <p className="notice">{t($ => $.operations.interruptedNote)}</p>}
         {node.task.error && <div className="operation-error"><h4>{t($ => $.operations.error)}</h4><p>{node.task.error}</p></div>}
         {taskData && <div key={node.id}>
+          <TaskSessions task={taskData} placement={placement} onOpenSession={onOpenSession} />
           <OperationData label={t($ => $.operations.input)} value={taskData.input} />
           <OperationData label={t($ => $.operations.output)} value={taskData.result?.output} />
         </div>}

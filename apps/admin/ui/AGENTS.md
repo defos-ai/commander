@@ -62,6 +62,21 @@
   upstream; reject structural traversal and keep other route checks intact.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
+- **Sessions** lists retained runtime resources through authenticated `/api/v1/sessions`
+  and ID detail reads. Keep scope/owner filters in the route across history and
+  reload. Link agent details by exact owner and task details by typed session
+  metadata, never arbitrary action input/output. Show observed state, lifecycle
+  disposition and activity separately, including placement blockers when overall
+  preflight is ready. Session metadata never grants readiness or ownership.
+  Controls use the existing same-origin proxy and exact saved ID/scope/owner, with
+  one request UUID per explicit submission. Never retry controls automatically;
+  preserve uncertain request IDs after dialog dismissal and require explicit
+  saved-state readback before a new control. Polling does not clear that guard. `inspect` reads
+  saved state; `verify` asks the owner. Busy resources can still accept controls.
+  Require explicit close/abandon confirmation, keep closing distinct from confirmed
+  closure, and retain abandonment's unconfirmed-closure explanation. Released
+  records and unassigned reservations are read-only. Abort requests and discard
+  dialogs on connection/session/selection changes; ignore stale responses.
 - Mission creation uses authenticated `POST /api/v1/missions`, with API validation
   and create-only name conflicts. The dedicated `create-mission` workspace route
   highlights Missions and returns to the catalog via **All missions**. Keep it
