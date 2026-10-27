@@ -96,3 +96,8 @@ run one stack at a time because their ports overlap. Always run the correspondin
 For the full stack, set `COMMANDER_TEST_SPAWNER_RUNTIME=docker` and remove spawned
 containers before teardown, scoped by both the test network and ownership label;
 see the testing guide for registry setup and cleanup commands.
+
+The shared spawn scenarios recognize Kubernetes results when
+`COMMANDER_TEST_SPAWNER_RUNTIME=kubernetes`. This selects the expected output; it
+does not provision a cluster or change the fixture inventory requirements. Keep
+cluster/RBAC/Pod lifecycle verification in external setup, outside Go fixtures.

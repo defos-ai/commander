@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,16 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 		decodeSpawnOutput(t, spawned.RuntimeDetails, &details)
 		if details.ContainerID == "" {
 			t.Fatalf("Docker spawn did not return its container: %+v", details)
+		}
+	case "kubernetes":
+		var details struct {
+			Namespace string `json:"namespace"`
+			PodName   string `json:"pod_name"`
+			PodUID    string `json:"pod_uid"`
+		}
+		decodeSpawnOutput(t, spawned.RuntimeDetails, &details)
+		if details.Namespace == "" || details.PodUID == "" || !strings.HasSuffix(details.PodName, spawned.AgentID) {
+			t.Fatalf("Kubernetes spawn did not return its assigned Pod identity: %+v", details)
 		}
 	default:
 		t.Fatalf("unsupported fixture runtime: %q", spawned.Runtime)

@@ -64,6 +64,12 @@ Test endpoints and credentials are preconfigured. Override them with
 `COMMANDER_TEST_MCP_URL`, `COMMANDER_TEST_MCP_TOKEN`, `COMMANDER_TEST_API_URL`,
 `COMMANDER_TEST_API_USERNAME` and `COMMANDER_TEST_API_PASSWORD` when needed.
 
+The API/MCP spawn scenarios also accept `COMMANDER_TEST_SPAWNER_RUNTIME=kubernetes`
+for a separately prepared test deployment using the same fixtures. They verify
+Pod identity, controller registration, action execution and artifact downloads.
+The supplied Compose stacks exercise native/Docker spawning; Kubernetes cluster
+setup and Pod-level lifecycle checks are separate work.
+
 ## CI
 
 [CI](../../.github/workflows/test.yml) selects affected suites using
