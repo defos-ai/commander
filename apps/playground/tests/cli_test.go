@@ -32,7 +32,7 @@ import (
 )
 
 func TestAllInOne(t *testing.T) {
-	t.Run("default builder and spawner startup", testAllInOneDefaultAgents)
+	t.Run("default spawner-only startup", testAllInOneDefaultAgents)
 	t.Run("shared API and MCP workflow", testAllInOneWorkflow)
 	t.Run("optional Admin lifecycle", testAllInOneAdmin)
 	t.Run("advertised Admin address", testAllInOneAdminAddress)
@@ -70,7 +70,7 @@ func testAllInOneWorkflow(t *testing.T) {
 		expected := map[int32][]string{
 			2: {"analyze-text", "build-agent", "install-agent"},
 			3: {"starting_actions", "rules", "for_actions", "aggregate-results", "decide-next-actions", "decision_by", "input_schema", "output_schema"},
-			4: {"example-agent-", "analyze-text", "write-summary", "builder-agent-", "spawner-agent-"},
+			4: {"example-agent-", "analyze-text", "write-summary", "spawner-agent-"},
 		}
 		for _, want := range expected[request] {
 			if len(body.Messages) == 0 || body.Messages[len(body.Messages)-1].Role != "tool" || !strings.Contains(body.Messages[len(body.Messages)-1].Content, want) {
@@ -187,7 +187,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	})
 	wait("Temporary session · results deleted on exit")
 	welcome := output.String()
-	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 2 agents connected", "Try:"} {
+	for _, want := range []string{"Other (OpenAI-compatible) · fixture", "Commander ready · all-in-one · 1 agent connected", "Try:"} {
 		if !strings.Contains(welcome, want) {
 			t.Fatalf("missing startup message %q: %s", want, welcome)
 		}
@@ -294,7 +294,7 @@ func testAllInOneWorkflow(t *testing.T) {
 				ready++
 			}
 		}
-		if ready == 3 {
+		if ready == 2 {
 			break
 		}
 		select {
@@ -303,12 +303,12 @@ func testAllInOneWorkflow(t *testing.T) {
 		case <-tick.C:
 		}
 	}
-	if len(agents.Items) != 3 {
+	if len(agents.Items) != 2 {
 		t.Fatalf("unexpected local agents: %+v", agents.Items)
 	}
-	var exampleChecks, builderChecks, spawnerChecks int
+	var exampleChecks, spawnerChecks int
 	for _, agent := range agents.Items {
-		if !regexp.MustCompile(`^(example|builder|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
+		if !regexp.MustCompile(`^(example|spawner)-agent-[0-9a-f]{8}$`).MatchString(agent.ID) || agent.Status != "ready" {
 			t.Fatalf("unexpected bundled agent identity: %+v", agent)
 		}
 		for _, action := range agent.Actions {
@@ -323,18 +323,13 @@ func testAllInOneWorkflow(t *testing.T) {
 					t.Fatalf("unexpected spawner action: %+v", action)
 				}
 				spawnerChecks++
-			case "builder-agent":
-				if (action.Name != "checkout-template" && action.Name != "build-agent" && action.Name != "publish-agent" && action.Name != "release-agent") || action.Status != "unavailable" {
-					t.Fatalf("unexpected builder action without tools: %+v", action)
-				}
-				builderChecks++
 			default:
 				t.Fatalf("unexpected bundled agent type: %s", agent.Type)
 			}
 		}
 	}
-	if exampleChecks != 2 || builderChecks != 4 || spawnerChecks != 1 {
-		t.Fatalf("unexpected local action coverage: example=%d, builder=%d, spawner=%d", exampleChecks, builderChecks, spawnerChecks)
+	if exampleChecks != 2 || spawnerChecks != 1 {
+		t.Fatalf("unexpected local action coverage: example=%d, spawner=%d", exampleChecks, spawnerChecks)
 	}
 	for _, token := range []string{"", "wrong-token"} {
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))

@@ -23,7 +23,7 @@ From the repository root:
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground
 ```
 
-Builder and spawner are ready to use. Ask chat to install other agents when needed.
+Spawner is ready to use. Ask chat to install other agents when needed.
 Compose supplies RabbitMQ, MongoDB and MinIO, using local development credentials.
 Admin adds bundled missions through the API at startup, preserving existing names.
 
@@ -51,6 +51,17 @@ docker compose run --rm --no-deps playground
 Close any existing Playground session first. For a custom `COMMANDER_API_URL`,
 also supply that API's `COMMANDER_API_USERNAME` and `COMMANDER_API_PASSWORD`, or
 enter its login in Playground's local form.
+
+### Optional builder
+
+Start the builder when you need to build agents:
+
+```sh
+docker compose --profile builder up --build --wait
+```
+
+The builder keeps its source checkouts in `builder-workspaces`. See
+[Builder setup](../apps/agents/builder/README.md) for native use and managed secrets.
 
 ### Secret encryption
 
@@ -109,7 +120,7 @@ Compose keeps data in named Docker volumes:
 | `mongo` | Missions, operations, results, encrypted secrets and execution checkpoints |
 | `minio` | Artifact files and reports |
 | `rabbitmq` | Broker data |
-| `builder-workspaces` | The default builder's source checkouts |
+| `builder-workspaces` | The optional builder's source checkouts |
 | `secrets-key` | The key needed to decrypt saved secrets |
 | `api-credentials` | The shared local API password |
 | `mcp-credentials` | The shared MCP token |

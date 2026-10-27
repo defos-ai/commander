@@ -37,7 +37,8 @@ Learn how to [create missions and choose rules](abstractions.md),
 | Change messaging or storage | [Providers](../providers/README.md) |
 
 All-in-one runs local hosts and child processes. Compose runs services and spawns
-additional agents as sibling containers. Both start with builder and spawner.
+additional agents as sibling containers. Both start with spawner; Compose's
+builder is optional.
 See [setup](deployment.md) to choose a deployment.
 
 ## State and restart recovery

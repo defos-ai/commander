@@ -1,11 +1,13 @@
 package playground_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/local"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -44,54 +46,14 @@ func testAllInOneDefaultAgents(t *testing.T) {
 		Agents []agents.Agent `json:"agents"`
 	}
 	call("list_agents", map[string]any{}, &inventory)
-	if session.AgentCount != 2 || len(inventory.Agents) != 2 {
-		t.Fatalf("default all-in-one did not start builder and spawner: %+v", inventory.Agents)
+	if session.AgentCount != 1 || len(inventory.Agents) != 1 || inventory.Agents[0].Type != "spawner-agent" {
+		t.Fatalf("default all-in-one must start only the spawner: %+v", inventory.Agents)
 	}
-	var builder, spawner agents.Agent
-	for _, agent := range inventory.Agents {
-		switch agent.Type {
-		case "builder-agent":
-			builder = agent
-		case "spawner-agent":
-			spawner = agent
-		}
-	}
+	spawner := inventory.Agents[0]
 	if spawner.ID == "" || spawner.Status != agents.AgentReady || spawner.Stale || len(spawner.Actions) != 1 || spawner.Actions[0].Name != "spawn-agent" || spawner.Actions[0].Status != actions.Ready {
 		t.Fatalf("default spawner is not ready to install agents: %+v", spawner)
 	}
-	if builder.ID == "" || builder.Status != agents.AgentReady || builder.Stale || len(builder.Actions) != 4 {
-		t.Fatalf("default builder did not advertise checkout, build, publication and release: %+v", builder)
-	}
-	for _, action := range builder.Actions {
-		if action.Status != actions.Unavailable {
-			t.Fatalf("builder action is ready without tools: %+v", action)
-		}
-		switch action.Name {
-		case "checkout-template":
-			if !slices.Equal(action.MissingRequirements, []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "git"}}) {
-				t.Fatalf("checkout did not report missing Git: %+v", action)
-			}
-		case "publish-agent":
-			if !slices.Contains(action.MissingRequirements, actions.Requirement{Kind: actions.ExecutableRequirement, Name: "git"}) || !slices.Equal(action.RequiredSecrets, []string{"GITHUB_TOKEN"}) {
-				t.Fatalf("publication did not report missing Git and its managed token: %+v", action)
-			}
-		case "release-agent":
-			if !slices.Equal(action.RequiredSecrets, []string{"GITHUB_TOKEN"}) || !slices.Equal(action.MissingRequirements, []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}) {
-				t.Fatalf("release must depend only on its managed token: %+v", action)
-			}
-		case "build-agent":
-			for _, tool := range []string{"go", "codex"} {
-				if !slices.Contains(action.MissingRequirements, actions.Requirement{Kind: actions.ExecutableRequirement, Name: tool}) {
-					t.Fatalf("build did not report missing %s: %+v", tool, action)
-				}
-			}
-			if !slices.Equal(action.RequiredSecrets, []string{"CODEX_API_KEY"}) {
-				t.Fatalf("build did not declare its managed key: %+v", action)
-			}
-		default:
-			t.Fatalf("unexpected builder action: %+v", action)
-		}
-	}
+	awaitSpawnerCatalog(t, session.Context, client)
 	var mission missions.Mission
 	call("describe_mission", map[string]any{"mission_name": "install-agent"}, &mission)
 	if !slices.Equal(mission.RequiredActions, []string{"spawn-agent"}) || !slices.Equal(mission.StartingActions, []string{"spawn-agent"}) {
@@ -103,10 +65,62 @@ func testAllInOneDefaultAgents(t *testing.T) {
 		t.Fatalf("installation cannot start with the default agents: %+v", provision)
 	}
 	call("cancel_operation", map[string]any{"operation_id": provision.ID}, nil)
+	call("describe_mission", map[string]any{"mission_name": "build-agent"}, &mission)
+	if !slices.Equal(mission.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(mission.StartingActions, []string{"checkout-template"}) {
+		t.Fatalf("on-demand builder mission was not retained: %+v", mission)
+	}
+	var build operations.Operation
+	call("start_operation", map[string]any{"mission_name": mission.Name, "input": map[string]any{
+		"instructions": "Build the requested action after installing its builder.",
+		"actions":      []map[string]any{{"name": "inspect-text", "description": "Inspect supplied text.", "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}},
+	}}, &build)
+	if build.Preflight == nil || build.Preflight.Ready || len(build.Preflight.Actions) != 2 || len(build.Tasks) != 0 {
+		t.Fatalf("build mission must wait for an installed builder: %+v", build)
+	}
+	for _, action := range build.Preflight.Actions {
+		if len(action.ReadyAgentIDs) != 0 {
+			t.Fatalf("uninstalled builder unexpectedly satisfies build preflight: %+v", action)
+		}
+	}
+	call("cancel_operation", map[string]any{"operation_id": build.ID}, nil)
 	for _, directory := range []string{"downloads", "agents"} {
 		entries, err := os.ReadDir(filepath.Join(session.Directory, "spawner", directory))
 		if err != nil || len(entries) != 0 {
 			t.Fatalf("default startup downloaded or launched an agent: %s: %v (%v)", directory, entries, err)
+		}
+	}
+}
+
+func awaitSpawnerCatalog(t *testing.T, parent context.Context, client *bridge.Client) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		request, cancelRequest := context.WithTimeout(ctx, time.Second)
+		result, err := client.Call(request, "list_actions", json.RawMessage(`{}`))
+		cancelRequest()
+		if err != nil || result.IsError {
+			t.Fatalf("MCP list_actions: %v (%s)", err, result.Text)
+		}
+		var catalog struct {
+			Actions []struct{ Name string } `json:"actions"`
+		}
+		if err := json.Unmarshal(result.Data, &catalog); err != nil {
+			t.Fatalf("decode list_actions: %v", err)
+		}
+		if len(catalog.Actions) == 1 && catalog.Actions[0].Name == "spawn-agent" {
+			return
+		}
+		if len(catalog.Actions) != 0 {
+			t.Fatalf("default action catalog must contain only spawn-agent, without builder actions: %+v", catalog.Actions)
+		}
+		// Inventory can become visible before its action catalog write commits.
+		select {
+		case <-ctx.Done():
+			t.Fatal("spawner action did not appear in the default catalog before the deadline")
+		case <-tick.C:
 		}
 	}
 }

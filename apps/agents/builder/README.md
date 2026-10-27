@@ -3,14 +3,19 @@
 Build a Commander agent with Codex, download its source, and optionally publish
 and release it on GitHub.
 
-In Playground, try:
+After starting a builder, ask Playground:
 
 > Build an agent that counts words in supplied text.
 
 ## Run
 
-Compose and [all-in-one](../../playground/README.md#native-one-executable) include
-the builder. Docker images include Git, Go and Codex CLI.
+Enable the optional Compose builder from the repository root:
+
+```sh
+docker compose --profile builder up --build --wait
+```
+
+Its image includes Git, Go and Codex CLI. All-in-one starts only spawner.
 
 For a separate native builder, install those tools and use Go 1.26.7+:
 
@@ -67,9 +72,9 @@ agent's readiness; its failure leaves your build and release available.
 
 ## Secrets
 
-Compose and all-in-one configure secret encryption automatically. Enter model
-and GitHub tokens in Playground's secret form or Admin's **Agents → Manage secrets**;
-never paste them into chat or action inputs.
+The optional Compose builder mounts the API's encryption key automatically.
+Enter model and GitHub tokens in Playground's secret form or Admin's
+**Agents → Manage secrets**; never paste them into chat or action inputs.
 
 For a separately started builder, set `SECRETS_ENCRYPTION_KEY` to the API's key.
 The spawner supplies it automatically only to the official builder package.
@@ -79,8 +84,7 @@ See [secret setup](../../../framework/secrets/README.md).
 
 | Deployment | Workspace storage |
 | --- | --- |
-| Compose | `builder-workspaces` volume; retained across container recreation |
-| All-in-one | Temporary session storage; deleted on exit |
+| Compose (`builder` profile) | `builder-workspaces` volume; retained across container recreation |
 | Separate builder | `state/builder-workspaces`; override with `BUILDER_WORKSPACE_DIR` |
 
 Use a builder deployment you trust to execute generated code. Codex uses its

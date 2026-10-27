@@ -28,11 +28,11 @@ func TestCIComposeDockerSpawner(t *testing.T) {
 		t.Fatal("Playground must start after the spawner")
 	}
 	builder, ok := compose.Services["builder-agent"]
-	if !ok || len(builder.Profiles) != 0 {
-		t.Fatal("Builder must start with the default Compose services")
+	if !ok || !slices.Equal(builder.Profiles, []string{"builder"}) {
+		t.Fatal("Builder must require the explicit builder profile")
 	}
-	if compose.Services["playground"].DependsOn["builder-agent"].Condition != "service_started" {
-		t.Fatal("Playground must start after the builder")
+	if _, required := compose.Services["playground"].DependsOn["builder-agent"]; required {
+		t.Fatal("Playground must not require the optional builder")
 	}
 	for _, name := range []string{"browser-agent", "web-agent-1", "web-agent-2"} {
 		if _, exists := compose.Services[name]; exists {

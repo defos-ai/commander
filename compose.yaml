@@ -403,6 +403,7 @@ services:
 
   builder-agent:
     <<: *agent
+    profiles: [builder]
     environment:
       <<: *environment
       BUILDER_DEFAULT_REPO_VISIBILITY: ${BUILDER_DEFAULT_REPO_VISIBILITY:-}
@@ -532,8 +533,6 @@ services:
       mcp:
         condition: service_healthy
       spawner-agent:
-        condition: service_started
-      builder-agent:
         condition: service_started
 
 volumes:

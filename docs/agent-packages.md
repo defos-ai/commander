@@ -115,8 +115,10 @@ Generate a fresh ID when none is supplied. Use the [example agent](https://githu
 for the complete CLI and factory pattern.
 
 Pass only the child's required environment. Never inherit the parent's entire
-credential set. Managed-secret agents need a separately configured encryption key;
-the official builder receives it automatically in the supplied deployments.
+credential set. Managed-secret agents need a separately configured encryption key.
+Compose's optional builder shares the API's key; the spawner retains its narrow
+trusted bootstrap for the official builder package.
+See [builder secrets](../apps/agents/builder/README.md#secrets).
 
 Registration means the process connected. Check action readiness too: the agent
 may still need a secret, executable or configuration.
@@ -129,7 +131,7 @@ may still need a secret, executable or configuration.
 | Docker AIO | Child processes inside the AIO container |
 | Compose | Sibling containers on the deployment network |
 
-Builder and spawner start by default. Additional agents are installed through
+Only spawner starts by default. Additional agents are installed through
 chat/MCP in a separate `install-agent` operation, before starting work that needs
 their actions. One spawn task creates one instance; use separate tasks for more.
 

@@ -11,9 +11,12 @@ Agents give Commander actions it can use in a mission.
 
 ## Quick start
 
-Compose and all-in-one start builder and spawner automatically. Ask Playground:
+Compose and all-in-one start spawner automatically. Ask Playground:
 
 > Install the web agent, then review defos.ai.
+
+To build agents, start a [builder](builder/README.md#run) separately; Compose has
+an opt-in `builder` profile.
 
 For a separate host, start the [controller](../controllers/README.md#quick-start),
 then run from the repository root with Go 1.26.7+:

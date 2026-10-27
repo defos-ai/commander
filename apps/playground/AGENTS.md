@@ -4,7 +4,7 @@
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
-  Admin, MCP, API, controller, builder and spawner hosts for `--all-in-one`.
+  Admin, MCP, API, controller and spawner hosts for `--all-in-one`.
   The spawner launches agent packages requested through chat/MCP as native children.
 - [`internal/adminhost/`](internal/adminhost/) owns the optional UI listener for
   native and remote sessions. Command cancellation limits startup; Playground
@@ -133,9 +133,8 @@
   then shuts down hosts and awaits native children before deleting that session's
   files, including downloads and child working directories. It must not use or
   delete the user's configured database/storage or existing Compose state.
-  The embedded builder's workspaces and spawned agents' private working directories
-  remain beneath session state; never inherit `BUILDER_WORKSPACE_DIR` or leave
-  generated source behind on exit.
+  Spawned agents' private working directories remain beneath session state;
+  never leave their generated files behind on exit.
 - After API readiness, all-in-one seeds bundled missions with Admin's
   `missions.Seed` and the session API connection before returning ready. Use the
   same create-only API import as Compose; do not write mission files, import
@@ -143,17 +142,16 @@
   and use normal host cleanup; never automatically retry uncertain writes.
 - Use the spawner's `RunWithOptions` to force native mode and a state directory
   beneath the session directory, including Docker AIO. Do not mutate environment
-  settings or use a Docker socket. Embed the builder host from the same build,
-  with its workspace directory beneath session state. Only the embedded builder
-  and spawner start automatically. Install additional packages through chat/MCP
+  settings or use a Docker socket. Only spawner starts automatically; do not embed
+  a builder host. Install additional packages through chat/MCP
   and controller-dispatched actions; do not add a direct startup launch path.
   Keep version resolution and execution checkpoints in the spawner action.
   Package downloads require Internet access.
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
-  Retain the key and cipher in session memory. Share the cipher with API and
-  the embedded builder through their `Options.SecretCipher`. Pass the key through
+  Retain the key and cipher in session memory. Inject the cipher into the API
+  through `Options.SecretCipher`. Pass the key through
   the spawner's `Options.SecretsEncryptionKey` so it constructs its own cipher and
   trusted-builder bootstrap from the same value. Do not change process environment,
   write the key to files, or expose it in logs, credentials output or model messages.
@@ -235,9 +233,9 @@
   `--admin-url` after the image name for another published port or host.
   Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
   non-root and pass this setting through native bootstrap. Retain Chromium,
-  fonts and Git for child agents, and Go/Codex for the embedded builder. State remains temporary; adding image
-  dependencies must not change session persistence. Container ports cannot be
-  published after creation.
+  fonts, Git, Go and Codex for installed agents and build capabilities. State
+  remains temporary; adding image dependencies must not change session persistence.
+  Container ports cannot be published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
   Embed `build-agent`, `install-agent` and both website missions. Within the build
@@ -251,11 +249,11 @@
   the web agent before using `review-website-no-browser`;
   `review-website-with-browser` requires discovered browser coverage. Do not create
   partial completion or browser fallback policy in the client.
-  Wait for the embedded builder and spawner to register. The web agent
+  Wait for spawner to register. The web agent
   owns HTTP work and remains ready without Chromium; the browser advertises rendering
-  requirements. The builder discovers Git, Go and Codex itself; missing tools or
-  managed `CODEX_API_KEY` make the relevant action unavailable without failing
-  all-in-one startup. Keep readiness in the agent.
+  requirements. Any separately started builder discovers Git, Go and Codex itself;
+  its tools and managed `CODEX_API_KEY` affect action readiness. Keep readiness in
+  the agent rather than adding builder startup or installation to the client.
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.
@@ -301,7 +299,7 @@
   Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
   while a reply is active.
   All-in-one startup shows the provider/model, readiness with the actual connected
-  agent count (two by default), one agent-installation prompt and the
+  agent count (one by default), one agent-installation prompt and the
   temporary-state note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 

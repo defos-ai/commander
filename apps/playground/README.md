@@ -15,13 +15,13 @@ Choose a provider, enter its API key and ask:
 
 > Install the web agent, then review defos.ai.
 
-The image includes Admin, builder and spawner, plus the tools needed to build
-agents and run browser checks. Other agents install on demand.
+The image includes Admin and spawner, plus Git, Go, Codex and browser tools for
+installed agents. Only spawner starts automatically; other agents install on demand.
 
 Type `/admin` to open [Admin](http://localhost:4275) and `/credentials` for the
 API login. Completed operation rows link to their Admin details.
 
-**All-in-one deletes results, artifacts, downloaded agents and builder workspaces
+**All-in-one deletes results, artifacts, downloaded agents and their working files
 on exit.** Use Compose to retain work.
 
 ### Native: one executable
@@ -60,9 +60,10 @@ From the repository root:
 docker compose up --build --wait && docker compose run --build --rm --no-deps playground
 ```
 
-Playground connects automatically. Builder and spawner start with the stack;
-additional agents run as sibling containers. `/exit` leaves hosts and results
-running. Follow [deployment teardown](../../docs/deployment.md#stopping-and-resetting-agents)
+Playground connects automatically. Spawner starts with the stack; builder is
+[optional](../../docs/deployment.md#optional-builder). Additional agents run as
+sibling containers. `/exit` leaves hosts and results running.
+Follow [deployment teardown](../../docs/deployment.md#stopping-and-resetting-agents)
 to stop the stack and its spawned agents.
 
 Compose supplies the saved MCP token and API login automatically; `/admin`

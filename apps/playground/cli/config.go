@@ -45,7 +45,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.SetOutput(stderr)
 	flags.StringVar(&c.MCP.URL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
 	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for Admin commands and agent secrets; omitted asks when needed (COMMANDER_API_URL)")
-	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller, builder and spawner; credentials are generated when unset; temporary state is removed on exit")
+	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller and spawner; credentials are generated when unset; temporary state is removed on exit")
 	flags.BoolVar(&c.ServeAdminUI, "serve-admin-ui", false, "Start Admin UI now; otherwise use /admin serve later")
 	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Admin UI browser address; defaults to http://localhost:4275 or the native all-in-one address (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
