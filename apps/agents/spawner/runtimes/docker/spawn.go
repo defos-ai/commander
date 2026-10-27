@@ -95,7 +95,7 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	if confirmed.ID != container.ID || confirmed.Status != "running" {
 		return runtimes.Result{}, errors.New("Docker container changed or stopped during registration")
 	}
-	result.ContainerID = container.ID
+	result.RuntimeDetails = runtimes.DockerRuntimeDetails{ContainerID: container.ID}
 	return result, nil
 }
 

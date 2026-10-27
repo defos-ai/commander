@@ -99,6 +99,7 @@ func (m *Manager) readRegistration(subscription comms.Subscription, saved record
 			}
 			seen[definition.Name] = true
 		}
-		return runtimes.Result{AgentID: saved.AgentID, AgentType: saved.AgentType, Package: saved.Package, Runtime: "docker", Actions: snapshot.Actions}, nil
+		return runtimes.Result{AgentID: saved.AgentID, AgentType: saved.AgentType, Package: saved.Package,
+			Runtime: runtimes.RuntimeDocker, Actions: snapshot.Actions}, nil
 	}
 }

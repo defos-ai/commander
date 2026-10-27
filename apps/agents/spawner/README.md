@@ -80,6 +80,13 @@ Children receive provider settings, not your API, MCP or model tokens. The
 official builder package also receives the secrets encryption key; Docker
 administrators can inspect that key in its container environment.
 
+Spawn results put runtime-specific identity in `runtime_details`: `pid` for
+native processes and `container_id` for Docker containers. Kubernetes spawning
+is not implemented. Its reserved payload contains `namespace`, `pod_name` and
+`pod_uid`, but `SPAWNER_RUNTIME=kubernetes` remains unsupported. See the
+[planned runtime contract](AGENTS.md#planned-kubernetes-runtime) before preparing
+a deployment; its Kubernetes settings are not read by the current CLI.
+
 ## Stop or replace agents
 
 - Native children stop with the spawner. In all-in-one, temporary state is

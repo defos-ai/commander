@@ -84,7 +84,7 @@ func TestNativeExecutionWaitsForCheckpointBeforeStartingAndRetainsOwnership(t *t
 	}
 	before := fixture.requests.Load()
 	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
-	if err != nil || repeated.PID != result.PID || repeated.AgentID != result.AgentID {
+	if err != nil || nativeDetails(t, repeated).PID != nativeDetails(t, result).PID || repeated.AgentID != result.AgentID {
 		t.Fatalf("retry did not reuse the owned child: result=%+v error=%v", repeated, err)
 	}
 	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {

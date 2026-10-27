@@ -78,7 +78,7 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 
 func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 	launcher := &actionLauncher{result: runtimes.Result{
-		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage, Runtime: "native", PID: 42,
+		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage, Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42},
 		Actions: []actionmodel.Action{{Name: "inspect", Description: "Inspect a local target", Status: action.Unavailable,
 			MissingRequirements: []actionmodel.Requirement{{Kind: actionmodel.ExecutableRequirement, Name: "example-tool"}},
 			InputSchema:         json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}},
@@ -129,6 +129,9 @@ func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 		{name: "caller token", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","token":"never-accept-input-secrets"}`)},
 		{name: "caller agent ID", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","agent_id":"example-agent-12345678"}`)},
 		{name: "caller request ID", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","request_id":"my-request"}`)},
+		{name: "caller runtime", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","runtime":"kubernetes"}`)},
+		{name: "caller namespace", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","namespace":"agents"}`)},
+		{name: "caller service account", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","service_account":"agent-worker"}`)},
 		{name: "caller environment", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","env":{"SECRETS_ENCRYPTION_KEY":"value"}}`)},
 		{name: "caller arguments", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","args":["--config=other"]}`)},
 	} {
@@ -151,22 +154,34 @@ func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 
 func TestSpawnAgentOutputIdentifiesLaunchRuntime(t *testing.T) {
 	for _, test := range []struct {
-		name, runtime, containerID string
-		pid                        int
-		valid                      bool
+		name    string
+		runtime runtimes.RuntimeKind
+		details runtimes.RuntimeDetails
+		valid   bool
 	}{
-		{name: "native process", runtime: "native", pid: 42, valid: true},
-		{name: "docker container", runtime: "docker", containerID: "fixture-container", valid: true},
-		{name: "missing runtime", pid: 42},
-		{name: "native without pid", runtime: "native"},
-		{name: "native with container", runtime: "native", pid: 42, containerID: "fixture-container"},
-		{name: "docker without container", runtime: "docker"},
-		{name: "docker with pid", runtime: "docker", pid: 42, containerID: "fixture-container"},
+		{"native process", runtimes.RuntimeNative, runtimes.NativeRuntimeDetails{PID: 42}, true},
+		{"docker container", runtimes.RuntimeDocker, runtimes.DockerRuntimeDetails{ContainerID: "fixture-container"}, true},
+		{"kubernetes pod", runtimes.RuntimeKubernetes, runtimes.KubernetesRuntimeDetails{Namespace: "agents", PodName: "worker.example-1", PodUID: "opaque:pod/uid"}, true},
+		{"missing runtime", "", runtimes.NativeRuntimeDetails{PID: 42}, false},
+		{"unsupported runtime", "job", runtimes.NativeRuntimeDetails{PID: 42}, false},
+		{"missing details", runtimes.RuntimeNative, nil, false},
+		{"native zero pid", runtimes.RuntimeNative, runtimes.NativeRuntimeDetails{}, false},
+		{"native negative pid", runtimes.RuntimeNative, runtimes.NativeRuntimeDetails{PID: -1}, false},
+		{"native with docker details", runtimes.RuntimeNative, runtimes.DockerRuntimeDetails{ContainerID: "fixture-container"}, false},
+		{"native with kubernetes details", runtimes.RuntimeNative, runtimes.KubernetesRuntimeDetails{Namespace: "agents", PodName: "worker", PodUID: "opaque-uid"}, false},
+		{"docker empty container", runtimes.RuntimeDocker, runtimes.DockerRuntimeDetails{}, false},
+		{"docker with native details", runtimes.RuntimeDocker, runtimes.NativeRuntimeDetails{PID: 42}, false},
+		{"docker with kubernetes details", runtimes.RuntimeDocker, runtimes.KubernetesRuntimeDetails{Namespace: "agents", PodName: "worker", PodUID: "opaque-uid"}, false},
+		{"kubernetes without namespace", runtimes.RuntimeKubernetes, runtimes.KubernetesRuntimeDetails{PodName: "worker", PodUID: "opaque-uid"}, false},
+		{"kubernetes without pod name", runtimes.RuntimeKubernetes, runtimes.KubernetesRuntimeDetails{Namespace: "agents", PodUID: "opaque-uid"}, false},
+		{"kubernetes without pod UID", runtimes.RuntimeKubernetes, runtimes.KubernetesRuntimeDetails{Namespace: "agents", PodName: "worker"}, false},
+		{"kubernetes with native details", runtimes.RuntimeKubernetes, runtimes.NativeRuntimeDetails{PID: 42}, false},
+		{"kubernetes with docker details", runtimes.RuntimeKubernetes, runtimes.DockerRuntimeDetails{ContainerID: "fixture-container"}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			launcher := &actionLauncher{result: runtimes.Result{
 				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
-				Runtime: test.runtime, PID: test.pid, ContainerID: test.containerID, Actions: []actionmodel.Action{},
+				Runtime: test.runtime, RuntimeDetails: test.details, Actions: []actionmodel.Action{},
 			}}
 			executor := newSpawnAction(t, launcher)
 			ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
@@ -177,12 +192,102 @@ func TestSpawnAgentOutputIdentifiesLaunchRuntime(t *testing.T) {
 			if !test.valid {
 				return
 			}
-			var properties map[string]json.RawMessage
-			if err := json.Unmarshal(output.Output, &properties); err != nil {
+			var actual runtimes.Result
+			if err := json.Unmarshal(output.Output, &actual); err != nil || !reflect.DeepEqual(actual, launcher.result) {
+				t.Fatalf("runtime output did not preserve the typed launch identity: %+v (%v)", actual, err)
+			}
+		})
+	}
+}
+
+func TestSpawnAgentOutputValidatesKubernetesNames(t *testing.T) {
+	maximumPodName := strings.Repeat("a", 63) + "." + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61)
+	for _, test := range []struct {
+		name, namespace, podName string
+		valid                    bool
+	}{
+		{"minimum names", "a", "0", true},
+		{"maximum names", strings.Repeat("a", 63), maximumPodName, true},
+		{"uppercase namespace", "Agents", "worker", false},
+		{"dotted namespace", "agents.example", "worker", false},
+		{"namespace leading hyphen", "-agents", "worker", false},
+		{"namespace trailing hyphen", "agents-", "worker", false},
+		{"namespace too long", strings.Repeat("a", 64), "worker", false},
+		{"uppercase pod", "agents", "Worker", false},
+		{"pod underscore", "agents", "worker_1", false},
+		{"pod path", "agents", "worker/other", false},
+		{"pod empty label", "agents", "worker..example", false},
+		{"pod trailing dot", "agents", "worker.", false},
+		{"pod too long", "agents", maximumPodName + "a", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
+				Runtime: runtimes.RuntimeKubernetes, RuntimeDetails: runtimes.KubernetesRuntimeDetails{Namespace: test.namespace, PodName: test.podName, PodUID: "opaque-uid"}, Actions: []actionmodel.Action{}}}
+			executor := newSpawnAction(t, launcher)
+			ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
+			if _, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`"}`)); (err == nil) != test.valid {
+				t.Fatalf("Kubernetes name validity: got %v, want valid=%t", err, test.valid)
+			}
+		})
+	}
+}
+
+func TestSpawnAgentAdvertisedSchemaRejectsInvalidRuntimeDetails(t *testing.T) {
+	executor := newSpawnAction(t, &actionLauncher{})
+	schema, err := actionmodel.ResolveSchema(executor.Action().OutputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name    string
+		runtime string
+		details any
+		extra   string
+	}{
+		{"missing details", "native", nil, ""},
+		{"details null", "native", json.RawMessage(`null`), ""},
+		{"details array", "native", []any{42}, ""},
+		{"details string", "native", "pid=42", ""},
+		{"native missing pid", "native", map[string]any{}, ""},
+		{"native foreign container", "native", map[string]any{"pid": 42, "container_id": "container"}, ""},
+		{"native foreign namespace", "native", map[string]any{"pid": 42, "namespace": "agents"}, ""},
+		{"native unknown field", "native", map[string]any{"pid": 42, "other": true}, ""},
+		{"docker missing container", "docker", map[string]any{}, ""},
+		{"docker empty container", "docker", map[string]any{"container_id": ""}, ""},
+		{"docker foreign pid", "docker", map[string]any{"container_id": "container", "pid": 42}, ""},
+		{"kubernetes missing namespace", "kubernetes", map[string]any{"pod_name": "worker", "pod_uid": "uid"}, ""},
+		{"kubernetes missing name", "kubernetes", map[string]any{"namespace": "agents", "pod_uid": "uid"}, ""},
+		{"kubernetes missing UID", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker"}, ""},
+		{"kubernetes empty namespace", "kubernetes", map[string]any{"namespace": "", "pod_name": "worker", "pod_uid": "uid"}, ""},
+		{"kubernetes empty name", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "", "pod_uid": "uid"}, ""},
+		{"kubernetes empty UID", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": ""}, ""},
+		{"kubernetes foreign pid", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": "uid", "pid": 42}, ""},
+		{"kubernetes foreign container", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": "uid", "container_id": "container"}, ""},
+		{"old flat pid", "native", map[string]any{"pid": 42}, "pid"},
+		{"old flat container", "docker", map[string]any{"container_id": "container"}, "container_id"},
+		{"old flat namespace", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": "uid"}, "namespace"},
+		{"old flat pod name", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": "uid"}, "pod_name"},
+		{"old flat pod UID", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": "uid"}, "pod_uid"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			output := map[string]any{"agent_id": "example-agent-12345678", "agent_type": "example-agent", "package": actionPackage, "runtime": test.runtime, "actions": []any{}}
+			if test.details != nil {
+				output["runtime_details"] = test.details
+			}
+			if test.extra != "" {
+				output[test.extra] = "obsolete"
+			}
+			// Decode the same JSON shape a client receives before checking the
+			// registered schema, including an explicitly present null payload.
+			raw, err := json.Marshal(output)
+			if err != nil {
 				t.Fatal(err)
 			}
-			if test.runtime == "native" && properties["container_id"] != nil || test.runtime == "docker" && properties["pid"] != nil {
-				t.Fatal("result exposed the other runtime's process identifier")
+			if err := json.Unmarshal(raw, &output); err != nil {
+				t.Fatal(err)
+			}
+			if err := schema.Validate(output); err == nil {
+				t.Fatal("advertised output schema accepted invalid runtime details")
 			}
 		})
 	}
@@ -215,7 +320,7 @@ func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 
 func TestSpawnerAgentWorkRequiresControllerDispatch(t *testing.T) {
 	launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
-		Package: actionPackage, Runtime: "native", PID: 42, Actions: []actionmodel.Action{}}}
+		Package: actionPackage, Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42}, Actions: []actionmodel.Action{}}}
 	runtime, err := spawner.NewAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}, launcher)
 	if err != nil {

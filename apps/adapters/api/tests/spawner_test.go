@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -16,28 +17,33 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
 	provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", object{"package": reference})
 	var launched struct {
-		AgentID     string                  `json:"agent_id"`
-		AgentType   string                  `json:"agent_type"`
-		Package     string                  `json:"package"`
-		Runtime     string                  `json:"runtime"`
-		PID         int                     `json:"pid"`
-		ContainerID string                  `json:"container_id"`
-		Actions     []models.ActionResponse `json:"actions"`
+		AgentID        string                  `json:"agent_id"`
+		AgentType      string                  `json:"agent_type"`
+		Package        string                  `json:"package"`
+		Runtime        string                  `json:"runtime"`
+		RuntimeDetails json.RawMessage         `json:"runtime_details"`
+		Actions        []models.ActionResponse `json:"actions"`
 	}
-	if err := json.Unmarshal(spawn.Result.Output, &launched); err != nil {
-		t.Fatal(err)
-	}
+	decodeSpawnOutput(t, spawn.Result.Output, &launched)
 	if launched.AgentID == "" || launched.AgentType != "fixture-agent" || launched.Package != reference || launched.Runtime != environment("COMMANDER_TEST_SPAWNER_RUNTIME", "native") || !slices.Equal(actionNames(launched.Actions), []string{"fixture-echo"}) {
 		t.Fatalf("spawn result lost package, runtime or registered capability: %+v", launched)
 	}
 	switch launched.Runtime {
 	case "native":
-		if launched.PID <= 0 || launched.ContainerID != "" {
-			t.Fatalf("native spawn did not return its process: %+v", launched)
+		var details struct {
+			PID int `json:"pid"`
+		}
+		decodeSpawnOutput(t, launched.RuntimeDetails, &details)
+		if details.PID <= 0 {
+			t.Fatalf("native spawn did not return its process: %+v", details)
 		}
 	case "docker":
-		if launched.ContainerID == "" || launched.PID != 0 {
-			t.Fatalf("Docker spawn did not return its container: %+v", launched)
+		var details struct {
+			ContainerID string `json:"container_id"`
+		}
+		decodeSpawnOutput(t, launched.RuntimeDetails, &details)
+		if details.ContainerID == "" {
+			t.Fatalf("Docker spawn did not return its container: %+v", details)
 		}
 	default:
 		t.Fatalf("unsupported fixture runtime: %q", launched.Runtime)
@@ -114,6 +120,15 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	completed := post[models.OperationResponse](a, operationPath(op.ID)+"/complete", object{"output": object{}}, http.StatusOK)
 	if completed.Status != "completed" || completed.ReportID == "" {
 		t.Fatalf("fixture operation did not complete: %+v", completed)
+	}
+}
+
+func decodeSpawnOutput(t *testing.T, data []byte, target any) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		t.Fatalf("decode spawn output: %v", err)
 	}
 }
 

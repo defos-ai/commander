@@ -153,7 +153,7 @@ func TestDockerRetryKeepsPackagePinAfterFailedPullAndRestart(t *testing.T) {
 	}
 	before := source.requests.Load()
 	repeated, err := manager.Spawn(ctx, requestID, "github.com/defos-ai/fixture-agent")
-	if err != nil || repeated.ContainerID != result.ContainerID || source.requests.Load() != before {
+	if err != nil || dockerDetails(t, repeated).ContainerID != dockerDetails(t, result).ContainerID || source.requests.Load() != before {
 		t.Fatalf("retry did not reuse the pinned container: result=%+v error=%v", repeated, err)
 	}
 	if _, err := manager.Spawn(ctx, requestID, strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1)); err == nil {

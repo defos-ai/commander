@@ -13,6 +13,14 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [runtimes/result.go](runtimes/result.go) holds its result;
   [native.Manager](runtimes/native/manager.go) and
   [docker.Manager](runtimes/docker/manager.go) implement the interface.
+- Results use `RuntimeKind` and one sealed `RuntimeDetails` value:
+  `NativeRuntimeDetails`, `DockerRuntimeDetails` or `KubernetesRuntimeDetails`.
+  JSON places the selected payload directly under `runtime_details`, with no
+  extra variant wrapper or flat identifier aliases. Decoding selects the concrete
+  value from `runtime`, rejects unsupported kinds, missing/null/non-object
+  payloads and unknown outer or nested fields, and preserves the receiver on
+  failure. The advertised action schema validates the matching payload and its
+  semantic values; the DTO decoder does not duplicate that validation.
 - Default registered `Responsibilities` in `agent.go` own installation guidance;
   action descriptions own their input behavior. MCP and Playground discover this
   metadata instead of maintaining a package list or installation instructions.
@@ -190,6 +198,61 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   operators stop the spawner, remove only children on that deployment network
   carrying `ai.defos.commander.spawn-owner` before removing the network.
   Never reset execution checkpoints while owned children exist.
+
+## Planned Kubernetes runtime
+
+This is a contract for later implementation, not an available launcher. The CLI
+still rejects `SPAWNER_RUNTIME=kubernetes` and does not read Kubernetes settings.
+[`Result`](runtimes/result.go) and the [action schema](actions/spawn_agent.go)
+reserve `runtime: kubernetes` with `runtime_details` containing `namespace`,
+`pod_name` and `pod_uid`. Native details contain only `pid`; Docker details contain
+only `container_id`. A result must use the payload matching its runtime. Namespace
+and Pod name follow Kubernetes DNS naming limits; Pod UID is an opaque nonempty
+string.
+
+Planned host configuration:
+
+| Setting | Deployment-owned choice |
+| --- | --- |
+| `SPAWNER_KUBERNETES_NAMESPACE` | Required child Pod namespace |
+| `SPAWNER_KUBERNETES_POD_PREFIX` | Optional literal Pod name prefix; defaults to an empty string |
+| `SPAWNER_KUBERNETES_SERVICE_ACCOUNT` | Child ServiceAccount, with token automount disabled |
+| `SPAWNER_KUBERNETES_CONFIG_MAP` | Child configuration reference in that namespace |
+| `SPAWNER_KUBERNETES_SECRET` | Child provider-credential reference in that namespace |
+
+Use `<prefix><agent-id>` as the Pod name; an empty prefix uses the assigned agent
+ID directly. Save the resolved namespace/name in the launch intent; configuration
+changes must not rename an existing launch.
+
+- Resource requests/limits, image-pull Secret references and Pod security remain
+  deployment settings. Do not add action inputs or manifest fields for them.
+  Reference existing Secrets without reading their contents; package-download
+  tokens do not automatically become registry credentials or child environment.
+  Do not forward the spawner's entire environment or its secrets encryption key.
+- Each agent is one persistent worker Pod, using the manifest's digest-pinned
+  image and `restartPolicy: Never`. A new process needs a fresh agent ID.
+  Save the immutable launch intent before creating a scheduling-gated Pod. After
+  verifying the created Pod, save its UID in a separate immutable receipt; never
+  overwrite the intent to add server-assigned identity.
+- Subscribe for registration before releasing the scheduling gate, after the UID
+  receipt is durable. Gate release must preserve exclusive launch authority and
+  address the verified Pod UID. A checkpoint alone does not grant a restarted
+  spawner permission to activate a Pod. Match the assigned agent ID and type;
+  registration observation is distinct from controller-persisted acceptance.
+- Reconcile uncertain API/checkpoint responses against the saved name, UID,
+  ownership and Pod configuration. A missing, replaced or exited Pod must not
+  authorize another Create, restart or replacement under the same request.
+  `Close` will end observation and leave Pods running; stopping/removing children
+  is explicit and scoped to deployment ownership. Retain checkpoints meanwhile.
+- Ownership must survive spawner replacement. Keep label values within 63
+  characters; put full package references and digests in annotations. Distinguish
+  dynamic `commander-spawner` ownership from static infrastructure workloads.
+  Do not attach children to the spawner Pod with owner references or use
+  cross-namespace owner references. Namespace permissions cannot enforce labels.
+- Builder support is deferred. A future launcher must reject the official
+  Builder package before Create until its workspace, namespace and encryption-key
+  bootstrap contract is implemented. Do not extend the shared agent Secret or
+  grant additional privileges as an implicit workaround.
 
 ## Validation
 

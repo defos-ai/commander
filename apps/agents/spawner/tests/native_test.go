@@ -41,6 +41,15 @@ const (
 	fixtureBuilderReleaseURL = "https://github.com/defos-ai/commander/releases/download/apps%2Fagents%2Fbuilder%2Fv0.1.0/"
 )
 
+func nativeDetails(t *testing.T, result runtimes.Result) runtimes.NativeRuntimeDetails {
+	t.Helper()
+	details, ok := result.RuntimeDetails.(runtimes.NativeRuntimeDetails)
+	if result.Runtime != runtimes.RuntimeNative || !ok {
+		t.Fatalf("expected native runtime details: %+v", result)
+	}
+	return details
+}
+
 var fixtureBuild struct {
 	once      sync.Once
 	directory string
@@ -199,7 +208,7 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.AgentType != "fixture-agent" || !strings.HasPrefix(first.AgentID, "fixture-agent-") || !id.ValidAgent(first.AgentID) || first.Package != fixtureReference || first.PID <= 0 {
+	if first.AgentType != "fixture-agent" || !strings.HasPrefix(first.AgentID, "fixture-agent-") || !id.ValidAgent(first.AgentID) || first.Package != fixtureReference || nativeDetails(t, first).PID <= 0 {
 		t.Fatalf("unexpected spawned identity: %+v", first)
 	}
 	if len(first.Actions) != 1 || first.Actions[0].Name != "fixture-action" || first.Actions[0].Status != actionmodel.Ready {
@@ -210,7 +219,7 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.AgentID == first.AgentID || second.PID == first.PID || second.Package != fixtureModuleReference {
+	if second.AgentID == first.AgentID || nativeDetails(t, second).PID == nativeDetails(t, first).PID || second.Package != fixtureModuleReference {
 		t.Fatal("independent requests reused an agent identity or process")
 	}
 	before := fixture.requests.Load()
@@ -218,7 +227,7 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repeated.AgentID != second.AgentID || repeated.PID != second.PID || fixture.requests.Load() != before {
+	if repeated.AgentID != second.AgentID || nativeDetails(t, repeated).PID != nativeDetails(t, second).PID || fixture.requests.Load() != before {
 		t.Fatal("same request did not reuse the existing child without downloading again")
 	}
 	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
@@ -422,7 +431,7 @@ func TestNativeRetryReceivesRegistrationAnnouncedAfterItsInitialWaitEnded(t *tes
 			if err != nil {
 				t.Fatalf("retry missed the child's registration: %v", err)
 			}
-			if result.AgentID != report.AgentID || result.PID != report.PID || fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
+			if result.AgentID != report.AgentID || nativeDetails(t, result).PID != report.PID || fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
 				t.Fatal("retry did not reconcile the original process")
 			}
 		})

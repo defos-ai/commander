@@ -119,7 +119,8 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 	current := &child{
 		command: command, done: make(chan struct{}), download: filepath.Dir(path), subscription: subscription,
 		registrationDone: make(chan struct{}),
-		result:           runtimes.Result{AgentID: agentID, AgentType: pkg.Manifest.Type, Package: reference, Runtime: "native", PID: command.Process.Pid},
+		result: runtimes.Result{AgentID: agentID, AgentType: pkg.Manifest.Type, Package: reference,
+			Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: command.Process.Pid}},
 	}
 	m.children[requestID] = current
 	go current.wait()

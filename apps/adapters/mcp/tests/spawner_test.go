@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"slices"
@@ -27,22 +28,36 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	a.call("assign_task", object{"operation_id": provision.ID, "action_name": "spawn-agent", "input": input}, &assigned)
 	spawnTask := waitSpawnerTask(t, a, provision.ID, assigned.ID)
 	var spawned struct {
-		AgentID     string           `json:"agent_id"`
-		AgentType   string           `json:"agent_type"`
-		Package     string           `json:"package"`
-		Runtime     string           `json:"runtime"`
-		PID         int              `json:"pid"`
-		ContainerID string           `json:"container_id"`
-		Actions     []actions.Action `json:"actions"`
+		AgentID        string           `json:"agent_id"`
+		AgentType      string           `json:"agent_type"`
+		Package        string           `json:"package"`
+		Runtime        string           `json:"runtime"`
+		RuntimeDetails json.RawMessage  `json:"runtime_details"`
+		Actions        []actions.Action `json:"actions"`
 	}
-	if err := json.Unmarshal(spawnTask.Result.Output, &spawned); err != nil {
-		t.Fatal(err)
-	}
+	decodeSpawnOutput(t, spawnTask.Result.Output, &spawned)
 	if !id.ValidAgent(spawned.AgentID) || spawned.AgentType != "fixture-agent" || spawned.Package != reference || len(spawned.Actions) != 1 || spawned.Actions[0].Name != "fixture-echo" || spawned.Actions[0].Status != actions.Ready {
 		t.Fatalf("spawn result lost the registered identity or capability: %+v", spawned)
 	}
-	if !((spawned.Runtime == "native" && spawned.PID > 0 && spawned.ContainerID == "") || (spawned.Runtime == "docker" && spawned.PID == 0 && spawned.ContainerID != "")) {
-		t.Fatalf("spawn result does not identify the launch runtime: %+v", spawned)
+	switch spawned.Runtime {
+	case "native":
+		var details struct {
+			PID int `json:"pid"`
+		}
+		decodeSpawnOutput(t, spawned.RuntimeDetails, &details)
+		if details.PID <= 0 {
+			t.Fatalf("native spawn did not return its process: %+v", details)
+		}
+	case "docker":
+		var details struct {
+			ContainerID string `json:"container_id"`
+		}
+		decodeSpawnOutput(t, spawned.RuntimeDetails, &details)
+		if details.ContainerID == "" {
+			t.Fatalf("Docker spawn did not return its container: %+v", details)
+		}
+	default:
+		t.Fatalf("unsupported fixture runtime: %q", spawned.Runtime)
 	}
 	expectedRuntime := os.Getenv("COMMANDER_TEST_SPAWNER_RUNTIME")
 	if expectedRuntime == "" {
@@ -106,6 +121,15 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 		t.Fatalf("spawned agent artifact bytes did not reach storage: %+v", resource)
 	}
 	a.call("complete_operation", object{"operation_id": operation.ID, "output": object{"message": output.Message, "agent_id": output.AgentID}}, nil)
+}
+
+func decodeSpawnOutput(t *testing.T, data []byte, target any) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		t.Fatalf("decode spawn output: %v", err)
+	}
 }
 
 func waitSpawnerTask(t *testing.T, a *api, operationID, taskID string) operations.Task {

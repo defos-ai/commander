@@ -209,5 +209,5 @@ func (f spawnSecretRequester) RequestSecret(ctx context.Context, name string) ([
 
 func secretSpawnResult() runtimes.Result {
 	return runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
-		Runtime: "native", PID: 42, Actions: []actionmodel.Action{}}
+		Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42}, Actions: []actionmodel.Action{}}
 }

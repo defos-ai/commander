@@ -61,15 +61,28 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 					"agent_id":{"type":"string"},
 					"agent_type":{"type":"string"},
 					"package":{"type":"string"},
-					"runtime":{"type":"string","enum":["native","docker"]},
-					"pid":{"type":"integer","minimum":1},
-					"container_id":{"type":"string","minLength":1},
+					"runtime":{"type":"string","enum":["native","docker","kubernetes"]},
+					"runtime_details":{"type":"object"},
 					"actions":{"type":"array","items":{"type":"object"}}
 				},
-				"required":["agent_id","agent_type","package","runtime","actions"],
+				"required":["agent_id","agent_type","package","runtime","runtime_details","actions"],
 				"oneOf":[
-					{"properties":{"runtime":{"const":"native"}},"required":["pid"],"not":{"required":["container_id"]}},
-					{"properties":{"runtime":{"const":"docker"}},"required":["container_id"],"not":{"required":["pid"]}}
+					{"properties":{"runtime":{"const":"native"},"runtime_details":{
+						"properties":{"pid":{"type":"integer","minimum":1}},
+						"required":["pid"],"additionalProperties":false
+					}}},
+					{"properties":{"runtime":{"const":"docker"},"runtime_details":{
+						"properties":{"container_id":{"type":"string","minLength":1}},
+						"required":["container_id"],"additionalProperties":false
+					}}},
+					{"properties":{"runtime":{"const":"kubernetes"},"runtime_details":{
+						"properties":{
+							"namespace":{"type":"string","minLength":1,"maxLength":63,"pattern":"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+							"pod_name":{"type":"string","minLength":1,"maxLength":253,"pattern":"^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"},
+							"pod_uid":{"type":"string","minLength":1}
+						},
+						"required":["namespace","pod_name","pod_uid"],"additionalProperties":false
+					}}}
 				],
 				"additionalProperties":false
 			}`),
