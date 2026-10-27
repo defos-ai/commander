@@ -205,13 +205,17 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 
 The injected Manager implements launch reconciliation and registration observation.
 The CLI still rejects `SPAWNER_RUNTIME=kubernetes` and reads no Kubernetes settings;
-deployment authentication, lifecycle cleanup and factory wiring remain follow-ups.
+lifecycle cleanup and factory wiring remain follow-ups.
 
 Current building blocks are the [Pod builder](runtimes/kubernetes/pod.go) and
 [narrow REST client](runtimes/kubernetes/client.go); they add no Kubernetes SDK
 dependency. The client takes an explicit HTTPS API endpoint and injected HTTP
-client; authentication remains caller-owned. It does not load kubeconfig or
-in-cluster credentials. Create/Get/Watch/ReleaseGate/Close bound requests and
+client; authentication remains caller-owned for that constructor.
+[`NewInClusterClient`](runtimes/kubernetes/incluster.go) instead uses Kubernetes'
+standard service endpoint and fixed mounted ServiceAccount files. CA/hostname
+verification, token refresh and owned transport cleanup are internal; do not expose
+credential paths, endpoint overrides or TLS switches as settings. It loads no
+kubeconfig or environment proxies. Create/Get/Watch/ReleaseGate/Close bound requests and
 watches, sanitize errors and add no application retries or watch reconnection.
 Gate removal requires the observed Pod UID, resource version and expected
 gate.
@@ -307,6 +311,9 @@ changes must not rename an existing launch.
 
 Keep public API tests in `tests/`, using an external package and deterministic
 HTTP transports. Read the [shared test guide](../../../framework/tests/AGENTS.md).
+The narrow exception is `runtimes/kubernetes/incluster_test.go`: package-local
+tests inject private file reads and in-memory TLS connections so credential paths
+and transport internals stay unexported. They must not access real account files.
 Cover manifest resolution, redirect restrictions, cancellation, checksum
 failures, identity conflicts and runtime cleanup without public network or paid
 model calls. Keep CLI tests focused on configuration and help; exercise host

@@ -33,11 +33,13 @@ const (
 // Client exposes only the namespace-scoped Pod operations needed by a future
 // launcher. It never retries writes, reconnects watches, or deletes Pods.
 type Client struct {
-	namespace string
-	server    string
-	http      http.Client
-	ctx       context.Context
-	cancel    context.CancelFunc
+	namespace      string
+	server         string
+	http           http.Client
+	ctx            context.Context
+	cancel         context.CancelFunc
+	closeTransport func()
+	closeOnce      sync.Once
 }
 
 // NewClient uses an explicitly configured HTTPS server and HTTP transport.
@@ -111,10 +113,16 @@ func (c *Client) ReleaseGate(ctx context.Context, observed Pod) (Pod, error) {
 	return c.podRequest(ctx, http.MethodPatch, observed.Metadata.Name, "application/json-patch+json", body, http.StatusOK, observed.Metadata.Name, observed.Metadata.UID)
 }
 
-// Close cancels requests and watches without changing any Pod or closing the
-// injected transport. It is safe to call more than once.
+// Close cancels requests and watches without changing any Pod. In-cluster
+// clients close their own idle connections; injected transports remain owned by
+// the caller. It is safe to call more than once.
 func (c *Client) Close() error {
-	c.cancel()
+	c.closeOnce.Do(func() {
+		c.cancel()
+		if c.closeTransport != nil {
+			c.closeTransport()
+		}
+	})
 	return nil
 }
 
