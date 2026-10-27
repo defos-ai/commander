@@ -13,6 +13,7 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/comms"
+	s3store "github.com/defos-ai/commander/providers/s3/store"
 )
 
 // Config is trusted host configuration. Packages and action input cannot supply
@@ -51,8 +52,8 @@ func NewManager(ctx context.Context, config Config) (*Manager, error) {
 		return nil, err
 	}
 	bus, busErr := url.Parse(config.BusURL)
-	storage, storageErr := url.Parse(config.StorageURL)
-	if busErr != nil || storageErr != nil || (bus.Scheme != "amqp" && bus.Scheme != "amqps") || bus.Host == "" || storage.Scheme != "s3" || storage.Host == "" {
+	_, _, storageErr := s3store.ParseURL(config.StorageURL)
+	if busErr != nil || storageErr != nil || (bus.Scheme != "amqp" && bus.Scheme != "amqps") || bus.Host == "" {
 		return nil, errors.New("Docker agents require a reachable AMQP bus and S3 storage")
 	}
 	if strings.ContainsRune(config.BusURL+config.StorageURL, 0) {

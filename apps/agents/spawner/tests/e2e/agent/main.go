@@ -184,6 +184,13 @@ func openBus(ctx context.Context, raw string) (comms.Bus, error) {
 }
 
 func openStorage(ctx context.Context, raw string) (artifacts.ArtifactFileStore, error) {
+	if scheme, _, ok := strings.Cut(raw, ":"); ok && strings.EqualFold(scheme, "s3") {
+		store, err := s3store.Open(ctx, raw)
+		if err != nil {
+			return nil, err
+		}
+		return s3artifacts.NewArtifactFileS3Store(store)
+	}
 	parsed, err := url.Parse(raw)
 	if err != nil || raw == "" {
 		return nil, errors.New("STORAGE_URL must be a valid URL")
@@ -195,12 +202,6 @@ func openStorage(ctx context.Context, raw string) (artifacts.ArtifactFileStore, 
 			return nil, err
 		}
 		return fsartifacts.NewArtifactFileFsStore(path)
-	case "s3":
-		store, err := s3store.Open(ctx, raw)
-		if err != nil {
-			return nil, err
-		}
-		return s3artifacts.NewArtifactFileS3Store(store)
 	default:
 		return nil, errors.New("unsupported STORAGE_URL scheme")
 	}

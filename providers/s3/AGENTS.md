@@ -10,14 +10,21 @@ reports in S3-compatible object storage; accepted metadata stays in the database
   create buckets or change policies.
 - Preserve `s3://bucket/optional-prefix`, `AWS_ENDPOINT_URL_S3` and explicit
   `S3_USE_PATH_STYLE` handling. Optional URL userinfo supplies a complete static
-  access-key/secret-key pair, percent-decoded exactly once. Reject missing/empty
-  fields and control characters without echoing supplied values. URL credentials
-  override the credential chain for that client with no ambient session token or
-  process environment mutation; URLs without userinfo retain the default chain.
+  access-key/secret-key pair. [`store.ParseURL`](store/s3_store.go) owns parsing,
+  including literal `/`, `+` and `=` in AWS secret keys and existing percent-encoded
+  userinfo. Decode credentials exactly once; other URL delimiters and literal `%`
+  require encoding. Use this parser when inspecting S3 connections outside `Open`;
+  do not reject raw secret-key slashes through an earlier `net/url` parse. Preserve
+  the original storage URL through bootstrap instead of reserializing parsed URLs.
+  Reject missing/empty fields and control characters without echoing supplied
+  values. URL credentials override the credential chain for that client with no
+  ambient session token or process environment mutation; URLs without userinfo
+  retain the default chain.
   Keep credentials and full URLs out of diagnostics; wrapper errors must retain
   their causes without exposing SDK request secrets. Spawned agents receive the
   storage URL through their existing environment bootstrap and need a provider
-  version supporting userinfo; do not infer support in previously released agents.
+  version supporting the supplied credential syntax; do not infer raw-slash support
+  in previously released agents. Never log parsed URLs or their userinfo.
 - Keep object keys scoped to the configured prefix and the artifact/report
   namespaces. Validate keys before I/O; test cleanup must remain inside its prefix.
 - Use conditional single-object PUT with `If-None-Match: *` and SHA-256 checksums.

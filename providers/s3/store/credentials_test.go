@@ -36,11 +36,17 @@ func TestS3CredentialSources(t *testing.T) {
 	for _, test := range []struct {
 		name, accessKey, secretKey, sessionToken string
 		userinfo                                 *url.Userinfo
+		rawURL                                   string
 		withoutEnvironment                       bool
 	}{
 		{name: "environment", accessKey: "environment-key", secretKey: "environment-secret", sessionToken: "environment-token"},
 		{name: "URL overrides environment", accessKey: "url-key", secretKey: "url-secret", userinfo: url.UserPassword("url-key", "url-secret")},
 		{name: "URL decodes reserved characters", accessKey: "url+key@:%", secretKey: "secret/+@:%", userinfo: url.UserPassword("url+key@:%", "secret/+@:%")},
+		{name: "raw AWS secret", accessKey: "url-key", secretKey: "raw/secret+key=", rawURL: "s3://url-key:raw/secret+key=@bucket/prefix"},
+		{name: "raw secret begins with digits", accessKey: "url-key", secretKey: "123/secret+=", rawURL: "s3://url-key:123/secret+=@bucket/prefix"},
+		{name: "raw leading and trailing slashes", accessKey: "url-key", secretKey: "/raw/secret/", rawURL: "s3://url-key:/raw/secret/@bucket/prefix"},
+		{name: "raw slash with escaped delimiters", accessKey: "url-key", secretKey: "raw/secret@?#", rawURL: "s3://url-key:raw/secret%40%3F%23@bucket/prefix"},
+		{name: "raw slash preserves one decoding pass", accessKey: "url-key", secretKey: "raw/secret%2F", rawURL: "s3://url-key:raw/secret%252F@bucket/prefix"},
 		{name: "URL without environment", accessKey: "url-key", secretKey: "url-secret", userinfo: url.UserPassword("url-key", "url-secret"), withoutEnvironment: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -60,6 +66,9 @@ func TestS3CredentialSources(t *testing.T) {
 			t.Setenv("AWS_ENDPOINT_URL_S3", "http://s3.invalid")
 			location := url.URL{Scheme: "s3", Host: "bucket", Path: "/prefix", User: test.userinfo}
 			raw := location.String()
+			if test.rawURL != "" {
+				raw = test.rawURL
+			}
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			storage, err := Open(ctx, raw)

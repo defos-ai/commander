@@ -2,7 +2,6 @@ package s3_test
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,8 +30,8 @@ func openStore(t *testing.T) fixture {
 	if raw == "" {
 		t.Skip("set COMMANDER_TEST_S3_URL to run S3 provider integration tests")
 	}
-	location, err := url.Parse(raw)
-	if err != nil || location.Scheme != "s3" || location.Host == "" {
+	location, _, err := store.ParseURL(raw)
+	if err != nil {
 		t.Fatalf("COMMANDER_TEST_S3_URL must identify an S3 bucket and optional prefix")
 	}
 	prefix := strings.Trim(location.Path, "/")

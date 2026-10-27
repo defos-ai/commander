@@ -39,7 +39,7 @@ func Open(ctx context.Context, rawURL string) (*S3Store, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err
 	}
-	location, prefix, err := parseURL(rawURL)
+	location, prefix, err := ParseURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +164,10 @@ func (s *S3Store) objectKey(key string) (string, error) {
 	return key, nil
 }
 
-func parseURL(rawURL string) (*url.URL, string, error) {
-	value, err := url.Parse(rawURL)
+// ParseURL validates an S3 location and returns its decoded prefix. The returned
+// URL may contain credentials and must not be included in diagnostics.
+func ParseURL(rawURL string) (*url.URL, string, error) {
+	value, err := url.Parse(escapePasswordSlashes(rawURL))
 	if err != nil {
 		return nil, "", errors.New("invalid S3 URL; expected s3://[access-key:secret-key@]bucket[/prefix]")
 	}
@@ -187,6 +189,21 @@ func parseURL(rawURL string) (*url.URL, string, error) {
 		return nil, "", errors.New("S3 URL prefix must not contain empty, dot, or parent segments")
 	}
 	return value, prefix, nil
+}
+
+func escapePasswordSlashes(rawURL string) string {
+	rest, ok := strings.CutPrefix(rawURL, "s3://")
+	if !ok {
+		return rawURL
+	}
+	userinfo, destination, found := strings.Cut(rest, "@")
+	key, secret, pair := strings.Cut(userinfo, ":")
+	if !found || !pair || strings.Contains(key, "/") || !strings.Contains(secret, "/") {
+		return rawURL
+	}
+	// A slash in an AWS secret is credential data rather than a bucket-path
+	// separator. Leave existing escapes intact for net/url to decode once.
+	return "s3://" + key + ":" + strings.ReplaceAll(secret, "/", "%2F") + "@" + destination
 }
 
 func validBucket(bucket string) bool {

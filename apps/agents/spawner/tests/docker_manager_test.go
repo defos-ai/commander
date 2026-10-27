@@ -257,6 +257,24 @@ func TestDockerManagerRejectsInvalidConfiguration(t *testing.T) {
 		{"filesystem storage", func(c *docker.Config) { c.StorageURL = "file:///state/storage" }},
 		{"missing bus host", func(c *docker.Config) { c.BusURL = "amqp:" }},
 		{"missing storage bucket", func(c *docker.Config) { c.StorageURL = "s3:" }},
+		{"malformed storage escape", func(c *docker.Config) {
+			c.StorageURL = "s3://key:private-config-sentinel/secret%zz@bucket/prefix"
+		}},
+		{"incomplete storage credentials", func(c *docker.Config) {
+			c.StorageURL = "s3://:private-config-sentinel/secret@bucket/prefix"
+		}},
+		{"invalid storage bucket", func(c *docker.Config) {
+			c.StorageURL = "s3://key:private-config-sentinel/secret@Bucket/prefix"
+		}},
+		{"storage query", func(c *docker.Config) {
+			c.StorageURL = "s3://key:private-config-sentinel/secret@bucket/prefix?token=private-config-sentinel"
+		}},
+		{"invalid storage prefix", func(c *docker.Config) {
+			c.StorageURL = "s3://key:private-config-sentinel/secret@bucket/../prefix"
+		}},
+		{"storage credential control character", func(c *docker.Config) {
+			c.StorageURL = "s3://key:private-config-sentinel/secret%00@bucket/prefix"
+		}},
 		{"invalid URL", func(c *docker.Config) { c.BusURL = "amqp://private-config-sentinel@host%/" }},
 		{"negative timeout", func(c *docker.Config) { c.RegistrationTimeout = -time.Second }},
 		{"inherited key", func(c *docker.Config) {
@@ -279,6 +297,42 @@ func TestDockerManagerRejectsInvalidConfiguration(t *testing.T) {
 				t.Fatal("configuration error disclosed a bootstrap value")
 			}
 		})
+	}
+}
+
+func TestDockerManagerForwardsRawS3CredentialURL(t *testing.T) {
+	fixture := newDockerManagerFixture(t)
+	if err := fixture.manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+	const storageURL = "s3://key:raw/secret+=@bucket/prefix"
+	config := fixture.config
+	config.StorageURL = storageURL
+	manager, err := docker.NewManager(t.Context(), config)
+	if err != nil {
+		t.Fatal("Docker manager rejected an S3 URL with a raw slash in its secret")
+	}
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx, requestID, journal := newSpawnCheckpoints(t)
+	result, err := manager.Spawn(ctx, requestID, fixtureReference)
+	if err != nil || result.Runtime != "docker" || result.ContainerID == "" || len(result.Actions) != 1 || result.Actions[0].Status != actionmodel.Ready {
+		t.Fatal("Docker spawn did not register its child with raw S3 credentials")
+	}
+	spec := <-fixture.engine.created
+	if spec.Environment["STORAGE_URL"] != storageURL {
+		t.Fatal("Docker spawn changed the credential-bearing storage URL")
+	}
+	assertCheckpointExcludes(t, journal, storageURL, "raw/secret+=")
+	repeated, err := manager.Spawn(ctx, requestID, fixtureReference)
+	if err != nil || repeated.AgentID != result.AgentID || repeated.ContainerID != result.ContainerID {
+		t.Fatal("Docker spawn did not reconcile the existing child with raw S3 credentials")
+	}
+	if creates, starts, _ := fixture.engine.counts(); creates != 1 || starts != 1 {
+		t.Fatal("retry launched another child with the same raw storage credentials")
 	}
 }
 
