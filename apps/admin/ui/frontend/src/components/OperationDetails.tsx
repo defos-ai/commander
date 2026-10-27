@@ -26,6 +26,7 @@ export function TaskSessions({ task, placement, onOpenSession }: {
 }) {
   const { t } = useTranslation();
   const intent = task.session_intent;
+  const mode = intent?.mode;
   const reported = task.result?.session;
   if (!intent && !reported && !placement?.reason && !placement?.owner_agent_id) return null;
   const target: SessionNavigationTarget | undefined = intent && !intent.error
@@ -34,8 +35,8 @@ export function TaskSessions({ task, placement, onOpenSession }: {
   return <section className="operation-nested"><h3>{t($ => $.operations.session)}</h3>
     {intent?.error && <p className="notice" role="status">{intent.error}</p>}
     <dl className="detail-list">
-      {intent?.mode && <div><dt>{t($ => $.operations.sessionMode)}</dt><dd>{intent.mode === 'create' || intent.mode === 'reuse' || intent.mode === 'use'
-        ? t($ => $.operations.sessionModes[intent.mode]) : intent.mode}</dd></div>}
+      {mode && <div><dt>{t($ => $.operations.sessionMode)}</dt><dd>{mode === 'create' || mode === 'reuse' || mode === 'use'
+        ? t($ => $.operations.sessionModes[mode]) : mode}</dd></div>}
       {target?.id && <div><dt>{t($ => $.operations.sessionId)}</dt><dd><code>{target.id}</code></dd></div>}
       {target?.scope_id && <div><dt>{t($ => $.operations.sessionScope)}</dt><dd><code>{target.scope_id}</code></dd></div>}
       {placement ? <TaskPlacement placement={placement} /> : reported?.owner_agent_id && <div><dt>{t($ => $.operations.sessionOwner)}</dt><dd><code>{reported.owner_agent_id}</code></dd></div>}
