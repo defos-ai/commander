@@ -267,10 +267,11 @@ describe('Sessions page', () => {
     try {
       const api = fixture();
       await act(async () => { view(session.id); });
-      expect(screen.getByText('Connected')).toBeVisible();
+      const savedSession = () => within(screen.getByRole('heading', { name: 'Saved session' }).closest('section')!);
+      expect(savedSession().getByText('Connected')).toBeVisible();
       api.state.current = { ...session, state: 'lost', busy: false };
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
-      expect(screen.getByText('Lost')).toBeVisible();
+      expect(savedSession().getByText('Lost')).toBeVisible();
       expect(api.fetch).toHaveBeenCalledTimes(2);
       expect(api.writes()).toHaveLength(0);
     } finally { vi.useRealTimers(); }
