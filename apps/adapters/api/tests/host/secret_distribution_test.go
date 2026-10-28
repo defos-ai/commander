@@ -345,6 +345,11 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 
 func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string, definitions ...missions.Mission) func() {
 	t.Helper()
+	return startOperationRunnerWithTimeout(t, coordinator, bus, database, 0, definitions...)
+}
+
+func startOperationRunnerWithTimeout(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string, timeout time.Duration, definitions ...missions.Mission) func() {
+	t.Helper()
 	missionStore, err := fsmissions.NewMissionFsStore(database)
 	if err != nil {
 		t.Fatal(err)
@@ -358,12 +363,13 @@ func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus 
 	if err != nil {
 		t.Fatal(err)
 	}
-	reportStore, err := fsreports.NewReportFsStore(database)
+	reportStore, err := fsreports.NewReportFsStore(filepath.Join(filepath.Dir(database), "storage"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	execution, err := runner.NewRunner(t.Context(), coordinator, runner.Config{
 		MissionStore: missionStore, OperationStore: operationStore, ReportStore: reportStore, AgentCatalog: coordinator,
+		TaskTimeout: timeout,
 	})
 	if err != nil {
 		t.Fatal(err)

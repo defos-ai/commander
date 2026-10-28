@@ -38,6 +38,46 @@ async function openOperation() {
 }
 
 describe('operation evidence', () => {
+  it('shows a late artifact after refreshing a completed operation with an interrupted task', async () => {
+    let snapshot: Operation = { ...operation,
+      tasks: [{ ...operation.tasks![0], status: 'interrupted', result: undefined, error: 'Execution outcome is unknown' }],
+      progress: { ...operation.progress, task_counts: { interrupted: 1 }, finished_tasks: 0, settled: false } };
+    const fetch = fixture(url => {
+      if (url.endsWith('/operations')) return Response.json({ items: [snapshot] });
+      if (url.endsWith(`/operations/${operation.id}`)) return Response.json(snapshot);
+    });
+    render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
+    await openOperation();
+
+    expect(screen.getByText('Completed', { selector: '.catalog-status' })).toBeVisible();
+    expect(screen.getByText('0/1 tasks finished')).toBeVisible();
+    expect(screen.getByText('No artifacts saved in task results.')).toBeVisible();
+    expect(screen.getByText(operation.report_id!)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
+
+    snapshot = operation;
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    expect(await screen.findByText(artifact.name, { selector: 'summary span span' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: operation.id })).toBeVisible();
+    expect(screen.getByText('Completed', { selector: '.catalog-status' })).toBeVisible();
+    expect(screen.getByText('1/1 tasks finished')).toBeVisible();
+    expect(screen.queryByText('No artifacts saved in task results.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel operation' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View report' }));
+    expect(await within(screen.getByRole('dialog')).findByText(/The reviewed pages load correctly/)).toBeVisible();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close dialog' }));
+    fireEvent.click(screen.getByText(artifact.name, { selector: 'summary span span' }).closest('summary')!);
+    fireEvent.click(screen.getByRole('button', { name: 'View artifact' }));
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByText('desktop.png')).toBeVisible();
+    expect(within(dialog).getByText(artifact.id)).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Download desktop.png' })).toBeVisible();
+    expect(fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
+    expect(fetch.mock.calls.some(([url]) => upstreamURL(url).includes('/files/'))).toBe(false);
+  });
+
   it('opens saved reports and artifacts on demand from details and the graph using only queries', async () => {
     const fetch = fixture();
     render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
