@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -48,7 +47,6 @@ func (store *SecretValues) Get(ctx context.Context, key secrets.Key) (secrets.Se
 }
 
 type SecretRequests struct {
-	mu        sync.Mutex
 	records   map[string]secrets.RequestRecord
 	saveError error
 	listError error
@@ -56,8 +54,6 @@ type SecretRequests struct {
 }
 
 func (store *SecretRequests) Create(ctx context.Context, request secrets.Request) error {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -75,8 +71,6 @@ func (store *SecretRequests) Create(ctx context.Context, request secrets.Request
 }
 
 func (store *SecretRequests) Get(ctx context.Context, requestID string) (secrets.RequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return secrets.RequestRecord{}, err
 	}
@@ -88,8 +82,6 @@ func (store *SecretRequests) Get(ctx context.Context, requestID string) (secrets
 }
 
 func (store *SecretRequests) ListPending(ctx context.Context) ([]secrets.RequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -118,9 +110,7 @@ func (store *SecretRequests) SaveDelivery(ctx context.Context, delivery secrets.
 	if err != nil {
 		return err
 	}
-	store.mu.Lock()
 	afterSave, failure := store.afterSave, store.saveError
-	store.mu.Unlock()
 	if afterSave != nil {
 		afterSave()
 	}
@@ -146,8 +136,6 @@ func (store *SecretRequests) Expire(ctx context.Context, requestID string, now t
 }
 
 func (store *SecretRequests) mutate(ctx context.Context, requestID string, apply func(secrets.RequestRecord) (secrets.RequestRecord, error)) error {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -166,18 +154,12 @@ func NewSecretRequests() *SecretRequests {
 	return &SecretRequests{records: make(map[string]secrets.RequestRecord)}
 }
 func (store *SecretRequests) SetSaveError(err error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	store.saveError = err
 }
 func (store *SecretRequests) SetListError(err error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	store.listError = err
 }
 func (store *SecretRequests) AfterSave(callback func()) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
 	store.afterSave = callback
 }
 func (store *SecretValues) Snapshot() *secrets.Secret {

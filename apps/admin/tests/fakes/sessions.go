@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
-	"sync"
 	"testing"
 
 	adminsessions "github.com/defos-ai/commander/apps/admin/sessions"
@@ -22,7 +21,6 @@ type SessionAPISnapshot struct {
 
 type SessionAPI struct {
 	t         testing.TB
-	mu        sync.Mutex
 	session   adminsessions.Session
 	requestID string
 	methods   []string
@@ -34,8 +32,6 @@ func NewSessionAPI(t testing.TB, config SessionAPIConfig) *SessionAPI {
 }
 
 func (a *SessionAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/sessions":
 		if r.URL.Query().Get("scope_id") != a.session.ScopeID || r.URL.Query().Get("owner_agent_id") != a.session.OwnerAgentID {
@@ -75,14 +71,10 @@ func (a *SessionAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *SessionAPI) SetState(state string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.session.State = state
 }
 
 func (a *SessionAPI) Snapshot() SessionAPISnapshot {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	return SessionAPISnapshot{Session: cloneSession(a.session), Methods: slices.Clone(a.methods)}
 }
 

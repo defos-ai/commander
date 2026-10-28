@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"slices"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,7 +22,6 @@ type SecretSnapshot struct {
 
 type SecretAPI struct {
 	t            testing.TB
-	mu           sync.Mutex
 	saved        *adminsecrets.Metadata
 	requests     []string
 	values       []string
@@ -36,8 +34,6 @@ func NewSecretAPI(t testing.TB) *SecretAPI {
 }
 
 func (f *SecretAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets" {
 		f.requests = append(f.requests, "GET list")
@@ -129,8 +125,6 @@ func (f *SecretAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (f *SecretAPI) MetadataRead() <-chan struct{} { return f.metadataRead }
 
 func (f *SecretAPI) Snapshot() SecretSnapshot {
-	f.mu.Lock()
-	defer f.mu.Unlock()
 	state := SecretSnapshot{Requests: slices.Clone(f.requests), Values: slices.Clone(f.values)}
 	if f.saved != nil {
 		saved := *f.saved
@@ -144,8 +138,6 @@ func (f *SecretAPI) Snapshot() SecretSnapshot {
 }
 
 func (f *SecretAPI) SetExpiry(expiry time.Time) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.saved.ExpiresAt = &expiry
 	if !expiry.After(time.Now()) {
 		f.saved.Status = "expired"

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
-	"sync"
 	"sync/atomic"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
@@ -14,7 +13,6 @@ import (
 )
 
 type PodClient struct {
-	mu                      sync.Mutex
 	current                 *kubernetes.Pod
 	creates, releases, gets int
 	closes                  int
@@ -28,18 +26,14 @@ type PodClient struct {
 }
 
 func (client *PodClient) Create(ctx context.Context, desired kubernetes.Pod) (kubernetes.Pod, error) {
-	client.mu.Lock()
 	before := client.beforeCreate
-	client.mu.Unlock()
 	if before != nil {
 		if err := before(ctx, desired); err != nil {
 			return kubernetes.Pod{}, err
 		}
 	}
-	client.mu.Lock()
 	client.creates++
 	if client.current != nil {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, kubernetes.ErrConflict
 	}
 	pod := ClonePod(desired)
@@ -47,7 +41,6 @@ func (client *PodClient) Create(ctx context.Context, desired kubernetes.Pod) (ku
 	pod.Status = json.RawMessage(`{"phase":"Pending"}`)
 	client.current = &pod
 	result, hook, failure := ClonePod(pod), client.onCreate, client.createErr
-	client.mu.Unlock()
 	if hook != nil {
 		if err := hook(ctx, ClonePod(pod)); err != nil {
 			return kubernetes.Pod{}, err
@@ -60,18 +53,14 @@ func (client *PodClient) Create(ctx context.Context, desired kubernetes.Pod) (ku
 }
 
 func (client *PodClient) Get(ctx context.Context, name string) (kubernetes.Pod, error) {
-	client.mu.Lock()
 	client.gets++
 	if err := ctx.Err(); err != nil {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, err
 	}
 	if client.current == nil || client.current.Metadata.Name != name {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, kubernetes.ErrNotFound
 	}
 	pod, hook := ClonePod(*client.current), client.onGet
-	client.mu.Unlock()
 	if hook != nil {
 		hook(ClonePod(pod))
 	}
@@ -79,28 +68,22 @@ func (client *PodClient) Get(ctx context.Context, name string) (kubernetes.Pod, 
 }
 
 func (client *PodClient) ReleaseGate(ctx context.Context, observed kubernetes.Pod) (kubernetes.Pod, error) {
-	client.mu.Lock()
 	before := client.beforeRelease
-	client.mu.Unlock()
 	if before != nil {
 		if err := before(ctx, observed); err != nil {
 			return kubernetes.Pod{}, err
 		}
 	}
-	client.mu.Lock()
 	client.releases++
 	if client.current == nil || client.current.Metadata.UID != observed.Metadata.UID || client.current.Metadata.ResourceVersion != observed.Metadata.ResourceVersion {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, kubernetes.ErrConflict
 	}
 	var spec map[string]json.RawMessage
 	if err := json.Unmarshal(client.current.Spec, &spec); err != nil {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, err
 	}
 	var gates []map[string]string
 	if err := json.Unmarshal(spec["schedulingGates"], &gates); err != nil {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, err
 	}
 	var remaining []map[string]string
@@ -113,7 +96,6 @@ func (client *PodClient) ReleaseGate(ctx context.Context, observed kubernetes.Po
 		}
 	}
 	if !found {
-		client.mu.Unlock()
 		return kubernetes.Pod{}, errors.New("fixture refused to release an absent gate")
 	}
 	if len(remaining) == 0 {
@@ -127,7 +109,6 @@ func (client *PodClient) ReleaseGate(ctx context.Context, observed kubernetes.Po
 		SetPodRunning(client.current)
 	}
 	pod, hook, failure := ClonePod(*client.current), client.onRelease, client.releaseErr
-	client.mu.Unlock()
 	if hook != nil {
 		if err := hook(ctx, ClonePod(pod)); err != nil {
 			return kubernetes.Pod{}, err
@@ -142,21 +123,15 @@ func (client *PodClient) ReleaseGate(ctx context.Context, observed kubernetes.Po
 // The manager accepts a narrower interface and must leave this caller-owned
 // client untouched, even though the fixture also happens to implement Close.
 func (client *PodClient) Close() error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.closes++
 	return nil
 }
 
 func (client *PodClient) Counts() (creates, releases, gets, closes int) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	return client.creates, client.releases, client.gets, client.closes
 }
 
 func (client *PodClient) Snapshot() kubernetes.Pod {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	if client.current == nil {
 		return kubernetes.Pod{}
 	}
@@ -164,8 +139,6 @@ func (client *PodClient) Snapshot() kubernetes.Pod {
 }
 
 func (client *PodClient) Change(edit func(*kubernetes.Pod)) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	pod := ClonePod(*client.current)
 	edit(&pod)
 	cloned := ClonePod(pod)
@@ -205,44 +178,28 @@ func (bus *TrackingBus) Subscribe(ctx context.Context, inbox comms.Inbox) (comms
 }
 
 func (client *PodClient) SetCreateError(err error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.createErr = err
 }
 func (client *PodClient) SetReleaseError(err error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.releaseErr = err
 }
 func (client *PodClient) SetBeforeCreate(hook func(context.Context, kubernetes.Pod) error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.beforeCreate = hook
 }
 func (client *PodClient) SetOnCreate(hook func(context.Context, kubernetes.Pod) error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.onCreate = hook
 }
 func (client *PodClient) SetBeforeRelease(hook func(context.Context, kubernetes.Pod) error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.beforeRelease = hook
 }
 func (client *PodClient) SetOnRelease(hook func(context.Context, kubernetes.Pod) error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.onRelease = hook
 }
 func (client *PodClient) SetOnGet(hook func(kubernetes.Pod)) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.onGet = hook
 }
 func (client *PodClient) SetKeepPending(keep bool) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
 	client.keepPending = keep
 }
-func (client *PodClient) Forget()                 { client.mu.Lock(); defer client.mu.Unlock(); client.current = nil }
+func (client *PodClient) Forget()                 { client.current = nil }
 func (bus *TrackingBus) SubscriptionCount() int64 { return bus.subscriptions.Load() }
