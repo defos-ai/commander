@@ -15,7 +15,7 @@ Read the [root guide](../AGENTS.md) and
   visibility are separate. Commander client integration owns catalog lookup and
   passes the selected package and visibility unchanged to `spawn-agent`; never load the
   catalog in spawner. Private installs use environment `GITHUB_TOKEN` first,
-  then a managed secret scoped to `spawner-agent` through the existing
+  then the shared managed `GITHUB_TOKEN` through the existing
   Playground/Admin exchange. Public or omitted visibility stays anonymous.
   The spawner owns public and private `stable` resolution and saves the exact pin
   for retries. Catalog loading remains anonymous; private GHCR pulls may reuse
@@ -45,6 +45,21 @@ Read the [root guide](../AGENTS.md) and
   is lazy and catalog failure must not prevent direct installs. Spawner action
   inputs accept GitHub URLs, bare references, `@stable` or exact pins;
   aliases remain discovery names, not installation inputs.
+
+## Persisted catalog foundation
+
+- [`CatalogEntry`](../framework/domain/agents/catalog_entry.go) and
+  [`CatalogStore`](../framework/domain/agents/catalog_store.go) describe saved
+  package metadata and trust state independently of live agent inventory.
+  FS uses `agent-catalog.json`; Mongo uses `agent_catalog`.
+- The full canonical package selector is the key. Aliases are display metadata;
+  `@stable` must not silently imply repository-wide authorization. Future operator
+  approvals must bind the resolved release and verified installation provenance.
+- Create-only insertion and versioned replacement preserve edited or revoked
+  records. There is no unrestricted upsert or delete that could reset trust.
+- Seeding is postponed. Implement it later through Admin CLI and the API, like
+  mission seeding; never load defaults automatically in the controller. HTTP/MCP
+  catalog integration and trust enforcement are separate later steps.
 
 ## Validation
 

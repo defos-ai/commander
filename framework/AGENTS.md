@@ -276,6 +276,16 @@
   module tag. The spawner runtime saves the exact pin before preparing a launch. The framework
   must not depend on the spawner. Cover catalog/reference behavior and the
   official catalog in [`tests/agent/packages`](tests/agent/packages/).
+- [`agents.CatalogEntry`](domain/agents/catalog_entry.go) and
+  [`CatalogStore`](domain/agents/catalog_store.go) persist the deployment's package
+  catalog separately from live agent inventory. Full canonical selectors are
+  immutable keys; `@stable` and exact releases remain distinct records. Names are
+  display aliases, not runtime identity. Stores reserve new entries at version 1
+  and replace only the expected business version, preserving creation time and
+  advancing the version once. Read after uncertain writes before mutating again.
+  Saved trust is metadata in this foundation; runtime authorization is not wired
+  yet. Seeding belongs in a later Admin CLI workflow through the API, following
+  mission seeding, with existing records preserved.
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.
 - Hosts accepting a preassigned agent ID from outside accept only an eight-digit
