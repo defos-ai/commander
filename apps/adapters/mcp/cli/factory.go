@@ -59,7 +59,7 @@ type dependencies struct {
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
 	TestCleaner       frameworktesting.TestCleaner
-	CatalogStore      agents.CatalogStore
+	AgentSourceStore  agents.AgentSourceStore
 	mongo             *mongostore.MongoStore
 	s3                *s3store.S3Store
 	closers           []func() error
@@ -114,9 +114,9 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
 	}
-	deps.CatalogStore, err = deps.createCatalogStore(ctx, configuration.databaseURL)
+	deps.AgentSourceStore, err = deps.createAgentSourceStore(ctx, configuration.databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("database-url catalog: %w", err)
+		return nil, fmt.Errorf("database-url agent sources: %w", err)
 	}
 	deps.MissionStore, err = deps.createMissionStore(ctx, configuration.databaseURL)
 	if err != nil {
@@ -222,7 +222,7 @@ func (d *dependencies) createAgentStore(ctx context.Context, rawURL string) (age
 	}
 }
 
-func (d *dependencies) createCatalogStore(ctx context.Context, rawURL string) (agents.CatalogStore, error) {
+func (d *dependencies) createAgentSourceStore(ctx context.Context, rawURL string) (agents.AgentSourceStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -232,14 +232,14 @@ func (d *dependencies) createCatalogStore(ctx context.Context, rawURL string) (a
 		if err != nil {
 			return nil, err
 		}
-		return fsagents.NewCatalogFsStore(path)
+		return fsagents.NewAgentSourceFsStore(path)
 	case "mongodb", "mongodb+srv":
 		if err := d.connectMongo(ctx, rawURL); err != nil {
 			return nil, err
 		}
-		return mongoagents.NewCatalogMongoStore(d.mongo), nil
+		return mongoagents.NewAgentSourceMongoStore(d.mongo), nil
 	default:
-		return nil, fmt.Errorf("unsupported agent catalog store scheme %q", scheme)
+		return nil, fmt.Errorf("unsupported agent source store scheme %q", scheme)
 	}
 }
 

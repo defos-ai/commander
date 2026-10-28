@@ -84,7 +84,7 @@ the controller, API and MCP containers.
 ### Spawned agents
 
 Ask Playground to install an agent from a trusted GitHub repository or choose one
-from the [catalog](../catalog/README.md). The
+from the [agent sources](../sources/README.md). The
 [spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket to
 launch sibling containers on the Compose network. Installation needs Internet access.
 

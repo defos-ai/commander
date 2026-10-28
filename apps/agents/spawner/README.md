@@ -8,7 +8,7 @@ In Playground, ask:
 
 > Install the web agent.
 
-You can also supply any compatible GitHub package URL. No catalog entry is required.
+You can also supply any compatible GitHub package URL. No saved source entry is required.
 
 ## Run
 

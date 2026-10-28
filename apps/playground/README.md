@@ -85,7 +85,7 @@ See [deployment](../../docs/deployment.md) for ports, password rotation and over
 
 ### Installing agents
 
-Ask in chat to install an agent, using its catalog name or GitHub repository:
+Ask in chat to install an agent, using its source name or GitHub repository:
 
 > Install https://github.com/defos-ai/commander-browser-agent
 
@@ -94,7 +94,7 @@ Omit the version or use `@stable` for the promoted Latest release; append
 from authors you trust: native agents run as your OS user.
 
 Installing an agent does not install host dependencies. Check its readiness
-before starting a mission. See the [agent catalog](../../catalog/README.md)
+before starting a mission. See [agent sources](../../sources/README.md)
 for available packages.
 
 ### Credentials

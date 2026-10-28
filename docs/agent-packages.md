@@ -5,13 +5,13 @@ executable, a Docker image, or both. Start from
 [commander-example-agent](https://github.com/defos-ai/commander-example-agent)
 to build one.
 
-## Catalog and stable references
+## Sources and stable references
 
 In Playground, ask:
 
 > Install the web agent.
 
-Commander can look it up with MCP's `get_agent_catalog`. You can also provide any
+Commander can look it up with MCP's `get_agent_sources`. You can also provide any
 trusted GitHub repository directly:
 
 > Install https://github.com/defos-ai/commander-web-agent
@@ -27,8 +27,8 @@ stable version marked Latest; it does not fall back to other tags. Each new
 installation creates an instance. Check the result and action readiness before
 starting dependent work.
 
-The deployment's saved [catalog](../catalog/README.md) helps discovery through
-API and MCP. Add entries through `/api/v1/catalog-agents`; default seeding is
+The deployment's saved [agent sources](../sources/README.md) help discovery through
+API and MCP. Add entries through `/api/v1/agent-sources`; default seeding is
 deferred. Saved trust is management metadata until controller enforcement is
 implemented; it does not currently restrict installation or secret delivery.
 
@@ -95,7 +95,7 @@ use a module-prefixed tag. Both publish an asset named `agent.yaml`:
 
 Module `@stable` references use the repository's root Latest version to choose the
 corresponding module release. Publication is required; a version in `go.mod` or
-a catalog entry does not make a package available.
+a source entry does not make a package available.
 
 The spawner verifies the native checksum or pulls the pinned image. It does not
 build source, run repository Compose files or install host dependencies. Install
@@ -146,4 +146,4 @@ their deployment network or data using the [teardown commands](deployment.md#sto
 1. Publish the native binaries, Docker image and generated manifest.
 2. Install the pinned release in native and Docker modes you support.
 3. Check that the expected agent ID registers and its actions become ready.
-4. Add a discoverable entry to your [catalog](../catalog/README.md) when ready to share it.
+4. Add a discoverable [agent source](../sources/README.md) when ready to share it.

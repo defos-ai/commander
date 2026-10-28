@@ -33,20 +33,20 @@ Add `--raw` to print only the token. Compose reuses its token across restarts;
 set `MCP_TOKEN` before launch to replace it. Playground connects automatically.
 In all-in-one Playground, use `/credentials`.
 
-### Discover agent packages
+### Discover agent sources
 
-Call `get_agent_catalog`, then follow the spawner's registered installation
-instructions with the selected `package` and `visibility`.
-You can also install a GitHub repository URL without a catalog entry:
+Call `get_agent_sources`, then follow the spawner's registered installation
+instructions with the selected `source` reference and `visibility`.
+You can also install a GitHub repository URL without a saved source entry:
 
 - Omit the version, or use `@stable`, for its promoted Latest release.
 - Use `@v1.2.3` to pin a version.
 - For private repositories, set `visibility: private`. Supply tokens through
   managed secrets or the spawner environment; never put them in tool inputs.
 
-API and MCP share the deployment's saved [catalog](../../catalog/README.md).
-Add packages through `/api/v1/catalog-agents`; new deployments start with an
-empty catalog until entries are added. Default catalog seeding will follow later.
+API and MCP share the deployment's saved [agent sources](../../sources/README.md).
+Add entries through `/api/v1/agent-sources`; new deployments start with an
+empty source list until entries are added. Default seeding will follow later.
 
 ### Create missions
 

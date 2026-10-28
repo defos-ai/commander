@@ -27,7 +27,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   action descriptions own their input behavior. MCP and Playground discover this
   metadata instead of maintaining a package list or installation instructions.
   Accept any compatible GitHub package, including packages outside the
-  discovery catalog. Preserve caller-supplied responsibilities. Keep mission
+  saved source list. Preserve caller-supplied responsibilities. Keep mission
   rules in `install-agent`; agent guidance must not bypass controller dispatch.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
   resources and closes them in reverse order. `cli.Run` uses deployment
@@ -57,7 +57,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   Bootstrap the key only for the exact resolved module
   `github.com/defos-ai/commander/apps/agents/builder@<version>` with manifest type
   `builder-agent`. This trusts published versions of that official module;
-  a self-claimed type, catalog entry or visibility never grants access.
+  a self-claimed type, source entry or visibility never grants access.
   Keep this exception out of the generic environment allowlist and never save
   its key in launch records, output or logs.
 - `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an
@@ -71,16 +71,16 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   `Agent.Work` cannot run `spawn-agent`; it has no controller execution.
   Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
-- Catalog lookup belongs to the Commander client. `spawn-agent` accepts the
+- Source lookup belongs to the Commander client. `spawn-agent` accepts the
   `package` URL/reference and optional `visibility` (`public` by default). Never load a
-  catalog in the spawner or add catalog configuration to its host. Private input
+  source definitions in the spawner or add source configuration to its host. Private input
   uses environment `GITHUB_TOKEN` first, otherwise `action.RequestSecret` within
   the current execution. Keep discovery ready without a token; do not declare
   it as a static requirement for public installs. Clear temporary token bytes
   after spawning. Public input must remain anonymous even with an inherited
   download token. Visibility selects authentication, not authorization or trust.
 - The shared [package metadata](../../../framework/agent/packages/) package owns
-  reference parsing and discovery catalogs. `ParseSelector` accepts GitHub HTTPS
+  reference parsing and discovery source definitions. `ParseSelector` accepts GitHub HTTPS
   URLs or `github.com/owner/repository[/module/path]`, with an optional exact
   `@vMAJOR.MINOR.PATCH` or `@stable`; omitted versions mean stable. `ParseReference`
   remains strict for exact canonical persisted references and download inputs.
@@ -89,7 +89,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   root Latest version, preserving module paths. A module path selects
   `module/path/vMAJOR.MINOR.PATCH`; standalone packages use the root version tag.
   Missing or invalid Latest metadata must not fall back to another release.
-  MCP only lists packages; never load a catalog or accept catalog aliases here.
+  MCP only lists packages; never load source definitions or accept source aliases here.
   Native and Docker runtimes save the canonical selector and exact pin before
   manifest/executable download or image pull. Controller-dispatched actions use
   the execution's `package-selection` checkpoint.

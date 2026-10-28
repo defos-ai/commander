@@ -18,7 +18,7 @@ func NewSecretBootstrap(key string) (*SecretBootstrap, error) {
 	return &SecretBootstrap{key: key}, nil
 }
 
-// KeyFor accepts the resolved package pin, never a catalog alias or moving tag.
+// KeyFor accepts the resolved package pin, never a source alias or moving tag.
 // A nil bootstrap disables key delivery.
 func (b *SecretBootstrap) KeyFor(reference, agentType string) string {
 	if b == nil || agentType != "builder-agent" {

@@ -262,23 +262,23 @@
   See the [package contract](../docs/agent-packages.md#source-template).
   Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
 - [`agent/packages`](agent/packages/) owns GitHub package reference/selector
-  parsing, strict discovery catalogs and bounded remote catalog loading. Selectors
+  parsing, strict source definitions and bounded remote source loading. Selectors
   accept GitHub HTTPS URLs or canonical references, with omitted versions meaning
   `@stable`; exact persisted references remain strict. The official source is
-  [`catalog/agents.yaml`](../catalog/agents.yaml); its remote loader remains separate
-  from deployment catalog queries. Catalog entries require repository
+  [`sources/agents.yaml`](../sources/agents.yaml); its remote loader remains separate
+  from deployment source queries. Source entries require repository
   `visibility: public | private`; this describes access, not trust or image
-  visibility. The shared catalog client remains anonymous. Catalog entries
+  visibility. The shared source client remains anonymous. Source entries
   support discovery, not an enforced installation allowlist. The spawner owns
   version selection, manifest resolution and executable downloads, including
   scoped GitHub authentication. Its resolver selects `stable` from the repository's
   published root Latest release and maps module references to that version's
   module tag. The spawner runtime saves the exact pin before preparing a launch. The framework
-  must not depend on the spawner. Cover catalog/reference behavior and the
-  official catalog in [`tests/agent/packages`](tests/agent/packages/).
-- [`agents.CatalogEntry`](domain/agents/catalog_entry.go) and
-  [`CatalogStore`](domain/agents/catalog_store.go) persist the deployment's package
-  catalog separately from live agent inventory. Full canonical selectors are
+  must not depend on the spawner. Cover source/reference behavior and the
+  official source definitions in [`tests/agent/packages`](tests/agent/packages/).
+- [`agents.AgentSource`](domain/agents/agent_source.go) and
+  [`AgentSourceStore`](domain/agents/agent_source_store.go) persist the deployment's
+  agent sources separately from live agent inventory. Full canonical selectors are
   immutable keys; `@stable` and exact releases remain distinct records. Names are
   display aliases, not runtime identity. Stores reserve new entries at version 1
   and replace only the expected business version, preserving creation time and
@@ -287,8 +287,7 @@
   require an exact release, and initial untrusted records may omit the audit pair.
   Audit times stay within the record timestamps. Saved trust is metadata;
   runtime authorization is not wired yet. Seeding belongs in a later Admin CLI
-  workflow through the API, following
-  mission seeding, with existing records preserved.
+  workflow through the API, following mission seeding, with existing records preserved.
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.
 - Hosts accepting a preassigned agent ID from outside accept only an eight-digit

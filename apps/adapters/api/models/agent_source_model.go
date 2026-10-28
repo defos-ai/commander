@@ -2,22 +2,22 @@ package models
 
 import "time"
 
-type CreateCatalogAgentRequest struct {
+type CreateAgentSourceRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Package     string `json:"package"`
+	Source      string `json:"source"`
 	Visibility  string `json:"visibility"`
 }
 
-type SetCatalogAgentTrustRequest struct {
+type SetAgentSourceTrustRequest struct {
 	Version uint64 `json:"version"`
 	Trusted *bool  `json:"trusted"`
 }
 
-type CatalogAgentResponse struct {
+type AgentSourceResponse struct {
 	Name           string    `json:"name"`
 	Description    string    `json:"description"`
-	Package        string    `json:"package"`
+	Source         string    `json:"source"`
 	Visibility     string    `json:"visibility"`
 	Trusted        bool      `json:"trusted"`
 	Version        uint64    `json:"version"`

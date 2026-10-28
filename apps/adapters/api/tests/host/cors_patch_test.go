@@ -10,15 +10,15 @@ import (
 	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 )
 
-func TestCORSPatchPreflightAndAuthenticatedCatalogUpdates(t *testing.T) {
+func TestCORSPatchPreflightAndAuthenticatedAgentSourceUpdates(t *testing.T) {
 	config := hostfixtures.LogAPIConfig(t)
 	config.Security.AllowedOrigins = []string{adminOrigin}
-	entry := hostfixtures.CatalogEntry(hostfixtures.CatalogPackage)
-	if err := config.CatalogStore.Create(t.Context(), entry); err != nil {
+	entry := hostfixtures.AgentSource(hostfixtures.AgentSourceSelector)
+	if err := config.AgentSourceStore.Create(t.Context(), entry); err != nil {
 		t.Fatal(err)
 	}
 	handler := hostfixtures.LogHandler(t, config)
-	path := catalogPath + "/" + url.PathEscape(entry.Package)
+	path := agentSourcesPath + "/" + url.PathEscape(entry.Source)
 
 	preflight := hostfixtures.CORSRequest(t.Context(), handler, http.MethodOptions, path, "", corsPreflight(adminOrigin, http.MethodPatch, "Authorization, Content-Type"))
 
@@ -44,7 +44,7 @@ func TestCORSPatchPreflightAndAuthenticatedCatalogUpdates(t *testing.T) {
 	})
 
 	assertCORSActual(t, updated, adminOrigin)
-	saved := decodeResponse[models.CatalogAgentResponse](t, updated)
+	saved := decodeResponse[models.AgentSourceResponse](t, updated)
 	if !saved.Trusted || saved.Version != 2 || saved.TrustUpdatedBy != "log-user" {
 		t.Fatalf("authenticated cross-origin PATCH lost its trust decision: %+v", saved)
 	}
@@ -53,10 +53,10 @@ func TestCORSPatchPreflightAndAuthenticatedCatalogUpdates(t *testing.T) {
 func TestCORSPatchKeepsHostOriginAndHeaderChecks(t *testing.T) {
 	config := hostfixtures.LogAPIConfig(t)
 	config.Security.AllowedOrigins = []string{adminOrigin}
-	store := fakes.NewCatalogFailures(config.CatalogStore, "", nil)
-	config.CatalogStore = store
+	store := fakes.NewAgentSourceFailures(config.AgentSourceStore, "", nil)
+	config.AgentSourceStore = store
 	handler := hostfixtures.LogHandler(t, config)
-	path := catalogPath + "/" + url.PathEscape(hostfixtures.CatalogPackage)
+	path := agentSourcesPath + "/" + url.PathEscape(hostfixtures.AgentSourceSelector)
 	for _, test := range []struct {
 		name, method, origin, host, requestMethod, headers, fetchSite, password, code string
 		status                                                                        int
@@ -103,6 +103,6 @@ func TestCORSPatchKeepsHostOriginAndHeaderChecks(t *testing.T) {
 		})
 	}
 	if store.Snapshot("get").Attempts != 0 || store.Snapshot("replace").Attempts != 0 {
-		t.Fatal("rejected PATCH request reached catalog storage")
+		t.Fatal("rejected PATCH request reached source storage")
 	}
 }

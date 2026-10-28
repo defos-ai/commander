@@ -104,8 +104,8 @@ func Session(t *testing.T, config adapter.Config) (context.Context, *sdkmcp.Clie
 	t.Cleanup(func() { check(operations.Close()) })
 	config.Operations = operations
 	database, storage := filepath.Join(root, "database"), filepath.Join(root, "storage")
-	if config.CatalogStore == nil {
-		config.CatalogStore, err = fsagents.NewCatalogFsStore(database)
+	if config.AgentSourceStore == nil {
+		config.AgentSourceStore, err = fsagents.NewAgentSourceFsStore(database)
 		check(err)
 	}
 	config.AgentStore, err = fsagents.NewAgentFsStore(database)

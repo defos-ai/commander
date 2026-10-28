@@ -97,27 +97,27 @@
   Validate record IDs and artifact membership before retrieving bytes. IDs are
   never filesystem paths. Empty files need explicit blob content.
 - Keep summaries small and use detail tools for schemas, task input and results.
-  Readiness reflects the selected agent's advertisement and current lease; catalog
+  Readiness reflects the selected agent's advertisement and current lease; source
   metadata alone does not establish an available executor.
   MCP instructions direct clients to registered agent responsibilities and action
   schemas. Keep installation guidance on the spawner's registered metadata and
   the `install-agent` mission, not in adapter constants or known-package lists.
   Preserve responsibilities in both `list_agents` and `describe_agent` so any
   client can discover an agent's usage guidance.
-- MCP agent discovery lives in `mcp/catalog.go`: `get_agent_catalog` reads
-  the required `agents.CatalogStore` and returns an `agents` list with public
+- MCP agent discovery lives in `mcp/sources.go`: `get_agent_sources` reads
+  the required `agents.AgentSourceStore` and returns a `sources` list with public
   entries first, then aliases sorted within each visibility group and package
-  selectors breaking ties. Preserve package, visibility, trust and business
+  selectors breaking ties. Preserve source, visibility, trust and business
   version. API and MCP factories select this store through `DATABASE_URL` and
   reuse their cached Mongo connection. Backend errors stay sanitized and tool-local.
-  Do not fetch remote YAML or seed defaults during startup or catalog reads.
-  Direct GitHub URLs and references work without catalog membership; aliases are
+  Do not fetch remote YAML or seed defaults during startup or source reads.
+  Direct GitHub URLs and references work without a saved source entry; aliases are
   discovery names only. Resolution and durable pinning belong to the spawner,
   including private `@stable` references. Keep MCP guidance generic and follow
   agent responsibilities; do not reintroduce a package-resolution tool or acquire
   spawner tokens in MCP. Readiness and manifest/asset validation remain in agent
   registration and spawning.
-  Remote source-catalog clients remain anonymous, with no environment token forwarding.
+  Remote source clients remain anonymous, with no environment token forwarding.
   Existing managed-secret handoff uses explicit preflight `agent_type` and
   `missing_requirements` of kind `secret` for actions without ready candidates.
   Sensitive host configuration remains kind `configuration`, even with

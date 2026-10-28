@@ -13,11 +13,11 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - Mission creation checks names and writes under one catalog lock, rejecting an
   existing name even for an identical definition. Keep startup `Upsert` separate;
   callers reconcile failed writes by reading the saved definition.
-- [Agent package catalogs](agents/catalog_fs_store.go) use a separate
-  `agent-catalog.json` collection keyed by the full canonical package selector.
+- [Agent sources](agents/agent_source_fs_store.go) use a separate
+  `agent-sources.json` collection keyed by the full canonical source selector.
   Create never overwrites an entry; replacement checks the saved business version
-  under the same file lock. Preserve package identity and creation time, increment
-  versions once, and map uncertain publication to `agents.ErrCatalogWriteUncertain`.
+  under the same file lock. Preserve source identity and creation time, increment
+  versions once, and map uncertain publication to `agents.ErrAgentSourceWriteUncertain`.
   Revocations survive reseeding; live inventory and test cleanup do not remove them.
 - An operation's manifest and sibling `.json.records` directory are one saved
   snapshot. Use [`Records`](internal/jsonfile/records.go) to publish immutable,

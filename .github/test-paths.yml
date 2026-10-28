@@ -17,7 +17,7 @@ framework:
     - 'apps/controllers/!(default)/**'
     - '!**/*.md'
   # The framework parser validates the official discovery data.
-  - 'catalog/**'
+  - 'sources/**'
 
 fs:
   - *shared

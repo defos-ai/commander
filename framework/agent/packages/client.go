@@ -29,29 +29,29 @@ func NewClient(transport http.RoundTripper) *Client {
 	}
 	return &Client{client: &http.Client{
 		Transport: transport,
-		// A redirect must not silently change the configured catalog source.
+		// A redirect must not silently change the configured sources URL.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
 }
 
 func (c *Client) CloseIdleConnections() { c.client.CloseIdleConnections() }
 
-// LoadCatalog reads a host-configured HTTPS source. Do not pass model/user URLs
-// here: selecting the catalog is deployment policy, not installation input.
-func (c *Client) LoadCatalog(ctx context.Context, source string) (Catalog, error) {
+// LoadSources reads a host-configured HTTPS source. Do not pass model/user URLs
+// here: selecting the sources is deployment policy, not installation input.
+func (c *Client) LoadSources(ctx context.Context, source string) (Sources, error) {
 	target, err := url.Parse(source)
 	if err != nil || target.Scheme != "https" || target.Hostname() == "" || target.User != nil || target.Opaque != "" || target.RawQuery != "" || target.ForceQuery || target.Fragment != "" {
-		return Catalog{}, errors.New("catalog source must be an HTTPS URL without credentials, query or fragment")
+		return Sources{}, errors.New("sources URL must be an HTTPS URL without credentials, query or fragment")
 	}
-	data, err := c.read(ctx, source, "agent catalog", MaxCatalogBytes)
+	data, err := c.read(ctx, source, "agent sources", MaxSourcesBytes)
 	if err != nil {
-		return Catalog{}, err
+		return Sources{}, err
 	}
-	catalog, err := ParseCatalog(data)
+	sources, err := ParseSources(data)
 	if err != nil {
-		return Catalog{}, errors.New("invalid agent catalog")
+		return Sources{}, errors.New("invalid agent sources")
 	}
-	return catalog, nil
+	return sources, nil
 }
 
 func (c *Client) read(ctx context.Context, target, resource string, limit int64) ([]byte, error) {
@@ -61,7 +61,7 @@ func (c *Client) read(ctx context.Context, target, resource string, limit int64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid %s URL", resource)
 	}
-	request.Header.Set("User-Agent", "Commander-Package-Catalog")
+	request.Header.Set("User-Agent", "Commander-Agent-Sources")
 	response, err := c.client.Do(request)
 	if err != nil {
 		return nil, metadataError(ctx, resource)

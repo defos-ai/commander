@@ -151,7 +151,7 @@ func NewLateArtifact(t *testing.T) *LateArtifact {
 	check(err)
 	t.Cleanup(func() { cleanupError(commands.Close()) })
 	config.Operations = commands
-	config.CatalogStore, err = fsagents.NewCatalogFsStore(filepath.Join(root, "database"))
+	config.AgentSourceStore, err = fsagents.NewAgentSourceFsStore(filepath.Join(root, "database"))
 	check(err)
 	server, err := adapter.NewServer(config)
 	check(err)

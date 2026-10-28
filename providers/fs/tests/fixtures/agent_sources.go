@@ -13,67 +13,67 @@ import (
 	agentfs "github.com/defos-ai/commander/providers/fs/agents"
 )
 
-func OpenCatalogStore(t *testing.T, root string) *agentfs.CatalogFsStore {
+func OpenAgentSourceStore(t *testing.T, root string) *agentfs.AgentSourceFsStore {
 	t.Helper()
-	store, err := agentfs.NewCatalogFsStore(root)
+	store, err := agentfs.NewAgentSourceFsStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return store
 }
 
-func CatalogEntry(number int, trusted bool) agents.CatalogEntry {
+func AgentSource(number int, trusted bool) agents.AgentSource {
 	stamp := time.Date(2026, 10, 28, 10, 0, 0, 123456789, time.UTC)
-	entry := agents.CatalogEntry{
-		Name: fmt.Sprintf("fixture-%d", number), Description: "Catalog package fixture.",
-		Package: fmt.Sprintf("github.com/example/agent-%d@v0.2.0", number), Visibility: packages.Public,
+	entry := agents.AgentSource{
+		Name: fmt.Sprintf("fixture-%d", number), Description: "Agent source fixture.",
+		Source: fmt.Sprintf("github.com/example/agent-%d@v0.2.0", number), Visibility: packages.Public,
 		Trusted: trusted, Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
 	}
 	if trusted {
-		entry.TrustUpdatedBy = "catalog-operator"
+		entry.TrustUpdatedBy = "sources-operator"
 		entry.TrustUpdatedAt = stamp
 	}
 	return entry
 }
 
-func CatalogReplacement(entry agents.CatalogEntry, trusted bool) agents.CatalogEntry {
+func AgentSourceReplacement(entry agents.AgentSource, trusted bool) agents.AgentSource {
 	entry.Version++
 	entry.Trusted = trusted
 	entry.UpdatedAt = entry.UpdatedAt.Add(time.Nanosecond)
-	entry.TrustUpdatedBy = "catalog-operator"
+	entry.TrustUpdatedBy = "sources-operator"
 	entry.TrustUpdatedAt = entry.UpdatedAt
 	return entry
 }
 
-func WriteCatalogBytes(t *testing.T, root string, data []byte) {
+func WriteAgentSourceBytes(t *testing.T, root string, data []byte) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(root, "agent-catalog.json"), data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "agent-sources.json"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func ReadCatalogBytes(t *testing.T, root string) []byte {
+func ReadAgentSourceBytes(t *testing.T, root string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, "agent-catalog.json"))
+	data, err := os.ReadFile(filepath.Join(root, "agent-sources.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return data
 }
 
-func InvalidCatalogDocuments(t *testing.T) map[string][]byte {
+func InvalidAgentSourceDocuments(t *testing.T) map[string][]byte {
 	t.Helper()
-	entry := CatalogEntry(1, true)
-	valid, err := json.Marshal([]agents.CatalogEntry{entry})
+	entry := AgentSource(1, true)
+	valid, err := json.Marshal([]agents.AgentSource{entry})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicate, err := json.Marshal([]agents.CatalogEntry{entry, entry})
+	duplicate, err := json.Marshal([]agents.AgentSource{entry, entry})
 	if err != nil {
 		t.Fatal(err)
 	}
 	entry.Version = 0
-	invalid, err := json.Marshal([]agents.CatalogEntry{entry})
+	invalid, err := json.Marshal([]agents.AgentSource{entry})
 	if err != nil {
 		t.Fatal(err)
 	}

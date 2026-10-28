@@ -11,29 +11,29 @@ import (
 	"github.com/defos-ai/commander/framework/agent/packages"
 )
 
-const catalogSource = `schema_version: 1
+const sourcesDocument = `schema_version: 1
 agents:
   web:
     description: Fetch web pages
-    package: github.com/defos-ai/web-agent@stable
+    source: github.com/defos-ai/web-agent@stable
     visibility: public
   builder-2:
     description: Build agents
-    package: github.com/defos-ai/commander/apps/agents/builder@v0.1.0
+    source: github.com/defos-ai/commander/apps/agents/builder@v0.1.0
     visibility: private
 `
 
-func TestRepositoryCatalog(t *testing.T) {
+func TestRepositorySources(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(file), "../../../..")
 	if _, err := os.Stat(filepath.Join(root, "go.work")); errors.Is(err, os.ErrNotExist) {
-		t.Skip("official catalog is maintained in the Commander repository, outside the standalone framework module")
+		t.Skip("official sources is maintained in the Commander repository, outside the standalone framework module")
 	}
-	data, err := os.ReadFile(filepath.Join(root, "catalog/agents.yaml"))
+	data, err := os.ReadFile(filepath.Join(root, "sources/agents.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := packages.ParseCatalog(data); err != nil {
+	if _, err := packages.ParseSources(data); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -101,42 +101,42 @@ func TestPackageSelectors(t *testing.T) {
 	}
 }
 
-func TestCatalogLookup(t *testing.T) {
-	catalog, err := packages.ParseCatalog([]byte(catalogSource))
+func TestSourcesLookup(t *testing.T) {
+	sources, err := packages.ParseSources([]byte(sourcesDocument))
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := catalog.Lookup("builder-2")
-	want := packages.Entry{Description: "Build agents", Package: "github.com/defos-ai/commander/apps/agents/builder@v0.1.0", Visibility: packages.Private}
+	entry, err := sources.Lookup("builder-2")
+	want := packages.Entry{Description: "Build agents", Source: "github.com/defos-ai/commander/apps/agents/builder@v0.1.0", Visibility: packages.Private}
 	if err != nil || entry != want {
-		t.Fatalf("catalog lookup: %#v, %v", entry, err)
+		t.Fatalf("sources lookup: %#v, %v", entry, err)
 	}
-	public, err := catalog.Lookup("web")
+	public, err := sources.Lookup("web")
 	if err != nil || public.Visibility != packages.Public {
-		t.Fatalf("public catalog lookup: %#v, %v", public, err)
+		t.Fatalf("public sources lookup: %#v, %v", public, err)
 	}
 	for _, missing := range []string{"unknown", "Builder-2", " builder-2"} {
-		if _, err := catalog.Lookup(missing); err == nil {
+		if _, err := sources.Lookup(missing); err == nil {
 			t.Fatalf("matched absent alias %q", missing)
 		}
 	}
-	if _, err := packages.ParseCatalog([]byte("schema_version: 1\nagents: {}\n")); err != nil {
-		t.Fatalf("explicit empty catalog: %v", err)
+	if _, err := packages.ParseSources([]byte("schema_version: 1\nagents: {}\n")); err != nil {
+		t.Fatalf("explicit empty sources: %v", err)
 	}
-	if err := catalog.Validate(); err != nil {
+	if err := sources.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	entry.Package = "github.com/owner/repo@latest"
-	catalog.Agents["web"] = entry
-	if err := catalog.Validate(); err == nil {
-		t.Fatal("accepted invalid package in a constructed catalog")
+	entry.Source = "github.com/owner/repo@latest"
+	sources.Agents["web"] = entry
+	if err := sources.Validate(); err == nil {
+		t.Fatal("accepted invalid package in a constructed sources")
 	}
-	if _, err := catalog.Lookup("builder-2"); err == nil {
-		t.Fatal("looked up an entry from an invalid catalog")
+	if _, err := sources.Lookup("builder-2"); err == nil {
+		t.Fatal("looked up an entry from an invalid sources")
 	}
 }
 
-func TestCatalogRejectsInvalidDocuments(t *testing.T) {
+func TestSourcesRejectsInvalidDocuments(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		data string
@@ -144,57 +144,57 @@ func TestCatalogRejectsInvalidDocuments(t *testing.T) {
 		{"empty", ""},
 		{"scalar", "hello"},
 		{"sequence", "[hello]"},
-		{"missing schema", strings.Replace(catalogSource, "schema_version: 1\n", "", 1)},
-		{"unsupported schema", strings.Replace(catalogSource, "schema_version: 1", "schema_version: 2", 1)},
-		{"quoted schema", strings.Replace(catalogSource, "schema_version: 1", "schema_version: \"1\"", 1)},
-		{"float schema", strings.Replace(catalogSource, "schema_version: 1", "schema_version: 1.0", 1)},
-		{"null schema", strings.Replace(catalogSource, "schema_version: 1", "schema_version: null", 1)},
+		{"missing schema", strings.Replace(sourcesDocument, "schema_version: 1\n", "", 1)},
+		{"unsupported schema", strings.Replace(sourcesDocument, "schema_version: 1", "schema_version: 2", 1)},
+		{"quoted schema", strings.Replace(sourcesDocument, "schema_version: 1", "schema_version: \"1\"", 1)},
+		{"float schema", strings.Replace(sourcesDocument, "schema_version: 1", "schema_version: 1.0", 1)},
+		{"null schema", strings.Replace(sourcesDocument, "schema_version: 1", "schema_version: null", 1)},
 		{"missing agents", "schema_version: 1\n"},
 		{"null agents", "schema_version: 1\nagents: null\n"},
 		{"sequence agents", "schema_version: 1\nagents: []\n"},
 		{"scalar entry", "schema_version: 1\nagents: {web: hello}\n"},
 		{"empty entry", "schema_version: 1\nagents: {web: {}}\n"},
-		{"unknown root field", catalogSource + "command: echo hello\n"},
-		{"unknown entry field", catalogSource + "    command: echo hello\n"},
-		{"duplicate root field", catalogSource + "schema_version: 1\n"},
-		{"duplicate alias", catalogSource + "  web: {}\n"},
-		{"duplicate entry field", catalogSource + "    package: github.com/owner/repo@stable\n"},
-		{"multiple documents", catalogSource + "---\n" + catalogSource},
-		{"empty trailing document", catalogSource + "---\n"},
-		{"anchor", strings.Replace(catalogSource, "agents:", "agents: &agents", 1)},
-		{"alias", strings.Replace(catalogSource, "Fetch web pages", "*description", 1)},
-		{"merge key", catalogSource + "    <<: {}\n"},
-		{"custom tag", strings.Replace(catalogSource, "Fetch web pages", "!description Fetch web pages", 1)},
-		{"nonstring alias", strings.Replace(catalogSource, "  web:", "  true:", 1)},
-		{"uppercase alias", strings.Replace(catalogSource, "  web:", "  Web:", 1)},
-		{"numeric alias prefix", strings.Replace(catalogSource, "  web:", "  1web:", 1)},
-		{"underscore alias", strings.Replace(catalogSource, "  web:", "  web_agent:", 1)},
-		{"empty description", strings.Replace(catalogSource, "Fetch web pages", "\"\"", 1)},
-		{"untrimmed description", strings.Replace(catalogSource, "Fetch web pages", "\" Fetch web pages \"", 1)},
-		{"numeric description", strings.Replace(catalogSource, "Fetch web pages", "123", 1)},
-		{"boolean description", strings.Replace(catalogSource, "Fetch web pages", "true", 1)},
-		{"null description", strings.Replace(catalogSource, "Fetch web pages", "null", 1)},
-		{"numeric package", strings.Replace(catalogSource, "github.com/defos-ai/web-agent@stable", "123", 1)},
-		{"invalid package", strings.Replace(catalogSource, "@stable", "@latest", 1)},
-		{"missing visibility", strings.Replace(catalogSource, "    visibility: public\n", "", 1)},
-		{"unknown visibility", strings.Replace(catalogSource, "visibility: public", "visibility: internal", 1)},
-		{"boolean visibility", strings.Replace(catalogSource, "visibility: public", "visibility: true", 1)},
-		{"null visibility", strings.Replace(catalogSource, "visibility: public", "visibility: null", 1)},
+		{"unknown root field", sourcesDocument + "command: echo hello\n"},
+		{"unknown entry field", sourcesDocument + "    command: echo hello\n"},
+		{"duplicate root field", sourcesDocument + "schema_version: 1\n"},
+		{"duplicate alias", sourcesDocument + "  web: {}\n"},
+		{"duplicate entry field", sourcesDocument + "    source: github.com/owner/repo@stable\n"},
+		{"multiple documents", sourcesDocument + "---\n" + sourcesDocument},
+		{"empty trailing document", sourcesDocument + "---\n"},
+		{"anchor", strings.Replace(sourcesDocument, "agents:", "agents: &agents", 1)},
+		{"alias", strings.Replace(sourcesDocument, "Fetch web pages", "*description", 1)},
+		{"merge key", sourcesDocument + "    <<: {}\n"},
+		{"custom tag", strings.Replace(sourcesDocument, "Fetch web pages", "!description Fetch web pages", 1)},
+		{"nonstring alias", strings.Replace(sourcesDocument, "  web:", "  true:", 1)},
+		{"uppercase alias", strings.Replace(sourcesDocument, "  web:", "  Web:", 1)},
+		{"numeric alias prefix", strings.Replace(sourcesDocument, "  web:", "  1web:", 1)},
+		{"underscore alias", strings.Replace(sourcesDocument, "  web:", "  web_agent:", 1)},
+		{"empty description", strings.Replace(sourcesDocument, "Fetch web pages", "\"\"", 1)},
+		{"untrimmed description", strings.Replace(sourcesDocument, "Fetch web pages", "\" Fetch web pages \"", 1)},
+		{"numeric description", strings.Replace(sourcesDocument, "Fetch web pages", "123", 1)},
+		{"boolean description", strings.Replace(sourcesDocument, "Fetch web pages", "true", 1)},
+		{"null description", strings.Replace(sourcesDocument, "Fetch web pages", "null", 1)},
+		{"numeric package", strings.Replace(sourcesDocument, "github.com/defos-ai/web-agent@stable", "123", 1)},
+		{"invalid package", strings.Replace(sourcesDocument, "@stable", "@latest", 1)},
+		{"missing visibility", strings.Replace(sourcesDocument, "    visibility: public\n", "", 1)},
+		{"unknown visibility", strings.Replace(sourcesDocument, "visibility: public", "visibility: internal", 1)},
+		{"boolean visibility", strings.Replace(sourcesDocument, "visibility: public", "visibility: true", 1)},
+		{"null visibility", strings.Replace(sourcesDocument, "visibility: public", "visibility: null", 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := packages.ParseCatalog([]byte(tc.data)); err == nil {
-				t.Fatal("accepted invalid catalog")
+			if _, err := packages.ParseSources([]byte(tc.data)); err == nil {
+				t.Fatal("accepted invalid sources")
 			}
 		})
 	}
 }
 
-func TestCatalogSizeLimit(t *testing.T) {
-	data := catalogSource + "#" + strings.Repeat("a", packages.MaxCatalogBytes-len(catalogSource)-1)
-	if _, err := packages.ParseCatalog([]byte(data)); err != nil {
-		t.Fatalf("catalog at size limit: %v", err)
+func TestSourcesSizeLimit(t *testing.T) {
+	data := sourcesDocument + "#" + strings.Repeat("a", packages.MaxSourcesBytes-len(sourcesDocument)-1)
+	if _, err := packages.ParseSources([]byte(data)); err != nil {
+		t.Fatalf("sources at size limit: %v", err)
 	}
-	if _, err := packages.ParseCatalog([]byte(data + "a")); err == nil {
-		t.Fatal("accepted oversized catalog")
+	if _, err := packages.ParseSources([]byte(data + "a")); err == nil {
+		t.Fatal("accepted oversized sources")
 	}
 }

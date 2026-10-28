@@ -13,7 +13,7 @@
   belong in [endpoints/operations/](endpoints/operations/). The root
   [openapi.go](openapi.go) assembles the document and shared resource schemas.
   Registered-agent handlers live in [endpoints/agents/agents.go](endpoints/agents/agents.go),
-  saved packages in [endpoints/agents/catalog.go](endpoints/agents/catalog.go),
+  saved agent sources in [endpoints/agents/sources.go](endpoints/agents/sources.go),
   and both resources' schemas in [endpoints/agents/openapi.go](endpoints/agents/openapi.go). Secret
   handlers live in [endpoints/secrets/secrets.go](endpoints/secrets/secrets.go)
   and [endpoints/secrets/requests.go](endpoints/secrets/requests.go); keep their
@@ -30,19 +30,19 @@
   and dot segments. Preserve typed missing-record responses; a proxy's generic
   404 is not evidence that a record is absent. Saved-state reads work without
   a live controller or MCP connection.
-- Deployment package catalog handlers and schemas live in `endpoints/agents/`.
-  Require `Config.CatalogStore`, selected from `DATABASE_URL`. List/create use
-  `/api/v1/catalog-agents`; detail paths encode the full canonical
+- Deployment agent-source handlers and schemas live in `endpoints/agents/`.
+  Require `Config.AgentSourceStore`, selected from `DATABASE_URL`. List/create use
+  `/api/v1/agent-sources`; detail paths encode the full canonical
   selector as one segment. Strict creation accepts metadata only and always
   starts untrusted at version 1. Trust PATCH requires explicit `trusted` plus the
   current `version`, and performs one store CAS. Approvals require exact releases;
   `@stable` is discovery metadata. Record the authenticated actor, never a body
-  claim. Reject unknown query/body fields and preserve `catalog_write_uncertain`
+  claim. Reject unknown query/body fields and preserve `agent_source_write_uncertain`
   ahead of timeout/cancellation errors. No retries, seeding or controller commands.
   Trust metadata does not yet enforce installation or secret access. MCP reads
   the same store; MCP trust writes and operator confirmation are a later step.
   PATCH changes trust only; metadata remains immutable. Keep PATCH permitted by
-  API CORS and the Admin proxy. Removed nested catalog and trust routes have no aliases.
+  API CORS and the Admin proxy. Removed catalog and trust routes have no aliases.
 - Runtime-session routes use `queries.Sessions` and typed controller controls;
   see [the public contract](../../../docs/runtime-sessions.md#queries-and-controls).
   Keep lifecycle disposition separate from observed state and preserve retained

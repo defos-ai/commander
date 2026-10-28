@@ -93,9 +93,9 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 	defer func() { result = errors.Join(result, controller.Close()) }()
 	serverConfig := missionsmcp.Config{
 		Operations: controller, Logger: logger, TestCleaner: deps.TestCleaner,
-		CatalogStore: deps.CatalogStore,
-		AgentStore:   deps.AgentStore,
-		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore, SessionStore: deps.SessionStore,
+		AgentSourceStore: deps.AgentSourceStore,
+		AgentStore:       deps.AgentStore,
+		MissionStore:     deps.MissionStore, OperationStore: deps.OperationStore, SessionStore: deps.SessionStore,
 		ExecutionStore: deps.ExecutionStore,
 		ActionStore:    deps.ActionStore, ReportStore: deps.ReportStore, ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
 	}

@@ -11,8 +11,8 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
-func Register(mux *http.ServeMux, store agents.AgentStore, catalog agents.CatalogStore) {
-	registerCatalog(mux, catalog)
+func Register(mux *http.ServeMux, store agents.AgentStore, sources agents.AgentSourceStore) {
+	registerSources(mux, sources)
 	mux.HandleFunc("GET /api/v1/agents", endpoints.RequestHandler(func(w http.ResponseWriter, r *http.Request) {
 		items, err := store.List(r.Context())
 		now := time.Now().UTC()

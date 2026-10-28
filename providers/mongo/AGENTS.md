@@ -23,8 +23,8 @@ artifact bytes and reports belong to the separate storage provider.
 - Mission creation uses an atomic primary-key insert and rejects every existing
   name, including an identical definition. Keep seeding's `Upsert` replacement
   behavior separate; only a duplicate `_id` maps to `missions.ErrMissionExists`.
-- [`CatalogMongoStore`](agents/catalog_mongo_store.go) stores deployment agent
-  catalog entries in `agent_catalog`, keyed by the full canonical package selector.
+- [`AgentSourceMongoStore`](agents/agent_source_mongo_store.go) stores deployment
+  agent sources in `agent_sources`, keyed by the full canonical source selector.
   Keep release selectors distinct and aliases out of identity. JSON payloads retain
   timestamp nanoseconds and uint64 versions; validate them against the indexed
   identity and decimal version. Trust updates use a checked payload/version CAS,

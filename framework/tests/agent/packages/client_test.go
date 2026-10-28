@@ -30,25 +30,25 @@ func checkPublicMetadataRequest(t *testing.T, request *http.Request) {
 	}
 }
 
-func TestClientLoadsConfiguredCatalog(t *testing.T) {
-	const source = "https://catalog.example/agents.yaml"
+func TestClientLoadsConfiguredSources(t *testing.T) {
+	const source = "https://sources.example/agents.yaml"
 	client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
 		checkPublicMetadataRequest(t, request)
 		if request.URL.String() != source {
-			t.Fatalf("unexpected catalog source: %s", request.URL)
+			t.Fatalf("unexpected sources URL: %s", request.URL)
 		}
-		return fakes.MetadataResponse(request, http.StatusOK, io.NopCloser(strings.NewReader(fixtures.ClientCatalog))), nil
+		return fakes.MetadataResponse(request, http.StatusOK, io.NopCloser(strings.NewReader(fixtures.ClientSources))), nil
 	}))
 	t.Cleanup(client.CloseIdleConnections)
 
-	catalog, err := client.LoadCatalog(context.Background(), source)
+	sources, err := client.LoadSources(context.Background(), source)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := catalog.Lookup("builder")
-	if err != nil || entry.Description != "Build an agent" || entry.Package != "github.com/acme/agents/apps/agents/builder@stable" {
-		t.Fatalf("catalog entry: %#v, %v", entry, err)
+	entry, err := sources.Lookup("builder")
+	if err != nil || entry.Description != "Build an agent" || entry.Source != "github.com/acme/agents/apps/agents/builder@stable" {
+		t.Fatalf("sources entry: %#v, %v", entry, err)
 	}
 }
 
@@ -59,15 +59,15 @@ func TestClientRejectsUnsafeSourcesBeforeRequest(t *testing.T) {
 	}))
 	t.Cleanup(client.CloseIdleConnections)
 	for _, source := range []string{
-		"http://catalog.example/private-marker",
-		"https://user:private-marker@catalog.example/agents.yaml",
-		"https://catalog.example/agents.yaml?token=private-marker",
-		"https://catalog.example/agents.yaml#private-marker",
+		"http://sources.example/private-marker",
+		"https://user:private-marker@sources.example/agents.yaml",
+		"https://sources.example/agents.yaml?token=private-marker",
+		"https://sources.example/agents.yaml#private-marker",
 		"https:private-marker",
 		"/private-marker",
 	} {
-		if _, err := client.LoadCatalog(context.Background(), source); err == nil || strings.Contains(err.Error(), "private-marker") {
-			t.Errorf("unsafe catalog source should fail without echoing input: %v", err)
+		if _, err := client.LoadSources(context.Background(), source); err == nil || strings.Contains(err.Error(), "private-marker") {
+			t.Errorf("unsafe sources URL should fail without echoing input: %v", err)
 		}
 	}
 }
@@ -78,8 +78,8 @@ func TestClientBoundsMetadataAndClosesBodies(t *testing.T) {
 		limit      int
 		load       func(*packages.Client) error
 	}{
-		{"catalog", fixtures.ClientCatalog, packages.MaxCatalogBytes, func(client *packages.Client) error {
-			_, err := client.LoadCatalog(context.Background(), "https://catalog.example/agents.yaml")
+		{"sources", fixtures.ClientSources, packages.MaxSourcesBytes, func(client *packages.Client) error {
+			_, err := client.LoadSources(context.Background(), "https://sources.example/agents.yaml")
 			return err
 		}},
 	} {
@@ -117,8 +117,8 @@ func TestClientRejectsHTTPFailuresWithoutLeakingMetadata(t *testing.T) {
 		{"rate limited", http.StatusTooManyRequests, "", "rate"},
 		{"missing", http.StatusNotFound, "", "not found"},
 		{"server error", http.StatusInternalServerError, "", ""},
-		{"same host redirect", http.StatusFound, "https://catalog.example/private-marker", ""},
-		{"cross host redirect", http.StatusTemporaryRedirect, "https://private-marker.example/catalog", ""},
+		{"same host redirect", http.StatusFound, "https://sources.example/private-marker", ""},
+		{"cross host redirect", http.StatusTemporaryRedirect, "https://private-marker.example/sources", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
@@ -133,7 +133,7 @@ func TestClientRejectsHTTPFailuresWithoutLeakingMetadata(t *testing.T) {
 				return response, nil
 			}))
 			t.Cleanup(client.CloseIdleConnections)
-			_, err := client.LoadCatalog(context.Background(), "https://catalog.example/private-marker.yaml")
+			_, err := client.LoadSources(context.Background(), "https://sources.example/private-marker.yaml")
 			if err == nil || strings.Contains(err.Error(), "private-marker") || !strings.Contains(strings.ToLower(err.Error()), tc.want) {
 				t.Fatalf("unexpected HTTP failure: %v", err)
 			}
@@ -152,7 +152,7 @@ func TestClientSanitizesTransportAndParseErrors(t *testing.T) {
 	}{
 		{"transport", nil, errors.New("private-marker transport failure")},
 		{"body read", fakes.MetadataReadError{}, nil},
-		{"catalog", strings.NewReader("schema_version: 1\nprivate-marker: true\nagents: {}\n"), nil},
+		{"sources", strings.NewReader("schema_version: 1\nprivate-marker: true\nagents: {}\n"), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
@@ -162,7 +162,7 @@ func TestClientSanitizesTransportAndParseErrors(t *testing.T) {
 				return fakes.MetadataResponse(request, http.StatusOK, io.NopCloser(tc.body)), nil
 			}))
 			t.Cleanup(client.CloseIdleConnections)
-			_, err := client.LoadCatalog(context.Background(), "https://catalog.example/private-marker.yaml")
+			_, err := client.LoadSources(context.Background(), "https://sources.example/private-marker.yaml")
 			if err == nil || strings.Contains(err.Error(), "private-marker") {
 				t.Fatalf("metadata error should omit URL, body and transport details: %v", err)
 			}
@@ -185,8 +185,8 @@ func TestClientPreservesContextCancellation(t *testing.T) {
 				return nil, request.Context().Err()
 			}))
 			t.Cleanup(client.CloseIdleConnections)
-			if _, err := client.LoadCatalog(ctx, "https://catalog.example/private-marker.yaml"); !errors.Is(err, expected) || strings.Contains(err.Error(), "private-marker") {
-				t.Fatalf("catalog cancellation: %v", err)
+			if _, err := client.LoadSources(ctx, "https://sources.example/private-marker.yaml"); !errors.Is(err, expected) || strings.Contains(err.Error(), "private-marker") {
+				t.Fatalf("sources cancellation: %v", err)
 			}
 		})
 	}
