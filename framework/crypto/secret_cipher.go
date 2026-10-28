@@ -1,5 +1,3 @@
-// Package crypto provides cryptographic components for Commander. SecretCipher
-// encrypts secret records; applications supply keys and enforce access and freshness.
 package crypto
 
 import (
@@ -67,7 +65,6 @@ func NewSecretCipher(encodedKey string) (*SecretCipher, error) {
 	return &SecretCipher{aead: aead, keyID: "sha256-" + hex.EncodeToString(fingerprint[:16])}, nil
 }
 
-// Validate lets hosts reject an uninitialized cipher before starting providers.
 func (c *SecretCipher) Validate() error {
 	if c == nil || c.aead == nil {
 		return ErrMissingKey

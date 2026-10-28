@@ -1,5 +1,3 @@
-// sessionworker is an executable E2E extension. Its HTTP peer controls when
-// listener creation returns and when that resource enters public inventory.
 package main
 
 import (

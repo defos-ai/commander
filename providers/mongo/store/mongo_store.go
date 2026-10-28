@@ -73,8 +73,6 @@ func (s *MongoStore) Find(ctx context.Context, collection string, filter, out an
 	return cursor.All(ctx, out)
 }
 
-// Filters are built by provider code; request-derived IDs are string values,
-// never BSON keys or operators. Do not pass client-decoded query documents.
 func (s *MongoStore) FindOne(ctx context.Context, collection string, filter, out any, opts ...options.Lister[options.FindOneOptions]) error {
 	return s.database.Collection(collection).FindOne(ctx, filter, opts...).Decode(out)
 }
@@ -96,8 +94,6 @@ func (s *MongoStore) Upsert(ctx context.Context, collection string, filter, upda
 	return s.database.Collection(collection).UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
 }
 
-// Keep filter keys/operators provider-defined and request input in typed values.
-// The replacement is a stored record, not an update expression.
 func (s *MongoStore) Replace(ctx context.Context, collection string, filter, replacement any, upsert bool) (*mongo.UpdateResult, error) {
 	return s.database.Collection(collection).ReplaceOne(ctx, filter, replacement, options.Replace().SetUpsert(upsert))
 }

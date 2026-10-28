@@ -15,8 +15,6 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Reuse the executable session stack so every record is created by public
-// commands and real workers, and discovery crosses the authenticated MCP host.
 func TestE2ESessionMCPDiscovery(t *testing.T) {
 	s := newSessionStack(t, immediateSessionPeer(t).URL)
 	mcp := s.mcp()

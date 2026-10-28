@@ -38,8 +38,6 @@ type Executor interface {
 	Run(context.Context, json.RawMessage) (Result, error)
 }
 
-// Base publishes immutable readiness snapshots for extensions.
-// Embed *Base, implement Run, and override Discover for external dependencies.
 type Base struct {
 	definition actionmodel.Definition
 	readiness  atomic.Pointer[readiness]
@@ -55,7 +53,6 @@ func NewBase(metadata actionmodel.Action) *Base {
 	return &Base{definition: metadata.Definition()}
 }
 
-// Action returns an independent snapshot of the action's metadata and readiness.
 func (b *Base) Action() actionmodel.Action {
 	snapshot := actionmodel.Action{
 		SessionMode: b.definition.SessionMode,

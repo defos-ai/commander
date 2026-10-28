@@ -14,8 +14,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// RequestFsStore saves request lifecycles and their immutable encrypted deliveries
-// in one locked collection, independently of current secret values.
 type RequestFsStore struct{ file *jsonfile.Collection }
 
 var _ secretmodel.RequestStore = (*RequestFsStore)(nil)

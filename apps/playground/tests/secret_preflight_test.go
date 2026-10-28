@@ -181,8 +181,6 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 				t.Fatal("unconfigured Admin hint invented a destination or omitted setup guidance")
 			}
 
-			// A fresh ready advertisement clears the handoff without another user
-			// command or a claim that saving the value itself made the agent ready.
 			op.Status, op.UpdatedAt, op.Preflight.Ready = "planning", op.UpdatedAt.Add(time.Second), true
 			op.Preflight.Version++
 			publish(op)

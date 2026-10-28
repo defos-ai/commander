@@ -18,8 +18,6 @@ type RequestMongoStore struct{ database *store.MongoStore }
 
 var _ secretmodel.RequestStore = (*RequestMongoStore)(nil)
 
-// NewRequestMongoStore prepares durable request and delivery identities. The
-// caller owns the database client; writes require MongoDB transactions.
 func NewRequestMongoStore(ctx context.Context, database *store.MongoStore) (*RequestMongoStore, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err

@@ -9,7 +9,6 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
-// ValidateActions checks requested contracts before the builder starts Codex.
 // Secret declarations describe the generated agent, not the builder's needs.
 func ValidateActions(definitions []actions.Definition) error {
 	if len(definitions) == 0 || len(definitions) > 100 {

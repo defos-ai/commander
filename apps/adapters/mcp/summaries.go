@@ -11,8 +11,6 @@ import (
 	"github.com/defos-ai/commander/framework/queries"
 )
 
-// Listings carry selection and progress information. Schemas, configuration and
-// evidence stay in detail queries, rather than repeating on every inventory read.
 type actionSummary struct {
 	SessionMode string `json:"session_mode,omitempty"`
 	Name        string `json:"name"`

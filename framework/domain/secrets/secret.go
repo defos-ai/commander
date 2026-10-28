@@ -47,8 +47,6 @@ func (value Metadata) Validate() error {
 	return nil
 }
 
-// AvailabilityAt derives availability from validated metadata at read time.
-// nil means no saved secret; expiration never changes a historical request.
 func AvailabilityAt(value *Metadata, now time.Time) Availability {
 	if value == nil {
 		return Missing

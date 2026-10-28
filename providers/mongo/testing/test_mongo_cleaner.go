@@ -12,9 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// TestMongoCleaner removes public operation and artifact records from the
-// configured test database. Collections, indexes, catalogs, and executions stay.
-// Compose it with framework/testing.StateCleaner before exposing test cleanup.
+// Compose with framework/testing.StateCleaner so work settles before cleanup.
 type TestMongoCleaner struct{ database *store.MongoStore }
 
 var _ frameworktesting.TestCleaner = (*TestMongoCleaner)(nil)

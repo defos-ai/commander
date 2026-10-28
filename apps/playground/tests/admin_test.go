@@ -78,7 +78,6 @@ func testAllInOneAdmin(t *testing.T) {
 			switch name {
 			case "disabled":
 				options.ServeAdmin = false
-				// Invalid settings must be ignored when the optional host is disabled.
 				t.Setenv("UI_LISTEN_ADDRESS", "invalid-address")
 				t.Setenv("UI_STATIC_DIR", filepath.Join(t.TempDir(), "missing"))
 			case "occupied port":

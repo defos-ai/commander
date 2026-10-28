@@ -30,7 +30,6 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	if empty.Tasks == nil || len(empty.Tasks) != 0 || empty.NextCursor == nil || *empty.NextCursor != "" {
 		t.Fatalf("new operation must have an empty task list: %+v", empty)
 	}
-	// A real operator question blocks one operation while the other completes.
 	var question operations.Question
 	a.call("ask_question", object{"operation_id": first.ID, "text": "Analyze the first text?", "options": []string{"Yes", "No"}}, &question)
 	a.fails("assign_task", object{"operation_id": first.ID, "action_name": "analyze-text", "input": object{"text": texts[0]}}, "pending question")

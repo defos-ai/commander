@@ -1,4 +1,3 @@
-// Package sessions describes agent-owned resources that outlive an action task.
 package sessions
 
 import (

@@ -19,8 +19,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// OperationFsStore atomically publishes metadata, tasks, questions, and events through
-// operations/<id>.json. Writers share a lock only with the same operation.
 type OperationFsStore struct {
 	root      string
 	directory string
@@ -227,8 +225,7 @@ func (s *OperationFsStore) updateChanged(ctx context.Context, operationID string
 	})
 }
 
-// Update is the filesystem provider's mutation primitive. The callback must be
-// safe to retry and must not perform I/O or other external side effects.
+// The callback must be safe to retry and must not perform external side effects.
 func (s *OperationFsStore) Update(ctx context.Context, operationID string, mutate func(*operations.Operation) error) (operations.Operation, error) {
 	path, err := s.path(ctx, operationID)
 	if err != nil {

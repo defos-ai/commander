@@ -37,9 +37,7 @@ var (
 type ControllerConfig struct {
 	SessionStore   sessions.Store
 	OperationStore operations.OperationStore
-	// Type identifies this controller implementation; empty selects default.
-	Type string
-	// ID identifies this process; empty generates <type>-controller-<8hex>.
+	Type           string
 	ID             string
 	ArtifactStore  artifacts.ArtifactStore
 	AgentStore     agentmodel.AgentStore
@@ -51,8 +49,7 @@ type ControllerConfig struct {
 	SecretRequestStore secrets.RequestStore
 	HeartbeatTimeout   time.Duration
 	LeaseSweepInterval time.Duration
-	// Logger receives message handling events. Nil is silent.
-	Logger *slog.Logger
+	Logger             *slog.Logger
 }
 
 // Controller discovers agents from its own event topic and routes decisions over

@@ -12,7 +12,6 @@ import (
 
 const AgentType agent.AgentType = "builder-agent"
 
-// Responsibilities returns the default capabilities and usage guidance.
 func Responsibilities() []string {
 	return []string{
 		"Build Commander agents from the example-agent template with Codex, verify them with Go, and return their source as an artifact",
@@ -23,8 +22,6 @@ func Responsibilities() []string {
 	}
 }
 
-// NewAgent supplies a fresh action catalog when config.Actions is nil.
-// An explicitly empty catalog stays empty and does not open workspace storage.
 func NewAgent(config agent.AgentConfig, workspaceDir string) (*agent.Agent, error) {
 	config.Type = AgentType
 	if config.Responsibilities == nil {
@@ -40,7 +37,6 @@ func NewAgent(config agent.AgentConfig, workspaceDir string) (*agent.Agent, erro
 	return agent.NewAgent(config)
 }
 
-// NewActions creates fresh executors so agents never share discovery state.
 func NewActions(workspaceDir string, files artifacts.ArtifactFileStore, defaultVisibility string) ([]action.Executor, error) {
 	checkout, err := builderactions.NewCheckoutTemplate(workspaceDir)
 	if err != nil {
@@ -61,7 +57,6 @@ func NewActions(workspaceDir string, files artifacts.ArtifactFileStore, defaultV
 	return []action.Executor{checkout, build, publish, release}, nil
 }
 
-// ActionDescriptions describes packaged capabilities without starting discovery or providers.
 func ActionDescriptions() []manifest.Action {
 	return []manifest.Action{
 		{Name: builderactions.CheckoutTemplateName, Description: builderactions.CheckoutTemplateDescription},
@@ -71,7 +66,6 @@ func ActionDescriptions() []manifest.Action {
 	}
 }
 
-// ActionNames lists the catalog without opening workspace storage.
 func ActionNames() []string {
 	descriptions := ActionDescriptions()
 	names := make([]string, len(descriptions))

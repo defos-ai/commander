@@ -155,7 +155,6 @@ func TestMongoTransactionCommitAndRollback(t *testing.T) {
 	const collection = "transaction_tests"
 	database := openStore(t, collection)
 	ctx := t.Context()
-	// Create the collection before entering the first transaction.
 	if err := database.Insert(ctx, collection, bson.M{"_id": "existing", "value": 0}); err != nil {
 		t.Fatal(err)
 	}

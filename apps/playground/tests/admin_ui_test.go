@@ -268,7 +268,6 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	u.wait("completed task in running operation", func(view string) bool { return strings.Contains(view, "target · running · 1/1 tasks finished") })
 	countLinks(0)
 
-	// Keep the watcher alive while delivering an obsolete terminal snapshot.
 	op.Status, op.Tasks[0].Status = "completed", "running"
 	op.Progress = bridge.Progress{TaskCounts: map[string]int{"running": 1}, TotalTasks: 1}
 	op.UpdatedAt = now.Add(-time.Second)

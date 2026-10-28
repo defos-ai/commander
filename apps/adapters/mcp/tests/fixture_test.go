@@ -41,7 +41,6 @@ type operationProgress struct {
 
 func connect(t *testing.T) *api {
 	t.Helper()
-	// Clean persisted data before each test; the stack stays running.
 	a := openSession(t)
 	tools, err := a.session.ListTools(a.ctx, nil)
 	if err != nil {

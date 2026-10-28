@@ -52,7 +52,6 @@ type Session struct {
 	admin          *adminhost.Manager
 }
 
-// Start reuses the real application hosts without a checkout or working-directory files.
 func Start(ctx context.Context) (session *Session, err error) {
 	return StartWithOptions(ctx, Options{})
 }
@@ -270,7 +269,6 @@ func (s *Session) awaitAgents(ctx context.Context, expected map[string]string) e
 	}
 }
 
-// Close waits for every host before removing this session's temporary files.
 func (s *Session) Close() error {
 	s.once.Do(func() {
 		s.cancel(context.Canceled)

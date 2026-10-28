@@ -28,7 +28,6 @@ type Options struct {
 	Application string
 }
 
-// Run installs no signal handlers; Main adds process-level shutdown handling.
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
 	return RunWithOptions(ctx, args, stderr, Options{})
 }

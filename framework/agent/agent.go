@@ -24,22 +24,18 @@ import (
 
 type AgentConfig struct {
 	Sessions sessions.Provider
-	// ID is optional. Missing IDs use the type, -agent if absent, and eight lowercase hex characters.
-	ID   string
-	Type AgentType
+	ID       string
+	Type     AgentType
 	// Server overrides host information. Missing fields use SERVER_IP_ADDRESS
 	// and SERVER_HOSTNAME, then local discovery, once at construction.
-	Server           ServerInfo
-	Responsibilities []string
-	Actions          []action.Executor
-	PublicConfig     json.RawMessage
-	Environment      environment.Environment
-	// Secrets enables encrypted synchronization of declared and requested names.
-	Secrets *SecretConfig
-	// ArtifactFileStore is required and is created by the host.
+	Server            ServerInfo
+	Responsibilities  []string
+	Actions           []action.Executor
+	PublicConfig      json.RawMessage
+	Environment       environment.Environment
+	Secrets           *SecretConfig
 	ArtifactFileStore artifacts.ArtifactFileStore
-	// Logger receives runtime events without action inputs or results. Nil is silent.
-	Logger *slog.Logger
+	Logger            *slog.Logger
 	// Nil uses thirty seconds; zero disables periodic announcements.
 	HeartbeatInterval *time.Duration
 }

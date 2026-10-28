@@ -146,7 +146,6 @@ func TestArtifactFsCleanupKeepsDelayedResultsRetired(t *testing.T) {
 		if err := cleaner.CleanContext(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		// A reopened store models a later delivery or another controller reader.
 		reopened, err := artifactfs.NewArtifactFsStore(database)
 		if err != nil {
 			t.Fatal(err)

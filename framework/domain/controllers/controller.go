@@ -1,4 +1,3 @@
-// Package controllers describes public controller registrations and their leases.
 package controllers
 
 import (
@@ -22,7 +21,6 @@ const (
 	Unavailable Status = "unavailable"
 )
 
-// ServerInfo contains host metadata only; unknown fields may be empty.
 type ServerInfo struct {
 	Hostname string `json:"hostname"`
 	OS       string `json:"os"`

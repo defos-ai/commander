@@ -1,4 +1,3 @@
-// The adapter test stacks use this HTTPS origin instead of public GitHub.
 package main
 
 import (

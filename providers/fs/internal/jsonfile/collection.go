@@ -1,5 +1,4 @@
-// Package jsonfile provides locked, atomic JSON array collections. The sibling
-// .lock file is persistent; its operating-system lock is released even on crash.
+// The sibling .lock file is persistent; its OS lock is released even on crash.
 package jsonfile
 
 import (
@@ -23,13 +22,10 @@ type Collection struct {
 
 var ErrWriteUncertain = errors.New("JSON collection was replaced but directory sync failed")
 
-// New creates parent directories and initializes a missing collection to [].
-// Existing content is validated and never overwritten during construction.
 func New(path string) (*Collection, error) {
 	return NewContext(context.Background(), path)
 }
 
-// NewContext is New with cancellation while initializing or waiting for a lock.
 func NewContext(ctx context.Context, path string) (*Collection, error) {
 	c, err := OpenContext(ctx, path)
 	if err != nil {

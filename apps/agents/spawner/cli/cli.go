@@ -22,7 +22,6 @@ const serviceName = "commander-" + string(spawner.AgentType)
 // ErrShutdown tells an embedded host to retain shared state after cleanup fails.
 var ErrShutdown = errors.New("spawner shutdown failed")
 
-// Options lets an embedded host isolate its runtime and receive its agent identity.
 type Options struct {
 	Runtime  string
 	StateDir string

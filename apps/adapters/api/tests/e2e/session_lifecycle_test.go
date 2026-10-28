@@ -23,8 +23,6 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// These scenarios use public HTTP commands/views and executable hosts only.
-// COMMANDER_SESSION_E2E_DATABASE_URL selects an isolated Mongo replica-set DB.
 type sessionStack struct {
 	processes           map[int]*os.Process
 	t                   *testing.T
@@ -63,7 +61,6 @@ func newSessionStack(t *testing.T, peer string, controllerSource ...string) *ses
 	listen.Close()
 	database := filepath.Join(state, "database")
 	if configured := os.Getenv("COMMANDER_SESSION_E2E_DATABASE_URL"); configured != "" {
-		// Every scenario has its own database. No existing application state is touched.
 		database = strings.ReplaceAll(configured, "{database}", "session_e2e_"+strings.ReplaceAll(id.New(), "-", ""))
 		if database == configured {
 			t.Fatal("COMMANDER_SESSION_E2E_DATABASE_URL must contain {database}")
@@ -456,7 +453,6 @@ func TestE2ESessionAffinityLookaheadAndOwnerReadiness(t *testing.T) {
 			t.Fatalf("stateless task bound group before owner became ready: %+v", task)
 		}
 	}
-	// Public capability metadata includes mode even for typed executors.
 	var agents struct {
 		Items []struct {
 			Actions []struct {

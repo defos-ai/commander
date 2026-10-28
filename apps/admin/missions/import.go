@@ -38,8 +38,6 @@ type ImportResult struct {
 	Counts ImportCounts `json:"counts"`
 }
 
-// Import creates missing missions and preserves confirmed existing definitions.
-// It stops at the first failure; retrying a file skips earlier completed writes.
 // An uncertain write must be checked before submitting that definition again.
 func Import(ctx context.Context, api *client.Client, definitions []Definition, dryRun bool) (ImportResult, error) {
 	validated, err := validateImport(definitions)

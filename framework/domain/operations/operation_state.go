@@ -21,7 +21,6 @@ func (operation Operation) ValidateStep(stepID string) error {
 	return fmt.Errorf("%w: unknown mission step %q for mission %q; use a step ID declared in mission.steps", domain.ErrInvalidInput, stepID, operation.Mission.Name)
 }
 
-// RefreshStatus derives the operation status without reopening a terminal operation.
 func (operation *Operation) RefreshStatus() {
 	if operation.Status.Terminal() {
 		return

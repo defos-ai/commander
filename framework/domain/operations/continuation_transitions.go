@@ -138,7 +138,6 @@ func applyFollowUps(op *Operation, followUps []RuleFollowUp) {
 	}
 }
 
-// ResolveContinuation records a model decision and its queued follow-up tasks.
 func (op *Operation) ResolveContinuation(taskID string, version uint64, actions []actionmodel.NextAction) error {
 	if op.Status.Terminal() {
 		return ErrFinished

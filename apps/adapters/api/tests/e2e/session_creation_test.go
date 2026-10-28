@@ -19,8 +19,6 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Exercise automatic proposals through the real API, controller, filesystem
-// providers and two worker processes. The peer represents a slow external resource.
 func TestE2EAutomaticSessionCreationReservesScope(t *testing.T) {
 	for _, sameAgent := range []bool{false, true} {
 		t.Run(fmt.Sprintf("same-agent=%t", sameAgent), func(t *testing.T) {

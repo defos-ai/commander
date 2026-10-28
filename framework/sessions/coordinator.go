@@ -1,4 +1,3 @@
-// Package sessions coordinates durable lifecycle, dispatch and execution claims.
 package sessions
 
 import (

@@ -129,7 +129,6 @@ func TestAdapterExpiredRequestDoesNotReserveIdentity(t *testing.T) {
 		if calls := backend.calls.Load(); calls != 0 {
 			t.Fatalf("expired request executed: calls=%d", calls)
 		}
-		// No retained state should reject or replay this fresh envelope.
 		live := adapterRequest(t)
 		live.ID = expired.ID
 		finishAdapterRequest(t, ctx, bus, backend, live)

@@ -164,8 +164,7 @@ func (s *S3Store) objectKey(key string) (string, error) {
 	return key, nil
 }
 
-// ParseURL validates an S3 location and returns its decoded prefix. The returned
-// URL may contain credentials and must not be included in diagnostics.
+// The returned URL may contain credentials and must not appear in diagnostics.
 func ParseURL(rawURL string) (*url.URL, string, error) {
 	value, err := url.Parse(escapePasswordSlashes(rawURL))
 	if err != nil {

@@ -1,4 +1,3 @@
-// Package releaseworkflow checks the template contract used for safe release dispatch.
 package releaseworkflow
 
 import (
@@ -44,7 +43,6 @@ type step struct {
 	With            map[string]string `yaml:"with"`
 }
 
-// Validate requires the known release template's dispatch and commit guard.
 // It is a structural check, not a sandbox for arbitrary workflow code.
 func Validate(data []byte) error {
 	invalid := errors.New("make-release.yml must preserve the release dispatch inputs, request run-name, initial commit guard and prepare dependencies")

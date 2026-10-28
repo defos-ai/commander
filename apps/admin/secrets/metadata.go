@@ -1,4 +1,3 @@
-// Package secrets administers secret metadata and write-only values through the API.
 package secrets
 
 import (

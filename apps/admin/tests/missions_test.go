@@ -29,7 +29,6 @@ func TestMissionCommandsRoundTrip(t *testing.T) {
 	name := "-review/site%new\\draft"
 	definition := missionJSON(name, "Review the requested site")
 	path := writeMissions(t, definition)
-	// Common flags also work after the filename, overriding the supplied URL.
 	connection := fixture.connection()
 	connection.URL = ":invalid"
 	output, err := missionCommand(t, connection, nil, "missions", "import", path, "--api-url", fixture.server.URL, "--json")
@@ -51,7 +50,6 @@ func TestMissionCommandsRoundTrip(t *testing.T) {
 		t.Fatalf("invalid list output: %s (%v)", output, err)
 	}
 	assertMissionJSON(t, list.Items[0], name)
-	// -- allows names beginning with a dash without reserving those names.
 	output, err = missionCommand(t, fixture.connection(), nil, "missions", "export", "--", name)
 	if err != nil {
 		t.Fatalf("export: %v", err)

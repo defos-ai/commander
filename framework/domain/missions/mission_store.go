@@ -14,7 +14,6 @@ type MissionStore interface {
 	// must read the catalog to reconcile the outcome before retrying.
 	Create(context.Context, Mission) error
 
-	// Upsert replaces a definition by name and is used for host-managed imports.
 	Upsert(context.Context, Mission) error
 	Get(context.Context, string) (Mission, error)
 	List(context.Context) ([]Mission, error)

@@ -18,7 +18,6 @@ import (
 
 const maxSecretInputBytes = 64 << 10
 
-// SecretInputRequired allows an embedded caller to open its own masked form.
 type SecretInputRequired struct{ Key secrets.Key }
 
 func (*SecretInputRequired) Error() string { return "provide a secret value on stdin or in a terminal" }

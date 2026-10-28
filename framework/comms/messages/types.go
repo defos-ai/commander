@@ -1,7 +1,5 @@
 package messages
 
-// Wire kinds identify serialized commands and events. Typed payloads and
-// publishing clients live under comms/clients, organized by recipient.
 const (
 	AdapterRequest         MessageType = "adapter.request"
 	AdapterRequestCanceled MessageType = "adapter.request.canceled"

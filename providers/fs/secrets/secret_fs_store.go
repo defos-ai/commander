@@ -14,15 +14,12 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// SecretFsStore keeps encrypted records and retired IDs in root/secrets.json.
 // One persistent OS lock protects both global ID and scoped-name uniqueness;
 // deletion and identity retirement commit through the same atomic replacement.
 type SecretFsStore struct{ file *jsonfile.Collection }
 
 var _ secretmodel.SecretStore = (*SecretFsStore)(nil)
 
-// NewSecretFsStore uses state/database when root is empty. Encryption and key
-// configuration belong to callers; the store accepts encrypted records only.
 func NewSecretFsStore(root string) (*SecretFsStore, error) {
 	if root == "" {
 		root = filepath.Join("state", "database")

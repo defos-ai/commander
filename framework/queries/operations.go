@@ -1,4 +1,3 @@
-// Package queries loads saved work and derives read-only views for adapters.
 package queries
 
 import (

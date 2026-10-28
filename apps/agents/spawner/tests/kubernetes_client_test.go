@@ -274,7 +274,6 @@ func TestKubernetesClientDoesNotReplayMutationsOrDiscloseFailures(t *testing.T) 
 				if err == nil || strings.Contains(err.Error(), "private-api-sentinel") || calls != 1 || redirects != 0 {
 					t.Fatalf("failure leaked, retried or redirected: calls=%d redirects=%d error=%v", calls, redirects, err)
 				}
-				// Constructor changes must stay on the copy, not alter the caller's client.
 				if err := httpClient.CheckRedirect(nil, nil); err != nil || redirects != 1 {
 					t.Fatal("constructor replaced the caller's redirect policy")
 				}

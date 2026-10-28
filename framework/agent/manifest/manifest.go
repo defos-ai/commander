@@ -1,4 +1,3 @@
-// Package manifest defines and renders versioned agent release manifests.
 package manifest
 
 import (
@@ -21,7 +20,6 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// MaxBytes is the maximum size of a published agent manifest.
 const MaxBytes = 64 << 10
 
 //go:embed agent.yaml.tmpl
@@ -45,7 +43,6 @@ type Action struct {
 	Description string `yaml:"description"`
 }
 
-// Validate checks the name and text bounds of a published capability summary.
 func (a Action) Validate() error {
 	if len(a.Name) > maxActionNameBytes || !actionPattern.MatchString(a.Name) {
 		return errors.New("manifest action names must be safe names of at most 128 bytes")
@@ -78,7 +75,6 @@ const (
 	maxActionNameBytes  = 128
 )
 
-// ValidVersion accepts nonzero stable vMAJOR.MINOR.PATCH release tags.
 func ValidVersion(value string) bool {
 	return value != "v0.0.0" && versionPattern.MatchString(value)
 }
@@ -101,7 +97,6 @@ func Render(value Manifest) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-// Parse accepts one strict release manifest matching the requested tag.
 func Parse(data []byte, version string) (Manifest, error) {
 	if len(data) > MaxBytes {
 		return Manifest{}, fmt.Errorf("agent manifest exceeds %d bytes", MaxBytes)

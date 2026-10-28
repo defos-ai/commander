@@ -1,4 +1,3 @@
-// Package comms defines transport-independent bus and subscription contracts.
 package comms
 
 import (

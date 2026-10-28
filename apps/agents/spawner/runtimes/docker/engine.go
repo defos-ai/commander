@@ -5,7 +5,6 @@ import (
 	"errors"
 )
 
-// ErrNotFound means the daemon has no container with the requested name or ID.
 var ErrNotFound = errors.New("container not found")
 
 // ValidateNetwork rejects daemon modes and names that cannot identify an
@@ -17,7 +16,6 @@ func ValidateNetwork(name string) error {
 	return nil
 }
 
-// Engine exposes only the Docker operations needed to bootstrap an agent.
 // Container lifetime belongs to the deployment, so it has no stop/remove API.
 type Engine interface {
 	Pull(context.Context, string) error

@@ -124,7 +124,6 @@ func TestInjectedSecretCipherOverridesEnvironment(t *testing.T) {
 
 func TestUninitializedInjectedSecretCipherFailsBeforeStartup(t *testing.T) {
 	fixture := newFixture(t)
-	// A supplied cipher must not silently fall back to a different environment key.
 	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()

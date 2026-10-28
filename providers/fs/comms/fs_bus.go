@@ -32,22 +32,11 @@ const (
 	fsCloseTimeout  = time.Second
 )
 
-// FsBus fans out exact-topic messages to distinct named transient inboxes.
-// Each inbox has one live owner. Subscribers start at the committed tail with
-// independent live cursors. Reopening a bus never replays old commands.
-// Instances and processes serialize
-// publication through file locks. Next reads only a small counter and the next
-// message, polling every 10ms when caught up.
-//
-// Next advances a live cursor without acknowledging processing. A message file
-// is removed only after all subscriptions registered at publication acknowledge
-// it. Reject retains the file as evidence after settling that delivery. Closing
-// or losing a subscription retains its unacknowledged files; there is no
-// redelivery or subscription recovery. Hosts may inspect/clean retained
-// failures while the bus is offline. Independently renewed subscriber leases
-// keep crashed processes out of future publications after at most one minute.
-// Interrupted publication may leave an uncommitted message file, which is
-// invisible and replaced by the next write.
+// Subscribers start at the committed tail; reopening never replays commands.
+// Remove a message only after every recipient registered at publication ACKs it.
+// Rejection or subscription loss retains files without redelivery or recovery.
+// Subscriber leases exclude crashed processes from publications within one minute.
+// Uncommitted message files remain invisible and are replaced by the next write.
 type FsBus struct {
 	root   string
 	ctx    context.Context
@@ -92,7 +81,6 @@ type fsSubscription struct {
 
 var _ comms.Bus = (*FsBus)(nil)
 
-// NewFsBus opens a lazily created directory. Empty root selects state/bus.
 func NewFsBus(root string) (*FsBus, error) {
 	if root == "" {
 		root = filepath.Join("state", "bus")
@@ -225,8 +213,6 @@ func (b *FsBus) Subscribe(ctx context.Context, inbox comms.Inbox) (comms.Subscri
 	return s, nil
 }
 
-// Close ends only this bus instance and its subscriptions. Shared queue files
-// and other independently opened buses remain available.
 func (b *FsBus) Close() error {
 	// Cancel before taking mu so an in-progress Subscribe stops waiting for a
 	// topic lock while Close waits for its local registration bookkeeping.

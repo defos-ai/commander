@@ -1,4 +1,3 @@
-// Package native starts verified agent executables owned by one spawner host.
 package native
 
 import (

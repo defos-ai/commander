@@ -60,8 +60,6 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 	if err != nil {
 		return config{}, err
 	}
-	// Flags override nonempty environment values, which override default paths.
-	// Provider selection and URL validation belong to the provider factory.
 	provided := make(map[string]bool)
 	flags.Visit(func(value *flag.Flag) { provided[value.Name] = true })
 	result.busURL = host.Value(busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))

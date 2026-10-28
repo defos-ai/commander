@@ -1,4 +1,3 @@
-// Package missions validates and administers mission definitions through the API.
 package missions
 
 import (
@@ -23,8 +22,6 @@ type Definition struct {
 
 func (d Definition) MarshalJSON() ([]byte, error) { return d.JSON.MarshalJSON() }
 
-// Parse accepts one definition, a nonempty array, or the API's items envelope.
-// Every definition is validated before callers can begin an import.
 func Parse(data []byte) ([]Definition, error) {
 	if len(data) > MaxFileBytes {
 		return nil, errors.New("mission file exceeds the 4 MiB limit")

@@ -9,9 +9,7 @@ import (
 	"github.com/defos-ai/commander/providers/s3/store"
 )
 
-// TestS3Cleaner removes only artifact/report objects under the configured test
-// bucket and prefix. Compose it with framework/testing.StateCleaner to check
-// that test work has settled before deleting its files.
+// Compose with framework/testing.StateCleaner so work settles before deleting files.
 type TestS3Cleaner struct{ storage *store.S3Store }
 
 var _ frameworktesting.TestCleaner = (*TestS3Cleaner)(nil)

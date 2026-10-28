@@ -17,9 +17,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// ReportFsStore saves each report at <storage root>/reports/<report ID>.json.
-// Construction and reads do not create files or directories. Filesystems must
-// support hard links: publishing a synced temporary file with Link makes report
+// Filesystems must support hard links: publishing a synced temporary file makes report
 // creation atomic and exclusive across independent instances and processes.
 type ReportFsStore struct{ root string }
 

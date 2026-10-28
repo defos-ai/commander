@@ -24,8 +24,7 @@ import (
 const adapterType = "api"
 
 type Options struct {
-	Ready func(net.Addr)
-	// Embedded hosts can supply a credential pair without changing process environment.
+	Ready       func(net.Addr)
 	Credentials *host.BasicCredentials
 	Application string
 	// SecretCipher takes precedence over SECRETS_ENCRYPTION_KEY for embedded hosts.

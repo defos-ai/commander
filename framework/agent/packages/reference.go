@@ -1,4 +1,3 @@
-// Package packages defines agent package references and catalog metadata.
 package packages
 
 import (

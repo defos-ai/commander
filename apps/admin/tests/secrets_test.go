@@ -191,7 +191,6 @@ func TestSecretWritesValidateMetadataWithoutRetrying(t *testing.T) {
 			}
 		})
 	}
-	// Reject stale or mismatched caller metadata before sending any mutation.
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests.Add(1) }))
 	defer server.Close()

@@ -148,7 +148,6 @@ func (c *Coordinator) CheckAdmission(ctx context.Context, task operations.Task) 
 	return model.ErrUnknownSession
 }
 
-// ScopeRecords supplies independent snapshots for a single shared placement assessment.
 func (c *Coordinator) ScopeRecords(ctx context.Context) ([]model.Scope, error) {
 	return c.store.List(ctx)
 }

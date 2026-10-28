@@ -1,4 +1,3 @@
-// Package client supplies authenticated API transport for administrative commands.
 package client
 
 import (
@@ -35,7 +34,6 @@ type Connection struct {
 	Credentials host.BasicCredentials
 }
 
-// ConnectionError lets an embedded client request local connection settings.
 type ConnectionError struct{ cause error }
 
 func (e *ConnectionError) Error() string { return e.cause.Error() }
@@ -44,7 +42,6 @@ func (e *ConnectionError) Unwrap() error { return e.cause }
 func (Connection) String() string   { return "Commander API connection" }
 func (Connection) GoString() string { return "Commander API connection" }
 
-// StatusError exposes a bounded API error identifier for programmatic handling.
 // Diagnostics deliberately omit remote messages, identifiers and redirect URLs.
 type StatusError struct {
 	StatusCode int
@@ -76,14 +73,11 @@ type Client struct {
 	http        *http.Client
 }
 
-// Response contains a successful response. The caller owns and may clear Data.
 type Response struct {
 	StatusCode int
 	Data       []byte
 }
 
-// New accepts an operator-configured API URL, including a reverse-proxy prefix.
-// It never derives the destination from model output or a remote MCP address.
 func New(connection Connection) (*Client, error) {
 	if err := ValidateURL(connection.URL); err != nil {
 		return nil, &ConnectionError{cause: err}
@@ -122,14 +116,11 @@ func (*Client) String() string   { return "Commander API client" }
 func (*Client) GoString() string { return "Commander API client" }
 func (c *Client) Close()         { c.http.CloseIdleConnections() }
 
-// Request sends one JSON request. The caller owns body and any returned bytes.
-// Mutation failures may represent a completed write; this client never retries them.
 func (c *Client) Request(ctx context.Context, method, path string, body []byte) ([]byte, error) {
 	response, err := c.Do(ctx, method, path, body, maxResponseBytes)
 	return response.Data, err
 }
 
-// Do sends one JSON request with a response limit between 1 byte and 4 MiB.
 // Mutation failures may represent a completed write; they are never retried.
 func (c *Client) Do(ctx context.Context, method, path string, body []byte, responseLimit int) (Response, error) {
 	if err := ctx.Err(); err != nil {

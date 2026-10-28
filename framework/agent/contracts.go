@@ -1,4 +1,3 @@
-// Package agent provides independently hosted, controller-directed agents.
 package agent
 
 import (

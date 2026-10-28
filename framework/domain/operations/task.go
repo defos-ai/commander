@@ -41,7 +41,6 @@ type Task struct {
 	FinishedAt    *time.Time                `json:"finished_at,omitempty"`
 }
 
-// NewTask constructs a queued assignment with a stable command identity.
 func NewTask(operationID, stepID, parentID string, action actionmodel.NextAction) Task {
 	taskID := id.TaskID()
 	intent := action.SessionIntent.Clone()

@@ -22,8 +22,6 @@ const (
 	OperationCancelled        EventType = "operation.cancelled"
 )
 
-// Event is a cursor-addressable update. TaskID and QuestionID identify the
-// corresponding record in Operation; large action results remain artifact refs.
 type Event struct {
 	Sequence    uint64    `json:"sequence"`
 	OperationID string    `json:"operation_id"`
@@ -35,7 +33,6 @@ type Event struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// AppendEvent records an event at the next operation-local sequence.
 func (operation *Operation) AppendEvent(kind EventType, taskID, questionID, message string) {
 	operation.Events = append(operation.Events, Event{Sequence: uint64(len(operation.Events) + 1),
 		OperationID: operation.ID, Type: kind, Status: operation.Status, TaskID: taskID,

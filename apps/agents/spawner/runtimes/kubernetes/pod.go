@@ -1,4 +1,3 @@
-// Package kubernetes defines the Kubernetes API boundary for spawning agents.
 package kubernetes
 
 import (
@@ -16,7 +15,6 @@ import (
 
 const SchedulingGate = "ai.defos.commander/launch"
 
-// Metadata retains server identity and ownership fields for later reconciliation.
 type Metadata struct {
 	Name              string            `json:"name,omitempty"`
 	Namespace         string            `json:"namespace,omitempty"`
@@ -29,7 +27,6 @@ type Metadata struct {
 	DeletionTimestamp *string           `json:"deletionTimestamp,omitempty"`
 }
 
-// Pod preserves admitted spec/status fields without certifying their safety.
 type Pod struct {
 	APIVersion string          `json:"apiVersion"`
 	Kind       string          `json:"kind"`

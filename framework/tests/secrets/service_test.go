@@ -127,7 +127,6 @@ func TestSecretServiceCASRejectsUpdateAfterMetadataRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	service, err = secretservice.NewService(store, encryptFunc(func(metadata secretmodel.Metadata, plaintext []byte) (secretmodel.Secret, error) {
-		// A different caller replaces the value after our metadata read.
 		newer := created
 		newer.Version++
 		newer.UpdatedAt = metadata.UpdatedAt

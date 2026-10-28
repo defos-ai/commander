@@ -95,8 +95,6 @@ func (r *Runner) Get(ctx context.Context, operationID string) (operations.Operat
 
 func (r *Runner) List(ctx context.Context) ([]operations.Operation, error) { return r.store.List(ctx) }
 
-// GetReport reads the report referenced by a completed operation, including
-// after restart. Older operations without report_id retain their inline Output.
 func (r *Runner) GetReport(ctx context.Context, operationID string) (reports.Report, error) {
 	operation, err := r.store.Get(ctx, operationID)
 	if err != nil {

@@ -41,7 +41,6 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 		t.Fatalf("sweep before deadline rewrote the operation: %v", err)
 	}
 	assertResultJSONEqual(t, unchanged, asked)
-	// Neither caller options nor returned snapshots may mutate the saved envelope.
 	question.Options[0] = "changed by caller"
 	asked.Questions[0].Options[1] = "changed by reader"
 	answered, err := newDispatchStore(t, dir).AnswerQuestion(t.Context(), op.ID, question.ID, "Proceed with review")

@@ -21,7 +21,6 @@ type Options struct {
 	Help io.Writer
 }
 
-// ConfigError identifies invalid UI settings before the listener starts.
 type ConfigError struct{ cause error }
 
 func (e *ConfigError) Error() string { return e.cause.Error() }

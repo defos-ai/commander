@@ -117,7 +117,6 @@ func TestPendingSecretRequestsRejectInvalidSavedEvidence(t *testing.T) {
 				}
 				return metadata, nil
 			}}
-			// A successful first item must not escape in a partial list when a later record fails.
 			assertSecretError(t, pendingRequestResponse(t.Context(), pendingRequestService(t, store), requests), http.StatusInternalServerError, "internal_error")
 		})
 	}

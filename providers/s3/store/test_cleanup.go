@@ -9,9 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// CleanTestData deletes artifact/report objects only. The caller must use an
-// isolated test bucket or prefix and ensure work is settled. Keeping cleanup on
-// the concrete store reuses its configured client without exposing credentials.
+// Use an isolated test bucket or prefix and ensure work is settled before cleanup.
 func (s *S3Store) CleanTestData(ctx context.Context) error {
 	if err := checkContext(ctx); err != nil {
 		return err

@@ -14,9 +14,7 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// TestFsCleaner clears only public operation/artifact records and report/artifact
-// files. Catalogs, executions, and persistent locks remain in place. Compose it
-// with framework/testing.StateCleaner to check that test work has settled.
+// Compose with framework/testing.StateCleaner so work settles before cleanup.
 type TestFsCleaner struct {
 	storage  string
 	database string

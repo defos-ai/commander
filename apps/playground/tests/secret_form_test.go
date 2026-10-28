@@ -268,7 +268,6 @@ func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
 	u.text(password)
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.wait("available secret opened for rotation", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	// Process the periodic requirement refresh with no operation being watched.
 	afterRefresh := time.Now().Add(280 * time.Millisecond)
 	u.wait("manual form retained across requirement refresh", func(view string) bool {
 		if !strings.Contains(view, "builder-agent · GITHUB_TOKEN") {

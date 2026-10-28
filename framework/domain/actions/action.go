@@ -56,7 +56,6 @@ func (a Action) ValidateRequiredSecrets() error {
 	return a.definition().ValidateRequiredSecrets()
 }
 
-// Definition returns an independent copy of the static capability contract.
 func (a Action) Definition() Definition {
 	return a.definition().Clone()
 }

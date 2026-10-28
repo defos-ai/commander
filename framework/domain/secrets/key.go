@@ -40,7 +40,6 @@ func (key Key) Validate() error {
 	return ValidateName(key.Name)
 }
 
-// ValidateName checks a public secret identifier, independently of its scope.
 func ValidateName(name string) error {
 	if len(name) == 0 || len(name) > 128 {
 		return errors.New("secret name must be between 1 and 128 ASCII characters")

@@ -20,7 +20,6 @@ func ControllerEvents(controllerType string) string {
 	return "controllers." + controllerType + ".events"
 }
 
-// ValidateControllerType accepts a stable lowercase routing destination.
 func ValidateControllerType(controllerType string) error {
 	if !id.ValidType(controllerType) {
 		return errors.New("controller type must be a lowercase type slug")

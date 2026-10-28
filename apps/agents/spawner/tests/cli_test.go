@@ -111,7 +111,6 @@ func TestSpawnerCLIValidatesEnvironmentBeforeCreatingState(t *testing.T) {
 			}
 		})
 	}
-	// Empty environment values retain the ordinary native and state defaults.
 	t.Setenv("BUS_URL", "")
 	t.Setenv("STORAGE_URL", "")
 	t.Setenv("SPAWNER_STATE_DIR", "")
@@ -172,8 +171,6 @@ func TestSpawnerCLIDockerValidatesNetworkAndExplicitTimeoutBeforeProviders(t *te
 			}
 		})
 	}
-	// The Docker default must not overwrite an explicit timeout. Zero and
-	// negative durations remain invalid, while a positive override is accepted.
 	for _, timeout := range []string{"0s", "-1s", "5s"} {
 		t.Run("timeout "+timeout, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())

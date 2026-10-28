@@ -35,7 +35,6 @@ func TestContinuationCreatesOneRecordedBranch(t *testing.T) {
 			t.Fatalf("child lost ownership/result: %+v", child)
 		}
 	}
-	// Completing records the already-reviewed model decisions without more work.
 	completed := a.complete(op.ID, "Reviewed continuation branch")
 	for _, task := range completed.Tasks {
 		if task.Continuation != nil && task.Continuation.Status != "resolved" {

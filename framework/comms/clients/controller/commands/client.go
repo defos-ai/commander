@@ -64,10 +64,8 @@ func (c *Client) Close() error {
 	return c.closeErr
 }
 
-// Done closes when the pending-call owner has stopped.
 func (c *Client) Done() <-chan struct{} { return c.done }
 
-// Err reports why the client stopped; it is nil while the client is running.
 func (c *Client) Err() error { return context.Cause(c.ctx) }
 
 func (c *Client) call(ctx context.Context, method string, params interface{ Validate() error }, result any) error {

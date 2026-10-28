@@ -1,5 +1,3 @@
-// Package commands sends adapter commands to an independently hosted controller over the bus.
-// Its contracts are also implemented by the in-process framework services.
 package commands
 
 import (

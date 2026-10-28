@@ -1,4 +1,3 @@
-// Package sessions administers retained agent sessions through the Commander API.
 package sessions
 
 import (
@@ -17,7 +16,6 @@ func (f Filter) Validate() error {
 	return (model.Query{ScopeID: f.ScopeID, OwnerAgentID: f.OwnerAgentID}).Validate()
 }
 
-// Session is a validated API view, including retained ownership after owner loss.
 type Session struct {
 	ID            string     `json:"id"`
 	ScopeID       string     `json:"scope_id"`

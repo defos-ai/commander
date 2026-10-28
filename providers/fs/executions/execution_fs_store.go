@@ -19,9 +19,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// ExecutionFsStore keeps one execution per locked JSON collection at
-// <database>/executions/<agent>/<command>.json. Each file
-// contains a single Record. Construction and reads do not create paths.
 type ExecutionFsStore struct {
 	root string
 }

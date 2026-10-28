@@ -1,4 +1,3 @@
-// Package adminhost owns the optional Admin UI server used by Playground.
 package adminhost
 
 import (
@@ -23,7 +22,6 @@ type server struct {
 	url   string
 }
 
-// Manager starts at most one UI server and waits for it during shutdown.
 type Manager struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -129,7 +127,6 @@ func (m *Manager) arguments(args []string) []string {
 	return append(result, args...)
 }
 
-// URL returns the currently ready server address, or an empty string.
 func (m *Manager) URL() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()

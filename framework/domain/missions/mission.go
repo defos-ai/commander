@@ -1,4 +1,3 @@
-// Package missions loads reusable mission definitions. Operations own execution state.
 package missions
 
 import (
@@ -45,9 +44,6 @@ type Mission struct {
 	OutputSchema      json.RawMessage          `json:"output_schema"`
 }
 
-// LoadMission strictly decodes and validates one JSON definition. Unknown
-// definition and step fields are rejected; JSON Schema extension keywords are
-// permitted according to the schema specification.
 func LoadMission(data []byte) (Mission, error) {
 	var definition Mission
 	trimmed := bytes.TrimSpace(data)

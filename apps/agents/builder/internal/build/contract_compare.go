@@ -12,7 +12,6 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 )
 
-// CompareActions checks the actual registration against the requested contracts.
 // Only validated requested names may appear in errors; generated metadata is untrusted.
 func CompareActions(expected, actual []actions.Definition) error {
 	if err := ValidateActions(expected); err != nil {

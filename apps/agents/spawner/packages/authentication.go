@@ -4,7 +4,6 @@ import "context"
 
 type githubTokenKey struct{}
 
-// WithGitHubToken attaches credentials for GitHub downloads and GHCR image pulls.
 // The caller owns the bytes and must keep them intact until spawning finishes,
 // then clear them.
 func WithGitHubToken(ctx context.Context, token []byte) context.Context {

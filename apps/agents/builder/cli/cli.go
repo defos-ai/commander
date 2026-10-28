@@ -20,7 +20,6 @@ import (
 
 const serviceName = "commander-" + string(builder.AgentType)
 
-// Options supplies dependencies for an embedded host.
 type Options struct {
 	// SecretCipher overrides SECRETS_ENCRYPTION_KEY when non-nil.
 	SecretCipher *crypto.SecretCipher
@@ -31,7 +30,6 @@ func Run(ctx context.Context, args []string, stderr io.Writer) error {
 	return RunWithOptions(ctx, args, stderr, Options{})
 }
 
-// RunWithOptions runs the host with injected dependencies and no signal handlers.
 func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
 	if stderr == nil {
 		stderr = io.Discard

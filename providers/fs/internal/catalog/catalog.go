@@ -69,7 +69,6 @@ func (s *Store[T]) Upsert(ctx context.Context, record T) error {
 	return s.save(ctx, record, nil)
 }
 
-// Create rejects existing names with conflict while holding the collection lock.
 func (s *Store[T]) Create(ctx context.Context, record T, conflict error) error {
 	if conflict == nil {
 		return errors.New("catalog creation requires a conflict error")

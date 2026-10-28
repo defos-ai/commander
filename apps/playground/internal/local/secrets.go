@@ -11,7 +11,6 @@ import (
 func secretCipher() (string, *crypto.SecretCipher, error) {
 	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
 	if key == "" {
-		// The generated 32-byte hex key has the same lifetime as session state.
 		var err error
 		key, err = host.GeneratePassword()
 		if err != nil {

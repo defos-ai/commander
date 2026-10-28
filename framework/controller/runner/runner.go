@@ -1,4 +1,3 @@
-// Package runner owns operations while an external decision maker selects work.
 package runner
 
 import (
@@ -42,13 +41,11 @@ type AgentCatalog interface {
 }
 
 type Config struct {
-	Sessions     *runtimeSessions.Coordinator
-	AgentCatalog AgentCatalog
-	// AgentSelector defaults to round-robin over eligible instances.
+	Sessions      *runtimeSessions.Coordinator
+	AgentCatalog  AgentCatalog
 	AgentSelector AgentSelector
-	// RuleSelector defaults to the mission's declared rules.
-	RuleSelector RuleSelector
-	Logger       *slog.Logger
+	RuleSelector  RuleSelector
+	Logger        *slog.Logger
 	// Capacity is per agent for work owned by this runner; default one.
 	Capacity int
 

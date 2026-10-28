@@ -16,9 +16,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// ControllerFsStore stores one single-record JSON collection per runtime in
-// root/controllers/<controllerID>.json. The jsonfile lock is per controller,
-// allowing unrelated registrations to update independently across processes.
 type ControllerFsStore struct{ directory string }
 
 var _ controllermodel.ControllerStore = (*ControllerFsStore)(nil)

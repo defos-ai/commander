@@ -1,4 +1,3 @@
-// Package secrets manages encrypted secret values and their public inventory.
 package secrets
 
 import (

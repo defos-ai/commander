@@ -1,5 +1,3 @@
-// faultcontroller runs production controller services and FS providers in a host
-// whose peer can fail catalog reads or session writes independently.
 package main
 
 import (

@@ -11,7 +11,6 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// MaxCatalogBytes bounds published catalog metadata.
 const MaxCatalogBytes = 64 << 10
 
 type Catalog struct {

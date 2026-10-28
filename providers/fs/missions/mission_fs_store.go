@@ -7,7 +7,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/catalog"
 )
 
-// MissionFsStore stores mission records in root/missions.json.
 type MissionFsStore struct {
 	*catalog.Store[missions.Mission]
 }
@@ -18,7 +17,6 @@ func (s *MissionFsStore) Create(ctx context.Context, definition missions.Mission
 	return s.Store.Create(ctx, definition, missions.ErrMissionExists)
 }
 
-// NewMissionFsStore uses state/database/ when root is empty.
 func NewMissionFsStore(root string) (*MissionFsStore, error) {
 	catalog, err := catalog.New(root, "missions.json", func(m missions.Mission) string { return m.Name }, missions.Mission.Validate, missions.ErrUnknownMission)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 // Hosts must still call Close to wait for subscription cleanup.
 func (c *Controller) Done() <-chan struct{} { return c.state.Context.Done() }
 
-// Err reports why coordination stopped, or nil while it is running.
 func (c *Controller) Err() error { return context.Cause(c.state.Context) }
 
 // Close wakes controller callers and releases its subscription. It leaves

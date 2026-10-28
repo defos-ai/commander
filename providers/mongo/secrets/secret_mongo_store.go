@@ -18,8 +18,6 @@ type SecretMongoStore struct{ database *store.MongoStore }
 
 var _ secretmodel.SecretStore = (*SecretMongoStore)(nil)
 
-// NewSecretMongoStore prepares the collection before any transaction. The host
-// owns the shared database client. Writes require a replica set or sharded cluster.
 func NewSecretMongoStore(ctx context.Context, database *store.MongoStore) (*SecretMongoStore, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err

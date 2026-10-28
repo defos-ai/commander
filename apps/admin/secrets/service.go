@@ -44,7 +44,6 @@ func Get(ctx context.Context, api *client.Client, key secretmodel.Key) (*Metadat
 	return readMetadata(response.Data, key)
 }
 
-// List returns a projection of metadata for one agent type, never raw API data.
 func List(ctx context.Context, api *client.Client, agentType string) ([]Metadata, error) {
 	if (secretmodel.Scope{AgentType: agentType}).Validate() != nil {
 		return nil, errors.New("a valid agent type is required")
@@ -71,7 +70,6 @@ func List(ctx context.Context, api *client.Client, agentType string) ([]Metadata
 	return envelope.Items, nil
 }
 
-// Requests returns pending request metadata, optionally filtered by agent type.
 func Requests(ctx context.Context, api *client.Client, agentType string) ([]Request, error) {
 	path := collectionPath + "/requests"
 	if agentType != "" {
@@ -101,7 +99,6 @@ func Requests(ctx context.Context, api *client.Client, agentType string) ([]Requ
 	return envelope.Items, nil
 }
 
-// Save creates a missing secret or replaces only the metadata shown to the user.
 // A completed but unconfirmed write must be inspected, never retried automatically.
 func Save(ctx context.Context, api *client.Client, key secretmodel.Key, value string, expected *Metadata) (*Metadata, error) {
 	if key.Validate() != nil {
@@ -156,7 +153,6 @@ func Save(ctx context.Context, api *client.Client, key secretmodel.Key, value st
 	return metadata, nil
 }
 
-// Delete removes only the saved identity and version supplied by the caller.
 func Delete(ctx context.Context, api *client.Client, key secretmodel.Key, expected Metadata) error {
 	if !validMetadata(expected, key) {
 		return errors.New("invalid saved secret metadata; load its current version")

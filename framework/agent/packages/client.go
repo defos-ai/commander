@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// Client reads a public discovery catalog. It does not resolve or launch agents.
 type Client struct {
 	client *http.Client
 }

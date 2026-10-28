@@ -20,7 +20,6 @@ var (
 )
 
 type Options struct {
-	// Prefetch bounds unacknowledged deliveries per subscription. Zero uses 16.
 	Prefetch int
 }
 

@@ -20,8 +20,6 @@ func SchemaFor[T any]() (json.RawMessage, error) {
 	return json.Marshal(schema)
 }
 
-// ResolveSchema compiles an explicit object schema using the shared action
-// contract validator, including local references and validated defaults.
 func ResolveSchema(raw json.RawMessage) (*jsonschema.Resolved, error) {
 	return actions.ResolveSchema(raw)
 }

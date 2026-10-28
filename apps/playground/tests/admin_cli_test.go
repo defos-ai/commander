@@ -142,7 +142,6 @@ func testAllInOneAdminAddress(t *testing.T) {
 	}
 }
 
-// Exercise the real CLI during provider selection, without a model connection.
 func lookupAdmin(t *testing.T, args []string, want string, commands ...string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)

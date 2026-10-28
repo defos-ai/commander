@@ -15,7 +15,6 @@ func SessionFromContext(ctx context.Context) (sessions.Binding, bool) {
 	return v, ok
 }
 
-// WithSession is used by the agent runtime after validating the accepted command.
 func WithSession(ctx context.Context, binding *sessions.Binding) context.Context {
 	if binding == nil {
 		return context.WithValue(ctx, sessionKey{}, false)

@@ -11,7 +11,6 @@ import (
 )
 
 func TestAdminCLIHelpAndUsage(t *testing.T) {
-	// Help must not need a valid API connection or expose retained credentials.
 	t.Setenv("COMMANDER_API_URL", ":invalid")
 	t.Setenv("COMMANDER_API_USERNAME", "invalid:username")
 	t.Setenv("COMMANDER_API_PASSWORD", "private-password-fixture")

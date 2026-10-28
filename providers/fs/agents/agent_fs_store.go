@@ -20,9 +20,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// AgentFsStore keeps one JSON observation per agent in
-// root/agents/<agentID>.json. One persistent lock serializes observations and
-// conditional lease expiry across processes.
 type AgentFsStore struct{ root string }
 
 // An expired record remains only while its source observation can still arrive

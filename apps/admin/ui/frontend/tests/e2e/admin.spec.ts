@@ -259,7 +259,6 @@ test('operation questions, automatic work, graph and downloads use the real stac
   await expect(answer).not.toBeVisible();
   expect(await api.get<OperationQuestion>(`${path}/questions/${question.id}`)).toMatchObject({ status: 'answered', answer: 'Current release' });
 
-  // Task planning and completion belong to Commander; the admin UI monitors and guides its work.
   const root = await api.post<OperationTask>(`${path}/tasks`, { action_name: 'analyze-text', input: { text: 'Commander integration example' } }, 201);
   const finished = await api.operation(operation.id, value => value.tasks?.length === 2 && value.tasks.every(task => !['queued', 'running'].includes(task.status))
     && value.tasks.some(task => task.id === root.id && task.continuation?.status === 'pending'));

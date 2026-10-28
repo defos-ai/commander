@@ -45,7 +45,6 @@ func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {
 	expected.Tasks[0].Continuation.Status = operations.ContinuationResolved
 	expected.Tasks[0].Continuation.Version++
 	assertTerminalSnapshot(t, expected, published, operations.OperationCompleted, started)
-	// Neither caller-owned output nor the returned snapshot may alias storage.
 	output[0] = '['
 	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {

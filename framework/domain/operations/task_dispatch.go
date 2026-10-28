@@ -10,7 +10,6 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// DefaultTaskTimeout is the initial wait for a newly dispatched task's outcome.
 const DefaultTaskTimeout = 15 * time.Minute
 
 type TaskDispatch struct {

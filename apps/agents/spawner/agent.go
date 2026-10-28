@@ -9,7 +9,6 @@ import (
 
 const AgentType agents.AgentType = "spawner-agent"
 
-// Responsibilities returns the default capabilities and usage guidance.
 func Responsibilities() []string {
 	return []string{
 		"Install any compatible agent package from a GitHub release, including repositories outside the discovery catalog. The release must publish agent.yaml describing a released native executable or digest-pinned Docker image for the configured runtime. Catalog inclusion is not required.",
@@ -21,8 +20,6 @@ func Responsibilities() []string {
 	}
 }
 
-// NewAgent constructs a fresh spawn catalog without launching processes.
-// An explicitly empty action catalog remains empty and does not require a launcher.
 func NewAgent(config agents.AgentConfig, launcher spawneractions.Spawner) (*agents.Agent, error) {
 	config.Type = AgentType
 	if config.Responsibilities == nil {
@@ -38,7 +35,6 @@ func NewAgent(config agents.AgentConfig, launcher spawneractions.Spawner) (*agen
 	return agents.NewAgent(config)
 }
 
-// NewActions creates executors with discovery state owned by this agent.
 func NewActions(launcher spawneractions.Spawner) ([]action.Executor, error) {
 	spawn, err := spawneractions.NewSpawnAgent(launcher)
 	if err != nil {
@@ -47,14 +43,12 @@ func NewActions(launcher spawneractions.Spawner) ([]action.Executor, error) {
 	return []action.Executor{spawn}, nil
 }
 
-// ActionDescriptions describes packaged capabilities without starting discovery or providers.
 func ActionDescriptions() []manifest.Action {
 	return []manifest.Action{
 		{Name: spawneractions.SpawnAgentName, Description: spawneractions.SpawnAgentDescription},
 	}
 }
 
-// ActionNames lists the catalog without creating providers or starting agents.
 func ActionNames() []string {
 	descriptions := ActionDescriptions()
 	names := make([]string, len(descriptions))

@@ -96,8 +96,6 @@ func testAllInOneWorkflow(t *testing.T) {
 		case 6:
 			delta, finish = map[string]any{"content": "**Analysis running**"}, "stop"
 		case 7, 9:
-			// Continuations must reach the model automatically, carrying actual
-			// results and then the operator's answer, without another chat prompt.
 			last := body.Messages[len(body.Messages)-1]
 			_, state, ok := strings.Cut(last.Content, "Current state:\n")
 			var op operations.Operation
@@ -472,7 +470,6 @@ const exampleMission = `{
   "output_schema":{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false}
 }`
 
-// Package downloading and child ownership are covered by the spawner suites.
 func startLocalExampleHost(t *testing.T, directory string) func() {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))

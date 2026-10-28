@@ -69,6 +69,5 @@ func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
 			t.Fatalf("HTTP query changed saved observation: saved=%+v original=%+v err=%v", saved, record, err)
 		}
 	}
-	// Readiness continues to report metadata readability despite stale controllers.
 	assertHealthy(t, server.request(t, http.MethodGet, "/readyz"))
 }

@@ -33,7 +33,6 @@ type EventConsumer struct {
 	Secrets    *SecretEventConsumer
 }
 
-// Consume is called by the controller loop, together with commands and lease expiry.
 func (c EventConsumer) Consume(ctx context.Context, message messages.Message) error {
 	if err := message.Validate(); err != nil {
 		return InvalidMessage(err)

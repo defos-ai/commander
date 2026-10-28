@@ -516,7 +516,6 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 			}))
 			defer provider.Close()
 			u := newUI(t, ctx, endpoint.URL, provider.URL)
-			// Close the model before HTTP servers, including on failed assertions.
 			defer u.model.Close()
 
 			u.text("Start the review")
@@ -724,8 +723,6 @@ func writeModelDelta(w http.ResponseWriter, delta map[string]any, finish any) {
 	}
 }
 
-// Drive Bubble Tea's public update loop, including async commands, and inspect
-// its current rendered frame instead of relying on stale terminal output.
 type uiDriver struct {
 	t        *testing.T
 	ctx      context.Context

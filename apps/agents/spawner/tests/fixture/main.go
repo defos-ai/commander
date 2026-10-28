@@ -1,4 +1,3 @@
-// Command fixture is a local agent executable for spawner lifecycle tests.
 package main
 
 import (
@@ -108,7 +107,6 @@ func run() error {
 				InputSchema: json.RawMessage(`[]`), OutputSchema: json.RawMessage(`{}`),
 			}}
 		} else if strings.Contains(mode, "wrong-type") {
-			// The envelope has the assigned ID, but the reported type is incorrect.
 			snapshot.Type = "different-agent"
 		} else {
 			snapshot.ID = "fixture-agent-12345678"

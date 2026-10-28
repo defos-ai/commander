@@ -84,8 +84,6 @@ func TestRabbitMQClosedObserverDoesNotRejectPublicationToRemainingInbox(t *testi
 
 	closeSubscription(t, observer)
 
-	// A host that observed a child may publish its own registration next.
-	// Removing the observer must not poison routing to the controller inbox.
 	ready := message(t)
 	f.publish(observerBus, inbox.Topic, ready)
 	ack(t, f.ctx, f.next(destination, ready))

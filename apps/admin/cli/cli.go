@@ -1,4 +1,3 @@
-// Package cli runs administrative commands without starting Playground or a model.
 package cli
 
 import (
@@ -16,14 +15,12 @@ import (
 	uicli "github.com/defos-ai/commander/apps/admin/ui/backend/cli"
 )
 
-// Options supplies caller-owned connection and UI readiness without changing environment.
 type Options struct {
 	Connection *client.Connection
 	// Ready receives the bound address when serve starts accepting connections.
 	Ready func(net.Addr)
 }
 
-// UsageError identifies invalid command arguments separately from runtime errors.
 type UsageError struct{ cause error }
 
 func (e *UsageError) Error() string { return e.cause.Error() }
@@ -125,7 +122,6 @@ Run commander-admin <command> --help for command options.
 	return err
 }
 
-// Main returns 0 for success/help, 2 for usage errors and 1 for runtime failures.
 func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if stderr == nil {
 		stderr = io.Discard

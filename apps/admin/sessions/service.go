@@ -95,7 +95,6 @@ func Get(ctx context.Context, api *client.Client, sessionID string) (Session, er
 	return item, nil
 }
 
-// Control resolves the exact retained reference before sending one owner control.
 // The request ID is a submitted correlation identity; a pending close may already
 // have its own durable identity on the controller. No mutation is retried here.
 func Control(ctx context.Context, api *client.Client, sessionID, method, requestID string) (ControlResult, error) {

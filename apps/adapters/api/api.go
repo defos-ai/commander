@@ -25,22 +25,20 @@ import (
 )
 
 type Config struct {
-	SessionStore      sessions.Store
-	Security          SecurityConfig
-	Deployment        DeploymentConfig
-	SwaggerEnabled    bool
-	Operations        controllercommands.Operations
-	MissionStore      missions.MissionStore
-	OperationStore    operations.OperationStore
-	AgentStore        agents.AgentStore
-	ControllerStore   controllers.ControllerStore
-	ActionStore       actions.ActionStore
-	ReportStore       reports.ReportStore
-	ArtifactStore     artifacts.ArtifactStore
-	ArtifactFileStore artifacts.ArtifactFileStore
-	// SecretService is optional; secret routes return 503 when it is absent.
-	SecretService *secretservice.Service
-	// SecretRequestStore enables pending-request metadata alongside SecretService.
+	SessionStore       sessions.Store
+	Security           SecurityConfig
+	Deployment         DeploymentConfig
+	SwaggerEnabled     bool
+	Operations         controllercommands.Operations
+	MissionStore       missions.MissionStore
+	OperationStore     operations.OperationStore
+	AgentStore         agents.AgentStore
+	ControllerStore    controllers.ControllerStore
+	ActionStore        actions.ActionStore
+	ReportStore        reports.ReportStore
+	ArtifactStore      artifacts.ArtifactStore
+	ArtifactFileStore  artifacts.ArtifactFileStore
+	SecretService      *secretservice.Service
 	SecretRequestStore secrets.RequestStore
 	TestCleaner        frameworktesting.TestCleaner
 }

@@ -15,8 +15,6 @@ type Execution struct {
 
 type executionContextKey struct{}
 
-// WithExecution supplies execution identity to an executor. Agent supplies its
-// current command and work context automatically when executing an action.
 func WithExecution(ctx context.Context, execution Execution) context.Context {
 	return context.WithValue(ctx, executionContextKey{}, execution)
 }

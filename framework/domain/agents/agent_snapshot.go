@@ -26,12 +26,11 @@ const (
 // Work identifies the action being executed without exposing its inputs.
 // Operation and task IDs are absent for work issued outside an operation.
 type Work struct {
-	OperationID string `json:"operation_id,omitempty"`
-	TaskID      string `json:"task_id,omitempty"`
-	StepID      string `json:"step_id,omitempty"`
-	ActionName  string `json:"action_name"`
-	CommandID   string `json:"command_id,omitempty"`
-	// MissingRequirements describes blockers encountered by this execution.
+	OperationID         string                    `json:"operation_id,omitempty"`
+	TaskID              string                    `json:"task_id,omitempty"`
+	StepID              string                    `json:"step_id,omitempty"`
+	ActionName          string                    `json:"action_name"`
+	CommandID           string                    `json:"command_id,omitempty"`
 	MissingRequirements []actionmodel.Requirement `json:"missing_requirements,omitempty"`
 }
 
@@ -44,8 +43,6 @@ func (work *Work) Clone() *Work {
 	return &copy
 }
 
-// AgentSnapshot is the public state reported by an agent. The controller adds
-// liveness observations when storing it as an Agent.
 type AgentSnapshot struct {
 	Sessions         []sessions.Session   `json:"sessions,omitempty"`
 	ID               string               `json:"id"`

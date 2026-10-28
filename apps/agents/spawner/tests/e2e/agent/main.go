@@ -1,4 +1,3 @@
-// Command agent is the package served by the isolated API/MCP test stacks.
 package main
 
 import (
