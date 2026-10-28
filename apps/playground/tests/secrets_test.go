@@ -16,6 +16,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/apps/playground/internal/local"
+	fixtures "github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/crypto"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
@@ -34,14 +35,14 @@ func testAllInOneSecrets(t *testing.T) {
 		{name: "explicit key", key: strings.Repeat("ab", 32)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			allInOneEnvironment(t)
+			fixtures.AllInOneEnvironment(t)
 			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
 			if test.unset {
 				if err := os.Unsetenv("SECRETS_ENCRYPTION_KEY"); err != nil {
 					t.Fatal(err)
 				}
 			}
-			session, stop := startLocalAdminSession(t, local.Options{})
+			session, stop := fixtures.StartLocalAdminSession(t, local.Options{})
 			assertLocalSecretEnvironment(t, test.key, !test.unset)
 			created := localSecretRequest(t, session, http.MethodPost, "/api/v1/secrets",
 				`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+localSecretValue+`"}`, http.StatusCreated)
@@ -91,7 +92,7 @@ func testAllInOneSecrets(t *testing.T) {
 			{"non-hex", strings.Repeat("g", 64)},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				temporary := allInOneEnvironment(t)
+				temporary := fixtures.AllInOneEnvironment(t)
 				t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
 				// Key validation must win even when creating a session directory would fail.
 				for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {

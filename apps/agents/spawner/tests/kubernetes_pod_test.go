@@ -9,31 +9,13 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 )
-
-func kubernetesPodConfig() kubernetes.Config {
-	return kubernetes.Config{
-		Namespace: "agents", ServiceAccount: "agent-worker", ConfigMap: "provider-config", Secret: "provider-secrets",
-		ImagePullSecrets: []string{"registry-pull"}, RunAsUser: 1000, RunAsGroup: 1001,
-		Resources: kubernetes.ResourceRequirements{
-			Requests: map[string]string{"cpu": "250m", "memory": "256Mi"},
-			Limits:   map[string]string{"cpu": "1", "memory": "1Gi"},
-		},
-	}
-}
-
-func kubernetesPodSpec() kubernetes.Spec {
-	return kubernetes.Spec{
-		RequestID: "command:11111111-1111-4111-8111-111111111111", Owner: "22222222-2222-4222-8222-222222222222",
-		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
-		Image: "ghcr.io/defos-ai/example-agent@sha256:" + strings.Repeat("a", 64),
-	}
-}
 
 func TestKubernetesPodUsesLiteralPrefix(t *testing.T) {
 	for _, prefix := range []string{"", "team-", "team."} {
 		t.Run("prefix="+prefix, func(t *testing.T) {
-			config, spec := kubernetesPodConfig(), kubernetesPodSpec()
+			config, spec := fixtures.PodConfig(), fixtures.PodSpec()
 			config.PodPrefix = prefix
 			pod, err := kubernetes.BuildPod(config, spec)
 			if err != nil {
@@ -47,7 +29,7 @@ func TestKubernetesPodUsesLiteralPrefix(t *testing.T) {
 }
 
 func TestKubernetesPodAcceptsMaximumNames(t *testing.T) {
-	config, spec := kubernetesPodConfig(), kubernetesPodSpec()
+	config, spec := fixtures.PodConfig(), fixtures.PodSpec()
 	config.Namespace = strings.Repeat("a", 63)
 	config.PodPrefix = strings.Repeat("b", 253-len(spec.AgentID))
 	config.ServiceAccount, config.ConfigMap, config.Secret = "agent.worker", "provider.config", "provider.secret"
@@ -64,7 +46,7 @@ func TestKubernetesPodBuildsGatedWorker(t *testing.T) {
 	for _, key := range []string{"GITHUB_TOKEN", "SECRETS_ENCRYPTION_KEY", "OPENAI_API_KEY", "AWS_SECRET_ACCESS_KEY", "BUS_URL", "STORAGE_URL"} {
 		t.Setenv(key, "private-parent-environment-sentinel")
 	}
-	config, spec := kubernetesPodConfig(), kubernetesPodSpec()
+	config, spec := fixtures.PodConfig(), fixtures.PodSpec()
 	pod, err := kubernetes.BuildPod(config, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +224,7 @@ func TestKubernetesPodRejectsInvalidConfiguration(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config, spec := kubernetesPodConfig(), kubernetesPodSpec()
+			config, spec := fixtures.PodConfig(), fixtures.PodSpec()
 			test.change(&config, &spec)
 			if _, err := kubernetes.BuildPod(config, spec); err == nil {
 				t.Fatal("invalid Kubernetes launch was accepted")
@@ -252,7 +234,7 @@ func TestKubernetesPodRejectsInvalidConfiguration(t *testing.T) {
 }
 
 func TestKubernetesPodOwnsConfigurationCopies(t *testing.T) {
-	config, spec := kubernetesPodConfig(), kubernetesPodSpec()
+	config, spec := fixtures.PodConfig(), fixtures.PodSpec()
 	first, err := kubernetes.BuildPod(config, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -261,7 +243,7 @@ func TestKubernetesPodOwnsConfigurationCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(config, kubernetesPodConfig()) {
+	if !reflect.DeepEqual(config, fixtures.PodConfig()) {
 		t.Fatal("building a Pod mutated deployment configuration")
 	}
 	before := append([]byte(nil), first.Spec...)
@@ -280,10 +262,10 @@ func TestKubernetesPodOwnsConfigurationCopies(t *testing.T) {
 }
 
 func TestKubernetesPodPreservesResourceQuantitySpelling(t *testing.T) {
-	config := kubernetesPodConfig()
+	config := fixtures.PodConfig()
 	config.Resources.Requests["cpu"] = "5e-1"
 	config.Resources.Limits["memory"] = "1.5Gi"
-	pod, err := kubernetes.BuildPod(config, kubernetesPodSpec())
+	pod, err := kubernetes.BuildPod(config, fixtures.PodSpec())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,49 +3,20 @@ package mongo_test
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/providers/mongo/store"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func openStore(t *testing.T, collection string) *store.MongoStore {
-	t.Helper()
-	uri := os.Getenv("COMMANDER_TEST_MONGO_URL")
-	if uri == "" {
-		t.Skip("set COMMANDER_TEST_MONGO_URL to run against MongoDB")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
-	defer cancel()
-	database, err := store.Open(ctx, uri)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if _, err := database.Delete(ctx, collection, bson.D{}); err != nil {
-			t.Error(err)
-		}
-		if err := database.Close(ctx); err != nil {
-			t.Error(err)
-		}
-	})
-	if _, err := database.Delete(ctx, collection, bson.D{}); err != nil {
-		t.Fatal(err)
-	}
-	return database
-}
-
 func TestMongoQueriesAndUpdates(t *testing.T) {
 	const collection = "store_tests"
-	database := openStore(t, collection)
+	database := fixtures.OpenStore(t, collection)
 	ctx := t.Context()
 	type item struct {
 		ID    string `bson:"_id"`
@@ -101,7 +72,7 @@ func TestMongoQueriesAndUpdates(t *testing.T) {
 
 func TestMongoFiltersTreatIDsAsLiteralValues(t *testing.T) {
 	const collection = "literal_id_tests"
-	database := openStore(t, collection)
+	database := fixtures.OpenStore(t, collection)
 	ctx := t.Context()
 	type item struct {
 		ID    string `bson:"_id"`
@@ -153,7 +124,7 @@ func TestMongoFiltersTreatIDsAsLiteralValues(t *testing.T) {
 
 func TestMongoTransactionCommitAndRollback(t *testing.T) {
 	const collection = "transaction_tests"
-	database := openStore(t, collection)
+	database := fixtures.OpenStore(t, collection)
 	ctx := t.Context()
 	if err := database.Insert(ctx, collection, bson.M{"_id": "existing", "value": 0}); err != nil {
 		t.Fatal(err)

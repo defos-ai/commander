@@ -85,6 +85,5 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   from `ui/frontend`. Use the UI guide for packaging and integration checks.
 - Keep CLI/client tests in `tests/`, using public packages and bounded local HTTP
   fixtures. Keep setup/data in `tests/fixtures` and fake implementations in
-  `tests/fakes`; follow the [local layout](tests/AGENTS.md) and shared
-  [test guidance](../../framework/tests/AGENTS.md). Do not add paid-model or
-  Docker dependencies to command tests.
+  `tests/fakes`; follow the shared [test rules](../../framework/tests/AGENTS.md).
+  Do not add paid-model or Docker dependencies to command tests.

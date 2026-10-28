@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
+	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
@@ -29,8 +30,8 @@ func TestMCPEventWaitRetainsInterruptedWorkAndTimeoutCursor(t *testing.T) {
 	if err := store.Create(t.Context(), op); err != nil {
 		t.Fatal(err)
 	}
-	observed := &eventWaitStore{OperationStore: store, waiting: make(chan struct{})}
-	ctx, session := mcpSession(t, adapter.Config{OperationStore: observed})
+	observed := fakes.NewEventWaitStore(store)
+	ctx, session := hostfixtures.Session(t, adapter.Config{OperationStore: observed})
 	cursor := strconv.FormatUint(op.Events[len(op.Events)-1].Sequence, 10)
 	arguments := map[string]any{"operation_id": op.ID, "cursor": cursor, "wait_seconds": 5}
 	type response struct {
@@ -55,7 +56,7 @@ func TestMCPEventWaitRetainsInterruptedWorkAndTimeoutCursor(t *testing.T) {
 	}()
 	var result response
 	select {
-	case <-observed.waiting:
+	case <-observed.Waiting():
 		// A second snapshot read proves the terminal operation remained in the
 		// polling loop. Only then deliver its late execution outcome.
 	case result = <-done:
@@ -108,18 +109,4 @@ func TestMCPEventWaitRetainsInterruptedWorkAndTimeoutCursor(t *testing.T) {
 	if len(page.Events) != 0 || page.Events == nil || page.NextCursor != "1" || time.Since(started) < time.Second {
 		t.Fatalf("bounded wait lost its deadline or empty-page cursor: %+v", page)
 	}
-}
-
-type eventWaitStore struct {
-	operations.OperationStore
-	reads   atomic.Int32
-	waiting chan struct{}
-}
-
-func (s *eventWaitStore) Get(ctx context.Context, operationID string) (operations.Operation, error) {
-	operation, err := s.OperationStore.Get(ctx, operationID)
-	if s.reads.Add(1) == 2 {
-		close(s.waiting)
-	}
-	return operation, err
 }

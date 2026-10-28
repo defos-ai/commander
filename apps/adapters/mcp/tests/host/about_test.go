@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 )
 
 func TestMCPAboutDeployment(t *testing.T) {
@@ -27,7 +28,7 @@ func TestMCPAboutDeployment(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("MCP_RUNTIME", test.environment)
-			endpoint, client, _ := startMCPWithOptions(t, test.args, cli.Options{Application: test.application}, io.Discard)
+			endpoint, client, _ := hostfixtures.StartWithOptions(t, test.args, cli.Options{Application: test.application}, io.Discard)
 			response, err := client.Get(endpoint + "/aboutz")
 			if err != nil {
 				t.Fatal(err)
@@ -55,7 +56,7 @@ func TestMCPAboutDeployment(t *testing.T) {
 func TestMCPAboutRouteAndOriginProtection(t *testing.T) {
 	t.Setenv("MCP_TOKEN", "metadata-test-token")
 	t.Setenv("MCP_RUNTIME", "native")
-	endpoint, client, _ := startMCP(t, nil, io.Discard)
+	endpoint, client, _ := hostfixtures.Start(t, nil, io.Discard)
 	for _, test := range []struct {
 		name, method, path string
 		headers            map[string][]string
@@ -120,7 +121,7 @@ func TestMCPRejectsInvalidDeploymentBeforeOpeningProviders(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("MCP_RUNTIME", test.environment)
-			args := append(hostArgs(t.TempDir()), "--bus-url=unsupported://broker")
+			args := append(hostfixtures.Args(t.TempDir()), "--bus-url=unsupported://broker")
 			args = append(args, test.args...)
 			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			defer cancel()

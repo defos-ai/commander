@@ -3,7 +3,6 @@ package providers_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,28 +14,8 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
-
-func openRecords(t *testing.T, path string) *jsonfile.Records {
-	t.Helper()
-	records, err := jsonfile.OpenRecords(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return records
-}
-
-func putRecords(t *testing.T, records *jsonfile.Records, values map[string]json.RawMessage) {
-	t.Helper()
-	if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
-		for name, value := range values {
-			next[name] = value
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
 
 func requireRecords(t *testing.T, records *jsonfile.Records, want map[string]json.RawMessage) {
 	t.Helper()
@@ -46,14 +25,10 @@ func requireRecords(t *testing.T, records *jsonfile.Records, want map[string]jso
 	}
 }
 
-func recordBlob(path, value string) string {
-	return filepath.Join(path+".records", fmt.Sprintf("%x.json", sha256.Sum256([]byte(value))))
-}
-
 func TestRecordsConcurrentWritersAndAtomicSnapshots(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "operation.json")
-	first, second := openRecords(t, path), openRecords(t, path)
-	putRecords(t, first, map[string]json.RawMessage{"operation": json.RawMessage(`0`), "tasks/id": json.RawMessage(`{"generation":0}`)})
+	first, second := fixtures.OpenRecords(t, path), fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, first, map[string]json.RawMessage{"operation": json.RawMessage(`0`), "tasks/id": json.RawMessage(`{"generation":0}`)})
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	gate, results := make(chan struct{}), make(chan error, 2)
@@ -95,16 +70,16 @@ func TestRecordsConcurrentWritersAndAtomicSnapshots(t *testing.T) {
 			}
 		}
 	}
-	requireRecords(t, openRecords(t, path), map[string]json.RawMessage{"operation": json.RawMessage(`50`), "tasks/id": json.RawMessage(`{"generation":50}`)})
+	requireRecords(t, fixtures.OpenRecords(t, path), map[string]json.RawMessage{"operation": json.RawMessage(`50`), "tasks/id": json.RawMessage(`{"generation":50}`)})
 }
 
 func TestRecordsReadersAndOtherSetsDoNotWaitForWriter(t *testing.T) {
 	dir := t.TempDir()
-	first := openRecords(t, filepath.Join(dir, "first.json"))
-	reader := openRecords(t, filepath.Join(dir, "first.json"))
-	other := openRecords(t, filepath.Join(dir, "other.json"))
+	first := fixtures.OpenRecords(t, filepath.Join(dir, "first.json"))
+	reader := fixtures.OpenRecords(t, filepath.Join(dir, "first.json"))
+	other := fixtures.OpenRecords(t, filepath.Join(dir, "other.json"))
 	old := map[string]json.RawMessage{"operation": json.RawMessage(`"old"`)}
-	putRecords(t, first, old)
+	fixtures.PutRecords(t, first, old)
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	defer func() {
 		close(release)
@@ -147,9 +122,9 @@ func TestRecordsReadersAndOtherSetsDoNotWaitForWriter(t *testing.T) {
 func TestRecordsRejectedMutationsLeaveSnapshotUnchanged(t *testing.T) {
 	for _, name := range []string{"callback", "invalid JSON", "cancelled"} {
 		t.Run(name, func(t *testing.T) {
-			records := openRecords(t, filepath.Join(t.TempDir(), "operation.json"))
+			records := fixtures.OpenRecords(t, filepath.Join(t.TempDir(), "operation.json"))
 			old := map[string]json.RawMessage{"operation": json.RawMessage(`{"count":1}`)}
-			putRecords(t, records, old)
+			fixtures.PutRecords(t, records, old)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			rejected := errors.New("rejected")
@@ -175,14 +150,14 @@ func TestRecordsRejectedMutationsLeaveSnapshotUnchanged(t *testing.T) {
 
 func TestRecordsReuseUnchangedFilesAndSkipNoOp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "operation.json")
-	records := openRecords(t, path)
-	putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`null`), "tasks/id": json.RawMessage(`[1]`)})
-	blob, err := os.Stat(recordBlob(path, `null`))
+	records := fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`null`), "tasks/id": json.RawMessage(`[1]`)})
+	blob, err := os.Stat(fixtures.RecordBlob(path, `null`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	putRecords(t, records, map[string]json.RawMessage{"tasks/id": json.RawMessage(`[2]`)})
-	after, err := os.Stat(recordBlob(path, `null`))
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"tasks/id": json.RawMessage(`[2]`)})
+	after, err := os.Stat(fixtures.RecordBlob(path, `null`))
 	if err != nil || !os.SameFile(blob, after) || !blob.ModTime().Equal(after.ModTime()) {
 		t.Fatalf("unchanged record was rewritten: %v", err)
 	}
@@ -190,7 +165,7 @@ func TestRecordsReuseUnchangedFilesAndSkipNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	putRecords(t, records, nil)
+	fixtures.PutRecords(t, records, nil)
 	after, err = os.Stat(path)
 	if err != nil || !os.SameFile(manifest, after) || !manifest.ModTime().Equal(after.ModTime()) {
 		t.Fatalf("no-op update replaced the manifest: %v", err)
@@ -198,16 +173,16 @@ func TestRecordsReuseUnchangedFilesAndSkipNoOp(t *testing.T) {
 	if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error { delete(next, "tasks/id"); return nil }); err != nil {
 		t.Fatal(err)
 	}
-	requireRecords(t, openRecords(t, path), map[string]json.RawMessage{"operation": json.RawMessage(`null`)})
+	requireRecords(t, fixtures.OpenRecords(t, path), map[string]json.RawMessage{"operation": json.RawMessage(`null`)})
 }
 
 func TestRecordsRepeatedContentAdvancesManifestRevision(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "operation.json")
-	records := openRecords(t, path)
+	records := fixtures.OpenRecords(t, path)
 	var previousVersion uint64
 	var initialRefs json.RawMessage
 	for index, value := range []string{`0`, `1`, `0`} {
-		putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(value)})
+		fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(value)})
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -232,8 +207,8 @@ func TestRecordsRepeatedContentAdvancesManifestRevision(t *testing.T) {
 func TestRecordsNoOpRetryConfirmsDirectoryDurability(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "operation.json")
-	records := openRecords(t, path)
-	putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
+	records := fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
 	before, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -244,7 +219,7 @@ func TestRecordsNoOpRetryConfirmsDirectoryDurability(t *testing.T) {
 	}
 	var restore func()
 	err = records.Update(t.Context(), func(map[string]json.RawMessage) error {
-		restore = denyDirectoryRead(t, dir)
+		restore = fixtures.DenyDirectoryRead(t, dir)
 		return nil
 	})
 	if restore != nil {
@@ -253,7 +228,7 @@ func TestRecordsNoOpRetryConfirmsDirectoryDurability(t *testing.T) {
 	if !errors.Is(err, jsonfile.ErrWriteUncertain) || !errors.Is(err, os.ErrPermission) {
 		t.Fatalf("no-op retry must report failure to confirm manifest durability: %v", err)
 	}
-	putRecords(t, records, nil)
+	fixtures.PutRecords(t, records, nil)
 	after, err := os.Stat(path)
 	if err != nil || !os.SameFile(before, after) {
 		t.Fatalf("confirming durability replaced the manifest: %v", err)
@@ -266,10 +241,10 @@ func TestRecordsNoOpRetryConfirmsDirectoryDurability(t *testing.T) {
 
 func TestRecordsStagingFailurePreservesSnapshotAndRetryCleansOrphans(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "operation.json")
-	records := openRecords(t, path)
+	records := fixtures.OpenRecords(t, path)
 	old := map[string]json.RawMessage{"operation": json.RawMessage(`0`), "tasks/id": json.RawMessage(`1`)}
-	putRecords(t, records, old)
-	blocked := recordBlob(path, `3`)
+	fixtures.PutRecords(t, records, old)
+	blocked := fixtures.RecordBlob(path, `3`)
 	err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
 		next["operation"], next["tasks/id"] = json.RawMessage(`2`), json.RawMessage(`3`)
 		return os.Mkdir(blocked, 0700)
@@ -278,7 +253,7 @@ func TestRecordsStagingFailurePreservesSnapshotAndRetryCleansOrphans(t *testing.
 		t.Fatalf("staging failure must precede publication: %v", err)
 	}
 	requireRecords(t, records, old)
-	orphan := recordBlob(path, `2`)
+	orphan := fixtures.RecordBlob(path, `2`)
 	if _, err := os.Stat(orphan); err != nil {
 		t.Fatalf("first changed blob was not staged before the second failed: %v", err)
 	}
@@ -289,9 +264,9 @@ func TestRecordsStagingFailurePreservesSnapshotAndRetryCleansOrphans(t *testing.
 	if err := os.WriteFile(pending, []byte("partial"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	reopened := openRecords(t, path)
-	putRecords(t, reopened, map[string]json.RawMessage{"operation": json.RawMessage(`4`), "tasks/id": json.RawMessage(`5`)})
-	requireRecords(t, openRecords(t, path), map[string]json.RawMessage{"operation": json.RawMessage(`4`), "tasks/id": json.RawMessage(`5`)})
+	reopened := fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, reopened, map[string]json.RawMessage{"operation": json.RawMessage(`4`), "tasks/id": json.RawMessage(`5`)})
+	requireRecords(t, fixtures.OpenRecords(t, path), map[string]json.RawMessage{"operation": json.RawMessage(`4`), "tasks/id": json.RawMessage(`5`)})
 	for _, file := range []string{orphan, pending} {
 		if _, err := os.Lstat(file); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("successful retry did not remove staged orphan %s: %v", file, err)
@@ -303,12 +278,12 @@ func TestRecordsMissingOrCorruptReferencedBlobFailsPromptly(t *testing.T) {
 	for _, damage := range []string{"missing", "invalid JSON", "wrong digest"} {
 		t.Run(damage, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "operation.json")
-			records := openRecords(t, path)
+			records := fixtures.OpenRecords(t, path)
 			if _, err := records.Read(t.Context()); !errors.Is(err, os.ErrNotExist) {
 				t.Fatalf("missing manifest must report not-exist: %v", err)
 			}
-			putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
-			file := recordBlob(path, `1`)
+			fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
+			file := fixtures.RecordBlob(path, `1`)
 			var err error
 			if damage == "missing" {
 				err = os.Remove(file)
@@ -338,7 +313,7 @@ func TestRecordsMissingOrCorruptReferencedBlobFailsPromptly(t *testing.T) {
 func TestRecordsRejectUnsafeManifestDigests(t *testing.T) {
 	for _, digest := range []string{"../outside", "", strings.Repeat("z", 64)} {
 		path := filepath.Join(t.TempDir(), "operation.json")
-		records := openRecords(t, path)
+		records := fixtures.OpenRecords(t, path)
 		data, err := json.Marshal([]map[string]any{{"version": 1, "records": []map[string]string{{"name": "operation", "digest": digest}}}})
 		if err != nil {
 			t.Fatal(err)

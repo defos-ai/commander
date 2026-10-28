@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { answerQuestion, cancelOperation, CommandError, startOperation } from '../src/api/operation-commands';
-import type { Operation } from '../src/api/operation-types';
-
-const url = 'https://commander.example/team';
-const credentials = { url: url, username: 'operator' };
+import { respondJSON as respond } from './fakes/fetch';
+import { credentials, id, input, operation, url } from './fixtures/operation-commands';
 
 function requestedPath(input: RequestInfo | URL): string {
   const request = new URL(String(input), 'http://localhost');
@@ -11,20 +9,6 @@ function requestedPath(input: RequestInfo | URL): string {
   expect(request.pathname).toBe('/ui/proxy');
   expect(request.searchParams.get('url')).toBe(url);
   return request.searchParams.get('path')!;
-}
-const id = '5cde98e0-23d3-447d-ad59-2238b244f689';
-const input = { operation_id: id, mission_name: 'review-website-with-browser', input: { url: 'https://example.com' } };
-const operation: Operation = {
-  id, mission: { name: 'review-website-with-browser', objectives: ['Review a website'], required_actions: null, starting_actions: null, input_schema: null, output_schema: null },
-  input: input.input, status: 'planning', tasks: null, questions: null, events: null,
-  progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
-  created_at: '2026-10-05T12:00:00Z', updated_at: '2026-10-05T12:00:00Z',
-};
-
-function respond(body: unknown, status = 200) {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(body, { status }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
 }
 
 afterEach(() => { vi.useRealTimers(); });

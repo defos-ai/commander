@@ -12,9 +12,10 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -37,21 +38,23 @@ func TestSpawnAgentScopesEnvironmentTokenToPrivatePackages(t *testing.T) {
 			ctx := packages.WithGitHubToken(t.Context(), inherited)
 			ctx = action.WithExecution(ctx, action.Execution{CommandID: id.MessageID()})
 			requests := 0
-			ctx = action.WithSecrets(ctx, spawnSecretRequester(func(context.Context, string) ([]byte, error) {
+			ctx = action.WithSecrets(ctx, fakes.SecretRequester(func(context.Context, string) ([]byte, error) {
 				requests++
 				return nil, errors.New("unexpected managed secret request")
 			}))
 			var received []byte
 			calls := 0
-			executor := newSpawnAction(t, secretActionLauncher(func(ctx context.Context, _, _ string) (runtimes.Result, error) {
+			executor := fixtures.SpawnAction(t, fakes.LauncherFunc(func(ctx context.Context, _, _ string) (runtimes.Result, error) {
 				calls++
 				received = packages.GitHubToken(ctx)
 				if tc.private && string(received) != token || !tc.private && len(received) != 0 {
 					t.Error("launch received the wrong credential scope")
 				}
-				return secretSpawnResult(), tc.failure
+				return fixtures.SpawnResult(), tc.failure
 			}))
-			result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`"`+tc.visibility+`}`))
+
+			result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+fixtures.ActionPackage+`"`+tc.visibility+`}`))
+
 			if !errors.Is(err, tc.failure) || calls != 1 || requests != 0 {
 				t.Fatalf("unexpected launch outcome: calls=%d requests=%d error=%v", calls, requests, err)
 			}
@@ -85,7 +88,7 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 			requested := make(chan string, 1)
 			deliver := make(chan struct{})
 			provided := []byte("managed-github-token")
-			ctx = action.WithSecrets(ctx, spawnSecretRequester(func(ctx context.Context, name string) ([]byte, error) {
+			ctx = action.WithSecrets(ctx, fakes.SecretRequester(func(ctx context.Context, name string) ([]byte, error) {
 				requested <- name
 				select {
 				case <-deliver:
@@ -94,21 +97,23 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 					return nil, ctx.Err()
 				}
 			}))
-			launched := make(chan spawnInvocation, 1)
+			launched := make(chan fakes.SpawnInvocation, 1)
 			var received []byte
-			executor := newSpawnAction(t, secretActionLauncher(func(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
+			executor := fixtures.SpawnAction(t, fakes.LauncherFunc(func(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
 				received = packages.GitHubToken(ctx)
 				if string(received) != "managed-github-token" {
 					t.Error("launch did not receive the delivered token")
 				}
-				launched <- spawnInvocation{requestID: requestID, reference: reference}
-				return secretSpawnResult(), nil
+				launched <- fakes.SpawnInvocation{RequestID: requestID, Reference: reference}
+				return fixtures.SpawnResult(), nil
 			}))
 			outcome := make(chan error, 1)
 			finished := make(chan struct{})
 			go func() {
 				defer close(finished)
+
 				result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+privateURL+`","visibility":"private"}`))
+
 				if bytes.Contains(result.Output, []byte("managed-github-token")) {
 					t.Error("spawn output exposed the managed token")
 				}
@@ -155,7 +160,7 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 			if err != nil || len(launched) != 1 || len(requested) != 0 {
 				t.Fatalf("secret delivery did not finish exactly one launch: %v", err)
 			}
-			if call := <-launched; call != (spawnInvocation{requestID: "command:" + commandID, reference: privateURL}) {
+			if call := <-launched; call != (fakes.SpawnInvocation{RequestID: "command:" + commandID, Reference: privateURL}) {
 				t.Fatalf("secret wait changed execution identity: %+v", call)
 			}
 			if !bytes.Equal(received, make([]byte, len(received))) || !bytes.Equal(provided, make([]byte, len(provided))) {
@@ -172,16 +177,18 @@ func TestSpawnAgentRejectsUnavailableOrEmptyManagedSecret(t *testing.T) {
 			ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
 			provided := []byte("secret-error-sentinel")
 			if name != "no provider" {
-				ctx = action.WithSecrets(ctx, spawnSecretRequester(func(context.Context, string) ([]byte, error) {
+				ctx = action.WithSecrets(ctx, fakes.SecretRequester(func(context.Context, string) ([]byte, error) {
 					if name == "empty secret" {
 						return nil, nil
 					}
 					return provided, errors.New("provider failed: secret-error-sentinel")
 				}))
 			}
-			launcher := &actionLauncher{}
-			result, err := newSpawnAction(t, launcher).Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`","visibility":"private"}`))
-			if err == nil || len(launcher.calls) != 0 {
+			launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{})
+
+			result, err := fixtures.SpawnAction(t, launcher).Run(ctx, json.RawMessage(`{"package":"`+fixtures.ActionPackage+`","visibility":"private"}`))
+
+			if err == nil || len(launcher.Calls()) != 0 {
 				t.Fatal("missing or empty managed secret reached the launcher")
 			}
 			if strings.Contains(err.Error(), "secret-error-sentinel") || bytes.Contains(result.Output, []byte("secret-error-sentinel")) {
@@ -192,22 +199,4 @@ func TestSpawnAgentRejectsUnavailableOrEmptyManagedSecret(t *testing.T) {
 			}
 		})
 	}
-}
-
-type secretActionLauncher func(context.Context, string, string) (runtimes.Result, error)
-
-func (f secretActionLauncher) Spawn(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
-	return f(ctx, requestID, reference)
-}
-
-type spawnSecretRequester func(context.Context, string) ([]byte, error)
-
-func (f spawnSecretRequester) Secret(string) ([]byte, error) { return nil, action.ErrSecretUnavailable }
-func (f spawnSecretRequester) RequestSecret(ctx context.Context, name string) ([]byte, error) {
-	return f(ctx, name)
-}
-
-func secretSpawnResult() runtimes.Result {
-	return runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
-		Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42}, Actions: []actionmodel.Action{}}
 }

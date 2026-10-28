@@ -10,13 +10,14 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, store)
-	question := newStoreQuestion(op.Tasks[0].ID)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, store)
+	question := fixtures.Question(op.Tasks[0].ID)
 	started := time.Now().UTC()
 	asked, err := store.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version)
 	if err != nil {
@@ -35,15 +36,15 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 	}, operations.ErrOperationConflict)
 
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	unchanged, err := store.ExpireQuestions(t.Context(), op.ID, question.ExpiresAt.Add(-time.Nanosecond))
-	if err != nil || !bytes.Equal(before, readDispatchFile(t, path)) {
+	if err != nil || !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatalf("sweep before deadline rewrote the operation: %v", err)
 	}
 	assertResultJSONEqual(t, unchanged, asked)
 	question.Options[0] = "changed by caller"
 	asked.Questions[0].Options[1] = "changed by reader"
-	answered, err := newDispatchStore(t, dir).AnswerQuestion(t.Context(), op.ID, question.ID, "Proceed with review")
+	answered, err := fixtures.NewDispatchStore(t, dir).AnswerQuestion(t.Context(), op.ID, question.ID, "Proceed with review")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,7 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 	}
 	assertQuestionContinuation(t, answered, operations.DecisionModel, operations.ContinuationPending, question.ID, op.Tasks[0].Continuation.Version+2)
 	assertQuestionEvent(t, answered, operations.QuestionAnsweredEvent, question.ID, len(op.Events)+2, started)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,8 +69,8 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 
 func TestOperationQuestionCompetingAsksUseLatestContinuation(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, first)
 	type result struct {
 		question operations.Question
 		op       operations.Operation
@@ -77,7 +78,7 @@ func TestOperationQuestionCompetingAsksUseLatestContinuation(t *testing.T) {
 	}
 	gate, results := make(chan struct{}), make(chan result, 2)
 	for _, store := range []*operationfs.OperationFsStore{first, second} {
-		question := newStoreQuestion(op.Tasks[0].ID)
+		question := fixtures.Question(op.Tasks[0].ID)
 		go func() {
 			<-gate
 			published, err := store.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version)
@@ -93,7 +94,7 @@ func TestOperationQuestionCompetingAsksUseLatestContinuation(t *testing.T) {
 		t.Fatalf("competing asks did not produce exactly one question: %+v; %+v", a, b)
 	}
 	assertQuestionContinuation(t, a.op, operations.DecisionUser, operations.ContinuationWaiting, a.question.ID, op.Tasks[0].Continuation.Version+1)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +103,8 @@ func TestOperationQuestionCompetingAsksUseLatestContinuation(t *testing.T) {
 
 func TestOperationQuestionRejectsInvalidEnvelope(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, store)
 	for _, tc := range []struct {
 		name   string
 		change func(*operations.Question)
@@ -121,7 +122,7 @@ func TestOperationQuestionRejectsInvalidEnvelope(t *testing.T) {
 		{"answer time", func(q *operations.Question) { q.AnsweredAt = &q.AskedAt }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			question := newStoreQuestion("")
+			question := fixtures.Question("")
 			tc.change(&question)
 			assertQuestionRejected(t, dir, op.ID, func() (operations.Operation, error) {
 				return store.AskQuestion(t.Context(), op.ID, question, 0)
@@ -151,9 +152,9 @@ func TestOperationQuestionUsesLatestStoredEligibility(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op, _ := createContinuationOperation(t, first)
-			question := newStoreQuestion(op.Tasks[0].ID)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op, _ := fixtures.CreateContinuationOperation(t, first)
+			question := fixtures.Question(op.Tasks[0].ID)
 			if tc.answer {
 				if _, err := first.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version); err != nil {
 					t.Fatal(err)
@@ -177,9 +178,9 @@ func TestOperationQuestionUsesLatestStoredEligibility(t *testing.T) {
 
 func TestOperationQuestionLateAnswerCommitsExpiration(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, store)
-	question := newStoreQuestion(op.Tasks[0].ID)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, store)
+	question := fixtures.Question(op.Tasks[0].ID)
 	question.AskedAt, question.ExpiresAt = time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour)
 	asked, err := store.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version)
 	if err != nil {
@@ -196,7 +197,7 @@ func TestOperationQuestionLateAnswerCommitsExpiration(t *testing.T) {
 	}
 	assertQuestionContinuation(t, expired, operations.DecisionModel, operations.ContinuationPending, question.ID, asked.Tasks[0].Continuation.Version+1)
 	assertQuestionEvent(t, expired, operations.QuestionExpiredEvent, question.ID, len(asked.Events)+1, started)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,9 +209,9 @@ func TestOperationQuestionLateAnswerCommitsExpiration(t *testing.T) {
 
 func TestOperationQuestionAnswerAndSweepHaveOneWinner(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, first)
-	question := newStoreQuestion(op.Tasks[0].ID)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, first)
+	question := fixtures.Question(op.Tasks[0].ID)
 	asked, err := first.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +232,7 @@ func TestOperationQuestionAnswerAndSweepHaveOneWinner(t *testing.T) {
 	if sweepErr != nil {
 		t.Fatal(sweepErr)
 	}
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,8 +249,8 @@ func TestOperationQuestionAnswerAndSweepHaveOneWinner(t *testing.T) {
 	}
 	assertQuestionContinuation(t, saved, operations.DecisionModel, operations.ContinuationPending, question.ID, asked.Tasks[0].Continuation.Version+1)
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
-	if _, err := first.ExpireQuestions(t.Context(), op.ID, question.ExpiresAt); err != nil || !bytes.Equal(before, readDispatchFile(t, path)) {
+	before := fixtures.ReadDispatchFile(t, path)
+	if _, err := first.ExpireQuestions(t.Context(), op.ID, question.ExpiresAt); err != nil || !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatalf("repeated sweep rewrote settled state: %v", err)
 	}
 }
@@ -258,9 +259,9 @@ func TestOperationQuestionExpirationPreservesTerminalState(t *testing.T) {
 	for _, status := range []operations.Status{operations.Completed, operations.Failed, operations.Cancelled} {
 		t.Run(string(status), func(t *testing.T) {
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
-			op, _ := createContinuationOperation(t, store)
-			question := newStoreQuestion(op.Tasks[0].ID)
+			store := fixtures.NewDispatchStore(t, dir)
+			op, _ := fixtures.CreateContinuationOperation(t, store)
+			question := fixtures.Question(op.Tasks[0].ID)
 			if _, err := store.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version); err != nil {
 				t.Fatal(err)
 			}
@@ -273,7 +274,7 @@ func TestOperationQuestionExpirationPreservesTerminalState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			expired, err := newDispatchStore(t, dir).ExpireQuestions(t.Context(), op.ID, question.ExpiresAt)
+			expired, err := fixtures.NewDispatchStore(t, dir).ExpireQuestions(t.Context(), op.ID, question.ExpiresAt)
 			if err != nil || expired.Status != status || expired.Questions[0].Status != operations.QuestionExpired || expired.Questions[0].Answer != "" || expired.Questions[0].AnsweredAt != nil || countResultEvents(expired, operations.QuestionExpiredEvent) != 1 {
 				t.Fatalf("terminal expiration revived the operation or supplied an answer: %+v, %v", expired, err)
 			}
@@ -282,21 +283,15 @@ func TestOperationQuestionExpirationPreservesTerminalState(t *testing.T) {
 	}
 }
 
-func newStoreQuestion(taskID string) operations.Question {
-	now := time.Now().UTC()
-	return operations.Question{ID: id.QuestionID(), TaskID: taskID, Status: operations.QuestionPending,
-		Text: "Continue review?", Options: []string{"yes", "no"}, AskedAt: now, ExpiresAt: now.Add(time.Hour)}
-}
-
 func assertQuestionRejected(t *testing.T, dir, operationID string, call func() (operations.Operation, error), want error) {
 	t.Helper()
 	path := filepath.Join(dir, "operations", operationID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	published, err := call()
 	if err == nil || want != nil && !errors.Is(err, want) || published.ID != "" {
 		t.Fatalf("question transition must reject without publishing a snapshot: %+v, %v", published, err)
 	}
-	if !bytes.Equal(before, readDispatchFile(t, path)) {
+	if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatal("rejected question transition changed operation bytes or storage revision")
 	}
 }

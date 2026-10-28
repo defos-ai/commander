@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
 func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
@@ -35,12 +36,12 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 		io.WriteString(w, `{"id":"metadata-only"}`)
 	}))
 	defer upstream.Close()
-	handler, err := connections.NewHandler(connections.Config{APIUpstreams: localMappings(upstream.URL)})
+	handler, err := connections.NewHandler(connections.Config{APIUpstreams: fixtures.LocalMappings(upstream.URL)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer handler.Close()
-	cookie := login(t, handler, upstream.URL, nil)
+	cookie := fixtures.Login(t, handler, upstream.URL, nil)
 
 	for _, tc := range []struct {
 		method, path, body string
@@ -50,9 +51,9 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 		{http.MethodDelete, "/api/v1/secrets/builder-agent/GITHUB_TOKEN?id=00000000-0000-4000-8000-000000000001&version=2", "", http.StatusNoContent},
 	} {
 		t.Run(tc.method, func(t *testing.T) {
-			path := proxyPath(upstream.URL, tc.path)
+			path := fixtures.ProxyPath(upstream.URL, tc.path)
 			for _, boundary := range []string{"no origin", "cross origin", "no session"} {
-				request := browserRequest(tc.method, path, tc.body, cookie)
+				request := fixtures.BrowserRequest(tc.method, path, tc.body, cookie)
 				status := http.StatusForbidden
 				switch boundary {
 				case "no origin":
@@ -63,12 +64,12 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 					request.Header.Del("Cookie")
 					status = http.StatusUnauthorized
 				}
-				result := serveUI(handler, request)
+				result := fixtures.ServeUI(handler, request)
 				if result.Code != status || len(observed) != 0 {
 					t.Fatalf("%s did not reject the secret mutation before forwarding", boundary)
 				}
 			}
-			result := serveUI(handler, browserRequest(tc.method, path, tc.body, cookie))
+			result := fixtures.ServeUI(handler, fixtures.BrowserRequest(tc.method, path, tc.body, cookie))
 			if result.Code != tc.status || len(observed) != 1 || result.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("secret mutation was not forwarded exactly once with uncacheable response")
 			}

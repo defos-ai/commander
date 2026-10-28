@@ -2,7 +2,6 @@ package providers_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -15,12 +14,13 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationContinuationHasOneDecisionAcrossStoreInstances(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, selected := createContinuationOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, selected := fixtures.CreateContinuationOperation(t, first)
 	type resolution struct {
 		next []actions.NextAction
 		op   operations.Operation
@@ -45,18 +45,18 @@ func TestOperationContinuationHasOneDecisionAcrossStoreInstances(t *testing.T) {
 		t.Fatalf("continuation must publish one decision and reject the other: %v, %v", a.err, b.err)
 	}
 	assertContinuationResolution(t, op, a.op, a.next, started)
-	reopened := newDispatchStore(t, dir)
+	reopened := fixtures.NewDispatchStore(t, dir)
 	saved, err := reopened.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertResultJSONEqual(t, saved, a.op)
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	if _, err := reopened.ResolveContinuation(t.Context(), op.ID, op.Tasks[0].ID, op.Tasks[0].Continuation.Version, a.next); err == nil {
 		t.Fatal("replaying the winning decision at the same version must fail")
 	}
-	if !bytes.Equal(before, readDispatchFile(t, path)) {
+	if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatal("replay changed the decision, child IDs, events, or storage revision")
 	}
 }
@@ -81,8 +81,8 @@ func TestOperationContinuationRejectsChangedStoredState(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op, selected := createContinuationOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op, selected := fixtures.CreateContinuationOperation(t, first)
 			latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				tc.change(next)
 				return nil
@@ -91,14 +91,14 @@ func TestOperationContinuationRejectsChangedStoredState(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 
 			published, err := first.ResolveContinuation(t.Context(), op.ID, op.Tasks[0].ID, op.Tasks[0].Continuation.Version, selected)
 
 			if err == nil || tc.want != nil && !errors.Is(err, tc.want) || published.ID != "" {
 				t.Fatalf("resolution accepted changed eligibility or returned an uncommitted snapshot: %+v, %v", published, err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 				t.Fatal("rejected resolution changed the latest operation or its storage revision")
 			}
 			saved, err := first.Get(t.Context(), op.ID)
@@ -112,8 +112,8 @@ func TestOperationContinuationRejectsChangedStoredState(t *testing.T) {
 
 func TestOperationContinuationEmptyDecisionIsDurable(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, store)
 	started := time.Now().UTC()
 	selected := []actions.NextAction{}
 
@@ -123,7 +123,7 @@ func TestOperationContinuationEmptyDecisionIsDurable(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertContinuationResolution(t, op, published, selected, started)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,11 +140,11 @@ func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) 
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
-			op, selected := createContinuationOperation(t, store)
+			store := fixtures.NewDispatchStore(t, dir)
+			op, selected := fixtures.CreateContinuationOperation(t, store)
 			operationDir := filepath.Join(dir, "operations")
 			path := filepath.Join(operationDir, op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 			restore := func() {
 				t.Helper()
 				if err := os.Chmod(operationDir, 0700); err != nil {
@@ -152,7 +152,7 @@ func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) 
 				}
 			}
 			if permission == "read" {
-				restore = denyDirectoryRead(t, operationDir)
+				restore = fixtures.DenyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
 				if err := os.Chmod(operationDir, 0500); err != nil {
@@ -170,10 +170,10 @@ func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) 
 			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
 				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) || published.ID != "" {
 				t.Fatal("failed write exposed or persisted an uncommitted mutation")
 			}
-			reopened := newDispatchStore(t, dir)
+			reopened := fixtures.NewDispatchStore(t, dir)
 			saved, err := reopened.Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -186,32 +186,6 @@ func TestOperationContinuationWriteFailuresPreserveAtomicDecision(t *testing.T) 
 			assertContinuationResolution(t, op, retried, selected, started)
 		})
 	}
-}
-
-func createContinuationOperation(t *testing.T, store *operationfs.OperationFsStore) (operations.Operation, []actions.NextAction) {
-	t.Helper()
-	created := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
-	operationID, taskID := id.OperationID(), id.TaskID()
-	op := operations.Operation{
-		ID: operationID, Status: operations.Waiting, CreatedAt: created, UpdatedAt: created,
-		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,
-			ParentTaskID: id.TaskID(), StepID: "review", ActionName: "discover", Status: operations.TaskSucceeded,
-			Continuation: &operations.Continuation{Version: 7, DecisionBy: operations.DecisionModel,
-				Status: operations.ContinuationPending, CreatedTaskIDs: []string{},
-				ProposedActions: []actions.NextAction{{ActionName: "inspect", Input: json.RawMessage(`{"page":0}`)}},
-			},
-		}},
-		Events: []operations.Event{{Sequence: 1, OperationID: operationID, TaskID: taskID,
-			Type: operations.ContinuationReady, Status: operations.Waiting, CreatedAt: created}},
-	}
-	selected := []actions.NextAction{
-		{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`), Reason: "Inspect first page"},
-		{ActionName: "report", Input: json.RawMessage(`{"page":2}`), Reason: "Report second page"},
-	}
-	if err := store.Create(t.Context(), op); err != nil {
-		t.Fatal(err)
-	}
-	return op, selected
 }
 
 func assertContinuationResolution(t *testing.T, before, published operations.Operation, selected []actions.NextAction, started time.Time) {

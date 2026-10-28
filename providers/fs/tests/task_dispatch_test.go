@@ -2,7 +2,6 @@ package providers_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -15,13 +14,14 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationDispatchHasOneOwnerAcrossStoreInstances(t *testing.T) {
 	dir := t.TempDir()
-	first := newDispatchStore(t, dir)
-	second := newDispatchStore(t, dir)
-	op, dispatch := createQueuedDispatchOperation(t, first)
+	first := fixtures.NewDispatchStore(t, dir)
+	second := fixtures.NewDispatchStore(t, dir)
+	op, dispatch := fixtures.CreateQueuedDispatchOperation(t, first)
 	type result struct {
 		dispatch  operations.TaskDispatch
 		operation operations.Operation
@@ -51,11 +51,11 @@ func TestOperationDispatchHasOneOwnerAcrossStoreInstances(t *testing.T) {
 	if a.operation.UpdatedAt.Before(started) || a.operation.UpdatedAt.After(time.Now().UTC()) {
 		t.Fatalf("dispatch did not record its commit time: %v", a.operation.UpdatedAt)
 	}
-	expected := expectedDispatch(op, a.dispatch, a.operation.UpdatedAt)
+	expected := fixtures.ExpectedDispatch(op, a.dispatch, a.operation.UpdatedAt)
 	if !reflect.DeepEqual(a.operation, expected) {
 		t.Fatalf("dispatch changed the assignment or omitted transition fields:\n got %+v\nwant %+v", a.operation, expected)
 	}
-	reopened := newDispatchStore(t, dir)
+	reopened := fixtures.NewDispatchStore(t, dir)
 	saved, err := reopened.Get(t.Context(), op.ID)
 	if err != nil || !reflect.DeepEqual(saved, expected) {
 		t.Fatalf("reopening lost the winning dispatch or appended another event: %+v, %v", saved, err)
@@ -84,9 +84,9 @@ func TestOperationDispatchRejectsChangedStoredState(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			first := newDispatchStore(t, dir)
-			second := newDispatchStore(t, dir)
-			op, dispatch := createQueuedDispatchOperation(t, first)
+			first := fixtures.NewDispatchStore(t, dir)
+			second := fixtures.NewDispatchStore(t, dir)
+			op, dispatch := fixtures.CreateQueuedDispatchOperation(t, first)
 			latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				tc.change(next)
 				return nil
@@ -95,14 +95,14 @@ func TestOperationDispatchRejectsChangedStoredState(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 
 			_, err = first.DispatchTask(t.Context(), op.ID, dispatch)
 
 			if !errors.Is(err, operations.ErrOperationConflict) {
 				t.Fatalf("dispatch accepted changed eligibility: %v", err)
 			}
-			if after := readDispatchFile(t, path); !bytes.Equal(before, after) {
+			if after := fixtures.ReadDispatchFile(t, path); !bytes.Equal(before, after) {
 				t.Fatal("rejected dispatch changed the operation file or its revision")
 			}
 			saved, err := second.Get(t.Context(), op.ID)
@@ -118,11 +118,11 @@ func TestOperationDispatchWriteFailureLeavesAssignmentQueued(t *testing.T) {
 		t.Skip("requires Unix directory permissions and an unprivileged user")
 	}
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, dispatch := createQueuedDispatchOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, dispatch := fixtures.CreateQueuedDispatchOperation(t, store)
 	operationDir := filepath.Join(dir, "operations")
 	path := filepath.Join(operationDir, op.ID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	restore := func() {
 		t.Helper()
 		if err := os.Chmod(operationDir, 0700); err != nil {
@@ -143,22 +143,22 @@ func TestOperationDispatchWriteFailureLeavesAssignmentQueued(t *testing.T) {
 	if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
 		t.Fatalf("expected permission failure before publishing the operation: %v", err)
 	}
-	if after := readDispatchFile(t, path); !bytes.Equal(before, after) {
+	if after := fixtures.ReadDispatchFile(t, path); !bytes.Equal(before, after) {
 		t.Fatal("failed write partially dispatched the task or changed its revision")
 	}
 	retried, err := store.DispatchTask(t.Context(), op.ID, dispatch)
-	if err != nil || !reflect.DeepEqual(retried, expectedDispatch(op, dispatch, retried.UpdatedAt)) {
+	if err != nil || !reflect.DeepEqual(retried, fixtures.ExpectedDispatch(op, dispatch, retried.UpdatedAt)) {
 		t.Fatalf("dispatch could not retry the unchanged assignment: %+v, %v", retried, err)
 	}
 }
 
 func TestOperationDispatchDirectorySyncFailureLeavesAssignmentQueued(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, dispatch := createQueuedDispatchOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, dispatch := fixtures.CreateQueuedDispatchOperation(t, store)
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
-	restore := denyDirectoryRead(t, filepath.Join(dir, "operations"))
+	before := fixtures.ReadDispatchFile(t, path)
+	restore := fixtures.DenyDirectoryRead(t, filepath.Join(dir, "operations"))
 
 	published, err := store.DispatchTask(t.Context(), op.ID, dispatch)
 	restore()
@@ -166,73 +166,16 @@ func TestOperationDispatchDirectorySyncFailureLeavesAssignmentQueued(t *testing.
 	if errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, fs.ErrPermission) {
 		t.Fatalf("pre-publication sync failure lost its cause or reported uncertain durability: %v", err)
 	}
-	if published.ID != "" || !bytes.Equal(before, readDispatchFile(t, path)) {
+	if published.ID != "" || !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatal("failed sync exposed or persisted an uncommitted dispatch")
 	}
-	reopened := newDispatchStore(t, dir)
+	reopened := fixtures.NewDispatchStore(t, dir)
 	saved, err := reopened.Get(t.Context(), op.ID)
 	if err != nil || !reflect.DeepEqual(saved, op) {
 		t.Fatalf("failed sync changed the queued assignment: %+v, %v", saved, err)
 	}
 	retried, err := reopened.DispatchTask(t.Context(), op.ID, dispatch)
-	if err != nil || !reflect.DeepEqual(retried, expectedDispatch(op, dispatch, retried.UpdatedAt)) {
+	if err != nil || !reflect.DeepEqual(retried, fixtures.ExpectedDispatch(op, dispatch, retried.UpdatedAt)) {
 		t.Fatalf("dispatch could not retry after directory permissions recovered: %+v, %v", retried, err)
 	}
-}
-
-func createQueuedDispatchOperation(t *testing.T, store *operationfs.OperationFsStore) (operations.Operation, operations.TaskDispatch) {
-	t.Helper()
-	created := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
-	operationID, taskID := id.OperationID(), id.TaskID()
-	op := operations.Operation{
-		ID: operationID, Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
-		Preflight: &operations.Preflight{Ready: true, Version: 2},
-		Tasks: []operations.Task{{
-			ID: taskID, OperationID: operationID, ParentTaskID: id.TaskID(), StepID: "review",
-			ActionName: "inspect", CommandID: taskID, Input: json.RawMessage(`{"page":1}`), Status: operations.TaskQueued,
-		}},
-		Events: []operations.Event{{Sequence: 1, OperationID: operationID, Type: operations.TaskAssigned,
-			Status: operations.Planning, TaskID: taskID, CreatedAt: created}},
-	}
-	dispatch := operations.TaskDispatch{TaskID: taskID, AgentID: "review-agent-00000001",
-		StartedAt: created.Add(time.Minute), DeadlineAt: created.Add(2 * time.Minute)}
-	if err := store.Create(t.Context(), op); err != nil {
-		t.Fatal(err)
-	}
-	saved, err := store.Get(t.Context(), op.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return saved, dispatch
-}
-
-func expectedDispatch(op operations.Operation, dispatch operations.TaskDispatch, updatedAt time.Time) operations.Operation {
-	op = op.Clone()
-	task := &op.Tasks[0]
-	task.Status, task.AgentID, task.StartedAt = operations.TaskRunning, dispatch.AgentID, dispatch.StartedAt
-	task.DeadlineAt = &dispatch.DeadlineAt
-	op.Status, op.UpdatedAt = operations.Running, updatedAt
-	op.Events = append(op.Events, operations.Event{
-		Sequence: 2, OperationID: op.ID, Type: operations.TaskDispatched, Status: operations.Running,
-		TaskID: dispatch.TaskID, Message: "Task dispatched", CreatedAt: updatedAt,
-	})
-	return op
-}
-
-func newDispatchStore(t *testing.T, dir string) *operationfs.OperationFsStore {
-	t.Helper()
-	store, err := operationfs.NewOperationFsStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store
-}
-
-func readDispatchFile(t *testing.T, path string) []byte {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
 }

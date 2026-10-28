@@ -6,20 +6,11 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/controllers"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
-func registration() controllers.Controller {
-	stamp := time.Date(2026, 10, 6, 12, 0, 0, 123456789, time.UTC)
-	return controllers.Controller{
-		ID: "default-controller-0123abcd", Type: "default", Status: controllers.Ready,
-		Server:  controllers.ServerInfo{Hostname: "worker-1", OS: "linux", Arch: "amd64"},
-		Version: "v1", AgentSelector: "*", RuleSelector: "mission-rules", StartedAt: stamp.Add(-time.Minute),
-		LastHeartbeat: stamp, LeaseExpiresAt: stamp.Add(45 * time.Second),
-	}
-}
-
 func TestSnapshotDerivesLeaseWithoutMutatingObservation(t *testing.T) {
-	record := registration()
+	record := fixtures.Registration()
 	for _, test := range []struct {
 		name   string
 		change func(*controllers.Controller)
@@ -39,7 +30,9 @@ func TestSnapshotDerivesLeaseWithoutMutatingObservation(t *testing.T) {
 			input := record
 			test.change(&input)
 			before := input
+
 			got := input.Snapshot(test.now)
+
 			if got.Status != test.status || got.Stale != test.stale {
 				t.Fatalf("snapshot = %#v", got)
 			}
@@ -51,7 +44,7 @@ func TestSnapshotDerivesLeaseWithoutMutatingObservation(t *testing.T) {
 }
 
 func TestControllerValidation(t *testing.T) {
-	record := registration()
+	record := fixtures.Registration()
 	for _, status := range []controllers.Status{controllers.Starting, controllers.Ready, controllers.Degraded, controllers.Draining, controllers.Stopped, controllers.Unavailable} {
 		valid := record
 		valid.Status = status

@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import type { OperationPreflight } from '../../src/api/operation-types';
-import { test, connect, publicAPIURL } from './fixtures';
+import { connect, publicAPIURL, test } from '../fixtures/e2e';
 
 test('operation secret guidance stays visible in graph and opens the matching connection', async ({ page, api }) => {
   const operation = await api.post<{ id: string }>('/operations', {

@@ -8,37 +8,8 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/secrets"
 )
-
-const deliveryID = "00000000-0000-4000-8000-000000000003"
-
-var requestedAt = time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
-
-func secretFixture() secrets.Secret {
-	return secrets.Secret{
-		Metadata: secrets.Metadata{
-			ID: "00000000-0000-4000-8000-000000000001",
-			Key: secrets.Key{
-				Scope: secrets.Scope{AgentType: "browser"},
-				Name:  "API_TOKEN",
-			},
-			Version: 2, CreatedAt: requestedAt.Add(-time.Hour), UpdatedAt: requestedAt,
-			ExpiresAt: requestedAt.Add(time.Hour),
-		},
-		Value: secrets.EncryptedValue{
-			Format: "test-envelope", KeyID: "test-key",
-			Nonce: []byte("nonce-fixture"), Ciphertext: []byte("private-payload-fixture"),
-		},
-	}
-}
-
-func requestFixture() secrets.Request {
-	return secrets.Request{
-		ID: "00000000-0000-4000-8000-000000000002", Key: secretFixture().Metadata.Key,
-		AgentID: "builder-agent-01234567", Status: secrets.Pending,
-		RequestedAt: requestedAt, ExpiresAt: requestedAt.Add(15 * time.Minute),
-	}
-}
 
 func TestScopeAndInvalidIdentities(t *testing.T) {
 	scope, err := secrets.NewScope("browser")
@@ -51,17 +22,17 @@ func TestScopeAndInvalidIdentities(t *testing.T) {
 		}
 	}
 
-	key := secretFixture().Metadata.Key
+	key := fixtures.Secret().Metadata.Key
 	key.Name = "../API_TOKEN"
 	if err := key.Validate(); err == nil {
 		t.Error("path-like secret name accepted")
 	}
-	metadata := secretFixture().Metadata
+	metadata := fixtures.Secret().Metadata
 	metadata.ID = "secret-1"
 	if err := metadata.Validate(); err == nil {
 		t.Error("non-UUID secret identity accepted")
 	}
-	request := requestFixture()
+	request := fixtures.Request()
 	request.AgentID = "builder"
 	if err := request.Validate(); err == nil {
 		t.Error("agent type accepted as recipient instance ID")
@@ -69,11 +40,11 @@ func TestScopeAndInvalidIdentities(t *testing.T) {
 }
 
 func TestAvailabilityBoundaries(t *testing.T) {
-	metadata := secretFixture().Metadata
+	metadata := fixtures.Secret().Metadata
 	if err := metadata.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if got := secrets.AvailabilityAt(nil, requestedAt); got != secrets.Missing {
+	if got := secrets.AvailabilityAt(nil, fixtures.RequestedAt()); got != secrets.Missing {
 		t.Fatalf("absent secret availability = %q", got)
 	}
 	for _, test := range []struct {
@@ -95,13 +66,13 @@ func TestAvailabilityBoundaries(t *testing.T) {
 	if err := metadata.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if got := secrets.AvailabilityAt(&metadata, requestedAt.AddDate(10, 0, 0)); got != secrets.Available {
+	if got := secrets.AvailabilityAt(&metadata, fixtures.RequestedAt().AddDate(10, 0, 0)); got != secrets.Available {
 		t.Fatalf("secret without expiry availability = %q", got)
 	}
 }
 
 func TestEncryptedSecretValidationAndClone(t *testing.T) {
-	original := secretFixture()
+	original := fixtures.Secret()
 	if err := original.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +92,7 @@ func TestEncryptedSecretValidationAndClone(t *testing.T) {
 		{"expiry before update", func(s *secrets.Secret) { s.Metadata.ExpiresAt = s.Metadata.UpdatedAt }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			invalid := secretFixture()
+			invalid := fixtures.Secret()
 			test.change(&invalid)
 			if err := invalid.Validate(); err == nil {
 				t.Fatal("invalid encrypted secret accepted")
@@ -131,8 +102,8 @@ func TestEncryptedSecretValidationAndClone(t *testing.T) {
 }
 
 func TestPublicJSONExcludesSecretValue(t *testing.T) {
-	secret := secretFixture()
-	request, err := requestFixture().Fulfill(secret.Metadata, deliveryID, requestedAt.Add(time.Minute))
+	secret := fixtures.Secret()
+	request, err := fixtures.Request().Fulfill(secret.Metadata, fixtures.DeliveryID, fixtures.RequestedAt().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}

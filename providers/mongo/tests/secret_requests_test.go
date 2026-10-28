@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -15,14 +14,14 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	secretmongo "github.com/defos-ai/commander/providers/mongo/secrets"
-	"github.com/defos-ai/commander/providers/mongo/store"
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestRequestMongoStoreEncryptedDeliveryAndRestart(t *testing.T) {
-	database := openStore(t, "secret_requests")
-	requests := openRequestMongoStore(t, database)
-	request, delivery, installation := mongoRequestFixture(t)
+	database := fixtures.OpenStore(t, "secret_requests")
+	requests := fixtures.OpenRequestStore(t, database)
+	request, delivery, installation := fixtures.SecretRequest(t)
 	items, err := requests.ListPending(t.Context())
 	if err != nil || items == nil || len(items) != 0 {
 		t.Fatalf("empty pending requests: count=%d error=%v", len(items), err)
@@ -43,14 +42,14 @@ func TestRequestMongoStoreEncryptedDeliveryAndRestart(t *testing.T) {
 	}
 	delivery.Secret.Value.Ciphertext[0] ^= 1
 	delivery.Secret.Value.Nonce[0] ^= 1
-	requests = openRequestMongoStore(t, database)
+	requests = fixtures.OpenRequestStore(t, database)
 	saved := assertMongoRequest(t, requests, want)
-	cipher, err := crypto.NewSecretCipher(mongoSecretEncryptionKey)
+	cipher, err := crypto.NewSecretCipher(fixtures.SecretEncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plaintext, err := cipher.Decrypt(saved.Delivery.Secret)
-	if err != nil || string(plaintext) != mongoSecretPlaintext {
+	if err != nil || string(plaintext) != fixtures.SecretPlaintext {
 		t.Fatal("reopened delivery lost encrypted value integrity")
 	}
 	saved.Delivery.Secret.Value.Ciphertext[0] ^= 1
@@ -75,7 +74,7 @@ func TestRequestMongoStoreEncryptedDeliveryAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requests = openRequestMongoStore(t, database)
+	requests = fixtures.OpenRequestStore(t, database)
 	assertMongoRequest(t, requests, want)
 	for _, replay := range []func() error{
 		func() error { return requests.Create(t.Context(), request) },
@@ -96,11 +95,11 @@ func TestRequestMongoStoreEncryptedDeliveryAndRestart(t *testing.T) {
 	if err := database.Find(t.Context(), "secret_requests", bson.D{}, &documents); err != nil {
 		t.Fatal(err)
 	}
-	keyBytes, _ := hex.DecodeString(mongoSecretEncryptionKey)
+	keyBytes, _ := hex.DecodeString(fixtures.SecretEncryptionKey)
 	if len(documents) != 1 {
 		t.Fatal("expected one durable request aggregate")
 	}
-	for _, sensitive := range [][]byte{[]byte(mongoSecretPlaintext), []byte(mongoSecretEncryptionKey), keyBytes} {
+	for _, sensitive := range [][]byte{[]byte(fixtures.SecretPlaintext), []byte(fixtures.SecretEncryptionKey), keyBytes} {
 		if bytes.Contains(documents[0], sensitive) {
 			t.Fatal("request persistence exposed plaintext or encryption key material")
 		}
@@ -108,9 +107,9 @@ func TestRequestMongoStoreEncryptedDeliveryAndRestart(t *testing.T) {
 }
 
 func TestRequestMongoStorePermanentIdentities(t *testing.T) {
-	database := openStore(t, "secret_requests")
-	requests := openRequestMongoStore(t, database)
-	request, delivery, _ := mongoRequestFixture(t)
+	database := fixtures.OpenStore(t, "secret_requests")
+	requests := fixtures.OpenRequestStore(t, database)
+	request, delivery, _ := fixtures.SecretRequest(t)
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -147,16 +146,16 @@ func TestRequestMongoStorePermanentIdentities(t *testing.T) {
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatalf("original create replay after cancellation: %v", err)
 	}
-	saved, err = openRequestMongoStore(t, database).Get(t.Context(), request.ID)
+	saved, err = fixtures.OpenRequestStore(t, database).Get(t.Context(), request.ID)
 	if err != nil || saved.Request.Status != secrets.Cancelled || saved.Delivery == nil || saved.Delivery.ID != delivery.ID {
 		t.Fatalf("replay revived a cancelled request or removed delivery identity: %v", err)
 	}
 }
 
 func TestRequestMongoStoreConcurrentReplaysAndSettlement(t *testing.T) {
-	database := openStore(t, "secret_requests")
-	first, second := openRequestMongoStore(t, database), openRequestMongoStore(t, database)
-	request, delivery, installation := mongoRequestFixture(t)
+	database := fixtures.OpenStore(t, "secret_requests")
+	first, second := fixtures.OpenRequestStore(t, database), fixtures.OpenRequestStore(t, database)
+	request, delivery, installation := fixtures.SecretRequest(t)
 	for _, operations := range [][]func() error{
 		{func() error { return first.Create(t.Context(), request) }, func() error { return second.Create(t.Context(), request) }},
 		{func() error { return first.SaveDelivery(t.Context(), delivery) }, func() error { return second.SaveDelivery(t.Context(), delivery) }},
@@ -174,7 +173,7 @@ func TestRequestMongoStoreConcurrentReplaysAndSettlement(t *testing.T) {
 		t.Fatalf("concurrent replays lost fulfillment: %v", err)
 	}
 
-	request, delivery, installation = mongoRequestFixture(t)
+	request, delivery, installation = fixtures.SecretRequest(t)
 	if err := first.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -203,8 +202,8 @@ func TestRequestMongoStoreConcurrentReplaysAndSettlement(t *testing.T) {
 }
 
 func TestRequestMongoStoreExpirationInventoryAndCancellation(t *testing.T) {
-	requests := openRequestMongoStore(t, openStore(t, "secret_requests"))
-	request, delivery, installation := mongoRequestFixture(t)
+	requests := fixtures.OpenRequestStore(t, fixtures.OpenStore(t, "secret_requests"))
+	request, delivery, installation := fixtures.SecretRequest(t)
 	other := request
 	other.ID = id.New()
 	for _, item := range []secrets.Request{request, other} {
@@ -264,31 +263,6 @@ func TestRequestMongoStoreExpirationInventoryAndCancellation(t *testing.T) {
 			t.Fatalf("cancelled operation: %v", err)
 		}
 	}
-}
-
-func openRequestMongoStore(t *testing.T, database *store.MongoStore) *secretmongo.RequestMongoStore {
-	t.Helper()
-	requests, err := secretmongo.NewRequestMongoStore(t.Context(), database)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return requests
-}
-
-func mongoRequestFixture(t *testing.T) (secrets.Request, secrets.Delivery, secrets.Installation) {
-	t.Helper()
-	secret := mongoSecretFixture(t, "API_TOKEN")
-	secret.Metadata.Version = math.MaxUint64
-	stamp := secret.Metadata.UpdatedAt.Add(time.Second)
-	secret.Metadata.ExpiresAt = stamp.Add(time.Minute)
-	secret = encryptMongoSecret(t, secret.Metadata)
-	request := secrets.Request{ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678",
-		Status: secrets.Pending, RequestedAt: stamp, ExpiresAt: stamp.Add(time.Hour)}
-	delivery := secrets.Delivery{ID: id.New(), RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
-		CreatedAt: stamp.Add(time.Nanosecond), ExpiresAt: stamp.Add(time.Minute)}
-	installation := secrets.Installation{ID: id.New(), RequestID: request.ID, DeliveryID: delivery.ID, AgentID: request.AgentID,
-		SecretID: secret.Metadata.ID, SecretVersion: secret.Metadata.Version, InstalledAt: stamp.Add(time.Second)}
-	return request, delivery, installation
 }
 
 func assertMongoRequest(t *testing.T, requests *secretmongo.RequestMongoStore, want secrets.RequestRecord) secrets.RequestRecord {

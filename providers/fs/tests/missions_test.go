@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	missionfs "github.com/defos-ai/commander/providers/fs/missions"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testing.T) {
@@ -18,7 +18,7 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	definition := storedMission()
+	definition := fixtures.Mission()
 	invalid := definition.Clone()
 	invalid.InputSchema = json.RawMessage(`{"type":"unknown"}`)
 	if err := store.Create(t.Context(), invalid); err == nil {
@@ -94,7 +94,7 @@ func TestMissionCreationIsAtomicAcrossStoreInstances(t *testing.T) {
 	gate, results := make(chan struct{}), make(chan result, attempts)
 	for i, store := range stores {
 		go func() {
-			definition := storedMission()
+			definition := fixtures.Mission()
 			definition.Objectives = []string{fmt.Sprintf("Candidate %d", i)}
 			<-gate
 			results <- result{definition, store.Create(t.Context(), definition)}
@@ -121,19 +121,5 @@ func TestMissionCreationIsAtomicAcrossStoreInstances(t *testing.T) {
 			t.Fatalf("store did not read the complete winning definition: %+v, %v", items, err)
 		}
 		assertResultJSONEqual(t, items[0], winner)
-	}
-}
-
-func storedMission() missions.Mission {
-	return missions.Mission{
-		Name: "review", Objectives: []string{"Review a target", "Summarize findings"}, RequiredActions: []string{"inspect"},
-		StartingActions: []string{"inspect"}, OptionalActions: []string{"publish"},
-		ActionDefinitions: []actions.Definition{{
-			Name: "inspect", Description: "Inspect the requested target", RequiredSecrets: []string{"INSPECTION_KEY"},
-			InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993}}}`),
-			OutputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`),
-		}},
-		Rules:       missions.RuleSet{missions.AggregateResults: {ForActions: []string{"inspect"}}},
-		InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`),
 	}
 }

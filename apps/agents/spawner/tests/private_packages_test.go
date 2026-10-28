@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,29 +11,25 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
 )
 
 const privateToken = "private-github-token-sentinel"
 const githubReleases = "https://api.github.com/repos/defos-ai/example-agent/releases/"
 
-func privateRelease(tag string) string {
-	return fmt.Sprintf(`{"tag_name":%q,"draft":false,"prerelease":false,"published_at":"2026-10-01T12:00:00Z","assets":[
-		{"id":11,"name":"agent.yaml","url":"https://untrusted.invalid/manifest"},
-		{"id":12,"name":%q,"url":"https://untrusted.invalid/binary"}]}`, tag, binaryAsset)
-}
-
 func TestPrivatePackageDownloadsUseScopedAuthentication(t *testing.T) {
-	for _, reference := range []string{packageReference, moduleReference} {
+	for _, reference := range []string{fixtures.PackageReference, fixtures.ModuleReference} {
 		t.Run(reference, func(t *testing.T) {
 			ref, err := agentpackages.ParseReference(reference)
 			if err != nil {
 				t.Fatal(err)
 			}
 			const binary = "private executable fixture"
-			manifestBody := packageManifest(binary)
+			manifestBody := fixtures.PackageManifest(binary)
 			var authenticated, redirected, anonymous int
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				switch request.URL.Host {
 				case "api.github.com":
 					authenticated++
@@ -46,12 +41,12 @@ func TestPrivatePackageDownloadsUseScopedAuthentication(t *testing.T) {
 						if request.Header.Get("Accept") != "application/vnd.github+json" {
 							t.Fatal("release metadata must request JSON")
 						}
-						return response(request, http.StatusOK, privateRelease(ref.ReleaseTag())), nil
+						return fixtures.Response(request, http.StatusOK, fixtures.PrivateRelease(ref.ReleaseTag())), nil
 					case githubReleases + "assets/11", githubReleases + "assets/12":
 						if request.Header.Get("Accept") != "application/octet-stream" {
 							t.Fatal("release asset must request binary content")
 						}
-						result := response(request, http.StatusFound, "")
+						result := fixtures.Response(request, http.StatusFound, "")
 						result.Header.Set("Location", "https://release-assets.githubusercontent.com"+request.URL.Path+"?signature=private-signature")
 						result.Header.Set("Set-Cookie", "private-session=sentinel")
 						return result, nil
@@ -64,15 +59,15 @@ func TestPrivatePackageDownloadsUseScopedAuthentication(t *testing.T) {
 						}
 					}
 					if strings.HasSuffix(request.URL.Path, "/11") {
-						return response(request, http.StatusOK, manifestBody), nil
+						return fixtures.Response(request, http.StatusOK, manifestBody), nil
 					}
-					return response(request, http.StatusOK, binary), nil
+					return fixtures.Response(request, http.StatusOK, binary), nil
 				case "github.com":
 					anonymous++
 					if request.Header.Get("Authorization") != "" {
 						t.Fatal("private token leaked into a subsequent public request")
 					}
-					return response(request, http.StatusOK, manifestBody), nil
+					return fixtures.Response(request, http.StatusOK, manifestBody), nil
 				}
 				t.Fatal("download followed an unexpected URL from API metadata")
 				return nil, errors.New("unexpected URL")
@@ -108,16 +103,16 @@ func TestPrivatePackageDownloadsUseScopedAuthentication(t *testing.T) {
 }
 
 func TestPrivatePackageRejectsUnsafeMetadataAndRedirects(t *testing.T) {
-	valid := privateRelease("v0.1.0")
+	valid := fixtures.PrivateRelease("v0.1.0")
 	for _, test := range []struct {
 		name, metadata, redirect string
 	}{
-		{name: "wrong tag", metadata: privateRelease("v0.2.0")},
+		{name: "wrong tag", metadata: fixtures.PrivateRelease("v0.2.0")},
 		{name: "draft", metadata: strings.Replace(valid, `"draft":false`, `"draft":true`, 1)},
 		{name: "prerelease", metadata: strings.Replace(valid, `"prerelease":false`, `"prerelease":true`, 1)},
 		{name: "unpublished", metadata: strings.Replace(valid, `"2026-10-01T12:00:00Z"`, `null`, 1)},
 		{name: "missing asset", metadata: strings.Replace(valid, `"agent.yaml"`, `"missing.yaml"`, 1)},
-		{name: "duplicate asset", metadata: strings.Replace(valid, `"`+binaryAsset+`"`, `"agent.yaml"`, 1)},
+		{name: "duplicate asset", metadata: strings.Replace(valid, `"`+fixtures.BinaryAsset+`"`, `"agent.yaml"`, 1)},
 		{name: "invalid asset ID", metadata: strings.Replace(valid, `"id":11`, `"id":0`, 1)},
 		{name: "malformed metadata", metadata: privateToken},
 		{name: "oversized metadata", metadata: strings.Repeat(" ", 2<<20) + valid},
@@ -127,21 +122,21 @@ func TestPrivatePackageRejectsUnsafeMetadataAndRedirects(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			requests := 0
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				requests++
 				if requests == 1 {
-					return response(request, http.StatusOK, test.metadata), nil
+					return fixtures.Response(request, http.StatusOK, test.metadata), nil
 				}
 				if test.redirect == "" || requests > 2 {
 					t.Fatal("invalid metadata or redirect reached another endpoint")
 				}
-				result := response(request, http.StatusFound, "")
+				result := fixtures.Response(request, http.StatusFound, "")
 				result.Header.Set("Location", test.redirect)
 				return result, nil
 			}))
 			t.Cleanup(resolver.CloseIdleConnections)
 			ctx := packages.WithGitHubToken(t.Context(), []byte(privateToken))
-			if _, err := resolver.Resolve(ctx, packageReference); err == nil || strings.Contains(err.Error(), privateToken) {
+			if _, err := resolver.Resolve(ctx, fixtures.PackageReference); err == nil || strings.Contains(err.Error(), privateToken) {
 				t.Fatal("unsafe package was accepted or its response leaked into diagnostics")
 			}
 		})
@@ -153,7 +148,7 @@ func TestPrivatePackageErrorsKeepCredentialsPrivate(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				switch failure {
 				case "invalid token":
 					t.Fatal("invalid token reached transport")
@@ -164,12 +159,12 @@ func TestPrivatePackageErrorsKeepCredentialsPrivate(t *testing.T) {
 					return nil, request.Context().Err()
 				case "manifest":
 					if strings.Contains(request.URL.Path, "/tags/") {
-						return response(request, http.StatusOK, privateRelease("v0.1.0")), nil
+						return fixtures.Response(request, http.StatusOK, fixtures.PrivateRelease("v0.1.0")), nil
 					}
-					return response(request, http.StatusOK, privateToken+": value"), nil
+					return fixtures.Response(request, http.StatusOK, privateToken+": value"), nil
 				}
 				status := map[string]int{"unauthorized": 401, "forbidden": 403, "missing": 404}[failure]
-				return response(request, status, privateToken), nil
+				return fixtures.Response(request, status, privateToken), nil
 			}))
 			t.Cleanup(resolver.CloseIdleConnections)
 			token := []byte(privateToken)
@@ -177,7 +172,7 @@ func TestPrivatePackageErrorsKeepCredentialsPrivate(t *testing.T) {
 				token = append(token, '\n')
 			}
 			defer clear(token)
-			_, err := resolver.Resolve(packages.WithGitHubToken(ctx, token), packageReference)
+			_, err := resolver.Resolve(packages.WithGitHubToken(ctx, token), fixtures.PackageReference)
 			if err == nil || strings.Contains(err.Error(), privateToken) {
 				t.Fatal("error leaked credentials or request unexpectedly succeeded")
 			}

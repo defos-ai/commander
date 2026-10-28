@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { checkConnection, normalizeURL } from '../src/connections/client';
+import { pendingFetch } from './fakes/pending-fetch';
 
 const baseURL = 'https://commander.example/prefix';
 const credentials = { url: baseURL, username: 'üser' };
@@ -14,14 +15,6 @@ function requestedPath(input: RequestInfo | URL): string {
 
 function healthyResponse(url: string) {
   return Response.json(requestedPath(url).endsWith('/missions') ? { items: [] } : { status: 'ok' });
-}
-
-function pendingFetch() {
-  const fetch = vi.fn<typeof globalThis.fetch>((_url, options) => new Promise((_resolve, reject) => {
-    options?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
-  }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
 }
 
 afterEach(() => vi.useRealTimers());

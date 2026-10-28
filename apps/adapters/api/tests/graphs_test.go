@@ -5,20 +5,23 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 )
 
 func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
-	a := connect(t)
-	op := a.start(fixtureText)
-	base := operationPath(op.ID)
-	empty := a.request(http.MethodGet, base+"/graph", nil)
-	initial := decode[models.OperationGraphResponse](t, empty, http.StatusOK)
+	a := fixtures.Connect(t)
+	op := a.Start(fixtures.FixtureText)
+	base := fixtures.OperationPath(op.ID)
+	empty := a.Request(http.MethodGet, base+"/graph", nil)
+	initial := fixtures.Decode[models.OperationGraphResponse](t, empty, http.StatusOK)
 	if initial.OperationID != op.ID || initial.Nodes == nil || initial.Edges == nil || len(initial.Nodes) != 0 || len(initial.Edges) != 0 {
 		t.Fatalf("new graph should contain empty arrays: %+v", initial)
 	}
 	assertSchema(t, a, "OperationGraph", empty)
-	root := a.task(op.ID, "analyze-text", object{"text": fixtureText})
-	finished := a.wait(op.ID, func(op models.OperationResponse) bool { return tasksSettled(op) && modelDecision(op) != nil })
+	root := a.Task(op.ID, "analyze-text", fixtures.Object{"text": fixtures.FixtureText})
+	finished := a.Wait(op.ID, func(op models.OperationResponse) bool {
+		return fixtures.TasksSettled(op) && fixtures.ModelDecision(op) != nil
+	})
 	root = finished.Tasks[0]
 	if root.Status != "succeeded" {
 		t.Fatalf("analysis task failed: %+v", root)
@@ -26,9 +29,9 @@ func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
 	if len(finished.Tasks) != 2 || finished.Tasks[1].Status != "succeeded" {
 		t.Fatalf("proposed summary branch failed: %+v", finished.Tasks)
 	}
-	queued := a.task(op.ID, "unavailable-test-action", object{})
+	queued := a.Task(op.ID, "unavailable-test-action", fixtures.Object{})
 	// Queue acceptance precedes the scheduler's persisted optional-action assessment.
-	snapshot := a.wait(op.ID, func(op models.OperationResponse) bool {
+	snapshot := a.Wait(op.ID, func(op models.OperationResponse) bool {
 		if op.Preflight == nil || op.Preflight.Ready {
 			return false
 		}
@@ -39,8 +42,8 @@ func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
 		}
 		return false
 	})
-	result := a.request(http.MethodGet, base+"/graph", nil)
-	graph := decode[models.OperationGraphResponse](t, result, http.StatusOK)
+	result := a.Request(http.MethodGet, base+"/graph", nil)
+	graph := fixtures.Decode[models.OperationGraphResponse](t, result, http.StatusOK)
 	assertSchema(t, a, "OperationGraph", result)
 	if graph.OperationID != op.ID || graph.Status != snapshot.Status || !graph.UpdatedAt.Equal(snapshot.UpdatedAt) || len(graph.Nodes) != 5 || len(graph.Edges) != 3 {
 		t.Fatalf("graph lost task/file snapshot: %+v", graph)
@@ -98,14 +101,14 @@ func TestGraphReflectsRealTaskBranchesAndArtifactFiles(t *testing.T) {
 	if len(wantEdges) != 0 {
 		t.Fatalf("missing edges: %+v", wantEdges)
 	}
-	if repeated := a.request(http.MethodGet, base+"/graph", nil); repeated.body != result.body {
+	if repeated := a.Request(http.MethodGet, base+"/graph", nil); repeated.Body != result.Body {
 		t.Fatal("unchanged snapshot changed node IDs/order")
 	}
-	if after := read[models.OperationResponse](a, base); !after.UpdatedAt.Equal(snapshot.UpdatedAt) {
+	if after := fixtures.Read[models.OperationResponse](a, base); !after.UpdatedAt.Equal(snapshot.UpdatedAt) {
 		t.Fatal("graph read mutated operation state")
 	}
-	post[models.OperationResponse](a, base+"/cancel", nil, http.StatusOK)
-	fresh := read[models.OperationGraphResponse](a, base+"/graph")
+	fixtures.Post[models.OperationResponse](a, base+"/cancel", nil, http.StatusOK)
+	fresh := fixtures.Read[models.OperationGraphResponse](a, base+"/graph")
 	if fresh.Status != "cancelled" || fresh.UpdatedAt.Equal(graph.UpdatedAt) || len(fresh.Nodes) != len(graph.Nodes) {
 		t.Fatalf("graph did not observe cancellation: %+v", fresh)
 	}

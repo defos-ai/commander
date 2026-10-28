@@ -11,14 +11,15 @@ import (
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/agent"
 )
 
 func TestAgentWorkSuppliesCurrentExecutionIdentity(t *testing.T) {
 	observed := make(chan action.Execution, 2)
-	executor := executionProbe(t, observed)
-	runtime := stateAgent(t, executor)
+	executor := fakes.ExecutionProbe(t, observed)
+	runtime := fixtures.StateAgent(t, executor)
 	if err := runtime.DiscoverActions(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -46,9 +47,8 @@ func TestAgentServeSuppliesCommandAndWorkIdentity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	observed := make(chan action.Execution, 1)
-	runtime := stateAgent(t, executionProbe(t, observed))
-	bus := &workBus{agentID: runtime.ID(), resultBus: resultBus{results: make(chan messages.Message, 16)},
-		commands: make(chan messages.Message, 1)}
+	runtime := fixtures.StateAgent(t, fakes.ExecutionProbe(t, observed))
+	bus := fakes.NewWorkBus(runtime.ID())
 	serving, stop := context.WithCancel(ctx)
 	finished := make(chan error, 1)
 	go func() { finished <- runtime.Serve(serving, bus, nil) }()
@@ -64,7 +64,7 @@ func TestAgentServeSuppliesCommandAndWorkIdentity(t *testing.T) {
 		}
 	})
 	select {
-	case message := <-bus.results:
+	case message := <-bus.Results():
 		if message.Type != controllerevents.AgentStarted {
 			t.Fatalf("unexpected startup event: %s", message.Type)
 		}
@@ -77,7 +77,9 @@ func TestAgentServeSuppliesCommandAndWorkIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bus.commands <- command
+	if err := bus.SendCommand(ctx, command); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case actual := <-observed:
 		if actual != (action.Execution{CommandID: command.ID, Work: call.Work}) {
@@ -88,7 +90,7 @@ func TestAgentServeSuppliesCommandAndWorkIdentity(t *testing.T) {
 	}
 	for {
 		select {
-		case message := <-bus.results:
+		case message := <-bus.Results():
 			if message.Type == controllerevents.ActionSucceeded {
 				if message.CorrelationID != command.ID || message.Work != call.Work {
 					t.Fatal("execution context changed the result's dispatch identity")
@@ -100,23 +102,4 @@ func TestAgentServeSuppliesCommandAndWorkIdentity(t *testing.T) {
 			t.Fatal("action did not publish a result")
 		}
 	}
-}
-
-func executionProbe(t *testing.T, observed chan<- action.Execution) action.Executor {
-	t.Helper()
-	executor, err := action.NewFunc(action.FuncConfig[struct{}, struct{}]{
-		Action: actions.Action{Name: "inspect-execution"},
-		Run: func(ctx context.Context, _ struct{}) (struct{}, error) {
-			execution, ok := action.ExecutionFromContext(ctx)
-			if !ok {
-				return struct{}{}, errors.New("action has no execution identity")
-			}
-			observed <- execution
-			return struct{}{}, nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return executor
 }

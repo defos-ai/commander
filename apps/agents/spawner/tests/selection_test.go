@@ -2,12 +2,10 @@ package packages_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,63 +15,21 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 )
 
 const fixtureSelector = "github.com/defos-ai/fixture-agent@stable"
 
-type packagePinningFixture struct {
-	resolver       *packages.Resolver
-	latest         atomic.Int32
-	latestRequests atomic.Int32
-	requests       atomic.Int32
-	failDownload   atomic.Bool
-}
-
-func newPackagePinningFixture(t *testing.T) *packagePinningFixture {
-	t.Helper()
-	binary := nativeFixtureBinary(t)
-	checksum := sha256.Sum256(binary)
-	asset := "fixture-agent"
-	if runtime.GOOS == "windows" {
-		asset += ".exe"
-	}
-	fixture := new(packagePinningFixture)
-	fixture.latest.Store(1)
-	fixture.resolver = packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		fixture.requests.Add(1)
-		if request.URL.String() == "https://api.github.com/repos/defos-ai/fixture-agent/releases/latest" {
-			fixture.latestRequests.Add(1)
-			return response(request, http.StatusOK, fmt.Sprintf(`{"tag_name":"v0.%d.0","draft":false,"prerelease":false,"published_at":"2026-10-01T12:00:00Z"}`, fixture.latest.Load())), nil
-		}
-		for _, minor := range []int{1, 2} {
-			version := fmt.Sprintf("v0.%d.0", minor)
-			base := strings.Replace(fixtureReleaseURL, "v0.1.0", version, 1)
-			switch request.URL.String() {
-			case base + "agent.yaml":
-				manifest := fmt.Sprintf("schema_version: 1\ntype: fixture-agent\nversion: %s\ndocker:\n  image: %s\nnative:\n  %s/%s:\n    asset: %s\n    sha256: %q\n", version, dockerFixtureImage, runtime.GOOS, runtime.GOARCH, asset, fmt.Sprintf("%x", checksum))
-				return response(request, http.StatusOK, manifest), nil
-			case base + asset:
-				if fixture.failDownload.Load() {
-					return response(request, http.StatusServiceUnavailable, "try again"), nil
-				}
-				return response(request, http.StatusOK, string(binary)), nil
-			}
-		}
-		return response(request, http.StatusNotFound, "not found"), nil
-	}))
-	t.Cleanup(fixture.resolver.CloseIdleConnections)
-	return fixture
-}
-
 func TestNativeRetryKeepsPackagePinAfterFailedDownloadAndRestart(t *testing.T) {
-	fixture := newNativeFixture(t, "", 5*time.Second)
-	source := newPackagePinningFixture(t)
-	source.failDownload.Store(true)
-	if err := fixture.manager.Close(); err != nil {
+	fixture := fixtures.NewNativeManager(t, "", 5*time.Second)
+	source := fixtures.NewPackageSource(t)
+	source.SetDownloadFailure(true)
+	if err := fixture.Manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	fixture.config.Resolver = source.resolver
-	manager, err := native.NewManager(t.Context(), fixture.config)
+	fixture.Config.Resolver = source.Resolver()
+	manager, err := native.NewManager(t.Context(), fixture.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,94 +40,100 @@ func TestNativeRetryKeepsPackagePinAfterFailedDownloadAndRestart(t *testing.T) {
 			}
 		}
 	})
-	ctx, requestID, _ := newSpawnCheckpoints(t)
+	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 	if _, err := manager.Spawn(ctx, requestID, "https://github.com/defos-ai/fixture-agent"); err == nil {
 		t.Fatal("failed download unexpectedly launched a child")
 	}
-	source.latest.Store(2)
+	source.SetLatest(2)
 	if _, err := manager.Spawn(ctx, requestID, fixtureSelector); err == nil {
 		t.Fatal("failed download unexpectedly launched a child on retry")
 	}
-	if source.latestRequests.Load() != 1 || len(childReports(t, fixture.storage)) != 0 {
+	if source.LatestRequestCount() != 1 || len(fixtures.ChildReports(t, fixture.Storage)) != 0 {
 		t.Fatal("retry resolved a different release or launched a child")
 	}
-	before := source.requests.Load()
-	if _, err := manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+	before := source.RequestCount()
+	if _, err := manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 		t.Fatal("same request accepted a different selector")
 	}
-	if source.requests.Load() != before {
+	if source.RequestCount() != before {
 		t.Fatal("selector conflict performed another download")
 	}
 	if err := manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err = native.NewManager(t.Context(), fixture.config)
+	manager, err = native.NewManager(t.Context(), fixture.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	source.failDownload.Store(false)
+	source.SetDownloadFailure(false)
+
 	result, err := manager.Spawn(ctx, requestID, "github.com/defos-ai/fixture-agent")
-	if err != nil || result.Package != fixtureReference {
+
+	if err != nil || result.Package != fixtures.Reference {
 		t.Fatalf("restart did not retain the originally selected release: result=%+v error=%v", result, err)
 	}
-	if source.latestRequests.Load() != 1 || len(childReports(t, fixture.storage)) != 1 {
+	if source.LatestRequestCount() != 1 || len(fixtures.ChildReports(t, fixture.Storage)) != 1 {
 		t.Fatal("restart resolved Latest again or launched duplicate children")
 	}
 	if err := manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err = native.NewManager(t.Context(), fixture.config)
+	manager, err = native.NewManager(t.Context(), fixture.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	before = source.requests.Load()
+	before = source.RequestCount()
 	if _, err := manager.Spawn(ctx, requestID, fixtureSelector); err == nil || !strings.Contains(err.Error(), "uncertain") {
 		t.Fatalf("restart adopted or relaunched an uncertain native process: %v", err)
 	}
-	if source.requests.Load() != before {
+	if source.RequestCount() != before {
 		t.Fatal("uncertain native request downloaded again")
 	}
 }
 
 func TestDockerRetryKeepsPackagePinAfterFailedPullAndRestart(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	source := newPackagePinningFixture(t)
-	fixture.config.Resolver = source.resolver
-	manager := restartDockerManager(t, fixture)
-	fixture.engine.pullErr = errors.New("fixture pull unavailable")
-	ctx, requestID, _ := newSpawnCheckpoints(t)
+	fixture := fixtures.NewDockerManager(t)
+	source := fixtures.NewPackageSource(t)
+	fixture.Config.Resolver = source.Resolver()
+	manager := fixtures.RestartDockerManager(t, fixture)
+	fixture.Engine.SetPullError(errors.New("fixture pull unavailable"))
+	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 	if _, err := manager.Spawn(ctx, requestID, fixtureSelector); err == nil {
 		t.Fatal("failed image pull unexpectedly launched a container")
 	}
-	source.latest.Store(2)
-	fixture.manager = manager
-	manager = restartDockerManager(t, fixture)
-	fixture.engine.pullErr = nil
+	source.SetLatest(2)
+	fixture.Manager = manager
+	manager = fixtures.RestartDockerManager(t, fixture)
+	fixture.Engine.SetPullError(nil)
+
 	result, err := manager.Spawn(ctx, requestID, "https://github.com/defos-ai/fixture-agent")
-	if err != nil || result.Package != fixtureReference {
+
+	if err != nil || result.Package != fixtures.Reference {
 		t.Fatalf("restart did not retain the originally selected release: result=%+v error=%v", result, err)
 	}
-	before := source.requests.Load()
+	before := source.RequestCount()
+
 	repeated, err := manager.Spawn(ctx, requestID, "github.com/defos-ai/fixture-agent")
-	if err != nil || dockerDetails(t, repeated).ContainerID != dockerDetails(t, result).ContainerID || source.requests.Load() != before {
+
+	if err != nil || dockerDetails(t, repeated).ContainerID != dockerDetails(t, result).ContainerID || source.RequestCount() != before {
 		t.Fatalf("retry did not reuse the pinned container: result=%+v error=%v", repeated, err)
 	}
-	if _, err := manager.Spawn(ctx, requestID, strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1)); err == nil {
+	if _, err := manager.Spawn(ctx, requestID, strings.Replace(fixtures.Reference, "v0.1.0", "v0.2.0", 1)); err == nil {
 		t.Fatal("same request accepted a conflicting package")
 	}
-	creates, starts, _ := fixture.engine.counts()
-	if source.latestRequests.Load() != 1 || creates != 1 || starts != 1 {
-		t.Fatalf("retry changed selection or duplicated launch: latest=%d creates=%d starts=%d", source.latestRequests.Load(), creates, starts)
+	creates, starts, _ := fixture.Engine.Counts()
+	if source.LatestRequestCount() != 1 || creates != 1 || starts != 1 {
+		t.Fatalf("retry changed selection or duplicated launch: latest=%d creates=%d starts=%d", source.LatestRequestCount(), creates, starts)
 	}
-	freshCtx, freshRequest, _ := newSpawnCheckpoints(t)
+	freshCtx, freshRequest, _ := fixtures.SpawnCheckpoints(t)
 	fresh, err := manager.Spawn(freshCtx, freshRequest, fixtureSelector)
-	if err != nil || fresh.Package != strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1) || source.latestRequests.Load() != 2 {
+	if err != nil || fresh.Package != strings.Replace(fixtures.Reference, "v0.1.0", "v0.2.0", 1) || source.LatestRequestCount() != 2 {
 		t.Fatalf("new request did not select the updated release: result=%+v error=%v", fresh, err)
 	}
 }
 
 func TestPackageSelectionRejectsCorruptStateWithoutResolvingAgain(t *testing.T) {
-	source := newPackagePinningFixture(t)
+	source := fixtures.NewPackageSource(t)
 	for _, test := range []struct {
 		name, selector string
 		change         func(map[string]any) []byte
@@ -187,15 +149,15 @@ func TestPackageSelectionRejectsCorruptStateWithoutResolvingAgain(t *testing.T) 
 			data, _ := json.Marshal(saved)
 			return data
 		}},
-		{"changed exact version", fixtureReference, func(saved map[string]any) []byte {
-			saved["package"] = strings.Replace(fixtureReference, "v0.1.0", "v0.2.0", 1)
+		{"changed exact version", fixtures.Reference, func(saved map[string]any) []byte {
+			saved["package"] = strings.Replace(fixtures.Reference, "v0.1.0", "v0.2.0", 1)
 			data, _ := json.Marshal(saved)
 			return data
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, requestID, journal := newSpawnCheckpoints(t)
-			if _, err := runtimes.PinPackage(ctx, requestID, test.selector, source.resolver); err != nil {
+			ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+			if _, err := runtimes.PinPackage(ctx, requestID, test.selector, source.Resolver()); err != nil {
 				t.Fatal(err)
 			}
 			data, found, err := journal.LoadCheckpoint(ctx, "package-selection")
@@ -207,15 +169,13 @@ func TestPackageSelectionRejectsCorruptStateWithoutResolvingAgain(t *testing.T) 
 				t.Fatal(err)
 			}
 			corrupt := test.change(saved)
-			journal.mu.Lock()
-			journal.record.Checkpoints["package-selection"] = corrupt
-			journal.mu.Unlock()
-			before := source.requests.Load()
-			if _, err := runtimes.PinPackage(ctx, requestID, test.selector, source.resolver); err == nil {
+			journal.ReplaceCheckpoint("package-selection", corrupt)
+			before := source.RequestCount()
+			if _, err := runtimes.PinPackage(ctx, requestID, test.selector, source.Resolver()); err == nil {
 				t.Fatal("corrupt selection was trusted")
 			}
 			after, _, err := journal.LoadCheckpoint(ctx, "package-selection")
-			if err != nil || string(after) != string(corrupt) || source.requests.Load() != before {
+			if err != nil || string(after) != string(corrupt) || source.RequestCount() != before {
 				t.Fatal("corrupt selection was overwritten or caused another resolution")
 			}
 		})
@@ -223,14 +183,14 @@ func TestPackageSelectionRejectsCorruptStateWithoutResolvingAgain(t *testing.T) 
 }
 
 func TestConcurrentPackageSelectionsKeepTheWinningPin(t *testing.T) {
-	ctx, requestID, _ := newSpawnCheckpoints(t)
+	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var workers sync.WaitGroup
 	t.Cleanup(func() { cancel(); workers.Wait() })
 	var resolutions atomic.Int32
 	ready, release := make(chan struct{}, 2), make(chan struct{})
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+	resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 		version := resolutions.Add(1)
 		ready <- struct{}{}
 		select {
@@ -238,7 +198,7 @@ func TestConcurrentPackageSelectionsKeepTheWinningPin(t *testing.T) {
 			return nil, ctx.Err()
 		case <-release:
 		}
-		return response(request, http.StatusOK, fmt.Sprintf(`{"tag_name":"v0.%d.0","draft":false,"prerelease":false,"published_at":"2026-10-01T12:00:00Z"}`, version)), nil
+		return fixtures.Response(request, http.StatusOK, fmt.Sprintf(`{"tag_name":"v0.%d.0","draft":false,"prerelease":false,"published_at":"2026-10-01T12:00:00Z"}`, version)), nil
 	}))
 	defer resolver.CloseIdleConnections()
 	type selectionResult struct {

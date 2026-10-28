@@ -2,8 +2,6 @@ package packages_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,40 +13,14 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent/manifest"
 	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
 )
 
-const (
-	packageReference = "github.com/defos-ai/example-agent@v0.1.0"
-	releaseURL       = "https://github.com/defos-ai/example-agent/releases/download/v0.1.0/"
-	moduleReference  = "github.com/defos-ai/example-agent/apps/agents/example@v0.1.0"
-	moduleReleaseURL = "https://github.com/defos-ai/example-agent/releases/download/apps%2Fagents%2Fexample%2Fv0.1.0/"
-	binaryAsset      = "example-agent_linux_amd64"
-)
-
-type transportFunc func(*http.Request) (*http.Response, error)
-
-func (f transportFunc) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
-}
-
-func response(request *http.Request, status int, body string) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Header:     make(http.Header),
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Request:    request,
-	}
-}
-
-func packageManifest(binary string) string {
-	checksum := sha256.Sum256([]byte(binary))
-	return fmt.Sprintf("schema_version: 1\ntype: example-agent\nversion: v0.1.0\nnative:\n  linux/amd64:\n    asset: %s\n    sha256: %q\n", binaryAsset, hex.EncodeToString(checksum[:]))
-}
-
 func TestResolveRejectsInvalidReferenceBeforeRequest(t *testing.T) {
-	resolver := packages.NewResolver(transportFunc(func(*http.Request) (*http.Response, error) {
+	resolver := packages.NewResolver(fakes.Transport(func(*http.Request) (*http.Response, error) {
 		t.Fatal("invalid reference reached transport")
 		return nil, errors.New("unexpected request")
 	}))
@@ -64,21 +36,21 @@ func TestResolveRejectsInvalidReferenceBeforeRequest(t *testing.T) {
 
 func TestResolvePackage(t *testing.T) {
 	for _, tc := range []struct{ reference, release string }{
-		{packageReference, releaseURL},
-		{moduleReference, moduleReleaseURL},
+		{fixtures.PackageReference, fixtures.ReleaseURL},
+		{fixtures.ModuleReference, fixtures.ModuleReleaseURL},
 	} {
 		t.Run(tc.reference, func(t *testing.T) {
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				if request.Method != http.MethodGet || request.URL.String() != tc.release+"agent.yaml" {
 					t.Fatalf("unexpected manifest request: %s %s", request.Method, request.URL)
 				}
-				return response(request, http.StatusOK, packageManifest("executable bytes")), nil
+				return fixtures.Response(request, http.StatusOK, fixtures.PackageManifest("executable bytes")), nil
 			}))
 			pkg, err := resolver.Resolve(context.Background(), tc.reference)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if pkg.Reference.String() != tc.reference || pkg.Manifest.Type != "example-agent" || pkg.Manifest.Version != "v0.1.0" || pkg.Manifest.Native["linux/amd64"].Asset != binaryAsset {
+			if pkg.Reference.String() != tc.reference || pkg.Manifest.Type != "example-agent" || pkg.Manifest.Version != "v0.1.0" || pkg.Manifest.Native["linux/amd64"].Asset != fixtures.BinaryAsset {
 				t.Fatalf("unexpected package: %#v", pkg)
 			}
 		})
@@ -91,15 +63,15 @@ func TestResolveRejectsBadResponses(t *testing.T) {
 		body   string
 	}{
 		"missing release":   {http.StatusNotFound, "not found"},
-		"partial manifest":  {http.StatusPartialContent, packageManifest("bytes")},
-		"wrong version":     {http.StatusOK, strings.Replace(packageManifest("bytes"), "version: v0.1.0", "version: v0.2.0", 1)},
-		"oversize manifest": {http.StatusOK, packageManifest("bytes") + "#" + strings.Repeat("x", 64*1024)},
+		"partial manifest":  {http.StatusPartialContent, fixtures.PackageManifest("bytes")},
+		"wrong version":     {http.StatusOK, strings.Replace(fixtures.PackageManifest("bytes"), "version: v0.1.0", "version: v0.2.0", 1)},
+		"oversize manifest": {http.StatusOK, fixtures.PackageManifest("bytes") + "#" + strings.Repeat("x", 64*1024)},
 	} {
 		t.Run(name, func(t *testing.T) {
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-				return response(request, tc.status, tc.body), nil
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
+				return fixtures.Response(request, tc.status, tc.body), nil
 			}))
-			if _, err := resolver.Resolve(context.Background(), packageReference); err == nil {
+			if _, err := resolver.Resolve(context.Background(), fixtures.PackageReference); err == nil {
 				t.Fatal("accepted invalid release response")
 			}
 		})
@@ -111,13 +83,13 @@ func TestResolvePermitsGitHubAssetRedirects(t *testing.T) {
 		t.Run(host, func(t *testing.T) {
 			requests := 0
 			target := "https://" + host + "/release/asset?signature=example"
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				requests++
 				if request.Header.Get("Authorization") != "" || request.Header.Get("Cookie") != "" {
 					t.Fatal("asset request contains credentials")
 				}
 				if requests == 1 {
-					result := response(request, http.StatusFound, "")
+					result := fixtures.Response(request, http.StatusFound, "")
 					result.Header.Set("Location", target)
 					result.Header.Set("Set-Cookie", "session=private; Path=/")
 					return result, nil
@@ -125,9 +97,9 @@ func TestResolvePermitsGitHubAssetRedirects(t *testing.T) {
 				if requests != 2 || request.URL.String() != target {
 					t.Fatalf("unexpected redirect request: %s", request.URL)
 				}
-				return response(request, http.StatusOK, packageManifest("bytes")), nil
+				return fixtures.Response(request, http.StatusOK, fixtures.PackageManifest("bytes")), nil
 			}))
-			if _, err := resolver.Resolve(context.Background(), packageReference); err != nil {
+			if _, err := resolver.Resolve(context.Background(), fixtures.PackageReference); err != nil {
 				t.Fatal(err)
 			}
 			if requests != 2 {
@@ -146,16 +118,16 @@ func TestResolveRejectsUnsafeRedirects(t *testing.T) {
 	} {
 		t.Run(target, func(t *testing.T) {
 			requests := 0
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				requests++
 				if requests > 1 {
 					t.Fatal("unsafe redirect reached transport")
 				}
-				result := response(request, http.StatusFound, "")
+				result := fixtures.Response(request, http.StatusFound, "")
 				result.Header.Set("Location", target)
 				return result, nil
 			}))
-			if _, err := resolver.Resolve(context.Background(), packageReference); err == nil {
+			if _, err := resolver.Resolve(context.Background(), fixtures.PackageReference); err == nil {
 				t.Fatal("accepted unsafe redirect")
 			}
 		})
@@ -164,16 +136,16 @@ func TestResolveRejectsUnsafeRedirects(t *testing.T) {
 
 func TestResolveBoundsRedirectLoops(t *testing.T) {
 	requests := 0
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+	resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 		requests++
 		if requests > 6 {
 			t.Fatal("more than five redirects were followed")
 		}
-		result := response(request, http.StatusTemporaryRedirect, "")
-		result.Header.Set("Location", releaseURL+"agent.yaml")
+		result := fixtures.Response(request, http.StatusTemporaryRedirect, "")
+		result.Header.Set("Location", fixtures.ReleaseURL+"agent.yaml")
 		return result, nil
 	}))
-	if _, err := resolver.Resolve(context.Background(), packageReference); err == nil {
+	if _, err := resolver.Resolve(context.Background(), fixtures.PackageReference); err == nil {
 		t.Fatal("accepted redirect loop")
 	}
 }
@@ -181,27 +153,27 @@ func TestResolveBoundsRedirectLoops(t *testing.T) {
 func TestResolveCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+	resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 		cancel()
 		<-request.Context().Done()
 		return nil, request.Context().Err()
 	}))
-	if _, err := resolver.Resolve(ctx, packageReference); !errors.Is(err, context.Canceled) {
+	if _, err := resolver.Resolve(ctx, fixtures.PackageReference); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
 }
 
 func TestResolveDoesNotExposeDownloadCredentials(t *testing.T) {
 	const secret = "private-signed-download-token"
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+	resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 		if request.URL.RawQuery == "" {
-			result := response(request, http.StatusFound, "")
+			result := fixtures.Response(request, http.StatusFound, "")
 			result.Header.Set("Location", "https://release-assets.githubusercontent.com/asset?token="+secret)
 			return result, nil
 		}
 		return nil, fmt.Errorf("failed request to %s", request.URL)
 	}))
-	_, err := resolver.Resolve(context.Background(), packageReference)
+	_, err := resolver.Resolve(context.Background(), fixtures.PackageReference)
 	if err == nil || strings.Contains(err.Error(), secret) {
 		t.Fatalf("expected sanitized download failure, got %v", err)
 	}
@@ -211,30 +183,30 @@ func TestDownloadNativeVerifiesBeforeExecution(t *testing.T) {
 	directory := t.TempDir()
 	const binary = "executable bytes, not actually executed by these tests"
 	downloads := 0
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+	resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 		switch request.URL.String() {
-		case moduleReleaseURL + "agent.yaml":
-			return response(request, http.StatusOK, packageManifest(binary)), nil
-		case moduleReleaseURL + binaryAsset:
+		case fixtures.ModuleReleaseURL + "agent.yaml":
+			return fixtures.Response(request, http.StatusOK, fixtures.PackageManifest(binary)), nil
+		case fixtures.ModuleReleaseURL + fixtures.BinaryAsset:
 			downloads++
 			if downloads > 1 {
-				return response(request, http.StatusOK, binary), nil
+				return fixtures.Response(request, http.StatusOK, binary), nil
 			}
-			result := response(request, http.StatusOK, "")
-			result.Body = io.NopCloser(&observedReader{reader: strings.NewReader(binary), observe: func() {
+			result := fixtures.Response(request, http.StatusOK, "")
+			result.Body = io.NopCloser(fakes.NewObservedReader(strings.NewReader(binary), func() {
 				assertIncompleteFilesNotExecutable(t, directory)
-				matches, err := filepath.Glob(filepath.Join(directory, "*", binaryAsset))
+				matches, err := filepath.Glob(filepath.Join(directory, "*", fixtures.BinaryAsset))
 				if err != nil || len(matches) != 0 {
 					t.Fatalf("unverified download has its final filename: %v, %v", matches, err)
 				}
-			}})
+			}))
 			return result, nil
 		default:
 			t.Fatalf("unexpected asset request: %s", request.URL)
 			return nil, errors.New("unexpected request")
 		}
 	}))
-	pkg, err := resolver.Resolve(context.Background(), moduleReference)
+	pkg, err := resolver.Resolve(context.Background(), fixtures.ModuleReference)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,19 +236,6 @@ func TestDownloadNativeVerifiesBeforeExecution(t *testing.T) {
 	if path == second {
 		t.Fatal("a second download overwrote an existing executable")
 	}
-}
-
-type observedReader struct {
-	reader  io.Reader
-	observe func()
-}
-
-func (r *observedReader) Read(data []byte) (int, error) {
-	r.observe()
-	if len(data) > 4 {
-		data = data[:4]
-	}
-	return r.reader.Read(data)
 }
 
 func assertIncompleteFilesNotExecutable(t *testing.T, directory string) {
@@ -314,29 +273,29 @@ func TestDownloadNativeFailurePreservesExistingFiles(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-				if request.URL.String() == releaseURL+"agent.yaml" {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
+				if request.URL.String() == fixtures.ReleaseURL+"agent.yaml" {
 					if failure == "empty" {
-						return response(request, http.StatusOK, packageManifest("")), nil
+						return fixtures.Response(request, http.StatusOK, fixtures.PackageManifest("")), nil
 					}
-					return response(request, http.StatusOK, packageManifest("expected executable")), nil
+					return fixtures.Response(request, http.StatusOK, fixtures.PackageManifest("expected executable")), nil
 				}
-				if request.URL.String() != releaseURL+binaryAsset {
+				if request.URL.String() != fixtures.ReleaseURL+fixtures.BinaryAsset {
 					t.Fatalf("unsafe asset request: %s", request.URL)
 				}
-				result := response(request, http.StatusOK, "corrupted executable")
+				result := fixtures.Response(request, http.StatusOK, "corrupted executable")
 				switch failure {
 				case "empty":
 					result.Body = io.NopCloser(strings.NewReader(""))
 				case "interrupted":
-					result.Body = io.NopCloser(io.MultiReader(strings.NewReader("partial"), failingReader{}))
+					result.Body = io.NopCloser(io.MultiReader(strings.NewReader("partial"), fakes.FailingReader{}))
 				case "missing":
 					result.StatusCode = http.StatusNotFound
 				case "oversize":
 					result.ContentLength = packages.MaxDownloadBytes + 1
-					result.Body = io.NopCloser(&observedReader{reader: strings.NewReader(""), observe: func() {
+					result.Body = io.NopCloser(fakes.NewObservedReader(strings.NewReader(""), func() {
 						t.Error("read binary advertised above size limit")
-					}})
+					}))
 				case "cancelled":
 					cancel()
 					return nil, request.Context().Err()
@@ -346,7 +305,7 @@ func TestDownloadNativeFailurePreservesExistingFiles(t *testing.T) {
 				}
 				return result, nil
 			}))
-			pkg, err := resolver.Resolve(context.Background(), packageReference)
+			pkg, err := resolver.Resolve(context.Background(), fixtures.PackageReference)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -367,18 +326,14 @@ func TestDownloadNativeFailurePreservesExistingFiles(t *testing.T) {
 	}
 }
 
-type failingReader struct{}
-
-func (failingReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
-
 func TestDownloadNativeRejectsUnsupportedAndForgedPackages(t *testing.T) {
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		if request.URL.String() != releaseURL+"agent.yaml" {
+	resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
+		if request.URL.String() != fixtures.ReleaseURL+"agent.yaml" {
 			t.Fatalf("invalid package reached asset transport: %s", request.URL)
 		}
-		return response(request, http.StatusOK, packageManifest("bytes")), nil
+		return fixtures.Response(request, http.StatusOK, fixtures.PackageManifest("bytes")), nil
 	}))
-	pkg, err := resolver.Resolve(context.Background(), packageReference)
+	pkg, err := resolver.Resolve(context.Background(), fixtures.PackageReference)
 	if err != nil {
 		t.Fatal(err)
 	}

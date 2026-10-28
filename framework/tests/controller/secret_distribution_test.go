@@ -6,13 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"sort"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/framework/comms"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
@@ -21,23 +17,25 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
 func TestSecretDeliveryPersistsBeforePublishingAndReplaysExactEvidence(t *testing.T) {
-	consumer, requests, values, bus := secretConsumerFixture(t)
-	request := secretSyncRequest()
-	bus.before = func(message messages.Message) {
+	consumer, requests, values, bus := fixtures.SecretConsumer(t)
+	request := fixtures.SecretSyncRequest()
+	bus.BeforePublish(func(message messages.Message) {
 		record, err := requests.Get(t.Context(), request.ID)
 		if err != nil || record.Delivery == nil || record.Delivery.ID != message.ID {
 			t.Fatalf("publication preceded durable reservation: %v", err)
 		}
-	}
-	requestMessage := secretRequestMessage(t, request)
+	})
+	requestMessage := fixtures.SecretRequestMessage(t, request)
 	if err := consumer.Consume(t.Context(), requestMessage); err != nil {
 		t.Fatal(err)
 	}
-	first := bus.messages[0]
-	if bus.topics[0] != messages.AgentEvents(request.AgentID) {
+	first := bus.Messages()[0]
+	if bus.Topics()[0] != messages.AgentEvents(request.AgentID) {
 		t.Fatal("secret delivery used the action command channel")
 	}
 	if bytes.Contains(first.Payload, []byte("plaintext-secret")) {
@@ -46,7 +44,7 @@ func TestSecretDeliveryPersistsBeforePublishingAndReplaysExactEvidence(t *testin
 	if err := consumer.Consume(t.Context(), requestMessage); err != nil {
 		t.Fatal(err)
 	}
-	if len(bus.messages) != 2 || !reflect.DeepEqual(first, bus.messages[1]) {
+	if len(bus.Messages()) != 2 || !reflect.DeepEqual(first, bus.Messages()[1]) {
 		t.Fatal("request retry changed the reserved delivery")
 	}
 	ack, err := controllerevents.NewSecretInstalled(first)
@@ -60,7 +58,7 @@ func TestSecretDeliveryPersistsBeforePublishingAndReplaysExactEvidence(t *testin
 	if settled.Request.Status != secrets.Fulfilled || settled.Installation.ID != ack.ID {
 		t.Fatal("installation acknowledgement did not settle the request")
 	}
-	values.record.Store(nil)
+	values.Set(nil)
 	if err := consumer.Consume(t.Context(), ack); err != nil {
 		t.Fatalf("exact historical acknowledgement failed after deletion: %v", err)
 	}
@@ -81,34 +79,35 @@ func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testi
 			name = "uncertain reservation"
 		}
 		t.Run(name, func(t *testing.T) {
-			consumer, requests, _, bus := secretConsumerFixture(t)
+			consumer, requests, _, bus := fixtures.SecretConsumer(t)
 			failure := errors.New("bus unavailable")
 			if uncertain {
-				requests.saveError = secrets.ErrWriteUncertain
+				requests.SetSaveError(secrets.ErrWriteUncertain)
 				failure = secrets.ErrWriteUncertain
 			} else {
-				bus.failure = failure
+				bus.FailPublish(failure)
 			}
-			request := secretSyncRequest()
-			if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); !errors.Is(err, failure) {
+			request := fixtures.SecretSyncRequest()
+			if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); !errors.Is(err, failure) {
 				t.Fatalf("lost required failure: %v", err)
 			}
-			if len(bus.messages) != 0 {
+			if len(bus.Messages()) != 0 {
 				t.Fatal("failed save/publish reported a successful delivery")
 			}
 			reserved, _ := requests.Get(t.Context(), request.ID)
 			if reserved.Delivery == nil {
 				t.Fatal("no recoverable reserved snapshot")
 			}
-			requests.saveError, bus.failure = nil, nil
+			requests.SetSaveError(nil)
+			bus.FailPublish(nil)
 			restarted := consumers.SecretEventConsumer{Bus: bus, Inventory: consumer.Inventory, Secrets: consumer.Secrets, Requests: requests}
 			if err := restarted.Reconcile(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			if len(bus.messages) != 1 || bus.messages[0].ID != reserved.Delivery.ID || !bus.messages[0].CreatedAt.Equal(reserved.Delivery.CreatedAt) {
+			if len(bus.Messages()) != 1 || bus.Messages()[0].ID != reserved.Delivery.ID || !bus.Messages()[0].CreatedAt.Equal(reserved.Delivery.CreatedAt) {
 				t.Fatal("recovery generated a replacement delivery")
 			}
-			payload, err := agentevents.DecodeSecretDelivery(bus.messages[0])
+			payload, err := agentevents.DecodeSecretDelivery(bus.Messages()[0])
 			if err != nil || !reflect.DeepEqual(payload.Secret, reserved.Delivery.Secret) {
 				t.Fatal("recovery changed encrypted snapshot")
 			}
@@ -119,32 +118,32 @@ func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testi
 func TestSecretRequestsRequireLiveOwnType(t *testing.T) {
 	for _, name := range []string{"wrong type", "unknown recipient", "stale agent", "stopped agent", "future"} {
 		t.Run(name, func(t *testing.T) {
-			consumer, requests, _, bus := secretConsumerFixture(t)
-			request := secretSyncRequest()
+			consumer, requests, _, bus := fixtures.SecretConsumer(t)
+			request := fixtures.SecretSyncRequest()
 			switch name {
 			case "wrong type":
 				request.Key.Scope.AgentType = "other"
 			case "unknown recipient":
 				request.AgentID = "fixture-agent-ffffffff"
 			case "stale agent":
-				store := consumer.Inventory.(*inventory)
-				stale := store.record.Load().Clone()
+				store := consumer.Inventory.(*fakes.Inventory)
+				stale := store.Snapshot().Clone()
 				stale.LeaseExpiresAt = time.Now().Add(-time.Second)
-				store.record.Store(&stale)
+				store.Set(&stale)
 			case "stopped agent":
-				store := consumer.Inventory.(*inventory)
-				stopped := store.record.Load().Clone()
+				store := consumer.Inventory.(*fakes.Inventory)
+				stopped := store.Snapshot().Clone()
 				stopped.Status = agents.AgentStopped
-				store.record.Store(&stopped)
+				store.Set(&stopped)
 			case "future":
 				request.RequestedAt = time.Now().Add(time.Hour)
 				request.ExpiresAt = request.RequestedAt.Add(time.Minute)
 			}
-			if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); !errors.Is(err, consumers.ErrInvalidMessage) {
+			if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); !errors.Is(err, consumers.ErrInvalidMessage) {
 				t.Fatalf("invalid request accepted: %v", err)
 			}
 			pending, _ := requests.ListPending(t.Context())
-			if len(pending) != 0 || len(bus.messages) != 0 {
+			if len(pending) != 0 || len(bus.Messages()) != 0 {
 				t.Fatal("invalid request reached persistence or publication")
 			}
 		})
@@ -152,20 +151,20 @@ func TestSecretRequestsRequireLiveOwnType(t *testing.T) {
 }
 
 func TestSecretRequestsAllowOnDemandNamesWithinRegisteredType(t *testing.T) {
-	consumer, requests, _, bus := secretConsumerFixture(t)
-	inventory := consumer.Inventory.(*inventory)
-	record := inventory.record.Load().Clone()
+	consumer, requests, _, bus := fixtures.SecretConsumer(t)
+	inventory := consumer.Inventory.(*fakes.Inventory)
+	record := inventory.Snapshot().Clone()
 	record.Actions[0].RequiredSecrets = nil
 	record.Status = agents.AgentWorking
-	inventory.record.Store(&record)
-	request := secretSyncRequest()
-	if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); err != nil {
+	inventory.Set(&record)
+	request := fixtures.SecretSyncRequest()
+	if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
 		t.Fatal(err)
 	}
-	if len(bus.messages) != 1 || bus.messages[0].AgentID != request.AgentID {
+	if len(bus.Messages()) != 1 || bus.Messages()[0].AgentID != request.AgentID {
 		t.Fatal("on-demand request did not deliver to its registered recipient")
 	}
-	ack, err := controllerevents.NewSecretInstalled(bus.messages[0])
+	ack, err := controllerevents.NewSecretInstalled(bus.Messages()[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,21 +178,21 @@ func TestSecretRequestsAllowOnDemandNamesWithinRegisteredType(t *testing.T) {
 }
 
 func TestSecretPendingRequestsAwaitAvailabilityAndRejectRotatedAcknowledgements(t *testing.T) {
-	consumer, requests, values, bus := secretConsumerFixture(t)
-	initial := values.record.Swap(nil)
-	request := secretSyncRequest()
-	if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); err != nil {
+	consumer, requests, values, bus := fixtures.SecretConsumer(t)
+	initial := values.Swap(nil)
+	request := fixtures.SecretSyncRequest()
+	if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
 		t.Fatal(err)
 	}
 	pending, _ := requests.Get(t.Context(), request.ID)
-	if pending.Request.Status != secrets.Pending || pending.Delivery != nil || len(bus.messages) != 0 {
+	if pending.Request.Status != secrets.Pending || pending.Delivery != nil || len(bus.Messages()) != 0 {
 		t.Fatal("missing value did not remain pending")
 	}
-	values.record.Store(initial)
+	values.Set(initial)
 	if err := consumer.Reconcile(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	ack, err := controllerevents.NewSecretInstalled(bus.messages[0])
+	ack, err := controllerevents.NewSecretInstalled(bus.Messages()[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +200,7 @@ func TestSecretPendingRequestsAwaitAvailabilityAndRejectRotatedAcknowledgements(
 	rotated.Metadata.Version++
 	rotated.Metadata.UpdatedAt = time.Now().UTC()
 	rotated.Value.Ciphertext = []byte("new-ciphertext")
-	values.record.Store(&rotated)
+	values.Set(&rotated)
 	if err := consumer.Consume(t.Context(), ack); !errors.Is(err, consumers.ErrInvalidMessage) {
 		t.Fatalf("superseded value was acknowledged: %v", err)
 	}
@@ -209,10 +208,10 @@ func TestSecretPendingRequestsAwaitAvailabilityAndRejectRotatedAcknowledgements(
 	if closed.Request.Status != secrets.Cancelled || closed.Installation != nil {
 		t.Fatal("superseded pending delivery was not cancelled")
 	}
-	if err := consumer.Consume(t.Context(), secretRequestMessage(t, secretSyncRequest())); err != nil {
+	if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, fixtures.SecretSyncRequest())); err != nil {
 		t.Fatal(err)
 	}
-	payload, err := agentevents.DecodeSecretDelivery(bus.messages[1])
+	payload, err := agentevents.DecodeSecretDelivery(bus.Messages()[1])
 	if err != nil || payload.Secret.Metadata.Version != 2 {
 		t.Fatal("fresh request did not receive rotated value")
 	}
@@ -221,8 +220,8 @@ func TestSecretPendingRequestsAwaitAvailabilityAndRejectRotatedAcknowledgements(
 func TestSecretReconcileCancelsUnavailableReservedValuesAndExpiresRequests(t *testing.T) {
 	for _, name := range []string{"deleted", "expired secret", "expired request"} {
 		t.Run(name, func(t *testing.T) {
-			consumer, requests, values, bus := secretConsumerFixture(t)
-			request := secretSyncRequest()
+			consumer, requests, values, bus := fixtures.SecretConsumer(t)
+			request := fixtures.SecretSyncRequest()
 			if name == "expired request" {
 				request.RequestedAt = time.Now().Add(-2 * time.Minute)
 				request.ExpiresAt = request.RequestedAt.Add(time.Minute)
@@ -230,18 +229,18 @@ func TestSecretReconcileCancelsUnavailableReservedValuesAndExpiresRequests(t *te
 					t.Fatal(err)
 				}
 			} else {
-				if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); err != nil {
+				if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
 					t.Fatal(err)
 				}
 				if name == "deleted" {
-					values.record.Store(nil)
+					values.Set(nil)
 				} else {
-					expired := values.record.Load().Clone()
+					expired := values.Snapshot().Clone()
 					expired.Metadata.ExpiresAt = time.Now().Add(-time.Second)
-					values.record.Store(&expired)
+					values.Set(&expired)
 				}
 			}
-			published := len(bus.messages)
+			published := len(bus.Messages())
 			if err := consumer.Reconcile(t.Context()); err != nil {
 				t.Fatal(err)
 			}
@@ -250,7 +249,7 @@ func TestSecretReconcileCancelsUnavailableReservedValuesAndExpiresRequests(t *te
 			if name == "expired request" {
 				want = secrets.RequestExpired
 			}
-			if record.Request.Status != want || len(bus.messages) != published {
+			if record.Request.Status != want || len(bus.Messages()) != published {
 				t.Fatalf("invalid snapshot replayed: status=%s", record.Request.Status)
 			}
 		})
@@ -260,35 +259,35 @@ func TestSecretReconcileCancelsUnavailableReservedValuesAndExpiresRequests(t *te
 func TestSecretAcknowledgementMustMatchDeliveryAndReceiptDeadline(t *testing.T) {
 	for _, name := range []string{"recipient", "delivery", "secret version", "future installation", "expired receipt"} {
 		t.Run(name, func(t *testing.T) {
-			consumer, requests, values, bus := secretConsumerFixture(t)
-			request := secretSyncRequest()
+			consumer, requests, values, bus := fixtures.SecretConsumer(t)
+			request := fixtures.SecretSyncRequest()
 			var delivery messages.Message
 			if name == "expired receipt" {
 				now := time.Now().UTC()
 				request.RequestedAt, request.ExpiresAt = now.Add(-2*time.Minute), now.Add(-time.Minute)
-				secret := values.record.Load().Clone()
+				secret := values.Snapshot().Clone()
 				secret.Metadata.CreatedAt, secret.Metadata.UpdatedAt = now.Add(-3*time.Minute), now.Add(-3*time.Minute)
-				values.record.Store(&secret)
+				values.Set(&secret)
 				if err := requests.Create(t.Context(), request); err != nil {
 					t.Fatal(err)
 				}
-				reserved := secrets.Delivery{ID: id.MessageID(), RequestID: request.ID, AgentID: agentID,
+				reserved := secrets.Delivery{ID: id.MessageID(), RequestID: request.ID, AgentID: fixtures.AgentID,
 					Secret: secret, CreatedAt: request.RequestedAt.Add(time.Second), ExpiresAt: request.ExpiresAt}
 				if err := requests.SaveDelivery(t.Context(), reserved); err != nil {
 					t.Fatal(err)
 				}
 				payload, _ := json.Marshal(agentevents.SecretDelivery{Secret: secret})
-				delivery = messages.Message{ID: reserved.ID, Type: agentevents.SecretDelivered, AgentID: agentID,
+				delivery = messages.Message{ID: reserved.ID, Type: agentevents.SecretDelivered, AgentID: fixtures.AgentID,
 					CorrelationID: request.ID, Payload: payload, CreatedAt: reserved.CreatedAt, ExpiresAt: reserved.ExpiresAt}
 			} else {
-				if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); err != nil {
+				if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
 					t.Fatal(err)
 				}
-				delivery = bus.messages[0]
+				delivery = bus.Messages()[0]
 			}
 			secret, _ := agentevents.DecodeSecretDelivery(delivery)
 			payload := controllerevents.SecretInstallation{RequestID: request.ID, SecretID: secret.Secret.Metadata.ID, SecretVersion: secret.Secret.Metadata.Version}
-			ack, err := messages.NewMessage(controllerevents.SecretInstalled, agentID, payload)
+			ack, err := messages.NewMessage(controllerevents.SecretInstalled, fixtures.AgentID, payload)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -318,34 +317,34 @@ func TestSecretAcknowledgementMustMatchDeliveryAndReceiptDeadline(t *testing.T) 
 }
 
 func TestSecretDeliveryRechecksRotationAfterReservation(t *testing.T) {
-	consumer, requests, values, bus := secretConsumerFixture(t)
-	requests.afterSave = func() {
-		rotated := values.record.Load().Clone()
+	consumer, requests, values, bus := fixtures.SecretConsumer(t)
+	requests.AfterSave(func() {
+		rotated := values.Snapshot().Clone()
 		rotated.Metadata.Version++
 		rotated.Metadata.UpdatedAt = time.Now().UTC()
-		values.record.Store(&rotated)
-	}
-	request := secretSyncRequest()
-	if err := consumer.Consume(t.Context(), secretRequestMessage(t, request)); err != nil {
+		values.Set(&rotated)
+	})
+	request := fixtures.SecretSyncRequest()
+	if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
 		t.Fatal(err)
 	}
 	record, _ := requests.Get(t.Context(), request.ID)
-	if record.Request.Status != secrets.Cancelled || len(bus.messages) != 0 {
+	if record.Request.Status != secrets.Cancelled || len(bus.Messages()) != 0 {
 		t.Fatal("published a value superseded while reserving the delivery")
 	}
 }
 
 func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
-	consumer, requests, _, _ := secretConsumerFixture(t)
-	request := secretSyncRequest()
+	consumer, requests, _, _ := fixtures.SecretConsumer(t)
+	request := fixtures.SecretSyncRequest()
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	bus := &testBus{events: make(chan messages.Message, 16), commands: make(chan messages.Message, 16), acked: make(chan string, 16), closed: make(chan struct{})}
+	bus := fakes.NewBus()
 	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
-		AgentStore: consumer.Inventory, ActionStore: unusedActions{}, ExecutionStore: unusedExecutions{}, ArtifactStore: unusedArtifacts{},
+		AgentStore: consumer.Inventory, ActionStore: fakes.UnusedActions{}, ExecutionStore: fakes.UnusedExecutions{}, ArtifactStore: fakes.UnusedArtifacts{},
 		SecretStore: consumer.Secrets, SecretRequestStore: requests, LeaseSweepInterval: time.Hour,
 	})
 	if err != nil {
@@ -358,7 +357,7 @@ func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	delivery := receive(t, ctx, bus.commands)
+	delivery := fixtures.Receive(t, ctx, bus.Commands())
 	if delivery.Type != agentevents.SecretDelivered || delivery.CorrelationID != request.ID {
 		t.Fatal("startup did not reconcile pending secret request")
 	}
@@ -366,8 +365,10 @@ func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bus.events <- ack
-	if receive(t, ctx, bus.acked) != ack.ID {
+	if err := bus.Send(ctx, ack); err != nil {
+		t.Fatal(err)
+	}
+	if fixtures.Receive(t, ctx, bus.Acknowledged()) != ack.ID {
 		t.Fatal("unexpected bus acknowledgement")
 	}
 	record, _ := requests.Get(ctx, request.ID)
@@ -377,200 +378,20 @@ func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
 }
 
 func TestControllerSecretRecoveryFailureStopsStartupAndClosesSubscription(t *testing.T) {
-	consumer, requests, _, _ := secretConsumerFixture(t)
+	consumer, requests, _, _ := fixtures.SecretConsumer(t)
 	failure := errors.New("request storage unavailable")
-	requests.listError = failure
-	bus := &testBus{closed: make(chan struct{})}
+	requests.SetListError(failure)
+	bus := fakes.NewBus()
 	c, err := controller.NewController(t.Context(), bus, controller.ControllerConfig{
-		AgentStore: consumer.Inventory, ActionStore: unusedActions{}, ExecutionStore: unusedExecutions{}, ArtifactStore: unusedArtifacts{},
+		AgentStore: consumer.Inventory, ActionStore: fakes.UnusedActions{}, ExecutionStore: fakes.UnusedExecutions{}, ArtifactStore: fakes.UnusedArtifacts{},
 		SecretStore: consumer.Secrets, SecretRequestStore: requests,
 	})
 	if c != nil || !errors.Is(err, failure) {
 		t.Fatalf("startup ignored failed secret recovery: controller=%v err=%v", c != nil, err)
 	}
 	select {
-	case <-bus.closed:
+	case <-bus.Closed():
 	default:
 		t.Fatal("failed startup leaked the event subscription")
 	}
-}
-
-func secretConsumerFixture(t *testing.T) (consumers.SecretEventConsumer, *secretRequestMemory, *secretValueMemory, *secretPublishBus) {
-	t.Helper()
-	now := time.Now().UTC()
-	snapshot := observationSnapshot()
-	snapshot.Actions[0].RequiredSecrets = []string{"API_TOKEN"}
-	inventory := &inventory{}
-	inventory.record.Store(&agents.Agent{AgentSnapshot: snapshot, LastHeartbeat: now, LeaseExpiresAt: now.Add(time.Minute)})
-	requests := &secretRequestMemory{records: make(map[string]secrets.RequestRecord)}
-	values := &secretValueMemory{}
-	values.record.Store(&secrets.Secret{
-		Metadata: secrets.Metadata{ID: id.MessageID(), Key: secretSyncRequest().Key, Version: 1, CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute)},
-		Value:    secrets.EncryptedValue{Format: "test-envelope", KeyID: "test-key", Nonce: []byte("nonce"), Ciphertext: []byte("ciphertext")},
-	})
-	bus := &secretPublishBus{}
-	return consumers.SecretEventConsumer{Bus: bus, Inventory: inventory, Secrets: values, Requests: requests}, requests, values, bus
-}
-
-func secretSyncRequest() secrets.Request {
-	now := time.Now().UTC()
-	return secrets.Request{
-		ID: id.MessageID(), AgentID: agentID, Key: secrets.Key{Scope: secrets.Scope{AgentType: "fixture"}, Name: "API_TOKEN"},
-		Status: secrets.Pending, RequestedAt: now, ExpiresAt: now.Add(time.Minute),
-	}
-}
-
-func secretRequestMessage(t *testing.T, request secrets.Request) messages.Message {
-	t.Helper()
-	message, err := controllerevents.NewSecretSyncRequested(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return message
-}
-
-type secretPublishBus struct {
-	comms.Bus
-	messages []messages.Message
-	topics   []string
-	before   func(messages.Message)
-	failure  error
-}
-
-func (bus *secretPublishBus) Publish(_ context.Context, topic string, message messages.Message) error {
-	if bus.before != nil {
-		bus.before(message)
-	}
-	if bus.failure != nil {
-		return bus.failure
-	}
-	bus.messages, bus.topics = append(bus.messages, message), append(bus.topics, topic)
-	return nil
-}
-
-type secretValueMemory struct {
-	secrets.SecretStore
-	record atomic.Pointer[secrets.Secret]
-}
-
-func (store *secretValueMemory) Get(ctx context.Context, key secrets.Key) (secrets.Secret, error) {
-	if err := ctx.Err(); err != nil {
-		return secrets.Secret{}, err
-	}
-	if record := store.record.Load(); record != nil && record.Metadata.Key == key {
-		return record.Clone(), nil
-	}
-	return secrets.Secret{}, secrets.ErrUnknownSecret
-}
-
-type secretRequestMemory struct {
-	mu        sync.Mutex
-	records   map[string]secrets.RequestRecord
-	saveError error
-	listError error
-	afterSave func()
-}
-
-func (store *secretRequestMemory) Create(ctx context.Context, request secrets.Request) error {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if saved, ok := store.records[request.ID]; ok {
-		if !saved.MatchesRequest(request) {
-			return secrets.ErrRequestConflict
-		}
-		return nil
-	}
-	record, err := secrets.NewRequestRecord(request)
-	if err == nil {
-		store.records[request.ID] = record
-	}
-	return err
-}
-
-func (store *secretRequestMemory) Get(ctx context.Context, requestID string) (secrets.RequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return secrets.RequestRecord{}, err
-	}
-	record, ok := store.records[requestID]
-	if !ok {
-		return secrets.RequestRecord{}, secrets.ErrUnknownRequest
-	}
-	return record.Clone(), nil
-}
-
-func (store *secretRequestMemory) ListPending(ctx context.Context) ([]secrets.RequestRecord, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if store.listError != nil {
-		return nil, store.listError
-	}
-	var records []secrets.RequestRecord
-	for _, record := range store.records {
-		if record.Request.Status == secrets.Pending {
-			records = append(records, record.Clone())
-		}
-	}
-	sort.Slice(records, func(i, j int) bool { return records[i].Request.ID < records[j].Request.ID })
-	return records, nil
-}
-
-func (store *secretRequestMemory) SaveDelivery(ctx context.Context, delivery secrets.Delivery) error {
-	err := store.mutate(ctx, delivery.RequestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {
-		for requestID, saved := range store.records {
-			if requestID != delivery.RequestID && saved.Delivery != nil && saved.Delivery.ID == delivery.ID {
-				return secrets.RequestRecord{}, secrets.ErrRequestConflict
-			}
-		}
-		return record.WithDelivery(delivery)
-	})
-	if err != nil {
-		return err
-	}
-	if store.afterSave != nil {
-		store.afterSave()
-	}
-	return store.saveError
-}
-
-func (store *secretRequestMemory) Acknowledge(ctx context.Context, installation secrets.Installation, now time.Time) error {
-	return store.mutate(ctx, installation.RequestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {
-		return record.Acknowledge(installation, now)
-	})
-}
-
-func (store *secretRequestMemory) Cancel(ctx context.Context, requestID string, now time.Time) error {
-	return store.mutate(ctx, requestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {
-		return record.Cancel(now)
-	})
-}
-
-func (store *secretRequestMemory) Expire(ctx context.Context, requestID string, now time.Time) error {
-	return store.mutate(ctx, requestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {
-		return record.Expire(now)
-	})
-}
-
-func (store *secretRequestMemory) mutate(ctx context.Context, requestID string, apply func(secrets.RequestRecord) (secrets.RequestRecord, error)) error {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	record, ok := store.records[requestID]
-	if !ok {
-		return secrets.ErrUnknownRequest
-	}
-	next, err := apply(record.Clone())
-	if err == nil {
-		store.records[requestID] = next.Clone()
-	}
-	return err
 }

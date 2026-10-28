@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	"github.com/defos-ai/commander/framework/id"
 	fscontrollers "github.com/defos-ai/commander/providers/fs/controllers"
@@ -15,14 +16,14 @@ import (
 // The running controller renews its lease in Compose. Expired registrations
 // therefore need a local store to check the HTTP projection and read-only rule.
 func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
-	fixture := newFixture(t)
-	store, err := fscontrollers.NewControllerFsStore(filepath.Join(fixture.root, "database"))
+	fixture := hostfixtures.New(t)
+	store, err := fscontrollers.NewControllerFsStore(filepath.Join(fixture.Root, "database"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := startAPI(t, fixture.localArgs())
-	empty := server.request(t, http.MethodGet, "/api/v1/controllers", authenticate)
-	if empty.status != http.StatusOK || empty.body != "{\"items\":[]}\n" {
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	empty := server.Request(t, http.MethodGet, "/api/v1/controllers", hostfixtures.Authenticate)
+	if empty.Status != http.StatusOK || empty.Body != "{\"items\":[]}\n" {
 		t.Fatalf("empty controller inventory: %+v", empty)
 	}
 	now := time.Now().UTC()
@@ -40,7 +41,7 @@ func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
 		if err := store.Upsert(t.Context(), record); err != nil {
 			t.Fatal(err)
 		}
-		detail := decodeResponse[models.ControllerResponse](t, server.request(t, http.MethodGet, "/api/v1/controllers/"+record.ID, authenticate))
+		detail := decodeResponse[models.ControllerResponse](t, server.Request(t, http.MethodGet, "/api/v1/controllers/"+record.ID, hostfixtures.Authenticate))
 		wantStatus, wantStale := "unavailable", true
 		if status == controllers.Stopped {
 			wantStatus, wantStale = "stopped", false
@@ -51,7 +52,7 @@ func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
 		if detail.AgentSelector != record.AgentSelector || detail.RuleSelector != record.RuleSelector {
 			t.Fatalf("HTTP query lost the controller's selection policies: %+v", detail)
 		}
-		inventory := decodeResponse[models.ListResponse[models.ControllerResponse]](t, server.request(t, http.MethodGet, "/api/v1/controllers", authenticate))
+		inventory := decodeResponse[models.ListResponse[models.ControllerResponse]](t, server.Request(t, http.MethodGet, "/api/v1/controllers", hostfixtures.Authenticate))
 		found := false
 		for _, item := range inventory.Items {
 			if item.ID == detail.ID {
@@ -69,5 +70,5 @@ func TestControllerQueriesProjectExpiredLeasesWithoutWriting(t *testing.T) {
 			t.Fatalf("HTTP query changed saved observation: saved=%+v original=%+v err=%v", saved, record, err)
 		}
 	}
-	assertHealthy(t, server.request(t, http.MethodGet, "/readyz"))
+	assertHealthy(t, server.Request(t, http.MethodGet, "/readyz"))
 }

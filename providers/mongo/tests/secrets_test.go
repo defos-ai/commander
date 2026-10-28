@@ -16,27 +16,23 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	secretmongo "github.com/defos-ai/commander/providers/mongo/secrets"
-	"github.com/defos-ai/commander/providers/mongo/store"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-const mongoSecretEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-const mongoSecretPlaintext = "private-test-token-never-store-as-plaintext"
-
 func TestSecretMongoStoreEncryptedRoundTrip(t *testing.T) {
-	database := openStore(t, "secrets")
-	catalog := openSecretMongoStore(t, database)
-	value := mongoSecretFixture(t, "API_TOKEN")
+	database := fixtures.OpenStore(t, "secrets")
+	catalog := fixtures.OpenSecretStore(t, database)
+	value := fixtures.Secret(t, "API_TOKEN")
 	value.Metadata.ExpiresAt = value.Metadata.UpdatedAt.Add(time.Hour + time.Nanosecond)
-	value = encryptMongoSecret(t, value.Metadata)
+	value = fixtures.EncryptSecret(t, value.Metadata)
 	expected := value.Clone()
 	if err := catalog.Create(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
 	value.Value.Nonce[0] ^= 1
 	value.Value.Ciphertext[0] ^= 1
-	reopened := openSecretMongoStore(t, database)
+	reopened := fixtures.OpenSecretStore(t, database)
 	assertMongoSecret(t, reopened, expected)
 	got, err := reopened.Get(t.Context(), expected.Metadata.Key)
 	if err != nil {
@@ -53,9 +49,9 @@ func TestSecretMongoStoreEncryptedRoundTrip(t *testing.T) {
 	if len(documents) == 0 {
 		t.Fatal("no encrypted record persisted")
 	}
-	keyBytes, _ := hex.DecodeString(mongoSecretEncryptionKey)
+	keyBytes, _ := hex.DecodeString(fixtures.SecretEncryptionKey)
 	for _, document := range documents {
-		for _, sensitive := range [][]byte{[]byte(mongoSecretPlaintext), []byte(mongoSecretEncryptionKey), keyBytes} {
+		for _, sensitive := range [][]byte{[]byte(fixtures.SecretPlaintext), []byte(fixtures.SecretEncryptionKey), keyBytes} {
 			if bytes.Contains(document, sensitive) {
 				t.Fatal("persisted document exposed plaintext or key material")
 			}
@@ -64,13 +60,13 @@ func TestSecretMongoStoreEncryptedRoundTrip(t *testing.T) {
 }
 
 func TestSecretMongoStoreScopedInventory(t *testing.T) {
-	catalog := openSecretMongoStore(t, openStore(t, "secrets"))
-	first, last, lower := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "Z_TOKEN"), mongoSecretFixture(t, "api_token")
+	catalog := fixtures.OpenSecretStore(t, fixtures.OpenStore(t, "secrets"))
+	first, last, lower := fixtures.Secret(t, "API_TOKEN"), fixtures.Secret(t, "Z_TOKEN"), fixtures.Secret(t, "api_token")
 	first.Metadata.ExpiresAt = first.Metadata.UpdatedAt.Add(time.Hour)
-	first = encryptMongoSecret(t, first.Metadata)
-	agent := mongoSecretFixture(t, "API_TOKEN")
+	first = fixtures.EncryptSecret(t, first.Metadata)
+	agent := fixtures.Secret(t, "API_TOKEN")
 	agent.Metadata.Key.Scope.AgentType = "other-agent"
-	agent = encryptMongoSecret(t, agent.Metadata)
+	agent = fixtures.EncryptSecret(t, agent.Metadata)
 	for _, value := range []secrets.Secret{lower, last, first, agent} {
 		if err := catalog.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
@@ -106,12 +102,12 @@ func TestSecretMongoStoreScopedInventory(t *testing.T) {
 }
 
 func TestSecretMongoStoreCreateIdentityAndReplay(t *testing.T) {
-	catalog := openSecretMongoStore(t, openStore(t, "secrets"))
-	initial := mongoSecretFixture(t, "API_TOKEN")
+	catalog := fixtures.OpenSecretStore(t, fixtures.OpenStore(t, "secrets"))
+	initial := fixtures.Secret(t, "API_TOKEN")
 	if err := catalog.Create(t.Context(), initial); err != nil {
 		t.Fatal(err)
 	}
-	replay := mongoSecretOtherZone(initial)
+	replay := fixtures.SecretOtherZone(initial)
 	if err := catalog.Create(t.Context(), replay); err != nil {
 		t.Fatalf("equal time instants must replay: %v", err)
 	}
@@ -126,7 +122,7 @@ func TestSecretMongoStoreCreateIdentityAndReplay(t *testing.T) {
 			t.Fatalf("conflicting create: %v", err)
 		}
 	}
-	invalid := mongoSecretFixture(t, "NEW_TOKEN")
+	invalid := fixtures.Secret(t, "NEW_TOKEN")
 	invalid.Metadata.Version = 2
 	if err := catalog.Create(t.Context(), invalid); err == nil {
 		t.Fatal("create accepted a noninitial version")
@@ -140,9 +136,9 @@ func TestSecretMongoStoreCreateIdentityAndReplay(t *testing.T) {
 }
 
 func TestSecretMongoStoreReplaceVersionsAndReplay(t *testing.T) {
-	database := openStore(t, "secrets")
-	catalog := openSecretMongoStore(t, database)
-	initial, other := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "OTHER_TOKEN")
+	database := fixtures.OpenStore(t, "secrets")
+	catalog := fixtures.OpenSecretStore(t, database)
+	initial, other := fixtures.Secret(t, "API_TOKEN"), fixtures.Secret(t, "OTHER_TOKEN")
 	for _, value := range []secrets.Secret{initial, other} {
 		if err := catalog.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
@@ -151,11 +147,11 @@ func TestSecretMongoStoreReplaceVersionsAndReplay(t *testing.T) {
 	metadata := initial.Metadata
 	metadata.Version++
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Second)
-	saved := encryptMongoSecret(t, metadata)
+	saved := fixtures.EncryptSecret(t, metadata)
 	if err := catalog.Replace(t.Context(), saved, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := openSecretMongoStore(t, database).Replace(t.Context(), mongoSecretOtherZone(saved), 1); err != nil {
+	if err := fixtures.OpenSecretStore(t, database).Replace(t.Context(), fixtures.SecretOtherZone(saved), 1); err != nil {
 		t.Fatalf("replacement replay: %v", err)
 	}
 	metadata.Version++
@@ -173,7 +169,7 @@ func TestSecretMongoStoreReplaceVersionsAndReplay(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			invalid := metadata
 			test.edit(&invalid)
-			if err := catalog.Replace(t.Context(), encryptMongoSecret(t, invalid), 2); !errors.Is(err, secrets.ErrSecretConflict) {
+			if err := catalog.Replace(t.Context(), fixtures.EncryptSecret(t, invalid), 2); !errors.Is(err, secrets.ErrSecretConflict) {
 				t.Fatalf("invalid replacement: %v", err)
 			}
 		})
@@ -185,25 +181,25 @@ func TestSecretMongoStoreReplaceVersionsAndReplay(t *testing.T) {
 	}
 	missing := metadata
 	missing.Key.Name = "MISSING"
-	if err := catalog.Replace(t.Context(), encryptMongoSecret(t, missing), 2); !errors.Is(err, secrets.ErrUnknownSecret) {
+	if err := catalog.Replace(t.Context(), fixtures.EncryptSecret(t, missing), 2); !errors.Is(err, secrets.ErrUnknownSecret) {
 		t.Fatalf("replacement created a missing key: %v", err)
 	}
 	assertMongoSecret(t, catalog, saved)
-	latest := encryptMongoSecret(t, metadata)
+	latest := fixtures.EncryptSecret(t, metadata)
 	if err := catalog.Replace(t.Context(), latest, 2); err != nil {
 		t.Fatal(err)
 	}
 	if err := catalog.Replace(t.Context(), saved, 1); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("stale replay replaced a newer version: %v", err)
 	}
-	assertMongoSecret(t, openSecretMongoStore(t, database), latest)
+	assertMongoSecret(t, fixtures.OpenSecretStore(t, database), latest)
 	assertMongoSecret(t, catalog, other)
 }
 
 func TestSecretMongoStoreDeletionRetiresIdentity(t *testing.T) {
-	database := openStore(t, "secrets")
-	catalog := openSecretMongoStore(t, database)
-	initial, other := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "OTHER_TOKEN")
+	database := fixtures.OpenStore(t, "secrets")
+	catalog := fixtures.OpenSecretStore(t, database)
+	initial, other := fixtures.Secret(t, "API_TOKEN"), fixtures.Secret(t, "OTHER_TOKEN")
 	for _, value := range []secrets.Secret{initial, other} {
 		if err := catalog.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
@@ -220,7 +216,7 @@ func TestSecretMongoStoreDeletionRetiresIdentity(t *testing.T) {
 	if err := catalog.Delete(t.Context(), initial.Metadata.Key, initial.Metadata.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	catalog = openSecretMongoStore(t, database)
+	catalog = fixtures.OpenSecretStore(t, database)
 	if err := catalog.Delete(t.Context(), initial.Metadata.Key, initial.Metadata.ID, 1); err != nil {
 		t.Fatalf("deletion replay: %v", err)
 	}
@@ -237,7 +233,7 @@ func TestSecretMongoStoreDeletionRetiresIdentity(t *testing.T) {
 			t.Fatalf("absent-key deletion reused another key's ID: %v", err)
 		}
 	}
-	fresh := mongoSecretFixture(t, initial.Metadata.Key.Name)
+	fresh := fixtures.Secret(t, initial.Metadata.Key.Name)
 	if err := catalog.Create(t.Context(), fresh); err != nil {
 		t.Fatalf("fresh ID could not recreate a key: %v", err)
 	}
@@ -247,14 +243,14 @@ func TestSecretMongoStoreDeletionRetiresIdentity(t *testing.T) {
 	old := initial.Metadata
 	old.Version++
 	old.UpdatedAt = old.UpdatedAt.Add(time.Nanosecond)
-	if err := catalog.Replace(t.Context(), encryptMongoSecret(t, old), 1); !errors.Is(err, secrets.ErrSecretConflict) {
+	if err := catalog.Replace(t.Context(), fixtures.EncryptSecret(t, old), 1); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("stale replacement affected a recreated key: %v", err)
 	}
-	delayed := mongoSecretFixture(t, "DELAYED_TOKEN")
+	delayed := fixtures.Secret(t, "DELAYED_TOKEN")
 	if err := catalog.Delete(t.Context(), delayed.Metadata.Key, delayed.Metadata.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := openSecretMongoStore(t, database).Create(t.Context(), delayed); !errors.Is(err, secrets.ErrSecretConflict) {
+	if err := fixtures.OpenSecretStore(t, database).Create(t.Context(), delayed); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("late initial create restored a retired identity: %v", err)
 	}
 	assertMongoSecret(t, catalog, fresh)
@@ -262,16 +258,16 @@ func TestSecretMongoStoreDeletionRetiresIdentity(t *testing.T) {
 }
 
 func TestSecretMongoStoreInvalidContexts(t *testing.T) {
-	database := openStore(t, "secrets")
-	catalog := openSecretMongoStore(t, database)
-	initial, fresh := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "NEW_TOKEN")
+	database := fixtures.OpenStore(t, "secrets")
+	catalog := fixtures.OpenSecretStore(t, database)
+	initial, fresh := fixtures.Secret(t, "API_TOKEN"), fixtures.Secret(t, "NEW_TOKEN")
 	if err := catalog.Create(t.Context(), initial); err != nil {
 		t.Fatal(err)
 	}
 	metadata := initial.Metadata
 	metadata.Version++
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Nanosecond)
-	replacement := encryptMongoSecret(t, metadata)
+	replacement := fixtures.EncryptSecret(t, metadata)
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, ctx := range []context.Context{nil, cancelled} {
@@ -297,12 +293,12 @@ func TestSecretMongoStoreInvalidContexts(t *testing.T) {
 }
 
 func TestSecretMongoStoreConcurrentInstances(t *testing.T) {
-	database := openStore(t, "secrets")
-	stores := []secrets.SecretStore{openSecretMongoStore(t, database), openSecretMongoStore(t, database)}
+	database := fixtures.OpenStore(t, "secrets")
+	stores := []secrets.SecretStore{fixtures.OpenSecretStore(t, database), fixtures.OpenSecretStore(t, database)}
 	const workers = 8
 	creates := make([]secrets.Secret, workers)
 	for i := range creates {
-		creates[i] = mongoSecretFixture(t, "API_TOKEN")
+		creates[i] = fixtures.Secret(t, "API_TOKEN")
 	}
 	compete := func(candidates []secrets.Secret, write func(context.Context, secrets.SecretStore, secrets.Secret) error) secrets.Secret {
 		t.Helper()
@@ -331,18 +327,18 @@ func TestSecretMongoStoreConcurrentInstances(t *testing.T) {
 		metadata := winner.Metadata
 		metadata.Version++
 		metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Duration(i+1) * time.Nanosecond)
-		replacements[i] = encryptMongoSecret(t, metadata)
+		replacements[i] = fixtures.EncryptSecret(t, metadata)
 	}
 	latest := compete(replacements, func(ctx context.Context, catalog secrets.SecretStore, value secrets.Secret) error {
 		return catalog.Replace(ctx, value, 1)
 	})
-	assertMongoSecret(t, openSecretMongoStore(t, database), latest)
+	assertMongoSecret(t, fixtures.OpenSecretStore(t, database), latest)
 }
 
 func TestSecretMongoStoreConcurrentIdenticalReplays(t *testing.T) {
-	database := openStore(t, "secrets")
-	stores := []secrets.SecretStore{openSecretMongoStore(t, database), openSecretMongoStore(t, database)}
-	initial, absent := mongoSecretFixture(t, "API_TOKEN"), mongoSecretFixture(t, "DELAYED_TOKEN")
+	database := fixtures.OpenStore(t, "secrets")
+	stores := []secrets.SecretStore{fixtures.OpenSecretStore(t, database), fixtures.OpenSecretStore(t, database)}
+	initial, absent := fixtures.Secret(t, "API_TOKEN"), fixtures.Secret(t, "DELAYED_TOKEN")
 	for _, write := range []func(context.Context, int) error{
 		func(ctx context.Context, i int) error { return stores[i%len(stores)].Create(ctx, initial) },
 		func(ctx context.Context, i int) error {
@@ -379,9 +375,9 @@ func TestSecretMongoStoreRejectsCorruptPayloads(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			database := openStore(t, "secrets")
-			catalog := openSecretMongoStore(t, database)
-			initial := mongoSecretFixture(t, "API_TOKEN")
+			database := fixtures.OpenStore(t, "secrets")
+			catalog := fixtures.OpenSecretStore(t, database)
+			initial := fixtures.Secret(t, "API_TOKEN")
 			if err := catalog.Create(t.Context(), initial); err != nil {
 				t.Fatal(err)
 			}
@@ -392,7 +388,7 @@ func TestSecretMongoStoreRejectsCorruptPayloads(t *testing.T) {
 			metadata := initial.Metadata
 			metadata.Version++
 			metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Nanosecond)
-			replacement := encryptMongoSecret(t, metadata)
+			replacement := fixtures.EncryptSecret(t, metadata)
 			for i, check := range []func() error{
 				func() error { _, err := catalog.Get(t.Context(), initial.Metadata.Key); return err },
 				func() error { _, err := catalog.GetMetadata(t.Context(), initial.Metadata.Key); return err },
@@ -414,9 +410,9 @@ func TestSecretMongoStoreRejectsCorruptPayloads(t *testing.T) {
 }
 
 func TestSecretMongoStorePreservesUnsignedVersions(t *testing.T) {
-	database := openStore(t, "secrets")
-	catalog := openSecretMongoStore(t, database)
-	initial := mongoSecretFixture(t, "API_TOKEN")
+	database := fixtures.OpenStore(t, "secrets")
+	catalog := fixtures.OpenSecretStore(t, database)
+	initial := fixtures.Secret(t, "API_TOKEN")
 	if err := catalog.Create(t.Context(), initial); err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +420,7 @@ func TestSecretMongoStorePreservesUnsignedVersions(t *testing.T) {
 	metadata := initial.Metadata
 	metadata.Version = math.MaxUint64 - 1
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Nanosecond)
-	previous := encryptMongoSecret(t, metadata)
+	previous := fixtures.EncryptSecret(t, metadata)
 	data, err := json.Marshal(previous)
 	if err != nil {
 		t.Fatal(err)
@@ -434,11 +430,11 @@ func TestSecretMongoStorePreservesUnsignedVersions(t *testing.T) {
 	}
 	metadata.Version++
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Nanosecond)
-	latest := encryptMongoSecret(t, metadata)
+	latest := fixtures.EncryptSecret(t, metadata)
 	if err := catalog.Replace(t.Context(), latest, math.MaxUint64-1); err != nil {
 		t.Fatalf("largest unsigned version rejected: %v", err)
 	}
-	assertMongoSecret(t, openSecretMongoStore(t, database), latest)
+	assertMongoSecret(t, fixtures.OpenSecretStore(t, database), latest)
 	if err := catalog.Replace(t.Context(), latest, math.MaxUint64); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("overflow accepted: %v", err)
 	}
@@ -480,48 +476,6 @@ func concurrentMongoSecretWrites(t *testing.T, count int, write func(context.Con
 	return results
 }
 
-func openSecretMongoStore(t *testing.T, database *store.MongoStore) *secretmongo.SecretMongoStore {
-	t.Helper()
-	catalog, err := secretmongo.NewSecretMongoStore(t.Context(), database)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return catalog
-}
-
-func mongoSecretFixture(t *testing.T, name string) secrets.Secret {
-	t.Helper()
-	stamp := time.Date(2026, 10, 16, 12, 0, 0, 123456789, time.UTC)
-	return encryptMongoSecret(t, secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: name},
-		Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
-	})
-}
-
-func encryptMongoSecret(t *testing.T, metadata secrets.Metadata) secrets.Secret {
-	t.Helper()
-	cipher, err := crypto.NewSecretCipher(mongoSecretEncryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	value, err := cipher.Encrypt(metadata, []byte(mongoSecretPlaintext))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return value
-}
-
-func mongoSecretOtherZone(value secrets.Secret) secrets.Secret {
-	replay := value.Clone()
-	zone := time.FixedZone("other representation", 3*60*60)
-	replay.Metadata.CreatedAt = replay.Metadata.CreatedAt.In(zone)
-	replay.Metadata.UpdatedAt = replay.Metadata.UpdatedAt.In(zone)
-	if !replay.Metadata.ExpiresAt.IsZero() {
-		replay.Metadata.ExpiresAt = replay.Metadata.ExpiresAt.In(zone)
-	}
-	return replay
-}
-
 func assertMongoSecret(t *testing.T, catalog secrets.SecretStore, expected secrets.Secret) {
 	t.Helper()
 	got, err := catalog.Get(t.Context(), expected.Metadata.Key)
@@ -535,12 +489,12 @@ func assertMongoSecret(t *testing.T, catalog secrets.SecretStore, expected secre
 	if canonical(got.Metadata) != canonical(expected.Metadata) || !reflect.DeepEqual(got.Value, expected.Value) {
 		t.Fatal("saved secret differs from expected record")
 	}
-	cipher, err := crypto.NewSecretCipher(mongoSecretEncryptionKey)
+	cipher, err := crypto.NewSecretCipher(fixtures.SecretEncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plaintext, err := cipher.Decrypt(got)
-	if err != nil || !bytes.Equal(plaintext, []byte(mongoSecretPlaintext)) {
+	if err != nil || !bytes.Equal(plaintext, []byte(fixtures.SecretPlaintext)) {
 		t.Fatalf("saved ciphertext could not be authenticated: %v", err)
 	}
 }

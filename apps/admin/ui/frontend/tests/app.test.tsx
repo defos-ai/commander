@@ -1,87 +1,12 @@
-import { upstreamURL } from './proxy';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { expireSession } from '../src/connections/client';
 import { CONNECTIONS_STORAGE_KEY } from '../src/connections/storage';
-import type { Connection } from '../src/connections/types';
 import { HEALTH_INTERVAL_MS } from '../src/hooks/useConnections';
-
-const localURL = 'http://localhost:4274';
-const customLocalURL = 'http://localhost:14274';
-const remoteURL = 'https://api.example.test/commander';
-const username = ' operator ';
-const password = ' exact secret ';
-const savedConnection = { id: 'existing', name: 'Remote Commander', url: remoteURL };
-
-function mockAPI() {
-  const state: {
-    online: boolean;
-    authorize: boolean;
-    sessions: Map<string, { url: string; username: string }>;
-    rejectDelete?: boolean;
-    intercept?: (url: string, init: RequestInit) => Promise<Response> | undefined;
-  } = { online: true, authorize: true, sessions: new Map() };
-  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
-    const url = upstreamURL(input);
-    const address = new URL(String(input), 'http://ui.test');
-    const intercepted = state.intercept?.(url, init);
-    if (intercepted) return intercepted;
-    if (address.pathname === '/ui/connections') {
-      if (init.method === 'POST') {
-        if (!state.authorize) return Response.json({}, { status: 401 });
-        const data = JSON.parse(init.body as string);
-        const session = { url: data.url, username: data.username };
-        state.sessions.set(data.url, session);
-        return Response.json(session);
-      }
-      if (init.method === 'DELETE') {
-        if (state.rejectDelete) return Response.json({}, { status: 502 });
-        state.sessions.delete(address.searchParams.get('url')!);
-        return new Response(null, { status: 204 });
-      }
-      return Response.json({ items: [...state.sessions.values()] });
-    }
-    if (!state.online && !url.startsWith(localURL)) throw new TypeError('Network unavailable');
-    if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
-    if (url.endsWith('/aboutz')) return Response.json({ runtime: 'docker-compose', application: 'commander-api' });
-    if (['operations', 'missions', 'controllers', 'agents', 'actions'].some(resource => url.endsWith(`/api/v1/${resource}`))) {
-      return state.authorize && state.sessions.has(address.searchParams.get('url') ?? '')
-        ? Response.json({ items: [] })
-        : Response.json({ error: 'authentication_required' }, { status: 401 });
-    }
-    throw new Error(`Unexpected test endpoint: ${url}`);
-  });
-  vi.stubGlobal('fetch', fetch);
-  return { fetch, state };
-}
-
-function persist(connections: Connection[]) {
-  localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
-}
-
-function stored(): Connection[] {
-  return JSON.parse(localStorage.getItem(CONNECTIONS_STORAGE_KEY) ?? '[]') as Connection[];
-}
-
-function fillConnection({ name = 'Remote Commander', url = remoteURL } = {}) {
-  const dialog = screen.getByRole('dialog');
-  fireEvent.change(within(dialog).getByLabelText('Connection name'), { target: { value: name } });
-  fireEvent.change(within(dialog).getByLabelText('API URL'), { target: { value: url } });
-  fireEvent.change(within(dialog).getByLabelText('Username'), { target: { value: username } });
-  fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: password } });
-  return dialog;
-}
-
-function deferredResponse() {
-  let resolve!: (response: Response) => void;
-  const promise = new Promise<Response>(complete => { resolve = complete; });
-  return { promise, resolve };
-}
-
-function connectionLink(url = localURL, user = 'commander', operation?: string) {
-  return `#/connect?${new URLSearchParams({ api: url, username: user, ...(operation ? { operation } : {}) })}`;
-}
+import { upstreamURL } from './fakes/proxy';
+import { connectionLink, customLocalURL, fillConnection, localURL, mockAPI, password, persist, remoteURL, savedConnection, stored, username } from './fixtures/app';
+import { deferredResponse } from './fixtures/deferred';
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
@@ -99,8 +24,8 @@ describe('connection links from Playground', () => {
 
   function operationAPI() {
     const api = mockAPI();
-    api.state.intercept = url => url.endsWith(`/api/v1/operations/${operationID}`)
-      ? Promise.resolve(Response.json(operation)) : undefined;
+    api.change(state => { state.intercept = url => url.endsWith(`/api/v1/operations/${operationID}`)
+      ? Promise.resolve(Response.json(operation)) : undefined; });
     return api;
   }
 
@@ -123,7 +48,7 @@ describe('connection links from Playground', () => {
   it.each([true, false])('keeps the operation destination for a saved connection (signed in: %s)', async signedIn => {
     const api = operationAPI();
     persist([savedConnection]);
-    if (signedIn) api.state.sessions.set(remoteURL, { url: remoteURL, username: 'commander' });
+    if (signedIn) api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username: 'commander' }); });
     window.history.replaceState(null, '', connectionLink(remoteURL, 'commander', operationID));
     const rendered = render(<App />);
     if (!signedIn) {
@@ -168,7 +93,7 @@ describe('connection links from Playground', () => {
     const api = operationAPI();
     const other = { id: 'other', name: 'Other API', url: 'https://other.example.test' };
     persist([savedConnection, other]);
-    for (const connection of [savedConnection, other]) api.state.sessions.set(connection.url, { url: connection.url, username: 'commander' });
+    for (const connection of [savedConnection, other]) api.change(state => { state.sessions.set(connection.url, { url: connection.url, username: 'commander' }); });
     window.history.replaceState(null, '', `#/operations/${operationID}`);
     render(<App />);
     expect(await screen.findByText(`Choose or add the API connection for operation ${operationID}.`)).toBeVisible();
@@ -210,12 +135,12 @@ describe('connection links from Playground', () => {
     const api = mockAPI();
     const restored = deferredResponse();
     persist([savedConnection]);
-    api.state.sessions.set(remoteURL, { url: remoteURL, username: 'existing-user' });
-    api.state.intercept = url => url === '/ui/connections' ? restored.promise : undefined;
+    api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username: 'existing-user' }); });
+    api.change(state => { state.intercept = url => url === '/ui/connections' ? restored.promise : undefined; });
     window.history.replaceState(null, '', connectionLink(`${remoteURL}/`, 'suggested-user'));
     render(<App />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    await act(async () => restored.resolve(Response.json({ items: [...api.state.sessions.values()] })));
+    await act(async () => restored.resolve(Response.json({ items: [...api.snapshot().sessions.values()] })));
     expect(await screen.findByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(window.location.hash).toBe(`#/connections/${savedConnection.id}/overview`);
@@ -328,12 +253,12 @@ describe('connection setup and saved metadata', () => {
     const api = mockAPI();
     const late = deferredResponse();
     const nativePlaygroundURL = 'http://localhost:24274';
-    api.state.intercept = url => {
+    api.change(state => { state.intercept = url => {
       if (url === `${customLocalURL}/aboutz`) return late.promise;
       if (url === `${remoteURL}/aboutz`) return Promise.resolve(Response.json({ runtime: 'native', application: 'commander-api' }));
       if (url === `${nativePlaygroundURL}/aboutz`) return Promise.resolve(Response.json({ runtime: 'native', application: 'commander' }));
       return undefined;
-    };
+    }; });
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
@@ -363,9 +288,9 @@ describe('connection setup and saved metadata', () => {
 
   it.each(['unavailable', 'unsupported'])('keeps connecting available when credential metadata is %s', async failure => {
     const api = mockAPI();
-    api.state.intercept = url => url.endsWith('/aboutz') ? Promise.resolve(failure === 'unavailable'
+    api.change(state => { state.intercept = url => url.endsWith('/aboutz') ? Promise.resolve(failure === 'unavailable'
       ? Response.json({}, { status: 503 })
-      : Response.json({ runtime: 'unknown', application: 'commander-api', command: 'untrusted command' })) : undefined;
+      : Response.json({ runtime: 'unknown', application: 'commander-api', command: 'untrusted command' })) : undefined; });
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
@@ -470,8 +395,8 @@ describe('connection setup and saved metadata', () => {
 
   it('hides discovery when the default API is unavailable and allows a custom port to be entered manually', async () => {
     const api = mockAPI();
-    api.state.intercept = url => url.startsWith(localURL)
-      ? Promise.resolve(Response.json({ status: 'unavailable' }, { status: 503 })) : undefined;
+    api.change(state => { state.intercept = url => url.startsWith(localURL)
+      ? Promise.resolve(Response.json({ status: 'unavailable' }, { status: 503 })) : undefined; });
     render(<App />);
 
     await waitFor(() => expect(screen.queryByText('Looking for a local API…')).not.toBeInTheDocument());
@@ -537,7 +462,7 @@ describe('connection setup and saved metadata', () => {
 
   it('keeps rejected credentials out of saved connections', async () => {
     const api = mockAPI();
-    api.state.authorize = false;
+    api.change(state => { state.authorize = false; });
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
@@ -650,15 +575,15 @@ describe('in-flight connection checks', () => {
     const other = { id: 'other', name: 'Other Commander', url: localURL };
     persist([savedConnection, other]);
     const api = mockAPI();
-    api.state.sessions.set(remoteURL, { url: remoteURL, username });
-    api.state.sessions.set(localURL, { url: localURL, username: 'another-operator' });
+    api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username }); });
+    api.change(state => { state.sessions.set(localURL, { url: localURL, username: 'another-operator' }); });
     render(<App />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`));
     await act(async () => { expireSession(remoteURL); });
     expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`);
     expect(screen.getByRole('button', { name: 'Open Other Commander' })).toHaveAccessibleDescription(`${localURL} Connected`);
 
-    api.state.sessions.delete(remoteURL);
+    api.change(state => { state.sessions.delete(remoteURL); });
     await act(async () => { expireSession(remoteURL); });
     expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Sign in required`);
     expect(screen.getByRole('button', { name: 'Open Other Commander' })).toHaveAccessibleDescription(`${localURL} Connected`);
@@ -669,14 +594,14 @@ describe('in-flight connection checks', () => {
   it('retains a known session when revalidation fails and clears the warning after recovery', async () => {
     persist([savedConnection]);
     const api = mockAPI();
-    api.state.sessions.set(remoteURL, { url: remoteURL, username });
+    api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username }); });
     render(<App />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`));
-    api.state.intercept = url => url === '/ui/connections' ? Promise.resolve(Response.json({}, { status: 502 })) : undefined;
+    api.change(state => { state.intercept = url => url === '/ui/connections' ? Promise.resolve(Response.json({}, { status: 502 })) : undefined; });
     await act(async () => { expireSession(remoteURL); });
     expect(screen.getByRole('alert')).toHaveTextContent('Could not restore sign-ins');
     expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`);
-    api.state.intercept = undefined;
+    api.change(state => { state.intercept = undefined; });
     await act(async () => { expireSession(remoteURL); });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`);
@@ -685,11 +610,11 @@ describe('in-flight connection checks', () => {
   it('ignores an old empty session response after signing in again', async () => {
     persist([savedConnection]);
     const api = mockAPI();
-    api.state.sessions.set(remoteURL, { url: remoteURL, username });
+    api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username }); });
     render(<App />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`));
     const delayed = deferredResponse();
-    api.state.intercept = (url, options) => url === '/ui/connections' && !options.method ? delayed.promise : undefined;
+    api.change(state => { state.intercept = (url, options) => url === '/ui/connections' && !options.method ? delayed.promise : undefined; });
     act(() => { expireSession(remoteURL); });
     fireEvent.click(screen.getByRole('button', { name: 'Edit Remote Commander' }));
     const dialog = fillConnection();
@@ -705,8 +630,8 @@ describe('in-flight connection checks', () => {
     const other = { id: 'other', name: 'Other Commander', url: localURL };
     persist([savedConnection, other]);
     const api = mockAPI();
-    api.state.sessions.set(remoteURL, { url: remoteURL, username });
-    api.state.sessions.set(localURL, { url: localURL, username: 'another-operator' });
+    api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username }); });
+    api.change(state => { state.sessions.set(localURL, { url: localURL, username: 'another-operator' }); });
     const first = render(<App />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`));
     expect(screen.getByRole('button', { name: 'Open Other Commander' })).toHaveAccessibleDescription(`${localURL} Connected`);
@@ -714,8 +639,8 @@ describe('in-flight connection checks', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Connection settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByText('Not signed in')).toBeVisible();
-    expect(api.state.sessions.has(remoteURL)).toBe(false);
-    expect(api.state.sessions.get(localURL)?.username).toBe('another-operator');
+    expect(api.snapshot().sessions.has(remoteURL)).toBe(false);
+    expect(api.snapshot().sessions.get(localURL)?.username).toBe('another-operator');
     first.unmount();
     window.history.replaceState(null, '', '/');
     render(<App />);
@@ -727,8 +652,8 @@ describe('in-flight connection checks', () => {
   it.each(['sign out', 'remove'])('keeps the connection signed in when %s fails', async command => {
     persist([savedConnection]);
     const api = mockAPI();
-    api.state.sessions.set(remoteURL, { url: remoteURL, username });
-    api.state.rejectDelete = true;
+    api.change(state => { state.sessions.set(remoteURL, { url: remoteURL, username }); });
+    api.change(state => { state.rejectDelete = true; });
     render(<App />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Connected`));
     fireEvent.click(screen.getByRole('button', { name: 'Open Remote Commander' }));
@@ -739,7 +664,7 @@ describe('in-flight connection checks', () => {
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove connection' }));
     }
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not end this');
-    expect(api.state.sessions.has(remoteURL)).toBe(true);
+    expect(api.snapshot().sessions.has(remoteURL)).toBe(true);
     expect(stored()).toEqual([savedConnection]);
     expect(screen.getByText('Signed in through the UI server')).toBeVisible();
   });
@@ -757,10 +682,10 @@ describe('in-flight connection checks', () => {
 
     const health = deferredResponse();
     const readiness = deferredResponse();
-    api.state.intercept = url => {
+    api.change(state => { state.intercept = url => {
       if (url === `${remoteURL}/healthz`) return health.promise;
       if (url === `${remoteURL}/readyz`) return readiness.promise;
-    };
+    }; });
     api.fetch.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Connection settings' }));
     const forgetButton = screen.getByRole('button', { name: 'Sign out' });
@@ -771,7 +696,7 @@ describe('in-flight connection checks', () => {
     expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
     expect(screen.getByText('Not signed in')).toBeVisible();
     expect(api.fetch.mock.calls.map(([url]) => upstreamURL(url))).toEqual(expect.arrayContaining([`${remoteURL}/healthz`, `${remoteURL}/readyz`]));
-    expect(api.state.sessions.has(remoteURL)).toBe(false);
+    expect(api.snapshot().sessions.has(remoteURL)).toBe(false);
     for (const [, options] of api.fetch.mock.calls) expect(new Headers(options?.headers).has('Authorization')).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
@@ -793,12 +718,12 @@ describe('in-flight connection checks', () => {
     const api = mockAPI();
     const delayed = deferredResponse();
     let signal: AbortSignal | undefined;
-    api.state.intercept = (url, options) => {
+    api.change(state => { state.intercept = (url, options) => {
       if (url === '/ui/connections' && options.method === 'POST') {
         signal = options.signal ?? undefined;
         return delayed.promise;
       }
-    };
+    }; });
     render(<App />);
     await screen.findByText('Local Commander detected');
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
@@ -824,19 +749,19 @@ describe('in-flight connection checks', () => {
     await act(async () => {});
     expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Sign in required`);
 
-    api.state.online = false;
+    api.change(state => { state.online = false; });
     await act(async () => { await vi.advanceTimersByTimeAsync(HEALTH_INTERVAL_MS); });
     expect(screen.getByRole('button', { name: 'Open Remote Commander' })).toHaveAccessibleDescription(`${remoteURL} Unreachable`);
 
-    api.state.online = true;
+    api.change(state => { state.online = true; });
     const delayed = deferredResponse();
     let signal: AbortSignal | undefined;
-    api.state.intercept = (url, options) => {
+    api.change(state => { state.intercept = (url, options) => {
       if (url === `${remoteURL}/healthz`) {
         signal = options.signal ?? undefined;
         return delayed.promise;
       }
-    };
+    }; });
     await act(async () => { await vi.advanceTimersByTimeAsync(HEALTH_INTERVAL_MS); });
     expect(signal?.aborted).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Remote Commander' }));

@@ -4,16 +4,17 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
-func assertMissionPreflight(t *testing.T, a *api, op operationDetail, expectedActions int) {
+func assertMissionPreflight(t *testing.T, a *fixtures.Client, op fixtures.OperationDetail, expectedActions int) {
 	t.Helper()
 	var inventory struct {
 		Agents []agents.Agent `json:"agents"`
 	}
-	a.call("list_agents", object{}, &inventory)
+	a.Call("list_agents", fixtures.Object{}, &inventory)
 
 	if op.Preflight == nil || !op.Preflight.Ready || len(op.Preflight.Actions) != expectedActions {
 		t.Fatalf("mission readiness missing: %+v", op)
@@ -33,14 +34,14 @@ func assertMissionPreflight(t *testing.T, a *api, op operationDetail, expectedAc
 		}
 	}
 	var definition actions.Action
-	a.call("describe_action", object{"action_name": "analyze-text"}, &definition)
+	a.Call("describe_action", fixtures.Object{"action_name": "analyze-text"}, &definition)
 	if len(definition.MissingRequirements) != 0 {
 		t.Fatalf("machine requirements leaked into the shared catalog: %+v", definition)
 	}
 	var listed struct {
-		Operations []operationDetail `json:"operations"`
+		Operations []fixtures.OperationDetail `json:"operations"`
 	}
-	a.call("list_operations", object{}, &listed)
+	a.Call("list_operations", fixtures.Object{}, &listed)
 	if len(listed.Operations) != 1 || listed.Operations[0].Preflight == nil || !listed.Operations[0].Preflight.Ready {
 		t.Fatalf("operation summary omitted preflight: %+v", listed)
 	}

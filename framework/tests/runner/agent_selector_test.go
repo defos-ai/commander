@@ -10,36 +10,30 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/controller/runner"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
-type agentSelectorFunc func(context.Context, runner.AgentSelection) (string, error)
-
-func (agentSelectorFunc) Name() string { return "test-selector" }
-func (f agentSelectorFunc) Select(ctx context.Context, selection runner.AgentSelection) (string, error) {
-	return f(ctx, selection)
-}
-
 func TestCustomAgentSelectorChoosesFromEligibleCandidates(t *testing.T) {
-	config := fixture()
-	first, preferred := readyAgent(agentID), readyAgent("review-agent-00000002")
-	unavailable := readyAgent("review-agent-00000003")
+	config := fixtures.Config()
+	first, preferred := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
+	unavailable := fixtures.ReadyAgent("review-agent-00000003")
 	unavailable.Stale = true
-	config.AgentCatalog.(*agentCatalog).set(unavailable, preferred, first)
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(unavailable, preferred, first)
 	selections := make(chan runner.AgentSelection, 4)
-	config.AgentSelector = agentSelectorFunc(func(_ context.Context, selection runner.AgentSelection) (string, error) {
+	config.AgentSelector = fakes.AgentSelectorFunc(func(_ context.Context, selection runner.AgentSelection) (string, error) {
 		selections <- selection
 		return preferred.ID, nil
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	task := assign(t, r, op.ID, "inspect")
-	call := receive(t, calls)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "inspect")
+	call := fixtures.Receive(t, calls)
 	selection := <-selections
 
-	if call.agent != preferred.ID || call.call.Work.TaskID != task.ID || selection.Task.ID != task.ID || selection.PreviousAgentID != "" {
+	if call.Agent != preferred.ID || call.Call.Work.TaskID != task.ID || selection.Task.ID != task.ID || selection.PreviousAgentID != "" {
 		t.Fatalf("custom selection was not used: call=%+v, selection=%+v", call, selection)
 	}
 	if len(selection.Candidates) != 2 {
@@ -50,23 +44,23 @@ func TestCustomAgentSelectorChoosesFromEligibleCandidates(t *testing.T) {
 			t.Fatalf("unexpected candidate context: %+v", candidate)
 		}
 	}
-	call.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	call.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 }
 
 func TestAgentSelectorCannotMutateSnapshotsOrAddEligibleAgents(t *testing.T) {
-	config := fixture()
-	record := readyAgent(agentID)
+	config := fixtures.Config()
+	record := fixtures.ReadyAgent(fixtures.AgentID)
 	record.Responsibilities = []string{"Inspect websites"}
 	record.Actions[0].InputSchema = json.RawMessage(`{"type":"object"}`)
-	catalog := &selectionCatalog{records: []agents.Agent{record}}
+	catalog := fakes.NewSelectionCatalog(record)
 	want := record.Clone()
 	config.AgentCatalog = catalog
 	var mutated, allowed atomic.Bool
 	attempted := make(chan struct{}, 1)
-	config.AgentSelector = agentSelectorFunc(func(_ context.Context, selection runner.AgentSelection) (string, error) {
+	config.AgentSelector = fakes.AgentSelectorFunc(func(_ context.Context, selection runner.AgentSelection) (string, error) {
 		if allowed.Load() {
-			return agentID, nil
+			return fixtures.AgentID, nil
 		}
 		if mutated.CompareAndSwap(false, true) {
 			selection.Task.Input[0] = '['
@@ -78,28 +72,24 @@ func TestAgentSelectorCannotMutateSnapshotsOrAddEligibleAgents(t *testing.T) {
 		}
 		return "", nil
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	task := assign(t, r, op.ID, "inspect")
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "inspect")
 	waitSelectionAttempt(t, attempted)
 	assertSelectionDeferred(t, r, op.ID, task, calls)
-	if !reflect.DeepEqual(catalog.records[0], want) {
-		t.Fatalf("selector modified the inventory snapshot: got=%+v, want=%+v", catalog.records[0], want)
+	if !reflect.DeepEqual(catalog.Snapshot()[0], want) {
+		t.Fatalf("selector modified the inventory snapshot: got=%+v, want=%+v", catalog.Snapshot()[0], want)
 	}
 
 	allowed.Store(true)
-	call := receive(t, calls)
-	if call.agent != agentID || string(call.call.Input) != "{}" {
+	call := fixtures.Receive(t, calls)
+	if call.Agent != fixtures.AgentID || string(call.Call.Input) != "{}" {
 		t.Fatalf("retry used selector mutations: %+v", call)
 	}
-	call.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	call.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 }
-
-type selectionCatalog struct{ records []agents.Agent }
-
-func (c *selectionCatalog) Agents(context.Context) ([]agents.Agent, error) { return c.records, nil }
 
 func TestAgentSelectionDefersWithoutFallbackAndRetries(t *testing.T) {
 	for _, test := range []struct {
@@ -108,13 +98,13 @@ func TestAgentSelectionDefersWithoutFallbackAndRetries(t *testing.T) {
 		err  error
 	}{
 		{name: "no selection"},
-		{name: "selection error", id: agentID, err: errors.New("decision service unavailable")},
+		{name: "selection error", id: fixtures.AgentID, err: errors.New("decision service unavailable")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config := fixture()
+			config := fixtures.Config()
 			var allowed atomic.Bool
 			attempted := make(chan struct{}, 1)
-			config.AgentSelector = agentSelectorFunc(func(_ context.Context, selection runner.AgentSelection) (string, error) {
+			config.AgentSelector = fakes.AgentSelectorFunc(func(_ context.Context, selection runner.AgentSelection) (string, error) {
 				if allowed.Load() {
 					return selection.Candidates[0].Agent.ID, nil
 				}
@@ -124,46 +114,46 @@ func TestAgentSelectionDefersWithoutFallbackAndRetries(t *testing.T) {
 				}
 				return test.id, test.err
 			})
-			exec, calls := controlledExecutor()
-			r := newRunner(t, config, exec)
-			op := start(t, r)
-			task := assign(t, r, op.ID, "inspect")
+			exec, calls := fakes.ControlledExecutor()
+			r := fixtures.NewRunner(t, config, exec)
+			op := fixtures.Start(t, r)
+			task := fixtures.Assign(t, r, op.ID, "inspect")
 			waitSelectionAttempt(t, attempted)
 			assertSelectionDeferred(t, r, op.ID, task, calls)
 
 			allowed.Store(true)
-			call := receive(t, calls)
-			if call.call.Work.TaskID != task.ID || call.agent != agentID {
-				t.Fatalf("retry dispatched a different task or agent: %+v", call)
+			call := fixtures.Receive(t, calls)
+			if call.Call.Work.TaskID != task.ID || call.Agent != fixtures.AgentID {
+				t.Fatalf("retry dispatched a different task or Agent: %+v", call)
 			}
-			call.reply <- output("inspect")
-			awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+			call.Reply <- fixtures.Output("inspect")
+			fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 		})
 	}
 }
 
 func TestRoundRobinAdvancesOnlyAfterDurableDispatch(t *testing.T) {
-	config := fixture()
-	first, second := readyAgent(agentID), readyAgent("review-agent-00000002")
-	config.AgentCatalog.(*agentCatalog).set(second, first)
-	store := &dispatchFailureStore{OperationStore: config.OperationStore, attempted: make(chan struct{}, 1)}
+	config := fixtures.Config()
+	first, second := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(second, first)
+	store := fakes.NewDispatchFailureStore(config.OperationStore)
 	config.OperationStore = store
 	previous := make(chan string, 16)
-	config.AgentSelector = agentSelectorFunc(func(ctx context.Context, selection runner.AgentSelection) (string, error) {
+	config.AgentSelector = fakes.AgentSelectorFunc(func(ctx context.Context, selection runner.AgentSelection) (string, error) {
 		select {
 		case previous <- selection.PreviousAgentID:
 		default:
 		}
 		return (runner.RoundRobinSelector{}).Select(ctx, selection)
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	firstTask := assign(t, r, op.ID, "inspect")
-	waitSelectionAttempt(t, store.attempted)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	firstTask := fixtures.Assign(t, r, op.ID, "inspect")
+	waitSelectionAttempt(t, store.Attempted())
 	assertSelectionDeferred(t, r, op.ID, firstTask, calls)
-	secondTask := assign(t, r, op.ID, "inspect")
-	waitSelectionAttempt(t, store.attempted)
+	secondTask := fixtures.Assign(t, r, op.ID, "inspect")
+	waitSelectionAttempt(t, store.Attempted())
 	if _, err := r.Events(t.Context(), op.ID, 0, false); err != nil {
 		t.Fatal(err)
 	}
@@ -173,9 +163,9 @@ func TestRoundRobinAdvancesOnlyAfterDurableDispatch(t *testing.T) {
 		}
 	}
 
-	store.allowed.Store(true)
-	firstCall, secondCall := receive(t, calls), receive(t, calls)
-	assigned := map[string]string{firstCall.call.Work.TaskID: firstCall.agent, secondCall.call.Work.TaskID: secondCall.agent}
+	store.Allow()
+	firstCall, secondCall := fixtures.Receive(t, calls), fixtures.Receive(t, calls)
+	assigned := map[string]string{firstCall.Call.Work.TaskID: firstCall.Agent, secondCall.Call.Work.TaskID: secondCall.Agent}
 	if assigned[firstTask.ID] != first.ID || assigned[secondTask.ID] != second.ID {
 		t.Fatalf("round-robin did not preserve reservation order: %+v", assigned)
 	}
@@ -186,15 +176,15 @@ func TestRoundRobinAdvancesOnlyAfterDurableDispatch(t *testing.T) {
 	if lastPrevious != first.ID {
 		t.Fatalf("successful reservation did not advance round-robin cursor: got %q, want %q", lastPrevious, first.ID)
 	}
-	firstCall.reply <- output("inspect")
-	secondCall.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+	firstCall.Reply <- fixtures.Output("inspect")
+	secondCall.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		return op.Tasks[0].Status == operations.TaskSucceeded && op.Tasks[1].Status == operations.TaskSucceeded
 	})
-	thirdTask := assign(t, r, op.ID, "inspect")
-	thirdCall := receive(t, calls)
-	if thirdCall.call.Work.TaskID != thirdTask.ID || thirdCall.agent != first.ID {
-		t.Fatalf("round-robin did not wrap to the first available agent: %+v", thirdCall)
+	thirdTask := fixtures.Assign(t, r, op.ID, "inspect")
+	thirdCall := fixtures.Receive(t, calls)
+	if thirdCall.Call.Work.TaskID != thirdTask.ID || thirdCall.Agent != first.ID {
+		t.Fatalf("round-robin did not wrap to the first available Agent: %+v", thirdCall)
 	}
 	select {
 	case id := <-previous:
@@ -204,22 +194,22 @@ func TestRoundRobinAdvancesOnlyAfterDurableDispatch(t *testing.T) {
 	default:
 		t.Fatal("wraparound did not invoke the selector")
 	}
-	thirdCall.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[2].Status == operations.TaskSucceeded })
+	thirdCall.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[2].Status == operations.TaskSucceeded })
 }
 
 func TestClosingRunnerCancelsAgentSelection(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	attempted := make(chan struct{}, 1)
-	config.AgentSelector = agentSelectorFunc(func(ctx context.Context, selection runner.AgentSelection) (string, error) {
+	config.AgentSelector = fakes.AgentSelectorFunc(func(ctx context.Context, selection runner.AgentSelection) (string, error) {
 		attempted <- struct{}{}
 		<-ctx.Done()
 		return selection.Candidates[0].Agent.ID, nil
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	task := assign(t, r, op.ID, "inspect")
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "inspect")
 	waitSelectionAttempt(t, attempted)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
@@ -237,7 +227,7 @@ func TestClosingRunnerCancelsAgentSelection(t *testing.T) {
 	}
 }
 
-func assertSelectionDeferred(t *testing.T, r *runner.Runner, operationID string, task operations.Task, calls <-chan invocation) {
+func assertSelectionDeferred(t *testing.T, r *runner.Runner, operationID string, task operations.Task, calls <-chan fakes.Invocation) {
 	t.Helper()
 	if _, err := r.Events(t.Context(), operationID, 0, false); err != nil {
 		t.Fatal(err)

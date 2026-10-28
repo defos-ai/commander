@@ -9,20 +9,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/framework/comms"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/crypto"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/comms"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/comms"
 )
 
-const contractSecretValue = "private-contract-test-value"
-const contractEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
 func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) {
-	request, secret := secretProtocolFixture(t)
+	request, secret := fixtures.SecretProtocol(t)
 	sync, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +49,7 @@ func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if bytes.Contains(data, []byte(contractSecretValue)) || bytes.Contains(data, []byte(contractEncryptionKey)) {
+		if bytes.Contains(data, []byte(fixtures.SecretValue)) || bytes.Contains(data, []byte(fixtures.EncryptionKey)) {
 			t.Fatal("secret protocol serialized plaintext or its encryption key")
 		}
 		if message.Work != (messages.WorkContext{}) {
@@ -71,7 +69,7 @@ func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) 
 }
 
 func TestSecretDeliverySnapshotsAreIndependent(t *testing.T) {
-	request, secret := secretProtocolFixture(t)
+	request, secret := fixtures.SecretProtocol(t)
 	delivery, err := agentevents.NewSecretDelivery(request, secret)
 	if err != nil {
 		t.Fatal(err)
@@ -93,18 +91,18 @@ func TestSecretDeliverySnapshotsAreIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cipher, err := crypto.NewSecretCipher(contractEncryptionKey)
+	cipher, err := crypto.NewSecretCipher(fixtures.EncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plaintext, err := cipher.Decrypt(again.Secret)
-	if err != nil || string(plaintext) != contractSecretValue {
+	if err != nil || string(plaintext) != fixtures.SecretValue {
 		t.Fatal("independent decoded delivery no longer decrypts to its original value")
 	}
 }
 
 func TestSecretDeliveryRequiresMatchingPendingRequest(t *testing.T) {
-	request, secret := secretProtocolFixture(t)
+	request, secret := fixtures.SecretProtocol(t)
 	delivery, err := agentevents.NewSecretDelivery(request, secret)
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +148,7 @@ func TestSecretDeliveryRequiresMatchingPendingRequest(t *testing.T) {
 }
 
 func TestSecretInstallationRejectsStaleOrMismatchedDelivery(t *testing.T) {
-	request, secret := secretProtocolFixture(t)
+	request, secret := fixtures.SecretProtocol(t)
 	delivery, err := agentevents.NewSecretDelivery(request, secret)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +180,7 @@ func TestSecretInstallationRejectsStaleOrMismatchedDelivery(t *testing.T) {
 				t.Fatal(err)
 			}
 			test.change(&changed, &payload)
-			changed.Payload = secretWirePayload(t, payload)
+			changed.Payload = fixtures.SecretWirePayload(t, payload)
 			if err := controllerevents.ValidateSecretInstalledDelivery(changed, delivery); err == nil {
 				t.Fatal("accepted installation for a stale or mismatched delivery")
 			}
@@ -200,7 +198,7 @@ func TestSecretInstallationRejectsStaleOrMismatchedDelivery(t *testing.T) {
 }
 
 func TestSecretPublishersRejectInvalidWireDataAndContexts(t *testing.T) {
-	request, secret := secretProtocolFixture(t)
+	request, secret := fixtures.SecretProtocol(t)
 	sync, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)
@@ -213,7 +211,7 @@ func TestSecretPublishersRejectInvalidWireDataAndContexts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bus := &secretBus{}
+	bus := &fakes.SecretBus{}
 	for _, route := range []struct {
 		name    string
 		message messages.Message
@@ -236,10 +234,10 @@ func TestSecretPublishersRejectInvalidWireDataAndContexts(t *testing.T) {
 				func(m *messages.Message) { m.AgentID = "invalid" },
 				func(m *messages.Message) { m.ID = "invalid" },
 				func(m *messages.Message) { m.Work = messages.WorkContext{OperationID: id.New(), TaskID: id.New()} },
-				func(m *messages.Message) { m.Payload = json.RawMessage(`{"secret":"` + contractSecretValue + `"}`) },
+				func(m *messages.Message) { m.Payload = json.RawMessage(`{"secret":"` + fixtures.SecretValue + `"}`) },
 				func(m *messages.Message) { m.Payload = json.RawMessage(`null`) },
 				func(m *messages.Message) {
-					m.Payload = append(bytes.Clone(m.Payload[:len(m.Payload)-1]), []byte(`,"unexpected":"`+contractSecretValue+`"}`)...)
+					m.Payload = append(bytes.Clone(m.Payload[:len(m.Payload)-1]), []byte(`,"unexpected":"`+fixtures.SecretValue+`"}`)...)
 				},
 			} {
 				changed := route.message
@@ -248,19 +246,19 @@ func TestSecretPublishersRejectInvalidWireDataAndContexts(t *testing.T) {
 				if err == nil {
 					t.Fatal("invalid wire data was published")
 				}
-				if strings.Contains(err.Error(), contractSecretValue) {
+				if strings.Contains(err.Error(), fixtures.SecretValue) {
 					t.Fatal("wire validation exposed payload data")
 				}
 			}
 		})
 	}
-	if len(bus.messages) != 0 {
+	if len(bus.Messages()) != 0 {
 		t.Fatal("invalid messages reached the transport")
 	}
 }
 
 func TestSecretEventRoutingPreservesReplayAndTransportErrors(t *testing.T) {
-	request, secret := secretProtocolFixture(t)
+	request, secret := fixtures.SecretProtocol(t)
 	sync, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)
@@ -273,7 +271,7 @@ func TestSecretEventRoutingPreservesReplayAndTransportErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bus := &secretBus{}
+	bus := &fakes.SecretBus{}
 	for _, route := range []struct {
 		message messages.Message
 		topic   string
@@ -287,65 +285,16 @@ func TestSecretEventRoutingPreservesReplayAndTransportErrors(t *testing.T) {
 			if err := route.publish(t.Context(), route.message); err != nil {
 				t.Fatal(err)
 			}
-			last := bus.messages[len(bus.messages)-1]
-			if bus.topics[len(bus.topics)-1] != route.topic || last.ID != route.message.ID || last.CorrelationID != route.message.CorrelationID || !bytes.Equal(last.Payload, route.message.Payload) {
+			last := bus.Messages()[len(bus.Messages())-1]
+			if bus.Topics()[len(bus.Topics())-1] != route.topic || last.ID != route.message.ID || last.CorrelationID != route.message.CorrelationID || !bytes.Equal(last.Payload, route.message.Payload) {
 				t.Fatal("publisher changed routing or prepared replay identity")
 			}
 		}
 	}
-	bus.err = errors.New("transport unavailable")
-	before := len(bus.messages)
-	if err := (agentevents.Client{Bus: bus}).Publish(t.Context(), delivery); !errors.Is(err, bus.err) || len(bus.messages) != before+1 {
+	transportError := errors.New("transport unavailable")
+	bus.Fail(transportError)
+	before := len(bus.Messages())
+	if err := (agentevents.Client{Bus: bus}).Publish(t.Context(), delivery); !errors.Is(err, transportError) || len(bus.Messages()) != before+1 {
 		t.Fatal("publisher hid the transport failure or retried automatically")
 	}
 }
-
-func secretProtocolFixture(t *testing.T) (secretmodel.Request, secretmodel.Secret) {
-	t.Helper()
-	now := time.Now().UTC()
-	key := secretmodel.Key{Scope: secretmodel.Scope{AgentType: "generated"}, Name: "API_TOKEN"}
-	request := secretmodel.Request{
-		ID: id.New(), Key: key, AgentID: "builder-agent-12345678", Status: secretmodel.Pending,
-		RequestedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour),
-	}
-	metadata := secretmodel.Metadata{
-		ID: id.New(), Key: key, Version: 1,
-		CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute), ExpiresAt: now.Add(30 * time.Minute),
-	}
-	cipher, err := crypto.NewSecretCipher(contractEncryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	secret, err := cipher.Encrypt(metadata, []byte(contractSecretValue))
-	if err != nil {
-		t.Fatal("could not prepare encrypted protocol fixture")
-	}
-	return request, secret
-}
-
-func secretWirePayload(t *testing.T, value any) json.RawMessage {
-	t.Helper()
-	data, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
-type secretBus struct {
-	topics   []string
-	messages []messages.Message
-	err      error
-}
-
-func (bus *secretBus) Publish(_ context.Context, topic string, message messages.Message) error {
-	bus.topics = append(bus.topics, topic)
-	bus.messages = append(bus.messages, message)
-	return bus.err
-}
-
-func (*secretBus) Subscribe(context.Context, comms.Inbox) (comms.Subscription, error) {
-	return nil, errors.New("subscription is outside this protocol test")
-}
-
-func (*secretBus) Close() error { return nil }

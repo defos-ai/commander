@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 )
 
 func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
@@ -17,8 +18,8 @@ func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
 			name = "acknowledgement lost"
 		}
 		t.Run(name, func(t *testing.T) {
-			fixture := newDockerManagerFixture(t)
-			ctx, requestID, journal := newSpawnCheckpoints(t)
+			fixture := fixtures.NewDockerManager(t)
+			ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
 			failure := errors.New("fixture checkpoint persistence acknowledgement failed")
 			failIntent := func(_ context.Context, name string, _ json.RawMessage) error {
 				if name == "launch-intent" {
@@ -27,11 +28,11 @@ func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
 				return nil
 			}
 			if persisted {
-				journal.afterSave = failIntent
+				journal.SetAfterSave(failIntent)
 			} else {
-				journal.beforeSave = failIntent
+				journal.SetBeforeSave(failIntent)
 			}
-			if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); !errors.Is(err, failure) {
+			if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); !errors.Is(err, failure) {
 				t.Fatalf("spawn did not return checkpoint failure: %v", err)
 			}
 			_, found, err := journal.LoadCheckpoint(ctx, "launch-intent")
@@ -39,12 +40,12 @@ func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
 				t.Fatalf("intent persistence: found=%t error=%v", found, err)
 			}
 			if persisted {
-				journal.afterSave = nil
-				if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "uncertain") {
+				journal.SetAfterSave(nil)
+				if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil || !strings.Contains(err.Error(), "uncertain") {
 					t.Fatalf("acknowledgement loss authorized creating a missing container: %v", err)
 				}
 			}
-			creates, starts, _ := fixture.engine.counts()
+			creates, starts, _ := fixture.Engine.Counts()
 			if creates != 0 || starts != 0 {
 				t.Fatalf("checkpoint failure launched container: create=%d start=%d", creates, starts)
 			}
@@ -53,46 +54,46 @@ func TestDockerCheckpointFailureNeverCreatesContainer(t *testing.T) {
 }
 
 func TestDockerCheckpointCreatedContainerNeedsOriginalOwner(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	ctx, requestID, _ := newSpawnCheckpoints(t)
-	fixture.engine.createErr = errors.New("fixture lost Docker Create response")
-	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+	fixture := fixtures.NewDockerManager(t)
+	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
+	fixture.Engine.SetCreateError(errors.New("fixture lost Docker Create response"))
+	if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 		t.Fatal("lost Create response unexpectedly succeeded")
 	}
 	// The saved intent alone must not grant another manager permission to
 	// Start the original container.
-	config := fixture.config
+	config := fixture.Config
 	second, err := docker.NewManager(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer second.Close()
-	if _, err := second.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "ownership is uncertain") {
+	if _, err := second.Spawn(ctx, requestID, fixtures.Reference); err == nil || !strings.Contains(err.Error(), "ownership is uncertain") {
 		t.Fatalf("second manager attempted to start restored intent: %v", err)
 	}
-	creates, starts, _ := fixture.engine.counts()
+	creates, starts, _ := fixture.Engine.Counts()
 	if creates != 1 || starts != 0 {
 		t.Fatalf("second owner launched container: create=%d start=%d", creates, starts)
 	}
-	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err != nil {
+	if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err != nil {
 		t.Fatalf("original owner could not reconcile lost Create response: %v", err)
 	}
-	creates, starts, _ = fixture.engine.counts()
+	creates, starts, _ = fixture.Engine.Counts()
 	if creates != 1 || starts != 1 {
 		t.Fatalf("owner retry relaunched container: create=%d start=%d", creates, starts)
 	}
 }
 
 func TestDockerCheckpointRejectsRuntimeMismatch(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	ctx, requestID, journal := newSpawnCheckpoints(t)
-	journal.afterSave = func(_ context.Context, name string, _ json.RawMessage) error {
+	fixture := fixtures.NewDockerManager(t)
+	ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+	journal.SetAfterSave(func(_ context.Context, name string, _ json.RawMessage) error {
 		if name == "launch-intent" {
 			return errors.New("fixture stops before Docker Create")
 		}
 		return nil
-	}
-	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+	})
+	if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 		t.Fatal("fixture did not stop before launch")
 	}
 	data, found, err := journal.LoadCheckpoint(ctx, "launch-intent")
@@ -108,14 +109,12 @@ func TestDockerCheckpointRejectsRuntimeMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	journal.mu.Lock()
-	journal.record.Checkpoints["launch-intent"] = data
-	journal.mu.Unlock()
-	journal.afterSave = nil
-	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "invalid or incomplete") {
+	journal.ReplaceCheckpoint("launch-intent", data)
+	journal.SetAfterSave(nil)
+	if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil || !strings.Contains(err.Error(), "invalid or incomplete") {
 		t.Fatalf("runtime mismatch accepted: %v", err)
 	}
-	creates, starts, _ := fixture.engine.counts()
+	creates, starts, _ := fixture.Engine.Counts()
 	if creates != 0 || starts != 0 {
 		t.Fatalf("runtime mismatch launched container: create=%d start=%d", creates, starts)
 	}

@@ -3,8 +3,6 @@ package providers_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -15,6 +13,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 	artifactfs "github.com/defos-ai/commander/providers/fs/artifacts"
 	fstesting "github.com/defos-ai/commander/providers/fs/testing"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestArtifactFsStore(t *testing.T) {
@@ -27,7 +26,7 @@ func TestArtifactFsStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := artifactFixture()
+	value := fixtures.Artifact()
 	if _, err := first.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("unknown artifact: %v", err)
 	}
@@ -70,7 +69,7 @@ func TestArtifactFsStore(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := first.Create(cancelled, artifactFixture()); !errors.Is(err, context.Canceled) {
+	if err := first.Create(cancelled, fixtures.Artifact()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled write: %v", err)
 	}
 	if _, err := first.Get(t.Context(), "../outside"); err == nil {
@@ -80,7 +79,7 @@ func TestArtifactFsStore(t *testing.T) {
 
 func TestConcurrentArtifactFsCreates(t *testing.T) {
 	root := t.TempDir()
-	value := artifactFixture()
+	value := fixtures.Artifact()
 	changed := value.Clone()
 	changed.Name = "conflicting evidence"
 	gate, results := make(chan struct{}), make(chan error, 12)
@@ -129,7 +128,7 @@ func TestArtifactFsCleanupKeepsDelayedResultsRetired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := artifactFixture()
+	value := fixtures.Artifact()
 	file, err := files.Put(t.Context(), value.ID, artifacts.FileSource{Name: "evidence.txt", Data: []byte("accepted result")})
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +162,7 @@ func TestArtifactFsCleanupKeepsDelayedResultsRetired(t *testing.T) {
 			t.Fatalf("cleanup left artifact bytes: %v", err)
 		}
 	}
-	if err := metadata.Create(t.Context(), artifactFixture()); err != nil {
+	if err := metadata.Create(t.Context(), fixtures.Artifact()); err != nil {
 		t.Fatalf("cleanup prevented new artifacts: %v", err)
 	}
 }
@@ -180,7 +179,7 @@ func TestArtifactFilesStaySeparateFromMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	payload := []byte("screenshot bytes")
-	value := artifactFixture()
+	value := fixtures.Artifact()
 	file, err := files.Put(t.Context(), value.ID, artifacts.FileSource{Name: "../../display.png", MediaType: "image/png", Data: payload})
 	if err != nil {
 		t.Fatal(err)
@@ -272,11 +271,4 @@ func TestArtifactFileSources(t *testing.T) {
 	if _, err := files.Get(t.Context(), artifactID, file); err == nil {
 		t.Fatal("symlink content accepted")
 	}
-}
-
-func artifactFixture() artifacts.Artifact {
-	digest := sha256.Sum256([]byte("data"))
-	return artifacts.Artifact{ID: id.ArtifactID(), Name: "page screenshots", AgentID: "browser-agent-1234abcd",
-		ActionName: "capture-page", CommandID: id.MessageID(), CreatedAt: time.Now().UTC(),
-		Files: []artifacts.ArtifactFile{{ID: id.ArtifactFileID(), Name: "desktop.png", MediaType: "image/png", Size: 4, SHA256: hex.EncodeToString(digest[:])}}}
 }

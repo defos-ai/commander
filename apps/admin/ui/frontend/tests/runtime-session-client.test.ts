@@ -1,28 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/api/client';
 import {
-  controlRuntimeSession, getRuntimeSession, listRuntimeSessions, SessionControlError, type RuntimeSession,
+  controlRuntimeSession, getRuntimeSession, listRuntimeSessions, SessionControlError
 } from '../src/api/runtime-sessions';
-
-const url = 'https://commander.example/team';
-const credentials = { url, username: 'operator' };
-const id = '5cde98e0-23d3-447d-ad59-2238b244f689';
-const scopeID = 'ee870ebc-2230-49ed-8fc7-24429bcfd05d';
-const requestID = 'f9dfb5e0-5ebf-4928-bcfa-1141d2889ba1';
-const session: RuntimeSession = {
-  id, scope_id: scopeID, owner_agent_id: 'browser-agent-0123abcd', kind: 'browser', label: 'Review browser',
-  state: 'connected', disposition: 'active', busy: false, revision: 3,
-  created_at: '2026-10-27T10:00:00Z', updated_at: '2026-10-27T10:01:00.123456789Z',
-  connected_at: '2026-10-27T12:01:00+02:00', verified_at: '2026-10-27T10:01:00Z',
-  endpoint: 'ws://runtime.example/session', hostname: 'worker', user: 'operator', peer: 'browser', reason: 'Observed connection',
-};
-const serverDetail = 'private server error that must not appear in the UI';
-
-function respond(body: unknown, status = 200) {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => Response.json(body, { status }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { respondJSON as respond } from './fakes/fetch';
+import { credentials, id, requestID, scopeID, serverDetail, session, url } from './fixtures/runtime-session-client';
 
 function requestedPath(input: RequestInfo | URL): string {
   const request = new URL(String(input), window.location.origin);

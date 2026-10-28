@@ -10,15 +10,16 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/executions"
 	mongoexecutions "github.com/defos-ai/commander/providers/mongo/executions"
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 )
 
 func TestExecutionMongoCheckpointsPersistAndRemainImmutable(t *testing.T) {
-	database := openStore(t, "executions")
+	database := fixtures.OpenStore(t, "executions")
 	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := executionCommand(1)
+	command := fixtures.ExecutionCommand(1)
 	data := json.RawMessage(`{"serial":18446744073709551615,"steps":["a"]}`)
 	original := string(data)
 	if err := catalog.SaveCheckpoint(t.Context(), command.AgentID, command.ID, "selected", data); !errors.Is(err, executions.ErrUnknownExecution) {
@@ -61,7 +62,7 @@ func TestExecutionMongoCheckpointsPersistAndRemainImmutable(t *testing.T) {
 	if err := reopened.SaveCheckpoint(t.Context(), command.AgentID, command.ID, "invalid", json.RawMessage(`{`)); err == nil {
 		t.Fatal("invalid JSON was saved")
 	}
-	result := executionResult(command)
+	result := fixtures.ExecutionResult(command)
 	if err := reopened.Complete(t.Context(), result); err != nil {
 		t.Fatal(err)
 	}
@@ -79,16 +80,16 @@ func TestExecutionMongoCheckpointsPersistAndRemainImmutable(t *testing.T) {
 }
 
 func TestExecutionMongoConcurrentCheckpoints(t *testing.T) {
-	first, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	first, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	second, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	stores := []executions.ExecutionStore{first, second}
-	command := executionCommand(1)
+	command := fixtures.ExecutionCommand(1)
 	if _, _, err := first.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
@@ -155,16 +156,16 @@ func TestExecutionMongoConcurrentCheckpoints(t *testing.T) {
 }
 
 func TestExecutionMongoCheckpointCompletionRace(t *testing.T) {
-	first, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	first, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	second, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := range 8 {
-		command := executionCommand(i + 1)
+		command := fixtures.ExecutionCommand(i + 1)
 		if _, _, err := first.Claim(t.Context(), command); err != nil {
 			t.Fatal(err)
 		}
@@ -177,7 +178,7 @@ func TestExecutionMongoCheckpointCompletionRace(t *testing.T) {
 		}()
 		go func() {
 			<-start
-			completed <- second.Complete(t.Context(), executionResult(command))
+			completed <- second.Complete(t.Context(), fixtures.ExecutionResult(command))
 		}()
 		close(start)
 		checkpointErr, completionErr := <-checkpoint, <-completed

@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -37,15 +38,15 @@ func TestChatScrolling(t *testing.T) {
 				http.Error(w, "scrolling must not submit model work", http.StatusBadRequest)
 			}))
 			defer provider.Close()
-			u := newUI(t, ctx, endpoint.URL, provider.URL)
-			defer u.model.Close()
-			u.model.Update(tea.WindowSizeMsg{Width: 110, Height: 18})
-			u.text("/help")
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("help content", func(view string) bool { return strings.Contains(view, "Ctrl+D exits.") })
+			u := fixtures.NewUI(t, ctx, endpoint.URL, provider.URL)
+			defer u.Close()
+			u.Model.Update(tea.WindowSizeMsg{Width: 110, Height: 18})
+			u.Text("/help")
+			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.Wait("help content", func(view string) bool { return strings.Contains(view, "Ctrl+D exits.") })
 			const draft = "Keep this draft while I read the help"
-			u.text(draft)
-			bottom := u.model.View()
+			u.Text(draft)
+			bottom := u.Model.View()
 			for _, msg := range []tea.Msg{
 				tea.MouseMsg{Button: tea.MouseButtonWheelUp, Action: tea.MouseActionRelease},
 				tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress},
@@ -53,15 +54,15 @@ func TestChatScrolling(t *testing.T) {
 				tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease, X: 15, Y: 3},
 				tea.MouseMsg{Button: tea.MouseButtonWheelLeft, Action: tea.MouseActionPress},
 			} {
-				u.model.Update(msg)
-				if u.model.View() != bottom {
+				u.Model.Update(msg)
+				if u.Model.View() != bottom {
 					t.Fatal("a click, drag, horizontal wheel or release scrolled the chat or changed its input")
 				}
 			}
 			for range 30 {
-				u.model.Update(input.up)
+				u.Model.Update(input.up)
 			}
-			top := u.model.View()
+			top := u.Model.View()
 			if !strings.Contains(top, "Commander connected") || strings.Contains(top, "Ctrl+D exits.") || !strings.Contains(top, draft) {
 				t.Fatal("scrolling up did not reach earlier chat content while preserving the draft")
 			}
@@ -70,14 +71,14 @@ func TestChatScrolling(t *testing.T) {
 				strings.Join(before[len(before)-3:], "\n") != strings.Join(after[len(after)-3:], "\n") {
 				t.Fatal("scrolling moved the header, input or footer")
 			}
-			u.model.Update(input.up)
-			if u.model.View() != top {
+			u.Model.Update(input.up)
+			if u.Model.View() != top {
 				t.Fatal("scrolling up moved past the start of the chat")
 			}
 			for range 30 {
-				u.model.Update(input.down)
+				u.Model.Update(input.down)
 			}
-			if u.model.View() != bottom {
+			if u.Model.View() != bottom {
 				t.Fatal("scrolling down did not restore the latest content and unchanged draft")
 			}
 			if modelRequests.Load() != 0 {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,15 +15,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
-	examplecli "github.com/defos-ai/commander-example-agent/cli"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/apps/playground/cli"
+	fakes "github.com/defos-ai/commander/apps/playground/tests/fakes"
+	fixtures "github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/id"
@@ -43,7 +41,7 @@ func TestAllInOne(t *testing.T) {
 }
 
 func testAllInOneWorkflow(t *testing.T) {
-	temporary := allInOneEnvironment(t)
+	temporary := fixtures.AllInOneEnvironment(t)
 	t.Setenv("TASK_TIMEOUT", "17m")
 	t.Setenv("PATH", t.TempDir()) // Startup and the example fixture need no external tools.
 	const analysisText = "Hello Commander. Build useful agents."
@@ -86,13 +84,13 @@ func testAllInOneWorkflow(t *testing.T) {
 			if request == 3 {
 				name = "list_agents"
 			}
-			delta = toolDelta(name, map[string]any{})
+			delta = fakes.ToolDelta(name, map[string]any{})
 		case 2:
-			delta = toolDelta("describe_mission", map[string]any{"mission_name": "analyze-text"})
+			delta = fakes.ToolDelta("describe_mission", map[string]any{"mission_name": "analyze-text"})
 		case 4:
-			delta = toolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "analyze-text", "input": map[string]any{"text": analysisText}})
+			delta = fakes.ToolDelta("start_operation", map[string]any{"operation_id": operationID, "mission_name": "analyze-text", "input": map[string]any{"text": analysisText}})
 		case 5:
-			delta = toolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "analyze-text", "input": map[string]any{"text": analysisText}})
+			delta = fakes.ToolDelta("assign_task", map[string]any{"operation_id": operationID, "action_name": "analyze-text", "input": map[string]any{"text": analysisText}})
 		case 6:
 			delta, finish = map[string]any{"content": "**Analysis running**"}, "stop"
 		case 7, 9:
@@ -123,13 +121,13 @@ func testAllInOneWorkflow(t *testing.T) {
 					http.Error(w, "missing continuation", http.StatusBadRequest)
 					return
 				}
-				delta = toolDelta("ask_question", map[string]any{"operation_id": operationID, "task_id": task.ID, "version": task.Continuation.Version,
+				delta = fakes.ToolDelta("ask_question", map[string]any{"operation_id": operationID, "task_id": task.ID, "version": task.Continuation.Version,
 					"text": "Accept this text summary?", "options": []string{"Revise", "Accept"}})
 			} else {
 				if len(op.Questions) != 1 || op.Questions[0].Status != operations.QuestionAnswered || op.Questions[0].Answer != "Accept" {
 					t.Errorf("model did not receive operator guidance: %+v", op.Questions)
 				}
-				delta = toolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{
+				delta = fakes.ToolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{
 					"summary": "Text analyzed; operator accepted summary.md"}})
 			}
 		case 8:
@@ -152,7 +150,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	cliContext, stopCLI := context.WithCancel(context.WithoutCancel(ctx))
 	stopAgents := func() {}
 	input, keyboard := io.Pipe()
-	var output terminalOutput
+	var output fakes.TerminalOutput
 	done := make(chan error, 1)
 	stopped := make(chan struct{})
 	go func() {
@@ -265,7 +263,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	if err != nil || len(directories) != 1 {
 		t.Fatalf("locate local session: %v (%v)", directories, err)
 	}
-	request, err = http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/missions", strings.NewReader(exampleMission))
+	request, err = http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/missions", strings.NewReader(fixtures.ExampleMission))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +277,7 @@ func testAllInOneWorkflow(t *testing.T) {
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("create example mission: status=%d", response.StatusCode)
 	}
-	stopAgents = startLocalExampleHost(t, directories[0])
+	stopAgents = fixtures.StartLocalExampleHost(t, directories[0])
 	var agents models.ListResponse[models.AgentResponse]
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
@@ -348,7 +346,7 @@ func testAllInOneWorkflow(t *testing.T) {
 			t.Errorf("MCP accepted missing or wrong token: status=%d", response.StatusCode)
 		}
 	}
-	client, err := mcp.NewClient(&mcp.Implementation{Name: "playground-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: &http.Client{Transport: mcpAuthTransport("all-in-one-mcp-secret")}}, nil)
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "playground-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: &http.Client{Transport: fakes.MCPAuthTransport("all-in-one-mcp-secret")}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,98 +455,6 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 }
 
-const exampleMission = `{
-  "name":"analyze-text",
-  "objectives":["Analyze text and save a summary artifact.","Ask the operator to accept the result before completing."],
-  "required_actions":["analyze-text","write-summary"],
-  "starting_actions":["analyze-text"],
-  "rules":{
-    "aggregate-results":{"for_actions":["analyze-text"]},
-    "decide-next-actions":{"for_actions":["write-summary"],"params":{"decision_by":"model"}}
-  },
-  "input_schema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false},
-  "output_schema":{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false}
-}`
-
-func startLocalExampleHost(t *testing.T, directory string) func() {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.WithoutCancel(t.Context()))
-	args := []string{"--bus-url=" + filepath.Join(directory, "bus"), "--storage-url=" + filepath.Join(directory, "storage")}
-	done := make(chan error, 1)
-	go func() { done <- examplecli.Run(ctx, args, io.Discard) }()
-	var once sync.Once
-	stop := func() {
-		once.Do(func() {
-			cancel()
-			timer := time.NewTimer(10 * time.Second)
-			defer timer.Stop()
-			select {
-			case err := <-done:
-				if err != nil && !errors.Is(err, context.Canceled) {
-					t.Errorf("stop workflow agent: %v", err)
-				}
-			case <-timer.C:
-				t.Error("workflow agent did not stop before session cleanup")
-			}
-		})
-	}
-	t.Cleanup(stop)
-	return stop
-}
-
-func allInOneEnvironment(t *testing.T) string {
-	t.Helper()
-	temporary := t.TempDir()
-	frontend := t.TempDir()
-	externalSpawner := t.TempDir()
-	externalBuilder := t.TempDir()
-	t.Setenv("SPAWNER_RUNTIME", "docker")
-	t.Setenv("SPAWNER_DOCKER_NETWORK", "")
-	t.Setenv("SPAWNER_STATE_DIR", externalSpawner)
-	t.Setenv("BUILDER_WORKSPACE_DIR", externalBuilder)
-	t.Cleanup(func() {
-		if files, err := os.ReadDir(externalSpawner); err != nil || len(files) != 0 {
-			t.Errorf("all-in-one used the external spawner state directory: %v (%v)", files, err)
-		}
-		if files, err := os.ReadDir(externalBuilder); err != nil || len(files) != 0 {
-			t.Errorf("all-in-one used the external builder workspace directory: %v (%v)", files, err)
-		}
-	})
-	if err := os.WriteFile(filepath.Join(frontend, "index.html"), []byte(`<html>Admin fixture</html>`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
-		t.Setenv(name, temporary)
-	}
-	t.Setenv("ENV", "")
-	t.Setenv("TASK_TIMEOUT", "")
-	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
-	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
-	t.Setenv("COMMANDER_MCP_TOKEN", "invalid remote token") // Local credentials win too.
-	t.Setenv("COMMANDER_ADMIN_URL", "")
-	t.Setenv("COMMANDER_API_URL", "invalid remote API URL") // Embedded credentials and URL win.
-	t.Setenv("COMMANDER_API_USERNAME", "remote-operator")
-	t.Setenv("COMMANDER_API_PASSWORD", "remote-password")
-	t.Setenv("MCP_TOKEN", "all-in-one-mcp-secret")
-	t.Setenv("MCP_RUNTIME", "native")
-	t.Setenv("API_USERNAME", "commander")
-	t.Setenv("API_PASSWORD", "all-in-one-api-secret")
-	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
-	t.Setenv("API_RUNTIME", "native")
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
-	t.Setenv("UI_LISTEN_ADDRESS", "127.0.0.1:0")
-	t.Setenv("UI_STATIC_DIR", frontend)
-	t.Setenv("UI_PUBLIC_ORIGIN", "")
-	t.Setenv("UI_API_UPSTREAMS", "")
-	t.Setenv("PORT", "not-a-port") // All-in-one uses explicit API and Admin listeners.
-	t.Setenv("API_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")
-	t.Setenv("API_ALLOWED_ORIGINS", "")
-	t.Setenv("API_TRUSTED_PROXIES", "")
-	t.Setenv("API_PROXY_HEADERS", "none")
-	t.Setenv("API_SWAGGER_ENABLED", "false")
-	return temporary
-}
-
 func testAllInOneGeneratedCredentials(t *testing.T) {
 	var previousPassword, previousToken string
 	for _, tc := range []struct {
@@ -559,7 +465,7 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 		{name: "password and token overrides", password: "operator-supplied-secret", token: "operator-supplied-token"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			temporary := allInOneEnvironment(t)
+			temporary := fixtures.AllInOneEnvironment(t)
 			t.Setenv("API_USERNAME", tc.username)
 			t.Setenv("API_PASSWORD", tc.password)
 			t.Setenv("MCP_TOKEN", tc.token)
@@ -568,7 +474,7 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			input, keyboard := io.Pipe()
 			defer input.Close()
 			defer keyboard.Close()
-			var output terminalOutput
+			var output fakes.TerminalOutput
 			done := make(chan error, 1)
 			stopped := make(chan struct{})
 			go func() {
@@ -649,7 +555,7 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 			if os.Getenv("API_USERNAME") != tc.username || os.Getenv("API_PASSWORD") != tc.password || os.Getenv("MCP_TOKEN") != tc.token {
 				t.Error("all-in-one changed process-wide credential environment")
 			}
-			mcpClient, err := mcp.NewClient(&mcp.Implementation{Name: "generated-credential-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: mcpURL, HTTPClient: &http.Client{Transport: mcpAuthTransport(token)}}, nil)
+			mcpClient, err := mcp.NewClient(&mcp.Implementation{Name: "generated-credential-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: mcpURL, HTTPClient: &http.Client{Transport: fakes.MCPAuthTransport(token)}}, nil)
 			if err != nil {
 				t.Fatalf("generated or overridden MCP credentials did not authenticate: %v", err)
 			}
@@ -776,7 +682,7 @@ func TestCredentialCommandArguments(t *testing.T) {
 func testAllInOneMCPFailure(t *testing.T) {
 	for _, token := range []string{"   ", "invalid\nheader"} {
 		t.Run("invalid token", func(t *testing.T) {
-			temporary := allInOneEnvironment(t)
+			temporary := fixtures.AllInOneEnvironment(t)
 			t.Setenv("MCP_TOKEN", token)
 			var output bytes.Buffer
 			err := cli.Run(t.Context(), []string{"--all-in-one", "--no-color"}, strings.NewReader(""), &output, &output)
@@ -794,7 +700,7 @@ func testAllInOneMCPFailure(t *testing.T) {
 func testAllInOneAPIFailure(t *testing.T) {
 	for _, name := range []string{"invalid username", "blank password", "occupied port"} {
 		t.Run(name, func(t *testing.T) {
-			temporary := allInOneEnvironment(t)
+			temporary := fixtures.AllInOneEnvironment(t)
 			want := "API_USERNAME and API_PASSWORD"
 			switch name {
 			case "invalid username":
@@ -827,27 +733,4 @@ func testAllInOneAPIFailure(t *testing.T) {
 			}
 		})
 	}
-}
-
-func toolDelta(name string, args map[string]any) map[string]any {
-	encoded, _ := json.Marshal(args)
-	return map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": name, "type": "function", "function": map[string]any{"name": name, "arguments": string(encoded)}}}}
-}
-
-type terminalOutput struct {
-	mu     sync.Mutex
-	buffer bytes.Buffer
-}
-
-func (b *terminalOutput) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buffer.Write(p)
-}
-
-func (b *terminalOutput) String() string {
-	b.mu.Lock()
-	output := b.buffer.String()
-	b.mu.Unlock()
-	return ansi.Strip(output)
 }

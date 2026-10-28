@@ -9,21 +9,21 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/reports"
-	"github.com/defos-ai/commander/framework/id"
 	reports3 "github.com/defos-ai/commander/providers/s3/reports"
+	"github.com/defos-ai/commander/providers/s3/tests/fixtures"
 )
 
 func TestReportS3StoreReplayAndImmutability(t *testing.T) {
-	f := openStore(t)
-	first, err := reports3.NewReportS3Store(f.storage)
+	f := fixtures.OpenStore(t)
+	first, err := reports3.NewReportS3Store(f.Storage)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := reports3.NewReportS3Store(f.storage)
+	second, err := reports3.NewReportS3Store(f.Storage)
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := reportFixture()
+	report := fixtures.Report()
 	if _, err := first.Get(t.Context(), report.ID); !errors.Is(err, reports.ErrUnknownReport) {
 		t.Fatalf("unknown report: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestReportS3StoreReplayAndImmutability(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := first.Put(cancelled, reportFixture()); !errors.Is(err, context.Canceled) {
+	if err := first.Put(cancelled, fixtures.Report()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled write: %v", err)
 	}
 	if _, err := first.Get(cancelled, report.ID); !errors.Is(err, context.Canceled) {
@@ -64,14 +64,14 @@ func TestReportS3StoreReplayAndImmutability(t *testing.T) {
 }
 
 func TestConcurrentReportsHaveOneImmutableWinner(t *testing.T) {
-	f := openStore(t)
-	original := reportFixture()
+	f := fixtures.OpenStore(t)
+	original := fixtures.Report()
 	changed := original.Clone()
 	changed.Output = json.RawMessage(`{"summary":"other candidate"}`)
 	const writers = 12
 	gate, results := make(chan struct{}), make(chan error, writers)
 	for i := range writers {
-		store, err := reports3.NewReportS3Store(f.storage)
+		store, err := reports3.NewReportS3Store(f.Storage)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func TestConcurrentReportsHaveOneImmutableWinner(t *testing.T) {
 	if succeeded != writers/2 || conflicts != writers/2 {
 		t.Fatalf("immutable winner: successes=%d, conflicts=%d", succeeded, conflicts)
 	}
-	store, err := reports3.NewReportS3Store(f.storage)
+	store, err := reports3.NewReportS3Store(f.Storage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,4 @@ func TestConcurrentReportsHaveOneImmutableWinner(t *testing.T) {
 	if err != nil || (!reflect.DeepEqual(winner, original) && !reflect.DeepEqual(winner, changed)) {
 		t.Fatalf("invalid winning report: %+v, %v", winner, err)
 	}
-}
-
-func reportFixture() reports.Report {
-	return reports.Report{ID: id.New(), OperationID: id.New(), Mission: "review-website-with-browser", Output: json.RawMessage(`{"summary":"reviewed","serial":9007199254740993}`), CreatedAt: time.Now().UTC()}
 }

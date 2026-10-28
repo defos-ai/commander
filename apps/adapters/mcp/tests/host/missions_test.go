@@ -4,72 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"reflect"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
-	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain/missions"
-	"github.com/defos-ai/commander/framework/host"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const missionDefinition = `{
-  "name": "Research / #1?",
-  "objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."],
-  "required_actions": ["inspect-domain", "summarize-domain"],
-  "optional_actions": ["publish-review"],
-  "starting_actions": ["inspect-domain"],
-  "action_definitions": [{
-    "name": "inspect-domain",
-    "description": "Inspect a requested domain.",
-    "input_schema": {"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993},"scale":{"type":"number","default":1.2300e-6}}},
-    "output_schema": {"type":"object","x-note":"\u0061"}
-  }, {
-    "name": "publish-review",
-    "description": "Publish a review after operator consent.",
-    "required_secrets": ["PUBLISH_TOKEN"],
-    "input_schema": {"type":"object"},
-    "output_schema": {"type":"object"}
-  }],
-  "steps": [{
-    "id": "inspect",
-    "objective": "Inspect the requested domain.",
-    "agent_types": ["future-agent"],
-    "required_actions": ["inspect-domain"]
-  }],
-  "rules": {
-    "aggregate-results": {"for_actions": ["inspect-domain"]},
-    "decide-next-actions": {
-      "for_actions": ["summarize-domain"],
-      "params": {"decision_by": "model"}
-    },
-    "same-agent": {"for_actions": ["inspect-domain", "summarize-domain"]}
-  },
-  "input_schema": {
-    "type": "object",
-    "properties": {"domain": {"$ref": "#/$defs/domain"}},
-    "$defs": {"domain": {"type": "string", "minLength": 1}},
-    "required": ["domain"],
-    "additionalProperties": false,
-    "x-purpose": "Schema extensions belong to the mission author."
-  },
-  "output_schema": {
-    "type": "object",
-    "properties": {"summary": {"type": "string"}},
-    "required": ["summary"]
-  }
-}`
-
 func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 	database := t.TempDir()
-	ctx, session, stop := missionSession(t, database)
+	ctx, session, stop := hostfixtures.MissionSession(t, database)
 	tools, err := session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -97,11 +48,11 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	var want map[string]any
-	if err := json.Unmarshal([]byte(missionDefinition), &want); err != nil {
+	if err := json.Unmarshal([]byte(hostfixtures.MissionDefinition), &want); err != nil {
 		t.Fatal(err)
 	}
 	for _, body := range []string{
-		missionDefinition,
+		hostfixtures.MissionDefinition,
 		`{"name":"minimal","objectives":["Plan future work."],"input_schema":{},"output_schema":{}}`,
 		`{"name":"minimal","objectives":["Plan future work."],"required_actions":null,"starting_actions":null,"optional_actions":null,"action_definitions":null,"input_schema":{},"output_schema":{}}`,
 	} {
@@ -114,9 +65,9 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		}
 	}
 	for _, body := range []string{
-		strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1),
-		strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {}`, 1),
-		strings.Replace(missionDefinition, `["PUBLISH_TOKEN"]`, `["PUBLISH_TOKEN","PUBLISH_TOKEN"]`, 1),
+		strings.Replace(hostfixtures.MissionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1),
+		strings.Replace(hostfixtures.MissionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {}`, 1),
+		strings.Replace(hostfixtures.MissionDefinition, `["PUBLISH_TOKEN"]`, `["PUBLISH_TOKEN","PUBLISH_TOKEN"]`, 1),
 	} {
 		var value any
 		if err := json.Unmarshal([]byte(body), &value); err != nil {
@@ -147,7 +98,7 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		}
 	}
 	var actual map[string]any
-	encoded := missionCall(t, ctx, session, "create_mission", json.RawMessage(missionDefinition), &actual)
+	encoded := hostfixtures.MissionCall(t, ctx, session, "create_mission", json.RawMessage(hostfixtures.MissionDefinition), &actual)
 	for _, lexical := range []string{"9007199254740993", "1.2300e-6", `\u0061`} {
 		if !strings.Contains(encoded, lexical) {
 			t.Fatalf("action definition schema changed lexical JSON value %q: %s", lexical, encoded)
@@ -156,7 +107,7 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 	if !reflect.DeepEqual(actual, want) {
 		t.Fatalf("creation changed the mission contract: %+v", actual)
 	}
-	for _, body := range []string{missionDefinition, strings.Replace(missionDefinition, "Review actions that have not been implemented yet.", "Overwrite the saved objective.", 1)} {
+	for _, body := range []string{hostfixtures.MissionDefinition, strings.Replace(hostfixtures.MissionDefinition, "Review actions that have not been implemented yet.", "Overwrite the saved objective.", 1)} {
 		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "create_mission", Arguments: json.RawMessage(body)})
 		if err != nil || result == nil || !result.IsError || len(result.Content) != 1 {
 			t.Fatalf("duplicate creation must return a tool error: result=%+v error=%v", result, err)
@@ -168,27 +119,27 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 	}
 	read := func() {
 		t.Helper()
-		missionCall(t, ctx, session, "describe_mission", map[string]any{"mission_name": want["name"]}, &actual)
+		hostfixtures.MissionCall(t, ctx, session, "describe_mission", map[string]any{"mission_name": want["name"]}, &actual)
 		if !reflect.DeepEqual(actual, want) {
 			t.Fatal("mission lookup lost the contract or duplicate creation changed it")
 		}
 		var listing struct {
 			Missions []map[string]any `json:"missions"`
 		}
-		missionCall(t, ctx, session, "list_missions", map[string]any{}, &listing)
+		hostfixtures.MissionCall(t, ctx, session, "list_missions", map[string]any{}, &listing)
 		if len(listing.Missions) != 1 || len(listing.Missions[0]) != 2 || listing.Missions[0]["name"] != want["name"] || !reflect.DeepEqual(listing.Missions[0]["objectives"], want["objectives"]) {
 			t.Fatalf("mission listing does not describe the saved definition: %+v", listing)
 		}
 		var operations struct {
 			Operations []json.RawMessage `json:"operations"`
 		}
-		missionCall(t, ctx, session, "list_operations", map[string]any{}, &operations)
+		hostfixtures.MissionCall(t, ctx, session, "list_operations", map[string]any{}, &operations)
 		if len(operations.Operations) != 0 {
 			t.Fatal("mission creation unexpectedly started an operation")
 		}
 		for _, tool := range []string{"list_actions", "list_agents"} {
 			var catalog map[string][]json.RawMessage
-			missionCall(t, ctx, session, tool, map[string]any{}, &catalog)
+			hostfixtures.MissionCall(t, ctx, session, tool, map[string]any{}, &catalog)
 			for _, items := range catalog {
 				if len(items) != 0 {
 					t.Fatalf("mission action definitions unexpectedly populated %s", tool)
@@ -199,7 +150,7 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 	read()
 	session.Close()
 	stop()
-	ctx, session, _ = missionSession(t, database)
+	ctx, session, _ = hostfixtures.MissionSession(t, database)
 	read()
 }
 
@@ -208,21 +159,21 @@ func TestMCPCreateMissionRejectsInvalidDefinitions(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
 		{"array", `[]`},
 		{"empty object", `{}`},
-		{"unknown definition field", strings.Replace(missionDefinition, `"objectives":`, `"unexpected": true, "objectives":`, 1)},
-		{"action readiness field", strings.Replace(missionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1)},
-		{"unreferenced action definition", strings.Replace(missionDefinition, `"name": "publish-review"`, `"name": "unreferenced-action"`, 1)},
-		{"remote action definition reference", strings.Replace(missionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {"$ref":"https://private.example/schema"}`, 1)},
-		{"unknown step field", strings.Replace(missionDefinition, `"id": "inspect"`, `"id": "inspect", "unexpected": true`, 1)},
-		{"unknown rule field", strings.Replace(missionDefinition, `"aggregate-results": {`, `"aggregate-results": {"unexpected": true,`, 1)},
-		{"unknown rule parameter", strings.Replace(missionDefinition, `"decision_by": "model"`, `"decision_by": "model", "unexpected": true`, 1)},
-		{"missing objectives", strings.Replace(missionDefinition, `"objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."],`, "", 1)},
-		{"string objectives", strings.Replace(missionDefinition, `["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."]`, `"String objectives"`, 1)},
-		{"invalid starting action", strings.Replace(missionDefinition, `"starting_actions": ["inspect-domain"]`, `"starting_actions": ["missing-action"]`, 1)},
+		{"unknown definition field", strings.Replace(hostfixtures.MissionDefinition, `"objectives":`, `"unexpected": true, "objectives":`, 1)},
+		{"action readiness field", strings.Replace(hostfixtures.MissionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1)},
+		{"unreferenced action definition", strings.Replace(hostfixtures.MissionDefinition, `"name": "publish-review"`, `"name": "unreferenced-action"`, 1)},
+		{"remote action definition reference", strings.Replace(hostfixtures.MissionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {"$ref":"https://private.example/schema"}`, 1)},
+		{"unknown step field", strings.Replace(hostfixtures.MissionDefinition, `"id": "inspect"`, `"id": "inspect", "unexpected": true`, 1)},
+		{"unknown rule field", strings.Replace(hostfixtures.MissionDefinition, `"aggregate-results": {`, `"aggregate-results": {"unexpected": true,`, 1)},
+		{"unknown rule parameter", strings.Replace(hostfixtures.MissionDefinition, `"decision_by": "model"`, `"decision_by": "model", "unexpected": true`, 1)},
+		{"missing objectives", strings.Replace(hostfixtures.MissionDefinition, `"objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."],`, "", 1)},
+		{"string objectives", strings.Replace(hostfixtures.MissionDefinition, `["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."]`, `"String objectives"`, 1)},
+		{"invalid starting action", strings.Replace(hostfixtures.MissionDefinition, `"starting_actions": ["inspect-domain"]`, `"starting_actions": ["missing-action"]`, 1)},
 		{"nonobject schema", `{"name":"invalid","objectives":["Rejected."],"input_schema":{},"output_schema":false}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Invalid-params responses can close the SDK's HTTP session.
-			ctx, session, _ := missionSession(t, database)
+			ctx, session, _ := hostfixtures.MissionSession(t, database)
 			_, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "create_mission", Arguments: json.RawMessage(tc.body)})
 			var rpcError *jsonrpc.Error
 			if !errors.As(err, &rpcError) || rpcError.Code != jsonrpc.CodeInvalidParams {
@@ -230,11 +181,11 @@ func TestMCPCreateMissionRejectsInvalidDefinitions(t *testing.T) {
 			}
 		})
 	}
-	ctx, session, _ := missionSession(t, database)
+	ctx, session, _ := hostfixtures.MissionSession(t, database)
 	var listing struct {
 		Missions []json.RawMessage `json:"missions"`
 	}
-	missionCall(t, ctx, session, "list_missions", map[string]any{}, &listing)
+	hostfixtures.MissionCall(t, ctx, session, "list_missions", map[string]any{}, &listing)
 	if len(listing.Missions) != 0 {
 		t.Fatal("invalid creation changed the mission catalog")
 	}
@@ -251,9 +202,11 @@ func TestMCPCreateMissionStoreFailuresAreSanitizedAndNeverRetried(t *testing.T) 
 		{"private error", "mission creation failed; read describe_mission before retrying", errors.New("private database credentials and path")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &failedMissionCreate{err: tc.err}
-			ctx, session := mcpSession(t, adapter.Config{MissionStore: store})
-			result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "create_mission", Arguments: json.RawMessage(missionDefinition)})
+			store := fakes.NewFailedMissionCreate(tc.err)
+			ctx, session := hostfixtures.Session(t, adapter.Config{MissionStore: store})
+
+			result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "create_mission", Arguments: json.RawMessage(hostfixtures.MissionDefinition)})
+
 			if err != nil || result == nil || !result.IsError || len(result.Content) != 1 || result.StructuredContent != nil {
 				t.Fatalf("store failure must return a text tool error: result=%+v error=%v", result, err)
 			}
@@ -261,59 +214,9 @@ func TestMCPCreateMissionStoreFailuresAreSanitizedAndNeverRetried(t *testing.T) 
 			if !ok || content.Text != tc.message {
 				t.Fatalf("creation did not return safe failure guidance: %+v", result.Content)
 			}
-			if attempts, remaining := store.attempts.Load(), time.Duration(store.remaining.Load()); attempts != 1 || remaining <= 0 || remaining > 10*time.Second {
+			if attempts, remaining := store.Calls(); attempts != 1 || remaining <= 0 || remaining > 10*time.Second {
 				t.Fatalf("creation was retried or lacked a bounded context: attempts=%d remaining=%s", attempts, remaining)
 			}
 		})
 	}
-}
-
-type failedMissionCreate struct {
-	missions.MissionStore
-	err       error
-	attempts  atomic.Int32
-	remaining atomic.Int64
-}
-
-func (store *failedMissionCreate) Create(ctx context.Context, _ missions.Mission) error {
-	store.attempts.Add(1)
-	deadline, _ := ctx.Deadline()
-	store.remaining.Store(int64(time.Until(deadline)))
-	return store.err
-}
-
-func missionSession(t *testing.T, database string) (context.Context, *sdkmcp.ClientSession, func()) {
-	t.Helper()
-	const token = "mission-creation-test-token"
-	endpoint, client, stop := startMCPWithOptions(t, []string{"--database-url=" + database},
-		cli.Options{Credentials: &host.BearerCredentials{Token: token}}, io.Discard)
-	client.Transport = bearerTransport{token: token, next: client.Transport}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	t.Cleanup(cancel)
-	session, err := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "mission-test", Version: "1"}, nil).Connect(ctx,
-		&sdkmcp.StreamableClientTransport{Endpoint: endpoint + "/mcp", HTTPClient: client}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { session.Close() })
-	return ctx, session, stop
-}
-
-func missionCall(t *testing.T, ctx context.Context, session *sdkmcp.ClientSession, tool string, arguments, output any) string {
-	t.Helper()
-	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: tool, Arguments: arguments})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.IsError || len(result.Content) != 1 || result.StructuredContent != nil {
-		t.Fatalf("%s must return one JSON text block without structured content: %+v", tool, result)
-	}
-	content, ok := result.Content[0].(*sdkmcp.TextContent)
-	if !ok {
-		t.Fatalf("%s did not return JSON text", tool)
-	}
-	if err := json.Unmarshal([]byte(content.Text), output); err != nil {
-		t.Fatal(err)
-	}
-	return content.Text
 }

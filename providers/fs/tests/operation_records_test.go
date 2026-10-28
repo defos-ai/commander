@@ -13,18 +13,19 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
+	store := fixtures.NewDispatchStore(t, dir)
 	op := operations.Operation{ID: id.OperationID(), Status: operations.Running,
 		Events: []operations.Event{{Sequence: 10, Type: operations.TaskFinished}, {Sequence: 2, Type: operations.OperationStarted}}}
 	// Storage sorts record names, but public snapshots retain the caller's order.
 	for _, recordID := range []string{"ffffffff-ffff-4fff-8fff-ffffffffffff", "00000000-0000-4000-8000-000000000001"} {
 		op.Tasks = append(op.Tasks, operations.Task{ID: recordID, OperationID: op.ID,
 			Status: operations.TaskSucceeded, Result: &actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{"page":1}`)}})
-		question := newStoreQuestion("")
+		question := fixtures.Question("")
 		question.ID = recordID
 		op.Questions = append(op.Questions, question)
 	}
@@ -32,7 +33,7 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before, err := openRecords(t, path).Read(t.Context())
+	before, err := fixtures.OpenRecords(t, path).Read(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 	assertResultJSONEqual(t, before["events/2"], op.Events[1])
 	files := map[string]os.FileInfo{}
 	for name, body := range before {
-		info, err := os.Stat(recordBlob(path, string(body)))
+		info, err := os.Stat(fixtures.RecordBlob(path, string(body)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +74,7 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		after, err := openRecords(t, path).Read(t.Context())
+		after, err := fixtures.OpenRecords(t, path).Read(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +82,7 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 			if name == "operation" || before[name] == nil || mutation == "bodies" && (name == "tasks/"+op.Tasks[0].ID || name == "questions/"+op.Questions[0].ID) {
 				continue
 			}
-			info, err := os.Stat(recordBlob(path, string(body)))
+			info, err := os.Stat(fixtures.RecordBlob(path, string(body)))
 			if err != nil || !bytes.Equal(before[name], body) || !os.SameFile(files[name], info) {
 				t.Fatalf("unchanged body %s lost its digest or was rewritten: %v", name, err)
 			}
@@ -89,13 +90,13 @@ func TestOperationRecordsPreserveOrderAndReuseUnchangedBodies(t *testing.T) {
 		op = published
 		before = after
 		for name, body := range before {
-			files[name], err = os.Stat(recordBlob(path, string(body)))
+			files[name], err = os.Stat(fixtures.RecordBlob(path, string(body)))
 			if err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	reopened := newDispatchStore(t, dir)
+	reopened := fixtures.NewDispatchStore(t, dir)
 	saved, err := reopened.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -123,9 +124,9 @@ func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
 		for _, damage := range []string{"missing", "orphan", "wrong identity", "invalid body"} {
 			t.Run(kind+"/"+damage, func(t *testing.T) {
 				dir := t.TempDir()
-				store := newDispatchStore(t, dir)
-				op, _ := createContinuationOperation(t, store)
-				question := newStoreQuestion(op.Tasks[0].ID)
+				store := fixtures.NewDispatchStore(t, dir)
+				op, _ := fixtures.CreateContinuationOperation(t, store)
+				question := fixtures.Question(op.Tasks[0].ID)
 				if _, err := store.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version); err != nil {
 					t.Fatal(err)
 				}
@@ -135,7 +136,7 @@ func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
 				} else if kind == "events" {
 					name = "events/1"
 				}
-				records := openRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
+				records := fixtures.OpenRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
 				if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
 					switch damage {
 					case "missing":
@@ -164,7 +165,7 @@ func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
 				}); err != nil {
 					t.Fatal(err)
 				}
-				reopened := newDispatchStore(t, dir)
+				reopened := fixtures.NewDispatchStore(t, dir)
 				if _, err := reopened.Get(t.Context(), op.ID); err == nil || errors.Is(err, operations.ErrUnknownOperation) {
 					t.Fatalf("broken reference was returned or hidden as absent: %v", err)
 				}
@@ -182,9 +183,9 @@ func TestOperationRecordsRejectBrokenReferences(t *testing.T) {
 
 func TestOperationRecordsQuestionTransitionsAreAtomicForReaders(t *testing.T) {
 	dir := t.TempDir()
-	writer, reader := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, _ := createContinuationOperation(t, writer)
-	question := newStoreQuestion(op.Tasks[0].ID)
+	writer, reader := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateContinuationOperation(t, writer)
+	question := fixtures.Question(op.Tasks[0].ID)
 	if _, err := writer.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestOperationRecordsQuestionTransitionsAreAtomicForReaders(t *testing.T) {
 				return
 			}
 			if round < 15 {
-				question = newStoreQuestion(op.Tasks[0].ID)
+				question = fixtures.Question(op.Tasks[0].ID)
 				if _, err := writer.AskQuestion(ctx, op.ID, question, answered.Tasks[0].Continuation.Version); err != nil {
 					done <- err
 					return
@@ -221,7 +222,7 @@ func TestOperationRecordsQuestionTransitionsAreAtomicForReaders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			saved, err := newDispatchStore(t, dir).Get(ctx, op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(ctx, op.ID)
 			if err != nil || len(saved.Questions) != 16 || saved.Questions[15].Status != operations.QuestionAnswered {
 				t.Fatalf("reopen lost the final answer after %d concurrent reads: %+v, %v", reads, saved, err)
 			}

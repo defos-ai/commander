@@ -12,18 +12,18 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestMissionMongoStore(t *testing.T) {
-	database := openStore(t, "missions")
+	database := fixtures.OpenStore(t, "missions")
 	catalog := mongomissions.NewMissionMongoStore(database)
 	ctx := t.Context()
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
-		ActionDefinitions: []actions.Definition{storedActionDefinition()},
+		ActionDefinitions: []actions.Definition{fixtures.ActionDefinition()},
 		Steps:             []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
@@ -143,18 +143,10 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 }
 
-func storedActionDefinition() actions.Definition {
-	return actions.Definition{
-		Name: "discover", Description: "Discover the requested target", RequiredSecrets: []string{"DISCOVERY_KEY"},
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","maximum":9007199254740993}}}`),
-		OutputSchema: json.RawMessage(`{"type":"object","x-example":9007199254740993}`),
-	}
-}
-
 func TestConcurrentMissionCreates(t *testing.T) {
 	catalogs := []*mongomissions.MissionMongoStore{
-		mongomissions.NewMissionMongoStore(openStore(t, "missions")),
-		mongomissions.NewMissionMongoStore(openStore(t, "missions")),
+		mongomissions.NewMissionMongoStore(fixtures.OpenStore(t, "missions")),
+		mongomissions.NewMissionMongoStore(fixtures.OpenStore(t, "missions")),
 	}
 	const writers = 12
 	type result struct {
@@ -194,7 +186,7 @@ func TestConcurrentMissionCreates(t *testing.T) {
 }
 
 func TestConcurrentMissionUpserts(t *testing.T) {
-	database := openStore(t, "missions")
+	database := fixtures.OpenStore(t, "missions")
 	catalog := mongomissions.NewMissionMongoStore(database)
 	const writers = 12
 	completed := make(chan error, writers)

@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestRecordViewRetriesWholeQueryAfterCollection(t *testing.T) {
 	for _, restore := range []bool{false, true} {
 		t.Run(fmt.Sprintf("restore-original=%t", restore), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "records.json")
-			reader, writer := openRecords(t, path), openRecords(t, path)
+			reader, writer := fixtures.OpenRecords(t, path), fixtures.OpenRecords(t, path)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			publish := func(generation string) error {
@@ -103,13 +104,13 @@ func TestRecordViewLoadsOnlySelectedBodies(t *testing.T) {
 	for _, damage := range []string{"missing", "corrupt"} {
 		t.Run(damage, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "records.json")
-			records := openRecords(t, path)
-			putRecords(t, records, map[string]json.RawMessage{"selected": json.RawMessage(`1`), "other": json.RawMessage(`2`)})
+			records := fixtures.OpenRecords(t, path)
+			fixtures.PutRecords(t, records, map[string]json.RawMessage{"selected": json.RawMessage(`1`), "other": json.RawMessage(`2`)})
 			var err error
 			if damage == "missing" {
-				err = os.Remove(recordBlob(path, `2`))
+				err = os.Remove(fixtures.RecordBlob(path, `2`))
 			} else {
-				err = os.WriteFile(recordBlob(path, `2`), []byte(`{`), 0600)
+				err = os.WriteFile(fixtures.RecordBlob(path, `2`), []byte(`{`), 0600)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -143,7 +144,7 @@ func TestRecordViewLoadsOnlySelectedBodies(t *testing.T) {
 
 func TestRecordViewErrorsAndCancellation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "records.json")
-	records := openRecords(t, path)
+	records := fixtures.OpenRecords(t, path)
 	for _, empty := range []bool{false, true} {
 		if empty {
 			if err := os.WriteFile(path, nil, 0600); err != nil {
@@ -157,7 +158,7 @@ func TestRecordViewErrorsAndCancellation(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	putRecords(t, records, map[string]json.RawMessage{"selected": json.RawMessage(`1`)})
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"selected": json.RawMessage(`1`)})
 	if err := records.View(t.Context(), nil); err == nil {
 		t.Error("nil callback accepted")
 	}

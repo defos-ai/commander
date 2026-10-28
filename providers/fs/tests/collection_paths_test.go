@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestCollectionRejectsSymlinkedFilesAndLocks(t *testing.T) {
@@ -31,7 +32,7 @@ func TestCollectionRejectsSymlinkedFilesAndLocks(t *testing.T) {
 			if err := os.Remove(link); err != nil {
 				t.Fatal(err)
 			}
-			linkForTest(t, outside, link)
+			fixtures.Link(t, outside, link)
 			called := false
 			err = collection.Update(t.Context(), func([]byte) ([]byte, error) {
 				called = true
@@ -69,7 +70,7 @@ func TestCollectionPinsDirectoryDuringMutation(t *testing.T) {
 		if renameErr != nil {
 			return nil, renameErr
 		}
-		linkForTest(t, outside, directory)
+		fixtures.Link(t, outside, directory)
 		return []byte(`["updated"]`), nil
 	})
 	assertFileBytes(t, outsidePath, []byte(`["outside"]`))
@@ -93,8 +94,8 @@ func TestRecordsPinsManifestDirectoryDuringMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(directory, "operation.json")
-	records := openRecords(t, path)
-	putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
+	records := fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
 	outside := t.TempDir()
 	outsidePath := filepath.Join(outside, "operation.json")
 	if err := os.WriteFile(outsidePath, []byte(`["outside"]`), 0600); err != nil {
@@ -106,7 +107,7 @@ func TestRecordsPinsManifestDirectoryDuringMutation(t *testing.T) {
 		if renameErr != nil {
 			return renameErr
 		}
-		linkForTest(t, outside, directory)
+		fixtures.Link(t, outside, directory)
 		next["operation"] = json.RawMessage(`2`)
 		return nil
 	})
@@ -121,19 +122,19 @@ func TestRecordsPinsManifestDirectoryDuringMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireRecords(t, openRecords(t, filepath.Join(moved, "operation.json")), map[string]json.RawMessage{"operation": json.RawMessage(`2`)})
+	requireRecords(t, fixtures.OpenRecords(t, filepath.Join(moved, "operation.json")), map[string]json.RawMessage{"operation": json.RawMessage(`2`)})
 }
 
 func TestRecordsRejectsReplacedBlobDirectoryBeforeCleanup(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "operation.json")
-	records := openRecords(t, path)
-	putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
+	records := fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	outside := t.TempDir()
-	orphan := filepath.Base(recordBlob(path, `7`))
+	orphan := filepath.Base(fixtures.RecordBlob(path, `7`))
 	for _, name := range []string{orphan, ".pending.tmp"} {
 		if err := os.WriteFile(filepath.Join(outside, name), []byte(`7`), 0600); err != nil {
 			t.Fatal(err)
@@ -143,7 +144,7 @@ func TestRecordsRejectsReplacedBlobDirectoryBeforeCleanup(t *testing.T) {
 		if err := os.Rename(path+".records", path+".saved"); err != nil {
 			return err
 		}
-		linkForTest(t, outside, path+".records")
+		fixtures.Link(t, outside, path+".records")
 		next["operation"] = json.RawMessage(`2`)
 		return nil
 	})
@@ -161,9 +162,9 @@ func TestRecordsRejectsReplacedBlobDirectoryBeforeCleanup(t *testing.T) {
 
 func TestRecordsRejectsSymlinkedBlob(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "operation.json")
-	records := openRecords(t, path)
-	putRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
-	blob := recordBlob(path, `1`)
+	records := fixtures.OpenRecords(t, path)
+	fixtures.PutRecords(t, records, map[string]json.RawMessage{"operation": json.RawMessage(`1`)})
+	blob := fixtures.RecordBlob(path, `1`)
 	outside := filepath.Join(t.TempDir(), "outside.json")
 	if err := os.WriteFile(outside, []byte(`1`), 0600); err != nil {
 		t.Fatal(err)
@@ -171,16 +172,9 @@ func TestRecordsRejectsSymlinkedBlob(t *testing.T) {
 	if err := os.Remove(blob); err != nil {
 		t.Fatal(err)
 	}
-	linkForTest(t, outside, blob)
+	fixtures.Link(t, outside, blob)
 	if _, err := records.Read(t.Context()); err == nil {
 		t.Fatal("read followed a symlinked blob despite matching content")
-	}
-}
-
-func linkForTest(t *testing.T, target, link string) {
-	t.Helper()
-	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
 	}
 }
 

@@ -8,17 +8,15 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	fakes "github.com/defos-ai/commander/apps/adapters/api/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/comms"
-	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -31,8 +29,8 @@ import (
 // The agent has its own bus connection and no execution store. Its HTTP-assigned
 // action must await controller persistence and acknowledgement before proceeding.
 func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
-	fixture := newFixture(t)
-	database := filepath.Join(fixture.root, "database")
+	fixture := hostfixtures.New(t)
+	database := filepath.Join(fixture.Root, "database")
 	config := controller.ControllerConfig{}
 	var err error
 	if config.AgentStore, err = fsagents.NewAgentFsStore(database); err != nil {
@@ -47,20 +45,17 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 	if config.ExecutionStore, err = fsexecutions.NewExecutionFsStore(database); err != nil {
 		t.Fatal(err)
 	}
-	observedBus := &checkpointDroppingBus{
-		Bus:     newSecretTestBus(t, fixture.root),
-		dropped: make(chan struct{}, 1), release: make(chan struct{}),
-	}
+	observedBus := fakes.NewCheckpointDroppingBus(hostfixtures.NewSecretTestBus(t, fixture.Root))
 	coordinator, err := controller.NewController(t.Context(), observedBus, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { closeSecretController(t, coordinator) })
-	stopOperations := startOperationRunner(t, coordinator, observedBus, database, missions.Mission{
+	t.Cleanup(func() { hostfixtures.CloseSecretController(t, coordinator) })
+	stopOperations := hostfixtures.StartOperationRunner(t, coordinator, observedBus, database, missions.Mission{
 		Name: "checkpoint-execution", Objectives: []string{"Confirm a durable intent before performing work"},
 		RequiredActions: []string{"checkpoint-action"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 	})
-	files, err := fsartifacts.NewArtifactFileFsStore(filepath.Join(fixture.root, "storage"))
+	files, err := fsartifacts.NewArtifactFileFsStore(filepath.Join(fixture.Root, "storage"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +72,7 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 			if data, found, err := action.LoadCheckpoint(ctx, "intent"); err != nil || found || len(data) != 0 {
 				return output{}, fmt.Errorf("fresh execution checkpoint: found=%t err=%v", found, err)
 			}
-			observedBus.armed.Store(true)
+			observedBus.Arm()
 			if err := action.SaveCheckpoint(ctx, "intent", intent); err != nil {
 				return output{}, err
 			}
@@ -100,7 +95,7 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agentBus := newSecretTestBus(t, fixture.root)
+	agentBus := hostfixtures.NewSecretTestBus(t, fixture.Root)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- worker.Serve(ctx, agentBus, nil) }()
@@ -115,12 +110,9 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 			t.Error("agent shutdown timed out")
 		}
 	})
-	// Release the fault gate even when an assertion fails before the normal ack.
-	var release sync.Once
-	unblock := func() { release.Do(func() { close(observedBus.release) }) }
-	t.Cleanup(unblock)
-	server := startAPI(t, fixture.localArgs())
-	awaitSecretCondition(t, "checkpoint action registration", func() bool {
+	t.Cleanup(observedBus.Unblock)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	hostfixtures.AwaitSecretCondition(t, "checkpoint action registration", func() bool {
 		registered, err := config.AgentStore.Get(t.Context(), worker.ID())
 		return err == nil && registered.Status == "ready"
 	})
@@ -130,7 +122,7 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 	queued := decodeResponse[models.TaskResponse](t, secretRequest(t, server, http.MethodPost, operationPath+"/tasks",
 		`{"action_name":"checkpoint-action","input":{}}`), http.StatusCreated)
 	select {
-	case <-observedBus.dropped:
+	case <-observedBus.Dropped():
 	case <-time.After(5 * time.Second):
 		t.Fatal("controller did not acknowledge the checkpoint")
 	}
@@ -141,9 +133,9 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 	if effects.Load() != 0 {
 		t.Fatal("action continued without receiving the persistence acknowledgement")
 	}
-	unblock()
+	observedBus.Unblock()
 	var completed models.OperationResponse
-	awaitSecretCondition(t, "checkpointed action completion after acknowledgement retry", func() bool {
+	hostfixtures.AwaitSecretCondition(t, "checkpointed action completion after acknowledgement retry", func() bool {
 		completed = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, operationPath, ""))
 		return len(completed.Tasks) == 1 && completed.Tasks[0].Status == "succeeded"
 	})
@@ -165,27 +157,4 @@ func TestActionCheckpointsThroughAPIRecoverLostAcknowledgement(t *testing.T) {
 	}
 	decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodPost, operationPath+"/cancel", ""))
 	stopOperations()
-}
-
-type checkpointDroppingBus struct {
-	comms.Bus
-	armed   atomic.Bool
-	lost    atomic.Bool
-	dropped chan struct{}
-	release chan struct{}
-}
-
-func (bus *checkpointDroppingBus) Publish(ctx context.Context, topic string, message messages.Message) error {
-	if message.Type == agentevents.CheckpointResponded && bus.armed.Load() {
-		if !bus.lost.Swap(true) {
-			bus.dropped <- struct{}{}
-			return nil
-		}
-		select {
-		case <-bus.release:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	return bus.Bus.Publish(ctx, topic, message)
 }

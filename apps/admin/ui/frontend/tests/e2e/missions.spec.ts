@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import type { Mission } from '../../src/api/types';
-import { test, connect } from './fixtures';
+import { connect, test } from '../fixtures/e2e';
 
 test('create a reusable mission through Admin without installed actions or starting work', async ({ page, api }) => {
   const actionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;

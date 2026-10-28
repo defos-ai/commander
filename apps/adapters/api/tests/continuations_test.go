@@ -5,28 +5,29 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 )
 
 func TestContinuationCreatesOneRecordedBranch(t *testing.T) {
-	a := connect(t)
-	op := a.start(fixtureText)
-	a.task(op.ID, "write-summary", summaryInput())
-	ready := a.wait(op.ID, func(op models.OperationResponse) bool { return modelDecision(op) != nil })
-	root := *modelDecision(ready)
+	a := fixtures.Connect(t)
+	op := a.Start(fixtures.FixtureText)
+	a.Task(op.ID, "write-summary", fixtures.SummaryInput())
+	ready := a.Wait(op.ID, func(op models.OperationResponse) bool { return fixtures.ModelDecision(op) != nil })
+	root := *fixtures.ModelDecision(ready)
 	if root.Status != "succeeded" {
 		t.Fatalf("summary action failed: %+v", root)
 	}
-	path := operationPath(op.ID) + "/tasks/" + root.ID + "/continuation/resolve"
-	for _, body := range []object{{"version": root.Continuation.Version}, {"version": root.Continuation.Version, "actions": nil}, {"version": root.Continuation.Version, "actions": []object{{"action_name": "write-summary", "agent_id": "pinned"}}}} {
-		assertError(t, a.request(http.MethodPost, path, body), http.StatusBadRequest, "invalid_request")
+	path := fixtures.OperationPath(op.ID) + "/tasks/" + root.ID + "/continuation/resolve"
+	for _, body := range []fixtures.Object{{"version": root.Continuation.Version}, {"version": root.Continuation.Version, "actions": nil}, {"version": root.Continuation.Version, "actions": []fixtures.Object{{"action_name": "write-summary", "agent_id": "pinned"}}}} {
+		fixtures.AssertError(t, a.Request(http.MethodPost, path, body), http.StatusBadRequest, "invalid_request")
 	}
-	actions := []object{{"action_name": "write-summary", "input": summaryInput(), "reason": "Save the reviewed result"}, {"action_name": "write-summary", "input": summaryInput()}}
-	resolved := a.resolve(op.ID, root, actions)
+	actions := []fixtures.Object{{"action_name": "write-summary", "input": fixtures.SummaryInput(), "reason": "Save the reviewed result"}, {"action_name": "write-summary", "input": fixtures.SummaryInput()}}
+	resolved := a.Resolve(op.ID, root, actions)
 	if len(resolved.Tasks) != 3 || resolved.Tasks[0].Continuation.Status != "resolved" || len(resolved.Tasks[0].Continuation.CreatedTaskIDs) != 2 {
 		t.Fatalf("resolution failed to persist one branch: %+v", resolved)
 	}
-	assertError(t, a.request(http.MethodPost, path, object{"version": root.Continuation.Version, "actions": actions}), http.StatusConflict, "continuation_conflict")
-	finished := a.wait(op.ID, tasksSettled)
+	fixtures.AssertError(t, a.Request(http.MethodPost, path, fixtures.Object{"version": root.Continuation.Version, "actions": actions}), http.StatusConflict, "continuation_conflict")
+	finished := a.Wait(op.ID, fixtures.TasksSettled)
 	if len(finished.Tasks) != 3 {
 		t.Fatalf("stale resolution duplicated children: %+v", finished.Tasks)
 	}
@@ -35,7 +36,7 @@ func TestContinuationCreatesOneRecordedBranch(t *testing.T) {
 			t.Fatalf("child lost ownership/result: %+v", child)
 		}
 	}
-	completed := a.complete(op.ID, "Reviewed continuation branch")
+	completed := a.Complete(op.ID, "Reviewed continuation branch")
 	for _, task := range completed.Tasks {
 		if task.Continuation != nil && task.Continuation.Status != "resolved" {
 			t.Fatalf("completion left a pending model decision: %+v", task)

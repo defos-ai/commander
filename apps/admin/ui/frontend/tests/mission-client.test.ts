@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/api/client';
 import { createMission, getMissionDocument, listMissions, MissionCreateError } from '../src/api/missions';
-import type { Mission } from '../src/api/types';
-
-const url = 'https://commander.example/proxy';
-const credentials = { url: url, username: ' opérateur ' };
+import { credentials, mission, url } from './fixtures/mission-client';
 
 function requestedPath(input: RequestInfo | URL): string {
   const request = new URL(String(input), 'http://localhost');
@@ -13,24 +10,6 @@ function requestedPath(input: RequestInfo | URL): string {
   expect(request.searchParams.get('url')).toBe(url);
   return request.searchParams.get('path')!;
 }
-const mission: Mission = {
-  name: 'review-website-with-browser',
-  objectives: ['Review a website'],
-  required_actions: ['discover-pages'],
-  optional_actions: ['capture-page'],
-  action_definitions: [{ name: 'discover-pages', description: 'Discover pages over HTTP.',
-    input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } },
-    output_schema: { type: 'object' }, required_secrets: ['SITE_TOKEN'] }],
-  starting_actions: ['discover-pages'],
-  steps: [{ id: 'discover', objective: 'Find pages', agent_types: null, required_actions: ['discover-pages'] }],
-  rules: {
-    'aggregate-results': { for_actions: ['discover-pages'] },
-    'decide-next-actions': { for_actions: ['check-links'], params: { decision_by: 'model' } },
-    'same-agent': { for_actions: ['discover-pages', 'check-links'] },
-  },
-  input_schema: { type: 'object', properties: { url: { type: 'string' } } },
-  output_schema: {},
-};
 
 afterEach(() => vi.useRealTimers());
 

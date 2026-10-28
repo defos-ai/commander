@@ -10,16 +10,17 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/playground/internal/local"
+	fixtures "github.com/defos-ai/commander/apps/playground/tests/fixtures"
 )
 
 func TestAllInOneBundledAdmin(t *testing.T) {
-	allInOneEnvironment(t)
+	fixtures.AllInOneEnvironment(t)
 	t.Chdir(t.TempDir())
 	if err := os.Unsetenv("UI_STATIC_DIR"); err != nil {
 		t.Fatal(err)
 	}
-	session, stop := startLocalAdminSession(t, local.Options{ServeAdmin: true})
-	index, _ := fetchLocalAsset(t, session.AdminURL, "/")
+	session, stop := fixtures.StartLocalAdminSession(t, local.Options{ServeAdmin: true})
+	index, _ := fixtures.FetchLocalAsset(t, session.AdminURL, "/")
 	if !bytes.Contains(index, []byte("COMMANDER | Administration")) {
 		t.Fatal("bundled Admin was not served from an unrelated working directory")
 	}
@@ -27,7 +28,7 @@ func TestAllInOneBundledAdmin(t *testing.T) {
 	var javascript, stylesheet bool
 	for _, match := range assets {
 		path := string(match[1])
-		_, headers := fetchLocalAsset(t, session.AdminURL, path)
+		_, headers := fixtures.FetchLocalAsset(t, session.AdminURL, path)
 		if headers.Get("Cache-Control") != "public, max-age=31536000, immutable" {
 			t.Fatal("bundled Admin asset lost immutable caching")
 		}

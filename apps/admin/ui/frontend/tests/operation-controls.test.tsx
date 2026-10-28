@@ -1,40 +1,8 @@
-import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Operation } from '../src/api/operation-types';
 import { OperationsPage } from '../src/pages/OperationsPage';
-
-const connection = { id: 'test', name: 'Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', url: connection.url };
-const now = '2026-10-05T10:00:00Z';
-const mission = { name: 'review-website-with-browser', objectives: ['Review website quality.', 'Summarize the findings.'], required_actions: [], starting_actions: [],
-  input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } }, output_schema: {} };
-const operation: Operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'waiting', tasks: [], events: [],
-  progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 1, settled: false },
-  questions: [{ id: 'question-browser', status: 'pending', text: 'How should the review continue?', options: ['Configure the browser', 'Use HTTP checks'],
-    asked_at: now, expires_at: '2099-01-01T00:00:00Z' }], created_at: now, updated_at: now };
-
-function fixture(post?: (url: string, body: Record<string, unknown>, signal?: AbortSignal | null) => Response | Promise<Response>) {
-  const state = { items: [operation], current: structuredClone(operation) };
-  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const url = upstreamURL(input);
-    if (init.method === 'POST') return post!(url, JSON.parse(init.body as string) as Record<string, unknown>, init.signal);
-    if (url.endsWith('/missions')) return Response.json({ items: [mission] });
-    if (url.endsWith('/operations')) return Response.json({ items: state.items });
-    return Response.json(state.current);
-  });
-  vi.stubGlobal('fetch', fetch);
-  return { state, fetch, posts: () => fetch.mock.calls.filter(([, init]) => init?.method === 'POST') };
-}
-
-function view() { return render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />); }
-async function detail() { fireEvent.click(await screen.findByRole('button', { name: `View operation ${operation.id}` })); await screen.findByText(mission.objectives[0]); }
-async function startDialog() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Start operation' }));
-  const dialog = screen.getByRole('dialog', { name: 'Start operation' });
-  await within(dialog).findByLabelText('Mission input (JSON)');
-  return dialog;
-}
+import { upstreamURL } from './fakes/proxy';
+import { connection, credentials, detail, fixture, mission, now, operation, startDialog, view } from './fixtures/operation-controls';
 
 describe('operation controls', () => {
   it('validates input, sends a stable start ID, and opens the saved operation without assigning agents', async () => {
@@ -43,8 +11,8 @@ describe('operation controls', () => {
     const api = fixture(async (_url, body) => {
       if (!(body.input as Record<string, unknown>).url) return Response.json({ error: 'invalid_input' }, { status: 422 });
       await held;
-      api.state.current = { ...operation, id: body.operation_id as string, status: 'planning', questions: [] };
-      return Response.json(api.state.current, { status: 201 });
+      api.change(state => { state.current = { ...operation, id: body.operation_id as string, status: 'planning', questions: [] }; });
+      return Response.json(api.snapshot().current, { status: 201 });
     });
     view();
     const dialog = await startDialog();
@@ -81,7 +49,7 @@ describe('operation controls', () => {
 
   it('keeps an uncertain start from being resubmitted and offers to inspect its stable operation ID', async () => {
     const api = fixture((_url, body) => {
-      api.state.current = { ...operation, id: body.operation_id as string, questions: [] };
+      api.change(state => { state.current = { ...operation, id: body.operation_id as string, questions: [] }; });
       return Response.json({ error: 'command_outcome_unknown', detail: 'private details' }, { status: 503 });
     });
     view();
@@ -96,12 +64,12 @@ describe('operation controls', () => {
     expect(api.posts()).toHaveLength(1);
     fireEvent.click(within(dialog).getByRole('button', { name: 'View operation' }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: api.state.current.id })).toBeVisible();
+    expect(await screen.findByRole('heading', { level: 1, name: api.snapshot().current.id })).toBeVisible();
     expect(api.posts()).toHaveLength(1);
   });
 
   it('confirms cancellation and removes controls once the operation is terminal', async () => {
-    const api = fixture(() => { api.state.current = { ...operation, status: 'cancelled' }; return Response.json(api.state.current); });
+    const api = fixture(() => { api.change(state => { state.current = { ...operation, status: 'cancelled' }; }); return Response.json(api.snapshot().current); });
     view(); await detail();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel operation' }));
     let dialog = screen.getByRole('dialog', { name: 'Cancel operation' });
@@ -121,7 +89,7 @@ describe('operation controls', () => {
   });
 
   it('keeps command notices on their operation when browser navigation changes the selection', async () => {
-    const api = fixture(() => { api.state.current = { ...operation, status: 'cancelled' }; return Response.json(api.state.current); });
+    const api = fixture(() => { api.change(state => { state.current = { ...operation, status: 'cancelled' }; }); return Response.json(api.snapshot().current); });
     const props = { connection, credentials, onSignIn: vi.fn(), onSelect: vi.fn() };
     const rendered = render(<OperationsPage {...props} selectedID={operation.id} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel operation' }));
@@ -130,7 +98,7 @@ describe('operation controls', () => {
 
     rendered.rerender(<OperationsPage {...props} />);
     expect(screen.queryByText('Operation cancelled. Already-dispatched work may still finish.')).not.toBeInTheDocument();
-    api.state.current = { ...operation, id: 'other-operation' };
+    api.change(state => { state.current = { ...operation, id: 'other-operation' }; });
     rendered.rerender(<OperationsPage {...props} selectedID="other-operation" />);
     await screen.findByRole('button', { name: 'Cancel operation' });
     expect(screen.queryByText('Operation cancelled. Already-dispatched work may still finish.')).not.toBeInTheDocument();
@@ -138,8 +106,8 @@ describe('operation controls', () => {
 
   it.each(['option', 'custom'])('submits a question %s answer and refreshes the saved answer', async mode => {
     const api = fixture((_url, body) => {
-      api.state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: body.answer as string, answered_at: now };
-      return Response.json(api.state.current);
+      api.change(state => { state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: body.answer as string, answered_at: now }; });
+      return Response.json(api.snapshot().current);
     });
     view(); await detail();
     fireEvent.click(screen.getByRole('button', { name: 'Answer question' }));
@@ -159,7 +127,7 @@ describe('operation controls', () => {
     vi.useFakeTimers();
     try {
       const api = fixture();
-      api.state.current.questions![0].expires_at = new Date(Date.now() + 2000).toISOString();
+      api.change(state => { state.current.questions![0].expires_at = new Date(Date.now() + 2000).toISOString(); });
       await act(async () => { view(); });
       fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
       await act(async () => {});
@@ -181,7 +149,7 @@ describe('operation controls', () => {
 
   it('handles another operator answering first without retrying or overwriting their answer', async () => {
     const api = fixture(() => {
-      api.state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: 'Answer from another operator', answered_at: now };
+      api.change(state => { state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: 'Answer from another operator', answered_at: now }; });
       return Response.json({ error: 'question_answered' }, { status: 409 });
     });
     view(); await detail();

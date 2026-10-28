@@ -10,12 +10,12 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	mongoactions "github.com/defos-ai/commander/providers/mongo/actions"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestActionMongoStore(t *testing.T) {
-	catalog := mongoactions.NewActionMongoStore(openStore(t, "actions"))
+	catalog := mongoactions.NewActionMongoStore(fixtures.OpenStore(t, "actions"))
 	ctx := t.Context()
 	original := actions.Action{
 		Name: "alpha", Description: "Inspect a page", Status: actions.Unknown,
@@ -73,7 +73,7 @@ func TestActionMongoStore(t *testing.T) {
 }
 
 func TestActionMongoStoreRejectsInvalidAndCancelledWrites(t *testing.T) {
-	catalog := mongoactions.NewActionMongoStore(openStore(t, "actions"))
+	catalog := mongoactions.NewActionMongoStore(fixtures.OpenStore(t, "actions"))
 	original := actions.Action{Name: "inspect", Description: "Original", Status: actions.Unknown, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 	if err := catalog.Upsert(t.Context(), original); err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestActionMongoStoreRejectsInvalidAndCancelledWrites(t *testing.T) {
 }
 
 func TestActionMongoStoreRejectsCorruptRecords(t *testing.T) {
-	database := openStore(t, "actions")
+	database := fixtures.OpenStore(t, "actions")
 	catalog := mongoactions.NewActionMongoStore(database)
 	original := actions.Action{Name: "inspect", Status: actions.Unknown, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 	if err := catalog.Upsert(t.Context(), original); err != nil {
@@ -144,7 +144,7 @@ func TestActionMongoStoreRejectsCorruptRecords(t *testing.T) {
 }
 
 func TestConcurrentActionUpserts(t *testing.T) {
-	catalog := mongoactions.NewActionMongoStore(openStore(t, "actions"))
+	catalog := mongoactions.NewActionMongoStore(fixtures.OpenStore(t, "actions"))
 	const writers = 12
 	completed := make(chan error, writers)
 	start := make(chan struct{})

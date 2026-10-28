@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func TestMCPDeploymentMetadata(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	defer client.CloseIdleConnections()
-	endpoint := strings.TrimSuffix(mcpEndpoint(), "/mcp") + "/aboutz"
+	endpoint := strings.TrimSuffix(fixtures.McpEndpoint(), "/mcp") + "/aboutz"
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		request, err := http.NewRequestWithContext(t.Context(), method, endpoint, nil)
 		if err != nil {
@@ -46,15 +47,15 @@ func TestMCPDeploymentMetadata(t *testing.T) {
 }
 
 func TestUnauthorizedCleanupPreservesSavedWork(t *testing.T) {
-	a := connect(t)
-	op := a.start("Saved cleanup fixture")
-	a.call("cancel_operation", object{"operation_id": op.ID}, nil)
+	a := fixtures.Connect(t)
+	op := a.Start("Saved cleanup fixture")
+	a.Call("cancel_operation", fixtures.Object{"operation_id": op.ID}, nil)
 	client := &http.Client{
 		Timeout:       10 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	for _, authorization := range []string{"", "Bearer incorrect-test-token"} {
-		request, err := http.NewRequestWithContext(a.ctx, http.MethodPost, mcpEndpoint(), strings.NewReader(
+		request, err := http.NewRequestWithContext(a.Context, http.MethodPost, fixtures.McpEndpoint(), strings.NewReader(
 			`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"clean_up_state","arguments":{}}}`,
 		))
 		if err != nil {
@@ -75,15 +76,15 @@ func TestUnauthorizedCleanupPreservesSavedWork(t *testing.T) {
 		if response.StatusCode != http.StatusUnauthorized {
 			t.Fatalf("unauthorized cleanup returned HTTP %d, want 401", response.StatusCode)
 		}
-		if got := a.get(op.ID); got.ID != op.ID || got.Status != operations.Cancelled {
+		if got := a.Get(op.ID); got.ID != op.ID || got.Status != operations.Cancelled {
 			t.Fatalf("unauthorized cleanup changed saved operation: id=%s status=%s", got.ID, got.Status)
 		}
 	}
-	a.call("clean_up_state", object{}, nil)
+	a.Call("clean_up_state", fixtures.Object{}, nil)
 	var list struct {
 		Operations []operations.Operation `json:"operations"`
 	}
-	a.call("list_operations", object{}, &list)
+	a.Call("list_operations", fixtures.Object{}, &list)
 	if len(list.Operations) != 0 {
 		t.Fatal("authenticated cleanup did not remove saved operations")
 	}

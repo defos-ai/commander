@@ -14,8 +14,8 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
-	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
@@ -26,8 +26,8 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op, parentResult := createResultOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op, parentResult := fixtures.CreateResultOperation(t, first)
 			if automatic {
 				var err error
 				op, err = first.Update(t.Context(), op.ID, func(next *operations.Operation) error {
@@ -90,7 +90,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 					t.Fatalf("group decision was not committed with the last child: %+v", result.op)
 				}
 			}
-			saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,18 +130,18 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 
 func TestOperationResultReplayPreservesPublishedChildrenAndBytes(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, request := createResultOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, request := fixtures.CreateResultOperation(t, store)
 	if _, err := store.FinishTask(t.Context(), op.ID, request); err != nil {
 		t.Fatal(err)
 	}
-	reopened := newDispatchStore(t, dir)
+	reopened := fixtures.NewDispatchStore(t, dir)
 	saved, err := reopened.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	replay := request
 	replay.FinishedAt = replay.FinishedAt.Add(time.Hour)
 	late := operations.TaskResult{TaskID: request.TaskID, AgentID: request.AgentID,
@@ -169,7 +169,7 @@ func TestOperationResultReplayPreservesPublishedChildrenAndBytes(t *testing.T) {
 				}
 				assertResultJSONEqual(t, result, saved)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 				t.Fatal("replay changed the result, receipt time, children, events, or storage revision")
 			}
 		})
@@ -178,9 +178,9 @@ func TestOperationResultReplayPreservesPublishedChildrenAndBytes(t *testing.T) {
 
 func TestOperationResultAfterCancellationRetainsEvidenceWithoutChildren(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, request := createResultOperation(t, store)
-	cancelled, err := newDispatchStore(t, dir).Cancel(t.Context(), op.ID)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, request := fixtures.CreateResultOperation(t, store)
+	cancelled, err := fixtures.NewDispatchStore(t, dir).Cancel(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestOperationResultAfterCancellationRetainsEvidenceWithoutChildren(t *testi
 	if len(published.Events) != len(cancelled.Events)+1 || published.Events[len(published.Events)-1].Type != operations.TaskFinished {
 		t.Fatalf("late result must publish only its completion event: %+v", published.Events)
 	}
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,11 +208,11 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
-			op, request := createResultOperation(t, store)
+			store := fixtures.NewDispatchStore(t, dir)
+			op, request := fixtures.CreateResultOperation(t, store)
 			operationDir := filepath.Join(dir, "operations")
 			path := filepath.Join(operationDir, op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 			restore := func() {
 				t.Helper()
 				if err := os.Chmod(operationDir, 0700); err != nil {
@@ -220,7 +220,7 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 				}
 			}
 			if permission == "read" {
-				restore = denyDirectoryRead(t, operationDir)
+				restore = fixtures.DenyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
 				if err := os.Chmod(operationDir, 0500); err != nil {
@@ -237,10 +237,10 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
 				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) || published.ID != "" {
 				t.Fatal("failed write exposed or persisted an uncommitted mutation")
 			}
-			reopened := newDispatchStore(t, dir)
+			reopened := fixtures.NewDispatchStore(t, dir)
 			saved, err := reopened.Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -253,37 +253,6 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 			}
 		})
 	}
-}
-
-func createResultOperation(t *testing.T, store *operationfs.OperationFsStore) (operations.Operation, operations.TaskResult) {
-	t.Helper()
-	created := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
-	operationID, taskID := id.OperationID(), id.TaskID()
-	op := operations.Operation{
-		ID: operationID, Status: operations.Running, CreatedAt: created, UpdatedAt: created,
-		Mission: missions.Mission{Rules: missions.RuleSet{
-			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
-		}},
-		Preflight: &operations.Preflight{Ready: true, Version: 2},
-		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,
-			AgentID: "review-agent-00000001", ActionName: "discover", StepID: "review",
-			Status: operations.TaskRunning, StartedAt: created}},
-		Events: []operations.Event{{Sequence: 1, OperationID: operationID, TaskID: taskID,
-			Type: operations.TaskDispatched, Status: operations.Running, CreatedAt: created}},
-	}
-	request := operations.TaskResult{TaskID: taskID, AgentID: op.Tasks[0].AgentID,
-		Status: operations.TaskSucceeded, FinishedAt: created.Add(time.Minute),
-		Result: &actions.ActionOutput{ActionName: "discover", Output: json.RawMessage(`{"found":2}`),
-			NextActions: []actions.NextAction{
-				{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)},
-				{ActionName: "inspect", Input: json.RawMessage(`{"page":2}`)},
-			}},
-	}
-	if err := store.Create(t.Context(), op); err != nil {
-		t.Fatal(err)
-	}
-	return op, request
 }
 
 func countResultEvents(op operations.Operation, kind operations.EventType) int {

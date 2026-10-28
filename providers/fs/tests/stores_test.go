@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 	executionfs "github.com/defos-ai/commander/providers/fs/executions"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationUpdatesAreAtomicAcrossStoreInstances(t *testing.T) {
@@ -171,7 +171,7 @@ func TestOperationRoundTripAndListingIgnoreUnrelatedFiles(t *testing.T) {
 		Input: json.RawMessage(`{}`),
 		Mission: missions.Mission{Name: "inspect", OptionalActions: []string{"publish"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
 			RequiredActions:   []string{"inspect"},
-			ActionDefinitions: storedMission().ActionDefinitions,
+			ActionDefinitions: fixtures.Mission().ActionDefinitions,
 			Rules: missions.RuleSet{
 				missions.AggregateResults:  {ForActions: []string{"discover"}},
 				missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -456,12 +456,12 @@ func TestOperationWritesDistinguishUnpublishedAndUncertainSnapshots(t *testing.T
 			var published operations.Operation
 
 			if create {
-				restore = denyDirectoryRead(t, operationDir)
+				restore = fixtures.DenyDirectoryRead(t, operationDir)
 				err = store.Create(t.Context(), op)
 			} else {
 				published, err = store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 					calls++
-					restore = denyDirectoryRead(t, operationDir)
+					restore = fixtures.DenyDirectoryRead(t, operationDir)
 					if !unchanged {
 						next.Status = operations.Running
 						next.Events = append(next.Events, operations.Event{Sequence: 1})
@@ -523,32 +523,6 @@ func TestOperationWritesDistinguishUnpublishedAndUncertainSnapshots(t *testing.T
 			}
 		})
 	}
-}
-
-func denyDirectoryRead(t *testing.T, dir string) func() {
-	t.Helper()
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("requires Unix directory permissions and an unprivileged user")
-	}
-	restore := func() {
-		t.Helper()
-		if err := os.Chmod(dir, 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Cleanup(restore)
-	if err := os.Chmod(dir, 0300); err != nil {
-		t.Fatal(err)
-	}
-	file, err := os.Open(dir)
-	if err == nil {
-		file.Close()
-		t.Skip("directory read permissions are not enforced")
-	}
-	if !errors.Is(err, fs.ErrPermission) {
-		t.Fatalf("directory permission probe failed unexpectedly: %v", err)
-	}
-	return restore
 }
 
 func TestExecutionClaimAndOutcomeRemainStableAcrossReopen(t *testing.T) {

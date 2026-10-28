@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
 func TestUIRejectsUnmappedInternalAPIsBeforeSendingCredentials(t *testing.T) {
@@ -24,14 +25,14 @@ func TestUIRejectsUnmappedInternalAPIsBeforeSendingCredentials(t *testing.T) {
 	}
 	defer handler.Close()
 	// Populate the mapped connection pool before trying its private address directly.
-	cookie := login(t, handler, "http://api.example", nil)
+	cookie := fixtures.Login(t, handler, "http://api.example", nil)
 	for _, target := range []string{upstream.URL, "http://10.0.0.1", "http://169.254.169.254", "http://[fd00:ec2::254]"} {
 		for _, request := range []*http.Request{
-			browserRequest(http.MethodGet, proxyPath(target, "/healthz"), "", cookie),
-			browserRequest(http.MethodGet, proxyPath(target, "/aboutz"), "", cookie),
-			browserRequest(http.MethodPost, "/ui/connections", loginBody(target), cookie),
+			fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(target, "/healthz"), "", cookie),
+			fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(target, "/aboutz"), "", cookie),
+			fixtures.BrowserRequest(http.MethodPost, "/ui/connections", fixtures.LoginBody(target), cookie),
 		} {
-			response := serveUI(handler, request)
+			response := fixtures.ServeUI(handler, request)
 			if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "UI_API_UPSTREAMS") {
 				t.Fatalf("unsafe API target was not rejected: %d %s", response.Code, response.Body.String())
 			}
@@ -40,7 +41,7 @@ func TestUIRejectsUnmappedInternalAPIsBeforeSendingCredentials(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatal("an unmapped internal API received a probe or credentials")
 	}
-	response := serveUI(handler, browserRequest(http.MethodGet, proxyPath("http://api.example", "/api/v1/missions"), "", cookie))
+	response := fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath("http://api.example", "/api/v1/missions"), "", cookie))
 	if response.Code != http.StatusOK || calls.Load() != 2 {
 		t.Fatal("blocking unsafe targets must retain the mapped API session")
 	}

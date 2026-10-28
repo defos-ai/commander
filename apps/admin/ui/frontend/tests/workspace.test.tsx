@@ -1,33 +1,7 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WorkspaceLayout } from '../src/components/WorkspaceLayout';
-
-const connection = { id: 'local', name: 'Local Commander', url: 'http://localhost:4274' };
-
-function viewport(mobile: boolean) {
-  const listeners = new Set<(event: MediaQueryListEvent) => void>();
-  const media = {
-    matches: mobile,
-    media: '(max-width: 760px)',
-    onchange: null,
-    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => listeners.add(listener),
-    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener),
-  };
-  vi.stubGlobal('matchMedia', vi.fn(() => media));
-  return (matches: boolean) => act(() => {
-    media.matches = matches;
-    listeners.forEach(listener => listener({ matches, media: media.media } as MediaQueryListEvent));
-  });
-}
-
-function workspace() {
-  const onNavigate = vi.fn();
-  const onBack = vi.fn();
-  const view = render(<WorkspaceLayout connection={connection} section="overview" onNavigate={onNavigate} onBack={onBack}>
-    <h1>Connection overview</h1><button>Refresh overview</button>
-  </WorkspaceLayout>);
-  return { ...view, onNavigate, onBack };
-}
+import { viewport } from './fakes/viewport';
+import { connection, workspace } from './fixtures/workspace';
 
 afterEach(() => vi.unstubAllGlobals());
 

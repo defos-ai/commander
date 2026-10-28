@@ -15,27 +15,32 @@ import (
 	"time"
 
 	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
+	"github.com/defos-ai/commander/apps/agents/builder/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/builder/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
-	source, _ := templateFixture(t)
+	source, _ := fixtures.Template(t)
 	root := t.TempDir()
-	checkout := runCheckout(t, localCheckout(t, root, source))
+	checkout := runCheckout(t, fixtures.LocalCheckout(t, root, source))
 	workspace := filepath.Join(root, checkout.WorkspaceID, "source")
-	writeBuildFile(t, workspace, "go.mod", "module example.invalid/fixture\n\ngo 1.26.7\n")
+	fixtures.WriteBuildFile(t, workspace, "go.mod", "module example.invalid/fixture\n\ngo 1.26.7\n")
 	for _, name := range []string{".env", ".env.production", "state/runtime.json", ".cache/build.bin"} {
-		writeBuildFile(t, workspace, name, "excluded deployment state")
+		fixtures.WriteBuildFile(t, workspace, name, "excluded deployment state")
 	}
 	for _, name := range []string{"GITHUB_TOKEN", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "COMMANDER_MCP_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"} {
 		t.Setenv(name, "ambient-secret-must-not-reach-child")
 	}
-	executor, config, _ := buildExecutor(t, root, checkout.WorkspaceID, "")
-	input := buildInput(t, checkout.WorkspaceID)
+	executor, config, _ := fixtures.BuildExecutor(t, root, checkout.WorkspaceID, "")
+	input := fixtures.BuildInput(t, checkout.WorkspaceID)
 	assertBuildInputSchema(t, executor.Action().InputSchema, input)
-	result, err := executor.Run(buildSecretContext(t), input)
+	ctx := fixtures.BuildContext(t)
+
+	result, err := executor.Run(ctx, input)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +51,7 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 	if output.WorkspaceID != checkout.WorkspaceID || bytes.Contains(result.Output, []byte(root)) || len(result.NextActions) != 0 {
 		t.Fatalf("unexpected build result: %s", result.Output)
 	}
-	if output.AgentType != buildTestAgentType || output.ModulePath != "example.invalid/fixture" || output.Binary != buildTestBinary {
+	if output.AgentType != fixtures.BuildAgentType || output.ModulePath != "example.invalid/fixture" || output.Binary != fixtures.BuildBinary {
 		t.Fatalf("build did not return verified release identity: %+v", output)
 	}
 	if len(result.Artifacts) != 1 || result.Artifacts[0].Name != "Agent source" || len(result.Artifacts[0].Files) != 1 {
@@ -61,7 +66,7 @@ func TestBuildAgentValidatesAndExportsSource(t *testing.T) {
 		t.Fatalf("archive lost verified source: files=%v output=%+v", files, output)
 	}
 	for name, contents := range files {
-		if strings.HasPrefix(name, ".git/") || strings.HasPrefix(name, ".env") || strings.HasPrefix(name, "state/") || strings.HasPrefix(name, ".cache/") || strings.HasPrefix(name, ".build-") || name == "agent.yaml" || strings.HasPrefix(name, buildTestBinary+"_") || strings.Contains(contents, buildTestSecret) {
+		if strings.HasPrefix(name, ".git/") || strings.HasPrefix(name, ".env") || strings.HasPrefix(name, "state/") || strings.HasPrefix(name, ".cache/") || strings.HasPrefix(name, ".build-") || name == "agent.yaml" || strings.HasPrefix(name, fixtures.BuildBinary+"_") || strings.Contains(contents, fixtures.BuildSecret) {
 			t.Fatalf("archive retained excluded data: %s", name)
 		}
 	}
@@ -90,9 +95,11 @@ func TestBuildAgentVerifiesRegisteredActionContracts(t *testing.T) {
 	} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
-			root, workspaceID := buildWorkspace(t)
-			executor, config, _ := buildExecutor(t, root, workspaceID, mode)
-			result, err := executor.Run(buildSecretContext(t), buildInput(t, workspaceID))
+			root, workspaceID := fixtures.BuildWorkspace(t)
+			executor, config, _ := fixtures.BuildExecutor(t, root, workspaceID, mode)
+
+			result, err := executor.Run(fixtures.BuildContext(t), fixtures.BuildInput(t, workspaceID))
+
 			if mode == "contracts-equivalent" {
 				if err != nil || len(result.Artifacts) != 1 {
 					t.Fatalf("equivalent registered contracts did not produce source: %v", err)
@@ -101,7 +108,7 @@ func TestBuildAgentVerifiesRegisteredActionContracts(t *testing.T) {
 				if err == nil {
 					t.Fatal("build accepted invalid or mismatched registered action contracts")
 				}
-				if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 || strings.Contains(err.Error(), buildTestSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") || strings.Contains(err.Error(), root) {
+				if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 || strings.Contains(err.Error(), fixtures.BuildSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") || strings.Contains(err.Error(), root) {
 					t.Fatalf("rejected contracts exposed output or raw diagnostics: %v", err)
 				}
 			}
@@ -118,8 +125,8 @@ func TestBuildAgentVerifiesRegisteredActionContracts(t *testing.T) {
 }
 
 func TestBuildAgentRejectsInvalidActionContractsBeforeExecution(t *testing.T) {
-	root, workspaceID := buildWorkspace(t)
-	executor, config, _ := buildExecutor(t, root, workspaceID, "")
+	root, workspaceID := fixtures.BuildWorkspace(t)
+	executor, config, _ := fixtures.BuildExecutor(t, root, workspaceID, "")
 	for _, scenario := range []struct {
 		name   string
 		change func(map[string]any, map[string]any)
@@ -146,7 +153,7 @@ func TestBuildAgentRejectsInvalidActionContractsBeforeExecution(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			var input map[string]any
-			if err := json.Unmarshal(buildInput(t, workspaceID), &input); err != nil {
+			if err := json.Unmarshal(fixtures.BuildInput(t, workspaceID), &input); err != nil {
 				t.Fatal(err)
 			}
 			definition := input["actions"].([]any)[0].(map[string]any)
@@ -155,7 +162,9 @@ func TestBuildAgentRejectsInvalidActionContractsBeforeExecution(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			result, err := executor.Run(t.Context(), raw)
+
 			if err == nil || errors.Is(err, action.ErrSecretUnavailable) {
 				t.Fatalf("action contract was not rejected before managed-secret access: %v", err)
 			}
@@ -208,7 +217,7 @@ func assertBuildInputSchema(t *testing.T, rawSchema, input json.RawMessage) {
 func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
 	for _, scenario := range []string{"missing secret", "empty secret", "codex failure", "Go tests fail", "Go build fails", "secret in source", "secret in filename", "symlink in source"} {
 		t.Run(scenario, func(t *testing.T) {
-			root, workspaceID := buildWorkspace(t)
+			root, workspaceID := fixtures.BuildWorkspace(t)
 			mode := ""
 			if scenario == "codex failure" {
 				mode = "fail"
@@ -231,20 +240,22 @@ func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
 					t.Skipf("symlinks unavailable: %v", err)
 				}
 			}
-			executor, config, _ := buildExecutor(t, root, workspaceID, mode)
+			executor, config, _ := fixtures.BuildExecutor(t, root, workspaceID, mode)
 			t.Setenv("CODEX_API_KEY", "ambient-value-is-not-a-managed-secret")
 			ctx := t.Context()
 			if scenario == "empty secret" {
-				ctx = action.WithSecrets(ctx, buildSecrets(""))
+				ctx = action.WithSecrets(ctx, fakes.BuildSecrets(""))
 			}
 			if mode != "" {
-				ctx = buildSecretContext(t)
+				ctx = fixtures.BuildContext(t)
 			}
-			result, err := executor.Run(ctx, buildInput(t, workspaceID))
+
+			result, err := executor.Run(ctx, fixtures.BuildInput(t, workspaceID))
+
 			if err == nil {
 				t.Fatal("unsafe or unsuccessful build returned success")
 			}
-			if len(result.Output) != 0 || len(result.Artifacts) != 0 || strings.Contains(err.Error(), buildTestSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") {
+			if len(result.Output) != 0 || len(result.Artifacts) != 0 || strings.Contains(err.Error(), fixtures.BuildSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") {
 				t.Fatal("failed build exposed raw diagnostics, source or credentials")
 			}
 			if mode == "" {
@@ -286,16 +297,18 @@ func TestBuildAgentRejectsSourceThatCannotRelease(t *testing.T) {
 		{"stale-manifest-actions", "action"},
 	} {
 		t.Run(scenario.mode, func(t *testing.T) {
-			root, workspaceID := buildWorkspace(t)
-			executor, config, _ := buildExecutor(t, root, workspaceID, scenario.mode)
-			result, err := executor.Run(buildSecretContext(t), buildInput(t, workspaceID))
+			root, workspaceID := fixtures.BuildWorkspace(t)
+			executor, config, _ := fixtures.BuildExecutor(t, root, workspaceID, scenario.mode)
+
+			result, err := executor.Run(fixtures.BuildContext(t), fixtures.BuildInput(t, workspaceID))
+
 			if err == nil {
 				t.Fatal("build accepted source that cannot produce a compatible release")
 			}
 			if !strings.Contains(err.Error(), scenario.reason) {
 				t.Fatalf("release validation did not identify the correction needed: %v", err)
 			}
-			if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 || strings.Contains(err.Error(), buildTestSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") || strings.Contains(err.Error(), root) {
+			if len(result.Output) != 0 || len(result.Artifacts) != 0 || len(result.NextActions) != 0 || strings.Contains(err.Error(), fixtures.BuildSecret) || strings.Contains(err.Error(), "untrusted-sensitive-build-diagnostic") || strings.Contains(err.Error(), root) {
 				t.Fatalf("rejected release exposed output or raw diagnostics: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(config.Source, "README.md")); err != nil {
@@ -307,16 +320,16 @@ func TestBuildAgentRejectsSourceThatCannotRelease(t *testing.T) {
 }
 
 func TestBuildAgentRejectsUnsafeWorkspacesAndMissingTools(t *testing.T) {
-	root, workspaceID := buildWorkspace(t)
-	executor, config, scope := buildExecutor(t, root, workspaceID, "")
+	root, workspaceID := fixtures.BuildWorkspace(t)
+	executor, config, scope := fixtures.BuildExecutor(t, root, workspaceID, "")
 	for _, value := range []string{"../checkout-123", "/tmp/checkout-123", "checkout-abc", "checkout-999999999"} {
-		if _, err := executor.Run(buildSecretContext(t), buildInput(t, value)); err == nil {
+		if _, err := executor.Run(fixtures.BuildContext(t), fixtures.BuildInput(t, value)); err == nil {
 			t.Fatalf("accepted invalid workspace %q", value)
 		}
 	}
 	for _, name := range []string{"root", "source"} {
 		t.Run("symlink "+name, func(t *testing.T) {
-			linkedRoot, linkedID := buildWorkspace(t)
+			linkedRoot, linkedID := fixtures.BuildWorkspace(t)
 			link := filepath.Join(linkedRoot, linkedID, "source")
 			target := t.TempDir()
 			if name == "root" {
@@ -335,7 +348,7 @@ func TestBuildAgentRejectsUnsafeWorkspacesAndMissingTools(t *testing.T) {
 			if _, err := unsafe.Discover(t.Context(), &environment.Local{}, scope); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := unsafe.Run(buildSecretContext(t), buildInput(t, linkedID)); err == nil {
+			if _, err := unsafe.Run(fixtures.BuildContext(t), fixtures.BuildInput(t, linkedID)); err == nil {
 				t.Fatal("build followed a workspace symlink")
 			}
 		})
@@ -351,7 +364,7 @@ func TestBuildAgentRejectsUnsafeWorkspacesAndMissingTools(t *testing.T) {
 	if !missing["codex"] || !missing["go"] {
 		t.Fatalf("missing tools not advertised: %+v", executor.Action().MissingRequirements)
 	}
-	if _, err := executor.Run(buildSecretContext(t), buildInput(t, workspaceID)); err == nil {
+	if _, err := executor.Run(fixtures.BuildContext(t), fixtures.BuildInput(t, workspaceID)); err == nil {
 		t.Fatal("rediscovery retained stale executables")
 	}
 	if _, err := os.Stat(config.Calls); !errors.Is(err, os.ErrNotExist) {
@@ -372,9 +385,9 @@ func TestBuildAgentCancellationPreservesCheckout(t *testing.T) {
 
 func testBuildAgentCancellation(t *testing.T, mode string, expectedCalls int) {
 	t.Helper()
-	root, workspaceID := buildWorkspace(t)
-	executor, config, _ := buildExecutor(t, root, workspaceID, mode)
-	ctx, cancel := context.WithCancel(buildSecretContext(t))
+	root, workspaceID := fixtures.BuildWorkspace(t)
+	executor, config, _ := fixtures.BuildExecutor(t, root, workspaceID, mode)
+	ctx, cancel := context.WithCancel(fixtures.BuildContext(t))
 	defer cancel()
 	type outcome struct {
 		result action.Result
@@ -382,7 +395,7 @@ func testBuildAgentCancellation(t *testing.T, mode string, expectedCalls int) {
 	}
 	finished := make(chan outcome, 1)
 	go func() {
-		result, err := executor.Run(ctx, buildInput(t, workspaceID))
+		result, err := executor.Run(ctx, fixtures.BuildInput(t, workspaceID))
 		finished <- outcome{result, err}
 	}()
 	stopped := false
@@ -437,71 +450,7 @@ func testBuildAgentCancellation(t *testing.T, mode string, expectedCalls int) {
 	assertBuildScratchRemoved(t, config)
 }
 
-func buildExecutor(t *testing.T, root, workspaceID, mode string) (*builderactions.BuildAgent, buildFixtureConfig, *environment.DiscoveryScope) {
-	t.Helper()
-	control := t.TempDir()
-	config := buildFixtureConfig{Source: filepath.Join(root, workspaceID, "source"), Mode: mode,
-		Started: filepath.Join(control, "started"), Calls: filepath.Join(control, "calls"), Home: filepath.Join(control, "home")}
-	scope := buildFixtureScope(t, config)
-	executor, err := builderactions.NewBuildAgent(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	status, err := executor.Discover(t.Context(), &environment.Local{}, scope)
-	if err != nil || status != action.Ready {
-		t.Fatalf("build discovery: status=%s err=%v", status, err)
-	}
-	if names := executor.Action().RequiredSecrets; len(names) != 1 || names[0] != "CODEX_API_KEY" {
-		t.Fatalf("build secret declaration: %v", names)
-	}
-	return executor, config, scope
-}
-
-func buildWorkspace(t *testing.T) (string, string) {
-	t.Helper()
-	root := t.TempDir()
-	const id = "checkout-123456"
-	source := filepath.Join(root, id, "source")
-	writeBuildFile(t, source, "README.md", "Local source fixture\n")
-	writeBuildFile(t, source, "go.mod", "module example.invalid/fixture\n\ngo 1.26.7\n")
-	return root, id
-}
-
-func writeBuildFile(t *testing.T, root, name, value string) {
-	t.Helper()
-	path := filepath.Join(root, filepath.FromSlash(name))
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func buildInput(t *testing.T, workspaceID string) json.RawMessage {
-	t.Helper()
-	input, err := json.Marshal(builderactions.BuildAgentInput{WorkspaceID: workspaceID, Instructions: buildTestInstructions, Actions: buildRequestedActions()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return input
-}
-
-type buildSecrets string
-
-func (s buildSecrets) Secret(name string) ([]byte, error) {
-	if name != "CODEX_API_KEY" {
-		return nil, action.ErrSecretUnavailable
-	}
-	return []byte(s), nil
-}
-
-func buildSecretContext(t *testing.T) context.Context {
-	t.Helper()
-	return action.WithSecrets(t.Context(), buildSecrets(buildTestSecret))
-}
-
-func assertBuildScratchRemoved(t *testing.T, config buildFixtureConfig) {
+func assertBuildScratchRemoved(t *testing.T, config fakes.BuildConfig) {
 	t.Helper()
 	home, err := os.ReadFile(config.Home)
 	if err != nil {

@@ -1,14 +1,11 @@
 package playground_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,9 +13,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	fakes "github.com/defos-ai/commander/apps/playground/tests/fakes"
+	"github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/host"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T) {
@@ -40,7 +38,7 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if missingSecretFormMetadata(w, request, "GITHUB_TOKEN", "OPENAI_API_KEY") {
+		if fakes.MissingSecretFormMetadata(w, request, "GITHUB_TOKEN", "OPENAI_API_KEY") {
 			return
 		}
 		if request.Method != http.MethodPost || request.URL.Path != "/api/v1/secrets" {
@@ -60,45 +58,45 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 		}
 		writes.Add(1)
 		w.WriteHeader(http.StatusCreated)
-		writeSecretFormMetadata(w, input.Name)
+		fakes.WriteSecretFormMetadata(w, input.Name)
 	}))
 	defer api.Close()
-	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: password}}, password, values["GITHUB_TOKEN"], values["OPENAI_API_KEY"])
-	defer u.model.Close()
-	op := secretFormOperation("GITHUB_TOKEN", "OPENAI_API_KEY")
+	u, operations := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: password}}, password, values["GITHUB_TOKEN"], values["OPENAI_API_KEY"])
+	defer u.Close()
+	op := fixtures.SecretFormOperation("GITHUB_TOKEN", "OPENAI_API_KEY")
 	if runtime {
-		op = runtimeSecretFormOperation("GITHUB_TOKEN", "OPENAI_API_KEY")
+		op = fixtures.RuntimeSecretFormOperation("GITHUB_TOKEN", "OPENAI_API_KEY")
 	}
-	publish(op)
-	u.text("/watch " + op.ID)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	operations.Publish(op)
+	u.Text("/watch " + op.ID)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	const draft = "Keep my unsent chat draft"
-	u.text(draft)
-	u.wait("automatic multi-secret form", func(view string) bool {
+	u.Text(draft)
+	u.Wait("automatic multi-secret form", func(view string) bool {
 		return strings.Contains(view, "builder-agent · GITHUB_TOKEN") && strings.Contains(view, "builder-agent · OPENAI_API_KEY")
 	})
-	u.text(values["GITHUB_TOKEN"])
-	u.key(tea.KeyMsg{Type: tea.KeyTab})
-	u.text(values["OPENAI_API_KEY"])
+	u.Text(values["GITHUB_TOKEN"])
+	u.Key(tea.KeyMsg{Type: tea.KeyTab})
+	u.Text(values["OPENAI_API_KEY"])
 	for _, value := range values {
-		if strings.Contains(u.model.View(), value) {
+		if strings.Contains(u.Model.View(), value) {
 			t.Fatal("secret input was not masked")
 		}
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("confirmed secret saves", func(view string) bool { return strings.Contains(view, "Secrets saved. Waiting for the agent.") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("confirmed secret saves", func(view string) bool { return strings.Contains(view, "Secrets saved. Waiting for the agent.") })
 	if writes.Load() != 2 {
 		t.Fatal("multi-secret form did not save each value once")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), draft) || !strings.Contains(u.model.View(), "secrets needed") {
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.Model.View(), draft) || !strings.Contains(u.Model.View(), "secrets needed") {
 		t.Fatal("save lost the chat draft or claimed the agent was ready")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyCtrlA})
-	u.key(tea.KeyMsg{Type: tea.KeyCtrlK})
-	u.text("Normal message after secret entry")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("chat after secret form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
+	u.Key(tea.KeyMsg{Type: tea.KeyCtrlA})
+	u.Key(tea.KeyMsg{Type: tea.KeyCtrlK})
+	u.Text("Normal message after secret entry")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("chat after secret form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
 	if runtime {
 		// Installation updates the agent observation without changing the saved
 		// operation timestamp. The watcher must still clear the local prompt.
@@ -107,12 +105,12 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 		op.Status, op.UpdatedAt, op.Preflight.Ready = "planning", op.UpdatedAt.Add(time.Second), true
 		op.Preflight.Version++
 	}
-	publish(op)
-	u.wait("fresh agent readiness", func(view string) bool { return !strings.Contains(view, "secrets needed") })
+	operations.Publish(op)
+	u.Wait("fresh agent readiness", func(view string) bool { return !strings.Contains(view, "secrets needed") })
 	if !runtime {
 		// A ready preflight revision also schedules model review. Await it so
 		// teardown cannot cancel the request while the fixture inspects its body.
-		u.wait("ready preflight review", func(view string) bool { return strings.Contains(view, "Ready preflight reviewed") })
+		u.Wait("ready preflight review", func(view string) bool { return strings.Contains(view, "Ready preflight reviewed") })
 	}
 }
 
@@ -130,45 +128,45 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 		if r.Method != http.MethodGet {
 			writes.Add(1)
 		}
-		if !missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
+		if !fakes.MissingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
 			http.NotFound(w, r)
 		}
 	}))
 	defer api.Close()
-	u, publish, reads := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "discarded-private-token")
-	defer u.model.Close()
-	op := secretFormOperation("GITHUB_TOKEN")
+	u, operations := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "discarded-private-token")
+	defer u.Close()
+	op := fixtures.SecretFormOperation("GITHUB_TOKEN")
 	if runtime {
-		op = runtimeSecretFormOperation()
+		op = fixtures.RuntimeSecretFormOperation()
 	}
-	publish(op)
-	u.text("/watch " + op.ID)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	operations.Publish(op)
+	u.Text("/watch " + op.ID)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	if runtime {
-		u.wait("running task before secret request", func(string) bool { return reads.Load() >= 1 })
+		u.Wait("running task before secret request", func(string) bool { return operations.ReadCount() >= 1 })
 		op.Tasks[0].MissingRequirements = []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}
-		publish(op)
+		operations.Publish(op)
 	}
-	u.wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	u.text("discarded-private-token")
-	u.key(tea.KeyMsg{Type: tea.KeyEsc})
+	u.Wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Text("discarded-private-token")
+	u.Key(tea.KeyMsg{Type: tea.KeyEsc})
 	if !runtime {
 		op.UpdatedAt = op.UpdatedAt.Add(time.Second)
 		op.Preflight.Version++
 	}
-	publish(op)
-	target := reads.Load() + 2
-	u.wait("repeated requirement snapshots", func(string) bool { return reads.Load() >= target })
-	if strings.Contains(u.model.View(), "Agent secrets") || writes.Load() != 0 {
+	operations.Publish(op)
+	target := operations.ReadCount() + 2
+	u.Wait("repeated requirement snapshots", func(string) bool { return operations.ReadCount() >= target })
+	if strings.Contains(u.Model.View(), "Agent secrets") || writes.Load() != 0 {
 		t.Fatal("dismissed requirement reopened or saved itself")
 	}
-	if runtime && strings.Contains(u.model.View(), "Operation reviewed") {
+	if runtime && strings.Contains(u.Model.View(), "Operation reviewed") {
 		t.Fatal("runtime requirement snapshots triggered model review")
 	}
-	u.text("/secrets")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("manually reopened secret form", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	if strings.Contains(u.model.View(), strings.Repeat("•", len("discarded-private-token"))) {
+	u.Text("/secrets")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("manually reopened secret form", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	if strings.Contains(u.Model.View(), strings.Repeat("•", len("discarded-private-token"))) {
 		t.Fatal("dismissed value was retained when the form reopened")
 	}
 	if runtime {
@@ -179,10 +177,10 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 		op.UpdatedAt, op.Preflight.Ready = op.UpdatedAt.Add(time.Second), true
 		op.Preflight.Version++
 	}
-	publish(op)
-	u.wait("requirement cleared while editing", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if strings.Contains(u.model.View(), "Agent secrets") || writes.Load() != 0 {
+	operations.Publish(op)
+	u.Wait("requirement cleared while editing", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if strings.Contains(u.Model.View(), "Agent secrets") || writes.Load() != 0 {
 		t.Fatal("cleared requirement stayed open or saved a discarded value")
 	}
 	// Clearing requirements schedules a preflight or completion review. Let it
@@ -191,7 +189,7 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	if runtime {
 		review = "Operation reviewed"
 	}
-	u.wait("review after secret requirements clear", func(view string) bool {
+	u.Wait("review after secret requirements clear", func(view string) bool {
 		return strings.Contains(view, review) && !strings.Contains(view, "Thinking")
 	})
 }
@@ -204,18 +202,18 @@ func TestSecretFormDoesNotOverwriteAvailableValues(t *testing.T) {
 		if r.Method != http.MethodGet {
 			writes.Add(1)
 		}
-		writeSecretFormMetadata(w, "GITHUB_TOKEN")
+		fakes.WriteSecretFormMetadata(w, "GITHUB_TOKEN")
 	}))
 	defer api.Close()
-	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}})
-	defer u.model.Close()
-	op := runtimeSecretFormOperation("GITHUB_TOKEN")
-	publish(op)
-	u.text("/watch " + op.ID)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("saved secret waiting for delivery", func(view string) bool { return strings.Contains(view, "Secrets are saved. Waiting for the agent.") })
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if writes.Load() != 0 || !strings.Contains(u.model.View(), "secrets needed") {
+	u, operations := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}})
+	defer u.Close()
+	op := fixtures.RuntimeSecretFormOperation("GITHUB_TOKEN")
+	operations.Publish(op)
+	u.Text("/watch " + op.ID)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("saved secret waiting for delivery", func(view string) bool { return strings.Contains(view, "Secrets are saved. Waiting for the agent.") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if writes.Load() != 0 || !strings.Contains(u.Model.View(), "secrets needed") {
 		t.Fatal("available metadata caused an overwrite or claimed agent readiness")
 	}
 }
@@ -240,7 +238,7 @@ func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
 			return
 		}
 		if r.Method == http.MethodGet {
-			writeSecretFormMetadata(w, "GITHUB_TOKEN")
+			fakes.WriteSecretFormMetadata(w, "GITHUB_TOKEN")
 			return
 		}
 		var input struct {
@@ -257,37 +255,37 @@ func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": secretID, "agent_type": "builder-agent", "name": "GITHUB_TOKEN", "version": 2, "status": "available"})
 	}))
 	defer api.Close()
-	u, _, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{}, password, value, api.URL)
-	defer u.model.Close()
-	u.text("/admin secrets set builder-agent GITHUB_TOKEN")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("Admin API login", func(view string) bool { return strings.Contains(view, "Connect to API") })
-	u.text(api.URL)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.text(password)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("available secret opened for rotation", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u, _ := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{}, password, value, api.URL)
+	defer u.Close()
+	u.Text("/admin secrets set builder-agent GITHUB_TOKEN")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("Admin API login", func(view string) bool { return strings.Contains(view, "Connect to API") })
+	u.Text(api.URL)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Text(password)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("available secret opened for rotation", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
 	afterRefresh := time.Now().Add(280 * time.Millisecond)
-	u.wait("manual form retained across requirement refresh", func(view string) bool {
+	u.Wait("manual form retained across requirement refresh", func(view string) bool {
 		if !strings.Contains(view, "builder-agent · GITHUB_TOKEN") {
 			t.Fatal("an unrelated requirement refresh closed the manual secret form")
 		}
 		return time.Now().After(afterRefresh)
 	})
-	u.text(value)
-	if strings.Contains(u.model.View(), value) {
+	u.Text(value)
+	if strings.Contains(u.Model.View(), value) {
 		t.Fatal("Admin secret value was not masked")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("Admin secret rotation", func(view string) bool { return strings.Contains(view, "Secret saved.") })
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("Admin secret rotation", func(view string) bool { return strings.Contains(view, "Secret saved.") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	if writes.Load() != 1 {
 		t.Fatal("Admin secret form did not rotate exactly once")
 	}
-	u.text("Normal message after Admin secret rotation")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("chat after Admin secret form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
+	u.Text("Normal message after Admin secret rotation")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("chat after Admin secret form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
 }
 
 func TestSecretFormClearsExpiredTaskWait(t *testing.T) {
@@ -298,25 +296,25 @@ func TestSecretFormClearsExpiredTaskWait(t *testing.T) {
 		if r.Method != http.MethodGet {
 			writes.Add(1)
 		}
-		if !missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
+		if !fakes.MissingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
 			http.NotFound(w, r)
 		}
 	}))
 	defer api.Close()
-	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "expired-private-token")
-	defer u.model.Close()
-	op := runtimeSecretFormOperation("GITHUB_TOKEN")
+	u, operations := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, "expired-private-token")
+	defer u.Close()
+	op := fixtures.RuntimeSecretFormOperation("GITHUB_TOKEN")
 	deadline := time.Now().Add(time.Second)
 	op.Tasks[0].DeadlineAt = &deadline
-	publish(op)
-	u.text("/watch " + op.ID)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("secret field before task timeout", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	u.text("expired-private-token")
+	operations.Publish(op)
+	u.Text("/watch " + op.ID)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("secret field before task timeout", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Text("expired-private-token")
 	// The server keeps returning this same snapshot, including its old wait.
-	u.wait("expired task wait cleared", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if writes.Load() != 0 || strings.Contains(u.model.View(), "secrets needed") {
+	u.Wait("expired task wait cleared", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if writes.Load() != 0 || strings.Contains(u.Model.View(), "secrets needed") {
 		t.Fatal("expired runtime wait prompted for or saved a value")
 	}
 }
@@ -334,7 +332,7 @@ func TestSecretFormConnectsRemoteAPIWithoutModelCredentials(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
+		if fakes.MissingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
 			return
 		}
 		var input struct{ Value string }
@@ -345,32 +343,32 @@ func TestSecretFormConnectsRemoteAPIWithoutModelCredentials(t *testing.T) {
 		}
 		writes.Add(1)
 		w.WriteHeader(http.StatusCreated)
-		writeSecretFormMetadata(w, "GITHUB_TOKEN")
+		fakes.WriteSecretFormMetadata(w, "GITHUB_TOKEN")
 	}))
 	defer api.Close()
-	u, publish, _ := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{}, password, token, api.URL)
-	defer u.model.Close()
-	op := secretFormOperation("GITHUB_TOKEN")
-	publish(op)
-	u.text("/watch " + op.ID)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("remote API login form", func(view string) bool { return strings.Contains(view, "Connect to API") })
-	u.text(api.URL)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.key(tea.KeyMsg{Type: tea.KeyEnter}) // Default username is commander.
-	u.text(password)
-	if strings.Contains(u.model.View(), password) {
+	u, operations := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{}, password, token, api.URL)
+	defer u.Close()
+	op := fixtures.SecretFormOperation("GITHUB_TOKEN")
+	operations.Publish(op)
+	u.Text("/watch " + op.ID)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("remote API login form", func(view string) bool { return strings.Contains(view, "Connect to API") })
+	u.Text(api.URL)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter}) // Default username is commander.
+	u.Text(password)
+	if strings.Contains(u.Model.View(), password) {
 		t.Fatal("remote API password was not masked")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("remote secret input", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	u.text(token)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("remote secret saved", func(view string) bool { return strings.Contains(view, "Secrets saved. Waiting for the agent.") })
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.text("Normal message after remote secret entry")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("chat after remote form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("remote secret input", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Text(token)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("remote secret saved", func(view string) bool { return strings.Contains(view, "Secrets saved. Waiting for the agent.") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Text("Normal message after remote secret entry")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("chat after remote form", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
 	if writes.Load() != 1 {
 		t.Fatal("remote secret was not saved exactly once")
 	}
@@ -382,137 +380,40 @@ func TestSecretFormFailedSaveDoesNotRetryOrRetainValue(t *testing.T) {
 	const value = "private-token-from-rejected-save"
 	var writes atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if missingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
+		if fakes.MissingSecretFormMetadata(w, r, "GITHUB_TOKEN") {
 			return
 		}
 		writes.Add(1)
 		http.Error(w, value, http.StatusServiceUnavailable)
 	}))
 	defer api.Close()
-	u, publish, reads := secretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, value)
-	defer u.model.Close()
-	op := secretFormOperation("GITHUB_TOKEN")
-	publish(op)
-	u.text("/watch " + op.ID)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	u.text(value)
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("unconfirmed save", func(view string) bool { return strings.Contains(view, "API write could not be confirmed") })
-	if strings.Contains(u.model.View(), value) || writes.Load() != 1 {
+	u, operations := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: "fixture-password"}}, value)
+	defer u.Close()
+	op := fixtures.SecretFormOperation("GITHUB_TOKEN")
+	operations.Publish(op)
+	u.Text("/watch " + op.ID)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Text(value)
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("unconfirmed save", func(view string) bool { return strings.Contains(view, "API write could not be confirmed") })
+	if strings.Contains(u.Model.View(), value) || writes.Load() != 1 {
 		t.Fatal("failed save disclosed the API response or retried automatically")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	target := reads.Load() + 2
-	u.wait("updates after failed save", func(string) bool { return reads.Load() >= target })
-	if writes.Load() != 1 || strings.Contains(u.model.View(), "Agent secrets") {
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	target := operations.ReadCount() + 2
+	u.Wait("updates after failed save", func(string) bool { return operations.ReadCount() >= target })
+	if writes.Load() != 1 || strings.Contains(u.Model.View(), "Agent secrets") {
 		t.Fatal("returning to chat retried or reopened the failed save")
 	}
-	u.text("/secrets")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("reloaded form", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
-	if strings.Contains(u.model.View(), strings.Repeat("•", len(value))) {
+	u.Text("/secrets")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("reloaded form", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	if strings.Contains(u.Model.View(), strings.Repeat("•", len(value))) {
 		t.Fatal("failed save value was retained in the reloaded form")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEsc})
-	u.text("Normal message after failed secret save")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("chat after failed save", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
-}
-
-func secretFormOperation(names ...string) bridge.Operation {
-	var requirements []actions.Requirement
-	for _, name := range names {
-		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
-	}
-	return bridge.Operation{ID: "secret-form-operation", Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}}, Preflight: &bridge.Preflight{Version: 1, Actions: []bridge.ActionReadiness{{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: requirements}}}}}}
-}
-
-func runtimeSecretFormOperation(names ...string) bridge.Operation {
-	var requirements []actions.Requirement
-	for _, name := range names {
-		requirements = append(requirements, actions.Requirement{Kind: actions.SecretRequirement, Name: name})
-	}
-	deadline := time.Now().Add(time.Minute)
-	return bridge.Operation{ID: "secret-form-operation", Status: "running", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{"running": 1}, TotalTasks: 1}, Tasks: []bridge.Task{{
-		ID: "running-task", Status: "running", ActionName: "build", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: requirements,
-	}}}
-}
-
-func writeSecretFormMetadata(w http.ResponseWriter, name string) {
-	_ = json.NewEncoder(w).Encode(map[string]any{"id": "da378c90-63eb-46da-b186-552e1e144510", "agent_type": "builder-agent", "name": name, "version": 1, "status": "available"})
-}
-
-func missingSecretFormMetadata(w http.ResponseWriter, r *http.Request, names ...string) bool {
-	for _, name := range names {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets/builder-agent/"+name {
-			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "secret_not_found"})
-			return true
-		}
-	}
-	return false
-}
-
-func secretFormUI(t *testing.T, ctx context.Context, api ui.Connection[host.BasicCredentials], private ...string) (*uiDriver, func(bridge.Operation), *atomic.Int32) {
-	t.Helper()
-	var mu sync.Mutex
-	var snapshot string
-	publish := func(operation bridge.Operation) {
-		t.Helper()
-		encoded, err := json.Marshal(operation)
-		if err != nil {
-			t.Fatal(err)
-		}
-		mu.Lock()
-		snapshot = string(encoded)
-		mu.Unlock()
-	}
-	assertPrivate := func(body []byte) {
-		for _, value := range private {
-			if bytes.Contains(body, []byte(value)) {
-				t.Error("local secret form leaked private data outside the API")
-			}
-		}
-	}
-	reads := &atomic.Int32{}
-	server := mcp.NewServer(&mcp.Implementation{Name: "secret-form-fixture", Version: "1"}, nil)
-	for _, name := range []string{"get_operation", "operation_events"} {
-		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			assertPrivate(request.Params.Arguments)
-			payload := `{"events":[],"next_cursor":""}`
-			if request.Params.Name == "get_operation" {
-				mu.Lock()
-				payload = snapshot
-				mu.Unlock()
-				reads.Add(1)
-			}
-			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: payload}}}, nil
-		})
-	}
-	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
-	t.Cleanup(endpoint.Close)
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Error("could not inspect model request")
-		}
-		assertPrivate(body)
-		content := "Operation reviewed"
-		if bytes.Contains(body, []byte("Normal message after")) {
-			content = "Normal chat remains available"
-		}
-		var request struct{ Messages []struct{ Content string } }
-		if err := json.Unmarshal(body, &request); err == nil && len(request.Messages) != 0 {
-			last := request.Messages[len(request.Messages)-1].Content
-			if strings.HasPrefix(last, "Operation update:") && strings.Contains(last, `"ready":true`) {
-				content = "Ready preflight reviewed"
-			}
-		}
-		writeModelDelta(w, map[string]any{"content": content}, "stop")
-	}))
-	t.Cleanup(provider.Close)
-	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, Keys: map[string]string{"other": "test-only"}, NoColor: true, API: api})
-	u.model.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
-	return u, publish, reads
+	u.Key(tea.KeyMsg{Type: tea.KeyEsc})
+	u.Text("Normal message after failed secret save")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("chat after failed save", func(view string) bool { return strings.Contains(view, "Normal chat remains available") })
 }

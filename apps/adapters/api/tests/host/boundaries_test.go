@@ -13,7 +13,8 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
-	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -36,80 +37,55 @@ func TestCommandFailuresMapToPublicErrorsWithoutRetries(t *testing.T) {
 		{"internal_error", errors.New("private controller credentials and database path"), 500},
 	} {
 		t.Run(tc.code, func(t *testing.T) {
-			command := &failedStart{err: tc.err}
+			command := fakes.NewFailedStart(tc.err)
 			mux := http.NewServeMux()
 			operationendpoints.Register(mux, nil, nil, nil, command)
 			request := httptest.NewRequest(http.MethodPost, "/api/v1/operations", strings.NewReader(`{"mission_name":"review-website-with-browser","input":{}}`))
 			request.Header.Set("Content-Type", "application/json")
 			recorder := httptest.NewRecorder()
+
 			mux.ServeHTTP(recorder, request)
-			assertAPIError(t, response{status: recorder.Code, header: recorder.Header(), body: recorder.Body.String()}, tc.status, tc.code)
-			if command.attempts != 1 || command.remaining <= 0 || command.remaining > 10*time.Second {
+
+			assertAPIError(t, hostfixtures.Response{Status: recorder.Code, Header: recorder.Header(), Body: recorder.Body.String()}, tc.status, tc.code)
+			calls := command.Snapshot()
+			if calls.Attempts != 1 || calls.Remaining <= 0 || calls.Remaining > 10*time.Second {
 				t.Fatalf("command was retried or lost its bounded context: %+v", command)
 			}
 		})
 	}
 }
 
-type failedStart struct {
-	commands.Operations
-	err       error
-	attempts  int
-	remaining time.Duration
-}
-
-func (s *failedStart) Start(ctx context.Context, _ commands.StartOperationCommand) (operations.Operation, error) {
-	s.attempts++
-	deadline, _ := ctx.Deadline()
-	s.remaining = time.Until(deadline)
-	return operations.Operation{}, s.err
-}
-
 func TestArtifactHeadersAndFileReadFailureBoundary(t *testing.T) {
 	const artifactID = "00000000-0000-4000-8000-000000000001"
 	const fileID = "00000000-0000-4000-8000-000000000002"
-	metadata := artifactMetadata{value: artifacts.Artifact{ID: artifactID, Files: []artifacts.ArtifactFile{{ID: fileID, Name: "../../private\";\r\nX-Injected: yes\\file.bin", MediaType: "text/plain\r\nX-Injected: yes"}}}}
+	metadata := fakes.NewArtifactMetadata(artifacts.Artifact{ID: artifactID, Files: []artifacts.ArtifactFile{{ID: fileID, Name: "../../private\";\r\nX-Injected: yes\\file.bin", MediaType: "text/plain\r\nX-Injected: yes"}}})
 	for _, fail := range []bool{false, true} {
-		files := &artifactBytes{}
+		var failure error
 		if fail {
-			files.err = errors.New("private storage content failed integrity check")
+			failure = errors.New("private storage content failed integrity check")
 		}
+		files := fakes.NewArtifactBytes(failure)
 		mux := http.NewServeMux()
 		endpoints.RegisterArtifacts(mux, metadata, files)
 		recorder := httptest.NewRecorder()
-		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/artifacts/"+artifactID+"/files/"+fileID, nil))
-		result := response{status: recorder.Code, header: recorder.Header(), body: recorder.Body.String()}
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/artifacts/"+artifactID+"/files/"+fileID, nil)
+
+		mux.ServeHTTP(recorder, request)
+
+		result := hostfixtures.Response{Status: recorder.Code, Header: recorder.Header(), Body: recorder.Body.String()}
 		if fail {
 			assertAPIError(t, result, http.StatusInternalServerError, "internal_error")
-			if result.header.Get("Content-Disposition") != "" || result.header.Get("Content-Type") != "application/json" {
-				t.Fatalf("failed read committed download headers: %v", result.header)
+			if result.Header.Get("Content-Disposition") != "" || result.Header.Get("Content-Type") != "application/json" {
+				t.Fatalf("failed read committed download headers: %v", result.Header)
 			}
 			continue
 		}
-		kind, params, err := mime.ParseMediaType(result.header.Get("Content-Disposition"))
-		if result.status != http.StatusOK || result.body != "" || result.header.Get("Content-Length") != "0" || result.header.Get("Content-Type") != "application/octet-stream" || result.header.Get("X-Injected") != "" {
+		kind, params, err := mime.ParseMediaType(result.Header.Get("Content-Disposition"))
+		if result.Status != http.StatusOK || result.Body != "" || result.Header.Get("Content-Length") != "0" || result.Header.Get("Content-Type") != "application/octet-stream" || result.Header.Get("X-Injected") != "" {
 			t.Fatalf("empty file or untrusted MIME damaged response: %+v", result)
 		}
 		if err != nil || kind != "attachment" || params["filename"] == "" || strings.ContainsAny(params["filename"], "/\\") || strings.IndexFunc(params["filename"], unicode.IsControl) >= 0 {
-			t.Fatalf("unsafe download filename: %q", result.header.Get("Content-Disposition"))
+			t.Fatalf("unsafe download filename: %q", result.Header.Get("Content-Disposition"))
 		}
 	}
-}
-
-type artifactMetadata struct {
-	artifacts.ArtifactStore
-	value artifacts.Artifact
-}
-
-func (s artifactMetadata) Get(context.Context, string) (artifacts.Artifact, error) {
-	return s.value, nil
-}
-
-type artifactBytes struct {
-	artifacts.ArtifactFileStore
-	err error
-}
-
-func (s *artifactBytes) Get(context.Context, string, artifacts.ArtifactFile) ([]byte, error) {
-	return []byte{}, s.err
 }

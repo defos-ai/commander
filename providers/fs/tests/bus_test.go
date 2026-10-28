@@ -16,11 +16,12 @@ import (
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) {
 	root := t.TempDir()
-	publisher, receiver := openTestFsBus(t, root), openTestFsBus(t, root)
+	publisher, receiver := fixtures.OpenBus(t, root), fixtures.OpenBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	first, err := publisher.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "first", Mode: comms.TransientExclusive})
@@ -31,7 +32,7 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	message := testBusMessage(t)
+	message := fixtures.BusMessage(t)
 	if err := publisher.Publish(ctx, "results", message); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 	if err := firstDelivery.Ack(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(storedBusMessages(t, root)) != 1 {
+	if len(fixtures.StoredBusMessages(t, root)) != 1 {
 		t.Fatal("message removed before every recipient acknowledged")
 	}
 	if err := secondDelivery.Ack(ctx); err != nil {
@@ -49,13 +50,13 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 	if err := secondDelivery.Ack(ctx); err != nil {
 		t.Fatalf("ack retry must be harmless: %v", err)
 	}
-	if len(storedBusMessages(t, root)) != 0 {
+	if len(fixtures.StoredBusMessages(t, root)) != 0 {
 		t.Fatal("completed delivery was not removed")
 	}
 	if err := first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	failure := testBusMessage(t)
+	failure := fixtures.BusMessage(t)
 	if err := publisher.Publish(ctx, "results", failure); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 		t.Fatal(closeErr)
 	}
 
-	records := storedBusMessages(t, root)
+	records := fixtures.StoredBusMessages(t, root)
 	if !errors.Is(err, rejected) || len(records) != 1 || records[0].Message.ID != failure.ID {
 		t.Fatalf("failed delivery was acknowledged or removed: %v, records=%+v", err, records)
 	}
@@ -74,14 +75,14 @@ func TestBusAcknowledgesOnlyCompletedDeliveriesAndRetainsFailures(t *testing.T) 
 
 func TestBusDuplicateMessageIDsSettleIndependently(t *testing.T) {
 	root := t.TempDir()
-	bus := openTestFsBus(t, root)
+	bus := fixtures.OpenBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	sub, err := bus.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "receiver", Mode: comms.TransientExclusive})
 	if err != nil {
 		t.Fatal(err)
 	}
-	message := testBusMessage(t)
+	message := fixtures.BusMessage(t)
 	for range 2 {
 		if err := bus.Publish(ctx, "results", message); err != nil {
 			t.Fatal(err)
@@ -89,7 +90,7 @@ func TestBusDuplicateMessageIDsSettleIndependently(t *testing.T) {
 	}
 	first := nextBusDelivery(t, ctx, sub, message)
 	second := nextBusDelivery(t, ctx, sub, message)
-	before := storedBusMessages(t, root)
+	before := fixtures.StoredBusMessages(t, root)
 	if len(before) != 2 || len(before[0].Pending) != 1 {
 		t.Fatalf("expected two independent pending publications: %+v", before)
 	}
@@ -97,14 +98,14 @@ func TestBusDuplicateMessageIDsSettleIndependently(t *testing.T) {
 	if err := first.Reject(ctx); err != nil {
 		t.Fatal(err)
 	}
-	records := storedBusMessages(t, root)
+	records := fixtures.StoredBusMessages(t, root)
 	if len(records) != 2 || len(records[0].Pending) != 0 || !slices.Equal(records[0].Rejected, []string{subscriber}) || !reflect.DeepEqual(records[1], before[1]) {
 		t.Fatalf("reject changed another publication or lost evidence: %+v", records)
 	}
 	if err := second.Ack(ctx); err != nil {
 		t.Fatal(err)
 	}
-	records = storedBusMessages(t, root)
+	records = fixtures.StoredBusMessages(t, root)
 	if len(records) != 1 || records[0].Sequence != before[0].Sequence || len(records[0].Pending) != 0 || !slices.Equal(records[0].Rejected, []string{subscriber}) {
 		t.Fatalf("ack of duplicate ID removed rejected publication: %+v", records)
 	}
@@ -112,7 +113,7 @@ func TestBusDuplicateMessageIDsSettleIndependently(t *testing.T) {
 
 func TestBusSubscribersSettleTheSamePublicationIndependently(t *testing.T) {
 	root := t.TempDir()
-	publisher, receiver := openTestFsBus(t, root), openTestFsBus(t, root)
+	publisher, receiver := fixtures.OpenBus(t, root), fixtures.OpenBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	first, err := publisher.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "first", Mode: comms.TransientExclusive})
@@ -123,23 +124,23 @@ func TestBusSubscribersSettleTheSamePublicationIndependently(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	message := testBusMessage(t)
+	message := fixtures.BusMessage(t)
 	if err := publisher.Publish(ctx, "results", message); err != nil {
 		t.Fatal(err)
 	}
 	firstDelivery := nextBusDelivery(t, ctx, first, message)
 	secondDelivery := nextBusDelivery(t, ctx, second, message)
-	before := storedBusMessages(t, root)
+	before := fixtures.StoredBusMessages(t, root)
 	if len(before) != 1 || len(before[0].Pending) != 2 {
 		t.Fatalf("expected two pending subscribers: %+v", before)
 	}
 	// A subscriber may still be reading the old snapshot while another settles.
-	directory, err := os.OpenRoot(filepath.Dir(before[0].path))
+	directory, err := os.OpenRoot(filepath.Dir(before[0].Path))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer directory.Close()
-	reader, err := directory.Open(filepath.Base(before[0].path))
+	reader, err := directory.Open(filepath.Base(before[0].Path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,14 +148,14 @@ func TestBusSubscribersSettleTheSamePublicationIndependently(t *testing.T) {
 	if err := firstDelivery.Reject(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var original []storedBusMessage
+	var original []fixtures.StoredBusMessage
 	if err := json.NewDecoder(reader).Decode(&original); err != nil {
 		t.Fatal(err)
 	}
 	if len(original) != 1 || !slices.Equal(original[0].Pending, before[0].Pending) || len(original[0].Rejected) != 0 {
 		t.Fatal("settlement changed the snapshot held by another reader")
 	}
-	records := storedBusMessages(t, root)
+	records := fixtures.StoredBusMessages(t, root)
 	if len(records) != 1 || len(records[0].Pending) != 1 || len(records[0].Rejected) != 1 {
 		t.Fatalf("reject did not settle exactly one subscriber: %+v", records)
 	}
@@ -172,7 +173,7 @@ func TestBusSubscribersSettleTheSamePublicationIndependently(t *testing.T) {
 	if err := second.Close(); err != nil {
 		t.Fatal(err)
 	}
-	records = storedBusMessages(t, root)
+	records = fixtures.StoredBusMessages(t, root)
 	if len(records) != 1 || len(records[0].Pending) != 0 || !slices.Equal(records[0].Rejected, []string{rejectedSubscriber}) || records[0].Message.ID != message.ID {
 		t.Fatalf("ack or close lost another subscriber's rejection evidence: %+v", records)
 	}
@@ -185,7 +186,7 @@ func TestBusDeliverySettlementRetriesAndConflicts(t *testing.T) {
 			name = "reject"
 		}
 		t.Run(name, func(t *testing.T) {
-			root, delivery, sub := pendingBusDelivery(t)
+			root, delivery, sub := fixtures.PendingBusDelivery(t)
 			settle, opposite := delivery.Ack, delivery.Reject
 			if reject {
 				settle, opposite = opposite, settle
@@ -194,7 +195,7 @@ func TestBusDeliverySettlementRetriesAndConflicts(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertBusSettlement(t, root, reject)
-			before := storedBusMessages(t, root)
+			before := fixtures.StoredBusMessages(t, root)
 			if err := settle(t.Context()); err != nil {
 				t.Fatalf("same settlement retry: %v", err)
 			}
@@ -207,7 +208,7 @@ func TestBusDeliverySettlementRetriesAndConflicts(t *testing.T) {
 			if err := settle(t.Context()); err != nil {
 				t.Fatalf("same settlement retry after subscription close: %v", err)
 			}
-			if after := storedBusMessages(t, root); !reflect.DeepEqual(before, after) {
+			if after := fixtures.StoredBusMessages(t, root); !reflect.DeepEqual(before, after) {
 				t.Fatalf("settlement retry changed evidence: before=%+v, after=%+v", before, after)
 			}
 		})
@@ -215,7 +216,7 @@ func TestBusDeliverySettlementRetriesAndConflicts(t *testing.T) {
 }
 
 func TestBusConcurrentSettlementCommitsOneOutcome(t *testing.T) {
-	root, delivery, sub := pendingBusDelivery(t)
+	root, delivery, sub := fixtures.PendingBusDelivery(t)
 	type outcome struct {
 		rejected bool
 		err      error
@@ -275,18 +276,18 @@ func TestBusCanceledDeliverySettlementCanRetry(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			reject := scenario.reject
-			root, delivery, _ := pendingBusDelivery(t)
+			root, delivery, _ := fixtures.PendingBusDelivery(t)
 			settle := delivery.Ack
 			if reject {
 				settle = delivery.Reject
 			}
-			before := storedBusMessages(t, root)
+			before := fixtures.StoredBusMessages(t, root)
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 			if err := settle(ctx); !errors.Is(err, context.Canceled) {
 				t.Fatalf("canceled settlement returned %v", err)
 			}
-			if after := storedBusMessages(t, root); !reflect.DeepEqual(before, after) {
+			if after := fixtures.StoredBusMessages(t, root); !reflect.DeepEqual(before, after) {
 				t.Fatalf("canceled settlement changed evidence: before=%+v, after=%+v", before, after)
 			}
 			if scenario.retryOpposite {
@@ -317,27 +318,27 @@ func TestBusDeliverySettlementFailureBeforeCommitCanRetry(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			reject := scenario.reject
-			root, delivery, _ := pendingBusDelivery(t)
+			root, delivery, _ := fixtures.PendingBusDelivery(t)
 			settle := delivery.Ack
 			if reject {
 				settle = delivery.Reject
 			}
-			record := storedBusMessages(t, root)[0]
-			original, err := os.ReadFile(record.path)
+			record := fixtures.StoredBusMessages(t, root)[0]
+			original, err := os.ReadFile(record.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			broken := []byte("{invalid JSON")
-			if err := os.WriteFile(record.path, broken, 0600); err != nil {
+			if err := os.WriteFile(record.Path, broken, 0600); err != nil {
 				t.Fatal(err)
 			}
 			if err := settle(t.Context()); err == nil {
 				t.Fatal("settlement unexpectedly accepted a malformed record")
 			}
-			if current, err := os.ReadFile(record.path); err != nil || !slices.Equal(current, broken) {
+			if current, err := os.ReadFile(record.Path); err != nil || !slices.Equal(current, broken) {
 				t.Fatalf("failed settlement changed the stored record: %q, %v", current, err)
 			}
-			if err := os.WriteFile(record.path, original, 0600); err != nil {
+			if err := os.WriteFile(record.Path, original, 0600); err != nil {
 				t.Fatal(err)
 			}
 			if scenario.retryOpposite {
@@ -356,7 +357,7 @@ func TestBusDeliverySettlementFailureBeforeCommitCanRetry(t *testing.T) {
 }
 
 func TestBusDeliveryMessageReturnsAnIndependentSnapshot(t *testing.T) {
-	root, delivery, _ := pendingBusDelivery(t)
+	root, delivery, _ := fixtures.PendingBusDelivery(t)
 	original := delivery.Message()
 	original.Payload = slices.Clone(original.Payload)
 	changed := delivery.Message()
@@ -373,7 +374,7 @@ func TestBusDeliveryMessageReturnsAnIndependentSnapshot(t *testing.T) {
 
 func TestBusInboxIsExclusiveAcrossInstancesAndScopedByTopic(t *testing.T) {
 	root := t.TempDir()
-	firstBus, secondBus := openTestFsBus(t, root), openTestFsBus(t, root)
+	firstBus, secondBus := fixtures.OpenBus(t, root), fixtures.OpenBus(t, root)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	inbox := comms.Inbox{Topic: "results", Name: "worker", Mode: comms.TransientExclusive}
@@ -392,7 +393,7 @@ func TestBusInboxIsExclusiveAcrossInstancesAndScopedByTopic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("same inbox name on another topic: %v", err)
 	}
-	firstMessage, otherMessage := testBusMessage(t), testBusMessage(t)
+	firstMessage, otherMessage := fixtures.BusMessage(t), fixtures.BusMessage(t)
 	if err := secondBus.Publish(ctx, inbox.Topic, firstMessage); err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +406,7 @@ func TestBusInboxIsExclusiveAcrossInstancesAndScopedByTopic(t *testing.T) {
 	if err := nextBusDelivery(t, ctx, other, otherMessage).Ack(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if records := storedBusMessages(t, root); len(records) != 0 {
+	if records := fixtures.StoredBusMessages(t, root); len(records) != 0 {
 		t.Fatalf("topic-scoped inboxes received another topic's publication: %+v", records)
 	}
 }
@@ -418,7 +419,7 @@ func TestBusReopenedInboxStartsAtTailAndRetainsOldDelivery(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
-			firstBus, secondBus := openTestFsBus(t, root), openTestFsBus(t, root)
+			firstBus, secondBus := fixtures.OpenBus(t, root), fixtures.OpenBus(t, root)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			inbox := comms.Inbox{Topic: "results", Name: "worker", Mode: comms.TransientExclusive}
@@ -426,22 +427,22 @@ func TestBusReopenedInboxStartsAtTailAndRetainsOldDelivery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			oldMessage := testBusMessage(t)
+			oldMessage := fixtures.BusMessage(t)
 			if err := firstBus.Publish(ctx, inbox.Topic, oldMessage); err != nil {
 				t.Fatal(err)
 			}
 			oldDelivery := nextBusDelivery(t, ctx, old, oldMessage)
-			before := storedBusMessages(t, root)
+			before := fixtures.StoredBusMessages(t, root)
 			if len(before) != 1 || len(before[0].Pending) != 1 {
 				t.Fatalf("expected one outstanding delivery: %+v", before)
 			}
 			if expired {
-				expireBusSubscriber(t, root, before[0].Pending[0])
+				fixtures.ExpireBusSubscriber(t, root, before[0].Pending[0])
 			} else {
 				if err := old.Close(); err != nil {
 					t.Fatal(err)
 				}
-				if err := firstBus.Publish(ctx, inbox.Topic, testBusMessage(t)); err != nil {
+				if err := firstBus.Publish(ctx, inbox.Topic, fixtures.BusMessage(t)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -463,52 +464,17 @@ func TestBusReopenedInboxStartsAtTailAndRetainsOldDelivery(t *testing.T) {
 			if duplicate, err := firstBus.Subscribe(ctx, inbox); !errors.Is(err, comms.ErrInboxInUse) || duplicate != nil {
 				t.Fatalf("stale close released successor's ownership: %v, %v", duplicate, err)
 			}
-			fresh := testBusMessage(t)
+			fresh := fixtures.BusMessage(t)
 			if err := secondBus.Publish(ctx, inbox.Topic, fresh); err != nil {
 				t.Fatal(err)
 			}
 			if err := nextBusDelivery(t, ctx, current, fresh).Ack(ctx); err != nil {
 				t.Fatal(err)
 			}
-			if after := storedBusMessages(t, root); !reflect.DeepEqual(before, after) {
+			if after := fixtures.StoredBusMessages(t, root); !reflect.DeepEqual(before, after) {
 				t.Fatalf("reopen or new settlement changed old pending evidence: before=%+v, after=%+v", before, after)
 			}
 		})
-	}
-}
-
-func expireBusSubscriber(t *testing.T, root, subscriber string) {
-	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(root, "*", "state.json"))
-	if err != nil || len(paths) != 1 {
-		t.Fatalf("expected one topic state: %v, %v", paths, err)
-	}
-	data, err := os.ReadFile(paths[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	var records []map[string]json.RawMessage
-	if err := json.Unmarshal(data, &records); err != nil || len(records) != 1 {
-		t.Fatalf("decode topic state: %s, %v", data, err)
-	}
-	var subscribers map[string]time.Time
-	if err := json.Unmarshal(records[0]["subscribers"], &subscribers); err != nil {
-		t.Fatal(err)
-	}
-	if _, exists := subscribers[subscriber]; !exists {
-		t.Fatalf("subscriber %s missing from persisted lease state", subscriber)
-	}
-	subscribers[subscriber] = time.Now().UTC().Add(-time.Minute)
-	records[0]["subscribers"], err = json.Marshal(subscribers)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err = json.Marshal(records)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(paths[0], data, 0600); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -531,7 +497,7 @@ func TestBusInvalidAndUnsupportedInboxesCreateNoPaths(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			parent := t.TempDir()
-			bus := openTestFsBus(t, filepath.Join(parent, "bus"))
+			bus := fixtures.OpenBus(t, filepath.Join(parent, "bus"))
 			if scenario.want != nil {
 				if err := scenario.inbox.Validate(); err != nil {
 					t.Fatalf("unsupported inbox must otherwise be valid: %v", err)
@@ -565,8 +531,8 @@ func TestBusInvalidPublishTopicsCreateNoPaths(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			parent := t.TempDir()
-			bus := openTestFsBus(t, filepath.Join(parent, "bus"))
-			if err := bus.Publish(t.Context(), scenario.topic, testBusMessage(t)); err == nil {
+			bus := fixtures.OpenBus(t, filepath.Join(parent, "bus"))
+			if err := bus.Publish(t.Context(), scenario.topic, fixtures.BusMessage(t)); err == nil {
 				t.Fatal("invalid publication topic was accepted")
 			}
 			entries, err := os.ReadDir(parent)
@@ -578,29 +544,6 @@ func TestBusInvalidPublishTopicsCreateNoPaths(t *testing.T) {
 			}
 		})
 	}
-}
-
-func openTestFsBus(t *testing.T, root string) *fscomms.FsBus {
-	t.Helper()
-	bus, err := fscomms.NewFsBus(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := bus.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	return bus
-}
-
-func testBusMessage(t *testing.T) messages.Message {
-	t.Helper()
-	message, err := messages.NewMessage(messages.AgentHeartbeat, "review-agent-00000001", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return message
 }
 
 func nextBusDelivery(t *testing.T, ctx context.Context, sub comms.Subscription, message messages.Message) comms.Delivery {
@@ -615,59 +558,9 @@ func nextBusDelivery(t *testing.T, ctx context.Context, sub comms.Subscription, 
 	return delivery
 }
 
-func pendingBusDelivery(t *testing.T) (string, comms.Delivery, comms.Subscription) {
-	t.Helper()
-	root := t.TempDir()
-	bus := openTestFsBus(t, root)
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	sub, err := bus.Subscribe(ctx, comms.Inbox{Topic: "results", Name: "receiver", Mode: comms.TransientExclusive})
-	if err != nil {
-		t.Fatal(err)
-	}
-	message := testBusMessage(t)
-	if err := bus.Publish(ctx, "results", message); err != nil {
-		t.Fatal(err)
-	}
-	return root, nextBusDelivery(t, ctx, sub, message), sub
-}
-
-type storedBusMessage struct {
-	Sequence uint64           `json:"sequence"`
-	Message  messages.Message `json:"message"`
-	Pending  []string         `json:"pending"`
-	Rejected []string         `json:"rejected"`
-	path     string
-}
-
-func storedBusMessages(t *testing.T, root string) []storedBusMessage {
-	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(root, "*", "[0-9]*.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var records []storedBusMessage
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var entries []storedBusMessage
-		if err := json.Unmarshal(data, &entries); err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Fatalf("expected one message record in %s: %+v", path, entries)
-		}
-		entries[0].path = path
-		records = append(records, entries[0])
-	}
-	return records
-}
-
 func assertBusSettlement(t *testing.T, root string, rejected bool) {
 	t.Helper()
-	records := storedBusMessages(t, root)
+	records := fixtures.StoredBusMessages(t, root)
 	if rejected {
 		if len(records) != 1 || len(records[0].Pending) != 0 || len(records[0].Rejected) != 1 {
 			t.Fatalf("rejection must retain evidence and remove pending recipient: %+v", records)

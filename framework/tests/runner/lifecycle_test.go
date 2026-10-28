@@ -12,16 +12,18 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
-	exec, calls := controlledExecutor()
-	r := newRunner(t, fixture(), exec)
-	first := start(t, r)
-	assign(t, r, first.ID, "inspect")
-	firstCall := receive(t, calls)
-	second := start(t, r)
-	task := assign(t, r, second.ID, "inspect")
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, fixtures.Config(), exec)
+	first := fixtures.Start(t, r)
+	fixtures.Assign(t, r, first.ID, "inspect")
+	firstCall := fixtures.Receive(t, calls)
+	second := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, second.ID, "inspect")
 	queued, err := r.Get(t.Context(), second.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -49,12 +51,12 @@ func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 		t.Fatalf("agent capacity exceeded across operations: %+v", call)
 	case <-time.After(150 * time.Millisecond):
 	}
-	firstCall.reply <- output("inspect")
-	secondCall := receive(t, calls)
+	firstCall.Reply <- fixtures.Output("inspect")
+	secondCall := fixtures.Receive(t, calls)
 	if _, err := r.Cancel(ctx, commands.CancelOperationCommand{OperationID: second.ID}); err != nil {
 		t.Fatal(err)
 	}
-	secondCall.reply <- output("inspect", actions.NextAction{ActionName: "follow-up"})
+	secondCall.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "follow-up"})
 
 	for _, result := range []<-chan error{waited, polled} {
 		if err := <-result; err != nil {
@@ -69,13 +71,13 @@ func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 
 func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
-	exec := executor{run: func(ctx context.Context, _ string, call actions.ActionCall) (actions.ActionOutput, error) {
+	exec := fakes.Executor{Run: func(ctx context.Context, _ string, call actions.ActionCall) (actions.ActionOutput, error) {
 		close(started)
 		<-ctx.Done()
 		<-release
-		return output(call.ActionName), nil
+		return fixtures.Output(call.ActionName), nil
 	}}
-	r := newRunner(t, fixture(), exec)
+	r := fixtures.NewRunner(t, fixtures.Config(), exec)
 	t.Cleanup(func() {
 		select {
 		case <-release:
@@ -83,8 +85,8 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 			close(release)
 		}
 	})
-	op := start(t, r)
-	task := assign(t, r, op.ID, "inspect")
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "inspect")
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
@@ -119,11 +121,13 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 }
 
 func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testing.T) {
-	config := fixture()
-	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {ForActions: []string{"discover"}},
-	}
-	exec, calls := controlledExecutor()
+	config := fixtures.Config()
+	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
+		m.Rules = missions.RuleSet{
+			missions.AggregateResults: {ForActions: []string{"discover"}},
+		}
+	})
+	exec, calls := fakes.ControlledExecutor()
 	r, err := runner.NewRunner(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
@@ -133,17 +137,17 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 		defer cancel()
 		_ = r.Close(ctx)
 	})
-	op := start(t, r)
-	task := assign(t, r, op.ID, "discover")
-	call := receive(t, calls)
-	savedResult := output("discover", actions.NextAction{ActionName: "inspect"})
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "discover")
+	call := fixtures.Receive(t, calls)
+	savedResult := fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
 	failure := errors.New("database unavailable")
-	store := config.OperationStore.(*operationStore)
-	store.failNextUpdate(failure)
+	store := config.OperationStore.(*fakes.OperationStore)
+	store.FailNextUpdate(failure)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	call.reply <- savedResult
+	call.Reply <- savedResult
 	_, waitErr := r.WaitTask(ctx, op.ID, task.ID)
 	_, eventErr := r.Events(ctx, op.ID, 0, false)
 	closeErr := r.Close(ctx)
@@ -157,23 +161,23 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 	if err != nil || len(stored.Tasks) != 1 || stored.Tasks[0].Status != operations.TaskRunning || stored.Tasks[0].Result != nil {
 		t.Fatalf("failed write corrupted recoverable work: %+v, %v", stored, err)
 	}
-	observed := make(chan invocation, 2)
-	exec.recover = func(_ context.Context, agent string, recovered actions.ActionCall) (actions.ActionOutput, error) {
-		observed <- invocation{agent: agent, call: recovered}
+	observed := make(chan fakes.Invocation, 2)
+	exec.Recover = func(_ context.Context, agent string, recovered actions.ActionCall) (actions.ActionOutput, error) {
+		observed <- fakes.Invocation{Agent: agent, Call: recovered}
 		return savedResult, nil
 	}
-	restarted := newRunner(t, config, exec)
-	recovered := receive(t, observed)
-	if recovered.agent != call.agent || recovered.call.Work != call.call.Work {
+	restarted := fixtures.NewRunner(t, config, exec)
+	recovered := fixtures.Receive(t, observed)
+	if recovered.Agent != call.Agent || recovered.Call.Work != call.Call.Work {
 		t.Fatalf("result reconciliation changed the saved command: %+v", recovered)
 	}
-	child := receive(t, calls)
-	if child.call.Work.TaskID == task.ID || child.call.Work.OperationID != op.ID || child.call.ActionName != "inspect" {
+	child := fixtures.Receive(t, calls)
+	if child.Call.Work.TaskID == task.ID || child.Call.Work.OperationID != op.ID || child.Call.ActionName != "inspect" {
 		t.Fatalf("recovery repeated the parent instead of starting its child: %+v", child)
 	}
-	child.reply <- output("inspect")
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
-	closeRunner(t, restarted)
+	child.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
+	fixtures.CloseRunner(t, restarted)
 	if len(settled.Tasks) != 2 {
 		t.Fatalf("recovery duplicated or lost automatic work: %+v", settled)
 	}
@@ -182,7 +186,7 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 		t.Fatalf("recovery changed the parent command or result: %+v", parent)
 	}
 	c := parent.Continuation
-	if settled.Tasks[1].ID != child.call.Work.TaskID || settled.Tasks[1].ParentTaskID != task.ID || c == nil || len(c.CreatedTaskIDs) != 1 || c.CreatedTaskIDs[0] != settled.Tasks[1].ID {
+	if settled.Tasks[1].ID != child.Call.Work.TaskID || settled.Tasks[1].ParentTaskID != task.ID || c == nil || len(c.CreatedTaskIDs) != 1 || c.CreatedTaskIDs[0] != settled.Tasks[1].ID {
 		t.Fatalf("recovery lost the automatic child relationship: %+v", settled)
 	}
 	finished := 0

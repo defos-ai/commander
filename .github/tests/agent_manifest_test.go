@@ -11,35 +11,17 @@ import (
 	"testing"
 	"time"
 
+	fixtures "github.com/defos-ai/commander/.github/tests/fixtures"
 	"go.yaml.in/yaml/v3"
 )
 
-func buildAgentManifestGenerator(t *testing.T) string {
-	t.Helper()
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	binary := filepath.Join(t.TempDir(), "agent-manifest")
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", binary, "./.github/scripts/agent-manifest.go")
-	cmd.Dir = root
-	// CI tooling runs outside go.work; the generator uses the tested framework.
-	cmd.Env = append(os.Environ(), "GOWORK="+filepath.Join(root, "go.work"))
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build manifest generator: %v: %s", err, output)
-	}
-	return binary
-}
-
 func TestCIAgentManifestGeneration(t *testing.T) {
-	generator := buildAgentManifestGenerator(t)
+	generator := fixtures.BuildAgentManifestGenerator(t)
 	digest := "sha256:" + strings.Repeat("a", 64)
 	for _, name := range []string{"builder", "spawner"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			for _, asset := range agentNativeBinaryNames(name) {
+			for _, asset := range fixtures.AgentNativeBinaryNames(name) {
 				if err := os.WriteFile(filepath.Join(dir, asset), []byte(asset), 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -96,7 +78,7 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 			if len(definition.Native) != 6 {
 				t.Fatalf("expected six native platforms, got %d", len(definition.Native))
 			}
-			for _, asset := range agentNativeBinaryNames(name) {
+			for _, asset := range fixtures.AgentNativeBinaryNames(name) {
 				platform := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(asset, "commander-"+name+"-agent_"), ".exe"), "_", "/")
 				got := definition.Native[platform]
 				if got.Asset != asset || got.SHA256 != fmt.Sprintf("%x", sha256.Sum256([]byte(asset))) {
@@ -110,7 +92,7 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			agent, version, imageDigest := "spawner", "v0.2.0", digest
-			for _, asset := range agentNativeBinaryNames("spawner") {
+			for _, asset := range fixtures.AgentNativeBinaryNames("spawner") {
 				if err := os.WriteFile(filepath.Join(dir, asset), []byte(asset), 0600); err != nil {
 					t.Fatal(err)
 				}

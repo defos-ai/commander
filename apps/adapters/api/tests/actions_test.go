@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 )
 
 func TestActionCatalogMatchesReadyAgents(t *testing.T) {
-	a := connect(t)
-	catalog := read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
-	agents := read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
-	if !slices.Equal(actionNames(catalog.Items), expectedCatalogActions(agents.Items)) {
+	a := fixtures.Connect(t)
+	catalog := fixtures.Read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
+	agents := fixtures.Read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
+	if !slices.Equal(fixtures.ActionNames(catalog.Items), fixtures.ExpectedCatalogActions(agents.Items)) {
 		t.Fatalf("catalog differs from the registered agents' capabilities: %+v", catalog)
 	}
 	for i, action := range catalog.Items {
@@ -25,10 +26,10 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 			t.Fatalf("action lacks definition: %+v", action)
 		}
 		path := "/api/v1/actions/" + action.Name
-		if detail := read[models.ActionResponse](a, path); !reflect.DeepEqual(detail, action) {
+		if detail := fixtures.Read[models.ActionResponse](a, path); !reflect.DeepEqual(detail, action) {
 			t.Fatalf("action detail differs from catalog: %+v", detail)
 		}
-		assertSchema(t, a, "Action", a.request(http.MethodGet, path, nil))
+		assertSchema(t, a, "Action", a.Request(http.MethodGet, path, nil))
 	}
 	for _, agent := range agents.Items {
 		var names []string
@@ -47,9 +48,9 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 			}
 		}
 		slices.Sort(names)
-		if !slices.Equal(names, expectedAgentActions(agent.Type)) {
+		if !slices.Equal(names, fixtures.ExpectedAgentActions(agent.Type)) {
 			t.Fatalf("agent advertises the wrong capabilities: %+v", agent)
 		}
 	}
-	assertError(t, a.request(http.MethodGet, "/api/v1/actions/missing", nil), http.StatusNotFound, "action_not_found")
+	fixtures.AssertError(t, a.Request(http.MethodGet, "/api/v1/actions/missing", nil), http.StatusNotFound, "action_not_found")
 }

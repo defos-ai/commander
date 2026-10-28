@@ -7,16 +7,18 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
-	config := fixture()
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	task := assign(t, r, op.ID, "inspect")
-	receive(t, calls).reply <- output("inspect")
-	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	config := fixtures.Config()
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "inspect")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	question, err := r.Ask(t.Context(), commands.AskQuestionCommand{OperationID: op.ID, TaskID: task.ID,
 		Version: settled.Tasks[0].Continuation.Version, Text: "How should we continue?"})
 	if err != nil {
@@ -30,15 +32,15 @@ func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
 		t.Fatalf("question did not suspend decision: %+v", waiting)
 	}
 
-	closeRunner(t, r)
-	if _, err := config.OperationStore.(*operationStore).Update(t.Context(), waiting.ID, func(op *operations.Operation) error {
+	fixtures.CloseRunner(t, r)
+	if _, err := config.OperationStore.(*fakes.OperationStore).Update(t.Context(), waiting.ID, func(op *operations.Operation) error {
 		op.Questions[0].ExpiresAt = time.Now().Add(-time.Second)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	r = newRunner(t, config, exec)
+	r = fixtures.NewRunner(t, config, exec)
 	expired, err := r.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)

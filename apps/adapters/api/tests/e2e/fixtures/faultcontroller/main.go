@@ -2,20 +2,17 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	faultcontrollerfakes "github.com/defos-ai/commander/apps/adapters/api/tests/fakes/faultcontroller"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/controller/consumers/adapter"
 	"github.com/defos-ai/commander/framework/controller/runner"
-	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/controllers"
-	sessionmodel "github.com/defos-ai/commander/framework/domain/sessions"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	"github.com/defos-ai/commander/providers/fs/agents"
 	"github.com/defos-ai/commander/providers/fs/artifacts"
@@ -27,40 +24,6 @@ import (
 	"github.com/defos-ai/commander/providers/fs/reports"
 	"github.com/defos-ai/commander/providers/fs/sessions"
 )
-
-type catalog struct{ actions.ActionStore }
-
-func (c catalog) List(ctx context.Context) ([]actions.Action, error) {
-	if err := probe(ctx, "/catalog"); err != nil {
-		return nil, err
-	}
-	return c.ActionStore.List(ctx)
-}
-
-type sessionStore struct{ sessionmodel.Store }
-
-func (s sessionStore) Apply(ctx context.Context, change sessionmodel.Change) (sessionmodel.Record, error) {
-	if err := probe(ctx, "/sessions"); err != nil {
-		return sessionmodel.Record{}, err
-	}
-	return s.Store.Apply(ctx, change)
-}
-
-func probe(ctx context.Context, path string) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, os.Getenv("FIXTURE_PEER")+path, nil)
-	if err != nil {
-		return err
-	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return err
-	}
-	response.Body.Close()
-	if response.StatusCode != 204 {
-		return errors.New("fixture storage temporarily unavailable")
-	}
-	return nil
-}
 
 func must[T any](value T, err error) T {
 	if err != nil {
@@ -78,9 +41,9 @@ func run() error {
 	operationStore := must(operations.NewOperationFsStore(root))
 	coordination := must(controller.NewController(context.Background(), bus, controller.ControllerConfig{
 		ID: "default-controller-00000001", HeartbeatTimeout: 6 * time.Second,
-		AgentStore: must(agents.NewAgentFsStore(root)), ActionStore: catalog{must(fsactions.NewActionFsStore(root))},
+		AgentStore: must(agents.NewAgentFsStore(root)), ActionStore: faultcontrollerfakes.Catalog{ActionStore: must(fsactions.NewActionFsStore(root)), Peer: os.Getenv("FIXTURE_PEER")},
 		ArtifactStore: must(artifacts.NewArtifactFsStore(root)), ExecutionStore: must(executions.NewExecutionFsStore(root)),
-		SessionStore: sessionStore{must(sessions.NewSessionFsStore(root))}, OperationStore: operationStore,
+		SessionStore: faultcontrollerfakes.SessionStore{Store: must(sessions.NewSessionFsStore(root)), Peer: os.Getenv("FIXTURE_PEER")}, OperationStore: operationStore,
 	}))
 	defer func() {
 		shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)

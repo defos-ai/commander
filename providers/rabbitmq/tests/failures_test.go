@@ -11,40 +11,41 @@ import (
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	rabbitcomms "github.com/defos-ai/commander/providers/rabbitmq/comms"
+	"github.com/defos-ai/commander/providers/rabbitmq/tests/fixtures"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func TestRabbitMQMalformedDeliveriesAreQuarantinedWithoutBlockingTheInbox(t *testing.T) {
-	f := newFixture(t)
-	bus := f.bus(1)
-	inbox := f.inbox(comms.DurableShared)
-	sub := f.subscribe(bus, inbox)
-	if err := f.client.Confirm(false); err != nil {
+	f := fixtures.NewBroker(t)
+	bus := f.Bus(1)
+	inbox := f.Inbox(comms.DurableShared)
+	sub := f.Subscribe(bus, inbox)
+	if err := f.Channel().Confirm(false); err != nil {
 		t.Fatal(err)
 	}
 	malformed := [][]byte{[]byte("{broken JSON"), []byte(`{"id":"not-a-uuid","payload":{}}`)}
 	for _, body := range malformed {
-		confirmation, err := f.client.PublishWithDeferredConfirmWithContext(f.ctx, "", rabbitcomms.QueueName(inbox), true, false, amqp.Publishing{
+		confirmation, err := f.Channel().PublishWithDeferredConfirmWithContext(f.Context(), "", rabbitcomms.QueueName(inbox), true, false, amqp.Publishing{
 			ContentType: "application/json", DeliveryMode: amqp.Persistent, Body: body,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if accepted, err := confirmation.WaitContext(f.ctx); err != nil || !accepted {
+		if accepted, err := confirmation.WaitContext(f.Context()); err != nil || !accepted {
 			t.Fatalf("inject malformed delivery: accepted=%v, error=%v", accepted, err)
 		}
 	}
-	valid := message(t)
-	f.publish(bus, inbox.Topic, valid)
+	valid := fixtures.Message(t)
+	f.Publish(bus, inbox.Topic, valid)
 
 	for range malformed {
-		if delivery, err := sub.Next(f.ctx); delivery != nil || !errors.Is(err, comms.ErrInvalidMessage) {
+		if delivery, err := sub.Next(f.Context()); delivery != nil || !errors.Is(err, comms.ErrInvalidMessage) {
 			t.Fatalf("malformed input returned %v, %v; want ErrInvalidMessage", delivery, err)
 		}
 	}
-	ack(t, f.ctx, f.next(sub, valid))
+	ack(t, f.Context(), nextDelivery(t, f.Context(), sub, valid))
 
-	failures := f.failures()
+	failures := f.Failures()
 	if len(failures) != len(malformed) {
 		t.Fatalf("quarantined %d deliveries, want %d", len(failures), len(malformed))
 	}
@@ -54,25 +55,25 @@ func TestRabbitMQMalformedDeliveriesAreQuarantinedWithoutBlockingTheInbox(t *tes
 		}
 	}
 	closeSubscription(t, sub)
-	f.empty(f.subscribe(bus, inbox))
+	assertNoDelivery(t, f.Context(), f.Subscribe(bus, inbox))
 }
 
 func TestRabbitMQPublishReportsUnroutableAndCanceledOperations(t *testing.T) {
-	f := newFixture(t)
-	bus := f.bus(0)
-	inbox := f.inbox(comms.TransientExclusive)
-	publication := message(t)
+	f := fixtures.NewBroker(t)
+	bus := f.Bus(0)
+	inbox := f.Inbox(comms.TransientExclusive)
+	publication := fixtures.Message(t)
 
-	if err := bus.Publish(f.ctx, inbox.Topic, publication); !errors.Is(err, rabbitcomms.ErrUnroutable) {
+	if err := bus.Publish(f.Context(), inbox.Topic, publication); !errors.Is(err, rabbitcomms.ErrUnroutable) {
 		t.Fatalf("publish without a declared inbox: %v", err)
 	}
-	sub := f.subscribe(bus, inbox)
-	canceled, cancel := context.WithCancel(f.ctx)
+	sub := f.Subscribe(bus, inbox)
+	canceled, cancel := context.WithCancel(f.Context())
 	cancel()
 	if err := bus.Publish(canceled, inbox.Topic, publication); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled publication: %v", err)
 	}
-	if got, err := bus.Subscribe(canceled, f.inbox(comms.DurableShared)); got != nil || !errors.Is(err, context.Canceled) {
+	if got, err := bus.Subscribe(canceled, f.Inbox(comms.DurableShared)); got != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled subscription: %v, %v", got, err)
 	}
 	if got, err := sub.Next(canceled); got != nil || !errors.Is(err, context.Canceled) {
@@ -80,33 +81,33 @@ func TestRabbitMQPublishReportsUnroutableAndCanceledOperations(t *testing.T) {
 	}
 	invalid := publication
 	invalid.Type = messages.MessageType(strings.Repeat("x", 256))
-	if err := bus.Publish(f.ctx, inbox.Topic, invalid); err == nil {
+	if err := bus.Publish(f.Context(), inbox.Topic, invalid); err == nil {
 		t.Fatal("publication with an oversized AMQP type was accepted")
 	}
-	f.empty(sub)
+	assertNoDelivery(t, f.Context(), sub)
 
 	// A returned, invalid, or canceled publication must not poison the next confirmation.
-	f.publish(bus, inbox.Topic, publication)
-	ack(t, f.ctx, f.next(sub, publication))
+	f.Publish(bus, inbox.Topic, publication)
+	ack(t, f.Context(), nextDelivery(t, f.Context(), sub, publication))
 }
 
 func TestRabbitMQSubscriptionContextOnlyAppliesToCreationAndCloseEndsReceives(t *testing.T) {
-	f := newFixture(t)
-	bus := f.bus(1)
-	inbox := f.inbox(comms.TransientExclusive)
-	creation, cancel := context.WithCancel(f.ctx)
+	f := fixtures.NewBroker(t)
+	bus := f.Bus(1)
+	inbox := f.Inbox(comms.TransientExclusive)
+	creation, cancel := context.WithCancel(f.Context())
 	sub, err := bus.Subscribe(creation, inbox)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.inboxes[inbox] = struct{}{}
+	f.TrackInbox(inbox)
 	cancel()
-	publication := message(t)
-	f.publish(bus, inbox.Topic, publication)
-	ack(t, f.ctx, f.next(sub, publication))
+	publication := fixtures.Message(t)
+	f.Publish(bus, inbox.Topic, publication)
+	ack(t, f.Context(), nextDelivery(t, f.Context(), sub, publication))
 	waiting := make(chan error, 1)
 	go func() {
-		_, err := sub.Next(f.ctx)
+		_, err := sub.Next(f.Context())
 		waiting <- err
 	}()
 
@@ -117,36 +118,36 @@ func TestRabbitMQSubscriptionContextOnlyAppliesToCreationAndCloseEndsReceives(t 
 		if !errors.Is(err, comms.ErrClosed) {
 			t.Fatalf("receive after subscription close: %v", err)
 		}
-	case <-f.ctx.Done():
+	case <-f.Context().Done():
 		t.Fatal("subscription close did not unblock Next")
 	}
 	closeSubscription(t, sub)
 }
 
 func TestRabbitMQBusCloseInvalidatesOpenResources(t *testing.T) {
-	f := newFixture(t)
-	bus := f.bus(1)
-	inbox := f.inbox(comms.DurableShared)
-	sub := f.subscribe(bus, inbox)
-	publication := message(t)
-	f.publish(bus, inbox.Topic, publication)
-	delivery := f.next(sub, publication)
+	f := fixtures.NewBroker(t)
+	bus := f.Bus(1)
+	inbox := f.Inbox(comms.DurableShared)
+	sub := f.Subscribe(bus, inbox)
+	publication := fixtures.Message(t)
+	f.Publish(bus, inbox.Topic, publication)
+	delivery := nextDelivery(t, f.Context(), sub, publication)
 
 	if err := bus.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bus.Publish(f.ctx, inbox.Topic, publication); !errors.Is(err, comms.ErrClosed) {
+	if err := bus.Publish(f.Context(), inbox.Topic, publication); !errors.Is(err, comms.ErrClosed) {
 		t.Fatalf("publish after close: %v", err)
 	}
-	if got, err := bus.Subscribe(f.ctx, inbox); got != nil || !errors.Is(err, comms.ErrClosed) {
+	if got, err := bus.Subscribe(f.Context(), inbox); got != nil || !errors.Is(err, comms.ErrClosed) {
 		t.Fatalf("subscribe after close: %v, %v", got, err)
 	}
-	if got, err := sub.Next(f.ctx); got != nil || !errors.Is(err, comms.ErrClosed) {
+	if got, err := sub.Next(f.Context()); got != nil || !errors.Is(err, comms.ErrClosed) {
 		t.Fatalf("receive after close: %v, %v", got, err)
 	}
 	for _, settle := range []func(context.Context) error{delivery.Ack, delivery.Reject} {
-		if err := settle(f.ctx); !errors.Is(err, comms.ErrClosed) {
+		if err := settle(f.Context()); !errors.Is(err, comms.ErrClosed) {
 			t.Fatalf("unsettled delivery after close: %v", err)
 		}
 	}
@@ -159,14 +160,14 @@ func TestRabbitMQBusCloseInvalidatesOpenResources(t *testing.T) {
 func TestRabbitMQFailedQuarantineCanRetryWithoutLosingUnsettledWork(t *testing.T) {
 	for _, scenario := range []string{"malformed_receive", "rejected_delivery"} {
 		t.Run(scenario, func(t *testing.T) {
-			f := newFixture(t)
-			bus := f.bus(2)
-			inbox := f.inbox(comms.DurableShared)
-			sub := f.subscribe(bus, inbox)
-			previous := message(t)
-			f.publish(bus, inbox.Topic, previous)
-			outstanding := f.next(sub, previous)
-			candidate := message(t)
+			f := fixtures.NewBroker(t)
+			bus := f.Bus(2)
+			inbox := f.Inbox(comms.DurableShared)
+			sub := f.Subscribe(bus, inbox)
+			previous := fixtures.Message(t)
+			f.Publish(bus, inbox.Topic, previous)
+			outstanding := nextDelivery(t, f.Context(), sub, previous)
+			candidate := fixtures.Message(t)
 			body, err := json.Marshal(candidate)
 			if err != nil {
 				t.Fatal(err)
@@ -174,26 +175,26 @@ func TestRabbitMQFailedQuarantineCanRetryWithoutLosingUnsettledWork(t *testing.T
 			if scenario == "malformed_receive" {
 				body = []byte("{unparseable input to retain through a failed transfer")
 			}
-			if err := f.client.Confirm(false); err != nil {
+			if err := f.Channel().Confirm(false); err != nil {
 				t.Fatal(err)
 			}
-			confirmation, err := f.client.PublishWithDeferredConfirmWithContext(f.ctx, "", rabbitcomms.QueueName(inbox), true, false, amqp.Publishing{
+			confirmation, err := f.Channel().PublishWithDeferredConfirmWithContext(f.Context(), "", rabbitcomms.QueueName(inbox), true, false, amqp.Publishing{
 				ContentType: "application/json", DeliveryMode: amqp.Persistent, Body: body, MessageId: candidate.ID,
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if accepted, err := confirmation.WaitContext(f.ctx); err != nil || !accepted {
+			if accepted, err := confirmation.WaitContext(f.Context()); err != nil || !accepted {
 				t.Fatalf("inject delivery to quarantine: accepted=%v, error=%v", accepted, err)
 			}
-			following := message(t)
-			f.publish(bus, inbox.Topic, following)
+			following := fixtures.Message(t)
+			f.Publish(bus, inbox.Topic, following)
 			var rejected comms.Delivery
 			if scenario == "rejected_delivery" {
-				rejected = f.next(sub, candidate)
+				rejected = nextDelivery(t, f.Context(), sub, candidate)
 			}
 			restore := func() error {
-				return f.client.QueueBind(rabbitcomms.FailedQueue, "", rabbitcomms.FailedExchange, false, nil)
+				return f.Channel().QueueBind(rabbitcomms.FailedQueue, "", rabbitcomms.FailedExchange, false, nil)
 			}
 			// This broker integration group is sequential; restore its one changed
 			// shared binding even if an assertion fails before the explicit restore.
@@ -202,39 +203,39 @@ func TestRabbitMQFailedQuarantineCanRetryWithoutLosingUnsettledWork(t *testing.T
 					t.Errorf("restore failure queue binding: %v", err)
 				}
 			})
-			if err := f.client.QueueUnbind(rabbitcomms.FailedQueue, "", rabbitcomms.FailedExchange, nil); err != nil {
+			if err := f.Channel().QueueUnbind(rabbitcomms.FailedQueue, "", rabbitcomms.FailedExchange, nil); err != nil {
 				t.Fatal(err)
 			}
 
 			if rejected == nil {
-				if delivery, err := sub.Next(f.ctx); delivery != nil || !errors.Is(err, rabbitcomms.ErrUnroutable) {
+				if delivery, err := sub.Next(f.Context()); delivery != nil || !errors.Is(err, rabbitcomms.ErrUnroutable) {
 					t.Fatalf("failed quarantine transfer: got %v, %v; want ErrUnroutable", delivery, err)
 				}
-			} else if err := rejected.Reject(f.ctx); !errors.Is(err, rabbitcomms.ErrUnroutable) {
+			} else if err := rejected.Reject(f.Context()); !errors.Is(err, rabbitcomms.ErrUnroutable) {
 				t.Fatalf("failed rejection transfer: got %v, want ErrUnroutable", err)
 			}
-			ack(t, f.ctx, outstanding)
+			ack(t, f.Context(), outstanding)
 			if err := restore(); err != nil {
 				t.Fatal(err)
 			}
 
 			if rejected == nil {
-				if delivery, err := sub.Next(f.ctx); delivery != nil || !errors.Is(err, comms.ErrInvalidMessage) {
+				if delivery, err := sub.Next(f.Context()); delivery != nil || !errors.Is(err, comms.ErrInvalidMessage) {
 					t.Fatalf("retry must preserve the malformed delivery: got %v, %v", delivery, err)
 				}
 			} else {
 				for range 2 {
-					if err := rejected.Reject(f.ctx); err != nil {
+					if err := rejected.Reject(f.Context()); err != nil {
 						t.Fatalf("retry rejected delivery: %v", err)
 					}
 				}
 			}
-			ack(t, f.ctx, f.next(sub, following))
-			failures := f.failures()
+			ack(t, f.Context(), nextDelivery(t, f.Context(), sub, following))
+			failures := f.Failures()
 			if len(failures) != 1 || !bytes.Equal(failures[0].Body, body) {
 				t.Fatalf("retry must quarantine original bytes exactly once: %+v", failures)
 			}
-			f.empty(sub)
+			assertNoDelivery(t, f.Context(), sub)
 		})
 	}
 }

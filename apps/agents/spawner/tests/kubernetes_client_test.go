@@ -11,52 +11,13 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 )
-
-const kubePodJSON = `{"apiVersion":"v1","kind":"Pod","metadata":{"name":"fixture-agent-a1b2c3d4","namespace":"agents","uid":"opaque:pod/uid","resourceVersion":"opaque-rv:7/+"},"spec":{"restartPolicy":"Never","schedulingGates":[{"name":"admission.example/first"},{"name":"ai.defos.commander/launch"},{"name":"admission.example/last"}],"containers":[{"name":"agent","image":"example@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"admittedField":{"retained":true}},"status":{"phase":"Pending","admittedStatus":{"retained":true}}}`
-
-func kubePod(t *testing.T) kubernetes.Pod {
-	t.Helper()
-	var pod kubernetes.Pod
-	if err := json.Unmarshal([]byte(kubePodJSON), &pod); err != nil {
-		t.Fatal(err)
-	}
-	return pod
-}
-
-func kubeCreatePod(t *testing.T) kubernetes.Pod {
-	t.Helper()
-	pod := kubePod(t)
-	pod.Metadata.UID, pod.Metadata.ResourceVersion = "", ""
-	pod.Status = nil
-	return pod
-}
-
-func kubeClient(t *testing.T, handler transportFunc) *kubernetes.Client {
-	t.Helper()
-	client, err := kubernetes.NewClient("agents", "https://kubernetes.invalid:6443", &http.Client{Transport: handler})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := client.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	return client
-}
-
-func kubeResponse(request *http.Request, status int, body string) *http.Response {
-	result := response(request, status, body)
-	result.Header.Set("Content-Type", "application/json")
-	return result
-}
 
 func checkKubeMutation(t *testing.T, request *http.Request) {
 	t.Helper()
@@ -70,7 +31,7 @@ func checkKubeMutation(t *testing.T, request *http.Request) {
 }
 
 func TestKubernetesClientRejectsInvalidConfiguration(t *testing.T) {
-	transport := transportFunc(func(*http.Request) (*http.Response, error) {
+	transport := fakes.Transport(func(*http.Request) (*http.Response, error) {
 		t.Fatal("invalid configuration reached the API")
 		return nil, errors.New("unexpected request")
 	})
@@ -107,10 +68,10 @@ func TestKubernetesClientRejectsInvalidConfiguration(t *testing.T) {
 }
 
 func TestKubernetesClientCreatesAndReadsAdmittedPod(t *testing.T) {
-	want := kubePod(t)
-	input := kubeCreatePod(t)
+	want := fixtures.Pod(t)
+	input := fixtures.CreatePod(t)
 	calls := 0
-	client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
+	client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
 		calls++
 		if request.URL.Scheme != "https" || request.URL.Host != "kubernetes.invalid:6443" || request.URL.RawQuery != "" {
 			t.Fatalf("unexpected API destination: %s", request.URL)
@@ -128,12 +89,12 @@ func TestKubernetesClientCreatesAndReadsAdmittedPod(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&actual); err != nil || !reflect.DeepEqual(actual, input) {
 				t.Fatalf("create changed the submitted Pod: %+v, %v", actual, err)
 			}
-			return kubeResponse(request, http.StatusCreated, kubePodJSON), nil
+			return fixtures.KubernetesResponse(request, http.StatusCreated, fixtures.PodJSON), nil
 		case 2:
 			if request.Method != http.MethodGet || request.URL.Path != "/api/v1/namespaces/agents/pods/"+want.Metadata.Name {
 				t.Fatalf("unexpected get request: %s %s", request.Method, request.URL)
 			}
-			return kubeResponse(request, http.StatusOK, kubePodJSON), nil
+			return fixtures.KubernetesResponse(request, http.StatusOK, fixtures.PodJSON), nil
 		default:
 			t.Fatal("create/get made an extra API request")
 			return nil, errors.New("unexpected request")
@@ -150,7 +111,7 @@ func TestKubernetesClientCreatesAndReadsAdmittedPod(t *testing.T) {
 }
 
 func TestKubernetesClientRejectsInvalidOperationsBeforeRequest(t *testing.T) {
-	client := kubeClient(t, func(*http.Request) (*http.Response, error) {
+	client := fixtures.KubernetesClient(t, func(*http.Request) (*http.Response, error) {
 		t.Fatal("invalid Pod operation reached the API")
 		return nil, errors.New("unexpected request")
 	})
@@ -173,7 +134,7 @@ func TestKubernetesClientRejectsInvalidOperationsBeforeRequest(t *testing.T) {
 		}},
 	} {
 		t.Run("create/"+test.name, func(t *testing.T) {
-			pod := kubeCreatePod(t)
+			pod := fixtures.CreatePod(t)
 			test.edit(&pod)
 			if _, err := client.Create(t.Context(), pod); err == nil {
 				t.Fatal("invalid create was accepted")
@@ -199,7 +160,7 @@ func TestKubernetesClientRejectsInvalidOperationsBeforeRequest(t *testing.T) {
 		{"missing gate", func(p *kubernetes.Pod) { p.Spec = json.RawMessage(`{"restartPolicy":"Never"}`) }},
 	} {
 		t.Run("release/"+test.name, func(t *testing.T) {
-			pod := kubePod(t)
+			pod := fixtures.Pod(t)
 			test.edit(&pod)
 			if _, err := client.ReleaseGate(t.Context(), pod); err == nil {
 				t.Fatal("gate release accepted incomplete observed identity")
@@ -209,10 +170,10 @@ func TestKubernetesClientRejectsInvalidOperationsBeforeRequest(t *testing.T) {
 }
 
 func TestKubernetesClientConditionallyRemovesOnlyItsGate(t *testing.T) {
-	observed := kubePod(t)
-	released := strings.Replace(kubePodJSON, `{"name":"ai.defos.commander/launch"},`, "", 1)
+	observed := fixtures.Pod(t)
+	released := strings.Replace(fixtures.PodJSON, `{"name":"ai.defos.commander/launch"},`, "", 1)
 	calls := 0
-	client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
+	client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
 		calls++
 		if request.Method != http.MethodPatch || request.URL.Path != "/api/v1/namespaces/agents/pods/"+observed.Metadata.Name || request.URL.RawQuery != "" {
 			t.Fatalf("unexpected gate request: %s %s", request.Method, request.URL)
@@ -234,7 +195,7 @@ func TestKubernetesClientConditionallyRemovesOnlyItsGate(t *testing.T) {
 		if !reflect.DeepEqual(patch, want) {
 			t.Fatalf("gate patch could release a changed Pod or another controller's gate: %+v", patch)
 		}
-		return kubeResponse(request, http.StatusOK, released), nil
+		return fixtures.KubernetesResponse(request, http.StatusOK, released), nil
 	})
 	actual, err := client.ReleaseGate(t.Context(), observed)
 	if err != nil || calls != 1 || strings.Contains(string(actual.Spec), kubernetes.SchedulingGate) ||
@@ -249,14 +210,14 @@ func TestKubernetesClientDoesNotReplayMutationsOrDiscloseFailures(t *testing.T) 
 			t.Run(method+"/"+failure, func(t *testing.T) {
 				calls, redirects := 0, 0
 				httpClient := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { redirects++; return nil }}
-				httpClient.Transport = transportFunc(func(request *http.Request) (*http.Response, error) {
+				httpClient.Transport = fakes.Transport(func(request *http.Request) (*http.Response, error) {
 					calls++
 					checkKubeMutation(t, request)
 					if failure == "transport" {
 						return nil, errors.New("lost response with private-api-sentinel")
 					}
 					status := map[string]int{"rate limit": 429, "server error": 503, "redirect": 307}[failure]
-					result := kubeResponse(request, status, `{"message":"private-api-sentinel"}`)
+					result := fixtures.KubernetesResponse(request, status, `{"message":"private-api-sentinel"}`)
 					result.Header.Set("Retry-After", "1")
 					result.Header.Set("Location", "https://another.invalid?token=private-api-sentinel")
 					return result, nil
@@ -267,9 +228,9 @@ func TestKubernetesClientDoesNotReplayMutationsOrDiscloseFailures(t *testing.T) 
 				}
 				defer client.Close()
 				if method == "create" {
-					_, err = client.Create(t.Context(), kubeCreatePod(t))
+					_, err = client.Create(t.Context(), fixtures.CreatePod(t))
 				} else {
-					_, err = client.ReleaseGate(t.Context(), kubePod(t))
+					_, err = client.ReleaseGate(t.Context(), fixtures.Pod(t))
 				}
 				if err == nil || strings.Contains(err.Error(), "private-api-sentinel") || calls != 1 || redirects != 0 {
 					t.Fatalf("failure leaked, retried or redirected: calls=%d redirects=%d error=%v", calls, redirects, err)
@@ -296,18 +257,18 @@ func TestKubernetesClientChecksStatusIdentityAndResponseBounds(t *testing.T) {
 		{"failed condition", 422, `{"message":"private-api-sentinel"}`, kubernetes.ErrConflict},
 		{"expired", 410, `{"message":"private-api-sentinel"}`, kubernetes.ErrExpired},
 		{"unavailable", 503, `{"message":"private-api-sentinel"}`, kubernetes.ErrUnavailable},
-		{"wrong namespace", 200, strings.Replace(kubePodJSON, `"namespace":"agents"`, `"namespace":"other"`, 1), kubernetes.ErrInvalidResponse},
-		{"wrong name", 200, strings.Replace(kubePodJSON, `fixture-agent-a1b2c3d4`, `other-agent-a1b2c3d4`, 1), kubernetes.ErrInvalidResponse},
-		{"missing UID", 200, strings.Replace(kubePodJSON, `"opaque:pod/uid"`, `""`, 1), kubernetes.ErrInvalidResponse},
-		{"missing version", 200, strings.Replace(kubePodJSON, `"opaque-rv:7/+"`, `""`, 1), kubernetes.ErrInvalidResponse},
+		{"wrong namespace", 200, strings.Replace(fixtures.PodJSON, `"namespace":"agents"`, `"namespace":"other"`, 1), kubernetes.ErrInvalidResponse},
+		{"wrong name", 200, strings.Replace(fixtures.PodJSON, `fixture-agent-a1b2c3d4`, `other-agent-a1b2c3d4`, 1), kubernetes.ErrInvalidResponse},
+		{"missing UID", 200, strings.Replace(fixtures.PodJSON, `"opaque:pod/uid"`, `""`, 1), kubernetes.ErrInvalidResponse},
+		{"missing version", 200, strings.Replace(fixtures.PodJSON, `"opaque-rv:7/+"`, `""`, 1), kubernetes.ErrInvalidResponse},
 		{"malformed", 200, `{"private-api-sentinel":`, kubernetes.ErrInvalidResponse},
-		{"trailing JSON", 200, kubePodJSON + `{}`, kubernetes.ErrInvalidResponse},
-		{"oversized", 200, strings.Repeat(" ", (1<<20)+1) + kubePodJSON, kubernetes.ErrInvalidResponse},
+		{"trailing JSON", 200, fixtures.PodJSON + `{}`, kubernetes.ErrInvalidResponse},
+		{"oversized", 200, strings.Repeat(" ", (1<<20)+1) + fixtures.PodJSON, kubernetes.ErrInvalidResponse},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			body := &kubeTrackedBody{Reader: strings.NewReader(test.body)}
-			client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
-				result := kubeResponse(request, test.status, "")
+			body := fakes.NewTrackedBody(strings.NewReader(test.body))
+			client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
+				result := fixtures.KubernetesResponse(request, test.status, "")
 				result.Body = body
 				return result, nil
 			})
@@ -315,7 +276,7 @@ func TestKubernetesClientChecksStatusIdentityAndResponseBounds(t *testing.T) {
 			if !errors.Is(err, test.want) || strings.Contains(err.Error(), "private-api-sentinel") {
 				t.Fatalf("incorrect or unsafe error: %v; want %v", err, test.want)
 			}
-			if !body.closed.Load() || body.read.Load() > (1<<20)+1 {
+			if !body.IsClosed() || body.ReadCount() > (1<<20)+1 {
 				t.Fatal("response body was left open or read beyond its bound")
 			}
 		})
@@ -328,9 +289,9 @@ func TestKubernetesClientSanitizesTransportAndBodyErrors(t *testing.T) {
 			for _, cause := range []error{errors.New("private-api-sentinel"), context.Canceled, context.DeadlineExceeded} {
 				t.Run(operation+"/"+stage+"/"+cause.Error(), func(t *testing.T) {
 					failure := &url.Error{Op: "read", URL: "https://user:private-api-sentinel@other.invalid?token=private-api-sentinel", Err: fmt.Errorf("private-api-sentinel: %w", cause)}
-					body := &kubeTrackedBody{Reader: kubeFailureReader{err: failure}}
+					body := fakes.NewTrackedBody(fakes.ErrorReader{Err: failure})
 					calls := 0
-					client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
+					client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
 						calls++
 						if stage == "transport" {
 							return nil, failure
@@ -339,18 +300,18 @@ func TestKubernetesClientSanitizesTransportAndBodyErrors(t *testing.T) {
 						if operation == "create" {
 							status = http.StatusCreated
 						}
-						result := kubeResponse(request, status, "")
+						result := fixtures.KubernetesResponse(request, status, "")
 						result.Body = body
 						return result, nil
 					})
 					var err error
 					switch operation {
 					case "create":
-						_, err = client.Create(t.Context(), kubeCreatePod(t))
+						_, err = client.Create(t.Context(), fixtures.CreatePod(t))
 					case "get":
 						_, err = client.Get(t.Context(), "fixture-agent-a1b2c3d4")
 					case "release":
-						_, err = client.ReleaseGate(t.Context(), kubePod(t))
+						_, err = client.ReleaseGate(t.Context(), fixtures.Pod(t))
 					case "watch":
 						var watch *kubernetes.Watch
 						watch, err = client.Watch(t.Context(), "fixture-agent-a1b2c3d4", "version")
@@ -365,7 +326,7 @@ func TestKubernetesClientSanitizesTransportAndBodyErrors(t *testing.T) {
 					if (cause == context.Canceled || cause == context.DeadlineExceeded) && !errors.Is(err, cause) {
 						t.Fatalf("API failure lost cancellation: %v; want %v", err, cause)
 					}
-					if stage == "body" && !body.closed.Load() {
+					if stage == "body" && !body.IsClosed() {
 						t.Fatal("failed API left its response body open")
 					}
 				})
@@ -375,14 +336,14 @@ func TestKubernetesClientSanitizesTransportAndBodyErrors(t *testing.T) {
 }
 
 func TestKubernetesClientWatchesOnePodFromObservedVersion(t *testing.T) {
-	pod := kubePod(t)
-	events := `{"type":"ADDED","object":` + kubePodJSON + "}\n" +
+	pod := fixtures.Pod(t)
+	events := `{"type":"ADDED","object":` + fixtures.PodJSON + "}\n" +
 		`{"type":"BOOKMARK","object":{"metadata":{"resourceVersion":"next-version"}}}` + "\n" +
-		`{"type":"MODIFIED","object":` + strings.Replace(kubePodJSON, `"phase":"Pending"`, `"phase":"Running"`, 1) + "}\n" +
-		`{"type":"DELETED","object":` + kubePodJSON + "}\n"
-	body := &kubeTrackedBody{Reader: strings.NewReader(events)}
+		`{"type":"MODIFIED","object":` + strings.Replace(fixtures.PodJSON, `"phase":"Pending"`, `"phase":"Running"`, 1) + "}\n" +
+		`{"type":"DELETED","object":` + fixtures.PodJSON + "}\n"
+	body := fakes.NewTrackedBody(strings.NewReader(events))
 	calls := 0
-	client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
+	client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
 		calls++
 		if request.Method != http.MethodGet || request.URL.Path != "/api/v1/namespaces/agents/pods" {
 			t.Fatalf("unexpected watch target: %s %s", request.Method, request.URL)
@@ -402,7 +363,7 @@ func TestKubernetesClientWatchesOnePodFromObservedVersion(t *testing.T) {
 		if !ok || time.Until(deadline) > 301*time.Second {
 			t.Fatal("watch has no bounded client timeout")
 		}
-		result := kubeResponse(request, http.StatusOK, "")
+		result := fixtures.KubernetesResponse(request, http.StatusOK, "")
 		result.Body = body
 		return result, nil
 	})
@@ -427,7 +388,7 @@ func TestKubernetesClientWatchesOnePodFromObservedVersion(t *testing.T) {
 	if _, err := watch.Next(); !errors.Is(err, io.EOF) || calls != 1 {
 		t.Fatalf("ended watch was reconnected or not reported as EOF: %v", err)
 	}
-	if !body.closed.Load() {
+	if !body.IsClosed() {
 		t.Fatal("ended watch left its response body open")
 	}
 }
@@ -442,18 +403,18 @@ func TestKubernetesClientRejectsInvalidWatchEvents(t *testing.T) {
 		{"expired event", `{"type":"ERROR","object":{"kind":"Status","code":410,"message":"private-api-sentinel"}}`, 200, kubernetes.ErrExpired},
 		{"forbidden event", `{"type":"ERROR","object":{"kind":"Status","code":403,"message":"private-api-sentinel"}}`, 200, kubernetes.ErrForbidden},
 		{"unknown error", `{"type":"ERROR","object":{"message":"private-api-sentinel"}}`, 200, kubernetes.ErrInvalidResponse},
-		{"unknown type", `{"type":"SURPRISE","object":` + kubePodJSON + `}`, 200, kubernetes.ErrInvalidResponse},
-		{"wrong Pod", `{"type":"ADDED","object":` + strings.Replace(kubePodJSON, `fixture-agent-a1b2c3d4`, `other-agent-a1b2c3d4`, 1) + `}`, 200, kubernetes.ErrInvalidResponse},
+		{"unknown type", `{"type":"SURPRISE","object":` + fixtures.PodJSON + `}`, 200, kubernetes.ErrInvalidResponse},
+		{"wrong Pod", `{"type":"ADDED","object":` + strings.Replace(fixtures.PodJSON, `fixture-agent-a1b2c3d4`, `other-agent-a1b2c3d4`, 1) + `}`, 200, kubernetes.ErrInvalidResponse},
 		{"empty bookmark", `{"type":"BOOKMARK","object":{"metadata":{}}}`, 200, kubernetes.ErrInvalidResponse},
 		{"malformed", `{"type":"ADDED","private-api-sentinel":`, 200, kubernetes.ErrInvalidResponse},
 		{"oversized stream", strings.Repeat(" ", (8<<20)+64) + `{}`, 200, kubernetes.ErrInvalidResponse},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			body := &kubeTrackedBody{Reader: strings.NewReader(test.body)}
+			body := fakes.NewTrackedBody(strings.NewReader(test.body))
 			calls := 0
-			client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
+			client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
 				calls++
-				result := kubeResponse(request, test.status, "")
+				result := fixtures.KubernetesResponse(request, test.status, "")
 				result.Body = body
 				return result, nil
 			})
@@ -465,7 +426,7 @@ func TestKubernetesClientRejectsInvalidWatchEvents(t *testing.T) {
 			if !errors.Is(err, test.want) || strings.Contains(err.Error(), "private-api-sentinel") || calls != 1 {
 				t.Fatalf("watch error leaked, reconnected or had wrong kind: %v; want %v", err, test.want)
 			}
-			if !body.closed.Load() || body.read.Load() > (8<<20)+1 {
+			if !body.IsClosed() || body.ReadCount() > (8<<20)+1 {
 				t.Fatal("failed watch left its body open or read past its bound")
 			}
 		})
@@ -477,12 +438,12 @@ func TestKubernetesClientStopsPendingWatch(t *testing.T) {
 		t.Run(stop, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			var body *kubeBlockingBody
+			var body *fakes.BlockingBody
 			calls := 0
-			client := kubeClient(t, func(request *http.Request) (*http.Response, error) {
+			client := fixtures.KubernetesClient(t, func(request *http.Request) (*http.Response, error) {
 				calls++
-				body = &kubeBlockingBody{ctx: request.Context(), started: make(chan struct{}), closed: make(chan struct{})}
-				result := kubeResponse(request, http.StatusOK, "")
+				body = fakes.NewBlockingBody(request.Context())
+				result := fixtures.KubernetesResponse(request, http.StatusOK, "")
 				result.Body = body
 				return result, nil
 			})
@@ -494,7 +455,7 @@ func TestKubernetesClientStopsPendingWatch(t *testing.T) {
 			finished := make(chan error, 1)
 			go func() { _, err := watch.Next(); finished <- err }()
 			select {
-			case <-body.started:
+			case <-body.Started():
 			case <-time.After(time.Second):
 				t.Fatal("watch did not start reading")
 			}
@@ -519,7 +480,7 @@ func TestKubernetesClientStopsPendingWatch(t *testing.T) {
 				t.Fatal("stop did not interrupt the pending watch")
 			}
 			select {
-			case <-body.closed:
+			case <-body.Closed():
 			default:
 				t.Fatal("stopped watch left its response body open")
 			}
@@ -528,44 +489,4 @@ func TestKubernetesClientStopsPendingWatch(t *testing.T) {
 			}
 		})
 	}
-}
-
-type kubeTrackedBody struct {
-	io.Reader
-	closed atomic.Bool
-	read   atomic.Int64
-}
-
-func (body *kubeTrackedBody) Read(data []byte) (int, error) {
-	n, err := body.Reader.Read(data)
-	body.read.Add(int64(n))
-	return n, err
-}
-
-func (body *kubeTrackedBody) Close() error { body.closed.Store(true); return nil }
-
-type kubeFailureReader struct{ err error }
-
-func (reader kubeFailureReader) Read([]byte) (int, error) { return 0, reader.err }
-
-type kubeBlockingBody struct {
-	ctx             context.Context
-	started, closed chan struct{}
-	readOnce        sync.Once
-	closeOnce       sync.Once
-}
-
-func (body *kubeBlockingBody) Read([]byte) (int, error) {
-	body.readOnce.Do(func() { close(body.started) })
-	select {
-	case <-body.ctx.Done():
-		return 0, body.ctx.Err()
-	case <-body.closed:
-		return 0, io.ErrClosedPipe
-	}
-}
-
-func (body *kubeBlockingBody) Close() error {
-	body.closeOnce.Do(func() { close(body.closed) })
-	return nil
 }

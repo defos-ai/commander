@@ -9,52 +9,16 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/secrets"
 )
 
-const installationID = "00000000-0000-4000-8000-000000000006"
-
-func pendingRecord(t *testing.T) secrets.RequestRecord {
-	t.Helper()
-	record, err := secrets.NewRequestRecord(requestFixture())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return record
-}
-
-func deliveryFixture(t *testing.T) secrets.Delivery {
-	t.Helper()
-	secret, err := newSecretCipher(t).Encrypt(secretFixture().Metadata, []byte("record-secret-plaintext-fixture"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	request := requestFixture()
-	return secrets.Delivery{ID: deliveryID, RequestID: request.ID, AgentID: request.AgentID,
-		Secret: secret, CreatedAt: requestedAt.Add(time.Minute), ExpiresAt: request.ExpiresAt}
-}
-
-func deliveryRecord(t *testing.T) secrets.RequestRecord {
-	t.Helper()
-	record, err := pendingRecord(t).WithDelivery(deliveryFixture(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return record
-}
-
-func installationFixture(delivery secrets.Delivery) secrets.Installation {
-	return secrets.Installation{ID: installationID, RequestID: delivery.RequestID,
-		DeliveryID: delivery.ID, AgentID: delivery.AgentID, SecretID: delivery.Secret.Metadata.ID,
-		SecretVersion: delivery.Secret.Metadata.Version, InstalledAt: delivery.CreatedAt.Add(time.Minute)}
-}
-
 func TestRequestRecordRequiresPendingCreationAndPreservesOriginalIdentity(t *testing.T) {
-	request := requestFixture()
-	record := pendingRecord(t)
+	request := fixtures.Request()
+	record := fixtures.PendingRecord(t)
 	if !record.MatchesRequest(request) || record.Delivery != nil || record.Installation != nil {
 		t.Fatal("new request record did not retain the pending identity")
 	}
-	cancelled, err := request.Cancel(requestedAt.Add(time.Minute))
+	cancelled, err := request.Cancel(fixtures.RequestedAt().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +29,7 @@ func TestRequestRecordRequiresPendingCreationAndPreservesOriginalIdentity(t *tes
 		t.Fatal("settled request accepted as original pending input")
 	}
 	for _, mutate := range []func(*secrets.Request){
-		func(r *secrets.Request) { r.ID = installationID },
+		func(r *secrets.Request) { r.ID = fixtures.InstallationID },
 		func(r *secrets.Request) { r.AgentID = "builder-agent-87654321" },
 		func(r *secrets.Request) { r.Key.Scope.AgentType = "another-agent" },
 		func(r *secrets.Request) { r.Key.Name = "OTHER_TOKEN" },
@@ -78,8 +42,8 @@ func TestRequestRecordRequiresPendingCreationAndPreservesOriginalIdentity(t *tes
 			t.Fatal("changed request matched the original identity")
 		}
 	}
-	withDelivery := deliveryRecord(t)
-	ack := installationFixture(*withDelivery.Delivery)
+	withDelivery := fixtures.DeliveryRecord(t)
+	ack := fixtures.Installation(*withDelivery.Delivery)
 	fulfilled, err := withDelivery.Acknowledge(ack, ack.InstalledAt.Add(time.Second))
 	if err != nil || !fulfilled.MatchesRequest(request) {
 		t.Fatalf("progress changed original request matching: %v", err)
@@ -87,17 +51,17 @@ func TestRequestRecordRequiresPendingCreationAndPreservesOriginalIdentity(t *tes
 }
 
 func TestRequestRecordDeliveryIsImmutableAndBoundToRequest(t *testing.T) {
-	pending := pendingRecord(t)
-	delivery := deliveryFixture(t)
+	pending := fixtures.PendingRecord(t)
+	delivery := fixtures.Delivery(t)
 	for _, test := range []struct {
 		name   string
 		change func(*secrets.Delivery)
 	}{
-		{"request", func(d *secrets.Delivery) { d.RequestID = installationID }},
+		{"request", func(d *secrets.Delivery) { d.RequestID = fixtures.InstallationID }},
 		{"recipient", func(d *secrets.Delivery) { d.AgentID = "builder-agent-87654321" }},
 		{"agent type", func(d *secrets.Delivery) { d.Secret.Metadata.Key.Scope.AgentType = "other-agent" }},
 		{"name", func(d *secrets.Delivery) { d.Secret.Metadata.Key.Name = "OTHER_TOKEN" }},
-		{"before request", func(d *secrets.Delivery) { d.CreatedAt = requestedAt.Add(-time.Second) }},
+		{"before request", func(d *secrets.Delivery) { d.CreatedAt = fixtures.RequestedAt().Add(-time.Second) }},
 		{"request deadline", func(d *secrets.Delivery) { d.ExpiresAt = d.ExpiresAt.Add(time.Second) }},
 		{"shortened deadline", func(d *secrets.Delivery) { d.ExpiresAt = d.ExpiresAt.Add(-time.Second) }},
 		{"future value", func(d *secrets.Delivery) { d.Secret.Metadata.UpdatedAt = d.CreatedAt.Add(time.Second) }},
@@ -128,9 +92,9 @@ func TestRequestRecordDeliveryIsImmutableAndBoundToRequest(t *testing.T) {
 		t.Fatalf("identical delivery replay changed saved state: %v", err)
 	}
 	for _, change := range []func(*secrets.Delivery){
-		func(d *secrets.Delivery) { d.ID = installationID },
+		func(d *secrets.Delivery) { d.ID = fixtures.InstallationID },
 		func(d *secrets.Delivery) { d.Secret.Metadata.Version++ },
-		func(d *secrets.Delivery) { d.Secret.Metadata.ID = installationID },
+		func(d *secrets.Delivery) { d.Secret.Metadata.ID = fixtures.InstallationID },
 		func(d *secrets.Delivery) { d.Secret.Value.Ciphertext[0] ^= 1 },
 		func(d *secrets.Delivery) { d.Secret.Value.Nonce[0] ^= 1 },
 		func(d *secrets.Delivery) { d.CreatedAt = d.CreatedAt.Add(time.Second) },
@@ -142,8 +106,8 @@ func TestRequestRecordDeliveryIsImmutableAndBoundToRequest(t *testing.T) {
 		}
 	}
 
-	short := deliveryFixture(t)
-	short.Secret.Metadata.ExpiresAt = requestedAt.Add(5 * time.Minute)
+	short := fixtures.Delivery(t)
+	short.Secret.Metadata.ExpiresAt = fixtures.RequestedAt().Add(5 * time.Minute)
 	short.ExpiresAt = short.Secret.Metadata.ExpiresAt
 	if _, err := pending.WithDelivery(short); err != nil {
 		t.Fatalf("secret expiration could not bound delivery deadline: %v", err)
@@ -151,20 +115,20 @@ func TestRequestRecordDeliveryIsImmutableAndBoundToRequest(t *testing.T) {
 }
 
 func TestRequestRecordAcknowledgementRequiresExactEvidenceAndReceiptTime(t *testing.T) {
-	record := deliveryRecord(t)
-	installation := installationFixture(*record.Delivery)
+	record := fixtures.DeliveryRecord(t)
+	installation := fixtures.Installation(*record.Delivery)
 	received := installation.InstalledAt.Add(time.Second)
-	if _, err := pendingRecord(t).Acknowledge(installation, received); !errors.Is(err, secrets.ErrRequestConflict) {
+	if _, err := fixtures.PendingRecord(t).Acknowledge(installation, received); !errors.Is(err, secrets.ErrRequestConflict) {
 		t.Fatalf("acknowledgement without saved delivery accepted: %v", err)
 	}
 	for _, test := range []struct {
 		name   string
 		change func(*secrets.Installation)
 	}{
-		{"request", func(i *secrets.Installation) { i.RequestID = deliveryID }},
-		{"delivery", func(i *secrets.Installation) { i.DeliveryID = installationID }},
+		{"request", func(i *secrets.Installation) { i.RequestID = fixtures.DeliveryID }},
+		{"delivery", func(i *secrets.Installation) { i.DeliveryID = fixtures.InstallationID }},
 		{"recipient", func(i *secrets.Installation) { i.AgentID = "builder-agent-87654321" }},
-		{"secret identity", func(i *secrets.Installation) { i.SecretID = installationID }},
+		{"secret identity", func(i *secrets.Installation) { i.SecretID = fixtures.InstallationID }},
 		{"version", func(i *secrets.Installation) { i.SecretVersion++ }},
 		{"before delivery", func(i *secrets.Installation) { i.InstalledAt = record.Delivery.CreatedAt.Add(-time.Nanosecond) }},
 		{"at deadline", func(i *secrets.Installation) { i.InstalledAt = record.Delivery.ExpiresAt }},
@@ -200,7 +164,7 @@ func TestRequestRecordAcknowledgementRequiresExactEvidenceAndReceiptTime(t *test
 		t.Fatalf("late exact acknowledgement replay changed history: %v", err)
 	}
 	for _, change := range []func(*secrets.Installation){
-		func(i *secrets.Installation) { i.ID = deliveryID },
+		func(i *secrets.Installation) { i.ID = fixtures.DeliveryID },
 		func(i *secrets.Installation) { i.InstalledAt = i.InstalledAt.Add(time.Nanosecond) },
 		func(i *secrets.Installation) { i.SecretVersion++ },
 	} {
@@ -211,28 +175,28 @@ func TestRequestRecordAcknowledgementRequiresExactEvidenceAndReceiptTime(t *test
 		}
 	}
 
-	short := deliveryFixture(t)
-	short.Secret.Metadata.ExpiresAt = requestedAt.Add(5 * time.Minute)
+	short := fixtures.Delivery(t)
+	short.Secret.Metadata.ExpiresAt = fixtures.RequestedAt().Add(5 * time.Minute)
 	short.ExpiresAt = short.Secret.Metadata.ExpiresAt
-	shortRecord, err := pendingRecord(t).WithDelivery(short)
+	shortRecord, err := fixtures.PendingRecord(t).WithDelivery(short)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := shortRecord.Acknowledge(installationFixture(short), short.ExpiresAt); !errors.Is(err, secrets.ErrRequestExpired) {
+	if _, err := shortRecord.Acknowledge(fixtures.Installation(short), short.ExpiresAt); !errors.Is(err, secrets.ErrRequestExpired) {
 		t.Fatalf("expired secret delivery fulfilled an otherwise live request: %v", err)
 	}
 }
 
 func TestRequestRecordTerminalStatesCannotReopen(t *testing.T) {
 	for _, withDelivery := range []bool{false, true} {
-		original := pendingRecord(t)
+		original := fixtures.PendingRecord(t)
 		if withDelivery {
-			original = deliveryRecord(t)
+			original = fixtures.DeliveryRecord(t)
 			if _, err := original.Cancel(original.Delivery.CreatedAt.Add(-time.Nanosecond)); err == nil {
 				t.Fatal("request cancellation preceded its saved delivery")
 			}
 		}
-		cancelled, err := original.Cancel(requestedAt.Add(3 * time.Minute))
+		cancelled, err := original.Cancel(fixtures.RequestedAt().Add(3 * time.Minute))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,10 +216,10 @@ func TestRequestRecordTerminalStatesCannotReopen(t *testing.T) {
 				if err != nil || !reflect.DeepEqual(replayed, terminal) {
 					t.Fatalf("late delivery retry changed terminal state: %v", err)
 				}
-				if _, err := terminal.Acknowledge(installationFixture(*terminal.Delivery), requestedAt.Add(3*time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
+				if _, err := terminal.Acknowledge(fixtures.Installation(*terminal.Delivery), fixtures.RequestedAt().Add(3*time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
 					t.Fatalf("acknowledgement reopened terminal request: %v", err)
 				}
-			} else if _, err := terminal.WithDelivery(deliveryFixture(t)); !errors.Is(err, secrets.ErrRequestClosed) {
+			} else if _, err := terminal.WithDelivery(fixtures.Delivery(t)); !errors.Is(err, secrets.ErrRequestClosed) {
 				t.Fatalf("new delivery added to terminal request: %v", err)
 			}
 		}
@@ -271,8 +235,8 @@ func TestRequestRecordTerminalStatesCannotReopen(t *testing.T) {
 }
 
 func TestRequestRecordSnapshotsAndSerializationKeepEvidenceIndependent(t *testing.T) {
-	record := deliveryRecord(t)
-	installation := installationFixture(*record.Delivery)
+	record := fixtures.DeliveryRecord(t)
+	installation := fixtures.Installation(*record.Delivery)
 	fulfilled, err := record.Acknowledge(installation, installation.InstalledAt.Add(time.Second))
 	if err != nil {
 		t.Fatal(err)
@@ -291,7 +255,7 @@ func TestRequestRecordSnapshotsAndSerializationKeepEvidenceIndependent(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(encoded, []byte("record-secret-plaintext-fixture")) || bytes.Contains(encoded, []byte(encryptionKey)) {
+	if bytes.Contains(encoded, []byte("record-secret-plaintext-fixture")) || bytes.Contains(encoded, []byte(fixtures.EncryptionKey)) {
 		t.Fatal("serialized request record exposed secret plaintext or encryption key")
 	}
 	var restored secrets.RequestRecord
@@ -304,7 +268,7 @@ func TestRequestRecordSnapshotsAndSerializationKeepEvidenceIndependent(t *testin
 	for _, mutate := range []func(*secrets.RequestRecord){
 		func(r *secrets.RequestRecord) { r.Delivery = nil },
 		func(r *secrets.RequestRecord) { r.Installation = nil },
-		func(r *secrets.RequestRecord) { r.Installation.DeliveryID = installationID },
+		func(r *secrets.RequestRecord) { r.Installation.DeliveryID = fixtures.InstallationID },
 		func(r *secrets.RequestRecord) { r.Request.Fulfillment.SecretVersion++ },
 		func(r *secrets.RequestRecord) { r.Request.ResolvedAt = installation.InstalledAt.Add(-time.Nanosecond) },
 	} {

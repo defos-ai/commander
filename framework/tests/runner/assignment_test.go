@@ -1,7 +1,6 @@
 package runner_test
 
 import (
-	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -10,15 +9,17 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestAssignmentWriteFailurePreservesRetryableState(t *testing.T) {
-	config := fixture()
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
+	config := fixtures.Config()
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
 	failure := errors.New("database unavailable")
-	config.OperationStore.(*operationStore).failNextUpdate(failure)
+	config.OperationStore.(*fakes.OperationStore).FailNextUpdate(failure)
 	command := commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect"}
 
 	_, assignErr := r.Assign(t.Context(), command)
@@ -40,72 +41,60 @@ func TestAssignmentWriteFailurePreservesRetryableState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call := receive(t, calls)
-	call.reply <- output("inspect")
-	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	if len(settled.Tasks) != 1 || settled.Tasks[0].ID != task.ID || call.call.Work.TaskID != task.ID {
+	call := fixtures.Receive(t, calls)
+	call.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	if len(settled.Tasks) != 1 || settled.Tasks[0].ID != task.ID || call.Call.Work.TaskID != task.ID {
 		t.Fatalf("retry lost or duplicated the assignment: %+v", settled)
 	}
 }
 
 func TestAssignmentReturnsRequestedTaskFromStoreSnapshot(t *testing.T) {
-	config := fixture()
-	config.OperationStore = &additionalQueuedTaskStore{OperationStore: config.OperationStore}
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
+	config := fixtures.Config()
+	config.OperationStore = &fakes.AdditionalQueuedTaskStore{OperationStore: config.OperationStore}
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
 
-	task := assign(t, r, op.ID, "inspect")
+	task := fixtures.Assign(t, r, op.ID, "inspect")
 	stored, err := r.Get(t.Context(), op.ID)
 	if err != nil || len(stored.Tasks) != 2 || task.ID != stored.Tasks[0].ID || task.CommandID != stored.Tasks[0].CommandID || task.ActionName != "inspect" {
 		t.Fatalf("assignment returned a different queued task: task=%+v, operation=%+v, error=%v", task, stored, err)
 	}
-	if call := receive(t, calls); call.call.Work.TaskID != task.ID {
+	if call := fixtures.Receive(t, calls); call.Call.Work.TaskID != task.ID {
 		t.Fatalf("dispatched a different assignment: %+v", call)
 	}
 }
 
-// A store snapshot may contain another assignment committed after the requested task.
-type additionalQueuedTaskStore struct{ operations.OperationStore }
-
-func (s *additionalQueuedTaskStore) QueueTask(ctx context.Context, operationID string, task operations.Task) (operations.Operation, error) {
-	op, err := s.OperationStore.QueueTask(ctx, operationID, task)
-	if err != nil {
-		return op, err
-	}
-	later := operations.NewTask(operationID, "", "", actions.NextAction{ActionName: "follow-up"})
-	return s.OperationStore.QueueTask(ctx, operationID, later)
-}
-
 func TestControllerSelectsReadyAgentsAndRespectsCapacity(t *testing.T) {
-	config := fixture()
-	unavailable := readyAgent(agentID)
+	config := fixtures.Config()
+	unavailable := fixtures.ReadyAgent(fixtures.AgentID)
 	unavailable.Actions[0].Status = actions.Unavailable
-	first, second := readyAgent("review-agent-00000002"), readyAgent("review-agent-00000003")
-	stale := readyAgent("review-agent-00000005")
+	first, second := fixtures.ReadyAgent("review-agent-00000002"), fixtures.ReadyAgent("review-agent-00000003")
+	stale := fixtures.ReadyAgent("review-agent-00000005")
 	stale.Stale = true
-	busy := readyAgent("review-agent-00000006")
+	busy := fixtures.ReadyAgent("review-agent-00000006")
 	busy.Status = agents.AgentWorking
-	config.AgentCatalog.(*agentCatalog).set(second, unavailable, stale, busy, first)
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(second, unavailable, stale, busy, first)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
 
 	for range 3 {
-		task := assign(t, r, op.ID, "inspect")
+		task := fixtures.Assign(t, r, op.ID, "inspect")
 		if task.AgentID != "" || task.Status != operations.TaskQueued {
-			t.Fatalf("assignment selected an agent before dispatch: %+v", task)
+			t.Fatalf("assignment selected an agent before Dispatch: %+v", task)
 		}
 	}
-	firstCall, secondCall := receive(t, calls), receive(t, calls)
+	firstCall, secondCall := fixtures.Receive(t, calls), fixtures.Receive(t, calls)
 	current, err := r.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	eligible := map[string]bool{first.ID: true, second.ID: true}
-	if firstCall.agent == secondCall.agent || !eligible[firstCall.agent] || !eligible[secondCall.agent] {
-		t.Fatalf("controller selected an unavailable or occupied agent: %+v, %+v", firstCall, secondCall)
+	if firstCall.Agent == secondCall.Agent || !eligible[firstCall.Agent] || !eligible[secondCall.Agent] {
+		t.Fatalf("controller selected an unavailable or occupied Agent: %+v, %+v", firstCall, secondCall)
 	}
 	var queued operations.Task
 	running := map[string]string{}
@@ -116,18 +105,18 @@ func TestControllerSelectsReadyAgentsAndRespectsCapacity(t *testing.T) {
 			running[task.ID] = task.AgentID
 		}
 	}
-	if queued.ID == "" || queued.AgentID != "" || len(running) != 2 || running[firstCall.call.Work.TaskID] != firstCall.agent || running[secondCall.call.Work.TaskID] != secondCall.agent {
+	if queued.ID == "" || queued.AgentID != "" || len(running) != 2 || running[firstCall.Call.Work.TaskID] != firstCall.Agent || running[secondCall.Call.Work.TaskID] != secondCall.Agent {
 		t.Fatalf("dispatch did not persist actual executors or exceeded capacity: %+v", current.Tasks)
 	}
 
-	firstCall.reply <- output("inspect")
-	resumed := receive(t, calls)
-	if resumed.call.Work.TaskID != queued.ID || resumed.agent != firstCall.agent {
+	firstCall.Reply <- fixtures.Output("inspect")
+	resumed := fixtures.Receive(t, calls)
+	if resumed.Call.Work.TaskID != queued.ID || resumed.Agent != firstCall.Agent {
 		t.Fatalf("queued task did not use the agent whose capacity became free: %+v", resumed)
 	}
-	secondCall.reply <- output("inspect")
-	resumed.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+	secondCall.Reply <- fixtures.Output("inspect")
+	resumed.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		for _, task := range op.Tasks {
 			if task.Status != operations.TaskSucceeded {
 				return false

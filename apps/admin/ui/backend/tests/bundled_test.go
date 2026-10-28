@@ -4,10 +4,8 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,6 +15,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/admin/cli"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
 func TestBundledFrontend(t *testing.T) {
@@ -28,7 +27,7 @@ func TestBundledFrontend(t *testing.T) {
 		}
 	}
 	t.Run("runs without a frontend directory", func(t *testing.T) {
-		baseURL, stop := startBundledUI(t)
+		baseURL, stop := fixtures.StartBundledUI(t)
 		index, _ := fetchBundledAsset(t, baseURL, "/")
 		if !bytes.Contains(index, []byte("COMMANDER | Administration")) {
 			t.Fatal("bundled index was not served")
@@ -97,14 +96,14 @@ func TestBundledFrontend(t *testing.T) {
 			name = "flag overrides environment and bundle"
 		}
 		t.Run(name, func(t *testing.T) {
-			directory := builtFrontend(t)
+			directory := fixtures.BuiltFrontend(t)
 			t.Setenv("UI_STATIC_DIR", directory)
 			var args []string
 			if useFlag {
 				t.Setenv("UI_STATIC_DIR", "missing-frontend")
 				args = []string{"--static-dir=" + directory}
 			}
-			baseURL, stop := startBundledUI(t, args...)
+			baseURL, stop := fixtures.StartBundledUI(t, args...)
 			body, _ := fetchBundledAsset(t, baseURL, "/")
 			if string(body) != "<html>Commander</html>" {
 				t.Fatal("explicit static directory did not override bundled assets")
@@ -119,43 +118,6 @@ func TestBundledFrontend(t *testing.T) {
 			t.Fatal("explicit blank static directory was silently replaced by bundled assets")
 		}
 	})
-}
-
-func startBundledUI(t *testing.T, args ...string) (string, func()) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(t.Context())
-	ready := make(chan net.Addr, 1)
-	done := make(chan struct{})
-	var output bytes.Buffer
-	var runErr error
-	go func() {
-		defer close(done)
-		serveArgs := append([]string{"serve"}, args...)
-		runErr = cli.RunWithOptions(ctx, append(serveArgs, "--listen-address=127.0.0.1:0"), nil, io.Discard, &output, cli.Options{
-			Ready: func(address net.Addr) { ready <- address },
-		})
-	}()
-	stop := func() {
-		cancel()
-		select {
-		case <-done:
-			if runErr != nil {
-				t.Errorf("bundled UI stopped with error: %v", runErr)
-			}
-		case <-time.After(6 * time.Second):
-			t.Error("bundled UI did not shut down")
-		}
-	}
-	t.Cleanup(stop)
-	select {
-	case address := <-ready:
-		return "http://" + address.String(), stop
-	case <-done:
-		t.Fatalf("bundled UI startup failed: %v", runErr)
-	case <-time.After(5 * time.Second):
-		t.Fatal("bundled UI did not become ready")
-	}
-	return "", stop
 }
 
 func fetchBundledAsset(t *testing.T, baseURL, path string) ([]byte, http.Header) {

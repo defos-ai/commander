@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,36 +15,28 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	fakes "github.com/defos-ai/commander/apps/adapters/api/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/comms"
-	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
-	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
-	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
-	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
-	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 	fsexecutions "github.com/defos-ai/commander/providers/fs/executions"
-	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
-	fsoperations "github.com/defos-ai/commander/providers/fs/operations"
-	fsreports "github.com/defos-ai/commander/providers/fs/reports"
 	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
 )
 
 // The HTTP host, controller and agent share only FS-backed providers. They do
 // not share a plaintext cache or a request store instance with the agent.
 func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
-	server := startAPI(t, fixture.localArgs())
-	database := filepath.Join(fixture.root, "database")
+	fixture := hostfixtures.New(t)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	database := filepath.Join(fixture.Root, "database")
 	config := controller.ControllerConfig{LeaseSweepInterval: 100 * time.Millisecond}
 	var err error
 	if config.AgentStore, err = fsagents.NewAgentFsStore(database); err != nil {
@@ -67,24 +57,24 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if config.SecretRequestStore, err = fssecrets.NewRequestFsStore(database); err != nil {
 		t.Fatal(err)
 	}
-	controllerBus := newSecretTestBus(t, fixture.root)
-	deliveries := make(chan messages.Message, 256)
-	observedBus := &secretObservingBus{Bus: controllerBus, delivered: deliveries}
+	controllerBus := hostfixtures.NewSecretTestBus(t, fixture.Root)
+	observedBus := fakes.NewSecretObservingBus(controllerBus)
+	deliveries := observedBus.Deliveries()
 	startController := func() *controller.Controller {
 		t.Helper()
 		runtime, err := controller.NewController(t.Context(), observedBus, config)
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { closeSecretController(t, runtime) })
+		t.Cleanup(func() { hostfixtures.CloseSecretController(t, runtime) })
 		return runtime
 	}
 	coordinator := startController()
-	cipher, err := crypto.NewSecretCipher(secretTestKey)
+	cipher, err := crypto.NewSecretCipher(hostfixtures.SecretTestKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := fsartifacts.NewArtifactFileFsStore(filepath.Join(fixture.root, "storage"))
+	files, err := fsartifacts.NewArtifactFileFsStore(filepath.Join(fixture.Root, "storage"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,9 +92,9 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 			if err != nil {
 				return output{}, err
 			}
-			want := secretTestValue
+			want := hostfixtures.SecretTestValue
 			if in.Version == 2 {
-				want = secretTestReplacement
+				want = hostfixtures.SecretTestReplacement
 			}
 			return output{Matched: bytes.Equal(value, []byte(want))}, nil
 		},
@@ -130,7 +120,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 			defer cancel()
 			value, err := action.RequestSecret(ctx, "RUNTIME_TOKEN")
 			defer clear(value)
-			return output{Matched: bytes.Equal(value, []byte(secretTestValue))}, err
+			return output{Matched: bytes.Equal(value, []byte(hostfixtures.SecretTestValue))}, err
 		},
 	})
 	if err != nil {
@@ -148,7 +138,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agentBus := newSecretTestBus(t, fixture.root)
+	agentBus := hostfixtures.NewSecretTestBus(t, fixture.Root)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- worker.Serve(ctx, agentBus, nil) }()
@@ -170,17 +160,17 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		}
 	}
 	t.Cleanup(stopAgent)
-	awaitSecretCondition(t, "missing secret request and unrelated ready action", func() bool {
+	hostfixtures.AwaitSecretCondition(t, "missing secret request and unrelated ready action", func() bool {
 		pending, err := config.SecretRequestStore.ListPending(t.Context())
-		return err == nil && len(pending) > 0 && secretActionStatus(worker, "use-secret") == action.Unavailable &&
-			secretActionStatus(worker, "public") == action.Ready
+		return err == nil && len(pending) > 0 && hostfixtures.SecretActionStatus(worker, "use-secret") == action.Unavailable &&
+			hostfixtures.SecretActionStatus(worker, "public") == action.Ready
 	})
 
 	// Resume pending synchronization from the saved database after a controller
 	// restart, without restarting the agent or supplying a value through its env.
-	closeSecretController(t, coordinator)
+	hostfixtures.CloseSecretController(t, coordinator)
 	coordinator = startController()
-	stopOperations := startOperationRunner(t, coordinator, observedBus, database,
+	stopOperations := hostfixtures.StartOperationRunner(t, coordinator, observedBus, database,
 		missions.Mission{
 			Name: "secret-distribution", Objectives: []string{"Use an agent's managed secret"},
 			RequiredActions: []string{"use-secret"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`),
@@ -210,11 +200,11 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if waiting.Status != "waiting" || len(waiting.Tasks) != 1 || waiting.Tasks[0].ID != queued.ID || waiting.Tasks[0].Status != "queued" {
 		t.Fatal("API did not retain the accepted task while waiting for its secret")
 	}
-	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath,
-		`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+secretTestValue+`"}`), http.StatusCreated)
-	awaitSecretInstallation(t, config.SecretRequestStore, deliveries, created.ID, 1)
+	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath,
+		`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`), http.StatusCreated)
+	hostfixtures.AwaitSecretInstallation(t, config.SecretRequestStore, deliveries, created.ID, 1)
 	var resumed models.OperationResponse
-	awaitSecretCondition(t, "queued operation task resuming after secret installation", func() bool {
+	hostfixtures.AwaitSecretCondition(t, "queued operation task resuming after secret installation", func() bool {
 		resumed = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, operationPath, ""))
 		return len(resumed.Tasks) == 1 && resumed.Tasks[0].Status == "succeeded"
 	})
@@ -248,16 +238,16 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	}
 	run("public", 0)
 
-	replace := fmt.Sprintf(`{"id":%q,"version":1,"value":%q}`, created.ID, secretTestReplacement)
-	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, secretPath, replace), http.StatusOK)
-	awaitSecretInstallation(t, config.SecretRequestStore, deliveries, created.ID, 2)
+	replace := fmt.Sprintf(`{"id":%q,"version":1,"value":%q}`, created.ID, hostfixtures.SecretTestReplacement)
+	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, hostfixtures.SecretPath, replace), http.StatusOK)
+	hostfixtures.AwaitSecretInstallation(t, config.SecretRequestStore, deliveries, created.ID, 2)
 	run("use-secret", 2)
-	deleted := secretRequest(t, server, http.MethodDelete, secretPath+"?id="+created.ID+"&version=2", "")
-	if deleted.status != http.StatusNoContent {
+	deleted := secretRequest(t, server, http.MethodDelete, hostfixtures.SecretPath+"?id="+created.ID+"&version=2", "")
+	if deleted.Status != http.StatusNoContent {
 		t.Fatal("secret deletion failed")
 	}
-	awaitSecretCondition(t, "deleted secret lease expiration", func() bool {
-		return secretActionStatus(worker, "use-secret") == action.Unavailable
+	hostfixtures.AwaitSecretCondition(t, "deleted secret lease expiration", func() bool {
+		return hostfixtures.SecretActionStatus(worker, "use-secret") == action.Unavailable
 	})
 	blocked, endAttempt := context.WithTimeout(t.Context(), 5*time.Second)
 	_, err = coordinator.RunAction(blocked, worker.ID(), actionmodel.ActionCall{ActionName: "use-secret", Input: json.RawMessage(`{"version":2}`)})
@@ -283,7 +273,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	runtimePath := "/api/v1/operations/" + runtimeOperation.ID
 	runtimeTask := decodeResponse[models.TaskResponse](t, secretRequest(t, server, http.MethodPost, runtimePath+"/tasks",
 		`{"action_name":"on-demand","input":{}}`), http.StatusCreated)
-	awaitSecretCondition(t, "on-demand request visible through API", func() bool {
+	hostfixtures.AwaitSecretCondition(t, "on-demand request visible through API", func() bool {
 		for _, request := range listSecretRequests(t, server, "") {
 			if request.AgentID == worker.ID() && request.Name == "RUNTIME_TOKEN" && request.Status == "needs_value" {
 				return true
@@ -292,7 +282,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		return false
 	})
 	var runtimeWaiting models.OperationResponse
-	awaitSecretCondition(t, "execution-scoped requirements visible through API", func() bool {
+	hostfixtures.AwaitSecretCondition(t, "execution-scoped requirements visible through API", func() bool {
 		runtimeWaiting = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, runtimePath, ""))
 		return len(runtimeWaiting.Tasks) == 1 && len(runtimeWaiting.Tasks[0].MissingRequirements) == 1
 	})
@@ -322,10 +312,10 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if len(previous.Tasks[0].MissingRequirements) != 0 {
 		t.Fatal("runtime wait leaked into another operation")
 	}
-	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath,
-		`{"agent_type":"builder-agent","name":"RUNTIME_TOKEN","value":"`+secretTestValue+`"}`), http.StatusCreated)
+	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath,
+		`{"agent_type":"builder-agent","name":"RUNTIME_TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`), http.StatusCreated)
 	var runtimeResumed models.OperationResponse
-	awaitSecretCondition(t, "same execution resumes after on-demand secret submission", func() bool {
+	hostfixtures.AwaitSecretCondition(t, "same execution resumes after on-demand secret submission", func() bool {
 		runtimeResumed = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, runtimePath, ""))
 		return len(runtimeResumed.Tasks) == 1 && runtimeResumed.Tasks[0].Status == "succeeded"
 	})
@@ -338,168 +328,9 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	run("on-demand", 0)
 	stopAgent()
 	stopOperations()
-	closeSecretController(t, coordinator)
-	server.stop(t)
-	assertNoDistributedPlaintext(t, fixture.root)
-}
-
-func startOperationRunner(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string, definitions ...missions.Mission) func() {
-	t.Helper()
-	return startOperationRunnerWithTimeout(t, coordinator, bus, database, 0, definitions...)
-}
-
-func startOperationRunnerWithTimeout(t *testing.T, coordinator *controller.Controller, bus comms.Bus, database string, timeout time.Duration, definitions ...missions.Mission) func() {
-	t.Helper()
-	missionStore, err := fsmissions.NewMissionFsStore(database)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, definition := range definitions {
-		if err := missionStore.Upsert(t.Context(), definition); err != nil {
-			t.Fatal(err)
-		}
-	}
-	operationStore, err := fsoperations.NewOperationFsStore(database)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reportStore, err := fsreports.NewReportFsStore(filepath.Join(filepath.Dir(database), "storage"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	execution, err := runner.NewRunner(t.Context(), coordinator, runner.Config{
-		MissionStore: missionStore, OperationStore: operationStore, ReportStore: reportStore, AgentCatalog: coordinator,
-		TaskTimeout: timeout,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	commandCtx, cancelCommands := context.WithCancel(t.Context())
-	var commands *adapterconsumer.Consumer
-	var done chan error
-	stopped := false
-	stop := func() {
-		t.Helper()
-		if stopped {
-			return
-		}
-		stopped = true
-		// Stop the reader before closing subscriptions, including in-flight ACKs.
-		cancelCommands()
-		if commands != nil {
-			select {
-			case err := <-done:
-				if err != nil && !errors.Is(err, context.Canceled) {
-					t.Errorf("operation command consumer: %v", err)
-				}
-			case <-time.After(5 * time.Second):
-				t.Error("operation command consumer shutdown timed out")
-			}
-			if err := commands.Close(); err != nil {
-				t.Errorf("operation command consumer shutdown: %v", err)
-			}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := execution.Close(ctx); err != nil {
-			t.Errorf("operation runner shutdown: %v", err)
-		}
-	}
-	t.Cleanup(stop)
-	commands, err = adapterconsumer.NewConsumer(t.Context(), bus, messages.DefaultControllerType, coordinator.ID(), coordinator, execution, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	done = make(chan error, 1)
-	go func() { done <- commands.Consume(commandCtx) }()
-	return stop
-}
-
-type secretObservingBus struct {
-	comms.Bus
-	delivered chan messages.Message
-}
-
-func (bus *secretObservingBus) Publish(ctx context.Context, topic string, message messages.Message) error {
-	if err := bus.Bus.Publish(ctx, topic, message); err != nil {
-		return err
-	}
-	if message.Type == agentevents.SecretDelivered {
-		select {
-		case bus.delivered <- message:
-		default:
-		}
-	}
-	return nil
-}
-
-func newSecretTestBus(t *testing.T, root string) *fscomms.FsBus {
-	t.Helper()
-	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := bus.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	return bus
-}
-
-func closeSecretController(t *testing.T, runtime *controller.Controller) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := runtime.Close(ctx); err != nil {
-		t.Errorf("controller shutdown: %v", err)
-	}
-}
-
-func secretActionStatus(worker *agent.Agent, name string) action.Status {
-	for _, definition := range worker.Describe().Actions {
-		if definition.Name == name {
-			return definition.Status
-		}
-	}
-	return action.Unknown
-}
-
-func awaitSecretCondition(t *testing.T, description string, ready func() bool) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
-	defer cancel()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for !ready() {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for %s", description)
-		case <-ticker.C:
-		}
-	}
-}
-
-func awaitSecretInstallation(t *testing.T, requests secretmodel.RequestStore, deliveries <-chan messages.Message, secretID string, version uint64) {
-	t.Helper()
-	var requestID string
-	awaitSecretCondition(t, "matching installed secret version", func() bool {
-		for {
-			select {
-			case message := <-deliveries:
-				payload, err := agentevents.DecodeSecretDelivery(message)
-				if err == nil && payload.Secret.Metadata.ID == secretID && payload.Secret.Metadata.Version == version {
-					requestID = message.CorrelationID
-				}
-			default:
-				if requestID == "" {
-					return false
-				}
-				record, err := requests.Get(t.Context(), requestID)
-				return err == nil && record.Request.Status == secretmodel.Fulfilled
-			}
-		}
-	})
+	hostfixtures.CloseSecretController(t, coordinator)
+	server.Stop(t)
+	assertNoDistributedPlaintext(t, fixture.Root)
 }
 
 func assertNoDistributedPlaintext(t *testing.T, root string) {
@@ -512,7 +343,7 @@ func assertNoDistributedPlaintext(t *testing.T, root string) {
 		if err != nil {
 			return err
 		}
-		for _, private := range []string{secretTestKey, secretTestValue, secretTestReplacement} {
+		for _, private := range []string{hostfixtures.SecretTestKey, hostfixtures.SecretTestValue, hostfixtures.SecretTestReplacement} {
 			if bytes.Contains(data, []byte(private)) {
 				t.Error("secret synchronization persisted plaintext or key material")
 			}

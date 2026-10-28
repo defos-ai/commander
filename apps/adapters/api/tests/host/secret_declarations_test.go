@@ -10,6 +10,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/mappings"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -18,8 +19,8 @@ import (
 )
 
 func TestCatalogQueriesPreserveSecretDeclarations(t *testing.T) {
-	fixture := newFixture(t)
-	database := filepath.Join(fixture.root, "database")
+	fixture := hostfixtures.New(t)
+	database := filepath.Join(fixture.Root, "database")
 	actionStore, err := actionfs.NewActionFsStore(database)
 	if err != nil {
 		t.Fatal(err)
@@ -46,14 +47,14 @@ func TestCatalogQueriesPreserveSecretDeclarations(t *testing.T) {
 	if err := agentStore.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
 	}
-	server := startAPI(t, fixture.localArgs())
-	list := decodeResponse[models.ListResponse[models.ActionResponse]](t, server.request(t, http.MethodGet, "/api/v1/actions", authenticate))
-	detail := decodeResponse[models.ActionResponse](t, server.request(t, http.MethodGet, "/api/v1/actions/"+action.Name, authenticate))
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	list := decodeResponse[models.ListResponse[models.ActionResponse]](t, server.Request(t, http.MethodGet, "/api/v1/actions", hostfixtures.Authenticate))
+	detail := decodeResponse[models.ActionResponse](t, server.Request(t, http.MethodGet, "/api/v1/actions/"+action.Name, hostfixtures.Authenticate))
 	if len(list.Items) != 1 || !reflect.DeepEqual(list.Items[0], detail) || !reflect.DeepEqual(detail.RequiredSecrets, action.RequiredSecrets) {
 		t.Fatalf("action queries lost secret declarations: list=%+v detail=%+v", list, detail)
 	}
-	agentList := decodeResponse[models.ListResponse[models.AgentResponse]](t, server.request(t, http.MethodGet, "/api/v1/agents", authenticate))
-	agentDetail := decodeResponse[models.AgentResponse](t, server.request(t, http.MethodGet, "/api/v1/agents/"+record.ID, authenticate))
+	agentList := decodeResponse[models.ListResponse[models.AgentResponse]](t, server.Request(t, http.MethodGet, "/api/v1/agents", hostfixtures.Authenticate))
+	agentDetail := decodeResponse[models.AgentResponse](t, server.Request(t, http.MethodGet, "/api/v1/agents/"+record.ID, hostfixtures.Authenticate))
 	if len(agentList.Items) != 1 || !reflect.DeepEqual(agentList.Items[0], agentDetail) ||
 		len(agentDetail.Actions) != 1 || !reflect.DeepEqual(agentDetail.Actions[0].RequiredSecrets, action.RequiredSecrets) || agentDetail.Actions[0].Status != "ready" {
 		t.Fatalf("agent queries lost ready-action requirements: list=%+v detail=%+v", agentList, agentDetail)

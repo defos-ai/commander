@@ -10,13 +10,14 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestAffinityPreflightRequiresCommonCapabilities(t *testing.T) {
-	checkout := affinityPreflightAgent("builder-agent-aaaaaaaa", "checkout-template")
-	build := affinityPreflightAgent("builder-agent-bbbbbbbb", "build-agent")
-	other := affinityPreflightAgent("review-agent-cccccccc", "other-action")
-	common := affinityPreflightAgent("builder-agent-dddddddd", "checkout-template", "build-agent")
+	checkout := fixtures.AffinityPreflightAgent("builder-agent-aaaaaaaa", "checkout-template")
+	build := fixtures.AffinityPreflightAgent("builder-agent-bbbbbbbb", "build-agent")
+	other := fixtures.AffinityPreflightAgent("review-agent-cccccccc", "other-action")
+	common := fixtures.AffinityPreflightAgent("builder-agent-dddddddd", "checkout-template", "build-agent")
 	missing := actions.Requirement{Kind: actions.SecretRequirement, Name: "BUILD_TOKEN"}
 	for _, test := range []struct {
 		name   string
@@ -34,7 +35,7 @@ func TestAffinityPreflightRequiresCommonCapabilities(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			op := affinityOperation()
+			op := fixtures.AffinityOperation()
 			// The group must be assessed even when it is absent from required_actions.
 			op.Mission.RequiredActions = []string{"other-action"}
 			inventory := []agents.Agent{checkout, build, other}
@@ -96,8 +97,8 @@ func TestAffinityPreflightRequiresCommonCapabilities(t *testing.T) {
 }
 
 func TestAffinityPreflightUsesOnlySavedOwner(t *testing.T) {
-	owner := affinityPreflightAgent("builder-agent-aaaaaaaa", "checkout-template", "build-agent")
-	other := affinityPreflightAgent("builder-agent-bbbbbbbb", "checkout-template", "build-agent", "other-action")
+	owner := fixtures.AffinityPreflightAgent("builder-agent-aaaaaaaa", "checkout-template", "build-agent")
+	other := fixtures.AffinityPreflightAgent("builder-agent-bbbbbbbb", "checkout-template", "build-agent", "other-action")
 	// This requirement must never be suggested after another agent owns the group.
 	other.Actions[1].Status = actions.Unavailable
 	other.Actions[1].RequiredSecrets = []string{"OTHER_TOKEN"}
@@ -125,7 +126,7 @@ func TestAffinityPreflightUsesOnlySavedOwner(t *testing.T) {
 		{name: "owner absent", absent: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			op := affinityOperation()
+			op := fixtures.AffinityOperation()
 			op.Mission.RequiredActions = []string{"other-action"}
 			dispatchAffinityTask(t, &op, 0, owner.ID)
 			inventory := []agents.Agent{other}
@@ -157,7 +158,7 @@ func TestAffinityPreflightUsesOnlySavedOwner(t *testing.T) {
 				}
 				for _, candidate := range coverage.UnavailableAgents {
 					if candidate.AgentID != owner.ID || candidate.Reason == "" {
-						t.Fatalf("owner wait is not explained or suggests another agent: %+v", coverage)
+						t.Fatalf("owner wait is not explained or suggests another Agent: %+v", coverage)
 					}
 				}
 				if coverage.ActionName == "build-agent" && !test.ready {
@@ -174,8 +175,8 @@ func TestAffinityPreflightUsesOnlySavedOwner(t *testing.T) {
 }
 
 func TestAffinityPreflightRefreshPreservesVersionAndRejectsConflictingHistory(t *testing.T) {
-	owner := affinityPreflightAgent("builder-agent-aaaaaaaa", "checkout-template", "build-agent")
-	op := affinityOperation()
+	owner := fixtures.AffinityPreflightAgent("builder-agent-aaaaaaaa", "checkout-template", "build-agent")
+	op := fixtures.AffinityOperation()
 	dispatchAffinityTask(t, &op, 0, owner.ID)
 	for _, state := range []struct {
 		inventory []agents.Agent
@@ -206,12 +207,4 @@ func TestAffinityPreflightRefreshPreservesVersionAndRejectsConflictingHistory(t 
 	if changed || !errors.Is(err, operations.ErrOperationConflict) || !reflect.DeepEqual(op.Clone(), before) {
 		t.Fatalf("conflicting refresh changed saved operation: changed %v, error %v", changed, err)
 	}
-}
-
-func affinityPreflightAgent(agentID string, names ...string) agents.Agent {
-	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: agentID, Type: "builder-agent", Status: agents.AgentReady}}
-	for _, name := range names {
-		record.Actions = append(record.Actions, actions.Action{Name: name, Status: actions.Ready})
-	}
-	return record
 }

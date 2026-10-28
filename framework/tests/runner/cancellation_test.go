@@ -12,23 +12,25 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestCancellationWriteFailurePreservesQueuedWorkAndRetry(t *testing.T) {
-	config := fixture()
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	assign(t, r, op.ID, "inspect")
-	first := receive(t, calls)
-	second := assign(t, r, op.ID, "inspect")
-	third := assign(t, r, op.ID, "inspect")
+	config := fixtures.Config()
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	fixtures.Assign(t, r, op.ID, "inspect")
+	first := fixtures.Receive(t, calls)
+	second := fixtures.Assign(t, r, op.ID, "inspect")
+	third := fixtures.Assign(t, r, op.ID, "inspect")
 	before, err := r.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	failure := errors.New("database unavailable")
-	config.OperationStore.(*operationStore).failNextUpdate(failure)
+	config.OperationStore.(*fakes.OperationStore).FailNextUpdate(failure)
 	command := commands.CancelOperationCommand{OperationID: op.ID}
 
 	_, cancelErr := r.Cancel(t.Context(), command)
@@ -42,9 +44,9 @@ func TestCancellationWriteFailurePreservesQueuedWorkAndRetry(t *testing.T) {
 	}
 
 	// The failed cancellation must leave queued work eligible to execute.
-	first.reply <- output("inspect")
-	next := receive(t, calls)
-	if next.call.Work.TaskID != second.ID {
+	first.Reply <- fixtures.Output("inspect")
+	next := fixtures.Receive(t, calls)
+	if next.Call.Work.TaskID != second.ID {
 		t.Fatalf("failed cancellation lost the next queued task: %+v", next)
 	}
 	cancelled, err := r.Cancel(t.Context(), command)
@@ -54,9 +56,9 @@ func TestCancellationWriteFailurePreservesQueuedWorkAndRetry(t *testing.T) {
 	if _, err := r.Cancel(t.Context(), command); !errors.Is(err, operations.ErrFinished) {
 		t.Fatalf("repeated cancellation should reject the finished operation: %v", err)
 	}
-	next.reply <- output("inspect")
-	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[1].Status == operations.TaskSucceeded })
-	closeRunner(t, r)
+	next.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[1].Status == operations.TaskSucceeded })
+	fixtures.CloseRunner(t, r)
 	cancellations := 0
 	for _, event := range settled.Events {
 		if event.Type == operations.OperationCancelled {
@@ -74,16 +76,18 @@ func TestCancellationWriteFailurePreservesQueuedWorkAndRetry(t *testing.T) {
 }
 
 func TestUncertainCancellationRecoversRunningResultsWithoutNewWork(t *testing.T) {
-	config := fixture()
-	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {ForActions: []string{"discover"}},
-	}
+	config := fixtures.Config()
+	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
+		m.Rules = missions.RuleSet{
+			missions.AggregateResults: {ForActions: []string{"discover"}},
+		}
+	})
 	failure := errors.New("directory sync failed")
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterCancel: func(operations.Operation) error {
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterCancel: func(operations.Operation) error {
 		return errors.Join(operations.ErrWriteUncertain, failure)
 	}}
-	exec, calls := controlledExecutor()
-	first, err := runner.NewRunner(t.Context(), durableExecutor{exec}, config)
+	exec, calls := fakes.ControlledExecutor()
+	first, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,10 +96,10 @@ func TestUncertainCancellationRecoversRunningResultsWithoutNewWork(t *testing.T)
 		defer cancel()
 		_ = first.Close(ctx)
 	})
-	op := start(t, first)
-	running := assign(t, first, op.ID, "discover")
-	original := receive(t, calls)
-	queued := assign(t, first, op.ID, "inspect")
+	op := fixtures.Start(t, first)
+	running := fixtures.Assign(t, first, op.ID, "discover")
+	original := fixtures.Receive(t, calls)
+	queued := fixtures.Assign(t, first, op.ID, "inspect")
 	command := commands.CancelOperationCommand{OperationID: op.ID}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -121,23 +125,23 @@ func TestUncertainCancellationRecoversRunningResultsWithoutNewWork(t *testing.T)
 	default:
 	}
 
-	savedResult := output("discover", actions.NextAction{ActionName: "inspect"})
-	observed := make(chan invocation, 2)
-	exec.recover = func(_ context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
-		observed <- invocation{agent: agent, call: call}
+	savedResult := fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
+	observed := make(chan fakes.Invocation, 2)
+	exec.Recover = func(_ context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
+		observed <- fakes.Invocation{Agent: agent, Call: call}
 		return savedResult, nil
 	}
-	restarted, err := runner.NewRunner(t.Context(), durableExecutor{exec}, config)
+	restarted, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { closeRunner(t, restarted) })
-	recovered := receive(t, observed)
-	if recovered.agent != original.agent || !reflect.DeepEqual(recovered.call, original.call) {
+	t.Cleanup(func() { fixtures.CloseRunner(t, restarted) })
+	recovered := fixtures.Receive(t, observed)
+	if recovered.Agent != original.Agent || !reflect.DeepEqual(recovered.Call, original.Call) {
 		t.Fatalf("cancellation recovery changed the dispatched command: %+v", recovered)
 	}
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	closeRunner(t, restarted)
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	fixtures.CloseRunner(t, restarted)
 	if settled.Status != operations.Cancelled || len(settled.Tasks) != 2 || settled.Tasks[0].ID != running.ID || !reflect.DeepEqual(settled.Tasks[0].Result, &savedResult) || !reflect.DeepEqual(settled.Tasks[1], stored.Tasks[1]) {
 		t.Fatalf("recovery lost cancellation or created follow-up work: %+v", settled)
 	}

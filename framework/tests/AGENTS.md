@@ -1,8 +1,45 @@
-# Working on framework tests
+# Working on repository tests
+
+This guide applies to test changes throughout the repository. Component guides
+add their service prerequisites and checks.
+
+## Layout and ownership
+
+- Keep scenarios and assertions in test files (`*_test.go`, frontend `*.test.ts(x)`
+  and browser specs). Use Arrange, Act, Assert: prepare
+  inputs/dependencies, perform the behavior under test, then check its observable
+  outcome. Separate phases with whitespace and clear names; do not add comments
+  that merely label those phases. Workflows may repeat these stages when later
+  actions depend on earlier outcomes.
+- Put test data, temporary files, server/client setup and cleanup in each suite's
+  `tests/fixtures/`. Put substitute implementations, including HTTP handlers,
+  readers, executors and in-memory stores, in `tests/fakes/`. Large suites may use
+  named subpackages below those roots. Keep existing executable fixture paths
+  when deployment tooling depends on them.
+- Keep assertion helpers beside scenarios. A handler that asserts a particular
+  transport or failure behavior can remain with that scenario. Extract reusable
+  behavior without adding generic callback frameworks or hiding the Act/Assert
+  phases inside setup helpers.
+- Fixtures may compose fakes. Fakes must not import fixtures or their parent test
+  package. Go support packages use ordinary `.go` files; keep them in the existing
+  module and out of production imports. Tests requiring access to
+  package internals may keep the minimum support beside that package.
+- Each test owns fresh state. Configure dependencies before starting workers;
+  register cleanup immediately and cancel/join workers before inspecting final
+  state or releasing resources. Data factories return independent values.
+- Keep mutable fake state and synchronization private. Expose controlled changes
+  and independent snapshots, copying nested slices, maps, bytes and pointers.
+  Prefer immutable setup, explicit completion boundaries and existing owner loops
+  over shared mutable test state. Keep mutexes where callers genuinely overlap;
+  do not replace a mutex with an equivalent channel gate solely to remove it.
+- Remove duplicated paths when a retained test already proves the same behavior
+  at the appropriate boundary, including E2E coverage. Identify the covering test
+  in the change summary. Preserve distinct protocol contracts, provider guarantees,
+  fault injection, recovery and cancellation cases that broader E2Es do not prove.
 
 ## Choosing coverage
 
-- These tests exercise framework behavior through public packages. Keep runtime
+- Framework tests exercise behavior through public packages. Keep runtime
   scenarios in [`agent`](agent/), [`controller`](controller/), [`runner`](runner/)
   and [`comms`](comms/), grouped by feature.
 - Prefer public HTTP/MCP scenarios in the adapter modules for cross-host behavior.
@@ -10,8 +47,7 @@
   failure paths; avoid tests that mirror implementation or duplicate coverage.
 - Use deterministic local fixtures and scripted models. Tests must need no paid
   model requests or public websites. Keep waits bounded and failures diagnostic.
-- Reuse and extend nearby fixtures, especially the runner's
-  [`fixture_test.go`](runner/fixture_test.go). Fake stores must preserve contract
+- Reuse and extend nearby fixtures and fakes. Fake stores must preserve contract
   behavior: independent snapshots, atomic mutations and explicit uncertain writes.
 - For lifecycle changes, cover late outcomes, cancellation and recovery where
   relevant. For concurrency changes, preserve race-detector coverage and verify

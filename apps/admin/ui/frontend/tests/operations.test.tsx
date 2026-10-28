@@ -1,37 +1,9 @@
-import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Operation, OperationTask } from '../src/api/operation-types';
+import type { Operation } from '../src/api/operation-types';
 import { OperationsPage } from '../src/pages/OperationsPage';
-
-const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', url: connection.url };
-const now = '2026-10-05T10:00:00Z';
-const task: OperationTask = {
-  id: 'task-discovery', operation_id: 'operation-review', agent_id: 'web-agent-1234abcd',
-  action_name: 'discover-pages', status: 'succeeded', input: { url: 'https://defos.ai' },
-  started_at: now, finished_at: now, result: { action_name: 'discover-pages', output: { pages: ['https://defos.ai'] } },
-};
-const operation: Operation = {
-  id: 'operation-review', mission: { name: 'review-website-with-browser', objectives: ['Review website quality.'],
-    required_actions: ['discover-pages'], starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} },
-  input: { url: 'https://defos.ai' }, status: 'planning', tasks: [task], questions: [], events: [], created_at: now, updated_at: now,
-  progress: { task_counts: { succeeded: 1 }, total_tasks: 1, finished_tasks: 1, pending_decisions: 0, pending_questions: 0, settled: false },
-};
-const secretWait: Operation = { ...operation, status: 'waiting', preflight: { ready: false, version: 1, actions: [
-  { action_name: 'build', unavailable_agents: [
-    { agent_id: 'builder-agent-1234abcd', agent_type: 'builder', reason: 'Action has missing requirements',
-      missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
-    { agent_id: 'builder-agent-2345abcd', agent_type: 'builder', reason: 'Action has missing requirements', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
-  ] },
-] } };
-
-function mockAPI(respond?: (url: string, options: RequestInit) => Response | Promise<Response>) {
-  const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => respond ? respond(upstreamURL(input), options)
-    : Response.json(upstreamURL(input).endsWith('/operations') ? { items: [operation] } : operation));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { upstreamURL } from './fakes/proxy';
+import { connection, credentials, mockAPI, now, operation, secretWait, task } from './fixtures/operations';
 
 describe('operations browser', () => {
   it('shows affinity before dispatch, preserves its owner, and limits queue hints to grouped active tasks', async () => {
@@ -323,12 +295,14 @@ describe('operations browser', () => {
     const other = { ...connection, id: 'other', url: 'https://other.example.test' };
 
     view.rerender(<OperationsPage connection={other} credentials={{ ...credentials, url: other.url }} onSignIn={vi.fn()} />);
+
     expect(await screen.findByRole('heading', { name: 'No operations yet' })).toBeVisible();
     expect(oldSignal?.aborted).toBe(true);
     await act(async () => finish(Response.json({ items: [operation] })));
     expect(screen.queryByRole('button', { name: `View operation ${operation.id}` })).not.toBeInTheDocument();
     const calls = fetch.mock.calls.length;
     view.rerender(<OperationsPage connection={other} onSignIn={vi.fn()} />);
+
     expect(screen.getByRole('alert')).toHaveTextContent('Sign in to view operations');
     expect(fetch).toHaveBeenCalledTimes(calls);
   });

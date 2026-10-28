@@ -12,10 +12,11 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	secretfs "github.com/defos-ai/commander/providers/fs/secrets"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestSecretFsStoreRejectsCorruptSnapshots(t *testing.T) {
-	value := fsSecretFixture(t, "API_TOKEN")
+	value := fixtures.Secret(t, "API_TOKEN")
 	encode := func(records ...map[string]any) []byte {
 		t.Helper()
 		data, err := json.Marshal(records)
@@ -40,7 +41,7 @@ func TestSecretFsStoreRejectsCorruptSnapshots(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
-			store := openSecretFsStore(t, root)
+			store := fixtures.OpenSecretStore(t, root)
 			path := filepath.Join(root, "secrets.json")
 			if err := os.WriteFile(path, test.data, 0600); err != nil {
 				t.Fatal(err)
@@ -50,7 +51,7 @@ func TestSecretFsStoreRejectsCorruptSnapshots(t *testing.T) {
 			}
 			metadata := value.Metadata
 			metadata.Version++
-			replacement := encryptFsSecret(t, metadata)
+			replacement := fixtures.EncryptSecret(t, metadata)
 			checks := []func() error{
 				func() error { _, err := store.Get(t.Context(), value.Metadata.Key); return err },
 				func() error { _, err := store.List(t.Context(), value.Metadata.Key.Scope); return err },
@@ -72,8 +73,8 @@ func TestSecretFsStoreRejectsCollectionAndLockSymlinks(t *testing.T) {
 	for _, name := range []string{"secrets.json", "secrets.json.lock"} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
-			store := openSecretFsStore(t, root)
-			value := fsSecretFixture(t, "API_TOKEN")
+			store := fixtures.OpenSecretStore(t, root)
+			value := fixtures.Secret(t, "API_TOKEN")
 			if err := store.Create(t.Context(), value); err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +87,7 @@ func TestSecretFsStoreRejectsCollectionAndLockSymlinks(t *testing.T) {
 			if err := os.Remove(link); err != nil {
 				t.Fatal(err)
 			}
-			linkForTest(t, outside, link)
+			fixtures.Link(t, outside, link)
 			if _, err := secretfs.NewSecretFsStore(root); err == nil {
 				t.Fatal("constructor followed symlink")
 			}
@@ -102,8 +103,8 @@ func TestSecretFsStoreRejectsCollectionAndLockSymlinks(t *testing.T) {
 }
 
 func TestSecretFsStoreRejectsInvalidRecords(t *testing.T) {
-	store := openSecretFsStore(t, t.TempDir())
-	value := fsSecretFixture(t, "API_TOKEN")
+	store := fixtures.OpenSecretStore(t, t.TempDir())
+	value := fixtures.Secret(t, "API_TOKEN")
 	if err := store.Create(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
@@ -136,9 +137,9 @@ func TestSecretFsStoreRejectsInvalidRecords(t *testing.T) {
 		func(m *secrets.Metadata) { m.Version = 2 },
 		func(m *secrets.Metadata) { m.UpdatedAt = m.UpdatedAt.Add(time.Nanosecond) },
 	} {
-		metadata := fsSecretFixture(t, "NEW_TOKEN").Metadata
+		metadata := fixtures.Secret(t, "NEW_TOKEN").Metadata
 		edit(&metadata)
-		if err := store.Create(t.Context(), encryptFsSecret(t, metadata)); err == nil {
+		if err := store.Create(t.Context(), fixtures.EncryptSecret(t, metadata)); err == nil {
 			t.Fatal("create accepted a noninitial version or update time")
 		}
 	}
@@ -151,14 +152,14 @@ func TestSecretFsStoreRejectsInvalidRecords(t *testing.T) {
 
 func TestSecretFsStoreRetiredIdentityStaysBoundToKey(t *testing.T) {
 	root := t.TempDir()
-	store := openSecretFsStore(t, root)
-	value := fsSecretFixture(t, "API_TOKEN")
+	store := fixtures.OpenSecretStore(t, root)
+	value := fixtures.Secret(t, "API_TOKEN")
 	if err := store.Delete(t.Context(), value.Metadata.Key, value.Metadata.ID, 1); err != nil {
 		t.Fatal(err)
 	}
 	other := value.Metadata.Key
 	other.Name = "OTHER_TOKEN"
-	reopened := openSecretFsStore(t, root)
+	reopened := fixtures.OpenSecretStore(t, root)
 	if err := reopened.Delete(t.Context(), other, value.Metadata.ID, 1); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("deletion reassigned a retired ID to another key: %v", err)
 	}

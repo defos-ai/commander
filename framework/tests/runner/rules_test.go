@@ -8,10 +8,11 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestRuleApplierAutomaticallyPreservesEveryProposal(t *testing.T) {
-	task := ruleTask("batch", "batch-ports",
+	task := fixtures.RuleTask("batch", "batch-ports",
 		actions.NextAction{ActionName: "scan-ports", Input: json.RawMessage(`{"port":80}`)},
 		actions.NextAction{ActionName: "scan-ports", Input: json.RawMessage(`{"port":443}`)},
 		actions.NextAction{ActionName: "scan-ports", Input: json.RawMessage(`{"port":80}`)})
@@ -81,7 +82,7 @@ func TestRuleApplierMatchesSourceActionsAndPreservesAggregation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.action, func(t *testing.T) {
-			task := ruleTask("source", tc.action, actions.NextAction{ActionName: "scan-ports"})
+			task := fixtures.RuleTask("source", tc.action, actions.NextAction{ActionName: "scan-ports"})
 			effects := applyRules(t, operations.RuleContext{Rules: rules, Task: task})
 			if effects.Decision != tc.decision {
 				t.Fatalf("rule applied to the wrong source: %+v", effects)
@@ -103,18 +104,18 @@ func TestRuleApplierMatchesSourceActionsAndPreservesAggregation(t *testing.T) {
 }
 
 func TestRuleApplierUsesDurableGroupMembersAndTheirOwnRules(t *testing.T) {
-	first := ruleTask("first", "scan-ports", actions.NextAction{ActionName: "report-scan"})
-	second := ruleTask("second", "batch-ports", actions.NextAction{ActionName: "scan-ports"})
-	input := ruleGroup(first, second)
+	first := fixtures.RuleTask("first", "scan-ports", actions.NextAction{ActionName: "report-scan"})
+	second := fixtures.RuleTask("second", "batch-ports", actions.NextAction{ActionName: "scan-ports"})
+	input := fixtures.RuleGroup(first, second)
 	input.Task.ActionName = "old-batch-action"
 	input.Task.Continuation.CreatedTaskIDs = []string{second.ID, first.ID}
 	input.Rules = missions.RuleSet{missions.AggregateResults: {ForActions: []string{"batch-ports"}}}
-	otherExecution := ruleTask("other-execution", "batch-ports")
+	otherExecution := fixtures.RuleTask("other-execution", "batch-ports")
 	otherExecution.ParentTaskID = "another-parent"
-	unrecordedChild := ruleTask("unrecorded", "scan-ports")
+	unrecordedChild := fixtures.RuleTask("unrecorded", "scan-ports")
 	unrecordedChild.ParentTaskID = input.Task.ID
 	unrecordedChild.Status = operations.TaskFailed
-	grandchild := ruleTask("grandchild", "scan-ports")
+	grandchild := fixtures.RuleTask("grandchild", "scan-ports")
 	grandchild.ParentTaskID = first.ID
 	grandchild.Status = operations.TaskRunning
 	input.Tasks = append(input.Tasks, otherExecution, unrecordedChild, grandchild)
@@ -136,7 +137,7 @@ func TestRuleApplierUsesDurableGroupMembersAndTheirOwnRules(t *testing.T) {
 func TestRuleApplierWaitsForWholeGroupBeforeModelReview(t *testing.T) {
 	for _, state := range []string{"missing", "running"} {
 		t.Run(state, func(t *testing.T) {
-			input := ruleGroup(ruleTask("review", "scan-ports"), ruleTask("pending", "batch-ports"))
+			input := fixtures.RuleGroup(fixtures.RuleTask("review", "scan-ports"), fixtures.RuleTask("pending", "batch-ports"))
 			input.Rules = missions.RuleSet{missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}}}
 			if state == "missing" {
 				input.Tasks = input.Tasks[:1]
@@ -152,9 +153,9 @@ func TestRuleApplierWaitsForWholeGroupBeforeModelReview(t *testing.T) {
 }
 
 func TestRuleApplierReturnsOneModelDecisionForMixedGroup(t *testing.T) {
-	first := ruleTask("first", "batch-ports", actions.NextAction{ActionName: "scan-ports", Input: json.RawMessage(`{"port":80}`)})
-	second := ruleTask("second", "scan-ports", actions.NextAction{ActionName: "report-scan", Input: json.RawMessage(`{"port":443}`)})
-	input := ruleGroup(first, second)
+	first := fixtures.RuleTask("first", "batch-ports", actions.NextAction{ActionName: "scan-ports", Input: json.RawMessage(`{"port":80}`)})
+	second := fixtures.RuleTask("second", "scan-ports", actions.NextAction{ActionName: "report-scan", Input: json.RawMessage(`{"port":443}`)})
+	input := fixtures.RuleGroup(first, second)
 	input.Rules = missions.RuleSet{
 		missions.AggregateResults:  {ForActions: []string{"batch-ports"}},
 		missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -178,10 +179,10 @@ func TestRuleApplierReturnsOneModelDecisionForMixedGroup(t *testing.T) {
 }
 
 func TestRuleApplierFailedGroupPreservesSuccessfulSiblingProposals(t *testing.T) {
-	succeeded := ruleTask("succeeded", "scan-ports", actions.NextAction{ActionName: "report-scan"})
-	failed := ruleTask("failed", "scan-ports", actions.NextAction{ActionName: "unaccepted-proposal"})
+	succeeded := fixtures.RuleTask("succeeded", "scan-ports", actions.NextAction{ActionName: "report-scan"})
+	failed := fixtures.RuleTask("failed", "scan-ports", actions.NextAction{ActionName: "unaccepted-proposal"})
 	failed.Status = operations.TaskFailed
-	effects := applyRules(t, ruleGroup(succeeded, failed))
+	effects := applyRules(t, fixtures.RuleGroup(succeeded, failed))
 	if effects.Decision != operations.RuleModel || len(effects.FollowUps) != 0 || !reflect.DeepEqual(effects.ProposedActions, succeeded.Result.NextActions) {
 		t.Fatalf("failed group dispatched work or lost successful sibling proposals: %+v", effects)
 	}
@@ -208,7 +209,7 @@ func TestRuleApplierRejectsInvalidGroupsWithoutEffects(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			input := ruleGroup(ruleTask("child", "scan-ports", actions.NextAction{ActionName: "report-scan"}))
+			input := fixtures.RuleGroup(fixtures.RuleTask("child", "scan-ports", actions.NextAction{ActionName: "report-scan"}))
 			tc.modify(&input)
 			effects, err := (operations.DefaultRuleApplier{}).Apply(input)
 			if err == nil || !reflect.DeepEqual(effects, operations.RuleEffects{}) {
@@ -225,19 +226,4 @@ func applyRules(t *testing.T, input operations.RuleContext) operations.RuleEffec
 		t.Fatal(err)
 	}
 	return effects
-}
-
-func ruleTask(id, action string, next ...actions.NextAction) operations.Task {
-	return operations.Task{ID: id, OperationID: "operation", ActionName: action, Status: operations.TaskSucceeded,
-		Result: &actions.ActionOutput{ActionName: action, NextActions: next}}
-}
-
-func ruleGroup(children ...operations.Task) operations.RuleContext {
-	parent := ruleTask("parent", "batch-ports")
-	parent.Continuation = &operations.Continuation{DecisionBy: operations.DecisionCode, Status: operations.ContinuationWaiting}
-	for i := range children {
-		children[i].ParentTaskID = parent.ID
-		parent.Continuation.CreatedTaskIDs = append(parent.Continuation.CreatedTaskIDs, children[i].ID)
-	}
-	return operations.RuleContext{Task: parent, Tasks: children}
 }

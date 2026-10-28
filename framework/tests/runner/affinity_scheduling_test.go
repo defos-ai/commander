@@ -12,148 +12,150 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestSelectedAffinitySelectsAnAgentSupportingTheWholeGroup(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	selected := missions.RuleSet{missions.SameAgent: {ForActions: []string{"inspect", "discover"}}}
-	config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 		return selected, nil
 	})
-	partial, complete := readyAgent(agentID), readyAgent("review-agent-00000002")
+	partial, complete := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
 	partial.Actions = []actions.Action{
 		{Name: "inspect", Status: actions.Ready},
 		{Name: "follow-up", Status: actions.Ready},
 	}
-	config.AgentCatalog.(*agentCatalog).set(partial, complete)
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	if !reflect.DeepEqual(op.Mission.Rules, selected) || len(config.MissionStore.(*missionStore).mission.Rules) != 0 {
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(partial, complete)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	if !reflect.DeepEqual(op.Mission.Rules, selected) || len(config.MissionStore.(*fakes.MissionStore).Snapshot().Rules) != 0 {
 		t.Fatal("selected affinity must belong to the saved operation without changing the mission catalog")
 	}
 
-	first := assign(t, r, op.ID, "inspect")
-	firstCall := receive(t, calls)
-	if firstCall.agent != complete.ID || firstCall.call.Work.TaskID != first.ID {
+	first := fixtures.Assign(t, r, op.ID, "inspect")
+	firstCall := fixtures.Receive(t, calls)
+	if firstCall.Agent != complete.ID || firstCall.Call.Work.TaskID != first.ID {
 		t.Fatalf("affinity bound to an agent missing another grouped action: %+v", firstCall)
 	}
 
-	unrelated := assign(t, r, op.ID, "follow-up")
-	unrelatedCall := receive(t, calls)
-	if unrelatedCall.agent != partial.ID || unrelatedCall.call.Work.TaskID != unrelated.ID {
+	unrelated := fixtures.Assign(t, r, op.ID, "follow-up")
+	unrelatedCall := fixtures.Receive(t, calls)
+	if unrelatedCall.Agent != partial.ID || unrelatedCall.Call.Work.TaskID != unrelated.ID {
 		t.Fatalf("affinity restricted an unrelated action: %+v", unrelatedCall)
 	}
-	unrelatedCall.reply <- output("follow-up")
-	firstCall.reply <- output("inspect", actions.NextAction{ActionName: "discover", Input: json.RawMessage(`{}`)})
-	next := receive(t, calls)
-	if next.agent != complete.ID || next.call.ActionName != "discover" || next.call.Work.OperationID != op.ID {
+	unrelatedCall.Reply <- fixtures.Output("follow-up")
+	firstCall.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "discover", Input: json.RawMessage(`{}`)})
+	next := fixtures.Receive(t, calls)
+	if next.Agent != complete.ID || next.Call.ActionName != "discover" || next.Call.Work.OperationID != op.ID {
 		t.Fatalf("automatic follow-up lost affinity: %+v", next)
 	}
-	next.reply <- output("discover")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+	next.Reply <- fixtures.Output("discover")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		return len(op.Tasks) == 3 && op.Tasks[0].Status == operations.TaskSucceeded &&
 			op.Tasks[1].Status == operations.TaskSucceeded && op.Tasks[2].Status == operations.TaskSucceeded
 	})
 }
 
 func TestAffinityQueuesBusySiblingsWithoutPinningOtherOperations(t *testing.T) {
-	config := affinityRunnerConfig()
+	config := fixtures.AffinityConfig()
 	config.Capacity = 2
-	first, second := readyAgent(agentID), readyAgent("review-agent-00000002")
-	config.AgentCatalog.(*agentCatalog).set(first, second)
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	assign(t, r, op.ID, "follow-up")
-	receive(t, calls).reply <- output("follow-up",
+	first, second := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(first, second)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	fixtures.Assign(t, r, op.ID, "follow-up")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("follow-up",
 		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{}`)},
 		actions.NextAction{ActionName: "discover", Input: json.RawMessage(`{}`)},
 		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{}`)})
 
-	grouped, concurrent := receive(t, calls), receive(t, calls)
-	if grouped.agent != concurrent.agent || grouped.call.ActionName == concurrent.call.ActionName ||
-		grouped.call.Work.OperationID != op.ID || concurrent.call.Work.OperationID != op.ID {
+	grouped, concurrent := fixtures.Receive(t, calls), fixtures.Receive(t, calls)
+	if grouped.Agent != concurrent.Agent || grouped.Call.ActionName == concurrent.Call.ActionName ||
+		grouped.Call.Work.OperationID != op.ID || concurrent.Call.Work.OperationID != op.ID {
 		t.Fatalf("concurrent grouped actions did not share an owner: %+v, %+v", grouped, concurrent)
 	}
 	// One result creates all children. Affinity must apply immediately without
 	// serializing the first two or sending the third to the spare agent.
 	stored := assertAffinityTaskQueued(t, r, op.ID, 3, calls)
-	for _, call := range []invocation{grouped, concurrent} {
-		if call.call.Work.TaskID != stored.Tasks[1].ID && call.call.Work.TaskID != stored.Tasks[2].ID {
+	for _, call := range []fakes.Invocation{grouped, concurrent} {
+		if call.Call.Work.TaskID != stored.Tasks[1].ID && call.Call.Work.TaskID != stored.Tasks[2].ID {
 			t.Fatalf("concurrent dispatch changed its task: %+v", call)
 		}
 	}
 
-	other := start(t, r)
-	otherTask := assign(t, r, other.ID, "inspect")
-	otherCall := receive(t, calls)
-	if otherCall.agent == grouped.agent || otherCall.call.Work.TaskID != otherTask.ID {
-		t.Fatalf("independent operation could not use the spare agent: %+v", otherCall)
+	other := fixtures.Start(t, r)
+	otherTask := fixtures.Assign(t, r, other.ID, "inspect")
+	otherCall := fixtures.Receive(t, calls)
+	if otherCall.Agent == grouped.Agent || otherCall.Call.Work.TaskID != otherTask.ID {
+		t.Fatalf("independent operation could not use the spare Agent: %+v", otherCall)
 	}
-	otherCall.reply <- output("inspect")
-	awaitOperation(t, r, other.ID, func(op operations.Operation) bool {
+	otherCall.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, other.ID, func(op operations.Operation) bool {
 		return op.Tasks[0].Status == operations.TaskSucceeded
 	})
 	assertAffinityTaskQueued(t, r, op.ID, 3, calls)
 
-	grouped.reply <- output(grouped.call.ActionName)
-	sibling := receive(t, calls)
-	if sibling.agent != grouped.agent || sibling.call.Work.TaskID != stored.Tasks[3].ID {
+	grouped.Reply <- fixtures.Output(grouped.Call.ActionName)
+	sibling := fixtures.Receive(t, calls)
+	if sibling.Agent != grouped.Agent || sibling.Call.Work.TaskID != stored.Tasks[3].ID {
 		t.Fatalf("queued sibling moved away from its owner: %+v", sibling)
 	}
-	sibling.reply <- output("inspect")
-	concurrent.reply <- output(concurrent.call.ActionName)
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+	sibling.Reply <- fixtures.Output("inspect")
+	concurrent.Reply <- fixtures.Output(concurrent.Call.ActionName)
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		return op.Tasks[1].Status == operations.TaskSucceeded && op.Tasks[2].Status == operations.TaskSucceeded &&
 			op.Tasks[3].Status == operations.TaskSucceeded
 	})
 }
 
 func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	var selections atomic.Int32
 	selected := missions.RuleSet{missions.SameAgent: {ForActions: []string{"inspect", "discover"}}}
-	config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 		selections.Add(1)
 		return selected, nil
 	})
-	owner, spare := readyAgent(agentID), readyAgent("review-agent-00000002")
-	catalog := config.AgentCatalog.(*agentCatalog)
-	catalog.set(owner, spare)
-	exec, calls := controlledExecutor()
-	first := newRunner(t, config, exec)
-	op := start(t, first)
-	originalTask := assign(t, first, op.ID, "inspect")
-	original := receive(t, calls)
-	if original.agent != owner.ID {
-		t.Fatalf("unexpected initial agent: %+v", original)
+	owner, spare := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
+	catalog := config.AgentCatalog.(*fakes.AgentCatalog)
+	catalog.Set(owner, spare)
+	exec, calls := fakes.ControlledExecutor()
+	first := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, first)
+	originalTask := fixtures.Assign(t, first, op.ID, "inspect")
+	original := fixtures.Receive(t, calls)
+	if original.Agent != owner.ID {
+		t.Fatalf("unexpected initial Agent: %+v", original)
 	}
-	queued := assign(t, first, op.ID, "discover")
+	queued := fixtures.Assign(t, first, op.ID, "discover")
 	assertAffinityTaskQueued(t, first, op.ID, 1, calls)
-	closeRunner(t, first)
-	config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+	fixtures.CloseRunner(t, first)
+	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 		selections.Add(1)
 		return nil, errors.New("must not reselect affinity for a saved operation")
 	})
 
 	owner.Stale = true
-	catalog.set(owner, spare)
-	observed := make(chan invocation, 1)
-	exec.recover = func(ctx context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
+	catalog.Set(owner, spare)
+	observed := make(chan fakes.Invocation, 1)
+	exec.Recover = func(ctx context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
 		select {
-		case observed <- invocation{agent: agent, call: call}:
-			return output(call.ActionName), nil
+		case observed <- fakes.Invocation{Agent: agent, Call: call}:
+			return fixtures.Output(call.ActionName), nil
 		case <-ctx.Done():
 			return actions.ActionOutput{}, ctx.Err()
 		}
 	}
-	restarted := newRunner(t, config, exec)
-	recovered := receive(t, observed)
-	if recovered.agent != original.agent || recovered.call.Work != original.call.Work {
-		t.Fatalf("recovery changed the saved dispatch: %+v", recovered)
+	restarted := fixtures.NewRunner(t, config, exec)
+	recovered := fixtures.Receive(t, observed)
+	if recovered.Agent != original.Agent || recovered.Call.Work != original.Call.Work {
+		t.Fatalf("recovery changed the saved Dispatch: %+v", recovered)
 	}
-	offline := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
+	offline := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
 		return op.Tasks[0].Status == operations.TaskSucceeded && op.Preflight != nil && !op.Preflight.Ready
 	})
 	assertAffinityTaskQueued(t, restarted, op.ID, 1, calls)
@@ -163,21 +165,21 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	owner.Stale = false
 	owner.Actions[1].Status = actions.Unavailable
 	owner.Actions[1].MissingRequirements = []actions.Requirement{{Kind: actions.ExecutableRequirement, Name: "git"}}
-	catalog.set(owner, spare)
-	awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
+	catalog.Set(owner, spare)
+	fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
 		return op.Preflight.Version > offline.Preflight.Version && !op.Preflight.Ready
 	})
 	assertAffinityTaskQueued(t, restarted, op.ID, 1, calls)
 
 	owner.Actions[1].Status = actions.Ready
 	owner.Actions[1].MissingRequirements = nil
-	catalog.set(owner, spare)
-	resumed := receive(t, calls)
-	if resumed.agent != owner.ID || resumed.call.Work.TaskID != queued.ID {
+	catalog.Set(owner, spare)
+	resumed := fixtures.Receive(t, calls)
+	if resumed.Agent != owner.ID || resumed.Call.Work.TaskID != queued.ID {
 		t.Fatalf("returning owner did not resume its queued task: %+v", resumed)
 	}
-	resumed.reply <- output("discover")
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
+	resumed.Reply <- fixtures.Output("discover")
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
 		return op.Tasks[1].Status == operations.TaskSucceeded
 	})
 	dispatches := 0
@@ -190,7 +192,7 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 		t.Fatalf("recovery replayed the original task: %+v", settled)
 	}
 	if selections.Load() != 1 || !reflect.DeepEqual(settled.Mission.Rules, selected) ||
-		len(config.MissionStore.(*missionStore).mission.Rules) != 0 {
+		len(config.MissionStore.(*fakes.MissionStore).Snapshot().Rules) != 0 {
 		t.Fatal("recovery must retain selected affinity without reselecting or changing the mission catalog")
 	}
 	select {
@@ -202,15 +204,7 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	}
 }
 
-func affinityRunnerConfig() runner.Config {
-	config := fixture()
-	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.SameAgent: {ForActions: []string{"inspect", "discover"}},
-	}
-	return config
-}
-
-func assertAffinityTaskQueued(t *testing.T, r *runner.Runner, operationID string, index int, calls <-chan invocation) operations.Operation {
+func assertAffinityTaskQueued(t *testing.T, r *runner.Runner, operationID string, index int, calls <-chan fakes.Invocation) operations.Operation {
 	t.Helper()
 	// Events uses the runner owner loop, so this observes a complete scheduler pass.
 	if _, err := r.Events(t.Context(), operationID, 0, false); err != nil {
@@ -225,7 +219,7 @@ func assertAffinityTaskQueued(t *testing.T, r *runner.Runner, operationID string
 	}
 	select {
 	case call := <-calls:
-		t.Fatalf("waiting task dispatched to another agent: %+v", call)
+		t.Fatalf("waiting task dispatched to another Agent: %+v", call)
 	default:
 	}
 	return op

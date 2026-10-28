@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -20,12 +21,12 @@ import (
 )
 
 func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testing.T) {
-	fixture := newFixture(t)
-	store, err := operationfs.NewOperationFsStore(filepath.Join(fixture.root, "database"))
+	fixture := hostfixtures.New(t)
+	store, err := operationfs.NewOperationFsStore(filepath.Join(fixture.Root, "database"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := startAPI(t, append(fixture.localArgs(), "--swagger=true"))
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--swagger=true"))
 	schema := affinityOperationSchema(t, server)
 	const owner = "builder-agent-12345678"
 	group := []string{"checkout-template", "build-agent"}
@@ -77,10 +78,10 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			result := server.request(t, http.MethodGet, "/api/v1/operations/"+op.ID, authenticate)
+			result := server.Request(t, http.MethodGet, "/api/v1/operations/"+op.ID, hostfixtures.Authenticate)
 			detail := decodeResponse[models.OperationResponse](t, result)
 			var body any
-			if err := json.Unmarshal([]byte(result.body), &body); err != nil {
+			if err := json.Unmarshal([]byte(result.Body), &body); err != nil {
 				t.Fatal(err)
 			}
 			if err := schema.Validate(body); err != nil {
@@ -120,7 +121,7 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 				len(detail.Preflight.Actions[1].UnavailableAgents) != 1 || detail.Preflight.Actions[1].UnavailableAgents[0].AgentID != owner) {
 				t.Fatal("saved readiness lost the absent owner blocker")
 			}
-			list := decodeResponse[models.ListResponse[models.OperationResponse]](t, server.request(t, http.MethodGet, "/api/v1/operations", authenticate))
+			list := decodeResponse[models.ListResponse[models.OperationResponse]](t, server.Request(t, http.MethodGet, "/api/v1/operations", hostfixtures.Authenticate))
 			index := slices.IndexFunc(list.Items, func(item models.OperationResponse) bool { return item.ID == op.ID })
 			if index < 0 || !reflect.DeepEqual(list.Items[index].Affinity, affinity) || !reflect.DeepEqual(list.Items[index].Progress, detail.Progress) {
 				t.Fatal("list and detail disagree about saved affinity or progress")
@@ -136,7 +137,7 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 				}); err != nil {
 					t.Fatal(err)
 				}
-				late := decodeResponse[models.OperationResponse](t, server.request(t, http.MethodGet, "/api/v1/operations/"+op.ID, authenticate))
+				late := decodeResponse[models.OperationResponse](t, server.Request(t, http.MethodGet, "/api/v1/operations/"+op.ID, hostfixtures.Authenticate))
 				if !late.Progress.Settled || late.Progress.FinishedTasks != 2 || late.Progress.PendingDecisions != 0 || late.Status != "cancelled" {
 					t.Fatalf("late known outcome did not settle cancelled work: %+v", late.Progress)
 				}
@@ -145,13 +146,13 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 	}
 }
 
-func affinityOperationSchema(t *testing.T, server *runningAPI) *jsonschema.Resolved {
+func affinityOperationSchema(t *testing.T, server *hostfixtures.API) *jsonschema.Resolved {
 	t.Helper()
 	document := decodeResponse[struct {
 		Components struct {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
-	}](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	}](t, server.Request(t, http.MethodGet, "/openapi.json", hostfixtures.Authenticate))
 	data, err := json.Marshal(map[string]any{"$defs": document.Components.Schemas, "$ref": "#/$defs/Operation"})
 	if err != nil {
 		t.Fatal(err)

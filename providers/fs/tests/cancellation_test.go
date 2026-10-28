@@ -12,12 +12,13 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationCancellationUsesLatestSnapshotAndPreservesEvidence(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, _ := createResultOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, _ := fixtures.CreateResultOperation(t, first)
 	latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 		for _, status := range []operations.TaskStatus{operations.TaskQueued, operations.TaskInterrupted, operations.TaskSucceeded, operations.TaskQueued} {
 			task := next.Tasks[0]
@@ -41,7 +42,7 @@ func TestOperationCancellationUsesLatestSnapshotAndPreservesEvidence(t *testing.
 		t.Fatal(err)
 	}
 	assertCancellation(t, latest, published, started)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,8 +53,8 @@ func TestOperationCancellationRejectsTerminalSnapshotsWithoutWriting(t *testing.
 	for _, status := range []operations.Status{operations.Completed, operations.Failed, operations.Cancelled} {
 		t.Run(string(status), func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op, _ := createQueuedDispatchOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op, _ := fixtures.CreateQueuedDispatchOperation(t, first)
 			var latest operations.Operation
 			var err error
 			if status == operations.Cancelled {
@@ -68,17 +69,17 @@ func TestOperationCancellationRejectsTerminalSnapshotsWithoutWriting(t *testing.
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 
 			published, err := first.Cancel(t.Context(), op.ID)
 
 			if !errors.Is(err, operations.ErrFinished) || published.ID != "" {
 				t.Fatalf("terminal cancellation must reject without a published snapshot: %+v, %v", published, err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 				t.Fatal("rejected cancellation changed the operation file or storage revision")
 			}
-			saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -95,16 +96,16 @@ func TestOperationCancellationSerializesWithDispatchAndAutomaticChildren(t *test
 		}
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
 			var op operations.Operation
 			var result operations.TaskResult
 			var compete func() (operations.Operation, error)
 			if dispatch {
 				var request operations.TaskDispatch
-				op, request = createQueuedDispatchOperation(t, first)
+				op, request = fixtures.CreateQueuedDispatchOperation(t, first)
 				compete = func() (operations.Operation, error) { return second.DispatchTask(t.Context(), op.ID, request) }
 			} else {
-				op, result = createResultOperation(t, first)
+				op, result = fixtures.CreateResultOperation(t, first)
 				compete = func() (operations.Operation, error) { return second.FinishTask(t.Context(), op.ID, result) }
 			}
 			type completion struct {
@@ -137,7 +138,7 @@ func TestOperationCancellationSerializesWithDispatchAndAutomaticChildren(t *test
 				before = work.op
 			}
 			assertCancellation(t, before, cancellation.op, started)
-			saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,11 +180,11 @@ func TestOperationCancellationWriteFailuresPreservePublicationState(t *testing.T
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
-			op, _ := createQueuedDispatchOperation(t, store)
+			store := fixtures.NewDispatchStore(t, dir)
+			op, _ := fixtures.CreateQueuedDispatchOperation(t, store)
 			operationDir := filepath.Join(dir, "operations")
 			path := filepath.Join(operationDir, op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 			restore := func() {
 				t.Helper()
 				if err := os.Chmod(operationDir, 0700); err != nil {
@@ -191,7 +192,7 @@ func TestOperationCancellationWriteFailuresPreservePublicationState(t *testing.T
 				}
 			}
 			if permission == "read" {
-				restore = denyDirectoryRead(t, operationDir)
+				restore = fixtures.DenyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
 				if err := os.Chmod(operationDir, 0500); err != nil {
@@ -209,10 +210,10 @@ func TestOperationCancellationWriteFailuresPreservePublicationState(t *testing.T
 			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
 				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) || published.ID != "" {
 				t.Fatal("failed write exposed or persisted an uncommitted mutation")
 			}
-			reopened := newDispatchStore(t, dir)
+			reopened := fixtures.NewDispatchStore(t, dir)
 			saved, err := reopened.Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)

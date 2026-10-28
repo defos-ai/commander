@@ -11,13 +11,13 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
-	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op := createCompletionOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op := fixtures.CreateCompletionOperation(t, first)
 	latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 		// A decision already resolved by another writer must retain its version.
 		task := next.Clone().Tasks[0]
@@ -46,7 +46,7 @@ func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {
 	expected.Tasks[0].Continuation.Version++
 	assertTerminalSnapshot(t, expected, published, operations.OperationCompleted, started)
 	output[0] = '['
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,8 +83,8 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op := createCompletionOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op := fixtures.CreateCompletionOperation(t, first)
 			if _, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				tc.change(next)
 				return nil
@@ -92,7 +92,7 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 
 			published, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"done"}`))
 
@@ -102,7 +102,7 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 			if tc.name == "pending question" && !errors.Is(err, operations.ErrQuestionPending) {
 				t.Fatalf("pending question lost its error identity: %v", err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 				t.Fatal("rejected completion changed the latest snapshot or storage revision")
 			}
 		})
@@ -111,8 +111,8 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 
 func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op := createCompletionOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op := fixtures.CreateCompletionOperation(t, store)
 	complete := func(reportID string, output json.RawMessage) func() (operations.Operation, error) {
 		return func() (operations.Operation, error) { return store.Complete(t.Context(), op.ID, reportID, output) }
 	}
@@ -137,7 +137,7 @@ func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T
 	}
 	for _, status := range []operations.Status{operations.Completed, operations.Failed, operations.Cancelled} {
 		t.Run(string(status), func(t *testing.T) {
-			if _, err := newDispatchStore(t, dir).Update(t.Context(), op.ID, func(next *operations.Operation) error {
+			if _, err := fixtures.NewDispatchStore(t, dir).Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				next.Status = status
 				return nil
 			}); err != nil {
@@ -153,8 +153,8 @@ func TestOperationCompetingTerminalWritesPublishOneWinner(t *testing.T) {
 	for _, competingStatus := range []operations.Status{operations.Completed, operations.Failed, operations.Cancelled} {
 		t.Run(string(competingStatus), func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op := createCompletionOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op := fixtures.CreateCompletionOperation(t, first)
 			compete := func() (operations.Operation, error) {
 				switch competingStatus {
 				case operations.Completed:
@@ -189,7 +189,7 @@ func TestOperationCompetingTerminalWritesPublishOneWinner(t *testing.T) {
 			if winner.err != nil || !errors.Is(loser.err, operations.ErrFinished) || loser.op.ID != "" {
 				t.Fatalf("terminal writes must have one winner: %v, %v", winner.err, loser.err)
 			}
-			saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -203,8 +203,8 @@ func TestOperationCompetingTerminalWritesPublishOneWinner(t *testing.T) {
 
 func TestOperationFailureCancelsLatestQueuedWorkAndPreservesEvidence(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, result := createResultOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, result := fixtures.CreateResultOperation(t, first)
 	latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 		for _, status := range []operations.TaskStatus{operations.TaskQueued, operations.TaskInterrupted, operations.TaskSucceeded, operations.TaskQueued} {
 			task := next.Tasks[0]
@@ -241,7 +241,7 @@ func TestOperationFailureCancelsLatestQueuedWorkAndPreservesEvidence(t *testing.
 	if published.Events[len(published.Events)-1].Message != expected.Error {
 		t.Fatal("failure event lost its reason")
 	}
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,8 +252,8 @@ func TestOperationFailureSerializesWithAutomaticFollowupsAndLateResults(t *testi
 	for _, order := range []string{"failure first", "result first", "concurrent"} {
 		t.Run(order, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op, request := createResultOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op, request := fixtures.CreateResultOperation(t, first)
 			fail := func() error { _, err := first.Fail(t.Context(), op.ID, "Cannot continue"); return err }
 			finish := func() error { _, err := second.FinishTask(t.Context(), op.ID, request); return err }
 			var a, b error
@@ -273,7 +273,7 @@ func TestOperationFailureSerializesWithAutomaticFollowupsAndLateResults(t *testi
 			if a != nil || b != nil {
 				t.Fatalf("failure or task result was lost: %v, %v", a, b)
 			}
-			saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -296,29 +296,15 @@ func TestOperationFailureSerializesWithAutomaticFollowupsAndLateResults(t *testi
 	}
 }
 
-func createCompletionOperation(t *testing.T, store *operationfs.OperationFsStore) operations.Operation {
-	t.Helper()
-	op, _ := createContinuationOperation(t, store)
-	op, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-		next.Input, next.Mission.InputSchema = json.RawMessage(`{}`), json.RawMessage(`{}`)
-		next.Mission.OutputSchema = json.RawMessage(`{"type":"object","required":["summary"],"properties":{"summary":{"type":"string"}}}`)
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return op
-}
-
 func assertTerminalRejected(t *testing.T, dir, operationID string, call func() (operations.Operation, error), want error) {
 	t.Helper()
 	path := filepath.Join(dir, "operations", operationID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	published, err := call()
 	if err == nil || want != nil && !errors.Is(err, want) || published.ID != "" {
 		t.Fatalf("terminal mutation must reject without a published snapshot: %+v, %v", published, err)
 	}
-	if !bytes.Equal(before, readDispatchFile(t, path)) {
+	if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatal("rejected terminal mutation changed operation bytes or storage revision")
 	}
 }

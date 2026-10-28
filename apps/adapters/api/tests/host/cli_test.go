@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 )
 
 func TestCLIFlagsOverrideEnvironment(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	for _, name := range []string{"BUS_URL", "STORAGE_URL", "DATABASE_URL"} {
 		t.Setenv(name, "unsupported://environment-user:environment-password@example.invalid/state")
 	}
@@ -29,19 +30,19 @@ func TestCLIFlagsOverrideEnvironment(t *testing.T) {
 	t.Setenv("API_TRUSTED_PROXIES", "invalid-proxy")
 	t.Setenv("API_PROXY_HEADERS", "invalid-mode")
 
-	server := startAPI(t, append(fixture.localArgs(), "--allowed-hosts=127.0.0.1", "--trusted-proxies=", "--proxy-headers=none"))
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--allowed-hosts=127.0.0.1", "--trusted-proxies=", "--proxy-headers=none"))
 
-	assertHealthy(t, server.request(t, http.MethodGet, "/readyz"))
-	if result := server.request(t, http.MethodGet, "/api/v1/nonexistent", authenticate); result.status != http.StatusNotFound {
-		t.Fatalf("security flags did not override environment: status=%d body=%s", result.status, result.body)
+	assertHealthy(t, server.Request(t, http.MethodGet, "/readyz"))
+	if result := server.Request(t, http.MethodGet, "/api/v1/nonexistent", hostfixtures.Authenticate); result.Status != http.StatusNotFound {
+		t.Fatalf("security flags did not override environment: status=%d body=%s", result.Status, result.Body)
 	}
 }
 
 func TestCLIUsesEnvironmentConfiguration(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("BUS_URL", filepath.Join(fixture.root, "bus"))
-	t.Setenv("STORAGE_URL", filepath.Join(fixture.root, "storage"))
-	t.Setenv("DATABASE_URL", filepath.Join(fixture.root, "database"))
+	fixture := hostfixtures.New(t)
+	t.Setenv("BUS_URL", filepath.Join(fixture.Root, "bus"))
+	t.Setenv("STORAGE_URL", filepath.Join(fixture.Root, "storage"))
+	t.Setenv("DATABASE_URL", filepath.Join(fixture.Root, "database"))
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
 	t.Setenv("PORT", "invalid-lower-priority-port")
 	t.Setenv("LOG_LEVEL", "error")
@@ -50,19 +51,19 @@ func TestCLIUsesEnvironmentConfiguration(t *testing.T) {
 	t.Setenv("API_TRUSTED_PROXIES", "127.0.0.1")
 	t.Setenv("API_PROXY_HEADERS", "x-forwarded")
 
-	server := startAPI(t, nil)
+	server := hostfixtures.Start(t, nil)
 
-	assertHealthy(t, server.request(t, http.MethodGet, "/readyz"))
-	result := server.request(t, http.MethodGet, "/api/v1/nonexistent", authenticate, func(r *http.Request) {
+	assertHealthy(t, server.Request(t, http.MethodGet, "/readyz"))
+	result := server.Request(t, http.MethodGet, "/api/v1/nonexistent", hostfixtures.Authenticate, func(r *http.Request) {
 		r.Header.Set("X-Forwarded-Host", "api.example")
 		r.Header.Set("X-Forwarded-Proto", "https")
 	})
-	if result.status != http.StatusNotFound {
-		t.Fatalf("security environment was not applied: status=%d body=%s", result.status, result.body)
+	if result.Status != http.StatusNotFound {
+		t.Fatalf("security environment was not applied: status=%d body=%s", result.Status, result.Body)
 	}
 	assertSecurityHeaders(t, result, true)
 	for _, directory := range []string{"bus", "database"} {
-		if _, err := os.Stat(filepath.Join(fixture.root, directory)); err != nil {
+		if _, err := os.Stat(filepath.Join(fixture.Root, directory)); err != nil {
 			t.Errorf("configured %s directory was not opened: %v", directory, err)
 		}
 	}
@@ -85,12 +86,12 @@ func TestCLIRejectsInvalidSecurityConfiguration(t *testing.T) {
 		{name: "X proto without trusted proxy", args: []string{"--proxy-headers=x-forwarded-proto"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			var logs bytes.Buffer
 
-			err := cli.Run(ctx, append(fixture.localArgs(), test.args...), &logs)
+			err := cli.Run(ctx, append(fixture.LocalArgs(), test.args...), &logs)
 
 			if ctx.Err() != nil || err == nil {
 				t.Fatalf("invalid security configuration did not fail startup promptly: %v", err)
@@ -103,7 +104,7 @@ func TestCLIRejectsInvalidSecurityConfiguration(t *testing.T) {
 }
 
 func TestCLIPortBindsAllInterfaces(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -114,13 +115,13 @@ func TestCLIPortBindsAllInterfaces(t *testing.T) {
 	}
 	t.Setenv("PORT", strconv.Itoa(port))
 
-	server := startAPI(t, fixture.args)
+	server := hostfixtures.Start(t, fixture.Args)
 
-	address, ok := server.address.(*net.TCPAddr)
+	address, ok := server.Address.(*net.TCPAddr)
 	if !ok || !address.IP.IsUnspecified() || address.Port != port {
-		t.Fatalf("PORT listener bound %s, want all interfaces on port %d", server.address, port)
+		t.Fatalf("PORT listener bound %s, want all interfaces on port %d", server.Address, port)
 	}
-	assertHealthy(t, server.request(t, http.MethodGet, "/healthz"))
+	assertHealthy(t, server.Request(t, http.MethodGet, "/healthz"))
 }
 
 func TestCLIRejectsInvalidCredentials(t *testing.T) {
@@ -133,14 +134,14 @@ func TestCLIRejectsInvalidCredentials(t *testing.T) {
 		{name: "password contains newline", username: "private-username-value", password: "private-password-value\nbad", diagnostic: "credentials"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("API_USERNAME", test.username)
 			t.Setenv("API_PASSWORD", test.password)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			var logs bytes.Buffer
 
-			err := cli.Run(ctx, fixture.localArgs(), &logs)
+			err := cli.Run(ctx, fixture.LocalArgs(), &logs)
 
 			if ctx.Err() != nil || err == nil {
 				t.Fatalf("invalid credentials did not fail startup promptly: %v", err)
@@ -160,9 +161,9 @@ func TestCLIRejectsInvalidCredentials(t *testing.T) {
 func TestCLIDoesNotAcceptCredentialFlags(t *testing.T) {
 	for _, flag := range []string{"username", "password"} {
 		t.Run(flag, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			const secret = "private-command-line-credential"
-			args := append(fixture.localArgs(), "--"+flag+"="+secret)
+			args := append(fixture.LocalArgs(), "--"+flag+"="+secret)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			var logs bytes.Buffer
@@ -182,13 +183,13 @@ func TestCLIDoesNotAcceptCredentialFlags(t *testing.T) {
 func TestCLIRejectsInvalidSelectedPort(t *testing.T) {
 	for _, port := range []string{"0", "65536", "private-invalid-port"} {
 		t.Run(port, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("PORT", port)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			var logs bytes.Buffer
 
-			err := cli.Run(ctx, fixture.args, &logs)
+			err := cli.Run(ctx, fixture.Args, &logs)
 
 			if ctx.Err() != nil || err == nil {
 				t.Fatalf("invalid PORT did not fail startup promptly: %v", err)
@@ -215,8 +216,8 @@ func TestCLIRejectsUnavailableProvidersWithoutExposingCredentials(t *testing.T) 
 		{name: "incomplete S3 credentials", flag: "storage-url", url: "s3://:" + secret + "@artifacts/bucket"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
-			args := append(fixture.localArgs(), "--"+test.flag+"="+test.url)
+			fixture := hostfixtures.New(t)
+			args := append(fixture.LocalArgs(), "--"+test.flag+"="+test.url)
 			logPath := filepath.Join(t.TempDir(), "startup.log")
 			logs, err := os.Create(logPath)
 			if err != nil {
@@ -246,7 +247,7 @@ func TestCLIRejectsUnavailableProvidersWithoutExposingCredentials(t *testing.T) 
 }
 
 func TestMainHelpAndConfigurationExitCodes(t *testing.T) {
-	newFixture(t)
+	hostfixtures.New(t)
 	t.Setenv("API_USERNAME", "")
 	t.Setenv("API_PASSWORD", "")
 	t.Setenv("DATABASE_URL", "postgres://user:private-help-password@example.invalid/database")

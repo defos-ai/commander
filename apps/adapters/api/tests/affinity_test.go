@@ -9,26 +9,27 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestAffinityWaitsForItsOwnerWhileAnotherOperationUsesASpare(t *testing.T) {
-	a := connect(t)
+	a := fixtures.Connect(t)
 	for range 2 {
-		provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", object{"package": "github.com/defos-ai/fixture-agent@v0.1.0"})
+		provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", fixtures.Object{"package": "github.com/defos-ai/fixture-agent@v0.1.0"})
 		var installed struct {
 			AgentID string `json:"agent_id"`
 		}
 		if err := json.Unmarshal(spawn.Result.Output, &installed); err != nil || installed.AgentID == "" {
 			t.Fatalf("fixture installation did not identify its agent: %s: %v", spawn.Result.Output, err)
 		}
-		decision := modelDecision(a.wait(provision.ID, func(op models.OperationResponse) bool { return modelDecision(op) != nil }))
-		a.resolve(provision.ID, *decision, []object{})
-		post[models.OperationResponse](a, operationPath(provision.ID)+"/complete", object{"output": object{"agent_id": installed.AgentID}}, http.StatusOK)
+		decision := fixtures.ModelDecision(a.Wait(provision.ID, func(op models.OperationResponse) bool { return fixtures.ModelDecision(op) != nil }))
+		a.Resolve(provision.ID, *decision, []fixtures.Object{})
+		fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(provision.ID)+"/complete", fixtures.Object{"output": fixtures.Object{"agent_id": installed.AgentID}}, http.StatusOK)
 	}
 
-	op := post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "fixture-affinity", "input": object{"message": "bind owner"}}, http.StatusCreated)
-	op = a.wait(op.ID, func(op models.OperationResponse) bool {
+	op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": "fixture-affinity", "input": fixtures.Object{"message": "bind owner"}}, http.StatusCreated)
+	op = a.Wait(op.ID, func(op models.OperationResponse) bool {
 		return op.Preflight != nil && op.Preflight.Ready && len(op.Preflight.Actions) == 1 && len(op.Preflight.Actions[0].ReadyAgentIDs) >= 2
 	})
 	assertAffinityOwner(t, op, "")
@@ -39,12 +40,12 @@ func TestAffinityWaitsForItsOwnerWhileAnotherOperationUsesASpare(t *testing.T) {
 		// Cleanup still releases the fixture after t.Context is cancelled.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		request, err := http.NewRequestWithContext(ctx, http.MethodPost, environment("COMMANDER_TEST_FIXTURE_URL", "http://127.0.0.1:14276")+"/gates/"+gate, nil)
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, fixtures.Environment("COMMANDER_TEST_FIXTURE_URL", "http://127.0.0.1:14276")+"/gates/"+gate, nil)
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		response, err := a.client.Do(request)
+		response, err := a.Client.Do(request)
 		if err != nil {
 			t.Errorf("release affinity readiness gate: %v", err)
 			return
@@ -56,11 +57,11 @@ func TestAffinityWaitsForItsOwnerWhileAnotherOperationUsesASpare(t *testing.T) {
 	}
 	// Release before shared-state settlement, including on assertion failure.
 	t.Cleanup(release)
-	first := post[models.TaskResponse](a, operationPath(op.ID)+"/tasks", object{
-		"action_name": "fixture-echo", "input": object{"message": "bind owner", "resume_url": resumeURL},
+	first := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{
+		"action_name": "fixture-echo", "input": fixtures.Object{"message": "bind owner", "resume_url": resumeURL},
 	}, http.StatusCreated)
-	blocked := a.wait(op.ID, func(op models.OperationResponse) bool {
-		return tasksSettled(op) && op.Preflight != nil && !op.Preflight.Ready
+	blocked := a.Wait(op.ID, func(op models.OperationResponse) bool {
+		return fixtures.TasksSettled(op) && op.Preflight != nil && !op.Preflight.Ready
 	})
 	if len(blocked.Tasks) != 1 {
 		t.Fatalf("first execution changed task count: %+v", blocked.Tasks)
@@ -72,25 +73,25 @@ func TestAffinityWaitsForItsOwnerWhileAnotherOperationUsesASpare(t *testing.T) {
 	assertAffinityOwner(t, blocked, owner)
 	assertAffinityEcho(t, a, blocked.Tasks[0], first, owner, "bind owner")
 
-	second := post[models.TaskResponse](a, operationPath(op.ID)+"/tasks", object{
-		"action_name": "fixture-echo", "input": object{"message": "resume original owner"},
+	second := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{
+		"action_name": "fixture-echo", "input": fixtures.Object{"message": "resume original owner"},
 	}, http.StatusCreated)
-	assertAffinityWaiting(t, read[models.OperationResponse](a, operationPath(op.ID)), second.ID, owner)
+	assertAffinityWaiting(t, fixtures.Read[models.OperationResponse](a, fixtures.OperationPath(op.ID)), second.ID, owner)
 
 	// A separate operation can bind to a ready spare. Its successful execution
 	// gives the controller work to process while the original owner stays blocked.
-	independent, spareTask := runFixtureAction(t, a, "fixture-affinity", "fixture-echo", object{"message": "independent operation"})
+	independent, spareTask := runFixtureAction(t, a, "fixture-affinity", "fixture-echo", fixtures.Object{"message": "independent operation"})
 	if spareTask.AgentID == "" || spareTask.AgentID == owner {
 		t.Fatalf("independent operation did not select a spare: owner=%s task=%+v", owner, spareTask)
 	}
 	assertAffinityOwner(t, independent, spareTask.AgentID)
 	assertAffinityEcho(t, a, spareTask, spareTask, spareTask.AgentID, "independent operation")
-	completedSpare := post[models.OperationResponse](a, operationPath(independent.ID)+"/complete", object{"output": object{}}, http.StatusOK)
+	completedSpare := fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(independent.ID)+"/complete", fixtures.Object{"output": fixtures.Object{}}, http.StatusOK)
 	assertAffinityOwner(t, completedSpare, spareTask.AgentID)
-	assertAffinityWaiting(t, read[models.OperationResponse](a, operationPath(op.ID)), second.ID, owner)
+	assertAffinityWaiting(t, fixtures.Read[models.OperationResponse](a, fixtures.OperationPath(op.ID)), second.ID, owner)
 
 	release()
-	finished := a.wait(op.ID, tasksSettled)
+	finished := a.Wait(op.ID, fixtures.TasksSettled)
 	if len(finished.Tasks) != 2 {
 		t.Fatalf("resuming owner added or lost tasks: %+v", finished.Tasks)
 	}
@@ -105,7 +106,7 @@ func TestAffinityWaitsForItsOwnerWhileAnotherOperationUsesASpare(t *testing.T) {
 		}
 		assertAffinityEcho(t, a, finished.Tasks[index], submitted, owner, message)
 	}
-	completed := post[models.OperationResponse](a, operationPath(op.ID)+"/complete", object{"output": object{}}, http.StatusOK)
+	completed := fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(op.ID)+"/complete", fixtures.Object{"output": fixtures.Object{}}, http.StatusOK)
 	if completed.Status != "completed" || completed.ReportID == "" || completedSpare.Status != "completed" || completedSpare.ReportID == "" {
 		t.Fatal("affinity operations did not preserve their completion reports")
 	}
@@ -136,7 +137,7 @@ func assertAffinityWaiting(t *testing.T, op models.OperationResponse, taskID, ow
 	}
 }
 
-func assertAffinityEcho(t *testing.T, a *api, task, submitted models.TaskResponse, owner, message string) {
+func assertAffinityEcho(t *testing.T, a *fixtures.Client, task, submitted models.TaskResponse, owner, message string) {
 	t.Helper()
 	if task.ID != submitted.ID || task.CommandID != submitted.CommandID || task.OperationID != submitted.OperationID ||
 		task.Status != "succeeded" || task.AgentID != owner || task.Result == nil {
@@ -154,8 +155,8 @@ func assertAffinityEcho(t *testing.T, a *api, task, submitted models.TaskRespons
 	}
 	artifact := task.Result.Artifacts[0]
 	file := artifact.Files[0]
-	download := a.request(http.MethodGet, "/api/v1/artifacts/"+artifact.ID+"/files/"+file.ID, nil)
-	if artifact.AgentID != owner || artifact.CommandID != task.CommandID || file.Name != "echo.txt" || download.status != http.StatusOK || download.body != message {
+	download := a.Request(http.MethodGet, "/api/v1/artifacts/"+artifact.ID+"/files/"+file.ID, nil)
+	if artifact.AgentID != owner || artifact.CommandID != task.CommandID || file.Name != "echo.txt" || download.Status != http.StatusOK || download.Body != message {
 		t.Fatalf("affinity evidence lost ownership or bytes: artifact=%+v download=%+v", artifact, download)
 	}
 }

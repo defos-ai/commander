@@ -9,6 +9,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	actionfs "github.com/defos-ai/commander/providers/fs/actions"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestSecretDeclarationsSurviveCatalogAndInventoryRestart(t *testing.T) {
@@ -38,13 +39,13 @@ func TestSecretDeclarationsSurviveCatalogAndInventoryRestart(t *testing.T) {
 		t.Fatalf("catalog reader changed persisted declarations: %#v, %v", items, err)
 	}
 
-	inventory := openAgentFsStore(t, root)
-	record := fsInventoryAgent(1, time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC))
+	inventory := fixtures.OpenAgentStore(t, root)
+	record := fixtures.Agent(1, time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC))
 	record.Actions = []actions.Action{action}
 	if err := inventory.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
 	}
-	inventory = openAgentFsStore(t, root)
+	inventory = fixtures.OpenAgentStore(t, root)
 	stored, err := inventory.Get(t.Context(), record.ID)
 	if err != nil || !reflect.DeepEqual(stored, record) {
 		t.Fatalf("reopened agent changed declarations: %#v, %v", stored, err)

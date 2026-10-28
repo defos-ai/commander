@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/host"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -18,7 +20,7 @@ func TestMCPRequiresBearerOnEveryRequest(t *testing.T) {
 	const token = "configured-test-token"
 	t.Setenv("MCP_TOKEN", token)
 	var logs bytes.Buffer
-	endpoint, client, stop := startMCP(t, nil, &logs)
+	endpoint, client, stop := hostfixtures.Start(t, nil, &logs)
 	for index, call := range []struct{ method, body string }{
 		{http.MethodPost, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`},
 		{http.MethodPost, `{"jsonrpc":"2.0","method":"notifications/initialized"}`},
@@ -108,7 +110,7 @@ func TestMCPRequiresBearerOnEveryRequest(t *testing.T) {
 func TestAuthenticatedMCPProtocol(t *testing.T) {
 	const token = "embedded-test-token"
 	t.Setenv("MCP_TOKEN", "environment-test-token")
-	endpoint, client, _ := startMCP(t, &host.BearerCredentials{Token: token}, io.Discard)
+	endpoint, client, _ := hostfixtures.Start(t, &host.BearerCredentials{Token: token}, io.Discard)
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, endpoint+"/mcp", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +125,7 @@ func TestAuthenticatedMCPProtocol(t *testing.T) {
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatal("environment token must not bypass an embedded credential override")
 	}
-	client.Transport = bearerTransport{token: token, next: client.Transport}
+	client.Transport = fakes.BearerTransport{Token: token, Next: client.Transport}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	session, err := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "auth-test", Version: "1"}, nil).Connect(ctx,
@@ -153,15 +155,4 @@ func TestAuthenticatedMCPProtocol(t *testing.T) {
 	if _, err := session.ReadResource(ctx, &sdkmcp.ReadResourceParams{URI: "missions://artifacts/unknown"}); err == nil || strings.Contains(err.Error(), "401") {
 		t.Fatal("authenticated resource read must reach resource validation")
 	}
-}
-
-type bearerTransport struct {
-	token string
-	next  http.RoundTripper
-}
-
-func (transport bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	request = request.Clone(request.Context())
-	request.Header.Set("Authorization", "bEaReR "+transport.token)
-	return transport.next.RoundTrip(request)
 }

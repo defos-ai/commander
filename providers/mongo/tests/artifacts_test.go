@@ -3,7 +3,6 @@ package mongo_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -11,17 +10,17 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 	mongoartifacts "github.com/defos-ai/commander/providers/mongo/artifacts"
 	mongotesting "github.com/defos-ai/commander/providers/mongo/testing"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestArtifactMongoStore(t *testing.T) {
-	database := openStore(t, "artifacts")
+	database := fixtures.OpenStore(t, "artifacts")
 	catalog, err := mongoartifacts.NewArtifactMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := mongoArtifactFixture()
+	value := fixtures.Artifact()
 	if _, err := catalog.Get(t.Context(), value.ID); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("missing artifact: %v", err)
 	}
@@ -68,7 +67,7 @@ func TestArtifactMongoStore(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := catalog.Create(cancelled, mongoArtifactFixture()); !errors.Is(err, context.Canceled) {
+	if err := catalog.Create(cancelled, fixtures.Artifact()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled create: %v", err)
 	}
 	if _, err := catalog.Get(cancelled, value.ID); !errors.Is(err, context.Canceled) {
@@ -86,7 +85,7 @@ func TestArtifactMongoStore(t *testing.T) {
 }
 
 func TestConcurrentArtifactMongoCreates(t *testing.T) {
-	database := openStore(t, "artifacts")
+	database := fixtures.OpenStore(t, "artifacts")
 	first, err := mongoartifacts.NewArtifactMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +94,7 @@ func TestConcurrentArtifactMongoCreates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := mongoArtifactFixture()
+	value := fixtures.Artifact()
 	changed := value.Clone()
 	changed.Name = "conflicting evidence"
 	gate, results := make(chan struct{}), make(chan error, 12)
@@ -138,12 +137,12 @@ func TestConcurrentArtifactMongoCreates(t *testing.T) {
 }
 
 func TestArtifactMongoCleanupKeepsDelayedResultsRetired(t *testing.T) {
-	database := openStore(t, "artifacts")
+	database := fixtures.OpenStore(t, "artifacts")
 	catalog, err := mongoartifacts.NewArtifactMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := mongoArtifactFixture()
+	value := fixtures.Artifact()
 	if err := catalog.Create(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
@@ -169,20 +168,11 @@ func TestArtifactMongoCleanupKeepsDelayedResultsRetired(t *testing.T) {
 			t.Fatalf("delayed result restored retired metadata: %v", err)
 		}
 	}
-	fresh := mongoArtifactFixture()
+	fresh := fixtures.Artifact()
 	if err := catalog.Create(t.Context(), fresh); err != nil {
 		t.Fatalf("cleanup prevented new artifacts: %v", err)
 	}
 	if saved, err := catalog.Get(t.Context(), fresh.ID); err != nil || !saved.Equal(fresh) {
 		t.Fatalf("new artifact did not survive retirement of old results: %+v, %v", saved, err)
 	}
-}
-
-func mongoArtifactFixture() artifacts.Artifact {
-	return artifacts.Artifact{ID: id.ArtifactID(), Name: "screenshots", AgentID: "browser-agent-1234abcd",
-		ActionName: "capture-page", CommandID: id.MessageID(), CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC),
-		Files: []artifacts.ArtifactFile{
-			{ID: id.ArtifactFileID(), Name: "desktop.png", MediaType: "image/png", Size: 128, SHA256: strings.Repeat("a", 64)},
-			{ID: id.ArtifactFileID(), Name: "mobile.png", MediaType: "image/png", Size: 64, SHA256: strings.Repeat("b", 64)},
-		}}
 }

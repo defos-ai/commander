@@ -1,35 +1,14 @@
-import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Action } from '../src/api/types';
 import { ActionsPage } from '../src/pages/ActionsPage';
-
-const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', url: connection.url };
-const action: Action = {
-  name: 'capture-page', description: 'Capture a screenshot of a page.', status: 'unavailable',
-  status_reason: 'Chromium and configuration are missing.',
-  missing_requirements: [{ kind: 'executable', name: 'chromium' }, { kind: 'configuration', name: 'BROWSER_TOKEN', sensitive: true },
-    { kind: 'secret', name: 'SCREENSHOT_TOKEN' }],
-  input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string', description: 'Page to capture' } } },
-  output_schema: { type: 'object', properties: { width: { type: 'integer' } } },
-};
-const otherAction: Action = { ...action, name: 'check-links', description: 'Check page links.', status: 'unknown', status_reason: undefined, missing_requirements: [] };
-
-function mockAPI(respond?: (url: string, init: RequestInit) => Response | Promise<Response>) {
-  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    if (respond) return respond(upstreamURL(input), init);
-    return upstreamURL(input).endsWith('/api/v1/actions') ? Response.json({ items: [action, otherAction] })
-      : Response.json(upstreamURL(input).endsWith(otherAction.name) ? otherAction : action);
-  });
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { action, connection, credentials, mockAPI } from './fixtures/actions';
 
 describe('actions browser', () => {
   it('searches descriptions, displays readiness and requirements, and preserves search on return', async () => {
     const fetch = mockAPI();
     render(<ActionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
+
     expect(await screen.findByRole('button', { name: 'View action capture-page' })).toBeVisible();
     expect(screen.getByText('2 actions')).toBeVisible();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search actions' }), { target: { value: 'SCREENSHOT' } });
@@ -73,6 +52,7 @@ describe('actions browser', () => {
     let items: Action[] = [];
     mockAPI(url => url.endsWith('/api/v1/actions') ? Response.json({ items }) : Response.json(minimal));
     render(<ActionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
+
     expect(await screen.findByRole('heading', { name: 'No actions yet' })).toBeVisible();
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
 
@@ -112,6 +92,7 @@ describe('actions browser', () => {
       ? failed ? Response.json({ error: 'database-secret-value' }, { status: 503 }) : Response.json({ items: [action] })
       : new Response(null, { status: 404 }));
     render(<ActionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
+
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load actions. Check the connection and try again.');
     expect(screen.queryByText('database-secret-value')).not.toBeInTheDocument();
 

@@ -14,26 +14,20 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
-type ruleSelectorFunc func(context.Context, runner.RuleSelection) (missions.RuleSet, error)
-
-func (ruleSelectorFunc) Name() string { return "test-rules" }
-
-func (f ruleSelectorFunc) Select(ctx context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
-	return f(ctx, selection)
-}
-
 func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
-	config := fixture()
-	catalog := config.MissionStore.(*missionStore)
-	catalog.mission.Rules = modelRules("inspect")
-	definition := catalog.mission.Clone()
-	selected := modelRules("discover")
+	config := fixtures.Config()
+	catalog := config.MissionStore.(*fakes.MissionStore)
+	catalog.Change(func(m *missions.Mission) { m.Rules = fixtures.ModelRules("inspect") })
+	definition := catalog.Snapshot()
+	selected := fixtures.ModelRules("discover")
 	wantRules := selected.Clone()
 	input := json.RawMessage(`{"page":1}`)
 	var selections atomic.Int32
-	config.RuleSelector = ruleSelectorFunc(func(_ context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
+	config.RuleSelector = fakes.RuleSelectorFunc(func(_ context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
 		selections.Add(1)
 		if !reflect.DeepEqual(selection.Mission, definition) || string(selection.Input) != string(input) {
 			t.Errorf("selector received the wrong context: %+v", selection)
@@ -45,13 +39,13 @@ func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
 		selection.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "modified"
 		return selected, nil
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
 	op, err := r.Start(t.Context(), commands.StartOperationCommand{MissionName: "review", Input: input})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(input) != `{"page":1}` || !reflect.DeepEqual(catalog.mission, definition) {
+	if string(input) != `{"page":1}` || !reflect.DeepEqual(catalog.Snapshot(), definition) {
 		t.Fatal("selector modified caller input or the mission catalog")
 	}
 	selected[missions.DecideNextActions].ForActions[0] = "modified"
@@ -59,9 +53,9 @@ func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
 	delete(selected, missions.DecideNextActions)
 	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot modified"
 	input[0] = '['
-	assign(t, r, op.ID, "discover")
-	receive(t, calls).reply <- output("discover", actions.NextAction{ActionName: "inspect"})
-	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	fixtures.Assign(t, r, op.ID, "discover")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
+	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	definition.Rules = wantRules
 	if !reflect.DeepEqual(settled.Mission, definition) || string(settled.Input) != `{"page":1}` {
 		t.Fatalf("selected rules or operation inputs were not isolated: %+v", settled)
@@ -72,19 +66,19 @@ func TestRuleSelectorSavesIndependentRulesAndInputs(t *testing.T) {
 }
 
 func TestRuleSelectorCanClearMissionRules(t *testing.T) {
-	config := fixture()
-	config.MissionStore.(*missionStore).mission.Rules = modelRules("discover")
-	config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+	config := fixtures.Config()
+	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) { m.Rules = fixtures.ModelRules("discover") })
+	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 		return nil, nil
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	parent := assign(t, r, op.ID, "discover")
-	receive(t, calls).reply <- output("discover", actions.NextAction{ActionName: "inspect"})
-	child := receive(t, calls)
-	child.reply <- output("inspect")
-	settled := awaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	parent := fixtures.Assign(t, r, op.ID, "discover")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
+	child := fixtures.Receive(t, calls)
+	child.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		return len(op.Tasks) == 2 && op.Tasks[1].Status == operations.TaskSucceeded
 	})
 	if settled.Mission.Rules != nil || settled.Tasks[1].ParentTaskID != parent.ID || settled.Tasks[0].Continuation.DecisionBy != operations.DecisionCode {
@@ -110,16 +104,16 @@ func TestRuleSelectionFailsBeforeSavingAnOperation(t *testing.T) {
 		{name: "invalid rule parameters", rules: missions.RuleSet{missions.DecideNextActions: {ForActions: []string{"discover"}}}, selections: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config := fixture()
+			config := fixtures.Config()
 			if test.mission != nil {
-				test.mission(&config.MissionStore.(*missionStore).mission)
+				config.MissionStore.(*fakes.MissionStore).Change(test.mission)
 			}
 			var selections atomic.Int32
-			config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+			config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 				selections.Add(1)
 				return test.rules, test.err
 			})
-			r := newRunner(t, config, executor{})
+			r := fixtures.NewRunner(t, config, fakes.Executor{})
 			_, err := r.Start(t.Context(), commands.StartOperationCommand{MissionName: "review", Input: json.RawMessage(`{}`)})
 			if err == nil || (test.err != nil && !errors.Is(err, test.err)) || selections.Load() != test.selections {
 				t.Fatalf("invalid start: error=%v, selections=%d; want selections=%d", err, selections.Load(), test.selections)
@@ -133,9 +127,9 @@ func TestRuleSelectionFailsBeforeSavingAnOperation(t *testing.T) {
 }
 
 func TestSlowRuleSelectionAllowsSettlementAndConcurrentStarts(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	entered := make(chan struct{}, 1)
-	config.RuleSelector = ruleSelectorFunc(func(ctx context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
+	config.RuleSelector = fakes.RuleSelectorFunc(func(ctx context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
 		if string(selection.Input) == `{"wait":true}` {
 			entered <- struct{}{}
 			<-ctx.Done()
@@ -143,11 +137,11 @@ func TestSlowRuleSelectionAllowsSettlementAndConcurrentStarts(t *testing.T) {
 		}
 		return selection.Mission.Rules, nil
 	})
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
-	assign(t, r, op.ID, "inspect")
-	running := receive(t, calls)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
+	fixtures.Assign(t, r, op.ID, "inspect")
+	running := fixtures.Receive(t, calls)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	done := make(chan error, 1)
@@ -166,9 +160,9 @@ func TestSlowRuleSelectionAllowsSettlementAndConcurrentStarts(t *testing.T) {
 		}
 	})
 	waitSelectionAttempt(t, entered)
-	running.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	concurrent := start(t, r)
+	running.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	concurrent := fixtures.Start(t, r)
 	cancel()
 	select {
 	case err := <-done:
@@ -185,21 +179,21 @@ func TestSlowRuleSelectionAllowsSettlementAndConcurrentStarts(t *testing.T) {
 }
 
 func TestClosingRunnerCancelsRuleSelection(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	entered := make(chan struct{}, 1)
-	config.RuleSelector = ruleSelectorFunc(func(ctx context.Context, _ runner.RuleSelection) (missions.RuleSet, error) {
+	config.RuleSelector = fakes.RuleSelectorFunc(func(ctx context.Context, _ runner.RuleSelection) (missions.RuleSet, error) {
 		entered <- struct{}{}
 		<-ctx.Done()
-		return modelRules("inspect"), nil
+		return fixtures.ModelRules("inspect"), nil
 	})
-	r := newRunner(t, config, executor{})
+	r := fixtures.NewRunner(t, config, fakes.Executor{})
 	done := make(chan error, 1)
 	go func() {
 		_, err := r.Start(t.Context(), commands.StartOperationCommand{MissionName: "review", Input: json.RawMessage(`{}`)})
 		done <- err
 	}()
 	waitSelectionAttempt(t, entered)
-	closeRunner(t, r)
+	fixtures.CloseRunner(t, r)
 	select {
 	case err := <-done:
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, runner.ErrClosed) {
@@ -215,29 +209,29 @@ func TestClosingRunnerCancelsRuleSelection(t *testing.T) {
 }
 
 func TestRecoveryKeepsSelectedRulesWithoutReselection(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	var selections atomic.Int32
-	config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 		selections.Add(1)
-		return modelRules("inspect"), nil
+		return fixtures.ModelRules("inspect"), nil
 	})
-	exec, calls := controlledExecutor()
-	first := newRunner(t, config, exec)
-	op := start(t, first)
-	task := assign(t, first, op.ID, "inspect")
-	receive(t, calls)
-	closeRunner(t, first)
-	config.RuleSelector = ruleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
+	exec, calls := fakes.ControlledExecutor()
+	first := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, first)
+	task := fixtures.Assign(t, first, op.ID, "inspect")
+	fixtures.Receive(t, calls)
+	fixtures.CloseRunner(t, first)
+	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
 		selections.Add(1)
 		return nil, errors.New("must not select rules for saved operations")
 	})
-	exec.recover = func(_ context.Context, _ string, call actions.ActionCall) (actions.ActionOutput, error) {
-		return output(call.ActionName, actions.NextAction{ActionName: "follow-up"}), nil
+	exec.Recover = func(_ context.Context, _ string, call actions.ActionCall) (actions.ActionOutput, error) {
+		return fixtures.Output(call.ActionName, actions.NextAction{ActionName: "follow-up"}), nil
 	}
-	restarted := newRunner(t, config, exec)
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	restarted := fixtures.NewRunner(t, config, exec)
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	c := settled.Tasks[0].Continuation
-	if len(settled.Tasks) != 1 || c.DecisionBy != operations.DecisionModel || !reflect.DeepEqual(settled.Mission.Rules, modelRules("inspect")) {
+	if len(settled.Tasks) != 1 || c.DecisionBy != operations.DecisionModel || !reflect.DeepEqual(settled.Mission.Rules, fixtures.ModelRules("inspect")) {
 		t.Fatalf("recovery discarded the selected rules: %+v", settled)
 	}
 	_, err := restarted.Resolve(t.Context(), commands.ResolveContinuationCommand{
@@ -247,17 +241,11 @@ func TestRecoveryKeepsSelectedRulesWithoutReselection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	receive(t, calls).reply <- output("follow-up")
-	awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("follow-up")
+	fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool {
 		return len(op.Tasks) == 2 && op.Tasks[1].Status == operations.TaskSucceeded
 	})
 	if selections.Load() != 1 {
 		t.Fatalf("recovery or continuation execution selected rules again: %d selections", selections.Load())
-	}
-}
-
-func modelRules(action string) missions.RuleSet {
-	return missions.RuleSet{
-		missions.DecideNextActions: {ForActions: []string{action}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 }

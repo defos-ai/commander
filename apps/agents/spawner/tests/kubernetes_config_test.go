@@ -11,19 +11,8 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/cli"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 )
-
-func kubernetesCLIEnvironment(t *testing.T) {
-	t.Helper()
-	for name, value := range map[string]string{
-		"COMMANDER_AGENT_ID_SUFFIX": "", "SECRETS_ENCRYPTION_KEY": "", "SPAWNER_RUNTIME": "kubernetes",
-		"SPAWNER_KUBERNETES_NAMESPACE": "agents", "SPAWNER_KUBERNETES_POD_PREFIX": "",
-		"SPAWNER_KUBERNETES_SERVICE_ACCOUNT": "agent-worker", "SPAWNER_KUBERNETES_CONFIG_MAP": "agent-config",
-		"SPAWNER_KUBERNETES_SECRET": "agent-credentials", "SPAWNER_KUBERNETES_IMAGE_PULL_SECRETS": "",
-	} {
-		t.Setenv(name, value)
-	}
-}
 
 func TestSpawnerCLIKubernetesValidatesBeforeStartup(t *testing.T) {
 	for _, test := range []struct {
@@ -42,7 +31,7 @@ func TestSpawnerCLIKubernetesValidatesBeforeStartup(t *testing.T) {
 		{name: "invalid explicit timeout", timeout: "0s", expected: "registration-timeout"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			kubernetesCLIEnvironment(t)
+			fixtures.KubernetesEnvironment(t)
 			if test.setting != "" {
 				t.Setenv("SPAWNER_KUBERNETES_"+test.setting, test.value)
 			}
@@ -75,7 +64,7 @@ func TestSpawnerCLIKubernetesValidatesBeforeStartup(t *testing.T) {
 func TestSpawnerCLIKubernetesAcceptsLiteralPrefixesAndRawS3Credentials(t *testing.T) {
 	for _, prefix := range []string{"", "team-", "team."} {
 		t.Run("prefix="+prefix, func(t *testing.T) {
-			kubernetesCLIEnvironment(t)
+			fixtures.KubernetesEnvironment(t)
 			t.Setenv("SPAWNER_KUBERNETES_POD_PREFIX", prefix)
 			t.Setenv("SPAWNER_KUBERNETES_IMAGE_PULL_SECRETS", " first.registry , second-registry ")
 			t.Setenv("SPAWNER_DOCKER_NETWORK", "invalid/ignored")
@@ -97,7 +86,7 @@ func TestSpawnerCLIKubernetesAcceptsLiteralPrefixesAndRawS3Credentials(t *testin
 func TestSpawnerCLINativeAndDockerIgnoreKubernetesSettings(t *testing.T) {
 	for _, mode := range []string{"native", "docker", "embedded-native"} {
 		t.Run(mode, func(t *testing.T) {
-			kubernetesCLIEnvironment(t)
+			fixtures.KubernetesEnvironment(t)
 			for _, suffix := range []string{"NAMESPACE", "POD_PREFIX", "SERVICE_ACCOUNT", "CONFIG_MAP", "SECRET", "IMAGE_PULL_SECRETS"} {
 				t.Setenv("SPAWNER_KUBERNETES_"+suffix, "private-sentinel/invalid")
 			}
@@ -122,7 +111,7 @@ func TestSpawnerCLINativeAndDockerIgnoreKubernetesSettings(t *testing.T) {
 }
 
 func TestSpawnerCLIKubernetesMissingAuthenticationPrecedesProviders(t *testing.T) {
-	kubernetesCLIEnvironment(t)
+	fixtures.KubernetesEnvironment(t)
 	t.Setenv("KUBERNETES_SERVICE_HOST", "")
 	t.Setenv("KUBERNETES_SERVICE_PORT", "")
 	root := filepath.Join(t.TempDir(), "unused")

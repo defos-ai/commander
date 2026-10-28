@@ -18,12 +18,13 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	secretfs "github.com/defos-ai/commander/providers/fs/secrets"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestRequestFsStorePersistsDeliveryAndExactAcknowledgement(t *testing.T) {
 	root := t.TempDir()
-	store := openRequestFsStore(t, root)
-	request, delivery, installation := fsRequestFixture(t)
+	store := fixtures.OpenRequestStore(t, root)
+	request, delivery, installation := fixtures.SecretRequest(t)
 	if err := store.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -34,17 +35,17 @@ func TestRequestFsStorePersistsDeliveryAndExactAcknowledgement(t *testing.T) {
 	expected.Secret = delivery.Secret.Clone()
 	delivery.Secret.Value.Nonce[0] ^= 1
 	delivery.Secret.Value.Ciphertext[0] ^= 1
-	store = openRequestFsStore(t, root)
+	store = fixtures.OpenRequestStore(t, root)
 	record, err := store.Get(t.Context(), request.ID)
 	if err != nil || record.Delivery == nil || !reflect.DeepEqual(*record.Delivery, expected) || record.Installation != nil || record.Request.Status != secrets.Pending {
 		t.Fatalf("reopened store lost pending request or encrypted delivery: %v", err)
 	}
-	cipher, err := crypto.NewSecretCipher(fsSecretEncryptionKey)
+	cipher, err := crypto.NewSecretCipher(fixtures.SecretEncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plaintext, err := cipher.Decrypt(record.Delivery.Secret)
-	if err != nil || string(plaintext) != fsSecretPlaintext {
+	if err != nil || string(plaintext) != fixtures.SecretPlaintext {
 		t.Fatal("stored delivery lost authenticated metadata or encrypted bytes")
 	}
 	record.Delivery.Secret.Value.Ciphertext[0] ^= 1
@@ -64,7 +65,7 @@ func TestRequestFsStorePersistsDeliveryAndExactAcknowledgement(t *testing.T) {
 			t.Fatalf("exact replay after fulfillment failed: %v", err)
 		}
 	}
-	reopened := openRequestFsStore(t, root)
+	reopened := fixtures.OpenRequestStore(t, root)
 	saved, err := reopened.Get(t.Context(), request.ID)
 	if err != nil || saved.Request.Status != secrets.Fulfilled || !saved.Request.ResolvedAt.Equal(now) || saved.Installation == nil || !reflect.DeepEqual(*saved.Installation, installation) || saved.Delivery == nil || !reflect.DeepEqual(*saved.Delivery, expected) {
 		t.Fatal("retries changed the accepted delivery, acknowledgement or resolution time")
@@ -83,7 +84,7 @@ func TestRequestFsStorePersistsDeliveryAndExactAcknowledgement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(data, []byte(fsSecretPlaintext)) || bytes.Contains(data, []byte(fsSecretEncryptionKey)) {
+	if bytes.Contains(data, []byte(fixtures.SecretPlaintext)) || bytes.Contains(data, []byte(fixtures.SecretEncryptionKey)) {
 		t.Fatal("request store persisted plaintext or encryption key")
 	}
 	if _, err := os.Stat(filepath.Join(root, "secrets.json")); !os.IsNotExist(err) {
@@ -92,10 +93,10 @@ func TestRequestFsStorePersistsDeliveryAndExactAcknowledgement(t *testing.T) {
 }
 
 func TestRequestFsStoreListsPendingAndSettlesExplicitly(t *testing.T) {
-	store := openRequestFsStore(t, t.TempDir())
+	store := fixtures.OpenRequestStore(t, t.TempDir())
 	requests := make([]secrets.Request, 3)
 	for index := range requests {
-		request, _, _ := fsRequestFixture(t)
+		request, _, _ := fixtures.SecretRequest(t)
 		requests[index] = request
 		if err := store.Create(t.Context(), request); err != nil {
 			t.Fatal(err)
@@ -149,8 +150,8 @@ func TestRequestFsStoreListsPendingAndSettlesExplicitly(t *testing.T) {
 }
 
 func TestRequestFsStoreRejectsConflictingIdentitiesAndReceipts(t *testing.T) {
-	store := openRequestFsStore(t, t.TempDir())
-	request, delivery, installation := fsRequestFixture(t)
+	store := fixtures.OpenRequestStore(t, t.TempDir())
+	request, delivery, installation := fixtures.SecretRequest(t)
 	if err := store.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -210,8 +211,8 @@ func TestRequestFsStoreRejectsConflictingIdentitiesAndReceipts(t *testing.T) {
 }
 
 func TestRequestFsStoreContextAndUnknownRecords(t *testing.T) {
-	store := openRequestFsStore(t, t.TempDir())
-	request, delivery, installation := fsRequestFixture(t)
+	store := fixtures.OpenRequestStore(t, t.TempDir())
+	request, delivery, installation := fixtures.SecretRequest(t)
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, ctx := range []context.Context{nil, cancelled} {
@@ -251,9 +252,9 @@ func TestRequestFsStoreSerializesConcurrentDeliveryAndSettlement(t *testing.T) {
 	const count = 8
 	stores := make([]*secretfs.RequestFsStore, count)
 	for i := range stores {
-		stores[i] = openRequestFsStore(t, root)
+		stores[i] = fixtures.OpenRequestStore(t, root)
 	}
-	request, original, _ := fsRequestFixture(t)
+	request, original, _ := fixtures.SecretRequest(t)
 	if err := stores[0].Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +287,7 @@ func TestRequestFsStoreSerializesConcurrentDeliveryAndSettlement(t *testing.T) {
 	if err != nil || saved.Delivery == nil {
 		t.Fatal("winning delivery was not saved")
 	}
-	installation := fsInstallation(*saved.Delivery)
+	installation := fixtures.Installation(*saved.Delivery)
 	start = make(chan struct{})
 	results = make(chan error, 2)
 	group.Go(func() { <-start; results <- stores[0].Acknowledge(t.Context(), installation, installation.InstalledAt) })
@@ -303,14 +304,14 @@ func TestRequestFsStoreSerializesConcurrentDeliveryAndSettlement(t *testing.T) {
 	if winners != 1 {
 		t.Fatal("competing settlement transitions both committed or both failed")
 	}
-	settled, err := openRequestFsStore(t, root).Get(t.Context(), request.ID)
+	settled, err := fixtures.OpenRequestStore(t, root).Get(t.Context(), request.ID)
 	if err != nil || (settled.Request.Status != secrets.Fulfilled && settled.Request.Status != secrets.Cancelled) || (settled.Request.Status == secrets.Fulfilled) != (settled.Installation != nil) {
 		t.Fatal("concurrent settlement left inconsistent request evidence")
 	}
 }
 
 func TestRequestFsStoreRejectsCorruptSnapshots(t *testing.T) {
-	request, delivery, _ := fsRequestFixture(t)
+	request, delivery, _ := fixtures.SecretRequest(t)
 	record := secrets.RequestRecord{Request: request, Delivery: &delivery}
 	second := record.Clone()
 	second.Request.ID = id.New()
@@ -330,7 +331,7 @@ func TestRequestFsStoreRejectsCorruptSnapshots(t *testing.T) {
 		[]byte(`[{"unexpected-private-field":"private-stored-value"}]`),
 	} {
 		root := t.TempDir()
-		store := openRequestFsStore(t, root)
+		store := fixtures.OpenRequestStore(t, root)
 		path := filepath.Join(root, "secret-requests.json")
 		if err := os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
@@ -350,36 +351,5 @@ func TestRequestFsStoreRejectsCorruptSnapshots(t *testing.T) {
 			}
 			assertSecretFileUnchanged(t, path, data)
 		}
-	}
-}
-
-func openRequestFsStore(t *testing.T, root string) *secretfs.RequestFsStore {
-	t.Helper()
-	store, err := secretfs.NewRequestFsStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store
-}
-
-func fsRequestFixture(t *testing.T) (secrets.Request, secrets.Delivery, secrets.Installation) {
-	t.Helper()
-	secret := fsSecretFixture(t, "API_TOKEN")
-	request := secrets.Request{
-		ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678", Status: secrets.Pending,
-		RequestedAt: secret.Metadata.CreatedAt, ExpiresAt: secret.Metadata.CreatedAt.Add(time.Hour),
-	}
-	delivery := secrets.Delivery{
-		ID: id.New(), RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
-		CreatedAt: request.RequestedAt.Add(time.Second), ExpiresAt: request.ExpiresAt,
-	}
-	return request, delivery, fsInstallation(delivery)
-}
-
-func fsInstallation(delivery secrets.Delivery) secrets.Installation {
-	return secrets.Installation{
-		ID: id.New(), RequestID: delivery.RequestID, DeliveryID: delivery.ID, AgentID: delivery.AgentID,
-		SecretID: delivery.Secret.Metadata.ID, SecretVersion: delivery.Secret.Metadata.Version,
-		InstalledAt: delivery.CreatedAt.Add(time.Second),
 	}
 }

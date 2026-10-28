@@ -19,25 +19,26 @@ import (
 
 	"github.com/defos-ai/commander/apps/playground/cli"
 	"github.com/defos-ai/commander/apps/playground/internal/local"
+	fixtures "github.com/defos-ai/commander/apps/playground/tests/fixtures"
 )
 
 func testAllInOneAdmin(t *testing.T) {
 	t.Run("serves UI and stops with session", func(t *testing.T) {
-		temporary := allInOneEnvironment(t)
-		session, stop := startLocalAdminSession(t, local.Options{ServeAdmin: true})
-		body, _ := fetchLocalAsset(t, session.AdminURL, "/")
+		temporary := fixtures.AllInOneEnvironment(t)
+		session, stop := fixtures.StartLocalAdminSession(t, local.Options{ServeAdmin: true})
+		body, _ := fixtures.FetchLocalAsset(t, session.AdminURL, "/")
 		if string(body) != "<html>Admin fixture</html>" {
 			t.Fatal("all-in-one Admin did not serve the explicit frontend directory")
 		}
-		deepLink, _ := fetchLocalAsset(t, session.AdminURL, "/connections/local/operations/example")
+		deepLink, _ := fixtures.FetchLocalAsset(t, session.AdminURL, "/connections/local/operations/example")
 		if !bytes.Equal(body, deepLink) {
 			t.Fatal("Admin deep link did not serve its frontend")
 		}
-		health, _ := fetchLocalAsset(t, session.AdminURL, "/healthz")
+		health, _ := fixtures.FetchLocalAsset(t, session.AdminURL, "/healthz")
 		if string(health) != "ok\n" {
 			t.Fatal("Admin health check failed")
 		}
-		connections, _ := fetchLocalAsset(t, session.AdminURL, "/ui/connections")
+		connections, _ := fixtures.FetchLocalAsset(t, session.AdminURL, "/ui/connections")
 		var result struct {
 			Items []json.RawMessage `json:"items"`
 		}
@@ -58,10 +59,10 @@ func testAllInOneAdmin(t *testing.T) {
 		}
 	})
 	t.Run("wildcard listeners expose usable local URLs", func(t *testing.T) {
-		allInOneEnvironment(t)
+		fixtures.AllInOneEnvironment(t)
 		t.Setenv("API_LISTEN_ADDRESS", "0.0.0.0:0")
 		t.Setenv("UI_LISTEN_ADDRESS", "0.0.0.0:0")
-		session, _ := startLocalAdminSession(t, local.Options{ServeAdmin: true})
+		session, _ := fixtures.StartLocalAdminSession(t, local.Options{ServeAdmin: true})
 		for _, endpoint := range []string{session.APIURL, session.AdminURL} {
 			address, err := url.Parse(endpoint)
 			if err != nil || !net.ParseIP(address.Hostname()).IsLoopback() {
@@ -72,7 +73,7 @@ func testAllInOneAdmin(t *testing.T) {
 	})
 	for _, name := range []string{"disabled", "occupied port", "missing frontend"} {
 		t.Run(name, func(t *testing.T) {
-			allInOneEnvironment(t)
+			fixtures.AllInOneEnvironment(t)
 			frontend := os.Getenv("UI_STATIC_DIR")
 			options := local.Options{ServeAdmin: true}
 			switch name {
@@ -90,11 +91,11 @@ func testAllInOneAdmin(t *testing.T) {
 			case "missing frontend":
 				t.Setenv("UI_STATIC_DIR", filepath.Join(t.TempDir(), "missing"))
 			}
-			session, stop := startLocalAdminSession(t, options)
+			session, stop := fixtures.StartLocalAdminSession(t, options)
 			if session.AdminURL != "" || session.Context.Err() != nil {
 				t.Fatal("unavailable Admin advertised a URL or stopped the session")
 			}
-			fetchLocalAsset(t, session.APIURL, "/readyz")
+			fixtures.FetchLocalAsset(t, session.APIURL, "/readyz")
 			notices := strings.Join(session.Notices, "\n")
 			if strings.Contains(notices, "Admin") != (name != "disabled") {
 				t.Fatal("Admin failure notice did not match whether startup was requested")
@@ -117,14 +118,14 @@ func checkRuntimeAdmin(t *testing.T, session *local.Session, frontend string) {
 	if _, err := session.ServeAdmin(t.Context(), nil); err == nil {
 		t.Fatal("runtime Admin start accepted invalid UI settings")
 	}
-	fetchLocalAsset(t, session.APIURL, "/readyz")
+	fixtures.FetchLocalAsset(t, session.APIURL, "/readyz")
 	startup, cancel := context.WithCancel(t.Context())
 	address, err := session.ServeAdmin(startup, []string{"--listen-address=127.0.0.1:0", "--static-dir=" + frontend})
 	cancel()
 	if err != nil || address == "" {
 		t.Fatalf("retry runtime Admin startup: %v", err)
 	}
-	fetchLocalAsset(t, address, "/healthz") // Canceling a command must not stop its server.
+	fixtures.FetchLocalAsset(t, address, "/healthz") // Canceling a command must not stop its server.
 	second, err := session.ServeAdmin(t.Context(), nil)
 	if err != nil || second != address || session.AdminURL != "" {
 		t.Fatalf("runtime start changed the initial URL or opened another listener: %q (%v)", second, err)
@@ -230,44 +231,6 @@ func TestServeAdminUIFlagWorksWithRemotePlayground(t *testing.T) {
 	if err != context.Canceled {
 		t.Fatal("--serve-admin-ui was rejected before starting a remote Playground session")
 	}
-}
-
-func startLocalAdminSession(t *testing.T, options local.Options) (*local.Session, func()) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
-	t.Cleanup(cancel)
-	session, err := local.StartWithOptions(ctx, options)
-	if err != nil {
-		t.Fatalf("start all-in-one: %v", err)
-	}
-	stop := func() {
-		if err := session.Close(); err != nil {
-			t.Errorf("stop all-in-one: %v", err)
-		}
-	}
-	t.Cleanup(stop)
-	return session, stop
-}
-
-func fetchLocalAsset(t *testing.T, baseURL, path string) ([]byte, http.Header) {
-	t.Helper()
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, baseURL+path, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("X-Commander-UI", "1")
-	client := &http.Client{Timeout: 3 * time.Second}
-	defer client.CloseIdleConnections()
-	response, err := client.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil || response.StatusCode != http.StatusOK || len(body) == 0 {
-		t.Fatalf("fetch %s: status=%d error=%v", path, response.StatusCode, err)
-	}
-	return body, response.Header
 }
 
 func assertLocalHostStopped(t *testing.T, endpoint string) {

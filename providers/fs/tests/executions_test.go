@@ -11,17 +11,15 @@ import (
 	"strings"
 	"testing"
 
-	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
-	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	executionfs "github.com/defos-ai/commander/providers/fs/executions"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestExecutionCheckpointsSurviveReopenAndCompletion(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "database")
-	store := checkpointStore(t, root)
-	command, result := checkpointMessages(t)
+	store := fixtures.CheckpointStore(t, root)
+	command, result := fixtures.CheckpointMessages(t)
 	if _, _, err := store.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +28,7 @@ func TestExecutionCheckpointsSurviveReopenAndCompletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	data[0] = '!'
-	reopened := checkpointStore(t, root)
+	reopened := fixtures.CheckpointStore(t, root)
 	saved, err := reopened.Get(t.Context(), command.AgentID, command.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -74,8 +72,8 @@ func TestExecutionCheckpointsSurviveReopenAndCompletion(t *testing.T) {
 
 func TestExecutionCheckpointSizeSurvivesJSONEncoding(t *testing.T) {
 	root := t.TempDir()
-	store := checkpointStore(t, root)
-	command, result := checkpointMessages(t)
+	store := fixtures.CheckpointStore(t, root)
+	command, result := fixtures.CheckpointMessages(t)
 	if _, _, err := store.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +94,7 @@ func TestExecutionCheckpointSizeSurvivesJSONEncoding(t *testing.T) {
 	}
 	assertSaved := func() {
 		t.Helper()
-		saved, err := checkpointStore(t, root).Get(t.Context(), command.AgentID, command.ID)
+		saved, err := fixtures.CheckpointStore(t, root).Get(t.Context(), command.AgentID, command.ID)
 		if err != nil {
 			t.Fatalf("accepted checkpoint became unreadable: %v", err)
 		}
@@ -130,8 +128,8 @@ func TestExecutionCheckpointSizeSurvivesJSONEncoding(t *testing.T) {
 
 func TestExecutionCheckpointRejectionDoesNotCreateOrChangeState(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "database")
-	store := checkpointStore(t, root)
-	command, _ := checkpointMessages(t)
+	store := fixtures.CheckpointStore(t, root)
+	command, _ := fixtures.CheckpointMessages(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if err := store.SaveCheckpoint(ctx, command.AgentID, command.ID, "selected", json.RawMessage(`{}`)); !errors.Is(err, context.Canceled) {
@@ -161,8 +159,8 @@ func TestExecutionCheckpointRejectionDoesNotCreateOrChangeState(t *testing.T) {
 
 func TestExecutionCheckpointWritesAreAtomicAcrossInstances(t *testing.T) {
 	root := t.TempDir()
-	first, second := checkpointStore(t, root), checkpointStore(t, root)
-	command, _ := checkpointMessages(t)
+	first, second := fixtures.CheckpointStore(t, root), fixtures.CheckpointStore(t, root)
+	command, _ := fixtures.CheckpointMessages(t)
 	if _, _, err := first.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
@@ -205,8 +203,8 @@ func TestExecutionCheckpointWritesAreAtomicAcrossInstances(t *testing.T) {
 
 func TestExecutionCheckpointAndCompletionSerialize(t *testing.T) {
 	root := t.TempDir()
-	first, second := checkpointStore(t, root), checkpointStore(t, root)
-	command, result := checkpointMessages(t)
+	first, second := fixtures.CheckpointStore(t, root), fixtures.CheckpointStore(t, root)
+	command, result := fixtures.CheckpointMessages(t)
 	if _, _, err := first.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
@@ -236,27 +234,4 @@ func TestExecutionCheckpointAndCompletionSerialize(t *testing.T) {
 	if exists != (checkpointErr == nil) {
 		t.Fatalf("checkpoint persistence contradicts acknowledgement: exists=%t, error=%v", exists, checkpointErr)
 	}
-}
-
-func checkpointStore(t *testing.T, root string) *executionfs.ExecutionFsStore {
-	t.Helper()
-	store, err := executionfs.NewExecutionFsStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store
-}
-
-func checkpointMessages(t *testing.T) (messages.Message, messages.Message) {
-	t.Helper()
-	command, err := agentcommands.NewRunAction("test-agent-00000001", actions.ActionCall{ActionName: "inspect", Input: json.RawMessage(`{}`)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := messages.NewMessage(messages.ActionSucceeded, command.AgentID, actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{"ok":true}`)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	result.CorrelationID, result.Work = command.ID, command.Work
-	return command, result
 }

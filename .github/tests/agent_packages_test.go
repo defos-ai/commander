@@ -9,60 +9,44 @@ import (
 	"strings"
 	"testing"
 
+	fakes "github.com/defos-ai/commander/.github/tests/fakes"
+	fixtures "github.com/defos-ai/commander/.github/tests/fixtures"
 	"go.yaml.in/yaml/v3"
 )
-
-func newAgentPackageFixture(t *testing.T, agent string) *nativeFixture {
-	t.Helper()
-	f := newNativeFixture(t)
-	f.env["AGENT"] = agent
-	f.env["TAG"] = "apps/agents/" + agent + "/v0.1.0"
-	f.env["RELEASE_TAG"] = f.env["TAG"]
-	f.env["RELEASE_TITLE"] = "Commander " + agent + " agent v0.1.0"
-	f.artifacts = f.dir
-	f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "stage")
-	if output, err := f.run(t); err != nil {
-		t.Fatalf("stage failed: %v: %s", err, output)
-	}
-	f.artifacts = filepath.Join(f.dir, "package")
-	f.write(t, "package/agent.yaml", fmt.Sprintf("schema_version: 1\ntype: %s-agent\nversion: v0.1.0\ndocker:\n  image: ghcr.io/defos-ai/commander-%s-agent@sha256:%s\n", agent, agent, strings.Repeat("a", 64)))
-	f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "publish")
-	return f
-}
 
 func TestCIAgentPackagePublication(t *testing.T) {
 	for _, agent := range []string{"builder", "spawner"} {
 		for _, draft := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/existing draft %t", agent, draft), func(t *testing.T) {
-				f := newAgentPackageFixture(t, agent)
+				f := fixtures.NewAgentPackage(t, agent)
 				if draft {
-					f.env["RELEASES"] = fmt.Sprintf(`{"tag_name":%q,"draft":true}`, f.env["TAG"])
+					f.SetEnvironment("RELEASES", fmt.Sprintf(`{"tag_name":%q,"draft":true}`, f.Environment("TAG")))
 				}
-				if output, err := f.run(t); err != nil {
+				if output, err := f.Run(t); err != nil {
 					t.Fatalf("publish failed: %v: %s", err, output)
 				}
-				log := f.read(t, "gh.log")
+				log := f.Read(t, "gh.log")
 				if got := strings.Contains(log, "release create"); got == draft {
 					t.Errorf("create release = %t, existing draft = %t", got, draft)
 				}
 				assets := []string{"agent.yaml", "LICENSE"}
-				assets = append(assets, agentNativeBinaryNames(agent)...)
+				assets = append(assets, fixtures.AgentNativeBinaryNames(agent)...)
 				var checksums strings.Builder
 				for _, name := range assets {
-					got, want := f.read(t, "uploaded/"+name), f.read(t, "package/"+name)
+					got, want := f.Read(t, "uploaded/"+name), f.Read(t, "package/"+name)
 					if got == "" || got != want {
 						t.Errorf("uploaded %s = %q, want %q", name, got, want)
 					}
 					fmt.Fprintf(&checksums, "%x  %s\n", sha256.Sum256([]byte(want)), name)
 				}
-				if got := f.read(t, "uploaded/checksums.txt"); got != checksums.String() {
+				if got := f.Read(t, "uploaded/checksums.txt"); got != checksums.String() {
 					t.Errorf("checksums = %q, want %q", got, checksums.String())
 				}
-				entries, err := os.ReadDir(filepath.Join(f.dir, "uploaded"))
+				entries, err := os.ReadDir(filepath.Join(f.Dir(), "uploaded"))
 				if err != nil || len(entries) != len(assets)+1 {
 					t.Fatalf("%s package must contain %d assets: %v, %v", agent, len(assets)+1, entries, err)
 				}
-				if !strings.HasSuffix(log, "release edit "+f.env["TAG"]+" --draft=false --latest=false\n") {
+				if !strings.HasSuffix(log, "release edit "+f.Environment("TAG")+" --draft=false --latest=false\n") {
 					t.Errorf("agent release must publish without promoting Latest: %s", log)
 				}
 			})
@@ -71,32 +55,27 @@ func TestCIAgentPackagePublication(t *testing.T) {
 }
 
 func TestCIAgentPackageWorkflowManifest(t *testing.T) {
-	generator := buildAgentManifestGenerator(t)
+	generator := fixtures.BuildAgentManifestGenerator(t)
 	for _, agent := range []string{"builder", "spawner"} {
 		t.Run(agent, func(t *testing.T) {
-			f := newAgentPackageFixture(t, agent)
-			if err := os.Remove(filepath.Join(f.artifacts, "agent.yaml")); err != nil {
+			f := fixtures.NewAgentPackage(t, agent)
+			if err := os.Remove(filepath.Join(f.Artifacts(), "agent.yaml")); err != nil {
 				t.Fatal(err)
 			}
-			f.env["GENERATOR"] = generator
-			f.env["DIGEST"] = "sha256:" + strings.Repeat("b", 64)
-			f.write(t, "go", `#!/bin/bash
-set -euo pipefail
-[[ "$1 $2" == 'run ./.github/scripts/agent-manifest.go' ]]
-shift 2
-exec "$GENERATOR" "$@"
-`)
-			f.artifacts = f.dir
-			f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "manifest")
-			if output, err := f.run(t); err != nil {
+			f.SetEnvironment("GENERATOR", generator)
+			f.SetEnvironment("DIGEST", "sha256:"+strings.Repeat("b", 64))
+			f.Write(t, "go", fakes.AgentManifestGo)
+			f.SetArtifacts(f.Dir())
+			f.SetScript(fixtures.WorkflowScript(t, "push-binaries.yml", "agents", "manifest"))
+			if output, err := f.Run(t); err != nil {
 				t.Fatalf("workflow manifest generation failed: %v: %s", err, output)
 			}
-			f.artifacts = filepath.Join(f.dir, "package")
-			f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "publish")
-			if output, err := f.run(t); err != nil {
+			f.SetArtifacts(filepath.Join(f.Dir(), "package"))
+			f.SetScript(fixtures.WorkflowScript(t, "push-binaries.yml", "agents", "publish"))
+			if output, err := f.Run(t); err != nil {
 				t.Fatalf("generated package publication failed: %v: %s", err, output)
 			}
-			if got, want := f.read(t, "uploaded/agent.yaml"), f.read(t, "package/agent.yaml"); got == "" || got != want {
+			if got, want := f.Read(t, "uploaded/agent.yaml"), f.Read(t, "package/agent.yaml"); got == "" || got != want {
 				t.Errorf("published manifest = %q, want generated manifest %q", got, want)
 			}
 		})
@@ -107,26 +86,21 @@ func TestCIAgentPackageReleaseTag(t *testing.T) {
 	const agent = "spawner"
 	for _, mode := range []string{"tested SHA", "different SHA", "missing tag", "invalid version"} {
 		t.Run(agent+"/"+mode, func(t *testing.T) {
-			f := newNativeFixture(t)
-			f.env["TAG"] = "apps/agents/" + agent + "/v0.1.0"
-			f.env["GITHUB_SHA"] = strings.Repeat("a", 40)
-			f.env["TAG_SHA"] = f.env["GITHUB_SHA"]
-			f.write(t, "git", `#!/bin/bash
-set -euo pipefail
-[[ "$*" == "rev-parse refs/tags/$TAG^{commit}" ]]
-[[ "${MISSING_TAG:-0}" == 0 ]] || exit 1
-printf '%s\n' "$TAG_SHA"
-`)
+			f := fixtures.NewNative(t)
+			f.SetEnvironment("TAG", "apps/agents/"+agent+"/v0.1.0")
+			f.SetEnvironment("GITHUB_SHA", strings.Repeat("a", 40))
+			f.SetEnvironment("TAG_SHA", f.Environment("GITHUB_SHA"))
+			f.Write(t, "git", fakes.AgentTagGit)
 			switch mode {
 			case "different SHA":
-				f.env["TAG_SHA"] = strings.Repeat("b", 40)
+				f.SetEnvironment("TAG_SHA", strings.Repeat("b", 40))
 			case "missing tag":
-				f.env["MISSING_TAG"] = "1"
+				f.SetEnvironment("MISSING_TAG", "1")
 			case "invalid version":
-				f.env["VERSION"] = "v0.0.0"
+				f.SetEnvironment("VERSION", "v0.0.0")
 			}
-			f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "verify")
-			if output, err := f.run(t); (err != nil) != (mode != "tested SHA") {
+			f.SetScript(fixtures.WorkflowScript(t, "push-binaries.yml", "agents", "verify"))
+			if output, err := f.Run(t); (err != nil) != (mode != "tested SHA") {
 				t.Fatalf("module tag verification = %v: %s", err, output)
 			}
 		})
@@ -137,8 +111,8 @@ func TestCIAgentPackagePublicationRejectsInvalidAssets(t *testing.T) {
 	const agent = "spawner"
 	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "hidden extra", "wrong name"} {
 		t.Run(agent+"/"+mode, func(t *testing.T) {
-			f := newAgentPackageFixture(t, agent)
-			path := filepath.Join(f.artifacts, "agent.yaml")
+			f := fixtures.NewAgentPackage(t, agent)
+			path := filepath.Join(f.Artifacts(), "agent.yaml")
 			if mode != "extra" && mode != "hidden extra" {
 				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
@@ -153,19 +127,19 @@ func TestCIAgentPackagePublicationRejectsInvalidAssets(t *testing.T) {
 			case "symlink":
 				err = os.Symlink("LICENSE", path)
 			case "extra":
-				f.write(t, "package/extra", "unexpected")
+				f.Write(t, "package/extra", "unexpected")
 			case "hidden extra":
-				f.write(t, "package/.extra", "unexpected")
+				f.Write(t, "package/.extra", "unexpected")
 			case "wrong name":
-				f.write(t, "package/"+agent+"-agent.yaml", "wrong manifest name")
+				f.Write(t, "package/"+agent+"-agent.yaml", "wrong manifest name")
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if output, err := f.run(t); err == nil {
+			if output, err := f.Run(t); err == nil {
 				t.Fatalf("invalid assets published: %s", output)
 			}
-			if got := f.read(t, "gh.log"); got != "" {
+			if got := f.Read(t, "gh.log"); got != "" {
 				t.Errorf("invalid assets reached GitHub: %s", got)
 			}
 		})
@@ -176,17 +150,17 @@ func TestCIAgentPackagePublicationFailures(t *testing.T) {
 	const agent = "spawner"
 	for _, mode := range []string{"API failure", "upload failure"} {
 		t.Run(agent+"/"+mode, func(t *testing.T) {
-			f := newAgentPackageFixture(t, agent)
+			f := fixtures.NewAgentPackage(t, agent)
 			switch mode {
 			case "API failure":
-				f.env["GH_STATUS"] = "1"
+				f.SetEnvironment("GH_STATUS", "1")
 			case "upload failure":
-				f.env["FAIL_UPLOAD"] = "1"
+				f.SetEnvironment("FAIL_UPLOAD", "1")
 			}
-			if output, err := f.run(t); err == nil {
+			if output, err := f.Run(t); err == nil {
 				t.Fatalf("publication failure ignored: %s", output)
 			}
-			log := f.read(t, "gh.log")
+			log := f.Read(t, "gh.log")
 			if strings.Contains(log, "release edit") {
 				t.Errorf("failed publication finalized release: %s", log)
 			}
@@ -200,8 +174,8 @@ func TestCIAgentPackagePublicationFailures(t *testing.T) {
 func TestCIAgentPackageStageRejectsInvalidBinaries(t *testing.T) {
 	for _, mode := range []string{"missing", "empty", "directory", "symlink"} {
 		t.Run(mode, func(t *testing.T) {
-			f := newNativeFixture(t)
-			path := filepath.Join(f.artifacts, agentNativeBinaryNames("spawner")[0])
+			f := fixtures.NewNative(t)
+			path := filepath.Join(f.Artifacts(), fixtures.AgentNativeBinaryNames("spawner")[0])
 			if err := os.Remove(path); err != nil {
 				t.Fatal(err)
 			}
@@ -217,10 +191,10 @@ func TestCIAgentPackageStageRejectsInvalidBinaries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			f.env["AGENT"] = "spawner"
-			f.artifacts = f.dir
-			f.script = nativeWorkflowScript(t, "push-binaries.yml", "agents", "stage")
-			if output, err := f.run(t); err == nil {
+			f.SetEnvironment("AGENT", "spawner")
+			f.SetArtifacts(f.Dir())
+			f.SetScript(fixtures.WorkflowScript(t, "push-binaries.yml", "agents", "stage"))
+			if output, err := f.Run(t); err == nil {
 				t.Fatalf("invalid spawner binary staged: %s", output)
 			}
 		})

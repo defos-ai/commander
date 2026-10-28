@@ -10,106 +10,107 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestReadOnlyQueriesValidateIDsAndEmptyCollections(t *testing.T) {
-	a := connect(t)
-	op := a.start(fixtureText)
-	base := operationPath(op.ID)
-	before := a.request(http.MethodGet, base, nil)
+	a := fixtures.Connect(t)
+	op := a.Start(fixtures.FixtureText)
+	base := fixtures.OperationPath(op.ID)
+	before := a.Request(http.MethodGet, base, nil)
 	lastEvent := fmt.Sprint(op.Events[len(op.Events)-1].Sequence)
 	for _, tc := range []struct{ path, cursor string }{{base + "/tasks", ""}, {base + "/events?cursor=" + lastEvent, lastEvent}} {
-		page := read[map[string]json.RawMessage](a, tc.path)
+		page := fixtures.Read[map[string]json.RawMessage](a, tc.path)
 		if string(page["items"]) != "[]" || string(page["next_cursor"]) != fmt.Sprintf("%q", tc.cursor) {
 			t.Fatalf("empty page shape: %+v", page)
 		}
 	}
-	questions := read[models.QuestionListResponse](a, base+"/questions")
+	questions := fixtures.Read[models.QuestionListResponse](a, base+"/questions")
 	if questions.Items == nil || questions.LastQuestion != nil || questions.RemainingQuestions != 0 {
 		t.Fatalf("empty question shape: %+v", questions)
 	}
-	for _, suffix := range []string{"", "/tasks", "/tasks/" + absentID, "/events", "/questions", "/questions/" + absentID, "/graph", "/report"} {
-		assertError(t, a.request(http.MethodGet, operationPath(absentID)+suffix, nil), http.StatusNotFound, "operation_not_found")
+	for _, suffix := range []string{"", "/tasks", "/tasks/" + fixtures.AbsentID, "/events", "/questions", "/questions/" + fixtures.AbsentID, "/graph", "/report"} {
+		fixtures.AssertError(t, a.Request(http.MethodGet, fixtures.OperationPath(fixtures.AbsentID)+suffix, nil), http.StatusNotFound, "operation_not_found")
 		for _, invalid := range []string{"not-a-uuid", "00000000-0000-4000-8000-000000ABCDEF", strings.ReplaceAll(op.ID, "-", "")} {
-			assertError(t, a.request(http.MethodGet, operationPath(invalid)+suffix, nil), http.StatusBadRequest, "invalid_operation_id")
+			fixtures.AssertError(t, a.Request(http.MethodGet, fixtures.OperationPath(invalid)+suffix, nil), http.StatusBadRequest, "invalid_operation_id")
 		}
 	}
 	for _, tc := range []struct{ path, code string }{
-		{base + "/tasks/" + absentID, "task_not_found"}, {base + "/questions/" + absentID, "question_not_found"}, {base + "/report", "report_not_found"},
-		{"/api/v1/reports/" + absentID, "report_not_found"}, {"/api/v1/artifacts/" + absentID, "artifact_not_found"},
+		{base + "/tasks/" + fixtures.AbsentID, "task_not_found"}, {base + "/questions/" + fixtures.AbsentID, "question_not_found"}, {base + "/report", "report_not_found"},
+		{"/api/v1/reports/" + fixtures.AbsentID, "report_not_found"}, {"/api/v1/artifacts/" + fixtures.AbsentID, "artifact_not_found"},
 	} {
-		assertError(t, a.request(http.MethodGet, tc.path, nil), http.StatusNotFound, tc.code)
+		fixtures.AssertError(t, a.Request(http.MethodGet, tc.path, nil), http.StatusNotFound, tc.code)
 	}
 	for _, suffix := range []string{"/tasks", "/events"} {
 		for _, query := range []string{"limit=0", "limit=1001", "limit=bad"} {
-			assertError(t, a.request(http.MethodGet, base+suffix+"?"+query, nil), http.StatusBadRequest, "invalid_limit")
+			fixtures.AssertError(t, a.Request(http.MethodGet, base+suffix+"?"+query, nil), http.StatusBadRequest, "invalid_limit")
 		}
 		for _, query := range []string{"unknown=1", "cursor=&cursor=", "limit=1&limit=2"} {
-			assertError(t, a.request(http.MethodGet, base+suffix+"?"+query, nil), http.StatusBadRequest, "invalid_query")
+			fixtures.AssertError(t, a.Request(http.MethodGet, base+suffix+"?"+query, nil), http.StatusBadRequest, "invalid_query")
 		}
 	}
-	assertError(t, a.request(http.MethodGet, base+"/tasks?cursor=invalid", nil), http.StatusBadRequest, "invalid_cursor")
-	assertError(t, a.request(http.MethodGet, base+"/events?cursor=-1", nil), http.StatusBadRequest, "invalid_cursor")
-	assertError(t, a.request(http.MethodGet, base+"/tasks?cursor="+absentID, nil), http.StatusNotFound, "task_not_found")
-	if after := a.request(http.MethodGet, base, nil); after.body != before.body {
+	fixtures.AssertError(t, a.Request(http.MethodGet, base+"/tasks?cursor=invalid", nil), http.StatusBadRequest, "invalid_cursor")
+	fixtures.AssertError(t, a.Request(http.MethodGet, base+"/events?cursor=-1", nil), http.StatusBadRequest, "invalid_cursor")
+	fixtures.AssertError(t, a.Request(http.MethodGet, base+"/tasks?cursor="+fixtures.AbsentID, nil), http.StatusNotFound, "task_not_found")
+	if after := a.Request(http.MethodGet, base, nil); after.Body != before.Body {
 		t.Fatal("read-only/error queries mutated saved operation")
 	}
 }
 
 func TestHTTPAuthenticationOriginMethodsAndPublicProbes(t *testing.T) {
-	a := connect(t)
-	op := a.start(fixtureText)
-	paths := []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/unknown-controller", operationPath(op.ID), operationPath(op.ID) + "/graph", "/api/v1/reports/" + absentID, "/api/v1/artifacts/" + absentID, "/openapi.json", "/api/v1/unknown"}
+	a := fixtures.Connect(t)
+	op := a.Start(fixtures.FixtureText)
+	paths := []string{"/api/v1/missions", "/api/v1/actions", "/api/v1/agents", "/api/v1/controllers", "/api/v1/controllers/unknown-controller", fixtures.OperationPath(op.ID), fixtures.OperationPath(op.ID) + "/graph", "/api/v1/reports/" + fixtures.AbsentID, "/api/v1/artifacts/" + fixtures.AbsentID, "/openapi.json", "/api/v1/unknown"}
 	for _, path := range paths {
-		unauthorized := a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
-		assertError(t, unauthorized, http.StatusUnauthorized, "authentication_required")
+		unauthorized := a.Request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
+		fixtures.AssertError(t, unauthorized, http.StatusUnauthorized, "authentication_required")
 		assertHeaders(t, unauthorized)
-		if unauthorized.header.Get("WWW-Authenticate") != `Basic realm="Commander", charset="UTF-8"` {
+		if unauthorized.Header.Get("WWW-Authenticate") != `Basic realm="Commander", charset="UTF-8"` {
 			t.Fatal("authentication challenge changed")
 		}
-		assertError(t, a.request(http.MethodGet, path, nil, func(r *http.Request) { r.SetBasicAuth(a.username, "wrong-password") }), http.StatusUnauthorized, "authentication_required")
-		assertError(t, a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Set("Origin", "https://attacker.invalid") }), http.StatusForbidden, "cross_origin_request")
+		fixtures.AssertError(t, a.Request(http.MethodGet, path, nil, func(r *http.Request) { r.SetBasicAuth(a.Username, "wrong-password") }), http.StatusUnauthorized, "authentication_required")
+		fixtures.AssertError(t, a.Request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Set("Origin", "https://attacker.invalid") }), http.StatusForbidden, "cross_origin_request")
 	}
 	for _, method := range []string{http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		if result := a.request(method, operationPath(op.ID)+"/graph", nil); result.status != http.StatusMethodNotAllowed {
+		if result := a.Request(method, fixtures.OperationPath(op.ID)+"/graph", nil); result.Status != http.StatusMethodNotAllowed {
 			t.Fatalf("unsupported method %s: %+v", method, result)
 		}
 	}
 	for _, path := range []string{"/healthz", "/readyz"} {
-		result := a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
-		if body := decode[map[string]string](t, result, http.StatusOK); body["status"] != "ok" {
+		result := a.Request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
+		if body := fixtures.Decode[map[string]string](t, result, http.StatusOK); body["status"] != "ok" {
 			t.Fatalf("unhealthy probe: %+v", body)
 		}
-		head := a.request(http.MethodHead, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
-		if head.status != http.StatusOK || head.body != "" {
+		head := a.Request(http.MethodHead, path, nil, func(r *http.Request) { r.Header.Del("Authorization") })
+		if head.Status != http.StatusOK || head.Body != "" {
 			t.Fatalf("HEAD probe: %+v", head)
 		}
 	}
-	about := a.request(http.MethodGet, "/aboutz", nil, func(r *http.Request) { r.Header.Del("Authorization") })
-	deployment := decode[map[string]string](t, about, http.StatusOK)
+	about := a.Request(http.MethodGet, "/aboutz", nil, func(r *http.Request) { r.Header.Del("Authorization") })
+	deployment := fixtures.Decode[map[string]string](t, about, http.StatusOK)
 	if len(deployment) != 2 || deployment["runtime"] != "docker-compose" || deployment["application"] != "commander-api" {
 		t.Fatalf("unexpected public deployment metadata: %+v", deployment)
 	}
 	assertHeaders(t, about)
 	assertSchema(t, a, "About", about)
-	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil, func(r *http.Request) { r.Header.Del("Authorization") }), http.StatusUnauthorized, "authentication_required")
-	assertError(t, a.request(http.MethodPost, "/api/v1/testing/cleanup", nil, func(r *http.Request) { r.Header.Set("Origin", "https://attacker.invalid") }), http.StatusForbidden, "cross_origin_request")
-	if result := a.request(http.MethodGet, "/api/v1/testing/cleanup", nil); result.status != http.StatusMethodNotAllowed {
+	fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/testing/cleanup", nil, func(r *http.Request) { r.Header.Del("Authorization") }), http.StatusUnauthorized, "authentication_required")
+	fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/testing/cleanup", nil, func(r *http.Request) { r.Header.Set("Origin", "https://attacker.invalid") }), http.StatusForbidden, "cross_origin_request")
+	if result := a.Request(http.MethodGet, "/api/v1/testing/cleanup", nil); result.Status != http.StatusMethodNotAllowed {
 		t.Fatalf("cleanup must require POST: %+v", result)
 	}
 }
 
 func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
-	a := connect(t)
+	a := fixtures.Connect(t)
 	for _, path := range []string{"/docs/", "/docs/swagger-ui.css", "/docs/swagger-ui-bundle.js", "/docs/initializer.js", "/openapi.json"} {
-		result := a.request(http.MethodGet, path, nil)
-		if result.status != http.StatusOK || result.body == "" {
+		result := a.Request(http.MethodGet, path, nil)
+		if result.Status != http.StatusOK || result.Body == "" {
 			t.Fatalf("Swagger resource %s: %+v", path, result)
 		}
-		assertError(t, a.request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") }), http.StatusUnauthorized, "authentication_required")
+		fixtures.AssertError(t, a.Request(http.MethodGet, path, nil, func(r *http.Request) { r.Header.Del("Authorization") }), http.StatusUnauthorized, "authentication_required")
 	}
-	document := read[struct {
+	document := fixtures.Read[struct {
 		OpenAPI  string                `json:"openapi"`
 		Security []map[string][]string `json:"security"`
 		Paths    map[string]struct {
@@ -159,14 +160,14 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 	}
 }
 
-func assertSchema(t *testing.T, a *api, name string, result response) {
+func assertSchema(t *testing.T, a *fixtures.Client, name string, result fixtures.Response) {
 	t.Helper()
-	document := read[struct {
+	document := fixtures.Read[struct {
 		Components struct {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
 	}](a, "/openapi.json")
-	data, err := json.Marshal(object{"$defs": document.Components.Schemas, "$ref": "#/$defs/" + name})
+	data, err := json.Marshal(fixtures.Object{"$defs": document.Components.Schemas, "$ref": "#/$defs/" + name})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func assertSchema(t *testing.T, a *api, name string, result response) {
 		t.Fatal(err)
 	}
 	var body any
-	if err := json.Unmarshal([]byte(result.body), &body); err != nil {
+	if err := json.Unmarshal([]byte(result.Body), &body); err != nil {
 		t.Fatal(err)
 	}
 	if err := resolved.Validate(body); err != nil {
@@ -187,17 +188,17 @@ func assertSchema(t *testing.T, a *api, name string, result response) {
 	}
 }
 
-func assertHeaders(t *testing.T, result response) {
+func assertHeaders(t *testing.T, result fixtures.Response) {
 	t.Helper()
 	for name, want := range map[string]string{"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer"} {
-		if result.header.Get(name) != want {
-			t.Errorf("%s=%q, want %q", name, result.header.Get(name), want)
+		if result.Header.Get(name) != want {
+			t.Errorf("%s=%q, want %q", name, result.Header.Get(name), want)
 		}
 	}
-	if policy := result.header.Get("Content-Security-Policy"); !strings.Contains(policy, "default-src 'none'") || !strings.Contains(policy, "frame-ancestors 'none'") {
+	if policy := result.Header.Get("Content-Security-Policy"); !strings.Contains(policy, "default-src 'none'") || !strings.Contains(policy, "frame-ancestors 'none'") {
 		t.Errorf("missing restrictive CSP: %q", policy)
 	}
-	if result.header.Get("Access-Control-Allow-Origin") != "" || result.header.Get("Access-Control-Allow-Credentials") != "" {
+	if result.Header.Get("Access-Control-Allow-Origin") != "" || result.Header.Get("Access-Control-Allow-Credentials") != "" {
 		t.Fatal("API unexpectedly allows cross-origin clients")
 	}
 }

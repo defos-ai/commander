@@ -1,55 +1,9 @@
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SecretsPage } from '../src/pages/SecretsPage';
-import { upstreamURL } from './proxy';
-
-const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
-const credentials = { username: 'operator', url: connection.url };
-const secretValue = 'private-test-token-never-in-metadata';
-const secret = {
-  id: '12345678-1234-4234-8234-123456789abc', agent_type: 'builder-agent', name: 'GITHUB_TOKEN', version: 7,
-  created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-02T10:00:00Z', status: 'available',
-  expires_at: undefined as string | undefined,
-};
-const pending = {
-  id: '22345678-1234-4234-8234-123456789abc', agent_type: secret.agent_type, name: secret.name,
-  agent_id: 'builder-agent-12345678', requested_at: '2026-10-01T10:00:00Z', expires_at: '2099-01-01T00:00:00Z',
-  status: 'needs_value',
-};
-const secretsPath = '/api/v1/secrets';
-const requestsPath = `${secretsPath}/requests`;
-const secretPath = `${secretsPath}/${secret.agent_type}/${secret.name}`;
-
-function deferredResponse() {
-  let resolve!: (response: Response) => void;
-  const promise = new Promise<Response>(complete => { resolve = complete; });
-  return { promise, resolve };
-}
-
-function fixture(respond?: (path: string, init: RequestInit, url: string) => Response | Promise<Response> | undefined) {
-  const state = { requests: [pending], secrets: [] as (typeof secret)[], current: undefined as typeof secret | undefined };
-  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const url = upstreamURL(input);
-    const parsed = new URL(url);
-    const path = parsed.pathname + parsed.search;
-    const custom = respond?.(path, init, url);
-    if (custom !== undefined) return custom;
-    if (init.method !== undefined && init.method !== 'GET') throw new Error(`Unexpected mutation: ${init.method} ${path}`);
-    if (parsed.pathname === requestsPath) return Response.json({ items: state.requests });
-    if (parsed.pathname === '/api/v1/agents') return Response.json({ items: [] });
-    if (parsed.pathname === secretsPath) return Response.json({ items: state.secrets });
-    if (parsed.pathname === secretPath) return state.current
-      ? Response.json(state.current) : Response.json({ error: 'secret_not_found' }, { status: 404 });
-    throw new Error(`Unexpected request: ${path}`);
-  });
-  vi.stubGlobal('fetch', fetch);
-  return { state, fetch, writes: () => fetch.mock.calls.filter(([, init]) => init?.method !== undefined && init.method !== 'GET')
-    .map(([url, init]) => [url, init!] as const) };
-}
-
-function view() {
-  return render(<SecretsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
-}
+import { upstreamURL } from './fakes/proxy';
+import { deferredResponse } from './fixtures/deferred';
+import { connection, credentials, fixture, pending, secret, secretPath, secretsPath, secretValue, view } from './fixtures/secrets';
 
 async function provide() {
   fireEvent.click(await screen.findByRole('button', { name: 'Provide value' }));
@@ -108,9 +62,9 @@ describe('secret management', () => {
     expect(storage).not.toHaveBeenCalled();
     expect(document.body).not.toHaveTextContent(secretValue);
 
-    api.state.current = { ...secret, version: 1 };
-    api.state.secrets = [api.state.current];
-    api.state.requests = [{ ...pending, status: 'awaiting_installation' }];
+    api.change(state => { state.current = { ...secret, version: 1 }; });
+    api.change(state => { state.secrets = [state.current!]; });
+    api.change(state => { state.requests = [{ ...pending, status: 'awaiting_installation' }]; });
     await act(async () => saved.resolve(Response.json({ ...secret, version: 1 }, { status: 201 })));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -165,12 +119,12 @@ describe('secret management', () => {
   it('replaces an expired value for a pending request using the current identity and version', async () => {
     const api = fixture((path, init) => {
       if (path !== secretPath || init.method !== 'PUT') return undefined;
-      api.state.current = { ...secret, version: secret.version + 1 };
-      api.state.secrets = [api.state.current];
-      return Response.json(api.state.current);
+      api.change(state => { state.current = { ...secret, version: secret.version + 1 }; });
+      api.change(state => { state.secrets = [state.current!]; });
+      return Response.json(api.snapshot().current);
     });
-    api.state.current = { ...secret, status: 'expired', expires_at: '2020-01-01T00:00:00Z' };
-    api.state.secrets = [api.state.current];
+    api.change(state => { state.current = { ...secret, status: 'expired', expires_at: '2020-01-01T00:00:00Z' }; });
+    api.change(state => { state.secrets = [state.current!]; });
     view();
     const dialog = await provide();
     fillValue(dialog);
@@ -189,10 +143,10 @@ describe('secret management', () => {
     const api = fixture((path, init) => {
       if (path !== secretsPath || init.method !== 'POST') return undefined;
       const body = JSON.parse(init.body as string);
-      api.state.secrets = [{ ...secret, version: 1, agent_type: body.agent_type, name: body.name }];
-      return Response.json(api.state.secrets[0], { status: 201 });
+      api.change(state => { state.secrets = [{ ...secret, version: 1, agent_type: body.agent_type, name: body.name }]; });
+      return Response.json(api.snapshot().secrets[0], { status: 201 });
     });
-    api.state.requests = [];
+    api.change(state => { state.requests = []; });
     view();
     const add = await screen.findByRole('button', { name: 'Add secret' });
     await waitFor(() => expect(add).toBeEnabled());
@@ -211,11 +165,11 @@ describe('secret management', () => {
   it('requires confirmation before deleting and sends the displayed record identity and version', async () => {
     const api = fixture((path, init) => {
       if (!path.startsWith(`${secretPath}?`) || init.method !== 'DELETE') return undefined;
-      api.state.secrets = [];
+      api.change(state => { state.secrets = []; });
       return new Response(null, { status: 204 });
     });
-    api.state.requests = [];
-    api.state.secrets = [secret];
+    api.change(state => { state.requests = []; });
+    api.change(state => { state.secrets = [secret]; });
     view();
     fireEvent.click(await showSaved());
     let dialog = screen.getByRole('dialog', { name: 'Delete secret' });

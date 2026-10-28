@@ -12,11 +12,12 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
@@ -26,38 +27,38 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			name = "interrupted after lost result receipt"
 		}
 		t.Run(name, func(t *testing.T) {
-			config := fixture()
-			started := make(chan invocation, 1)
+			config := fixtures.Config()
+			started := make(chan fakes.Invocation, 1)
 			var dispatches atomic.Int32
-			e := executor{run: func(ctx context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
+			e := fakes.Executor{Run: func(ctx context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
 				dispatches.Add(1)
-				started <- invocation{agent: agent, call: call}
+				started <- fakes.Invocation{Agent: agent, Call: call}
 				if interrupted {
 					return actions.ActionOutput{}, executions.ErrIndeterminate
 				}
 				<-ctx.Done()
 				return actions.ActionOutput{}, ctx.Err()
 			}}
-			first := newRunner(t, config, e)
-			op := start(t, first)
-			task := assign(t, first, op.ID, "inspect")
-			original := receive(t, started)
+			first := fixtures.NewRunner(t, config, e)
+			op := fixtures.Start(t, first)
+			task := fixtures.Assign(t, first, op.ID, "inspect")
+			original := fixtures.Receive(t, started)
 			if interrupted {
-				awaitOperation(t, first, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskInterrupted })
+				fixtures.AwaitOperation(t, first, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskInterrupted })
 			}
-			closeRunner(t, first)
-			observed := make(chan invocation, 1)
-			e.recover = func(_ context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
-				observed <- invocation{agent: agent, call: call}
-				return output(call.ActionName), nil
+			fixtures.CloseRunner(t, first)
+			observed := make(chan fakes.Invocation, 1)
+			e.Recover = func(_ context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
+				observed <- fakes.Invocation{Agent: agent, Call: call}
+				return fixtures.Output(call.ActionName), nil
 			}
 
-			config.AgentCatalog.(*agentCatalog).set(readyAgent("review-agent-00000002"))
-			restarted := newRunner(t, config, e)
-			recovered := receive(t, observed)
-			settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+			config.AgentCatalog.(*fakes.AgentCatalog).Set(fixtures.ReadyAgent("review-agent-00000002"))
+			restarted := fixtures.NewRunner(t, config, e)
+			recovered := fixtures.Receive(t, observed)
+			settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 
-			if dispatches.Load() != 1 || recovered.agent != original.agent || recovered.call.Work != original.call.Work {
+			if dispatches.Load() != 1 || recovered.Agent != original.Agent || recovered.Call.Work != original.Call.Work {
 				t.Fatalf("recovery repeated or changed work: dispatches=%d, recovered=%+v", dispatches.Load(), recovered)
 			}
 			got := settled.Tasks[0]
@@ -72,12 +73,12 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 }
 
 func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	failure := errors.New("directory sync failed")
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterQueue: func(operations.Operation) error {
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterQueue: func(operations.Operation) error {
 		return errors.Join(operations.ErrWriteUncertain, failure)
 	}}
-	exec, calls := controlledExecutor()
+	exec, calls := fakes.ControlledExecutor()
 	first, err := runner.NewRunner(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +88,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 		defer cancel()
 		_ = first.Close(ctx)
 	})
-	op := start(t, first)
+	op := fixtures.Start(t, first)
 	command := commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)}
 	_, assignErr := first.Assign(t.Context(), command)
 	stored, err := first.Get(t.Context(), op.ID)
@@ -112,14 +113,14 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 	default:
 	}
 
-	restarted := newRunner(t, config, exec)
-	call := receive(t, calls)
-	if call.agent != agentID || saved.AgentID != "" || call.call.Work.TaskID != saved.ID || call.call.Work.OperationID != op.ID || call.call.ActionName != saved.ActionName || !reflect.DeepEqual(call.call.Input, saved.Input) {
+	restarted := fixtures.NewRunner(t, config, exec)
+	call := fixtures.Receive(t, calls)
+	if call.Agent != fixtures.AgentID || saved.AgentID != "" || call.Call.Work.TaskID != saved.ID || call.Call.Work.OperationID != op.ID || call.Call.ActionName != saved.ActionName || !reflect.DeepEqual(call.Call.Input, saved.Input) {
 		t.Fatalf("recovery changed the saved assignment: %+v", call)
 	}
-	call.reply <- output("inspect")
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	closeRunner(t, restarted)
+	call.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	fixtures.CloseRunner(t, restarted)
 	assigned, dispatched := 0, 0
 	for _, event := range settled.Events {
 		switch event.Type {
@@ -140,17 +141,17 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 }
 
 func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	failure := errors.New("directory sync failed")
 	var failed atomic.Bool
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterDispatch: func(op operations.Operation) error {
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterDispatch: func(op operations.Operation) error {
 		if op.Events[len(op.Events)-1].Type == operations.TaskDispatched && failed.CompareAndSwap(false, true) {
 			return errors.Join(operations.ErrWriteUncertain, failure)
 		}
 		return nil
 	}}
-	exec, calls := controlledExecutor()
-	first, err := runner.NewRunner(t.Context(), durableExecutor{exec}, config)
+	exec, calls := fakes.ControlledExecutor()
+	first, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,8 +160,8 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 		defer cancel()
 		_ = first.Close(ctx)
 	})
-	op := start(t, first)
-	task := assign(t, first, op.ID, "inspect")
+	op := fixtures.Start(t, first)
+	task := fixtures.Assign(t, first, op.ID, "inspect")
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
@@ -184,18 +185,18 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 		t.Fatalf("uncertain write lost the saved reservation: %+v, %v", stored, err)
 	}
 
-	restarted, err := runner.NewRunner(t.Context(), durableExecutor{exec}, config)
+	restarted, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { closeRunner(t, restarted) })
-	recovered := receive(t, calls)
-	if recovered.agent != agentID || recovered.call.Work.TaskID != task.ID || recovered.call.Work.OperationID != op.ID {
+	t.Cleanup(func() { fixtures.CloseRunner(t, restarted) })
+	recovered := fixtures.Receive(t, calls)
+	if recovered.Agent != fixtures.AgentID || recovered.Call.Work.TaskID != task.ID || recovered.Call.Work.OperationID != op.ID {
 		t.Fatalf("recovery changed the reserved work: %+v", recovered)
 	}
-	recovered.reply <- output("inspect")
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	closeRunner(t, restarted)
+	recovered.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	fixtures.CloseRunner(t, restarted)
 
 	dispatchEvents := 0
 	for _, event := range settled.Events {
@@ -214,10 +215,10 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 }
 
 func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	durable := config.OperationStore
 	var failed atomic.Bool
-	config.OperationStore = &uncertainWriteStore{OperationStore: durable, dispatch: func(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: durable, Dispatch: func(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
 		if !failed.CompareAndSwap(false, true) {
 			return durable.DispatchTask(ctx, operationID, dispatch)
 		}
@@ -230,7 +231,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 		}
 		return attempted, operations.ErrWriteUncertain
 	}}
-	exec, calls := controlledExecutor()
+	exec, calls := fakes.ControlledExecutor()
 	first, err := runner.NewRunner(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
@@ -240,8 +241,8 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 		defer cancel()
 		_ = first.Close(ctx)
 	})
-	op := start(t, first)
-	task := assign(t, first, op.ID, "inspect")
+	op := fixtures.Start(t, first)
+	task := fixtures.Assign(t, first, op.ID, "inspect")
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
@@ -269,14 +270,14 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 		}
 	}
 
-	restarted := newRunner(t, config, exec)
-	recovered := receive(t, calls)
-	if recovered.agent != agentID || task.AgentID != "" || recovered.call.Work.TaskID != task.ID || recovered.call.Work.OperationID != op.ID {
+	restarted := fixtures.NewRunner(t, config, exec)
+	recovered := fixtures.Receive(t, calls)
+	if recovered.Agent != fixtures.AgentID || task.AgentID != "" || recovered.Call.Work.TaskID != task.ID || recovered.Call.Work.OperationID != op.ID {
 		t.Fatalf("recovery changed the queued assignment: %+v", recovered)
 	}
-	recovered.reply <- output("inspect")
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	closeRunner(t, restarted)
+	recovered.Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	fixtures.CloseRunner(t, restarted)
 	dispatchEvents := 0
 	for _, event := range settled.Events {
 		if event.Type == operations.TaskDispatched {
@@ -294,21 +295,23 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 }
 
 func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.T) {
-	config := fixture()
-	config.MissionStore.(*missionStore).mission.Rules = missions.RuleSet{
-		missions.AggregateResults: {ForActions: []string{"discover"}},
-	}
+	config := fixtures.Config()
+	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
+		m.Rules = missions.RuleSet{
+			missions.AggregateResults: {ForActions: []string{"discover"}},
+		}
+	})
 	failure := errors.New("directory sync failed")
 	var failed atomic.Bool
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterFinish: func(operations.Operation) error {
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterFinish: func(operations.Operation) error {
 		if failed.CompareAndSwap(false, true) {
 			return errors.Join(operations.ErrWriteUncertain, failure)
 		}
 		return nil
 	}}
-	exec, calls := controlledExecutor()
+	exec, calls := fakes.ControlledExecutor()
 	var recoveries atomic.Int32
-	exec.recover = func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error) {
+	exec.Recover = func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error) {
 		recoveries.Add(1)
 		return actions.ActionOutput{}, errors.New("unexpected recovery of completed work")
 	}
@@ -321,9 +324,9 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 		defer cancel()
 		_ = first.Close(ctx)
 	})
-	op := start(t, first)
-	parent := assign(t, first, op.ID, "discover")
-	receive(t, calls).reply <- output("discover",
+	op := fixtures.Start(t, first)
+	parent := fixtures.Assign(t, first, op.ID, "discover")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover",
 		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)},
 		actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{"page":2}`)})
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -359,18 +362,18 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 		savedChildren[child.ID] = child
 	}
 
-	restarted := newRunner(t, config, exec)
+	restarted := fixtures.NewRunner(t, config, exec)
 	for range 2 {
-		call := receive(t, calls)
-		child, exists := savedChildren[call.call.Work.TaskID]
-		if !exists || call.call.Work.OperationID != op.ID || call.agent != agentID || child.AgentID != "" || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
+		call := fixtures.Receive(t, calls)
+		child, exists := savedChildren[call.Call.Work.TaskID]
+		if !exists || call.Call.Work.OperationID != op.ID || call.Agent != fixtures.AgentID || child.AgentID != "" || call.Call.ActionName != child.ActionName || !reflect.DeepEqual(call.Call.Input, child.Input) {
 			t.Fatalf("recovery repeated the parent or changed an automatic child: %+v", call)
 		}
 		delete(savedChildren, child.ID)
-		call.reply <- output("inspect")
+		call.Reply <- fixtures.Output("inspect")
 	}
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
-	closeRunner(t, restarted)
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
+	fixtures.CloseRunner(t, restarted)
 	if len(settled.Tasks) != 3 || recoveries.Load() != 0 {
 		t.Fatalf("recovery duplicated or lost saved work: recoveries=%d, operation=%+v", recoveries.Load(), settled)
 	}
@@ -398,14 +401,14 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 }
 
 func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
-	config := fixture()
+	config := fixtures.Config()
 	failure := errors.New("directory sync failed")
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, afterResolve: func(operations.Operation) error {
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterResolve: func(operations.Operation) error {
 		return errors.Join(operations.ErrWriteUncertain, failure)
 	}}
-	exec, calls := controlledExecutor()
+	exec, calls := fakes.ControlledExecutor()
 	var recoveries atomic.Int32
-	exec.recover = func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error) {
+	exec.Recover = func(context.Context, string, actions.ActionCall) (actions.ActionOutput, error) {
 		recoveries.Add(1)
 		return actions.ActionOutput{}, errors.New("unexpected recovery of completed work")
 	}
@@ -418,10 +421,10 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 		defer cancel()
 		_ = first.Close(ctx)
 	})
-	op := start(t, first)
-	parent := assign(t, first, op.ID, "discover")
-	receive(t, calls).reply <- output("discover")
-	before := awaitOperation(t, first, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	op := fixtures.Start(t, first)
+	parent := fixtures.Assign(t, first, op.ID, "discover")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover")
+	before := fixtures.AwaitOperation(t, first, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	continuation := before.Tasks[0].Continuation
 	if continuation == nil || continuation.Status != operations.ContinuationPending || continuation.DecisionBy != operations.DecisionModel {
 		t.Fatalf("parent is not awaiting a model decision: %+v", before.Tasks[0])
@@ -468,21 +471,21 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 		savedChildren[child.ID] = child
 	}
 
-	restarted := newRunner(t, config, exec)
+	restarted := fixtures.NewRunner(t, config, exec)
 	for range 2 {
-		call := receive(t, calls)
-		child, exists := savedChildren[call.call.Work.TaskID]
-		if !exists || call.call.Work.OperationID != op.ID || call.agent != agentID || child.AgentID != "" || call.call.ActionName != child.ActionName || !reflect.DeepEqual(call.call.Input, child.Input) {
+		call := fixtures.Receive(t, calls)
+		child, exists := savedChildren[call.Call.Work.TaskID]
+		if !exists || call.Call.Work.OperationID != op.ID || call.Agent != fixtures.AgentID || child.AgentID != "" || call.Call.ActionName != child.ActionName || !reflect.DeepEqual(call.Call.Input, child.Input) {
 			t.Fatalf("recovery repeated the parent or changed a resolved child: %+v", call)
 		}
 		delete(savedChildren, child.ID)
-		call.reply <- output("inspect")
+		call.Reply <- fixtures.Output("inspect")
 	}
-	settled := awaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
+	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
 	if _, err := restarted.Resolve(ctx, command); err == nil || errors.Is(err, operations.ErrWriteUncertain) {
 		t.Fatalf("recovery did not reject the stale decision: %v", err)
 	}
-	closeRunner(t, restarted)
+	fixtures.CloseRunner(t, restarted)
 	if len(settled.Tasks) != 3 || recoveries.Load() != 0 || !reflect.DeepEqual(settled.Tasks[0], savedParent) {
 		t.Fatalf("recovery changed saved work: recoveries=%d, operation=%+v", recoveries.Load(), settled)
 	}
@@ -506,9 +509,9 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 }
 
 func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
-	config := fixture()
-	config.OperationStore = &uncertainWriteStore{OperationStore: config.OperationStore, createError: operations.ErrWriteUncertain}
-	exec, calls := controlledExecutor()
+	config := fixtures.Config()
+	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, CreateError: operations.ErrWriteUncertain}
+	exec, calls := fakes.ControlledExecutor()
 	first, err := runner.NewRunner(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
@@ -534,142 +537,12 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 			t.Fatalf("uncertain creation was hidden: %v", err)
 		}
 	}
-	restarted := newRunner(t, config, exec)
-	task := assign(t, restarted, opID, "inspect")
-	receive(t, calls).reply <- output("inspect")
-	settled := awaitOperation(t, restarted, opID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	restarted := fixtures.NewRunner(t, config, exec)
+	task := fixtures.Assign(t, restarted, opID, "inspect")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("inspect")
+	settled := fixtures.AwaitOperation(t, restarted, opID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	all, err := restarted.List(t.Context())
 	if err != nil || len(all) != 1 || len(settled.Tasks) != 1 || settled.Tasks[0].ID != task.ID {
 		t.Fatalf("recovery duplicated work: %+v, %v", all, err)
 	}
-}
-
-type uncertainWriteStore struct {
-	operations.OperationStore
-	createError    error
-	dispatch       func(context.Context, string, operations.TaskDispatch) (operations.Operation, error)
-	afterQueue     func(operations.Operation) error
-	afterDispatch  func(operations.Operation) error
-	afterFinish    func(operations.Operation) error
-	afterResolve   func(operations.Operation) error
-	afterAsk       func(operations.Operation) error
-	afterAnswer    func(operations.Operation) error
-	afterExpire    func(operations.Operation) error
-	afterPreflight func(operations.Operation) error
-	afterRecover   func(operations.Operation) error
-	afterCancel    func(operations.Operation) error
-	afterComplete  func(operations.Operation) error
-	afterFail      func(operations.Operation) error
-}
-
-func (s *uncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
-	if err := s.OperationStore.Create(ctx, op); err != nil {
-		return err
-	}
-	return s.createError
-}
-
-func (s *uncertainWriteStore) QueueTask(ctx context.Context, operationID string, task operations.Task) (operations.Operation, error) {
-	op, err := s.OperationStore.QueueTask(ctx, operationID, task)
-	if err == nil && s.afterQueue != nil {
-		err = s.afterQueue(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
-	if s.dispatch != nil {
-		return s.dispatch(ctx, operationID, dispatch)
-	}
-	op, err := s.OperationStore.DispatchTask(ctx, operationID, dispatch)
-	if err == nil && s.afterDispatch != nil {
-		err = s.afterDispatch(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) FinishTask(ctx context.Context, operationID string, result operations.TaskResult) (operations.Operation, error) {
-	op, err := s.OperationStore.FinishTask(ctx, operationID, result)
-	if err == nil && s.afterFinish != nil {
-		err = s.afterFinish(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (operations.Operation, error) {
-	op, err := s.OperationStore.ResolveContinuation(ctx, operationID, taskID, version, next)
-	if err == nil && s.afterResolve != nil {
-		err = s.afterResolve(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) AskQuestion(ctx context.Context, operationID string, question operations.Question, version uint64) (operations.Operation, error) {
-	op, err := s.OperationStore.AskQuestion(ctx, operationID, question, version)
-	if err == nil && s.afterAsk != nil {
-		err = s.afterAsk(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
-	op, err := s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer)
-	if err == nil && s.afterAnswer != nil {
-		err = s.afterAnswer(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
-	op, err := s.OperationStore.ExpireQuestions(ctx, operationID, now)
-	if err == nil && s.afterExpire != nil {
-		err = s.afterExpire(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
-	op, err := s.OperationStore.RefreshPreflight(ctx, operationID, records)
-	if err == nil && s.afterPreflight != nil {
-		err = s.afterPreflight(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) Recover(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
-	op, err := s.OperationStore.Recover(ctx, operationID, now)
-	if err == nil && s.afterRecover != nil {
-		err = s.afterRecover(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) Cancel(ctx context.Context, operationID string) (operations.Operation, error) {
-	op, err := s.OperationStore.Cancel(ctx, operationID)
-	if err == nil && s.afterCancel != nil {
-		err = s.afterCancel(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
-	op, err := s.OperationStore.Complete(ctx, operationID, reportID, output)
-	if err == nil && s.afterComplete != nil {
-		err = s.afterComplete(op)
-	}
-	return op, err
-}
-
-func (s *uncertainWriteStore) Fail(ctx context.Context, operationID, reason string) (operations.Operation, error) {
-	op, err := s.OperationStore.Fail(ctx, operationID, reason)
-	if err == nil && s.afterFail != nil {
-		err = s.afterFail(op)
-	}
-	return op, err
-}
-
-type durableExecutor struct{ executor }
-
-func (e durableExecutor) DispatchAction(ctx context.Context, agentID string, call actions.ActionCall) (actions.ActionOutput, error) {
-	return e.RunAction(ctx, agentID, call)
 }

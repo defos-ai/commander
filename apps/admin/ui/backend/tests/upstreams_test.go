@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/admin/ui/backend/connections"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
 func TestAPIUpstreamRouting(t *testing.T) {
@@ -42,7 +43,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer handler.Close()
-	response := serveUI(handler, browserRequest(http.MethodGet, proxyPath(publicURL+"/", "/healthz"), "", nil))
+	response := fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(publicURL+"/", "/healthz"), "", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("mapped health failed: %d %s", response.Code, response.Body.String())
 	}
@@ -53,10 +54,10 @@ func TestAPIUpstreamRouting(t *testing.T) {
 	checkAbout := func(cookie *http.Cookie) {
 		t.Helper()
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
-			request := browserRequest(method, proxyPath(publicURL, "/aboutz"), "", cookie)
+			request := fixtures.BrowserRequest(method, fixtures.ProxyPath(publicURL, "/aboutz"), "", cookie)
 			request.SetBasicAuth("browser-user", "must-not-be-forwarded")
 			request.AddCookie(&http.Cookie{Name: "browser-cookie", Value: "must-not-be-forwarded"})
-			response := serveUI(handler, request)
+			response := fixtures.ServeUI(handler, request)
 			if response.Code != http.StatusOK {
 				t.Fatalf("mapped about discovery failed: %d", response.Code)
 			}
@@ -76,7 +77,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		}
 	}
 	checkAbout(nil)
-	response = serveUI(handler, browserRequest(http.MethodPost, "/ui/connections", loginBody(publicURL), nil))
+	response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodPost, "/ui/connections", fixtures.LoginBody(publicURL), nil))
 	var connection connections.Connection
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &connection) != nil || connection.URL != publicURL || len(response.Result().Cookies()) != 1 {
 		t.Fatalf("mapped login must return the public URL: %d %s", response.Code, response.Body.String())
@@ -88,7 +89,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		t.Fatalf("mapped authentication changed: %s", forwarded.RequestURI)
 	}
 	checkAbout(cookie)
-	response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(publicURL, "/api/v1/agents/team%2Fagent?limit=5&label=a%2Fb"), "", cookie))
+	response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(publicURL, "/api/v1/agents/team%2Fagent?limit=5&label=a%2Fb"), "", cookie))
 	if response.Code != http.StatusOK {
 		t.Fatalf("mapped proxy failed: %d %s", response.Code, response.Body.String())
 	}
@@ -97,7 +98,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 	if forwarded.RequestURI != "/public%2Fbase/api/v1/agents/team%2Fagent?limit=5&label=a%2Fb" || !ok || user != "operator" || password != "private-password" {
 		t.Fatalf("mapped proxy changed path, query, or credentials: %s", forwarded.RequestURI)
 	}
-	response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(upstreamURL, "/api/v1/missions"), "", cookie))
+	response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(upstreamURL, "/api/v1/missions"), "", cookie))
 	if response.Code != http.StatusUnauthorized {
 		t.Fatal("public session credentials must not be keyed by the private upstream")
 	}
@@ -105,15 +106,15 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		t.Fatal("mapped requests reached the public address")
 	}
 	aliasURL := "http://localhost/public%2Fbase"
-	response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(aliasURL, "/api/v1/missions"), "", cookie))
+	response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(aliasURL, "/api/v1/missions"), "", cookie))
 	if response.Code != http.StatusUnauthorized {
 		t.Fatal("mapped aliases must not share public session credentials")
 	}
-	cookie = loginAs(t, handler, aliasURL, cookie, "alias-operator", "alias-password")
+	cookie = fixtures.LoginAs(t, handler, aliasURL, cookie, "alias-operator", "alias-password")
 	<-observed
 	assertConnections(t, handler, cookie, 2)
 	for target, wantUser := range map[string]string{publicURL: "operator", aliasURL: "alias-operator"} {
-		response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(target, "/api/v1/missions"), "", cookie))
+		response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(target, "/api/v1/missions"), "", cookie))
 		if response.Code != http.StatusOK {
 			t.Fatalf("mapped alias failed: %s %d", target, response.Code)
 		}
@@ -124,7 +125,7 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		}
 	}
 	for _, target := range []string{direct.URL + "/public/base", publicURL + "/other"} {
-		response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(target, "/healthz"), "", nil))
+		response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(target, "/healthz"), "", nil))
 		if response.Code != http.StatusOK {
 			t.Fatalf("mapped hostname did not retain another base path: %s %d", target, response.Code)
 		}
@@ -137,17 +138,17 @@ func TestAPIUpstreamRouting(t *testing.T) {
 		other.URL + "/public%2Fbase",
 		strings.Replace(publicURL, "127.0.0.1", "localhost", 1),
 	} {
-		response = serveUI(handler, browserRequest(http.MethodGet, proxyPath(target, "/healthz"), "", nil))
+		response = fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(target, "/healthz"), "", nil))
 		if response.Code != http.StatusForbidden {
 			t.Fatalf("unmapped internal API escaped the network policy: %s: %d %s", target, response.Code, response.Body.String())
 		}
 	}
 	upstream.Close()
 	for _, request := range []*http.Request{
-		browserRequest(http.MethodGet, proxyPath(publicURL, "/healthz"), "", nil),
-		browserRequest(http.MethodPost, "/ui/connections", loginBody(publicURL), nil),
+		fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(publicURL, "/healthz"), "", nil),
+		fixtures.BrowserRequest(http.MethodPost, "/ui/connections", fixtures.LoginBody(publicURL), nil),
 	} {
-		response = serveUI(handler, request)
+		response = fixtures.ServeUI(handler, request)
 		if response.Code != http.StatusBadGateway || strings.Contains(response.Body.String(), upstreamURL) {
 			t.Fatalf("unavailable upstream response: %d %s", response.Code, response.Body.String())
 		}

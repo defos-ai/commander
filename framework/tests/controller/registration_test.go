@@ -3,12 +3,13 @@ package controller_test
 import (
 	"context"
 	"errors"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/domain/controllers"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
 func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
@@ -16,7 +17,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 	defer cancel()
 	hostCtx, stopHost := context.WithCancel(ctx)
 	defer stopHost()
-	store := &registrationStore{observations: make(chan controllers.Controller, 100)}
+	store := fakes.NewRegistrationStore()
 	registration, err := controller.Register(hostCtx, store, controller.RegistrationConfig{
 		ID: "default-controller-12345678", Type: "default", AgentSelector: "round-robin", RuleSelector: "custom-rules",
 		HeartbeatInterval: 10 * time.Millisecond, LeaseDuration: time.Second,
@@ -25,14 +26,14 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = registration.Close(context.Background()) })
-	previous := receive(t, ctx, store.observations)
+	previous := fixtures.Receive(t, ctx, store.Observations())
 	if previous.Status != controllers.Starting || previous.Version == "" || previous.Server.OS == "" || previous.Server.Arch == "" || previous.RuleSelector != "custom-rules" {
 		t.Fatalf("incomplete starting registration: %+v", previous)
 	}
 	if err := registration.SetStatus(ctx, controllers.Degraded, "invalid\nreason"); err == nil {
 		t.Fatal("invalid status reason was accepted")
 	}
-	if heartbeat := receive(t, ctx, store.observations); heartbeat.Status != controllers.Starting || heartbeat.StatusReason != "" {
+	if heartbeat := fixtures.Receive(t, ctx, store.Observations()); heartbeat.Status != controllers.Starting || heartbeat.StatusReason != "" {
 		t.Fatalf("rejected status update changed subsequent heartbeats: %+v", heartbeat)
 	}
 	for _, status := range []controllers.Status{controllers.Ready, controllers.Degraded, controllers.Draining} {
@@ -43,7 +44,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 			t.Fatal(err)
 		}
 		for {
-			current := receive(t, ctx, store.observations)
+			current := fixtures.Receive(t, ctx, store.Observations())
 			if !current.LastHeartbeat.After(previous.LastHeartbeat) || !current.StartedAt.Equal(previous.StartedAt) || current.RuleSelector != previous.RuleSelector {
 				t.Fatalf("registration lost observation ordering: previous=%+v current=%+v", previous, current)
 			}
@@ -53,7 +54,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 			}
 		}
 	}
-	renewal := receive(t, ctx, store.observations)
+	renewal := fixtures.Receive(t, ctx, store.Observations())
 	if renewal.Status != controllers.Draining || !renewal.LeaseExpiresAt.After(previous.LeaseExpiresAt) {
 		t.Fatalf("host cancellation stopped lease renewal before shutdown: %+v", renewal)
 	}
@@ -61,7 +62,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for {
-		last := receive(t, ctx, store.observations)
+		last := fixtures.Receive(t, ctx, store.Observations())
 		if last.Status == controllers.Stopped {
 			if !last.LeaseExpiresAt.Equal(last.LastHeartbeat) {
 				t.Fatalf("stopped registration retained a live lease: %+v", last)
@@ -80,7 +81,7 @@ func TestRegistrationAdvertisesUntilHostShutdownFinishes(t *testing.T) {
 func TestRegistrationCloseCancelsBlockedHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	store := &registrationStore{observations: make(chan controllers.Controller, 10), blocked: make(chan struct{}, 1)}
+	store := fakes.NewRegistrationStore()
 	registration, err := controller.Register(ctx, store, controller.RegistrationConfig{
 		ID: "default-controller-12345678", Type: "default", AgentSelector: "round-robin",
 		HeartbeatInterval: 10 * time.Millisecond, LeaseDuration: time.Second,
@@ -89,8 +90,8 @@ func TestRegistrationCloseCancelsBlockedHeartbeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = registration.Close(context.Background()) })
-	store.block.Store(true)
-	receive(t, ctx, store.blocked)
+	store.BlockHeartbeat()
+	fixtures.Receive(t, ctx, store.Blocked())
 	shutdown, stop := context.WithTimeout(ctx, 20*time.Millisecond)
 	defer stop()
 	if err := registration.Close(shutdown); !errors.Is(err, context.DeadlineExceeded) {
@@ -98,29 +99,5 @@ func TestRegistrationCloseCancelsBlockedHeartbeat(t *testing.T) {
 	}
 	if err := registration.Close(ctx); err != nil {
 		t.Fatalf("blocked heartbeat was not cancelled: %v", err)
-	}
-}
-
-type registrationStore struct {
-	controllers.ControllerStore
-	observations chan controllers.Controller
-	blocked      chan struct{}
-	block        atomic.Bool
-}
-
-func (s *registrationStore) Upsert(ctx context.Context, record controllers.Controller) error {
-	if s.block.Load() {
-		select {
-		case s.blocked <- struct{}{}:
-		default:
-		}
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	select {
-	case s.observations <- record:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 }

@@ -1,36 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-import { getOperationGraph } from '../src/api/operation-graph';
+import { describe, expect, it } from 'vitest';
 import type { OperationGraph } from '../src/api/graph-types';
-
-const url = 'https://commander.example/team';
-const credentials = { url, username: 'operator' };
-const timestamp = '2026-10-05T12:00:00.123456789Z';
-const graph: OperationGraph = {
-  operation_id: 'operation-1', status: 'running', updated_at: timestamp,
-  nodes: [
-    { id: 'task:task-1', kind: 'task', task: { id: 'task-1', action_name: 'discover-pages', status: 'succeeded', agent_id: 'agent-1', command_id: 'command-1', started_at: timestamp, finished_at: timestamp } },
-    { id: 'task:task-2', kind: 'task', task: { id: 'task-2', parent_task_id: 'task-1', action_name: 'capture-page', status: 'succeeded', started_at: timestamp, finished_at: timestamp } },
-    { id: 'artifact:artifact-1', kind: 'artifact', artifact: { id: 'artifact-1', name: 'Screenshot', agent_id: 'agent-1', action_name: 'capture-page', created_at: timestamp } },
-    { id: 'file:artifact-1:file-1', kind: 'file', file: { artifact_id: 'artifact-1', id: 'file-1', name: 'desktop.png', media_type: 'image/png', size: 2048, sha256: 'abc' } },
-  ],
-  edges: [
-    { source: 'task:task-1', target: 'task:task-2', kind: 'parent_child' },
-    { source: 'task:task-2', target: 'artifact:artifact-1', kind: 'produced' },
-    { source: 'artifact:artifact-1', target: 'file:artifact-1:file-1', kind: 'contains' },
-  ],
-};
+import { getOperationGraph } from '../src/api/operation-graph';
+import { respondJSON as respond } from './fakes/fetch';
+import { credentials, graph, url } from './fixtures/operation-graph-client';
 
 function proxyTarget(input: RequestInfo | URL) {
   const endpoint = new URL(String(input), window.location.origin);
   expect(endpoint.origin).toBe(window.location.origin);
   expect(endpoint.pathname).toBe('/ui/proxy');
   return Object.fromEntries(endpoint.searchParams);
-}
-
-function respond(body: unknown) {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(body));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
 }
 
 describe('operation graph client', () => {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -12,17 +11,17 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	mongoagents "github.com/defos-ai/commander/providers/mongo/agents"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func TestAgentMongoStore(t *testing.T) {
-	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), openStore(t, "agents"))
+	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), fixtures.OpenStore(t, "agents"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := inventoryAgent(2, time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC))
+	original := fixtures.Agent(2, time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC))
 	original.Status = agents.AgentWorking
 	original.Server = agents.ServerInfo{IPAddress: "2001:db8::1", Hostname: "review-pod-1"}
 	original.Responsibilities = []string{"Review websites"}
@@ -66,7 +65,7 @@ func TestAgentMongoStore(t *testing.T) {
 		t.Fatalf("reader mutated a persisted snapshot: %#v, error = %v", stored, err)
 	}
 
-	updated := inventoryAgent(2, time.Time{})
+	updated := fixtures.Agent(2, time.Time{})
 	if err := catalog.Upsert(t.Context(), updated); err != nil {
 		t.Fatal(err)
 	}
@@ -78,13 +77,13 @@ func TestAgentMongoStore(t *testing.T) {
 }
 
 func TestAgentMongoStoreOrdersObservationsAcrossRestart(t *testing.T) {
-	database := openStore(t, "agents")
+	database := fixtures.OpenStore(t, "agents")
 	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
 	observed := time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)
-	original := inventoryAgent(1, observed.Add(-time.Hour))
+	original := fixtures.Agent(1, observed.Add(-time.Hour))
 	if err := catalog.Upsert(t.Context(), original); err != nil {
 		t.Fatal(err)
 	}
@@ -129,13 +128,13 @@ func TestAgentMongoStoreOrdersObservationsAcrossRestart(t *testing.T) {
 }
 
 func TestAgentMongoStoreExpiredObservationsBlockStaleReactivation(t *testing.T) {
-	database := openStore(t, "agents")
+	database := fixtures.OpenStore(t, "agents")
 	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cutoff := time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)
-	original := inventoryAgent(1, cutoff)
+	original := fixtures.Agent(1, cutoff)
 	original.ObservedAt = cutoff.Add(2 * time.Nanosecond)
 	if err := catalog.Upsert(t.Context(), original); err != nil {
 		t.Fatal(err)
@@ -192,7 +191,7 @@ func TestAgentMongoStoreExpiredObservationsBlockStaleReactivation(t *testing.T) 
 }
 
 func TestAgentMongoStorePrunesExpiredObservations(t *testing.T) {
-	database := openStore(t, "agents")
+	database := fixtures.OpenStore(t, "agents")
 	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +200,7 @@ func TestAgentMongoStorePrunesExpiredObservations(t *testing.T) {
 	expected := make(map[string]agents.Agent)
 	var retained agents.Agent
 	for i, observed := range []time.Time{time.Time{}, cutoff.Add(-time.Nanosecond), cutoff, cutoff.Add(time.Nanosecond)} {
-		record := inventoryAgent(i, cutoff)
+		record := fixtures.Agent(i, cutoff)
 		record.ObservedAt = observed
 		if err := catalog.Upsert(t.Context(), record); err != nil {
 			t.Fatal(err)
@@ -254,12 +253,12 @@ func TestAgentMongoStorePrunesExpiredObservations(t *testing.T) {
 }
 
 func TestAgentMongoStoreRejectsInvalidAndCancelledWrites(t *testing.T) {
-	database := openStore(t, "agents")
+	database := fixtures.OpenStore(t, "agents")
 	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := inventoryAgent(1, time.Date(2026, 9, 30, 12, 0, 0, 1, time.UTC))
+	original := fixtures.Agent(1, time.Date(2026, 9, 30, 12, 0, 0, 1, time.UTC))
 	if err := catalog.Upsert(t.Context(), original); err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +314,7 @@ func TestAgentMongoStoreRejectsInvalidAndCancelledWrites(t *testing.T) {
 }
 
 func TestAgentMongoStoreExpiresOnlyHeartbeatLeases(t *testing.T) {
-	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), openStore(t, "agents"))
+	catalog, err := mongoagents.NewAgentMongoStore(t.Context(), fixtures.OpenStore(t, "agents"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +322,7 @@ func TestAgentMongoStoreExpiresOnlyHeartbeatLeases(t *testing.T) {
 	expected := map[string]agents.Agent{}
 	var fresh agents.Agent
 	for i, heartbeat := range []time.Time{time.Time{}, cutoff.Add(-time.Nanosecond), cutoff, cutoff.Add(time.Nanosecond)} {
-		record := inventoryAgent(i, heartbeat)
+		record := fixtures.Agent(i, heartbeat)
 		record.LastSeen = cutoff.Add(time.Hour)
 		record.LeaseExpiresAt = cutoff.Add(2 * time.Hour)
 		if i == 0 {
@@ -363,7 +362,7 @@ func TestAgentMongoStoreExpiresOnlyHeartbeatLeases(t *testing.T) {
 }
 
 func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
-	database := openStore(t, "agents")
+	database := fixtures.OpenStore(t, "agents")
 	first, err := mongoagents.NewAgentMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
@@ -383,7 +382,7 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 	for round, renew := range []bool{false, true} {
 		observed := cutoff.Add(time.Duration(round+1) * time.Nanosecond)
 		for i := range count {
-			record := inventoryAgent(i, cutoff)
+			record := fixtures.Agent(i, cutoff)
 			record.ObservedAt = observed
 			if err := first.Upsert(t.Context(), record); err != nil {
 				t.Fatal(err)
@@ -403,7 +402,7 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 			for i := range count {
 				go func() {
 					<-start
-					record := inventoryAgent(i, cutoff.Add(time.Nanosecond))
+					record := fixtures.Agent(i, cutoff.Add(time.Nanosecond))
 					record.ObservedAt = observed.Add(time.Nanosecond)
 					written <- catalogs[i%len(catalogs)].Upsert(t.Context(), record)
 				}()
@@ -439,19 +438,11 @@ func TestConcurrentAgentExpiryAndHeartbeats(t *testing.T) {
 			t.Fatalf("renew=%t: inventory after races = %#v, error = %v", renew, items, err)
 		}
 		for i, record := range items {
-			want := inventoryAgent(i, cutoff.Add(time.Nanosecond))
+			want := fixtures.Agent(i, cutoff.Add(time.Nanosecond))
 			want.ObservedAt = observed.Add(time.Nanosecond)
 			if !reflect.DeepEqual(record, want) {
 				t.Fatalf("sweep lost or changed a fresh heartbeat: %#v", record)
 			}
 		}
-	}
-}
-
-func inventoryAgent(index int, heartbeat time.Time) agents.Agent {
-	return agents.Agent{
-		AgentSnapshot: agents.AgentSnapshot{ID: fmt.Sprintf("browser-agent-%08x", index), Type: "browser-agent", Status: agents.AgentReady},
-		LastSeen:      time.Date(2026, 9, 30, 12, 0, 1, 123456789, time.UTC),
-		LastHeartbeat: heartbeat,
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/admin/cli"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
 func TestCLI(t *testing.T) {
@@ -47,7 +48,7 @@ func TestCLI(t *testing.T) {
 	}
 	t.Run("invalid api-upstreams", func(t *testing.T) {
 		ready := false
-		err := cli.RunWithOptions(context.Background(), []string{"serve", "--listen-address=127.0.0.1:0", "--static-dir=" + builtFrontend(t), "--api-upstreams=ftp://invalid"}, nil, io.Discard, io.Discard, cli.Options{
+		err := cli.RunWithOptions(context.Background(), []string{"serve", "--listen-address=127.0.0.1:0", "--static-dir=" + fixtures.BuiltFrontend(t), "--api-upstreams=ftp://invalid"}, nil, io.Discard, io.Discard, cli.Options{
 			Ready: func(net.Addr) { ready = true },
 		})
 		if err == nil || !strings.Contains(err.Error(), "api-upstreams") || ready {
@@ -71,7 +72,7 @@ func TestCLIServesAndShutsDown(t *testing.T) {
 			}))
 			defer upstream.Close()
 			publicURL := "http://localhost:14274/local"
-			directory := builtFrontend(t)
+			directory := fixtures.BuiltFrontend(t)
 			t.Setenv("PORT", "invalid")
 			t.Setenv("UI_LISTEN_ADDRESS", "127.0.0.1:0")
 			t.Setenv("UI_STATIC_DIR", directory)
@@ -113,7 +114,7 @@ func TestCLIServesAndShutsDown(t *testing.T) {
 			if err != nil || response.StatusCode != http.StatusOK || string(body) != "ok\n" {
 				t.Fatalf("health status=%d body=%q error=%v", response.StatusCode, body, err)
 			}
-			request, err = http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address.String()+proxyPath(publicURL, "/healthz"), nil)
+			request, err = http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address.String()+fixtures.ProxyPath(publicURL, "/healthz"), nil)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -11,7 +11,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +19,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/apps/playground/tests/fakes"
+	"github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,16 +62,16 @@ func TestHelpLayout(t *testing.T) {
 					http.Error(w, "unexpected model request", http.StatusBadRequest)
 				}))
 				defer provider.Close()
-				u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAgentCount: 4, AllInOne: allInOne, API: local})
-				defer u.model.Close()
-				u.model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
-				u.text("/help")
-				u.key(tea.KeyMsg{Type: tea.KeyEnter})
-				u.wait("help", func(view string) bool { return strings.Contains(view, "Show this help") })
+				u := fixtures.NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAgentCount: 4, AllInOne: allInOne, API: local})
+				defer u.Close()
+				u.Model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
+				u.Text("/help")
+				u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+				u.Wait("help", func(view string) bool { return strings.Contains(view, "Show this help") })
 
 				for _, width := range []int{120, 60, 120} {
-					u.model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
-					view := ansi.Strip(u.model.View())
+					u.Model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
+					view := ansi.Strip(u.Model.View())
 					start := strings.Index(view, "\n  /help — Show this help")
 					if start < 0 {
 						t.Fatalf("help is not aligned with the chat inset at width %d", width)
@@ -151,19 +152,19 @@ func TestMCPAuthenticationDuringSetup(t *testing.T) {
 				t.Error("MCP token setup leaked into a model request")
 			}
 		}
-		writeModelDelta(w, map[string]any{"content": "Authenticated and ready"}, "stop")
+		fakes.WriteModelDelta(w, map[string]any{"content": "Authenticated and ready"}, "stop")
 	}))
 	defer provider.Close()
 	var output bytes.Buffer
-	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{
+	u := fixtures.NewUIDriver(t, ctx, ui.New(ctx, ui.Config{
 		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL + "/mcp"},
 		Keys: map[string]string{"other": "fixture-key"}, NoColor: true,
-	}, &output)}
-	defer u.model.Close()
-	u.model.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
-	u.run(u.model.Init())
-	u.wait("token input", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
-	view := u.model.View()
+	}, &output))
+	defer u.Close()
+	u.Model.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	u.Run(u.Model.Init())
+	u.Wait("token input", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	view := u.Model.View()
 	environmentCommand := `export COMMANDER_MCP_TOKEN="$(docker compose exec -T mcp commander-mcp credentials --raw)"`
 	if runtime.GOOS == "windows" {
 		environmentCommand = `$env:COMMANDER_MCP_TOKEN = (docker compose exec -T mcp commander-mcp credentials --raw)`
@@ -186,49 +187,49 @@ func TestMCPAuthenticationDuringSetup(t *testing.T) {
 	}
 	for _, value := range []string{"", invalidToken} {
 		before := attempts.Load()
-		u.text(value)
-		if strings.Contains(u.model.View(), invalidToken) {
+		u.Text(value)
+		if strings.Contains(u.Model.View(), invalidToken) {
 			t.Fatal("token input was not masked")
 		}
-		u.key(tea.KeyMsg{Type: tea.KeyEnter})
-		if attempts.Load() != before || !strings.Contains(u.model.View(), "Commander MCP token") {
+		u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+		if attempts.Load() != before || !strings.Contains(u.Model.View(), "Commander MCP token") {
 			t.Fatal("invalid or blank token made a network request or left the prompt")
 		}
-		if strings.Contains(u.model.View(), invalidToken) {
+		if strings.Contains(u.Model.View(), invalidToken) {
 			t.Fatal("invalid token was disclosed in the validation error")
 		}
 	}
-	u.text(wrongToken)
-	if strings.Contains(u.model.View(), wrongToken) || !strings.Contains(u.model.View(), strings.Repeat("*", len(wrongToken))) || attempts.Load() != 1 {
+	u.Text(wrongToken)
+	if strings.Contains(u.Model.View(), wrongToken) || !strings.Contains(u.Model.View(), strings.Repeat("*", len(wrongToken))) || attempts.Load() != 1 {
 		t.Fatal("typing a token disclosed it or retried authentication")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("token input after rejected token", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
-	if attempts.Load() != 2 || strings.Contains(u.model.View(), wrongToken) {
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("token input after rejected token", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	if attempts.Load() != 2 || strings.Contains(u.Model.View(), wrongToken) {
 		t.Fatal("rejected token was retried automatically or disclosed")
 	}
-	if strings.Contains(u.model.View(), "Enter a valid MCP token.") || strings.Count(u.model.View(), "MCP token rejected. Try again.") != 1 {
+	if strings.Contains(u.Model.View(), "Enter a valid MCP token.") || strings.Count(u.Model.View(), "MCP token rejected. Try again.") != 1 {
 		t.Fatal("token prompt retained resolved validation errors")
 	}
-	u.text(token)
-	if strings.Contains(u.model.View(), token) || attempts.Load() != 2 {
+	u.Text(token)
+	if strings.Contains(u.Model.View(), token) || attempts.Load() != 2 {
 		t.Fatal("typing the replacement token disclosed it or connected before Enter")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("authenticated connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
-	if strings.Contains(u.model.View(), "MCP token rejected") || strings.Contains(u.model.View(), "Enter a valid MCP token.") {
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("authenticated connection", func(view string) bool { return strings.Contains(view, "Commander connected") })
+	if strings.Contains(u.Model.View(), "MCP token rejected") || strings.Contains(u.Model.View(), "Enter a valid MCP token.") {
 		t.Fatal("resolved token errors carried into chat")
 	}
-	u.text("Hello")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("chat after token entry", func(view string) bool {
+	u.Text("Hello")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("chat after token entry", func(view string) bool {
 		return strings.Contains(view, "Authenticated and ready") && !strings.Contains(view, "Thinking")
 	})
 	if requests.Load() != 1 || os.Getenv("COMMANDER_MCP_TOKEN") != originalEnvironment {
 		t.Fatal("interactive authentication changed the environment or made unexpected model requests")
 	}
 	for _, private := range []string{token, wrongToken, invalidToken} {
-		if strings.Contains(u.model.View(), private) || strings.Contains(output.String(), private) {
+		if strings.Contains(u.Model.View(), private) || strings.Contains(output.String(), private) {
 			t.Fatal("token setup retained a credential in rendered history or output")
 		}
 	}
@@ -252,32 +253,32 @@ func TestMCPTokenInputWithoutDeploymentHintAndBack(t *testing.T) {
 		http.Error(w, private, http.StatusUnauthorized)
 	}))
 	defer endpoint.Close()
-	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, ui.Config{
+	u := fixtures.NewUIDriver(t, ctx, ui.New(ctx, ui.Config{
 		Provider: "other", Model: "fixture", BaseURL: endpoint.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL + "/mcp"},
 		Keys: map[string]string{"other": "fixture-key"}, NoColor: true,
-	}, io.Discard)}
-	defer u.model.Close()
-	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	u.run(u.model.Init())
-	u.wait("token prompt without metadata", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
-	u.text(private)
-	if strings.Contains(u.model.View(), private) || strings.Contains(u.model.View(), untrusted) {
+	}, io.Discard))
+	defer u.Close()
+	u.Model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	u.Run(u.Model.Init())
+	u.Wait("token prompt without metadata", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	u.Text(private)
+	if strings.Contains(u.Model.View(), private) || strings.Contains(u.Model.View(), untrusted) {
 		t.Fatal("token prompt disclosed credentials or trusted a server-provided command")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyCtrlA})
-	u.key(tea.KeyMsg{Type: tea.KeyCtrlK})
-	u.text("/back")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	view := u.model.View()
+	u.Key(tea.KeyMsg{Type: tea.KeyCtrlA})
+	u.Key(tea.KeyMsg{Type: tea.KeyCtrlK})
+	u.Text("/back")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	view := u.Model.View()
 	if !strings.Contains(view, "Commander MCP URL") || !strings.Contains(view, endpoint.URL+"/mcp") || strings.Contains(view, private) || strings.Contains(view, "Select your model provider:") {
 		t.Fatal("back did not return to the MCP URL with a cleared private input")
 	}
 	if attempts.Load() != 1 {
 		t.Fatal("back retried the connection")
 	}
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("token prompt after URL submission", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
-	if attempts.Load() != 2 || strings.Contains(u.model.View(), private) || strings.Contains(u.model.View(), untrusted) {
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("token prompt after URL submission", func(view string) bool { return strings.Contains(view, "Commander MCP token") })
+	if attempts.Load() != 2 || strings.Contains(u.Model.View(), private) || strings.Contains(u.Model.View(), untrusted) {
 		t.Fatal("URL submission reused the abandoned token or untrusted metadata")
 	}
 }
@@ -357,42 +358,42 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 				t.Error("local credential lookup leaked into a model request")
 			}
 		}
-		writeModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
+		fakes.WriteModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
 	}))
 	defer provider.Close()
-	u := newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: credentials}, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAgentCount: 4, AllInOne: true, API: local, AdminURL: adminURL})
-	defer u.model.Close()
-	if strings.Contains(u.model.View(), local.Credentials.Password) || strings.Contains(u.model.View(), credentials.Token) {
+	u := fixtures.NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: credentials}, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAgentCount: 4, AllInOne: true, API: local, AdminURL: adminURL})
+	defer u.Close()
+	if strings.Contains(u.Model.View(), local.Credentials.Password) || strings.Contains(u.Model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")
 	}
-	if strings.Contains(u.model.View(), local.URL) || strings.Contains(u.model.View(), endpoint.URL) || strings.Contains(u.model.View(), adminURL) {
+	if strings.Contains(u.Model.View(), local.URL) || strings.Contains(u.Model.View(), endpoint.URL) || strings.Contains(u.Model.View(), adminURL) {
 		t.Fatal("local startup displayed endpoints before a status request")
 	}
-	u.text("/status")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("local status", func(view string) bool {
+	u.Text("/status")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("local status", func(view string) bool {
 		return strings.Contains(view, "MCP connected · watching 0 operations · 0 queued messages")
 	})
-	view := u.model.View()
+	view := u.Model.View()
 	if !strings.Contains(view, "API: "+local.URL) || !strings.Contains(view, "MCP: "+endpoint.URL) || !strings.Contains(view, "Admin: "+adminURL) || strings.Contains(view, local.Credentials.Password) || strings.Contains(view, credentials.Token) {
 		t.Fatal("status did not show endpoints without credentials")
 	}
-	u.text("/credentials api")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if strings.Contains(u.model.View(), "Password: "+local.Credentials.Password) || strings.Contains(u.model.View(), "Token: "+credentials.Token) {
+	u.Text("/credentials api")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if strings.Contains(u.Model.View(), "Password: "+local.Credentials.Password) || strings.Contains(u.Model.View(), "Token: "+credentials.Token) {
 		t.Fatal("invalid credential arguments disclosed local credentials")
 	}
-	u.text("/credentials")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), "Password: "+local.Credentials.Password) || !strings.Contains(u.model.View(), "Token: "+credentials.Token) {
+	u.Text("/credentials")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.Model.View(), "Password: "+local.Credentials.Password) || !strings.Contains(u.Model.View(), "Token: "+credentials.Token) {
 		t.Fatal("explicit credential lookup did not display local credentials")
 	}
-	u.text("Hello")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("normal chat after credential lookup", func(view string) bool {
+	u.Text("Hello")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("normal chat after credential lookup", func(view string) bool {
 		return strings.Contains(view, "Ready to chat") && !strings.Contains(view, "Thinking")
 	})
-	if requests.Load() != 1 || calls.Load() != 0 || strings.Contains(u.model.View(), "Unknown command") {
+	if requests.Load() != 1 || calls.Load() != 0 || strings.Contains(u.Model.View(), "Unknown command") {
 		t.Fatal("credential lookup caused model or MCP work")
 	}
 }
@@ -400,50 +401,13 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 func TestQuestionSelector(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	var mu sync.Mutex
 	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, PendingQuestions: 2}, Questions: []bridge.Question{
 		{ID: "older", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Minute)},
 		{ID: "latest", Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), ExpiresAt: time.Now().Add(2 * time.Minute)},
 	}}
-	answers := make(chan string, 1)
-	server := mcp.NewServer(&mcp.Implementation{Name: "question-fixture", Version: "1"}, nil)
-	for _, name := range []string{"get_operation", "operation_events", "answer_question"} {
-		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			mu.Lock()
-			defer mu.Unlock()
-			var payload any = op
-			switch req.Params.Name {
-			case "operation_events":
-				payload = map[string]any{"events": []any{}, "next_cursor": ""}
-			case "answer_question":
-				var args struct {
-					Answer      string
-					OperationID string `json:"operation_id"`
-					QuestionID  string `json:"question_id"`
-				}
-				if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
-					return nil, err
-				}
-				if args.OperationID != op.ID || args.QuestionID != "latest" {
-					t.Errorf("answer targeted the wrong question: %+v", args)
-				}
-				answers <- args.Answer
-				op.UpdatedAt = time.Now()
-				op.Questions[1].Status = bridge.QuestionAnswered
-				op.Questions[1].Answer = args.Answer
-				op.Progress.PendingQuestions = 1
-				op.Questions[0].ExpiresAt = time.Now().Add(500 * time.Millisecond)
-				payload = op
-			}
-			encoded, _ := json.Marshal(payload)
-			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}, nil
-		})
-	}
-	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
-	defer endpoint.Close()
-	u := newUI(t, ctx, endpoint.URL, "http://127.0.0.1:1")
-	defer u.model.Close()
-	model, key, text, wait := u.model, u.key, u.text, u.wait
+	u, questions := fixtures.QuestionUI(t, ctx, op, "latest")
+	defer u.Close()
+	model, key, text, wait := u.Model, u.Key, u.Text, u.Wait
 
 	text("/watch operation-1")
 	key(tea.KeyMsg{Type: tea.KeyEnter})
@@ -463,7 +427,7 @@ func TestQuestionSelector(t *testing.T) {
 	wait("recorded answer", func(view string) bool { return strings.Contains(view, "Operator answer: Broken links") })
 
 	select {
-	case answer := <-answers:
+	case answer := <-questions.Answers():
 		if answer != "Broken links" {
 			t.Fatalf("submitted %q", answer)
 		}
@@ -473,9 +437,7 @@ func TestQuestionSelector(t *testing.T) {
 	wait("expiry", func(view string) bool { return !strings.Contains(view, "Operator input") })
 	// The server projection can hide an expired question before the controller
 	// saves expiry. Its progress must arrive without advancing updated_at.
-	mu.Lock()
-	op.Progress.PendingQuestions = 0
-	mu.Unlock()
+	questions.ClearPendingCount()
 	wait("derived question progress", func(view string) bool { return !strings.Contains(view, "question(s)") })
 	if !strings.Contains(model.View(), "unsent chat draft") {
 		t.Fatal("answering or expiry lost the chat draft")
@@ -501,9 +463,9 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 					case "HTTP error":
 						http.Error(w, `{"error":{"message":"Invalid fixture model"}}`, http.StatusBadRequest)
 					case "truncated tool stream":
-						writeModelDelta(w, toolDelta("start_operation", map[string]any{}), nil)
+						fakes.WriteModelDelta(w, fakes.ToolDelta("start_operation", map[string]any{}), nil)
 					case "Ctrl+C":
-						writeModelDelta(w, map[string]any{"content": "Waiting for model"}, nil)
+						fakes.WriteModelDelta(w, map[string]any{"content": "Waiting for model"}, nil)
 						w.(http.Flusher).Flush()
 						select {
 						case <-r.Context().Done():
@@ -512,36 +474,36 @@ func TestChatRecoversAfterModelFailureOrCancellation(t *testing.T) {
 					}
 					return
 				}
-				writeModelDelta(w, map[string]any{"content": "**Chat recovered**"}, "stop")
+				fakes.WriteModelDelta(w, map[string]any{"content": "**Chat recovered**"}, "stop")
 			}))
 			defer provider.Close()
-			u := newUI(t, ctx, endpoint.URL, provider.URL)
-			defer u.model.Close()
+			u := fixtures.NewUI(t, ctx, endpoint.URL, provider.URL)
+			defer u.Close()
 
-			u.text("Start the review")
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.Text("Start the review")
+			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 			want := "HTTP 400"
 			if scenario == "truncated tool stream" {
 				want = "model stream ended before completion"
 			} else if scenario == "Ctrl+C" {
-				u.wait("active stream", func(view string) bool { return strings.Contains(view, "Waiting for model") })
-				u.key(tea.KeyMsg{Type: tea.KeyCtrlC})
+				u.Wait("active stream", func(view string) bool { return strings.Contains(view, "Waiting for model") })
+				u.Key(tea.KeyMsg{Type: tea.KeyCtrlC})
 				want = "Reply stopped"
 			}
-			u.wait("error and idle state", func(view string) bool {
+			u.Wait("error and idle state", func(view string) bool {
 				return strings.Contains(view, want) && !strings.Contains(view, "Thinking")
 			})
 
 			if calls.Load() != 0 {
 				t.Fatal("an unfinished model response executed a tool")
 			}
-			u.text("Continue chatting")
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("recovered reply", func(view string) bool {
+			u.Text("Continue chatting")
+			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.Wait("recovered reply", func(view string) bool {
 				return strings.Contains(view, "Chat recovered") && !strings.Contains(view, "Thinking")
 			})
-			if requests.Load() != 2 || strings.Contains(u.model.View(), "**Chat recovered**") {
-				t.Fatalf("chat recovery or markdown rendering failed: %s", u.model.View())
+			if requests.Load() != 2 || strings.Contains(u.Model.View(), "**Chat recovered**") {
+				t.Fatalf("chat recovery or markdown rendering failed: %s", u.Model.View())
 			}
 		})
 	}
@@ -566,18 +528,18 @@ func TestReadingReportDoesNotTriggerBackgroundReview(t *testing.T) {
 	defer endpoint.Close()
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requests.Add(1) == 1 {
-			writeModelDelta(w, toolDelta("get_report", map[string]any{"operation_id": "finished-operation"}), "tool_calls")
+			fakes.WriteModelDelta(w, fakes.ToolDelta("get_report", map[string]any{"operation_id": "finished-operation"}), "tool_calls")
 			return
 		}
-		writeModelDelta(w, map[string]any{"content": "Saved review retrieved"}, "stop")
+		fakes.WriteModelDelta(w, map[string]any{"content": "Saved review retrieved"}, "stop")
 	}))
 	defer provider.Close()
-	u := newUI(t, ctx, endpoint.URL, provider.URL)
-	defer u.model.Close()
+	u := fixtures.NewUI(t, ctx, endpoint.URL, provider.URL)
+	defer u.Close()
 
-	u.text("Get the saved report")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("report reply", func(view string) bool {
+	u.Text("Get the saved report")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("report reply", func(view string) bool {
 		return strings.Contains(view, "Saved review retrieved") && !strings.Contains(view, "Thinking")
 	})
 	// Drain asynchronous updates: a report read must not launch a watcher or another model turn.
@@ -586,9 +548,9 @@ func TestReadingReportDoesNotTriggerBackgroundReview(t *testing.T) {
 wait:
 	for {
 		select {
-		case msg := <-u.messages:
-			_, cmd := u.model.Update(msg)
-			u.run(cmd)
+		case msg := <-u.Messages():
+			_, cmd := u.Model.Update(msg)
+			u.Run(cmd)
 		case <-quiet.C:
 			break wait
 		case <-ctx.Done():
@@ -599,7 +561,7 @@ wait:
 	if reads.Load() != 0 || requests.Load() != 2 {
 		t.Fatalf("report read started background work: %d operation reads, %d model requests", reads.Load(), requests.Load())
 	}
-	if strings.Contains(u.model.View(), "Operator input") {
+	if strings.Contains(u.Model.View(), "Operator input") {
 		t.Fatal("report retrieval opened an operator question")
 	}
 }
@@ -682,23 +644,23 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 		if requests.Add(1) > 1 {
 			message = "Environment ready to run"
 		}
-		writeModelDelta(w, map[string]any{"content": message}, "stop")
+		fakes.WriteModelDelta(w, map[string]any{"content": message}, "stop")
 	}))
 	defer provider.Close()
-	u := newUI(t, ctx, endpoint.URL, provider.URL)
-	defer u.model.Close()
+	u := fixtures.NewUI(t, ctx, endpoint.URL, provider.URL)
+	defer u.Close()
 
-	u.text("/watch operation-1")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("automatic secret form", func(view string) bool { return strings.Contains(view, "Connect to API") })
-	u.key(tea.KeyMsg{Type: tea.KeyEsc})
-	u.wait("blocked preflight", func(view string) bool {
+	u.Text("/watch operation-1")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("automatic secret form", func(view string) bool { return strings.Contains(view, "Connect to API") })
+	u.Key(tea.KeyMsg{Type: tea.KeyEsc})
+	u.Wait("blocked preflight", func(view string) bool {
 		return strings.Contains(view, "secrets needed") && strings.Contains(view, "Requirements need operator attention") && !strings.Contains(view, "Thinking")
 	})
 	op.UpdatedAt = time.Now()
 	publish()
 	targetReads := reads.Load() + 3
-	u.wait("unchanged preflight", func(string) bool { return reads.Load() >= targetReads })
+	u.Wait("unchanged preflight", func(string) bool { return reads.Load() >= targetReads })
 	if requests.Load() != 1 {
 		t.Fatalf("unchanged requirements triggered %d model calls", requests.Load())
 	}
@@ -706,79 +668,10 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 	op.UpdatedAt = time.Now()
 	op.Preflight.Version++
 	publish()
-	u.wait("ready preflight", func(view string) bool {
+	u.Wait("ready preflight", func(view string) bool {
 		return strings.Contains(view, "Environment ready to run") && !strings.Contains(view, "Thinking")
 	})
 	if requests.Load() != 2 {
 		t.Fatalf("expected one review per preflight change, got %d", requests.Load())
-	}
-}
-
-func writeModelDelta(w http.ResponseWriter, delta map[string]any, finish any) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	encoded, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}}})
-	fmt.Fprintf(w, "data: %s\n\n", encoded)
-	if finish != nil {
-		fmt.Fprint(w, "data: [DONE]\n\n")
-	}
-}
-
-type uiDriver struct {
-	t        *testing.T
-	ctx      context.Context
-	model    *ui.Model
-	messages chan tea.Msg
-}
-
-func newUI(t *testing.T, ctx context.Context, endpoint, provider string) *uiDriver {
-	t.Helper()
-	return newUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint}, Keys: map[string]string{"other": "test-only"}, NoColor: true})
-}
-
-func newUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *uiDriver {
-	t.Helper()
-	u := &uiDriver{t: t, ctx: ctx, messages: make(chan tea.Msg, 32), model: ui.New(ctx, config, io.Discard)}
-	t.Cleanup(u.model.Close)
-	u.model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	u.run(u.model.Init())
-	ready := "Commander connected"
-	if config.AllInOne {
-		ready = fmt.Sprintf("Commander ready · all-in-one · %d agents connected", config.LocalAgentCount)
-	}
-	u.wait("connection", func(view string) bool { return strings.Contains(view, ready) })
-	return u
-}
-
-func (u *uiDriver) run(cmd tea.Cmd) {
-	if cmd == nil {
-		return
-	}
-	go func() {
-		msg := cmd()
-		if batch, ok := msg.(tea.BatchMsg); ok {
-			for _, child := range batch {
-				u.run(child)
-			}
-			return
-		}
-		select {
-		case u.messages <- msg:
-		case <-u.ctx.Done():
-		}
-	}()
-}
-
-func (u *uiDriver) key(key tea.KeyMsg) { _, cmd := u.model.Update(key); u.run(cmd) }
-func (u *uiDriver) text(text string)   { u.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)}) }
-func (u *uiDriver) wait(description string, check func(string) bool) {
-	u.t.Helper()
-	for !check(u.model.View()) {
-		select {
-		case msg := <-u.messages:
-			_, cmd := u.model.Update(msg)
-			u.run(cmd)
-		case <-u.ctx.Done():
-			u.t.Fatalf("waiting for %s: %s", description, u.model.View())
-		}
 	}
 }

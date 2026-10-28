@@ -12,16 +12,16 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op, firstTask := createQueueOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op, firstTask := fixtures.CreateQueueOperation(t, first)
 	firstTask.Input = json.RawMessage(`{"page":1}`)
 	secondTask := operations.NewTask(op.ID, "review", "", actions.NextAction{
 		ActionName: "inspect", Input: json.RawMessage(`{"page":2}`),
@@ -67,7 +67,7 @@ func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) 
 	if b.op.Tasks[0].ID == b.op.Tasks[1].ID {
 		t.Fatal("concurrent assignments duplicated one task")
 	}
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,8 +76,8 @@ func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) 
 
 func TestOperationQueueReplayPreservesDispatchedAndTerminalState(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
-	op, task := createQueueOperation(t, store)
+	store := fixtures.NewDispatchStore(t, dir)
+	op, task := fixtures.CreateQueueOperation(t, store)
 	task.Input = json.RawMessage(`{"page":9007199254740992,"flags":{"checked":true,"fresh":false}}`)
 	if _, err := store.QueueTask(t.Context(), op.ID, task); err != nil {
 		t.Fatal(err)
@@ -115,13 +115,13 @@ func TestOperationQueueReplayPreservesDispatchedAndTerminalState(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			reopened := newDispatchStore(t, dir)
+			reopened := fixtures.NewDispatchStore(t, dir)
 			saved, err := reopened.Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 			for _, tc := range []struct {
 				name     string
 				task     operations.Task
@@ -145,7 +145,7 @@ func TestOperationQueueReplayPreservesDispatchedAndTerminalState(t *testing.T) {
 						}
 						assertResultJSONEqual(t, published, saved)
 					}
-					if !bytes.Equal(before, readDispatchFile(t, path)) {
+					if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 						t.Fatal("assignment retry changed execution state, events, timestamp, or storage revision")
 					}
 				})
@@ -180,8 +180,8 @@ func TestOperationQueueChecksLatestStateAndAllowsPreflightWaiting(t *testing.T) 
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op, task := createQueueOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op, task := fixtures.CreateQueueOperation(t, first)
 			latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				tc.change(next)
 				return nil
@@ -190,7 +190,7 @@ func TestOperationQueueChecksLatestStateAndAllowsPreflightWaiting(t *testing.T) 
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 
 			published, err := first.QueueTask(t.Context(), op.ID, task)
 
@@ -198,7 +198,7 @@ func TestOperationQueueChecksLatestStateAndAllowsPreflightWaiting(t *testing.T) 
 				if err == nil || tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
 					t.Fatalf("queue ignored latest assignment guard: %v", err)
 				}
-				if !bytes.Equal(before, readDispatchFile(t, path)) {
+				if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 					t.Fatal("rejected assignment changed the latest snapshot or revision")
 				}
 			} else {
@@ -226,11 +226,11 @@ func TestOperationQueueWriteFailuresAreSafeToRetry(t *testing.T) {
 				t.Skip("requires Unix directory permissions and an unprivileged user")
 			}
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
-			op, task := createQueueOperation(t, store)
+			store := fixtures.NewDispatchStore(t, dir)
+			op, task := fixtures.CreateQueueOperation(t, store)
 			operationDir := filepath.Join(dir, "operations")
 			path := filepath.Join(operationDir, op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 			restore := func() {
 				t.Helper()
 				if err := os.Chmod(operationDir, 0700); err != nil {
@@ -238,7 +238,7 @@ func TestOperationQueueWriteFailuresAreSafeToRetry(t *testing.T) {
 				}
 			}
 			if permission == "read" {
-				restore = denyDirectoryRead(t, operationDir)
+				restore = fixtures.DenyDirectoryRead(t, operationDir)
 			} else {
 				t.Cleanup(restore)
 				if err := os.Chmod(operationDir, 0500); err != nil {
@@ -255,10 +255,10 @@ func TestOperationQueueWriteFailuresAreSafeToRetry(t *testing.T) {
 			if !errors.Is(err, fs.ErrPermission) || errors.Is(err, operations.ErrWriteUncertain) {
 				t.Fatalf("pre-publication failure lost its cause or reported uncertain durability: %v", err)
 			}
-			if !bytes.Equal(before, readDispatchFile(t, path)) || published.ID != "" {
+			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) || published.ID != "" {
 				t.Fatal("failed write exposed or persisted an uncommitted mutation")
 			}
-			reopened := newDispatchStore(t, dir)
+			reopened := fixtures.NewDispatchStore(t, dir)
 			saved, err := reopened.Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -271,25 +271,4 @@ func TestOperationQueueWriteFailuresAreSafeToRetry(t *testing.T) {
 			assertResultJSONEqual(t, retried.Tasks[0], task)
 		})
 	}
-}
-
-func createQueueOperation(t *testing.T, store *operationfs.OperationFsStore) (operations.Operation, operations.Task) {
-	t.Helper()
-	created := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
-	operationID := id.OperationID()
-	op := operations.Operation{
-		ID: operationID, Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
-		Mission:   missions.Mission{Steps: []missions.Step{{ID: "review"}, {ID: "report"}}},
-		Preflight: &operations.Preflight{Ready: true, Version: 2},
-		Events: []operations.Event{{Sequence: 1, OperationID: operationID,
-			Type: operations.OperationStarted, Status: operations.Planning, CreatedAt: created}},
-	}
-	if err := store.Create(t.Context(), op); err != nil {
-		t.Fatal(err)
-	}
-	saved, err := store.Get(t.Context(), op.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return saved, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect"})
 }

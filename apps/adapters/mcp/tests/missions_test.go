@@ -6,17 +6,18 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestMissions(t *testing.T) {
-	a := connect(t)
+	a := fixtures.Connect(t)
 	var catalog struct {
 		Missions []map[string]any `json:"missions"`
 	}
-	a.call("list_missions", object{}, &catalog)
+	a.Call("list_missions", fixtures.Object{}, &catalog)
 	if len(catalog.Missions) != 6 {
 		t.Fatalf("unexpected missions: %+v", catalog)
 	}
@@ -35,14 +36,14 @@ func TestMissions(t *testing.T) {
 		}
 	}
 	var build missions.Mission
-	a.call("describe_mission", object{"mission_name": "build-agent"}, &build)
+	a.Call("describe_mission", fixtures.Object{"mission_name": "build-agent"}, &build)
 	if !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent", "release-agent"}) {
 		t.Fatalf("build mission lost its optional publication and release actions: %+v", build)
 	}
 	var buildOperation operations.Operation
-	a.call("start_operation", object{"mission_name": "build-agent", "input": object{
+	a.Call("start_operation", fixtures.Object{"mission_name": "build-agent", "input": fixtures.Object{
 		"instructions": "Create a fixture agent",
-		"actions":      []object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": object{"type": "object"}, "output_schema": object{"type": "object"}}},
+		"actions":      []fixtures.Object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": fixtures.Object{"type": "object"}, "output_schema": fixtures.Object{"type": "object"}}},
 	}}, &buildOperation)
 	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
 		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
@@ -52,10 +53,10 @@ func TestMissions(t *testing.T) {
 			t.Fatalf("unscheduled optional action blocked build preflight: %+v", action)
 		}
 	}
-	a.call("cancel_operation", object{"operation_id": buildOperation.ID}, nil)
+	a.Call("cancel_operation", fixtures.Object{"operation_id": buildOperation.ID}, nil)
 	summary := summaries["analyze-text"]
 	var raw json.RawMessage
-	a.call("describe_mission", object{"mission_name": "analyze-text"}, &raw)
+	a.Call("describe_mission", fixtures.Object{"mission_name": "analyze-text"}, &raw)
 	mission, err := missions.LoadMission(raw)
 	if err != nil {
 		t.Fatalf("mission detail does not match the mission definition format: %v", err)
@@ -79,16 +80,16 @@ func TestMissions(t *testing.T) {
 	if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {
 		t.Fatal("mission schemas missing")
 	}
-	a.fails("describe_mission", object{"mission_name": "missing"}, "unknown")
-	a.fails("start_operation", object{"mission_name": "missing", "input": object{}}, "unknown")
-	a.fails("start_operation", object{"mission_name": "analyze-text", "input": object{"text": ""}}, "input")
+	a.Fails("describe_mission", fixtures.Object{"mission_name": "missing"}, "unknown")
+	a.Fails("start_operation", fixtures.Object{"mission_name": "missing", "input": fixtures.Object{}}, "unknown")
+	a.Fails("start_operation", fixtures.Object{"mission_name": "analyze-text", "input": fixtures.Object{"text": ""}}, "input")
 	opID := id.OperationID()
-	args := object{"operation_id": opID, "mission_name": "analyze-text", "input": object{"text": "Explicit operation identity"}}
+	args := fixtures.Object{"operation_id": opID, "mission_name": "analyze-text", "input": fixtures.Object{"text": "Explicit operation identity"}}
 	var op operations.Operation
-	a.call("start_operation", args, &op)
+	a.Call("start_operation", args, &op)
 	if op.ID != opID || op.Status != operations.Planning {
 		t.Fatalf("unexpected start: %+v", op)
 	}
-	a.fails("start_operation", args, "conflict")
-	a.call("cancel_operation", object{"operation_id": opID}, nil)
+	a.Fails("start_operation", args, "conflict")
+	a.Call("cancel_operation", fixtures.Object{"operation_id": opID}, nil)
 }

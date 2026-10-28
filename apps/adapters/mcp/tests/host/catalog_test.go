@@ -1,7 +1,6 @@
 package mcp_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,16 +9,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
+	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-type catalogTransport func(*http.Request) (*http.Response, error)
-
-func (transport catalogTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	return transport(request)
-}
 
 func TestMCPAgentCatalog(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "private-token-sentinel")
@@ -38,7 +32,7 @@ agents:
 `
 	var requests atomic.Int32
 	var catalogUnavailable atomic.Bool
-	client := packages.NewClient(catalogTransport(func(request *http.Request) (*http.Response, error) {
+	client := packages.NewClient(fakes.CatalogTransport(func(request *http.Request) (*http.Response, error) {
 		requests.Add(1)
 		for _, header := range []string{"Authorization", "Proxy-Authorization", "Cookie"} {
 			if request.Header.Get(header) != "" {
@@ -59,7 +53,7 @@ agents:
 		return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
 	}))
 	t.Cleanup(client.CloseIdleConnections)
-	ctx, session := agentCatalogSession(t, client, source)
+	ctx, session := hostfixtures.AgentCatalogSession(t, client, source)
 	if requests.Load() != 0 {
 		t.Fatal("MCP startup or initialization fetched remote agent catalog metadata")
 	}
@@ -118,9 +112,4 @@ agents:
 	if len(listing.Agents) != 2 || requests.Load() != 3 {
 		t.Fatal("catalog discovery did not recover after the source became available")
 	}
-}
-
-func agentCatalogSession(t *testing.T, client *packages.Client, source string) (context.Context, *sdkmcp.ClientSession) {
-	t.Helper()
-	return mcpSession(t, adapter.Config{CatalogClient: client, CatalogURL: source})
 }

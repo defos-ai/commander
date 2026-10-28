@@ -1,31 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createSecret, deleteSecret, getSecret, listSecretRequests, listSecrets, replaceSecret, SecretError,
-  type PendingSecretRequest, type SecretMetadata,
+  createSecret, deleteSecret, getSecret, listSecretRequests, listSecrets, replaceSecret, SecretError
 } from '../src/api/secrets';
-
-const url = 'https://commander.example/team';
-const credentials = { url, username: 'operator' };
-const key = { agent_type: 'builder-agent', name: 'GITHUB_TOKEN' };
-const id = '5cde98e0-23d3-447d-ad59-2238b244f689';
-const metadata: SecretMetadata = {
-  ...key, id, version: 1, status: 'available', created_at: '2026-10-17T10:00:00Z',
-  updated_at: '2026-10-17T10:00:00.123456789Z', expires_at: '2027-10-17T12:00:00+02:00',
-};
-const pending: PendingSecretRequest = {
-  ...key, id, agent_id: 'builder-agent-0123abcd', requested_at: '2026-10-17T10:00:00Z',
-  expires_at: '2026-10-17T10:01:00Z', status: 'needs_value',
-};
-const secretValue = 'test-private-value-not-for-display';
-const createInput = { ...key, value: secretValue };
-const replacement = { id, version: 1, value: secretValue };
-const itemPath = '/api/v1/secrets/builder-agent/GITHUB_TOKEN';
-
-function respond(body: unknown, status = 200) {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => Response.json(body, { status }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { respondJSON as respond } from './fakes/fetch';
+import { createInput, credentials, id, itemPath, key, metadata, pending, replacement, secretValue, url } from './fixtures/secret-client';
 
 function requestedPath(input: RequestInfo | URL): string {
   const request = new URL(String(input), window.location.origin);

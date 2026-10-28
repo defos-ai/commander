@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
@@ -39,7 +40,7 @@ func TestSpawnResultJSONRoundTrip(t *testing.T) {
 	} {
 		t.Run(string(test.kind), func(t *testing.T) {
 			want := runtimes.Result{
-				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
+				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: fixtures.ActionPackage,
 				Runtime: test.kind, RuntimeDetails: test.details, Actions: []actionmodel.Action{},
 			}
 			raw, err := json.Marshal(want)
@@ -107,7 +108,7 @@ func TestSpawnResultJSONRejectsInvalidRuntimeDetails(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fields := map[string]any{
-				"agent_id": "example-agent-12345678", "agent_type": "example-agent", "package": actionPackage,
+				"agent_id": "example-agent-12345678", "agent_type": "example-agent", "package": fixtures.ActionPackage,
 				"runtime": "native", "runtime_details": map[string]any{"pid": 42}, "actions": []any{},
 			}
 			for name, value := range test.overrides {

@@ -7,25 +7,26 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 )
 
 func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
-	a := connect(t)
-	catalog := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-	if !slices.Equal(missionNames(catalog.Items), expectedMissions) {
+	a := fixtures.Connect(t)
+	catalog := fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
+	if !slices.Equal(fixtures.MissionNames(catalog.Items), fixtures.ExpectedMissions()) {
 		t.Fatalf("unexpected stack missions: %+v", catalog)
 	}
-	build := read[models.MissionResponse](a, "/api/v1/missions/build-agent")
+	build := fixtures.Read[models.MissionResponse](a, "/api/v1/missions/build-agent")
 	buildIndex := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == build.Name })
 	if buildIndex < 0 || !reflect.DeepEqual(catalog.Items[buildIndex], build) || !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent", "release-agent"}) {
 		t.Fatalf("build mission lost its optional publication action: %+v", build)
 	}
-	assertSchema(t, a, "Mission", a.request(http.MethodGet, "/api/v1/missions/build-agent", nil))
-	created := a.request(http.MethodPost, "/api/v1/operations", object{"mission_name": "build-agent", "input": object{
+	assertSchema(t, a, "Mission", a.Request(http.MethodGet, "/api/v1/missions/build-agent", nil))
+	created := a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "build-agent", "input": fixtures.Object{
 		"instructions": "Create a fixture agent",
-		"actions":      []object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": object{"type": "object"}, "output_schema": object{"type": "object"}}},
+		"actions":      []fixtures.Object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": fixtures.Object{"type": "object"}, "output_schema": fixtures.Object{"type": "object"}}},
 	}})
-	buildOperation := decode[models.OperationResponse](t, created, http.StatusCreated)
+	buildOperation := fixtures.Decode[models.OperationResponse](t, created, http.StatusCreated)
 	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
 		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
 	}
@@ -34,9 +35,9 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 			t.Fatalf("unscheduled optional action blocked build preflight: %+v", action)
 		}
 	}
-	decode[models.OperationResponse](t, a.request(http.MethodPost, operationPath(buildOperation.ID)+"/cancel", nil), http.StatusOK)
+	fixtures.Decode[models.OperationResponse](t, a.Request(http.MethodPost, fixtures.OperationPath(buildOperation.ID)+"/cancel", nil), http.StatusOK)
 	path := "/api/v1/missions/analyze-text"
-	mission := read[models.MissionResponse](a, path)
+	mission := fixtures.Read[models.MissionResponse](a, path)
 	index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == mission.Name })
 	aggregate := mission.Rules["aggregate-results"]
 	decision := mission.Rules["decide-next-actions"]
@@ -46,14 +47,14 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	if len(mission.Rules) != 2 || !slices.Equal(aggregate.ForActions, []string{"analyze-text"}) || aggregate.Params != nil || !slices.Equal(decision.ForActions, []string{"write-summary"}) || decision.Params == nil || decision.Params.DecisionBy != "model" {
 		t.Fatalf("mission catalog lost grouping or model rules: %+v", mission.Rules)
 	}
-	assertSchema(t, a, "Mission", a.request(http.MethodGet, path, nil))
-	assertError(t, a.request(http.MethodGet, "/api/v1/missions/missing", nil), http.StatusNotFound, "mission_not_found")
+	assertSchema(t, a, "Mission", a.Request(http.MethodGet, path, nil))
+	fixtures.AssertError(t, a.Request(http.MethodGet, "/api/v1/missions/missing", nil), http.StatusNotFound, "mission_not_found")
 	for range 2 {
-		clean := a.request(http.MethodPost, "/api/v1/testing/cleanup", nil)
-		if clean.status != http.StatusNoContent || clean.body != "" {
+		clean := a.Request(http.MethodPost, "/api/v1/testing/cleanup", nil)
+		if clean.Status != http.StatusNoContent || clean.Body != "" {
 			t.Fatalf("idempotent cleanup: %+v", clean)
 		}
-		if current := read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); !reflect.DeepEqual(current, catalog) {
+		if current := fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); !reflect.DeepEqual(current, catalog) {
 			t.Fatal("cleanup deleted or changed the imported missions")
 		}
 	}

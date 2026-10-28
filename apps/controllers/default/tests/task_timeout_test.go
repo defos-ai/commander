@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/controllers/default/cli"
+	"github.com/defos-ai/commander/apps/controllers/default/tests/fixtures"
 	"github.com/defos-ai/commander/framework/comms"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
@@ -62,11 +63,11 @@ func TestCLITaskTimeoutControlsSavedDispatchDeadline(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			args := timeoutHostArgs(root)
+			args := fixtures.ControllerArgs(root)
 			if test.flag != "" {
 				args = append(args, "--task-timeout="+test.flag)
 			}
-			startTimeoutController(t, ctx, args)
+			fixtures.StartController(t, ctx, args)
 			const agentID = "timeout-agent-01234567"
 			inbox, err := bus.Subscribe(ctx, comms.Inbox{Topic: messages.AgentCommands(agentID), Name: agentID, Mode: comms.TransientExclusive})
 			if err != nil {
@@ -88,7 +89,7 @@ func TestCLITaskTimeoutControlsSavedDispatchDeadline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			awaitTimeoutCondition(t, ctx, "ready agent", func() bool {
+			fixtures.Await(t, ctx, "ready agent", func() bool {
 				record, err := inventory.Get(ctx, agentID)
 				return err == nil && record.Status == agents.AgentReady
 			})
@@ -105,6 +106,11 @@ func TestCLITaskTimeoutControlsSavedDispatchDeadline(t *testing.T) {
 					t.Error(err)
 				}
 			})
+			store, err := fsoperations.NewOperationFsStore(database)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			op, err := client.Start(ctx, controllercommands.StartOperationCommand{MissionName: "timeout-fixture", Input: json.RawMessage(`{}`)})
 			if err != nil {
 				t.Fatal(err)
@@ -113,16 +119,14 @@ func TestCLITaskTimeoutControlsSavedDispatchDeadline(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			store, err := fsoperations.NewOperationFsStore(database)
-			if err != nil {
-				t.Fatal(err)
-			}
+
 			var dispatched operations.Task
-			awaitTimeoutCondition(t, ctx, "saved dispatch", func() bool {
+			fixtures.Await(t, ctx, "saved dispatch", func() bool {
 				var err error
 				dispatched, err = store.GetTask(ctx, op.ID, queued.ID)
 				return err == nil && dispatched.Status == operations.TaskRunning
 			})
+
 			if dispatched.DeadlineAt == nil || dispatched.StartedAt.IsZero() || dispatched.AgentID != agentID ||
 				dispatched.DeadlineAt.Sub(dispatched.StartedAt) != test.want {
 				t.Fatalf("saved deadline did not use configured timeout %s: %+v", test.want, dispatched)
@@ -147,7 +151,7 @@ func TestCLIRejectsInvalidTaskTimeoutBeforeOpeningProviders(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("TASK_TIMEOUT", test.environment)
 			root := t.TempDir()
-			args := timeoutHostArgs(root)
+			args := fixtures.ControllerArgs(root)
 			if test.flagProvided {
 				args = append(args, "--task-timeout="+test.flag)
 			}
@@ -172,56 +176,5 @@ func TestCLIHelpDoesNotValidateTaskTimeoutEnvironment(t *testing.T) {
 	var output bytes.Buffer
 	if err := cli.Run(t.Context(), []string{"--help"}, &output); err != nil || !strings.Contains(output.String(), "task-timeout") {
 		t.Fatalf("help required a valid task timeout: output=%s error=%v", output.String(), err)
-	}
-}
-
-func timeoutHostArgs(root string) []string {
-	return []string{
-		"--bus-url=" + filepath.Join(root, "bus"),
-		"--storage-url=" + filepath.Join(root, "storage"),
-		"--database-url=" + filepath.Join(root, "database"),
-		"--heartbeat-timeout=45s", "--log-level=error", "--log-format=json",
-	}
-}
-
-func startTimeoutController(t *testing.T, ctx context.Context, args []string) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(ctx)
-	ready, done := make(chan struct{}), make(chan struct{})
-	var runErr error
-	go func() {
-		defer close(done)
-		runErr = cli.RunWithOptions(ctx, args, io.Discard, cli.Options{Ready: func() { close(ready) }})
-	}()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case <-done:
-			if runErr != nil {
-				t.Errorf("controller shutdown: %v", runErr)
-			}
-		case <-time.After(5 * time.Second):
-			t.Error("controller did not stop")
-		}
-	})
-	select {
-	case <-ready:
-	case <-done:
-		t.Fatalf("controller stopped before readiness: %v", runErr)
-	case <-ctx.Done():
-		t.Fatal("controller did not become ready")
-	}
-}
-
-func awaitTimeoutCondition(t *testing.T, ctx context.Context, name string, condition func() bool) {
-	t.Helper()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for !condition() {
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for %s", name)
-		}
 	}
 }

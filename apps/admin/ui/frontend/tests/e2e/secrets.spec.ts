@@ -1,7 +1,7 @@
+import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { test, expect } from '@playwright/test';
-import { apiURL, connect, password, username } from './fixtures';
 import type { SecretMetadata } from '../../src/api/secrets';
+import { apiURL, connect, password, username } from '../fixtures/e2e';
 
 test('manage write-only secrets through the signed-in Admin connection', async ({ page, playwright }) => {
   const agentType = `ui-test-${randomUUID()}`;

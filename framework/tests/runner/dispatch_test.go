@@ -1,27 +1,26 @@
 package runner_test
 
 import (
-	"context"
-	"errors"
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestDispatchWriteFailureKeepsTaskQueuedUntilRetry(t *testing.T) {
-	config := fixture()
-	store := &dispatchFailureStore{OperationStore: config.OperationStore, attempted: make(chan struct{}, 1)}
+	config := fixtures.Config()
+	store := fakes.NewDispatchFailureStore(config.OperationStore)
 	config.OperationStore = store
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
-	op := start(t, r)
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
+	op := fixtures.Start(t, r)
 
-	task := assign(t, r, op.ID, "inspect")
+	task := fixtures.Assign(t, r, op.ID, "inspect")
 	select {
-	case <-store.attempted:
+	case <-store.Attempted():
 	case <-time.After(5 * time.Second):
 		t.Fatal("expected dispatch reservation attempt")
 	}
@@ -44,32 +43,15 @@ func TestDispatchWriteFailureKeepsTaskQueuedUntilRetry(t *testing.T) {
 	default:
 	}
 
-	store.allowed.Store(true)
-	call := receive(t, calls)
+	store.Allow()
+	call := fixtures.Receive(t, calls)
 	reserved, err := r.Get(t.Context(), op.ID)
 	if err != nil || len(reserved.Tasks) != 1 || reserved.Tasks[0].Status != operations.TaskRunning || reserved.Tasks[0].CommandID != task.ID || reserved.Tasks[0].StartedAt.IsZero() || reserved.Tasks[0].DeadlineAt == nil {
 		t.Fatalf("retry executed without a complete reservation: %+v, %v", reserved, err)
 	}
-	if call.agent != reserved.Tasks[0].AgentID || task.AgentID != "" || call.call.Work.TaskID != task.ID || len(reserved.Events) != len(events)+1 || reserved.Events[len(events)].Type != operations.TaskDispatched {
-		t.Fatalf("retry changed or duplicated the dispatch: call=%+v, operation=%+v", call, reserved)
+	if call.Agent != reserved.Tasks[0].AgentID || task.AgentID != "" || call.Call.Work.TaskID != task.ID || len(reserved.Events) != len(events)+1 || reserved.Events[len(events)].Type != operations.TaskDispatched {
+		t.Fatalf("retry changed or duplicated the Dispatch: call=%+v, operation=%+v", call, reserved)
 	}
-	call.reply <- output("inspect")
-	awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-}
-
-type dispatchFailureStore struct {
-	operations.OperationStore
-	allowed   atomic.Bool
-	attempted chan struct{}
-}
-
-func (s *dispatchFailureStore) DispatchTask(ctx context.Context, operationID string, dispatch operations.TaskDispatch) (operations.Operation, error) {
-	if !s.allowed.Load() {
-		select {
-		case s.attempted <- struct{}{}:
-		default:
-		}
-		return operations.Operation{}, errors.New("database unavailable")
-	}
-	return s.OperationStore.DispatchTask(ctx, operationID, dispatch)
+	call.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 }

@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
-	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/executions"
 )
 
 func TestCheckpointValidationAndBounds(t *testing.T) {
@@ -32,7 +31,7 @@ func TestCheckpointValidationAndBounds(t *testing.T) {
 		{"encoding", []byte{'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			record := newExecution(t)
+			record := fixtures.Execution(t)
 			if _, err := record.RecordCheckpoint(tc.name, tc.data); err == nil || len(record.Checkpoints) != 0 {
 				t.Fatalf("invalid checkpoint changed execution: error=%v", err)
 			}
@@ -43,7 +42,7 @@ func TestCheckpointValidationAndBounds(t *testing.T) {
 		})
 	}
 
-	record := newExecution(t)
+	record := fixtures.Execution(t)
 	maxName := strings.Repeat("a", executions.MaxCheckpointNameLength)
 	if added, err := record.RecordCheckpoint(maxName, exactSize); err != nil || !added {
 		t.Fatalf("checkpoint at limits: added=%t error=%v", added, err)
@@ -63,15 +62,4 @@ func TestCheckpointValidationAndBounds(t *testing.T) {
 	if err := record.Validate(); err == nil {
 		t.Fatal("oversized stored checkpoint collection was accepted")
 	}
-}
-
-func newExecution(t *testing.T) executions.Execution {
-	t.Helper()
-	command, err := agentcommands.NewRunAction("example-agent-00000001", actions.ActionCall{
-		ActionName: "inspect", Input: json.RawMessage(`{}`),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return executions.Execution{Command: command, StartedAt: command.CreatedAt}
 }

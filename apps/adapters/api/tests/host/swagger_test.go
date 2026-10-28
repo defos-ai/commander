@@ -2,21 +2,23 @@ package api_test
 
 import (
 	"bytes"
-	"github.com/defos-ai/commander/apps/adapters/api/cli"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/defos-ai/commander/apps/adapters/api/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 )
 
 func TestSwaggerIsDisabledByDefault(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, fixture.localArgs())
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 
 	for _, path := range []string{"/docs", "/docs/", "/openapi.json"} {
-		result := server.request(t, http.MethodGet, path, authenticate)
+		result := server.Request(t, http.MethodGet, path, hostfixtures.Authenticate)
 
-		if result.status != http.StatusNotFound {
-			t.Errorf("disabled documentation %s returned %d", path, result.status)
+		if result.Status != http.StatusNotFound {
+			t.Errorf("disabled documentation %s returned %d", path, result.Status)
 		}
 	}
 }
@@ -30,23 +32,23 @@ func TestSwaggerConfigurationPrecedence(t *testing.T) {
 		{name: "flag overrides invalid environment", environment: "invalid-private-value", flag: "--swagger=true", status: http.StatusOK},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("API_SWAGGER_ENABLED", test.environment)
-			server := startAPI(t, append(fixture.localArgs(), test.flag))
+			server := hostfixtures.Start(t, append(fixture.LocalArgs(), test.flag))
 
-			result := server.request(t, http.MethodGet, "/openapi.json", authenticate)
+			result := server.Request(t, http.MethodGet, "/openapi.json", hostfixtures.Authenticate)
 
-			if result.status != test.status {
-				t.Fatalf("status=%d, want %d", result.status, test.status)
+			if result.Status != test.status {
+				t.Fatalf("status=%d, want %d", result.Status, test.status)
 			}
 		})
 	}
 	t.Run("invalid environment", func(t *testing.T) {
-		fixture := newFixture(t)
+		fixture := hostfixtures.New(t)
 		t.Setenv("API_SWAGGER_ENABLED", "invalid-private-value")
 		var logs bytes.Buffer
 
-		err := cli.Run(t.Context(), fixture.localArgs(), &logs)
+		err := cli.Run(t.Context(), fixture.LocalArgs(), &logs)
 
 		if err == nil || !strings.Contains(err.Error(), "API_SWAGGER_ENABLED") {
 			t.Fatalf("invalid boolean did not identify its configuration key: %v", err)

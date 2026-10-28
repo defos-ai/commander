@@ -5,26 +5,27 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/apps/agents/builder/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/builder/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 )
 
 func TestCheckoutIgnoresAmbientGitConfiguration(t *testing.T) {
-	source, revision := templateFixture(t)
+	source, revision := fixtures.Template(t)
 	parent := t.TempDir()
-	fixtureGit(t, "init", "--quiet", parent)
-	fixtureGit(t, "-C", parent, "config", "url.https://unexpected.invalid/.insteadOf", source)
+	fixtures.Git(t, "init", "--quiet", parent)
+	fixtures.Git(t, "-C", parent, "config", "url.https://unexpected.invalid/.insteadOf", source)
 	root := filepath.Join(parent, "workspaces")
 	global := filepath.Join(t.TempDir(), "gitconfig")
-	fixtureGit(t, "config", "--file", global, "url.https://unexpected.invalid/.insteadOf", source)
-	fixtureGit(t, "config", "--file", global, "credential.helper", "!exit 97")
+	fixtures.Git(t, "config", "--file", global, "url.https://unexpected.invalid/.insteadOf", source)
+	fixtures.Git(t, "config", "--file", global, "credential.helper", "!exit 97")
 	t.Setenv("GIT_CONFIG_GLOBAL", global)
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "url.https://unexpected.invalid/.insteadOf")
@@ -33,7 +34,7 @@ func TestCheckoutIgnoresAmbientGitConfiguration(t *testing.T) {
 	t.Setenv("GIT_WORK_TREE", filepath.Join(t.TempDir(), "not-the-workspace"))
 	t.Setenv("GIT_ALLOW_PROTOCOL", "ssh")
 	t.Setenv("GIT_ASKPASS", filepath.Join(t.TempDir(), "should-not-execute"))
-	output := runCheckout(t, localCheckout(t, root, source))
+	output := runCheckout(t, fixtures.LocalCheckout(t, root, source))
 	if output.TemplateRevision != revision {
 		t.Fatalf("ambient Git settings changed checkout: %+v", output)
 	}
@@ -43,20 +44,20 @@ func TestCheckoutDoesNotRunHostTemplateHooks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture hook is a POSIX shell script")
 	}
-	source, _ := templateFixture(t)
+	source, _ := fixtures.Template(t)
 	template := t.TempDir()
 	hooks := filepath.Join(template, "hooks")
 	if err := os.Mkdir(hooks, 0700); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(t.TempDir(), "hook-executed")
-	hook := "#!/bin/sh\nprintf executed > " + shellQuote(marker) + "\n"
+	hook := "#!/bin/sh\nprintf executed > " + fixtures.ShellQuote(marker) + "\n"
 	if err := os.WriteFile(filepath.Join(hooks, "post-checkout"), []byte(hook), 0700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GIT_TEMPLATE_DIR", template)
 	root := t.TempDir()
-	output := runCheckout(t, localCheckout(t, root, source))
+	output := runCheckout(t, fixtures.LocalCheckout(t, root, source))
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("checkout executed an inherited hook: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestCheckoutDoesNotRunHostTemplateHooks(t *testing.T) {
 func TestCheckoutCancellationRemovesPartialWorkspace(t *testing.T) {
 	root := t.TempDir()
 	started := filepath.Join(t.TempDir(), "started")
-	executor := configuredCheckout(t, root, gitFixtureConfig{Mode: "wait", Started: started})
+	executor := fixtures.ConfiguredCheckout(t, root, fakes.GitConfig{Mode: "wait", Started: started})
 	ctx, cancel := context.WithCancel(t.Context())
 	finished := make(chan error, 1)
 	stopped := false
@@ -121,8 +122,8 @@ func TestCheckoutCancellationRemovesPartialWorkspace(t *testing.T) {
 
 func TestCheckoutRechecksRemovedGit(t *testing.T) {
 	root := t.TempDir()
-	executor := localCheckout(t, root, "")
-	executable, err := (&environment.Local{}).FindExecutable(t.Context(), "git", executor.scope)
+	executor := fixtures.LocalCheckout(t, root, "")
+	executable, err := (&environment.Local{}).FindExecutable(t.Context(), "git", executor.Scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +140,7 @@ func TestCheckoutRechecksRemovedGit(t *testing.T) {
 }
 
 func TestGitSubprocessProtectsCredentialsAndDiagnostics(t *testing.T) {
-	source, revision := templateFixture(t)
+	source, revision := fixtures.Template(t)
 	t.Setenv("GITHUB_TOKEN", "fixture-github-token")
 	t.Setenv("SECRETS_ENCRYPTION_KEY", "fixture-encryption-key")
 	for _, test := range []struct {
@@ -164,14 +165,16 @@ func TestGitSubprocessProtectsCredentialsAndDiagnostics(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
-			executor := configuredCheckout(t, root, gitFixtureConfig{Source: source, Mode: test.mode})
+			executor := fixtures.ConfiguredCheckout(t, root, fakes.GitConfig{Source: source, Mode: test.mode})
 			if test.wantErr == "" {
 				if output := runCheckout(t, executor); output.TemplateRevision != revision {
 					t.Fatal("checkout with isolated credentials returned the wrong revision")
 				}
 				return
 			}
+
 			result, err := executor.Run(t.Context(), json.RawMessage(`{}`))
+
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("checkout error = %v, want %q", err, test.wantErr)
 			}
@@ -181,46 +184,4 @@ func TestGitSubprocessProtectsCredentialsAndDiagnostics(t *testing.T) {
 			assertEmptyWorkspaceRoot(t, root)
 		})
 	}
-}
-
-func templateFixture(t *testing.T) (string, string) {
-	t.Helper()
-	directory := t.TempDir()
-	fixtureGit(t, "init", "--quiet", directory)
-	if err := os.WriteFile(filepath.Join(directory, "README.md"), []byte("Local example-agent fixture.\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	fixtureGit(t, "-C", directory, "add", "README.md")
-	fixtureGit(t, "-C", directory, "-c", "user.name=Builder fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "Template fixture")
-	return directory, strings.TrimSpace(fixtureGit(t, "-C", directory, "rev-parse", "HEAD"))
-}
-
-func fixtureGit(t *testing.T, args ...string) string {
-	t.Helper()
-	git, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal("Git is required for local checkout fixtures:", err)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, git, args...)
-	command.Env = []string{
-		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + t.TempDir(),
-		"GIT_CONFIG_GLOBAL=" + os.DevNull,
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_TERMINAL_PROMPT=0",
-	}
-	if value := os.Getenv("SystemRoot"); value != "" {
-		command.Env = append(command.Env, "SystemRoot="+value)
-	}
-	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("fixture Git %v: %v\n%s", args, err, output)
-	}
-	return string(output)
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }

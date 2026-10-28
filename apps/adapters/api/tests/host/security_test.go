@@ -4,15 +4,13 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 )
 
-func authenticate(request *http.Request) {
-	request.SetBasicAuth("api-fixture-user", "api-fixture-password")
-}
-
 func TestBasicAuthenticationRequiresExactCredentials(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, fixture.localArgs())
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	const username, password = "api-fixture-user", "api-fixture-password"
 	for _, test := range []struct {
 		name, username, password string
@@ -27,38 +25,38 @@ func TestBasicAuthenticationRequiresExactCredentials(t *testing.T) {
 		{"empty password", username, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result := server.request(t, http.MethodGet, "/api/v1/missions", func(request *http.Request) {
+			result := server.Request(t, http.MethodGet, "/api/v1/missions", func(request *http.Request) {
 				request.SetBasicAuth(test.username, test.password)
 			})
 			assertAPIError(t, result, http.StatusUnauthorized, "authentication_required")
-			if !strings.HasPrefix(result.header.Get("WWW-Authenticate"), "Basic ") {
+			if !strings.HasPrefix(result.Header.Get("WWW-Authenticate"), "Basic ") {
 				t.Error("authentication failure lost its Basic challenge")
 			}
 		})
 	}
-	duplicate := server.request(t, http.MethodGet, "/api/v1/missions", authenticate, func(request *http.Request) {
+	duplicate := server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate, func(request *http.Request) {
 		request.Header.Add("Authorization", request.Header.Get("Authorization"))
 	})
 	assertAPIError(t, duplicate, http.StatusUnauthorized, "authentication_required")
-	if result := server.request(t, http.MethodGet, "/api/v1/missions", authenticate); result.status != http.StatusOK {
-		t.Fatalf("configured credentials were rejected: status=%d", result.status)
+	if result := server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate); result.Status != http.StatusOK {
+		t.Fatalf("configured credentials were rejected: status=%d", result.Status)
 	}
 }
 
 func TestPublicHealthProbesBypassHostAndProxyChecks(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, append(fixture.localArgs(), "--allowed-hosts=api.example", "--trusted-proxies=127.0.0.1", "--proxy-headers=forwarded"))
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--allowed-hosts=api.example", "--trusted-proxies=127.0.0.1", "--proxy-headers=forwarded"))
 	for _, path := range []string{"/healthz", "/readyz"} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
 			t.Run(method+" "+path, func(t *testing.T) {
-				result := server.request(t, method, path, func(r *http.Request) {
+				result := server.Request(t, method, path, func(r *http.Request) {
 					r.Host = "internal-load-balancer.invalid"
 					r.Header.Set("Forwarded", "malformed-forwarding")
 					r.Header.Set("Origin", "https://other.example")
 				})
 
-				if result.status != http.StatusOK {
-					t.Fatalf("public probe returned %d: %s", result.status, result.body)
+				if result.Status != http.StatusOK {
+					t.Fatalf("public probe returned %d: %s", result.Status, result.Body)
 				}
 				assertSecurityHeaders(t, result, false)
 			})
@@ -67,15 +65,15 @@ func TestPublicHealthProbesBypassHostAndProxyChecks(t *testing.T) {
 }
 
 func TestHostAndOriginValidation(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, fixture.localArgs())
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	for _, test := range []struct {
 		name, method, host, origin, fetchSite string
 		duplicateOrigin                       bool
 		status                                int
 	}{
 		{name: "native client", status: http.StatusNotFound},
-		{name: "same origin", origin: server.url, status: http.StatusNotFound},
+		{name: "same origin", origin: server.URL, status: http.StatusNotFound},
 		{name: "host is case insensitive", host: "LOCALHOST", origin: "http://localhost", status: http.StatusNotFound},
 		{name: "loopback IPv6", host: "[::1]", origin: "http://[::1]", status: http.StatusNotFound},
 		{name: "default port equivalence", host: "localhost:80", origin: "http://localhost", status: http.StatusNotFound},
@@ -84,7 +82,7 @@ func TestHostAndOriginValidation(t *testing.T) {
 		{name: "unknown host", host: "attacker.invalid", status: http.StatusForbidden},
 		{name: "host suffix is not allowed", host: "localhost.attacker.invalid", status: http.StatusForbidden},
 		{name: "different origin hostname", origin: "http://attacker.invalid", status: http.StatusForbidden},
-		{name: "different origin scheme", origin: strings.Replace(server.url, "http:", "https:", 1), status: http.StatusForbidden},
+		{name: "different origin scheme", origin: strings.Replace(server.URL, "http:", "https:", 1), status: http.StatusForbidden},
 		{name: "unconfigured origin port", host: "localhost:4274", origin: "http://localhost:4276", status: http.StatusForbidden},
 		{name: "opaque origin", origin: "null", status: http.StatusForbidden},
 		{name: "cross site navigation", fetchSite: "cross-site", status: http.StatusForbidden},
@@ -93,14 +91,14 @@ func TestHostAndOriginValidation(t *testing.T) {
 		{name: "native mutation", method: http.MethodPost, status: http.StatusNotFound},
 		{name: "cross origin mutation", method: http.MethodPost, origin: "https://attacker.invalid", status: http.StatusForbidden},
 		{name: "origin mismatch despite same origin metadata", origin: "https://attacker.invalid", fetchSite: "same-origin", status: http.StatusForbidden},
-		{name: "duplicate origin", origin: server.url, duplicateOrigin: true, status: http.StatusForbidden},
+		{name: "duplicate origin", origin: server.URL, duplicateOrigin: true, status: http.StatusForbidden},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			method := test.method
 			if method == "" {
 				method = http.MethodGet
 			}
-			result := server.request(t, method, "/api/v1/nonexistent", authenticate, func(r *http.Request) {
+			result := server.Request(t, method, "/api/v1/nonexistent", hostfixtures.Authenticate, func(r *http.Request) {
 				if test.host != "" {
 					r.Host = test.host
 				}
@@ -115,15 +113,15 @@ func TestHostAndOriginValidation(t *testing.T) {
 				}
 			})
 
-			if result.status != test.status {
-				t.Fatalf("status=%d, want %d: %s", result.status, test.status, result.body)
+			if result.Status != test.status {
+				t.Fatalf("status=%d, want %d: %s", result.Status, test.status, result.Body)
 			}
 			assertSecurityHeaders(t, result, false)
 		})
 	}
 	for _, path := range []string{"/healthz/", "/readyz/private"} {
-		if result := server.request(t, http.MethodGet, path); result.status != http.StatusUnauthorized {
-			t.Errorf("non-probe path %s bypassed authentication: status=%d", path, result.status)
+		if result := server.Request(t, http.MethodGet, path); result.Status != http.StatusUnauthorized {
+			t.Errorf("non-probe path %s bypassed authentication: status=%d", path, result.Status)
 		}
 	}
 }
@@ -155,46 +153,46 @@ func TestReverseProxyTrustAndHeaderModes(t *testing.T) {
 		{name: "invalid repeated X proto", mode: "x-forwarded", trusted: "127.0.0.1", host: "api.example", headers: http.Header{"X-Forwarded-Proto": {"https", "https"}}, status: http.StatusBadRequest},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
-			args := append(fixture.localArgs(), "--allowed-hosts=api.example")
+			fixture := hostfixtures.New(t)
+			args := append(fixture.LocalArgs(), "--allowed-hosts=api.example")
 			if test.mode != "" {
 				args = append(args, "--proxy-headers="+test.mode, "--trusted-proxies="+test.trusted)
 			}
-			server := startAPI(t, args)
+			server := hostfixtures.Start(t, args)
 
-			result := server.request(t, http.MethodGet, "/api/v1/nonexistent", authenticate, func(r *http.Request) {
+			result := server.Request(t, http.MethodGet, "/api/v1/nonexistent", hostfixtures.Authenticate, func(r *http.Request) {
 				r.Host = test.host
 				r.Header = test.headers.Clone()
 				if r.Header == nil {
 					r.Header = make(http.Header)
 				}
-				authenticate(r)
+				hostfixtures.Authenticate(r)
 			})
 
-			if result.status != test.status {
-				t.Fatalf("status=%d, want %d: %s", result.status, test.status, result.body)
+			if result.Status != test.status {
+				t.Fatalf("status=%d, want %d: %s", result.Status, test.status, result.Body)
 			}
 			assertSecurityHeaders(t, result, test.https)
 		})
 	}
 }
 
-func assertSecurityHeaders(t *testing.T, result response, https bool) {
+func assertSecurityHeaders(t *testing.T, result hostfixtures.Response, https bool) {
 	t.Helper()
 	for name, want := range map[string]string{
 		"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
 	} {
-		if got := result.header.Get(name); got != want {
+		if got := result.Header.Get(name); got != want {
 			t.Errorf("%s=%q, want %q", name, got, want)
 		}
 	}
-	if policy := result.header.Get("Content-Security-Policy"); !strings.Contains(policy, "default-src 'none'") || !strings.Contains(policy, "frame-ancestors 'none'") {
+	if policy := result.Header.Get("Content-Security-Policy"); !strings.Contains(policy, "default-src 'none'") || !strings.Contains(policy, "frame-ancestors 'none'") {
 		t.Errorf("missing restrictive CSP: %q", policy)
 	}
-	if got := result.header.Get("Strict-Transport-Security"); (got != "") != https {
+	if got := result.Header.Get("Strict-Transport-Security"); (got != "") != https {
 		t.Errorf("HSTS=%q, effective HTTPS=%v", got, https)
 	}
-	if result.header.Get("Access-Control-Allow-Origin") != "" || result.header.Get("Access-Control-Allow-Credentials") != "" {
+	if result.Header.Get("Access-Control-Allow-Origin") != "" || result.Header.Get("Access-Control-Allow-Credentials") != "" {
 		t.Error("API unexpectedly allows cross-origin requests")
 	}
 }

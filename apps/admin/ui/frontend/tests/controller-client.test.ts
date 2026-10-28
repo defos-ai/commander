@@ -1,30 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { getController, listControllers } from '../src/api/controllers';
-import type { Controller } from '../src/api/types';
-
-const url = 'https://commander.example/team';
-const credentials = { url, username: 'operator' };
-const controller: Controller = {
-  id: 'default-controller-0123abcd', type: 'default', status: 'ready', stale: false,
-  server: { hostname: 'control-west-1', os: 'linux', arch: 'amd64' }, version: '0.1.0', agent_selector: 'round-robin',
-  rule_selector: 'mission-rules',
-  started_at: '2026-10-06T09:00:00Z', last_heartbeat: '2026-10-06T09:10:00.123456789Z', lease_expires_at: '2026-10-06T09:10:45Z',
-};
-
-function respond(...bodies: unknown[]) {
-  const fetch = vi.fn<typeof globalThis.fetch>();
-  for (const body of bodies) fetch.mockResolvedValueOnce(Response.json(body));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { respondSequence as respond } from './fakes/fetch';
+import { controller, credentials, url } from './fixtures/controller-client';
 
 describe('controller catalog client', () => {
   it('loads snapshots through the authenticated same-origin proxy and preserves base paths and encoded IDs', async () => {
     const id = 'team/controller ?#é';
     const fetch = respond({ items: [controller] }, { ...controller, id });
 
-    expect(await listControllers(url, credentials)).toEqual([controller]);
-    expect(await getController(`${url}/`, credentials, id)).toEqual({ ...controller, id });
+    const items = await listControllers(url, credentials);
+    const detail = await getController(`${url}/`, credentials, id);
+
+    expect(items).toEqual([controller]);
+    expect(detail).toEqual({ ...controller, id });
     expect(fetch.mock.calls.map(([input]) => {
       const endpoint = new URL(String(input), window.location.origin);
       expect(endpoint.origin).toBe(window.location.origin);

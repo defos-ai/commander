@@ -12,10 +12,12 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/comms"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/comms"
 )
 
 func TestCheckpointProtocolPreservesExecutionAndRequestIdentity(t *testing.T) {
-	request := checkpointWireRequest(t)
+	request := fixtures.CheckpointWireRequest(t)
 	payload, err := controllerevents.DecodeCheckpointRequest(request)
 	if err != nil {
 		t.Fatal(err)
@@ -31,14 +33,14 @@ func TestCheckpointProtocolPreservesExecutionAndRequestIdentity(t *testing.T) {
 		response.Work != request.Work || response.AgentID != request.AgentID {
 		t.Fatal("checkpoint reply lost its original execution or request identity")
 	}
-	bus := &secretBus{}
+	bus := &fakes.SecretBus{}
 	if err := (controllerevents.Client{Bus: bus}).Publish(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
 	if err := (agentevents.Client{Bus: bus}).Publish(t.Context(), response); err != nil {
 		t.Fatal(err)
 	}
-	if bus.topics[0] != messages.ControllerEvents(messages.DefaultControllerType) || bus.topics[1] != messages.AgentEvents(request.AgentID) {
+	if bus.Topics()[0] != messages.ControllerEvents(messages.DefaultControllerType) || bus.Topics()[1] != messages.AgentEvents(request.AgentID) {
 		t.Fatal("checkpoint exchange used the action command channel")
 	}
 	before := bytes.Clone(response.Payload)
@@ -49,7 +51,7 @@ func TestCheckpointProtocolPreservesExecutionAndRequestIdentity(t *testing.T) {
 }
 
 func TestCheckpointRequestRejectsMalformedAndUnboundedData(t *testing.T) {
-	request := checkpointWireRequest(t)
+	request := fixtures.CheckpointWireRequest(t)
 	for _, test := range []struct {
 		name   string
 		change func(*messages.Message, *controllerevents.CheckpointRequest)
@@ -74,7 +76,7 @@ func TestCheckpointRequestRejectsMalformedAndUnboundedData(t *testing.T) {
 			changed := request
 			payload, _ := controllerevents.DecodeCheckpointRequest(request)
 			test.change(&changed, &payload)
-			changed.Payload = secretWirePayload(t, payload)
+			changed.Payload = fixtures.SecretWirePayload(t, payload)
 			if _, err := controllerevents.DecodeCheckpointRequest(changed); err == nil || strings.Contains(err.Error(), "private-data") {
 				t.Fatal("invalid checkpoint request was accepted or exposed data")
 			}
@@ -87,7 +89,7 @@ func TestCheckpointRequestRejectsMalformedAndUnboundedData(t *testing.T) {
 }
 
 func TestCheckpointResponsesRequireBoundedDataOrFixedError(t *testing.T) {
-	request := checkpointWireRequest(t)
+	request := fixtures.CheckpointWireRequest(t)
 	payload, _ := controllerevents.DecodeCheckpointRequest(request)
 	for _, test := range []struct {
 		name   string
@@ -122,16 +124,4 @@ func TestCheckpointResponsesRequireBoundedDataOrFixedError(t *testing.T) {
 			t.Fatal("fixed checkpoint error was not preserved")
 		}
 	}
-}
-
-func checkpointWireRequest(t *testing.T) messages.Message {
-	t.Helper()
-	request, err := controllerevents.NewCheckpointRequest("fixture-agent-12345678",
-		messages.WorkContext{OperationID: id.New(), TaskID: id.New()},
-		controllerevents.CheckpointRequest{CommandID: id.New(), Name: "launch", Operation: controllerevents.CheckpointSave,
-			Data: json.RawMessage(`{"agent_id":"fixture-agent-87654321"}`)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return request
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -13,15 +14,15 @@ import (
 )
 
 func TestAgentsAndActions(t *testing.T) {
-	a := connect(t)
+	a := fixtures.Connect(t)
 	var list struct {
 		Agents []agents.Agent `json:"agents"`
 	}
-	a.call("list_agents", object{}, &list)
+	a.Call("list_agents", fixtures.Object{}, &list)
 	var catalog struct {
 		Actions []actions.Action `json:"actions"`
 	}
-	a.call("list_actions", object{}, &catalog)
+	a.Call("list_actions", fixtures.Object{}, &catalog)
 	expectedCatalog := map[string]bool{}
 	var exampleID string
 	for _, agent := range list.Agents {
@@ -45,7 +46,7 @@ func TestAgentsAndActions(t *testing.T) {
 			}
 		}
 		slices.Sort(names)
-		if !slices.Equal(names, expectedAgentActions(string(agent.Type))) {
+		if !slices.Equal(names, fixtures.ExpectedAgentActions(string(agent.Type))) {
 			t.Fatalf("agent advertises the wrong capabilities: %+v", agent)
 		}
 		if agent.Type == "example-agent" {
@@ -61,32 +62,32 @@ func TestAgentsAndActions(t *testing.T) {
 		}
 	}
 	var detail agents.Agent
-	a.call("describe_agent", object{"agent_id": exampleID}, &detail)
+	a.Call("describe_agent", fixtures.Object{"agent_id": exampleID}, &detail)
 	if detail.ID != exampleID || detail.Status != agents.AgentReady {
 		t.Fatalf("agent query lost identity or readiness: %+v", detail)
 	}
 	var action actions.Action
-	a.call("describe_action", object{"agent_id": detail.ID, "action_name": "write-summary"}, &action)
+	a.Call("describe_action", fixtures.Object{"agent_id": detail.ID, "action_name": "write-summary"}, &action)
 	if len(action.InputSchema) == 0 || len(action.OutputSchema) == 0 || action.Status != actions.Ready {
 		t.Fatalf("missing schema or readiness: %+v", action)
 	}
 	for _, query := range []struct {
 		name string
-		args object
+		args fixtures.Object
 	}{
-		{"list_agents", object{}},
-		{"list_actions", object{}},
-		{"describe_agent", object{"agent_id": exampleID}},
-		{"describe_action", object{"agent_id": exampleID, "action_name": "write-summary"}},
+		{"list_agents", fixtures.Object{}},
+		{"list_actions", fixtures.Object{}},
+		{"describe_agent", fixtures.Object{"agent_id": exampleID}},
+		{"describe_action", fixtures.Object{"agent_id": exampleID, "action_name": "write-summary"}},
 	} {
 		var raw json.RawMessage
-		a.call(query.name, query.args, &raw)
+		a.Call(query.name, query.args, &raw)
 		if strings.Contains(string(raw), `"required_permissions"`) || strings.Contains(string(raw), `"granted_permissions"`) {
 			t.Fatalf("%s still publishes application action permissions: %s", query.name, raw)
 		}
 	}
 
-	tools, err := a.session.ListTools(a.ctx, nil)
+	tools, err := a.Session.ListTools(a.Context, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,20 +106,20 @@ func TestAgentsAndActions(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"run_action", "discover_actions", "stop_agent"} {
-		invalid := openSession(t)
-		_, err := invalid.session.CallTool(invalid.ctx, &mcp.CallToolParams{Name: name, Arguments: object{"agent_id": detail.ID}})
+		invalid := fixtures.OpenSession(t)
+		_, err := invalid.Session.CallTool(invalid.Context, &mcp.CallToolParams{Name: name, Arguments: fixtures.Object{"agent_id": detail.ID}})
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "unknown tool") {
 			t.Errorf("%s should be unavailable, got %v", name, err)
 		}
 	}
 
-	op := a.start("Agent query fixture")
-	assertAgentSelectionRejected(t, "assign_task", object{"operation_id": op.ID, "agent_id": detail.ID, "action_name": "write-summary", "input": summaryInput()})
-	if len(a.get(op.ID).Tasks) != 0 {
+	op := a.Start("Agent query fixture")
+	assertAgentSelectionRejected(t, "assign_task", fixtures.Object{"operation_id": op.ID, "agent_id": detail.ID, "action_name": "write-summary", "input": fixtures.SummaryInput()})
+	if len(a.Get(op.ID).Tasks) != 0 {
 		t.Fatal("rejected request created work")
 	}
-	assigned := a.task(op.ID, "write-summary", summaryInput())
-	settled := a.wait(op.ID, allTasksSucceeded)
+	assigned := a.Task(op.ID, "write-summary", fixtures.SummaryInput())
+	settled := a.Wait(op.ID, allTasksSucceeded)
 	task := settled.Tasks[0]
 	if task.ID != assigned.ID || task.AgentID == "" || task.Result == nil || len(task.Result.Output) == 0 {
 		t.Fatalf("tracked action lost its executor or result: %+v", task)
@@ -131,23 +132,23 @@ func TestAgentsAndActions(t *testing.T) {
 		t.Fatalf("controller selected an unannounced or incapable agent: %s", task.AgentID)
 	}
 	var idle agents.Agent
-	a.call("describe_agent", object{"agent_id": task.AgentID}, &idle)
+	a.Call("describe_agent", fixtures.Object{"agent_id": task.AgentID}, &idle)
 	if idle.Status != agents.AgentReady || idle.Work != nil {
 		t.Fatalf("completed action still reported as current work: %+v", idle)
 	}
 	var saved operations.Task
-	a.call("get_task", object{"operation_id": op.ID, "task_id": task.ID}, &saved)
+	a.Call("get_task", fixtures.Object{"operation_id": op.ID, "task_id": task.ID}, &saved)
 	if saved.AgentID != task.AgentID {
 		t.Fatalf("task query lost executor: %+v", saved)
 	}
-	a.resolve(op.ID, *modelDecision(settled), []object{})
-	a.call("complete_operation", object{"operation_id": op.ID, "output": object{"summary": "Tracked action reviewed"}}, nil)
+	a.Resolve(op.ID, *fixtures.ModelDecision(settled), []fixtures.Object{})
+	a.Call("complete_operation", fixtures.Object{"operation_id": op.ID, "output": fixtures.Object{"summary": "Tracked action reviewed"}}, nil)
 }
 
-func assertAgentSelectionRejected(t *testing.T, name string, args object) {
+func assertAgentSelectionRejected(t *testing.T, name string, args fixtures.Object) {
 	t.Helper()
-	invalid := openSession(t)
-	_, err := invalid.session.CallTool(invalid.ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	invalid := fixtures.OpenSession(t)
+	_, err := invalid.Session.CallTool(invalid.Context, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err == nil || !strings.Contains(err.Error(), "agent_id") {
 		t.Fatalf("%s should reject agent_id, got %v", name, err)
 	}

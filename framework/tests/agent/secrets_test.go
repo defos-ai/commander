@@ -16,15 +16,17 @@ import (
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/agent"
 )
 
 func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T) {
 	definition := actions.Action{Name: "build", RequiredSecrets: []string{"CODEX_API_KEY", "GITHUB_TOKEN"},
 		InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
-	executor := &secretAction{Base: action.NewBase(definition)}
+	executor := &fakes.SecretAction{Base: action.NewBase(definition)}
 	definition.RequiredSecrets[0] = "CHANGED"
 	runtime, err := agent.NewAgent(agent.AgentConfig{Type: "builder-agent",
-		Actions: []action.Executor{executor}, ArtifactFileStore: unusedArtifacts{},
+		Actions: []action.Executor{executor}, ArtifactFileStore: fakes.UnusedArtifacts{},
 		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"},
 	})
 	if err != nil {
@@ -106,7 +108,7 @@ func TestInvalidSecretDeclarationsRejectedBeforeDiscovery(t *testing.T) {
 				t.Fatal("invalid action secret declarations accepted")
 			}
 			_, err := agent.NewAgent(agent.AgentConfig{Type: "builder-agent",
-				Actions: []action.Executor{&secretAction{Base: action.NewBase(definition)}}, ArtifactFileStore: unusedArtifacts{},
+				Actions: []action.Executor{&fakes.SecretAction{Base: action.NewBase(definition)}}, ArtifactFileStore: fakes.UnusedArtifacts{},
 				Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"},
 			})
 			if err == nil {
@@ -121,12 +123,6 @@ func TestInvalidSecretDeclarationsRejectedBeforeDiscovery(t *testing.T) {
 			}
 		})
 	}
-}
-
-type secretAction struct{ *action.Base }
-
-func (*secretAction) Run(context.Context, json.RawMessage) (action.Result, error) {
-	return action.JSONResult(struct{}{})
 }
 
 func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
@@ -179,12 +175,12 @@ func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := startSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
-	command := fixture.command(t, "wait", `{}`)
+	fixture := fixtures.StartSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
+	command := fixture.Command(t, "wait", `{}`)
 	waitSecretWorkRequirements(t, fixture, command)
 	close(waiters[0].start)
 	waitSecretWorkRequirements(t, fixture, command, "TOKEN")
-	request := fixture.request(t, "")
+	request := fixture.Request(t, "")
 	close(waiters[1].start)
 	waitSecretWorkRequirements(t, fixture, command, "TOKEN")
 	(<-waiters[0].cancel)()
@@ -194,7 +190,7 @@ func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("canceled overlapping waiter returned %v", err)
 		}
-	case <-fixture.ctx.Done():
+	case <-fixture.Context().Done():
 		t.Fatal("canceled overlapping waiter did not return")
 	}
 	close(waiters[2].start)
@@ -202,18 +198,18 @@ func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
 	if request.Key.Name != "TOKEN" {
 		t.Fatal("first request was not for the shared waiter name")
 	}
-	delivery, err := agentevents.NewSecretDelivery(request, fixture.secret(t, request, time.Time{}, "fixture-value"))
+	delivery, err := agentevents.NewSecretDelivery(request, fixture.Secret(t, request, time.Time{}, "fixture-value"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.deliver(t, delivery)
+	fixture.Deliver(t, delivery)
 	waitSecretWorkRequirements(t, fixture, command, "OTHER_TOKEN")
 	select {
 	case err := <-waiters[1].outcome:
 		if err != nil {
 			t.Fatalf("remaining overlapping waiter did not receive the value: %v", err)
 		}
-	case <-fixture.ctx.Done():
+	case <-fixture.Context().Done():
 		t.Fatal("remaining overlapping waiter did not return")
 	}
 	(<-waiters[2].cancel)()
@@ -223,11 +219,11 @@ func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("last canceled waiter returned %v", err)
 		}
-	case <-fixture.ctx.Done():
+	case <-fixture.Context().Done():
 		t.Fatal("last canceled waiter did not return")
 	}
 	close(finish)
-	fixture.outcome(t, command, controllerevents.ActionSucceeded)
+	fixture.Outcome(t, command, controllerevents.ActionSucceeded)
 }
 
 func TestAgentFinishedExecutionCannotReportSecretWaits(t *testing.T) {
@@ -248,12 +244,12 @@ func TestAgentFinishedExecutionCannotReportSecretWaits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := startSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
-	first := fixture.command(t, "wait", `{}`)
+	fixture := fixtures.StartSecretAgentActions(t, 10*time.Second, 8*time.Second, executor)
+	first := fixture.Command(t, "wait", `{}`)
 	var detached context.Context
 	select {
 	case detached = <-contexts:
-	case <-fixture.ctx.Done():
+	case <-fixture.Context().Done():
 		t.Fatal("first execution did not start")
 	}
 	returned := make(chan error, 1)
@@ -264,16 +260,16 @@ func TestAgentFinishedExecutionCannotReportSecretWaits(t *testing.T) {
 	}()
 	waitSecretWorkRequirements(t, fixture, first, "TOKEN")
 	finish <- struct{}{}
-	fixture.outcome(t, first, controllerevents.ActionSucceeded)
+	fixture.Outcome(t, first, controllerevents.ActionSucceeded)
 	select {
 	case err := <-returned:
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("finished execution's detached waiter returned %v", err)
 		}
-	case <-fixture.ctx.Done():
+	case <-fixture.Context().Done():
 		t.Fatal("finished execution retained its detached waiter")
 	}
-	second := fixture.command(t, "wait", `{}`)
+	second := fixture.Command(t, "wait", `{}`)
 	waitSecretWorkRequirements(t, fixture, second)
 	if value, err := action.RequestSecret(detached, "OTHER_TOKEN"); !errors.Is(err, context.Canceled) || len(value) != 0 {
 		clear(value)
@@ -281,16 +277,16 @@ func TestAgentFinishedExecutionCannotReportSecretWaits(t *testing.T) {
 	}
 	assertSecretWorkRequirements(t, fixture, second)
 	finish <- struct{}{}
-	fixture.outcome(t, second, controllerevents.ActionSucceeded)
-	if fixture.runtime.Describe().Work != nil {
+	fixture.Outcome(t, second, controllerevents.ActionSucceeded)
+	if fixture.Runtime().Describe().Work != nil {
 		t.Fatal("finished execution retained missing requirements")
 	}
 }
 
-func waitSecretWorkRequirements(t *testing.T, fixture *secretFixture, commandID string, names ...string) {
+func waitSecretWorkRequirements(t *testing.T, fixture *fixtures.SecretAgent, commandID string, names ...string) {
 	t.Helper()
 	for {
-		message := fixture.next(t, controllerevents.AgentUpdated)
+		message := fixture.Next(t, controllerevents.AgentUpdated)
 		var snapshot agents.AgentSnapshot
 		if err := json.Unmarshal(message.Payload, &snapshot); err != nil {
 			t.Fatal(err)
@@ -303,10 +299,10 @@ func waitSecretWorkRequirements(t *testing.T, fixture *secretFixture, commandID 
 	}
 }
 
-func assertSecretWorkRequirements(t *testing.T, fixture *secretFixture, commandID string, names ...string) {
+func assertSecretWorkRequirements(t *testing.T, fixture *fixtures.SecretAgent, commandID string, names ...string) {
 	t.Helper()
 	want := secretRequirements(names)
-	snapshot := fixture.runtime.Describe()
+	snapshot := fixture.Runtime().Describe()
 	if snapshot.Status != agents.AgentWorking || snapshot.Work == nil || snapshot.Work.CommandID != commandID || !slices.Equal(snapshot.Work.MissingRequirements, want) {
 		t.Fatalf("unexpected execution requirements: %+v; want %v", snapshot.Work, want)
 	}
@@ -321,7 +317,7 @@ func assertSecretWorkRequirements(t *testing.T, fixture *secretFixture, commandI
 			t.Fatal("inventory clone shared execution missing requirements")
 		}
 	}
-	for _, message := range fixture.bus.history() {
+	for _, message := range fixture.History() {
 		if message.Type != controllerevents.AgentUpdated {
 			continue
 		}

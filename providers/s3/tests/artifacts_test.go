@@ -16,11 +16,12 @@ import (
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/id"
 	files3 "github.com/defos-ai/commander/providers/s3/artifacts"
+	"github.com/defos-ai/commander/providers/s3/tests/fixtures"
 )
 
 func TestArtifactFileSourcesAndIntegrity(t *testing.T) {
-	f := openStore(t)
-	files, err := files3.NewArtifactFileS3Store(f.storage)
+	f := fixtures.OpenStore(t)
+	files, err := files3.NewArtifactFileS3Store(f.Storage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,8 +69,8 @@ func TestArtifactFileSourcesAndIntegrity(t *testing.T) {
 			if _, err := files.Get(t.Context(), artifactID, wrongHash); err == nil {
 				t.Fatal("incorrect hash passed verification")
 			}
-			key := f.prefix + "artifacts/" + artifactID + "/" + file.ID
-			_, err = f.client.PutObject(t.Context(), &awss3.PutObjectInput{Bucket: aws.String(f.bucket), Key: aws.String(key), Body: strings.NewReader("tampered")})
+			key := f.Prefix + "artifacts/" + artifactID + "/" + file.ID
+			_, err = f.Client.PutObject(t.Context(), &awss3.PutObjectInput{Bucket: aws.String(f.Bucket), Key: aws.String(key), Body: strings.NewReader("tampered")})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -81,8 +82,8 @@ func TestArtifactFileSourcesAndIntegrity(t *testing.T) {
 }
 
 func TestArtifactFileRejectsInvalidAndCancelledRequests(t *testing.T) {
-	f := openStore(t)
-	files, err := files3.NewArtifactFileS3Store(f.storage)
+	f := fixtures.OpenStore(t)
+	files, err := files3.NewArtifactFileS3Store(f.Storage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +115,7 @@ func TestArtifactFileRejectsInvalidAndCancelledRequests(t *testing.T) {
 	if _, err := files.Get(t.Context(), artifactID, file); !errors.Is(err, artifacts.ErrUnknownArtifact) {
 		t.Fatalf("missing file: %v", err)
 	}
-	page, err := f.client.ListObjectsV2(t.Context(), &awss3.ListObjectsV2Input{Bucket: aws.String(f.bucket), Prefix: aws.String(f.prefix)})
+	page, err := f.Client.ListObjectsV2(t.Context(), &awss3.ListObjectsV2Input{Bucket: aws.String(f.Bucket), Prefix: aws.String(f.Prefix)})
 	if err != nil || len(page.Contents) != 0 {
 		t.Fatalf("invalid/cancelled writes created objects: %+v, %v", page, err)
 	}

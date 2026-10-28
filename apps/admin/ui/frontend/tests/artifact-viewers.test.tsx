@@ -1,41 +1,9 @@
-import { upstreamURL } from './proxy';
-import { Blob as NodeBlob } from 'node:buffer';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { OperationArtifact } from '../src/api/operation-types';
 import { ArtifactDialog } from '../src/components/ArtifactDialog';
 import { ReportDialog } from '../src/components/ReportDialog';
-
-const url = 'https://commander.example.test';
-const credentials = { username: 'operator', url };
-const artifact: OperationArtifact = { id: 'artifact-1', name: 'Page evidence', agent_id: 'agent-one', action_name: 'capture-page', created_at: '2026-10-06T10:00:00Z', files: [
-  { id: 'text', name: 'page.html', media_type: 'text/html', size: 100, sha256: 'a'.repeat(64) },
-  { id: 'image', name: 'page.png', media_type: 'image/png', size: 50, sha256: 'b'.repeat(64) },
-] };
-
-function browserFiles() {
-  const blobs: Blob[] = [];
-  const createObjectURL = vi.fn((blob: Blob) => { blobs.push(blob); return `blob:fixture-${blobs.length}`; });
-  const revokeObjectURL = vi.fn();
-  vi.stubGlobal('Blob', NodeBlob);
-  vi.stubGlobal('URL', class extends URL {
-    static createObjectURL = createObjectURL;
-    static revokeObjectURL = revokeObjectURL;
-  });
-  const downloads: { href: string; name: string }[] = [];
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloads.push({ href: this.href, name: this.download }); });
-  return { blobs, downloads, createObjectURL, revokeObjectURL };
-}
-
-function artifactAPI(fileReply?: (fileID: string, options: RequestInit) => Response | Promise<Response>) {
-  const fetch = vi.fn(async (input: RequestInfo | URL, options: RequestInit = {}) => {
-    const address = upstreamURL(input);
-    if (address.includes('/files/')) return fileReply!(address.split('/').at(-1)!, options);
-    return Response.json(artifact);
-  });
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { browserFiles } from './fakes/browser-files';
+import { artifact, artifactAPI, credentials, url } from './fixtures/artifact-viewers';
 
 describe('artifact and report viewers', () => {
   it('previews HTML as text and downloads original bytes without rendering active content', async () => {

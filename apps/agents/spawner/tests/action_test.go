@@ -11,19 +11,18 @@ import (
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
 	spawneractions "github.com/defos-ai/commander/apps/agents/spawner/actions"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const actionPackage = "github.com/defos-ai/commander/apps/agents/example@v0.1.0"
-
 func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
-	launcher := &actionLauncher{}
-	config := agent.AgentConfig{Type: "ignored", ArtifactFileStore: actionArtifacts{},
+	launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{})
+	config := agent.AgentConfig{Type: "ignored", ArtifactFileStore: fakes.RejectArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}
 	first, err := spawner.NewAgent(config, launcher)
 	if err != nil {
@@ -59,7 +58,7 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 			t.Fatal("published action descriptions differ from the registered catalog")
 		}
 	}
-	if len(launcher.calls) != 0 {
+	if len(launcher.Calls()) != 0 {
 		t.Fatal("construction or discovery launched a process")
 	}
 	config.Actions = []action.Executor{}
@@ -77,18 +76,21 @@ func TestSpawnerAgentHasIndependentCatalogs(t *testing.T) {
 }
 
 func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
-	launcher := &actionLauncher{result: runtimes.Result{
-		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage, Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42},
+	launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Result: runtimes.Result{
+		AgentID: "example-agent-12345678", AgentType: "example-agent", Package: fixtures.ActionPackage, Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42},
 		Actions: []actionmodel.Action{{Name: "inspect", Description: "Inspect a local target", Status: action.Unavailable,
 			MissingRequirements: []actionmodel.Requirement{{Kind: actionmodel.ExecutableRequirement, Name: "example-tool"}},
 			InputSchema:         json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}},
-	}}
-	executor := newSpawnAction(t, launcher)
+	}})
+	executor := fixtures.SpawnAction(t, launcher)
 	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
 	for _, execution := range []action.Execution{{CommandID: id.MessageID(), Work: work}, {CommandID: id.MessageID()}} {
-		for _, reference := range []string{actionPackage, "https://github.com/defos-ai/commander-example-agent", "github.com/defos-ai/commander-example-agent@stable"} {
+		for _, reference := range []string{fixtures.ActionPackage, "https://github.com/defos-ai/commander-example-agent", "github.com/defos-ai/commander-example-agent@stable"} {
 			ctx := action.WithExecution(t.Context(), execution)
-			result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+reference+`"}`))
+			input := json.RawMessage(`{"package":"` + reference + `"}`)
+
+			result, err := executor.Run(ctx, input)
+
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,11 +98,11 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 			if err := json.Unmarshal(result.Output, &actual); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(actual, launcher.result) {
+			if !reflect.DeepEqual(actual, launcher.Result()) {
 				t.Fatalf("spawn output lost registration or action readiness: %+v", actual)
 			}
 			wantID := "command:" + execution.CommandID
-			if call := launcher.calls[len(launcher.calls)-1]; call != (spawnInvocation{requestID: wantID, reference: reference}) {
+			if call := launcher.Calls()[len(launcher.Calls())-1]; call != (fakes.SpawnInvocation{RequestID: wantID, Reference: reference}) {
 				t.Fatalf("launcher received wrong dispatch identity: %+v", call)
 			}
 		}
@@ -109,7 +111,7 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 
 func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 	validExecution := action.Execution{CommandID: id.MessageID()}
-	validInput := json.RawMessage(`{"package":"` + actionPackage + `"}`)
+	validInput := json.RawMessage(`{"package":"` + fixtures.ActionPackage + `"}`)
 	for _, test := range []struct {
 		name      string
 		execution *action.Execution
@@ -124,28 +126,30 @@ func TestSpawnAgentRejectsInvalidRequestsBeforeLaunch(t *testing.T) {
 		{name: "unsupported channel", execution: &validExecution, input: json.RawMessage(`{"package":"github.com/defos-ai/commander-example-agent@latest"}`)},
 		{name: "missing package", execution: &validExecution, input: json.RawMessage(`{}`)},
 		{name: "null package", execution: &validExecution, input: json.RawMessage(`{"package":null}`)},
-		{name: "invalid visibility", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","visibility":"internal"}`)},
-		{name: "empty visibility", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","visibility":""}`)},
-		{name: "caller token", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","token":"never-accept-input-secrets"}`)},
-		{name: "caller agent ID", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","agent_id":"example-agent-12345678"}`)},
-		{name: "caller request ID", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","request_id":"my-request"}`)},
-		{name: "caller runtime", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","runtime":"kubernetes"}`)},
-		{name: "caller namespace", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","namespace":"agents"}`)},
-		{name: "caller service account", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","service_account":"agent-worker"}`)},
-		{name: "caller environment", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","env":{"SECRETS_ENCRYPTION_KEY":"value"}}`)},
-		{name: "caller arguments", execution: &validExecution, input: json.RawMessage(`{"package":"` + actionPackage + `","args":["--config=other"]}`)},
+		{name: "invalid visibility", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","visibility":"internal"}`)},
+		{name: "empty visibility", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","visibility":""}`)},
+		{name: "caller token", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","token":"never-accept-input-secrets"}`)},
+		{name: "caller agent ID", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","agent_id":"example-agent-12345678"}`)},
+		{name: "caller request ID", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","request_id":"my-request"}`)},
+		{name: "caller runtime", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","runtime":"kubernetes"}`)},
+		{name: "caller namespace", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","namespace":"agents"}`)},
+		{name: "caller service account", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","service_account":"agent-worker"}`)},
+		{name: "caller environment", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","env":{"SECRETS_ENCRYPTION_KEY":"value"}}`)},
+		{name: "caller arguments", execution: &validExecution, input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `","args":["--config=other"]}`)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			launcher := &actionLauncher{}
-			executor := newSpawnAction(t, launcher)
+			launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{})
+			executor := fixtures.SpawnAction(t, launcher)
 			ctx := t.Context()
 			if test.execution != nil {
 				ctx = action.WithExecution(ctx, *test.execution)
 			}
-			if _, err := executor.Run(ctx, test.input); err == nil {
+			_, err := executor.Run(ctx, test.input)
+
+			if err == nil {
 				t.Fatal("invalid spawn request was accepted")
 			}
-			if len(launcher.calls) != 0 {
+			if len(launcher.Calls()) != 0 {
 				t.Fatal("invalid input reached the launcher")
 			}
 		})
@@ -179,13 +183,13 @@ func TestSpawnAgentOutputIdentifiesLaunchRuntime(t *testing.T) {
 		{"kubernetes with docker details", runtimes.RuntimeKubernetes, runtimes.DockerRuntimeDetails{ContainerID: "fixture-container"}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			launcher := &actionLauncher{result: runtimes.Result{
-				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
+			launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Result: runtimes.Result{
+				AgentID: "example-agent-12345678", AgentType: "example-agent", Package: fixtures.ActionPackage,
 				Runtime: test.runtime, RuntimeDetails: test.details, Actions: []actionmodel.Action{},
-			}}
-			executor := newSpawnAction(t, launcher)
+			}})
+			executor := fixtures.SpawnAction(t, launcher)
 			ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
-			output, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`"}`))
+			output, err := executor.Run(ctx, json.RawMessage(`{"package":"`+fixtures.ActionPackage+`"}`))
 			if (err == nil) != test.valid {
 				t.Fatalf("runtime result validity: got %v, want valid=%t", err, test.valid)
 			}
@@ -193,7 +197,7 @@ func TestSpawnAgentOutputIdentifiesLaunchRuntime(t *testing.T) {
 				return
 			}
 			var actual runtimes.Result
-			if err := json.Unmarshal(output.Output, &actual); err != nil || !reflect.DeepEqual(actual, launcher.result) {
+			if err := json.Unmarshal(output.Output, &actual); err != nil || !reflect.DeepEqual(actual, launcher.Result()) {
 				t.Fatalf("runtime output did not preserve the typed launch identity: %+v (%v)", actual, err)
 			}
 		})
@@ -221,11 +225,11 @@ func TestSpawnAgentOutputValidatesKubernetesNames(t *testing.T) {
 		{"pod too long", "agents", maximumPodName + "a", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent", Package: actionPackage,
-				Runtime: runtimes.RuntimeKubernetes, RuntimeDetails: runtimes.KubernetesRuntimeDetails{Namespace: test.namespace, PodName: test.podName, PodUID: "opaque-uid"}, Actions: []actionmodel.Action{}}}
-			executor := newSpawnAction(t, launcher)
+			launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent", Package: fixtures.ActionPackage,
+				Runtime: runtimes.RuntimeKubernetes, RuntimeDetails: runtimes.KubernetesRuntimeDetails{Namespace: test.namespace, PodName: test.podName, PodUID: "opaque-uid"}, Actions: []actionmodel.Action{}}})
+			executor := fixtures.SpawnAction(t, launcher)
 			ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
-			if _, err := executor.Run(ctx, json.RawMessage(`{"package":"`+actionPackage+`"}`)); (err == nil) != test.valid {
+			if _, err := executor.Run(ctx, json.RawMessage(`{"package":"`+fixtures.ActionPackage+`"}`)); (err == nil) != test.valid {
 				t.Fatalf("Kubernetes name validity: got %v, want valid=%t", err, test.valid)
 			}
 		})
@@ -233,7 +237,7 @@ func TestSpawnAgentOutputValidatesKubernetesNames(t *testing.T) {
 }
 
 func TestSpawnAgentAdvertisedSchemaRejectsInvalidRuntimeDetails(t *testing.T) {
-	executor := newSpawnAction(t, &actionLauncher{})
+	executor := fixtures.SpawnAction(t, fakes.NewActionLauncher(fakes.ActionLauncherConfig{}))
 	schema, err := actionmodel.ResolveSchema(executor.Action().OutputSchema)
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +274,7 @@ func TestSpawnAgentAdvertisedSchemaRejectsInvalidRuntimeDetails(t *testing.T) {
 		{"old flat pod UID", "kubernetes", map[string]any{"namespace": "agents", "pod_name": "worker", "pod_uid": "uid"}, "pod_uid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			output := map[string]any{"agent_id": "example-agent-12345678", "agent_type": "example-agent", "package": actionPackage, "runtime": test.runtime, "actions": []any{}}
+			output := map[string]any{"agent_id": "example-agent-12345678", "agent_type": "example-agent", "package": fixtures.ActionPackage, "runtime": test.runtime, "actions": []any{}}
 			if test.details != nil {
 				output["runtime_details"] = test.details
 			}
@@ -295,14 +299,14 @@ func TestSpawnAgentAdvertisedSchemaRejectsInvalidRuntimeDetails(t *testing.T) {
 
 func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 	failure := errors.New("launch outcome is uncertain")
-	launcher := &actionLauncher{err: failure}
+	launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Error: failure})
 	executor, err := spawneractions.NewSpawnAgent(launcher)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
-	input := json.RawMessage(`{"package":"` + actionPackage + `"}`)
-	if _, err := executor.Run(ctx, input); err == nil || len(launcher.calls) != 0 {
+	input := json.RawMessage(`{"package":"` + fixtures.ActionPackage + `"}`)
+	if _, err := executor.Run(ctx, input); err == nil || len(launcher.Calls()) != 0 {
 		t.Fatal("spawn action ran without discovery")
 	}
 	if _, err := executor.Discover(ctx, nil, nil); err != nil {
@@ -310,18 +314,18 @@ func TestSpawnAgentChecksDiscoveryCancellationAndLaunchFailure(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err := executor.Run(canceled, input); !errors.Is(err, context.Canceled) || len(launcher.calls) != 0 {
+	if _, err := executor.Run(canceled, input); !errors.Is(err, context.Canceled) || len(launcher.Calls()) != 0 {
 		t.Fatalf("canceled spawn request reached the launcher: %v", err)
 	}
-	if _, err := executor.Run(ctx, input); !errors.Is(err, failure) || len(launcher.calls) != 1 {
+	if _, err := executor.Run(ctx, input); !errors.Is(err, failure) || len(launcher.Calls()) != 1 {
 		t.Fatalf("launch failure was hidden or retried: %v", err)
 	}
 }
 
 func TestSpawnerAgentWorkRequiresControllerDispatch(t *testing.T) {
-	launcher := &actionLauncher{result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
-		Package: actionPackage, Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42}, Actions: []actionmodel.Action{}}}
-	runtime, err := spawner.NewAgent(agent.AgentConfig{ArtifactFileStore: actionArtifacts{},
+	launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Result: runtimes.Result{AgentID: "example-agent-12345678", AgentType: "example-agent",
+		Package: fixtures.ActionPackage, Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: 42}, Actions: []actionmodel.Action{}}})
+	runtime, err := spawner.NewAgent(agent.AgentConfig{ArtifactFileStore: fakes.RejectArtifacts{},
 		Server: agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"}}, launcher)
 	if err != nil {
 		t.Fatal(err)
@@ -332,43 +336,8 @@ func TestSpawnerAgentWorkRequiresControllerDispatch(t *testing.T) {
 	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
 	ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID(), Work: work})
 	_, err = runtime.Work(ctx, agent.ActionCall{ActionName: spawneractions.SpawnAgentName, Work: work,
-		Input: json.RawMessage(`{"package":"` + actionPackage + `"}`)})
-	if err == nil || len(launcher.calls) != 0 {
+		Input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `"}`)})
+	if err == nil || len(launcher.Calls()) != 0 {
 		t.Fatalf("standalone Work must not launch without a controller execution: %v", err)
 	}
-}
-
-func newSpawnAction(t *testing.T, launcher spawneractions.Spawner) action.Executor {
-	t.Helper()
-	executor, err := spawneractions.NewSpawnAgent(launcher)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := executor.Discover(t.Context(), nil, nil); err != nil {
-		t.Fatal(err)
-	}
-	return executor
-}
-
-type spawnInvocation struct{ requestID, reference string }
-
-type actionLauncher struct {
-	calls  []spawnInvocation
-	result runtimes.Result
-	err    error
-}
-
-func (launcher *actionLauncher) Spawn(_ context.Context, requestID, reference string) (runtimes.Result, error) {
-	launcher.calls = append(launcher.calls, spawnInvocation{requestID: requestID, reference: reference})
-	return launcher.result, launcher.err
-}
-
-type actionArtifacts struct{}
-
-func (actionArtifacts) Put(context.Context, string, artifacts.FileSource) (artifacts.ArtifactFile, error) {
-	return artifacts.ArtifactFile{}, errors.New("unexpected artifact write")
-}
-
-func (actionArtifacts) Get(context.Context, string, artifacts.ArtifactFile) ([]byte, error) {
-	return nil, errors.New("unexpected artifact read")
 }

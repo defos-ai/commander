@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestOperationAffinityConstrainsOnlyMatchingDispatches(t *testing.T) {
-	op := affinityOperation()
+	op := fixtures.AffinityOperation()
 	assertAffinity(t, op, "")
 	dispatchAffinityTask(t, &op, 2, "builder-agent-bbbbbbbb")
 	assertAffinity(t, op, "")
@@ -23,7 +23,7 @@ func TestOperationAffinityConstrainsOnlyMatchingDispatches(t *testing.T) {
 	dispatchAffinityTask(t, &op, 3, "builder-agent-bbbbbbbb")
 
 	before := op.Clone()
-	err := op.DispatchTask(affinityDispatch(op.Tasks[1], "builder-agent-bbbbbbbb"))
+	err := op.DispatchTask(fixtures.AffinityDispatch(op.Tasks[1], "builder-agent-bbbbbbbb"))
 	if !errors.Is(err, operations.ErrOperationConflict) {
 		t.Fatalf("conflicting dispatch = %v, want operation conflict", err)
 	}
@@ -33,12 +33,12 @@ func TestOperationAffinityConstrainsOnlyMatchingDispatches(t *testing.T) {
 	dispatchAffinityTask(t, &op, 1, "builder-agent-aaaaaaaa")
 	assertAffinity(t, op, "builder-agent-aaaaaaaa")
 
-	other := affinityOperation()
+	other := fixtures.AffinityOperation()
 	dispatchAffinityTask(t, &other, 0, "builder-agent-bbbbbbbb")
 	assertAffinity(t, other, "builder-agent-bbbbbbbb")
 	assertAffinity(t, op, "builder-agent-aaaaaaaa")
 
-	unrestricted := affinityOperation()
+	unrestricted := fixtures.AffinityOperation()
 	unrestricted.Mission.Rules = nil
 	dispatchAffinityTask(t, &unrestricted, 0, "builder-agent-aaaaaaaa")
 	dispatchAffinityTask(t, &unrestricted, 1, "builder-agent-bbbbbbbb")
@@ -50,7 +50,7 @@ func TestOperationAffinitySurvivesSavedOutcomesAndRecovery(t *testing.T) {
 		operations.TaskSucceeded, operations.TaskFailed, operations.TaskInterrupted, operations.TaskCancelled,
 	} {
 		t.Run(string(status), func(t *testing.T) {
-			op := affinityOperation()
+			op := fixtures.AffinityOperation()
 			dispatchAffinityTask(t, &op, 0, "builder-agent-aaaaaaaa")
 			// Restore a saved outcome while retaining the original dispatch claim.
 			op.Tasks[0].Status = status
@@ -80,15 +80,15 @@ func TestOperationAffinitySurvivesSavedOutcomesAndRecovery(t *testing.T) {
 			if !reflect.DeepEqual(restored.Tasks, before.Tasks) {
 				t.Fatal("recovery changed saved task assignments or outcomes")
 			}
-			if err := restored.DispatchTask(affinityDispatch(restored.Tasks[1], "builder-agent-bbbbbbbb")); !errors.Is(err, operations.ErrOperationConflict) {
-				t.Fatalf("restored operation accepted another agent: %v", err)
+			if err := restored.DispatchTask(fixtures.AffinityDispatch(restored.Tasks[1], "builder-agent-bbbbbbbb")); !errors.Is(err, operations.ErrOperationConflict) {
+				t.Fatalf("restored operation accepted another Agent: %v", err)
 			}
 			dispatchAffinityTask(t, &restored, 1, "builder-agent-aaaaaaaa")
 		})
 	}
 
 	t.Run("queued cancellation", func(t *testing.T) {
-		op := affinityOperation()
+		op := fixtures.AffinityOperation()
 		if err := op.Cancel(); err != nil {
 			t.Fatal(err)
 		}
@@ -103,13 +103,13 @@ func TestOperationAffinitySurvivesSavedOutcomesAndRecovery(t *testing.T) {
 func TestOperationAffinityRejectsInvalidHistoryBeforeRecoveryChanges(t *testing.T) {
 	for _, name := range []string{"conflicting assignments", "assigned queued task"} {
 		t.Run(name, func(t *testing.T) {
-			op := affinityOperation()
+			op := fixtures.AffinityOperation()
 			if name == "conflicting assignments" {
 				dispatchAffinityTask(t, &op, 0, "builder-agent-aaaaaaaa")
 				dispatchAffinityTask(t, &op, 1, "builder-agent-aaaaaaaa")
 				op.Tasks[1].AgentID = "builder-agent-bbbbbbbb"
 			} else {
-				dispatch := affinityDispatch(op.Tasks[0], "builder-agent-aaaaaaaa")
+				dispatch := fixtures.AffinityDispatch(op.Tasks[0], "builder-agent-aaaaaaaa")
 				op.Tasks[0].AgentID = dispatch.AgentID
 				op.Tasks[0].DeadlineAt = &dispatch.DeadlineAt
 			}
@@ -134,29 +134,9 @@ func TestOperationAffinityRejectsInvalidHistoryBeforeRecoveryChanges(t *testing.
 	}
 }
 
-func affinityOperation() operations.Operation {
-	op := operations.Operation{
-		ID: id.OperationID(), Status: operations.Planning,
-		Mission: missions.Mission{Rules: missions.RuleSet{
-			missions.SameAgent: {ForActions: []string{"checkout-template", "build-agent"}},
-		}},
-	}
-	for _, name := range []string{"checkout-template", "build-agent", "other-action", "another-action"} {
-		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: name}))
-	}
-	return op
-}
-
-func affinityDispatch(task operations.Task, agentID string) operations.TaskDispatch {
-	start := time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC)
-	return operations.TaskDispatch{
-		TaskID: task.ID, AgentID: agentID, StartedAt: start, DeadlineAt: start.Add(time.Minute),
-	}
-}
-
 func dispatchAffinityTask(t *testing.T, op *operations.Operation, index int, agentID string) {
 	t.Helper()
-	if err := op.DispatchTask(affinityDispatch(op.Tasks[index], agentID)); err != nil {
+	if err := op.DispatchTask(fixtures.AffinityDispatch(op.Tasks[index], agentID)); err != nil {
 		t.Fatal(err)
 	}
 }

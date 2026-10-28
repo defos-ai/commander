@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/playground/cli"
+	fakes "github.com/defos-ai/commander/apps/playground/tests/fakes"
+	fixtures "github.com/defos-ai/commander/apps/playground/tests/fixtures"
 )
 
 func TestAdminURLValidation(t *testing.T) {
@@ -78,7 +80,7 @@ func testAllInOneAdminAddress(t *testing.T) {
 		{name: "unavailable", runtime: "native", serve: true, missingAssets: true, publicURL: "https://admin.example.test", hint: "Admin UI unavailable."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			allInOneEnvironment(t)
+			fixtures.AllInOneEnvironment(t)
 			t.Setenv("API_RUNTIME", tc.runtime)
 			t.Setenv("API_USERNAME", "operator+local")
 			t.Setenv("COMMANDER_ADMIN_URL", tc.publicURL)
@@ -149,7 +151,7 @@ func lookupAdmin(t *testing.T, args []string, want string, commands ...string) s
 	input, keyboard := io.Pipe()
 	defer input.Close()
 	defer keyboard.Close()
-	var output terminalOutput
+	var output fakes.TerminalOutput
 	done := make(chan error, 1)
 	stopped := make(chan struct{})
 	go func() {

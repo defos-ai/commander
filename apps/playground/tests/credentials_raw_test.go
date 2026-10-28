@@ -2,11 +2,11 @@ package playground_test
 
 import (
 	"bytes"
-	"io"
 	"strings"
 	"testing"
 
 	"github.com/defos-ai/commander/apps/playground/cli"
+	fakes "github.com/defos-ai/commander/apps/playground/tests/fakes"
 )
 
 func TestCredentialCommandRaw(t *testing.T) {
@@ -23,7 +23,7 @@ func TestCredentialCommandRaw(t *testing.T) {
 			t.Setenv("API_PASSWORD", test.password)
 			t.Setenv("MCP_TOKEN", test.token)
 			var output, diagnostic bytes.Buffer
-			err := cli.Run(t.Context(), []string{"credentials", test.target, "--raw"}, credentialCommandInput{t}, &output, &diagnostic)
+			err := cli.Run(t.Context(), []string{"credentials", test.target, "--raw"}, fakes.NewCredentialCommandInput(t), &output, &diagnostic)
 			if diagnostic.Len() != 0 {
 				t.Fatal("credential command wrote startup output or diagnostics")
 			}
@@ -41,7 +41,7 @@ func TestCredentialCommandHelpWithoutLookup(t *testing.T) {
 	t.Setenv("COMMANDER_MCP_URL", "invalid-url")
 	for _, args := range [][]string{{"credentials", "--help"}, {"credentials", "api", "--help"}, {"credentials", "mcp", "--raw", "--help"}} {
 		var output, diagnostic bytes.Buffer
-		if err := cli.Run(t.Context(), args, credentialCommandInput{t}, &output, &diagnostic); err != nil {
+		if err := cli.Run(t.Context(), args, fakes.NewCredentialCommandInput(t), &output, &diagnostic); err != nil {
 			t.Fatalf("credential help failed: %v", err)
 		}
 		if !strings.Contains(output.String(), "Usage: commander credentials api|mcp [--raw]") || diagnostic.Len() != 0 {
@@ -61,7 +61,7 @@ func TestCredentialCommandRawRejectsArguments(t *testing.T) {
 	t.Setenv("MCP_TOKEN", "private-environment-token")
 	for _, args := range [][]string{{"credentials", "api", "--raw", "private-argument"}, {"credentials", "mcp", "--raw=private-argument"}, {"credentials", "--raw", "api"}} {
 		var output, diagnostic bytes.Buffer
-		err := cli.Run(t.Context(), args, credentialCommandInput{t}, &output, &diagnostic)
+		err := cli.Run(t.Context(), args, fakes.NewCredentialCommandInput(t), &output, &diagnostic)
 		if err == nil || output.Len() != 0 || diagnostic.Len() != 0 {
 			t.Fatal("invalid raw command must fail without printing credentials or starting Playground")
 		}
@@ -71,11 +71,4 @@ func TestCredentialCommandRawRejectsArguments(t *testing.T) {
 			}
 		}
 	}
-}
-
-type credentialCommandInput struct{ t *testing.T }
-
-func (r credentialCommandInput) Read([]byte) (int, error) {
-	r.t.Error("credential command attempted to read interactive input")
-	return 0, io.EOF
 }

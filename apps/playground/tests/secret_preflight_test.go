@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 )
@@ -102,7 +103,7 @@ func TestOperationNeedsRuntimeSecrets(t *testing.T) {
 func TestOperationRuntimeSecretDeadline(t *testing.T) {
 	expired := time.Now().Add(-time.Second)
 	for _, deadline := range []*time.Time{nil, &expired} {
-		operation := runtimeSecretFormOperation("GITHUB_TOKEN")
+		operation := fixtures.RuntimeSecretFormOperation("GITHUB_TOKEN")
 		operation.Tasks[0].DeadlineAt = deadline
 		if operation.NeedsSecrets() {
 			t.Fatal("runtime secret prompt survived a missing or expired observation deadline")
@@ -151,9 +152,9 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			u, publish, _ := adminOperationUI(t, ctx, test.adminURL, true)
-			defer u.model.Close()
-			u.model.Update(tea.WindowSizeMsg{Width: 300, Height: 80})
+			u, operations := fixtures.AdminOperationUI(t, ctx, test.adminURL, true)
+			defer u.Close()
+			u.Model.Update(tea.WindowSizeMsg{Width: 300, Height: 80})
 			op := bridge.Operation{
 				ID: "blocked-operation", Status: "waiting", UpdatedAt: time.Now(),
 				Progress: bridge.Progress{TaskCounts: map[string]int{}},
@@ -161,15 +162,15 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 					{UnavailableAgents: []bridge.AgentReadiness{{AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}}}},
 				}},
 			}
-			publish(op)
-			u.text("/watch " + op.ID)
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("automatic secret form", func(view string) bool { return strings.Contains(view, "Connect to API") })
-			u.key(tea.KeyMsg{Type: tea.KeyEsc})
-			u.wait("secret wait progress", func(view string) bool {
+			operations.Publish(op)
+			u.Text("/watch " + op.ID)
+			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.Wait("automatic secret form", func(view string) bool { return strings.Contains(view, "Connect to API") })
+			u.Key(tea.KeyMsg{Type: tea.KeyEsc})
+			u.Wait("secret wait progress", func(view string) bool {
 				return strings.Contains(view, "secrets needed") && strings.Contains(view, "Operation reviewed") && !strings.Contains(view, "Thinking")
 			})
-			view := u.model.View()
+			view := u.Model.View()
 			if strings.Contains(view, "requirements missing") {
 				t.Fatal("managed secret wait still shows only generic requirements")
 			}
@@ -183,11 +184,11 @@ func TestSecretWaitAdminHandoff(t *testing.T) {
 
 			op.Status, op.UpdatedAt, op.Preflight.Ready = "planning", op.UpdatedAt.Add(time.Second), true
 			op.Preflight.Version++
-			publish(op)
-			u.wait("ready after secret installation", func(view string) bool {
+			operations.Publish(op)
+			u.Wait("ready after secret installation", func(view string) bool {
 				return strings.Contains(view, "blocked- · planning") && !strings.Contains(view, "secrets needed")
 			})
-			if strings.Contains(u.model.View(), "Review on Admin UI") {
+			if strings.Contains(u.Model.View(), "Review on Admin UI") {
 				t.Fatal("secret wait review link remains after preflight is ready")
 			}
 		})

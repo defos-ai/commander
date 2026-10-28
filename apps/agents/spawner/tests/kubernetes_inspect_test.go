@@ -7,44 +7,8 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 )
-
-func kubernetesInspectionPods(t *testing.T) (kubernetes.Pod, kubernetes.Pod) {
-	t.Helper()
-	expected, err := kubernetes.BuildPod(kubernetesPodConfig(), kubernetesPodSpec())
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := json.Marshal(expected)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var actual kubernetes.Pod
-	if err := json.Unmarshal(raw, &actual); err != nil {
-		t.Fatal(err)
-	}
-	actual.Metadata.UID, actual.Metadata.ResourceVersion = "pod-uid", "1"
-	actual.Status = json.RawMessage(`{"phase":"Pending"}`)
-	return expected, actual
-}
-
-func changeKubernetesJSON(t *testing.T, raw *json.RawMessage, change func(map[string]any)) {
-	t.Helper()
-	var object map[string]any
-	if err := json.Unmarshal(*raw, &object); err != nil {
-		t.Fatal(err)
-	}
-	change(object)
-	updated, err := json.Marshal(object)
-	if err != nil {
-		t.Fatal(err)
-	}
-	*raw = updated
-}
-
-func inspectedContainer(spec map[string]any) map[string]any {
-	return spec["containers"].([]any)[0].(map[string]any)
-}
 
 func TestKubernetesInspectPodAcceptsGatedAndRunningInstances(t *testing.T) {
 	for _, test := range []struct {
@@ -54,16 +18,16 @@ func TestKubernetesInspectPodAcceptsGatedAndRunningInstances(t *testing.T) {
 	}{
 		{"gated Pending", func(*testing.T, *kubernetes.Pod) {}, kubernetes.PodState{Gated: true, Phase: "Pending"}},
 		{"additional admission gate", func(t *testing.T, actual *kubernetes.Pod) {
-			changeKubernetesJSON(t, &actual.Spec, func(spec map[string]any) {
+			fixtures.ChangePodJSON(t, &actual.Spec, func(spec map[string]any) {
 				spec["schedulingGates"] = append(spec["schedulingGates"].([]any), map[string]any{"name": "admission.example/wait"})
 			})
 		}, kubernetes.PodState{Gated: true, Phase: "Pending"}},
 		{"ungated image pull wait", func(t *testing.T, actual *kubernetes.Pod) {
-			changeKubernetesJSON(t, &actual.Spec, func(spec map[string]any) { delete(spec, "schedulingGates") })
+			fixtures.ChangePodJSON(t, &actual.Spec, func(spec map[string]any) { delete(spec, "schedulingGates") })
 			actual.Status = json.RawMessage(`{"phase":"Pending","containerStatuses":[{"name":"agent","restartCount":0,"state":{"waiting":{"reason":"ImagePullBackOff"}}}]}`)
 		}, kubernetes.PodState{Phase: "Pending"}},
 		{"running fingerprint", func(t *testing.T, actual *kubernetes.Pod) {
-			changeKubernetesJSON(t, &actual.Spec, func(spec map[string]any) {
+			fixtures.ChangePodJSON(t, &actual.Spec, func(spec map[string]any) {
 				delete(spec, "schedulingGates")
 				spec["nodeName"] = "worker.example"
 			})
@@ -71,7 +35,7 @@ func TestKubernetesInspectPodAcceptsGatedAndRunningInstances(t *testing.T) {
 		}, kubernetes.PodState{Phase: "Running", ContainerID: "containerd://first", StartedAt: "2026-10-27T10:00:00.123Z"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			expected, actual := kubernetesInspectionPods(t)
+			expected, actual := fixtures.InspectionPods(t)
 			test.change(t, &actual)
 			actual.Metadata.Labels["admission.example/label"] = "unrelated"
 			actual.Metadata.Annotations["admission.example/note"] = "unrelated"
@@ -91,8 +55,8 @@ func TestKubernetesInspectPodAcceptsGatedAndRunningInstances(t *testing.T) {
 }
 
 func TestKubernetesInspectPodAcceptsKnownDefaultsAndEquivalentResources(t *testing.T) {
-	expected, actual := kubernetesInspectionPods(t)
-	changeKubernetesJSON(t, &actual.Spec, func(spec map[string]any) {
+	expected, actual := fixtures.InspectionPods(t)
+	fixtures.ChangePodJSON(t, &actual.Spec, func(spec map[string]any) {
 		spec["dnsPolicy"], spec["schedulerName"] = "ClusterFirst", "default-scheduler"
 		spec["terminationGracePeriodSeconds"], spec["priority"], spec["preemptionPolicy"] = 30, 0, "PreemptLowerPriority"
 		spec["serviceAccount"] = "agent-worker"
@@ -101,7 +65,7 @@ func TestKubernetesInspectPodAcceptsKnownDefaultsAndEquivalentResources(t *testi
 			map[string]any{"key": "node.kubernetes.io/not-ready", "operator": "Exists", "effect": "NoExecute", "tolerationSeconds": 300},
 			map[string]any{"key": "node.kubernetes.io/unreachable", "operator": "Exists", "effect": "NoExecute", "tolerationSeconds": 300},
 		}
-		container := inspectedContainer(spec)
+		container := fixtures.InspectedContainer(spec)
 		container["terminationMessagePath"], container["terminationMessagePolicy"] = "/dev/termination-log", "File"
 		container["stdin"], container["stdinOnce"], container["tty"] = false, false, false
 		resources := container["resources"].(map[string]any)
@@ -115,13 +79,13 @@ func TestKubernetesInspectPodAcceptsKnownDefaultsAndEquivalentResources(t *testi
 	}
 	for _, test := range []struct{ before, after string }{{"5e-1", "500m"}, {"1.5Gi", "1536Mi"}, {"100000000n", "100m"}, {"1G", "1000M"}} {
 		t.Run(test.before+"="+test.after, func(t *testing.T) {
-			expected, actual := kubernetesInspectionPods(t)
+			expected, actual := fixtures.InspectionPods(t)
 			for _, edit := range []struct {
 				pod   *kubernetes.Pod
 				value string
 			}{{&expected, test.before}, {&actual, test.after}} {
-				changeKubernetesJSON(t, &edit.pod.Spec, func(spec map[string]any) {
-					inspectedContainer(spec)["resources"].(map[string]any)["requests"].(map[string]any)["cpu"] = edit.value
+				fixtures.ChangePodJSON(t, &edit.pod.Spec, func(spec map[string]any) {
+					fixtures.InspectedContainer(spec)["resources"].(map[string]any)["requests"].(map[string]any)["cpu"] = edit.value
 				})
 			}
 			if _, err := kubernetes.InspectPod(expected, actual); err != nil {
@@ -156,7 +120,7 @@ func TestKubernetesInspectPodRejectsIdentityChanges(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			expected, actual := kubernetesInspectionPods(t)
+			expected, actual := fixtures.InspectionPods(t)
 			test.change(&actual)
 			if _, err := kubernetes.InspectPod(expected, actual); err == nil || strings.Contains(err.Error(), "private-value-sentinel") {
 				t.Fatal("identity mutation was accepted or disclosed an observed value")
@@ -196,38 +160,42 @@ func TestKubernetesInspectPodRejectsAdmittedSpecMutations(t *testing.T) {
 		{"seccomp", func(s map[string]any) {
 			s["securityContext"].(map[string]any)["seccompProfile"] = map[string]any{"type": "Unconfined"}
 		}},
-		{"privileged", func(s map[string]any) { inspectedContainer(s)["securityContext"].(map[string]any)["privileged"] = true }},
+		{"privileged", func(s map[string]any) {
+			fixtures.InspectedContainer(s)["securityContext"].(map[string]any)["privileged"] = true
+		}},
 		{"escalation", func(s map[string]any) {
-			inspectedContainer(s)["securityContext"].(map[string]any)["allowPrivilegeEscalation"] = true
+			fixtures.InspectedContainer(s)["securityContext"].(map[string]any)["allowPrivilegeEscalation"] = true
 		}},
 		{"added capability", func(s map[string]any) {
-			inspectedContainer(s)["securityContext"].(map[string]any)["capabilities"].(map[string]any)["add"] = []any{"SYS_ADMIN"}
+			fixtures.InspectedContainer(s)["securityContext"].(map[string]any)["capabilities"].(map[string]any)["add"] = []any{"SYS_ADMIN"}
 		}},
-		{"container user override", func(s map[string]any) { inspectedContainer(s)["securityContext"].(map[string]any)["runAsUser"] = 0 }},
-		{"image", func(s map[string]any) { inspectedContainer(s)["image"] = "private-value-sentinel" }},
-		{"command", func(s map[string]any) { inspectedContainer(s)["command"] = []any{"private-value-sentinel"} }},
-		{"args", func(s map[string]any) { inspectedContainer(s)["args"] = []any{"private-value-sentinel"} }},
+		{"container user override", func(s map[string]any) {
+			fixtures.InspectedContainer(s)["securityContext"].(map[string]any)["runAsUser"] = 0
+		}},
+		{"image", func(s map[string]any) { fixtures.InspectedContainer(s)["image"] = "private-value-sentinel" }},
+		{"command", func(s map[string]any) { fixtures.InspectedContainer(s)["command"] = []any{"private-value-sentinel"} }},
+		{"args", func(s map[string]any) { fixtures.InspectedContainer(s)["args"] = []any{"private-value-sentinel"} }},
 		{"envFrom", func(s map[string]any) {
-			inspectedContainer(s)["envFrom"] = []any{map[string]any{"secretRef": map[string]any{"name": "all-secrets"}}}
+			fixtures.InspectedContainer(s)["envFrom"] = []any{map[string]any{"secretRef": map[string]any{"name": "all-secrets"}}}
 		}},
 		{"extra environment", func(s map[string]any) {
-			c := inspectedContainer(s)
+			c := fixtures.InspectedContainer(s)
 			c["env"] = append(c["env"].([]any), map[string]any{"name": "GITHUB_TOKEN", "value": "private-value-sentinel"})
 		}},
 		{"Secret reference", func(s map[string]any) {
-			inspectedContainer(s)["env"].([]any)[1].(map[string]any)["valueFrom"] = map[string]any{"secretKeyRef": map[string]any{"name": "other", "key": "BUS_URL"}}
+			fixtures.InspectedContainer(s)["env"].([]any)[1].(map[string]any)["valueFrom"] = map[string]any{"secretKeyRef": map[string]any{"name": "other", "key": "BUS_URL"}}
 		}},
 		{"resource change", func(s map[string]any) {
-			inspectedContainer(s)["resources"].(map[string]any)["requests"].(map[string]any)["cpu"] = "2"
+			fixtures.InspectedContainer(s)["resources"].(map[string]any)["requests"].(map[string]any)["cpu"] = "2"
 		}},
 		{"invalid resource", func(s map[string]any) {
-			inspectedContainer(s)["resources"].(map[string]any)["limits"].(map[string]any)["memory"] = "private-value-sentinel"
+			fixtures.InspectedContainer(s)["resources"].(map[string]any)["limits"].(map[string]any)["memory"] = "private-value-sentinel"
 		}},
 		{"extra resource", func(s map[string]any) {
-			inspectedContainer(s)["resources"].(map[string]any)["limits"].(map[string]any)["nvidia.com/gpu"] = "1"
+			fixtures.InspectedContainer(s)["resources"].(map[string]any)["limits"].(map[string]any)["nvidia.com/gpu"] = "1"
 		}},
 		{"unknown spec field", func(s map[string]any) { s["futureField"] = "private-value-sentinel" }},
-		{"unknown container field", func(s map[string]any) { inspectedContainer(s)["futureField"] = "private-value-sentinel" }},
+		{"unknown container field", func(s map[string]any) { fixtures.InspectedContainer(s)["futureField"] = "private-value-sentinel" }},
 		{"unknown security field", func(s map[string]any) { s["securityContext"].(map[string]any)["futureField"] = true }},
 		{"duplicate owned gate", func(s map[string]any) {
 			s["schedulingGates"] = append(s["schedulingGates"].([]any), map[string]any{"name": kubernetes.SchedulingGate})
@@ -236,8 +204,8 @@ func TestKubernetesInspectPodRejectsAdmittedSpecMutations(t *testing.T) {
 		{"broad toleration", func(s map[string]any) { s["tolerations"] = []any{map[string]any{"operator": "Exists"}} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			expected, actual := kubernetesInspectionPods(t)
-			changeKubernetesJSON(t, &actual.Spec, test.change)
+			expected, actual := fixtures.InspectionPods(t)
+			fixtures.ChangePodJSON(t, &actual.Spec, test.change)
 			if _, err := kubernetes.InspectPod(expected, actual); err == nil || strings.Contains(err.Error(), "private-value-sentinel") {
 				t.Fatal("admitted mutation was accepted or disclosed an observed value")
 			}
@@ -272,9 +240,9 @@ func TestKubernetesInspectPodRejectsPriorExecutionAndInvalidStatus(t *testing.T)
 		{"unexpected ephemeral execution", `{"phase":"Pending","ephemeralContainerStatuses":[{"name":"debug"}]}`, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			expected, actual := kubernetesInspectionPods(t)
+			expected, actual := fixtures.InspectionPods(t)
 			if test.ungated {
-				changeKubernetesJSON(t, &actual.Spec, func(spec map[string]any) { delete(spec, "schedulingGates") })
+				fixtures.ChangePodJSON(t, &actual.Spec, func(spec map[string]any) { delete(spec, "schedulingGates") })
 			}
 			actual.Status = json.RawMessage(test.status)
 			state, err := kubernetes.InspectPod(expected, actual)
@@ -286,7 +254,7 @@ func TestKubernetesInspectPodRejectsPriorExecutionAndInvalidStatus(t *testing.T)
 }
 
 func TestKubernetesInspectPodRejectsDuplicateSpecKeys(t *testing.T) {
-	expected, actual := kubernetesInspectionPods(t)
+	expected, actual := fixtures.InspectionPods(t)
 	actual.Spec = json.RawMessage(`{"hostNetwork":true,` + string(actual.Spec[1:len(actual.Spec)-1]) + `,"hostNetwork":false}`)
 	if _, err := kubernetes.InspectPod(expected, actual); err == nil {
 		t.Fatal("inspection accepted duplicate security-related JSON fields")

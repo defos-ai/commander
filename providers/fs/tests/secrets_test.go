@@ -15,23 +15,20 @@ import (
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
-	secretfs "github.com/defos-ai/commander/providers/fs/secrets"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
-
-const fsSecretEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-const fsSecretPlaintext = "private-test-token-never-store-as-plaintext"
 
 func TestSecretFsStoreEncryptedRoundTripAndIsolation(t *testing.T) {
 	root := t.TempDir()
-	store := openSecretFsStore(t, root)
-	value := fsSecretFixture(t, "API_TOKEN")
+	store := fixtures.OpenSecretStore(t, root)
+	value := fixtures.Secret(t, "API_TOKEN")
 	expected := value.Clone()
 	if err := store.Create(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
 	value.Value.Nonce[0] ^= 1
 	value.Value.Ciphertext[0] ^= 1
-	reopened := openSecretFsStore(t, root)
+	reopened := fixtures.OpenSecretStore(t, root)
 	assertFsSecret(t, reopened, expected)
 	got, err := reopened.Get(t.Context(), expected.Metadata.Key)
 	if err != nil {
@@ -43,7 +40,7 @@ func TestSecretFsStoreEncryptedRoundTripAndIsolation(t *testing.T) {
 
 	// Check all persisted files, including lock/staging files, without printing
 	// their contents if a future implementation accidentally saves plaintext.
-	keyBytes, _ := hex.DecodeString(fsSecretEncryptionKey)
+	keyBytes, _ := hex.DecodeString(fixtures.SecretEncryptionKey)
 	files := 0
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
@@ -54,7 +51,7 @@ func TestSecretFsStoreEncryptedRoundTripAndIsolation(t *testing.T) {
 			return err
 		}
 		files++
-		for _, sensitive := range [][]byte{[]byte(fsSecretPlaintext), []byte(fsSecretEncryptionKey), keyBytes} {
+		for _, sensitive := range [][]byte{[]byte(fixtures.SecretPlaintext), []byte(fixtures.SecretEncryptionKey), keyBytes} {
 			if bytes.Contains(data, sensitive) {
 				return errors.New("persisted data exposed plaintext or encryption key material")
 			}
@@ -67,13 +64,13 @@ func TestSecretFsStoreEncryptedRoundTripAndIsolation(t *testing.T) {
 }
 
 func TestSecretFsStoreInventoryScopesAndExpiration(t *testing.T) {
-	store := openSecretFsStore(t, t.TempDir())
-	first, last := fsSecretFixture(t, "A_TOKEN"), fsSecretFixture(t, "Z_TOKEN")
+	store := fixtures.OpenSecretStore(t, t.TempDir())
+	first, last := fixtures.Secret(t, "A_TOKEN"), fixtures.Secret(t, "Z_TOKEN")
 	first.Metadata.ExpiresAt = first.Metadata.UpdatedAt.Add(time.Hour)
-	first = encryptFsSecret(t, first.Metadata)
-	agent := fsSecretFixture(t, "A_TOKEN")
+	first = fixtures.EncryptSecret(t, first.Metadata)
+	agent := fixtures.Secret(t, "A_TOKEN")
 	agent.Metadata.Key.Scope.AgentType = "other-agent"
-	agent = encryptFsSecret(t, agent.Metadata)
+	agent = fixtures.EncryptSecret(t, agent.Metadata)
 	for _, value := range []secrets.Secret{last, first, agent} {
 		if err := store.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
@@ -108,8 +105,8 @@ func TestSecretFsStoreInventoryScopesAndExpiration(t *testing.T) {
 }
 
 func TestSecretFsStoreCreateIdentityAndReplay(t *testing.T) {
-	store := openSecretFsStore(t, t.TempDir())
-	value := fsSecretFixture(t, "API_TOKEN")
+	store := fixtures.OpenSecretStore(t, t.TempDir())
+	value := fixtures.Secret(t, "API_TOKEN")
 	if err := store.Create(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
@@ -136,15 +133,15 @@ func TestSecretFsStoreCreateIdentityAndReplay(t *testing.T) {
 
 func TestSecretFsStoreReplaceCASAndReplay(t *testing.T) {
 	root := t.TempDir()
-	store, other := openSecretFsStore(t, root), openSecretFsStore(t, root)
-	initial := fsSecretFixture(t, "API_TOKEN")
+	store, other := fixtures.OpenSecretStore(t, root), fixtures.OpenSecretStore(t, root)
+	initial := fixtures.Secret(t, "API_TOKEN")
 	if err := store.Create(t.Context(), initial); err != nil {
 		t.Fatal(err)
 	}
 	metadata := initial.Metadata
 	metadata.Version++
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Nanosecond)
-	replacement := encryptFsSecret(t, metadata)
+	replacement := fixtures.EncryptSecret(t, metadata)
 	if err := other.Replace(t.Context(), replacement, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -162,30 +159,30 @@ func TestSecretFsStoreReplaceCASAndReplay(t *testing.T) {
 	}
 	metadata.Version++
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Nanosecond)
-	latest := encryptFsSecret(t, metadata)
+	latest := fixtures.EncryptSecret(t, metadata)
 	if err := store.Replace(t.Context(), latest, 2); err != nil {
 		t.Fatal(err)
 	}
 	if err := other.Replace(t.Context(), replacement, 1); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("stale replay overwrote a newer version: %v", err)
 	}
-	assertFsSecret(t, openSecretFsStore(t, root), latest)
+	assertFsSecret(t, fixtures.OpenSecretStore(t, root), latest)
 }
 
 func TestSecretFsStoreReplacePreservesIdentityAndVersion(t *testing.T) {
-	store := openSecretFsStore(t, t.TempDir())
-	initial := fsSecretFixture(t, "API_TOKEN")
+	store := fixtures.OpenSecretStore(t, t.TempDir())
+	initial := fixtures.Secret(t, "API_TOKEN")
 	if err := store.Create(t.Context(), initial); err != nil {
 		t.Fatal(err)
 	}
 	metadata := initial.Metadata
 	metadata.Version = 2
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Hour)
-	saved := encryptFsSecret(t, metadata)
+	saved := fixtures.EncryptSecret(t, metadata)
 	if err := store.Replace(t.Context(), saved, 1); err != nil {
 		t.Fatal(err)
 	}
-	other := fsSecretFixture(t, "OTHER_TOKEN")
+	other := fixtures.Secret(t, "OTHER_TOKEN")
 	if err := store.Create(t.Context(), other); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +201,7 @@ func TestSecretFsStoreReplacePreservesIdentityAndVersion(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			changed := metadata
 			test.edit(&changed)
-			if err := store.Replace(t.Context(), encryptFsSecret(t, changed), 2); !errors.Is(err, secrets.ErrSecretConflict) {
+			if err := store.Replace(t.Context(), fixtures.EncryptSecret(t, changed), 2); !errors.Is(err, secrets.ErrSecretConflict) {
 				t.Fatalf("invalid replacement: %v", err)
 			}
 		})
@@ -221,7 +218,7 @@ func TestSecretFsStoreReplacePreservesIdentityAndVersion(t *testing.T) {
 	}
 	missing := metadata
 	missing.Key.Name = "MISSING_TOKEN"
-	if err := store.Replace(t.Context(), encryptFsSecret(t, missing), 2); !errors.Is(err, secrets.ErrUnknownSecret) {
+	if err := store.Replace(t.Context(), fixtures.EncryptSecret(t, missing), 2); !errors.Is(err, secrets.ErrUnknownSecret) {
 		t.Fatalf("replacement created a new key: %v", err)
 	}
 	assertFsSecret(t, store, saved)
@@ -230,9 +227,9 @@ func TestSecretFsStoreReplacePreservesIdentityAndVersion(t *testing.T) {
 
 func TestSecretFsStoreDeletionRetiresIdentity(t *testing.T) {
 	root := t.TempDir()
-	store := openSecretFsStore(t, root)
-	first := fsSecretFixture(t, "API_TOKEN")
-	other := fsSecretFixture(t, "OTHER_TOKEN")
+	store := fixtures.OpenSecretStore(t, root)
+	first := fixtures.Secret(t, "API_TOKEN")
+	other := fixtures.Secret(t, "OTHER_TOKEN")
 	for _, value := range []secrets.Secret{first, other} {
 		if err := store.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
@@ -254,7 +251,7 @@ func TestSecretFsStoreDeletionRetiresIdentity(t *testing.T) {
 	if err := store.Delete(t.Context(), first.Metadata.Key, first.Metadata.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	store = openSecretFsStore(t, root)
+	store = fixtures.OpenSecretStore(t, root)
 	if err := store.Delete(t.Context(), first.Metadata.Key, first.Metadata.ID, 1); err != nil {
 		t.Fatalf("repeated deletion: %v", err)
 	}
@@ -266,10 +263,10 @@ func TestSecretFsStoreDeletionRetiresIdentity(t *testing.T) {
 	}
 	relocated := first.Metadata
 	relocated.Key.Name = "RELOCATED"
-	if err := store.Create(t.Context(), encryptFsSecret(t, relocated)); !errors.Is(err, secrets.ErrSecretConflict) {
+	if err := store.Create(t.Context(), fixtures.EncryptSecret(t, relocated)); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("retired ID reused under a different key: %v", err)
 	}
-	fresh := fsSecretFixture(t, first.Metadata.Key.Name)
+	fresh := fixtures.Secret(t, first.Metadata.Key.Name)
 	if err := store.Create(t.Context(), fresh); err != nil {
 		t.Fatalf("fresh identity could not recreate key: %v", err)
 	}
@@ -279,26 +276,26 @@ func TestSecretFsStoreDeletionRetiresIdentity(t *testing.T) {
 	assertFsSecret(t, store, fresh)
 	assertFsSecret(t, store, other)
 
-	delayed := fsSecretFixture(t, "DELAYED_TOKEN")
+	delayed := fixtures.Secret(t, "DELAYED_TOKEN")
 	if err := store.Delete(t.Context(), delayed.Metadata.Key, delayed.Metadata.ID, 1); err != nil {
 		t.Fatalf("delete before delayed create: %v", err)
 	}
-	if err := openSecretFsStore(t, root).Create(t.Context(), delayed); !errors.Is(err, secrets.ErrSecretConflict) {
+	if err := fixtures.OpenSecretStore(t, root).Create(t.Context(), delayed); !errors.Is(err, secrets.ErrSecretConflict) {
 		t.Fatalf("delayed first create restored a retired identity: %v", err)
 	}
 }
 
 func TestSecretFsStoreCancelledAndNilContexts(t *testing.T) {
-	store := openSecretFsStore(t, t.TempDir())
-	value := fsSecretFixture(t, "API_TOKEN")
+	store := fixtures.OpenSecretStore(t, t.TempDir())
+	value := fixtures.Secret(t, "API_TOKEN")
 	if err := store.Create(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
 	metadata := value.Metadata
 	metadata.Version++
 	metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Second)
-	replacement := encryptFsSecret(t, metadata)
-	fresh := fsSecretFixture(t, "NEW_TOKEN")
+	replacement := fixtures.EncryptSecret(t, metadata)
+	fresh := fixtures.Secret(t, "NEW_TOKEN")
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, test := range []struct {
@@ -335,9 +332,9 @@ func TestSecretFsStoreConcurrentInstances(t *testing.T) {
 	const workers = 12
 	stores := make([]secrets.SecretStore, workers)
 	for i := range workers {
-		stores[i] = openSecretFsStore(t, root)
+		stores[i] = fixtures.OpenSecretStore(t, root)
 	}
-	base := fsSecretFixture(t, "API_TOKEN")
+	base := fixtures.Secret(t, "API_TOKEN")
 	compete := func(candidates []secrets.Secret, write func(secrets.SecretStore, secrets.Secret) error) secrets.Secret {
 		t.Helper()
 		type result struct {
@@ -368,7 +365,7 @@ func TestSecretFsStoreConcurrentInstances(t *testing.T) {
 	}
 	creates := make([]secrets.Secret, workers)
 	for i := range workers {
-		creates[i] = fsSecretFixture(t, base.Metadata.Key.Name)
+		creates[i] = fixtures.Secret(t, base.Metadata.Key.Name)
 	}
 	winner := compete(creates, func(store secrets.SecretStore, value secrets.Secret) error {
 		return store.Create(t.Context(), value)
@@ -379,43 +376,12 @@ func TestSecretFsStoreConcurrentInstances(t *testing.T) {
 		metadata := winner.Metadata
 		metadata.Version++
 		metadata.UpdatedAt = metadata.UpdatedAt.Add(time.Duration(i+1) * time.Nanosecond)
-		replacements[i] = encryptFsSecret(t, metadata)
+		replacements[i] = fixtures.EncryptSecret(t, metadata)
 	}
 	latest := compete(replacements, func(store secrets.SecretStore, value secrets.Secret) error {
 		return store.Replace(t.Context(), value, 1)
 	})
-	assertFsSecret(t, openSecretFsStore(t, root), latest)
-}
-
-func openSecretFsStore(t *testing.T, root string) *secretfs.SecretFsStore {
-	t.Helper()
-	store, err := secretfs.NewSecretFsStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store
-}
-
-func fsSecretFixture(t *testing.T, name string) secrets.Secret {
-	t.Helper()
-	stamp := time.Date(2026, 10, 16, 12, 0, 0, 123456789, time.UTC)
-	return encryptFsSecret(t, secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: name},
-		Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
-	})
-}
-
-func encryptFsSecret(t *testing.T, metadata secrets.Metadata) secrets.Secret {
-	t.Helper()
-	cipher, err := crypto.NewSecretCipher(fsSecretEncryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	value, err := cipher.Encrypt(metadata, []byte(fsSecretPlaintext))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return value
+	assertFsSecret(t, fixtures.OpenSecretStore(t, root), latest)
 }
 
 func assertFsSecret(t *testing.T, store secrets.SecretStore, expected secrets.Secret) {
@@ -433,12 +399,12 @@ func assertFsSecret(t *testing.T, store secrets.SecretStore, expected secrets.Se
 	if canonical(got.Metadata) != canonical(expected.Metadata) || !reflect.DeepEqual(got.Value, expected.Value) {
 		t.Fatal("saved secret differs from expected record")
 	}
-	cipher, err := crypto.NewSecretCipher(fsSecretEncryptionKey)
+	cipher, err := crypto.NewSecretCipher(fixtures.SecretEncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plaintext, err := cipher.Decrypt(got)
-	if err != nil || !bytes.Equal(plaintext, []byte(fsSecretPlaintext)) {
+	if err != nil || !bytes.Equal(plaintext, []byte(fixtures.SecretPlaintext)) {
 		t.Fatalf("saved ciphertext could not be authenticated and recovered: %v", err)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,6 +17,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
+	"github.com/defos-ai/commander/apps/playground/tests/fakes"
+	"github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -119,10 +120,10 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 				t.Error("local Admin command reached model history")
 			}
 		}
-		writeModelDelta(w, map[string]any{"content": "Normal chat works"}, "stop")
+		fakes.WriteModelDelta(w, map[string]any{"content": "Normal chat works"}, "stop")
 	}))
 	defer provider.Close()
-	u := newUIWithConfig(t, ctx, ui.Config{
+	u := fixtures.NewUIWithConfig(t, ctx, ui.Config{
 		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: host.BearerCredentials{Token: token}},
 		Keys: map[string]string{"other": "test-only"}, NoColor: true, AdminURL: adminURL,
 		LocalAgentCount: 4,
@@ -143,69 +144,69 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 			}
 		},
 	})
-	defer u.model.Close()
-	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 80})
-	if strings.Contains(u.model.View(), "Admin:") || strings.Contains(u.model.View(), adminURL) {
+	defer u.Close()
+	u.Model.Update(tea.WindowSizeMsg{Width: 180, Height: 80})
+	if strings.Contains(u.Model.View(), "Admin:") || strings.Contains(u.Model.View(), adminURL) {
 		t.Fatal("Admin link added noise to startup")
 	}
 	for _, command := range []string{"/admin unexpected", "/admin", "/admin", "/help"} {
-		u.text(command)
-		u.key(tea.KeyMsg{Type: tea.KeyEnter})
+		u.Text(command)
+		u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	}
-	u.wait("help including Admin", func(view string) bool {
+	u.Wait("help including Admin", func(view string) bool {
 		return strings.Contains(view, "/admin [command] — Admin UI and commands")
 	})
-	view := u.model.View()
+	view := u.Model.View()
 	if !strings.Contains(view, "Usage: /admin") || strings.Count(view, "Admin: "+adminURL) != 2 {
 		t.Fatal("Admin command is not repeatable or did not preserve its link")
 	}
 	if modelCalls.Load() != 0 || toolCalls.Load() != 0 {
 		t.Fatal("Admin command or help called the model or MCP tools")
 	}
-	u.text("/admin help")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("local Admin CLI help", func(view string) bool { return strings.Contains(view, "Usage: commander-admin") })
-	u.text("/admin missions list --json")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("local mission JSON", func(view string) bool { return strings.Contains(view, missionObjective) })
+	u.Text("/admin help")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("local Admin CLI help", func(view string) bool { return strings.Contains(view, "Usage: commander-admin") })
+	u.Text("/admin missions list --json")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("local mission JSON", func(view string) bool { return strings.Contains(view, missionObjective) })
 	if apiCalls.Load() != 1 {
 		t.Fatal("Admin mission command did not make exactly one API request")
 	}
-	u.text("/admin sessions list")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("local session discovery", func(view string) bool { return strings.Contains(view, "No sessions.") })
+	u.Text("/admin sessions list")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("local session discovery", func(view string) bool { return strings.Contains(view, "No sessions.") })
 	if apiCalls.Load() != 2 || modelCalls.Load() != 0 || toolCalls.Load() != 0 {
 		t.Fatal("Admin session command did not use only the configured API")
 	}
-	u.text("/admin serve --listen-address=127.0.0.1:0")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Text("/admin serve --listen-address=127.0.0.1:0")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	select {
 	case <-started:
 	case <-ctx.Done():
 		t.Fatal("Admin serve callback did not start")
 	}
-	u.text("/admin serve --listen-address=127.0.0.1:0")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), "An Admin command is running") || serveCalls.Load() != 1 {
+	u.Text("/admin serve --listen-address=127.0.0.1:0")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.Model.View(), "An Admin command is running") || serveCalls.Load() != 1 {
 		t.Fatal("concurrent Admin command was not rejected")
 	}
 	close(release)
 	wantURL := "http://localhost:43275/#/connect?api=" + url.QueryEscape(api.URL) + "&username=commander"
-	u.wait("ready Admin link", func(view string) bool { return strings.Contains(view, "Admin: "+wantURL) })
-	u.text("/status")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), wantURL) || serveCalls.Load() != 1 || modelCalls.Load() != 0 || toolCalls.Load() != 0 {
+	u.Wait("ready Admin link", func(view string) bool { return strings.Contains(view, "Admin: "+wantURL) })
+	u.Text("/status")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.Model.View(), wantURL) || serveCalls.Load() != 1 || modelCalls.Load() != 0 || toolCalls.Load() != 0 {
 		t.Fatal("Admin result did not update its link locally")
 	}
-	view = u.model.View()
+	view = u.Model.View()
 	for _, private := range []string{password, token} {
 		if strings.Contains(view, private) {
 			t.Fatal("Admin command disclosed credentials")
 		}
 	}
-	u.text("Hello")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("chat after Admin command", func(view string) bool {
+	u.Text("Hello")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("chat after Admin command", func(view string) bool {
 		return strings.Contains(view, "Normal chat works") && !strings.Contains(view, "Thinking")
 	})
 	if modelCalls.Load() != 1 || toolCalls.Load() != 0 {
@@ -217,25 +218,25 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	const adminURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&username=commander"
-	u, publish, reads := adminOperationUI(t, ctx, adminURL, true)
-	defer u.model.Close()
-	u.model.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
-	command := func(text string) { u.text(text); u.key(tea.KeyMsg{Type: tea.KeyEnter}) }
+	u, operations := fixtures.AdminOperationUI(t, ctx, adminURL, true)
+	defer u.Close()
+	u.Model.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	command := func(text string) { u.Text(text); u.Key(tea.KeyMsg{Type: tea.KeyEnter}) }
 	countLinks := func(want int) {
 		t.Helper()
-		if got := strings.Count(u.model.View(), "Review on Admin UI ("); got != want {
+		if got := strings.Count(u.Model.View(), "Review on Admin UI ("); got != want {
 			t.Fatalf("Admin review link appeared %d times, want %d", got, want)
 		}
-		if strings.Contains(u.model.View(), "View results in Admin:") {
+		if strings.Contains(u.Model.View(), "View results in Admin:") {
 			t.Fatal("completion still adds a separate chat notice")
 		}
 	}
 	command("/admin")
 	countLinks(0)
 	now := time.Now()
-	publish(bridge.Operation{ID: "failed", Status: "failed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+	operations.Publish(bridge.Operation{ID: "failed", Status: "failed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 	command("/watch failed")
-	u.wait("failed operation reviewed", func(view string) bool {
+	u.Wait("failed operation reviewed", func(view string) bool {
 		return strings.Contains(view, "failed · failed") && strings.Count(view, "Operation reviewed") == 1 && !strings.Contains(view, "Thinking")
 	})
 	countLinks(0)
@@ -244,81 +245,81 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 		Tasks:    []bridge.Task{{ID: "known", Status: "succeeded"}, {ID: "unknown", Status: "interrupted"}},
 		Progress: bridge.Progress{TaskCounts: map[string]int{"succeeded": 1, "interrupted": 1}, TotalTasks: 2, FinishedTasks: 1},
 	}
-	publish(cancelled)
+	operations.Publish(cancelled)
 	command("/watch cancelled")
-	targetReads := reads.Load() + 3
-	u.wait("cancelled work awaiting its outcome", func(view string) bool {
-		return strings.Contains(view, "○ cancelle · cancelled · 1/2 tasks finished · 1 task outcome unknown") && reads.Load() >= targetReads
+	targetReads := operations.ReadCount() + 3
+	u.Wait("cancelled work awaiting its outcome", func(view string) bool {
+		return strings.Contains(view, "○ cancelle · cancelled · 1/2 tasks finished · 1 task outcome unknown") && operations.ReadCount() >= targetReads
 	})
-	if strings.Contains(u.model.View(), "✓ cancelle") || strings.Count(u.model.View(), "Operation reviewed") != 1 {
+	if strings.Contains(u.Model.View(), "✓ cancelle") || strings.Count(u.Model.View(), "Operation reviewed") != 1 {
 		t.Fatal("interrupted cancellation was marked settled or reviewed before its outcome arrived")
 	}
 	countLinks(0)
 	cancelled.Tasks[1].Status = "failed"
 	cancelled.UpdatedAt = now.Add(time.Second)
 	cancelled.Progress = bridge.Progress{TaskCounts: map[string]int{"succeeded": 1, "failed": 1}, TotalTasks: 2, FinishedTasks: 2, Settled: true}
-	publish(cancelled)
-	u.wait("late cancellation outcome reviewed once", func(view string) bool {
+	operations.Publish(cancelled)
+	u.Wait("late cancellation outcome reviewed once", func(view string) bool {
 		return strings.Contains(view, "✓ cancelle · cancelled · 2/2 tasks finished") && strings.Count(view, "Operation reviewed") == 2 && !strings.Contains(view, "Thinking")
 	})
 	countLinks(0)
 	op := bridge.Operation{ID: "target", Status: "running", UpdatedAt: now, Tasks: []bridge.Task{{ID: "task", Status: "succeeded"}}, Progress: bridge.Progress{TaskCounts: map[string]int{"succeeded": 1}, TotalTasks: 1, FinishedTasks: 1}}
-	publish(op)
+	operations.Publish(op)
 	command("/watch target")
-	u.wait("completed task in running operation", func(view string) bool { return strings.Contains(view, "target · running · 1/1 tasks finished") })
+	u.Wait("completed task in running operation", func(view string) bool { return strings.Contains(view, "target · running · 1/1 tasks finished") })
 	countLinks(0)
 
 	op.Status, op.Tasks[0].Status = "completed", "running"
 	op.Progress = bridge.Progress{TaskCounts: map[string]int{"running": 1}, TotalTasks: 1}
 	op.UpdatedAt = now.Add(-time.Second)
-	publish(op)
-	targetReads = reads.Load() + 2
-	u.wait("stale snapshot read", func(string) bool { return reads.Load() >= targetReads })
+	operations.Publish(op)
+	targetReads = operations.ReadCount() + 2
+	u.Wait("stale snapshot read", func(string) bool { return operations.ReadCount() >= targetReads })
 	op.Status, op.UpdatedAt = "waiting", now.Add(time.Second)
-	publish(op)
-	u.wait("fresh snapshot after stale completion", func(view string) bool { return strings.Contains(view, "target · waiting") })
+	operations.Publish(op)
+	u.Wait("fresh snapshot after stale completion", func(view string) bool { return strings.Contains(view, "target · waiting") })
 	countLinks(0)
 
 	op.Status, op.UpdatedAt = "completed", now.Add(2*time.Second)
 	op.Tasks[0].Status = "interrupted"
 	op.Progress = bridge.Progress{TaskCounts: map[string]int{"interrupted": 1}, TotalTasks: 1}
-	publish(op)
-	u.wait("completion with an unknown outcome", func(view string) bool {
+	operations.Publish(op)
+	u.Wait("completion with an unknown outcome", func(view string) bool {
 		return strings.Contains(view, "○ target · completed · 0/1 tasks finished · 1 task outcome unknown")
 	})
 	countLinks(0)
 	op.UpdatedAt = now.Add(3 * time.Second)
-	publish(op)
-	targetReads = reads.Load() + 2
-	u.wait("repeated completion snapshots", func(string) bool { return reads.Load() >= targetReads })
-	if !strings.Contains(u.model.View(), "○ target · completed · 0/1 tasks finished · 1 task outcome unknown") || strings.Count(u.model.View(), "Operation reviewed") != 2 {
+	operations.Publish(op)
+	targetReads = operations.ReadCount() + 2
+	u.Wait("repeated completion snapshots", func(string) bool { return operations.ReadCount() >= targetReads })
+	if !strings.Contains(u.Model.View(), "○ target · completed · 0/1 tasks finished · 1 task outcome unknown") || strings.Count(u.Model.View(), "Operation reviewed") != 2 {
 		t.Fatal("completed operation animated or triggered another model review while its outcome remained unknown")
 	}
 	op.Tasks[0].Status, op.UpdatedAt = "succeeded", now.Add(4*time.Second)
 	op.Progress = bridge.Progress{TaskCounts: map[string]int{"succeeded": 1}, TotalTasks: 1, FinishedTasks: 1, Settled: true}
-	publish(op)
-	u.wait("settled completion", func(view string) bool {
+	operations.Publish(op)
+	u.Wait("settled completion", func(view string) bool {
 		return strings.Contains(view, "target · completed · 1/1 tasks finished") && strings.Count(view, "Operation reviewed") == 3 && !strings.Contains(view, "Thinking")
 	})
 	countLinks(1)
-	if strings.Contains(u.model.View(), "task outcome unknown") || strings.Contains(u.model.View(), "task outcomes unknown") {
+	if strings.Contains(u.Model.View(), "task outcome unknown") || strings.Contains(u.Model.View(), "task outcomes unknown") {
 		t.Fatal("known late outcomes still appear as unknown")
 	}
 	const targetURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&operation=target&username=commander"
-	if !strings.Contains(u.model.View(), "target · completed · 1/1 tasks finished · Review on Admin UI ("+targetURL+")") {
+	if !strings.Contains(u.Model.View(), "target · completed · 1/1 tasks finished · Review on Admin UI ("+targetURL+")") {
 		t.Fatal("review link does not appear on its operation's progress row")
 	}
 	command("/clear")
-	u.wait("cleared model history", func(view string) bool { return strings.Contains(view, "Model conversation cleared") })
-	publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+	u.Wait("cleared model history", func(view string) bool { return strings.Contains(view, "Model conversation cleared") })
+	operations.Publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 	command("/watch second")
-	u.wait("second completed operation", func(view string) bool { return strings.Contains(view, "second · completed") })
+	u.Wait("second completed operation", func(view string) bool { return strings.Contains(view, "second · completed") })
 	countLinks(2)
-	if !strings.Contains(u.model.View(), "operation=second&username=commander") || !strings.Contains(u.model.View(), "operation=target&username=commander") {
+	if !strings.Contains(u.Model.View(), "operation=second&username=commander") || !strings.Contains(u.Model.View(), "operation=target&username=commander") {
 		t.Fatal("completed operations do not have distinct destinations")
 	}
 	command("/admin")
-	if strings.Count(u.model.View(), "Admin: "+adminURL) != 2 {
+	if strings.Count(u.Model.View(), "Admin: "+adminURL) != 2 {
 		t.Fatal("Admin command did not remain available after operation completion")
 	}
 }
@@ -326,18 +327,18 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 func TestAdminCompletionWithoutURLIsSilent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	u, publish, _ := adminOperationUI(t, ctx, "", true)
-	defer u.model.Close()
-	publish(bridge.Operation{ID: "completed", Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
-	u.text("/watch completed")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("completion without Admin", func(view string) bool { return strings.Contains(view, "complete · completed") })
-	if strings.Contains(u.model.View(), "Review on Admin UI") || strings.Contains(u.model.View(), "--admin-url") {
+	u, operations := fixtures.AdminOperationUI(t, ctx, "", true)
+	defer u.Close()
+	operations.Publish(bridge.Operation{ID: "completed", Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+	u.Text("/watch completed")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("completion without Admin", func(view string) bool { return strings.Contains(view, "complete · completed") })
+	if strings.Contains(u.Model.View(), "Review on Admin UI") || strings.Contains(u.Model.View(), "--admin-url") {
 		t.Fatal("completion advertised an unknown Admin address")
 	}
-	u.text("/admin")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(u.model.View(), "Start Admin with /admin serve.") {
+	u.Text("/admin")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	if !strings.Contains(u.Model.View(), "Start Admin with /admin serve.") {
 		t.Fatal("explicit Admin lookup did not explain missing configuration")
 	}
 }
@@ -345,31 +346,31 @@ func TestAdminCompletionWithoutURLIsSilent(t *testing.T) {
 func TestFailedOperationShowsUnknownTaskOutcomes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	u, publish, reads := adminOperationUI(t, ctx, "", true)
-	defer u.model.Close()
-	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 60})
+	u, operations := fixtures.AdminOperationUI(t, ctx, "", true)
+	defer u.Close()
+	u.Model.Update(tea.WindowSizeMsg{Width: 180, Height: 60})
 	op := bridge.Operation{
 		ID: "failed", Status: "failed", UpdatedAt: time.Now(),
 		Tasks:    []bridge.Task{{ID: "first", Status: "interrupted"}, {ID: "second", Status: "interrupted"}},
 		Progress: bridge.Progress{TaskCounts: map[string]int{"interrupted": 2}, TotalTasks: 2},
 	}
-	publish(op)
-	u.text("/watch failed")
-	u.key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.wait("failed operation with unknown outcomes", func(view string) bool {
-		return strings.Contains(view, "○ failed · failed · 0/2 tasks finished · 2 task outcomes unknown") && reads.Load() >= 3
+	operations.Publish(op)
+	u.Text("/watch failed")
+	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.Wait("failed operation with unknown outcomes", func(view string) bool {
+		return strings.Contains(view, "○ failed · failed · 0/2 tasks finished · 2 task outcomes unknown") && operations.ReadCount() >= 3
 	})
-	if strings.Contains(u.model.View(), "Operation reviewed") {
+	if strings.Contains(u.Model.View(), "Operation reviewed") {
 		t.Fatal("unknown outcomes triggered a final model review")
 	}
 	op.Tasks[0].Status, op.Tasks[1].Status = "failed", "failed"
 	op.UpdatedAt = op.UpdatedAt.Add(time.Second)
 	op.Progress = bridge.Progress{TaskCounts: map[string]int{"failed": 2}, TotalTasks: 2, FinishedTasks: 2, Settled: true}
-	publish(op)
-	u.wait("failed operation with known outcomes", func(view string) bool {
+	operations.Publish(op)
+	u.Wait("failed operation with known outcomes", func(view string) bool {
 		return strings.Contains(view, "✓ failed · failed · 2/2 tasks finished") && strings.Contains(view, "Operation reviewed") && !strings.Contains(view, "Thinking")
 	})
-	if strings.Contains(u.model.View(), "task outcomes unknown") {
+	if strings.Contains(u.Model.View(), "task outcomes unknown") {
 		t.Fatal("settled operation still shows unknown outcomes")
 	}
 }
@@ -409,18 +410,18 @@ func TestAdminLinkRendering(t *testing.T) {
 			setup.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/admin")})
 			setup.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			check(setup, adminURL)
-			u, publish, _ := adminOperationUI(t, ctx, adminURL, noColor)
-			defer u.model.Close()
+			u, operations := fixtures.AdminOperationUI(t, ctx, adminURL, noColor)
+			defer u.Close()
 			for _, command := range []string{"/admin", "/status"} {
-				u.text(command)
-				u.key(tea.KeyMsg{Type: tea.KeyEnter})
+				u.Text(command)
+				u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 			}
-			check(u.model, adminURL)
-			publish(bridge.Operation{ID: "done", Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
-			u.text("/watch done")
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("completion link", func(view string) bool { return strings.Contains(ansi.Strip(view), "Review on Admin UI") })
-			check(u.model, "http://localhost:4275/#/connect?api=http%3A%2F%2F127.0.0.1%3A4274&operation=done&username=commander")
+			check(u.Model, adminURL)
+			operations.Publish(bridge.Operation{ID: "done", Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+			u.Text("/watch done")
+			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.Wait("completion link", func(view string) bool { return strings.Contains(ansi.Strip(view), "Review on Admin UI") })
+			check(u.Model, "http://localhost:4275/#/connect?api=http%3A%2F%2F127.0.0.1%3A4274&operation=done&username=commander")
 		})
 	}
 }
@@ -442,17 +443,17 @@ func TestOperationAdminLinkDestinations(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			u, publish, _ := adminOperationUI(t, ctx, test.adminURL, false)
-			defer u.model.Close()
-			publish(bridge.Operation{ID: operationID, Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
-			u.text("/watch " + operationID)
-			u.key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.wait("operation-specific review link", func(view string) bool {
+			u, operations := fixtures.AdminOperationUI(t, ctx, test.adminURL, false)
+			defer u.Close()
+			operations.Publish(bridge.Operation{ID: operationID, Status: "completed", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+			u.Text("/watch " + operationID)
+			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+			u.Wait("operation-specific review link", func(view string) bool {
 				return strings.Contains(view, ansi.SetHyperlink(test.target))
 			})
 			for _, width := range []int{80, 40} {
-				u.model.Update(tea.WindowSizeMsg{Width: width, Height: 50})
-				view := u.model.View()
+				u.Model.Update(tea.WindowSizeMsg{Width: width, Height: 50})
+				view := u.Model.View()
 				if !strings.Contains(view, ansi.SetHyperlink(test.target)) {
 					t.Fatal("wrapping changed the operation link destination")
 				}
@@ -475,20 +476,20 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 		t.Run(fmt.Sprintf("no-color=%t", noColor), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
-			u, publish, _ := adminOperationUI(t, ctx, adminURL, noColor)
-			defer u.model.Close()
-			u.model.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+			u, operations := fixtures.AdminOperationUI(t, ctx, adminURL, noColor)
+			defer u.Close()
+			u.Model.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
 			now := time.Now()
 			for i, id := range []string{"alpha", "bravo", "charlie", "delta", "zulu"} {
 				// The last two share a timestamp so their order also exercises the ID tie-break.
-				publish(bridge.Operation{ID: id, Status: "completed", UpdatedAt: now.Add(time.Duration(min(i, 3)) * time.Second), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
-				u.text("/watch " + id)
-				u.key(tea.KeyMsg{Type: tea.KeyEnter})
-				u.wait("completed "+id, func(view string) bool {
+				operations.Publish(bridge.Operation{ID: id, Status: "completed", UpdatedAt: now.Add(time.Duration(min(i, 3)) * time.Second), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+				u.Text("/watch " + id)
+				u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+				u.Wait("completed "+id, func(view string) bool {
 					return strings.Contains(ansi.Strip(view), id+" · completed") && !strings.Contains(view, "Thinking")
 				})
 			}
-			view := ansi.Strip(u.model.View())
+			view := ansi.Strip(u.Model.View())
 			previous := -1
 			for _, id := range []string{"delta", "zulu", "charlie", "bravo"} {
 				position := strings.Index(view, id+" · completed")
@@ -501,10 +502,10 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 				t.Fatal("progress did not keep its four-operation limit and overflow count")
 			}
 			const draft = "Keep this draft"
-			u.text(draft)
+			u.Text(draft)
 			for _, size := range []tea.WindowSizeMsg{{Width: 40, Height: 20}, {Width: 80, Height: 24}} {
-				u.model.Update(size)
-				view := u.model.View()
+				u.Model.Update(size)
+				view := u.Model.View()
 				plain := ansi.Strip(view)
 				if strings.Count(view, "\n") > size.Height {
 					t.Fatalf("operation progress pushes input beyond a %dx%d terminal", size.Width, size.Height)
@@ -537,58 +538,4 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 			}
 		})
 	}
-}
-
-func adminOperationUI(t *testing.T, ctx context.Context, adminURL string, noColor bool) (*uiDriver, func(bridge.Operation), *atomic.Int32) {
-	t.Helper()
-	var mu sync.Mutex
-	operations := make(map[string]string)
-	publish := func(operation bridge.Operation) {
-		t.Helper()
-		encoded, err := json.Marshal(operation)
-		if err != nil {
-			t.Fatal(err)
-		}
-		mu.Lock()
-		operations[operation.ID] = string(encoded)
-		mu.Unlock()
-	}
-	reads := &atomic.Int32{}
-	server := mcp.NewServer(&mcp.Implementation{Name: "admin-operation-fixture", Version: "1"}, nil)
-	for _, name := range []string{"get_operation", "operation_events"} {
-		server.AddTool(&mcp.Tool{Name: name, InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			payload := `{"events":[],"next_cursor":""}`
-			if request.Params.Name == "get_operation" {
-				var args struct {
-					ID string `json:"operation_id"`
-				}
-				if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
-					return nil, err
-				}
-				mu.Lock()
-				payload = operations[args.ID]
-				mu.Unlock()
-				reads.Add(1)
-			}
-			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: payload}}}, nil
-		})
-	}
-	endpoint := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
-	t.Cleanup(endpoint.Close)
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		body, err := io.ReadAll(request.Body)
-		if err != nil {
-			t.Error("could not inspect model request")
-		}
-		if strings.Contains(string(body), "Review on Admin UI") || strings.Contains(string(body), "http://localhost:4275") {
-			t.Error("Admin link reached model history")
-		}
-		writeModelDelta(w, map[string]any{"content": "Operation reviewed"}, "stop")
-	}))
-	t.Cleanup(provider.Close)
-	u := newUIWithConfig(t, ctx, ui.Config{
-		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL},
-		Keys: map[string]string{"other": "test-only"}, NoColor: noColor, AdminURL: adminURL,
-	})
-	return u, publish, reads
 }

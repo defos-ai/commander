@@ -331,11 +331,3 @@ func assertMCPConnectAuthError(t *testing.T, err error) *bridge.AuthenticationEr
 	}
 	return failure
 }
-
-type mcpAuthTransport string
-
-func (token mcpAuthTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	request = request.Clone(request.Context())
-	request.Header.Set("Authorization", "Bearer "+string(token))
-	return http.DefaultTransport.RoundTrip(request)
-}

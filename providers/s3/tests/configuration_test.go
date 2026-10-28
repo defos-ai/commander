@@ -3,29 +3,15 @@ package s3_test
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/defos-ai/commander/providers/s3/store"
+	"github.com/defos-ai/commander/providers/s3/tests/fixtures"
 )
 
-func isolateAWSConfiguration(t *testing.T) {
-	t.Helper()
-	directory := t.TempDir()
-	t.Setenv("AWS_CONFIG_FILE", filepath.Join(directory, "config"))
-	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(directory, "credentials"))
-	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
-	for _, name := range []string{
-		"AWS_PROFILE", "AWS_DEFAULT_PROFILE", "AWS_ROLE_ARN", "AWS_WEB_IDENTITY_TOKEN_FILE",
-		"AWS_CONTAINER_CREDENTIALS_FULL_URI", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-	} {
-		t.Setenv(name, "")
-	}
-}
-
 func TestS3Configuration(t *testing.T) {
-	isolateAWSConfiguration(t)
+	fixtures.IsolateAWSConfiguration(t)
 	for _, raw := range []string{
 		"https://bucket/prefix", "s3://", "s3://bucket:9000/prefix", "s3://Bucket/prefix", "s3://bucket/%zz",
 		"s3://user@bucket/prefix", "s3://user:@bucket/prefix", "s3://:secret-marker@bucket/prefix",

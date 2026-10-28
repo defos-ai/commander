@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/secrets"
 )
 
 func TestFulfillmentRecordsMatchingSecretAndDelivery(t *testing.T) {
-	request := requestFixture()
-	metadata := secretFixture().Metadata
-	now := requestedAt.Add(time.Minute)
-	fulfilled, err := request.Fulfill(metadata, deliveryID, now)
+	request := fixtures.Request()
+	metadata := fixtures.Secret().Metadata
+	now := fixtures.RequestedAt().Add(time.Minute)
+	fulfilled, err := request.Fulfill(metadata, fixtures.DeliveryID, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := secrets.Fulfillment{SecretID: metadata.ID, SecretVersion: metadata.Version, DeliveryID: deliveryID}
+	want := secrets.Fulfillment{SecretID: metadata.ID, SecretVersion: metadata.Version, DeliveryID: fixtures.DeliveryID}
 	if fulfilled.Status != secrets.Fulfilled || fulfilled.Fulfillment == nil || *fulfilled.Fulfillment != want || !fulfilled.ResolvedAt.Equal(now) {
 		t.Fatalf("unexpected fulfillment: %+v", fulfilled)
 	}
@@ -40,7 +41,7 @@ func TestFulfillmentRecordsMatchingSecretAndDelivery(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			mismatch := metadata
 			test.change(&mismatch)
-			if _, err := request.Fulfill(mismatch, deliveryID, now); err == nil {
+			if _, err := request.Fulfill(mismatch, fixtures.DeliveryID, now); err == nil {
 				t.Fatal("secret for a different key fulfilled request")
 			}
 		})
@@ -51,14 +52,14 @@ func TestFulfillmentRecordsMatchingSecretAndDelivery(t *testing.T) {
 }
 
 func TestFulfillmentRejectsUnavailableAndLateSecrets(t *testing.T) {
-	request := requestFixture()
-	metadata := secretFixture().Metadata
+	request := fixtures.Request()
+	metadata := fixtures.Secret().Metadata
 	for _, now := range []time.Time{request.ExpiresAt, request.ExpiresAt.Add(time.Nanosecond)} {
-		if _, err := request.Fulfill(metadata, deliveryID, now); !errors.Is(err, secrets.ErrRequestExpired) {
+		if _, err := request.Fulfill(metadata, fixtures.DeliveryID, now); !errors.Is(err, secrets.ErrRequestExpired) {
 			t.Fatalf("fulfillment at %s error = %v, want expired", now, err)
 		}
 	}
-	now := requestedAt.Add(time.Minute)
+	now := fixtures.RequestedAt().Add(time.Minute)
 	expired := metadata
 	expired.ExpiresAt = now
 	future := metadata
@@ -72,30 +73,30 @@ func TestFulfillmentRejectsUnavailableAndLateSecrets(t *testing.T) {
 		{name: "future update", metadata: future},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := request.Fulfill(test.metadata, deliveryID, now); err == nil {
+			if _, err := request.Fulfill(test.metadata, fixtures.DeliveryID, now); err == nil {
 				t.Fatal("unavailable secret fulfilled request")
 			}
 		})
 	}
-	if _, err := request.Fulfill(metadata, deliveryID, requestedAt.Add(-time.Nanosecond)); err == nil {
+	if _, err := request.Fulfill(metadata, fixtures.DeliveryID, fixtures.RequestedAt().Add(-time.Nanosecond)); err == nil {
 		t.Fatal("request fulfilled before it was made")
 	}
 }
 
 func TestFulfillmentReplayAndConflicts(t *testing.T) {
-	metadata := secretFixture().Metadata
-	fulfilled, err := requestFixture().Fulfill(metadata, deliveryID, requestedAt.Add(time.Minute))
+	metadata := fixtures.Secret().Metadata
+	fulfilled, err := fixtures.Request().Fulfill(metadata, fixtures.DeliveryID, fixtures.RequestedAt().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
-	replayed, err := fulfilled.Fulfill(metadata, deliveryID, metadata.ExpiresAt.Add(time.Hour))
+	replayed, err := fulfilled.Fulfill(metadata, fixtures.DeliveryID, metadata.ExpiresAt.Add(time.Hour))
 	if err != nil || !reflect.DeepEqual(replayed, fulfilled) {
 		t.Fatalf("historical acknowledgement replay = %+v, %v", replayed, err)
 	}
 	replayed.Fulfillment.SecretVersion++
 	clone := fulfilled.Clone()
 	clone.Fulfillment.DeliveryID = "00000000-0000-4000-8000-000000000004"
-	if fulfilled.Fulfillment.SecretVersion != metadata.Version || fulfilled.Fulfillment.DeliveryID != deliveryID {
+	if fulfilled.Fulfillment.SecretVersion != metadata.Version || fulfilled.Fulfillment.DeliveryID != fixtures.DeliveryID {
 		t.Fatal("replayed or cloned fulfillment aliases historical evidence")
 	}
 	rotated := metadata
@@ -107,27 +108,27 @@ func TestFulfillmentReplayAndConflicts(t *testing.T) {
 		metadata   secrets.Metadata
 		deliveryID string
 	}{
-		{"rotated version", rotated, deliveryID},
-		{"recreated identity", recreated, deliveryID},
+		{"rotated version", rotated, fixtures.DeliveryID},
+		{"recreated identity", recreated, fixtures.DeliveryID},
 		{"different delivery", metadata, "00000000-0000-4000-8000-000000000004"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := fulfilled.Fulfill(test.metadata, test.deliveryID, requestedAt.Add(2*time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
+			if _, err := fulfilled.Fulfill(test.metadata, test.deliveryID, fixtures.RequestedAt().Add(2*time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
 				t.Fatalf("conflicting fulfillment error = %v, want closed", err)
 			}
 		})
 	}
-	if _, err := fulfilled.Cancel(requestedAt.Add(2 * time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
+	if _, err := fulfilled.Cancel(fixtures.RequestedAt().Add(2 * time.Minute)); !errors.Is(err, secrets.ErrRequestClosed) {
 		t.Fatalf("cancel fulfilled request error = %v, want closed", err)
 	}
-	if _, err := fulfilled.Expire(requestFixture().ExpiresAt); !errors.Is(err, secrets.ErrRequestClosed) {
+	if _, err := fulfilled.Expire(fixtures.Request().ExpiresAt); !errors.Is(err, secrets.ErrRequestClosed) {
 		t.Fatalf("expire fulfilled request error = %v, want closed", err)
 	}
 }
 
 func TestCancellationAndExpirationSettleOnce(t *testing.T) {
-	request := requestFixture()
-	now := requestedAt.Add(time.Minute)
+	request := fixtures.Request()
+	now := fixtures.RequestedAt().Add(time.Minute)
 	cancelled, err := request.Cancel(now)
 	if err != nil || cancelled.Status != secrets.Cancelled || !cancelled.ResolvedAt.Equal(now) {
 		t.Fatalf("cancel = %+v, %v", cancelled, err)
@@ -154,7 +155,7 @@ func TestCancellationAndExpirationSettleOnce(t *testing.T) {
 		if err := settled.Validate(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := settled.Fulfill(secretFixture().Metadata, deliveryID, now); !errors.Is(err, secrets.ErrRequestClosed) {
+		if _, err := settled.Fulfill(fixtures.Secret().Metadata, fixtures.DeliveryID, now); !errors.Is(err, secrets.ErrRequestClosed) {
 			t.Fatalf("fulfill %s request error = %v, want closed", settled.Status, err)
 		}
 	}

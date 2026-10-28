@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -17,16 +18,16 @@ import (
 )
 
 func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
-	a := connect(t)
+	a := fixtures.Connect(t)
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
 	var provision operations.Operation
-	input := object{"package": "https://github.com/defos-ai/fixture-agent"}
-	a.call("start_operation", object{"mission_name": "install-agent", "input": input}, &provision)
+	input := fixtures.Object{"package": "https://github.com/defos-ai/fixture-agent"}
+	a.Call("start_operation", fixtures.Object{"mission_name": "install-agent", "input": input}, &provision)
 	if provision.Preflight == nil || !provision.Preflight.Ready {
 		t.Fatalf("spawner is not ready: %+v", provision.Preflight)
 	}
 	var assigned operations.Task
-	a.call("assign_task", object{"operation_id": provision.ID, "action_name": "spawn-agent", "input": input}, &assigned)
+	a.Call("assign_task", fixtures.Object{"operation_id": provision.ID, "action_name": "spawn-agent", "input": input}, &assigned)
 	spawnTask := waitSpawnerTask(t, a, provision.ID, assigned.ID)
 	var spawned struct {
 		AgentID        string           `json:"agent_id"`
@@ -78,20 +79,20 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 		t.Fatalf("spawned with runtime %q, expected %q", spawned.Runtime, expectedRuntime)
 	}
 	waitFixtureAgent(t, a, spawned.AgentID)
-	decision := modelDecision(a.wait(provision.ID, func(op operationDetail) bool { return modelDecision(op) != nil }))
+	decision := fixtures.ModelDecision(a.Wait(provision.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil }))
 	if decision.ID != assigned.ID {
 		t.Fatalf("install mission requested a decision for a different task: %+v", decision)
 	}
-	a.resolve(provision.ID, *decision, []object{})
-	a.call("complete_operation", object{"operation_id": provision.ID, "output": object{"agent_id": spawned.AgentID}}, nil)
-	installed := a.get(provision.ID)
+	a.Resolve(provision.ID, *decision, []fixtures.Object{})
+	a.Call("complete_operation", fixtures.Object{"operation_id": provision.ID, "output": fixtures.Object{"agent_id": spawned.AgentID}}, nil)
+	installed := a.Get(provision.ID)
 	var installedOutput struct {
 		AgentID string `json:"agent_id"`
 	}
 	if err := json.Unmarshal(installed.Output, &installedOutput); err != nil {
 		t.Fatal(err)
 	}
-	if installed.Status != operations.Completed || installed.ReportID == "" || installedOutput.AgentID != spawned.AgentID || modelDecision(installed) != nil {
+	if installed.Status != operations.Completed || installed.ReportID == "" || installedOutput.AgentID != spawned.AgentID || fixtures.ModelDecision(installed) != nil {
 		t.Fatalf("install mission did not save the reviewed agent identity: %+v", installed)
 	}
 
@@ -99,12 +100,12 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	// may have spawned another instance; the controller chooses the executor.
 	var operation operations.Operation
 	message := "MCP spawned agent " + spawned.AgentID
-	input = object{"message": message}
-	a.call("start_operation", object{"mission_name": "fixture-use-agent", "input": input}, &operation)
+	input = fixtures.Object{"message": message}
+	a.Call("start_operation", fixtures.Object{"mission_name": "fixture-use-agent", "input": input}, &operation)
 	if operation.Preflight == nil || !operation.Preflight.Ready || len(operation.Preflight.Actions) != 1 || operation.Preflight.Actions[0].ActionName != "fixture-echo" || !slices.Contains(operation.Preflight.Actions[0].ReadyAgentIDs, spawned.AgentID) {
 		t.Fatalf("spawned capability is absent from preflight: %+v", operation.Preflight)
 	}
-	a.call("assign_task", object{"operation_id": operation.ID, "action_name": "fixture-echo", "input": input}, &assigned)
+	a.Call("assign_task", fixtures.Object{"operation_id": operation.ID, "action_name": "fixture-echo", "input": input}, &assigned)
 	executed := waitSpawnerTask(t, a, operation.ID, assigned.ID)
 	var output struct {
 		Message string `json:"message"`
@@ -124,14 +125,14 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	if artifact.AgentID != executed.AgentID || artifact.CommandID != executed.CommandID || artifact.ActionName != "fixture-echo" || len(artifact.Files) != 1 || artifact.Files[0].Name != "echo.txt" {
 		t.Fatalf("spawned agent artifact lost ownership or file metadata: %+v", artifact)
 	}
-	resource, err := a.session.ReadResource(a.ctx, &mcp.ReadResourceParams{URI: "missions://artifacts/" + artifact.ID + "/files/" + artifact.Files[0].ID})
+	resource, err := a.Session.ReadResource(a.Context, &mcp.ReadResourceParams{URI: "missions://artifacts/" + artifact.ID + "/files/" + artifact.Files[0].ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(resource.Contents) != 1 || resource.Contents[0].MIMEType != "text/plain" || resource.Contents[0].Text != message {
 		t.Fatalf("spawned agent artifact bytes did not reach storage: %+v", resource)
 	}
-	a.call("complete_operation", object{"operation_id": operation.ID, "output": object{"message": output.Message, "agent_id": output.AgentID}}, nil)
+	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": fixtures.Object{"message": output.Message, "agent_id": output.AgentID}}, nil)
 }
 
 func decodeSpawnOutput(t *testing.T, data []byte, target any) {
@@ -143,9 +144,9 @@ func decodeSpawnOutput(t *testing.T, data []byte, target any) {
 	}
 }
 
-func waitSpawnerTask(t *testing.T, a *api, operationID, taskID string) operations.Task {
+func waitSpawnerTask(t *testing.T, a *fixtures.Client, operationID, taskID string) operations.Task {
 	t.Helper()
-	finished := a.wait(operationID, func(op operationDetail) bool {
+	finished := a.Wait(operationID, func(op fixtures.OperationDetail) bool {
 		for _, task := range op.Tasks {
 			if task.ID == taskID {
 				return task.Status != operations.TaskQueued && task.Status != operations.TaskRunning
@@ -165,7 +166,7 @@ func waitSpawnerTask(t *testing.T, a *api, operationID, taskID string) operation
 	return operations.Task{}
 }
 
-func waitFixtureAgent(t *testing.T, a *api, agentID string) {
+func waitFixtureAgent(t *testing.T, a *fixtures.Client, agentID string) {
 	t.Helper()
 	deadline := time.NewTimer(15 * time.Second)
 	defer deadline.Stop()
@@ -175,7 +176,7 @@ func waitFixtureAgent(t *testing.T, a *api, agentID string) {
 		var inventory struct {
 			Agents []agents.Agent `json:"agents"`
 		}
-		a.call("list_agents", object{}, &inventory)
+		a.Call("list_agents", fixtures.Object{}, &inventory)
 		for _, agent := range inventory.Agents {
 			if agent.ID == agentID && agent.Type == "fixture-agent" && !agent.Stale && agent.Status == agents.AgentReady && agent.Work == nil && len(agent.Actions) == 1 && agent.Actions[0].Name == "fixture-echo" && agent.Actions[0].Status == actions.Ready {
 				return
@@ -184,8 +185,8 @@ func waitFixtureAgent(t *testing.T, a *api, agentID string) {
 		select {
 		case <-deadline.C:
 			t.Fatalf("controller did not persist ready fixture agent %s: %+v", agentID, inventory.Agents)
-		case <-a.ctx.Done():
-			t.Fatal(a.ctx.Err())
+		case <-a.Context.Done():
+			t.Fatal(a.Context.Err())
 		case <-tick.C:
 		}
 	}

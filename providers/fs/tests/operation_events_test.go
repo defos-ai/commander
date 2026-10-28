@@ -9,17 +9,18 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationEventRecordsMaximumSequence(t *testing.T) {
 	dir := t.TempDir()
-	store := newDispatchStore(t, dir)
+	store := fixtures.NewDispatchStore(t, dir)
 	maximum := ^uint64(0)
 	op := operations.Operation{ID: id.OperationID(), Events: []operations.Event{{Sequence: maximum}, {Sequence: 2}, {Sequence: 10}}}
 	if err := store.Create(t.Context(), op); err != nil {
 		t.Fatal(err)
 	}
-	store = newDispatchStore(t, dir)
+	store = fixtures.NewDispatchStore(t, dir)
 	saved, err := store.Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -49,22 +50,22 @@ func TestOperationQueriesReadOnlySelectedBodies(t *testing.T) {
 		for _, damage := range []string{"missing", "corrupt"} {
 			t.Run(kind+"/"+damage, func(t *testing.T) {
 				dir := t.TempDir()
-				store := newDispatchStore(t, dir)
+				store := fixtures.NewDispatchStore(t, dir)
 				op := operations.Operation{ID: id.OperationID(),
 					Tasks:     []operations.Task{{ID: id.TaskID()}, {ID: id.TaskID()}},
-					Questions: []operations.Question{newStoreQuestion("")},
+					Questions: []operations.Question{fixtures.Question("")},
 					Events:    []operations.Event{{Sequence: 10}, {Sequence: 2}}}
 				if err := store.Create(t.Context(), op); err != nil {
 					t.Fatal(err)
 				}
 				path := filepath.Join(dir, "operations", op.ID+".json")
-				records, err := openRecords(t, path).Read(t.Context())
+				records, err := fixtures.OpenRecords(t, path).Read(t.Context())
 				if err != nil {
 					t.Fatal(err)
 				}
 				name := map[string]string{"tasks": "tasks/" + op.Tasks[1].ID,
 					"questions": "questions/" + op.Questions[0].ID, "events": "events/10"}[kind]
-				blob := recordBlob(path, string(records[name]))
+				blob := fixtures.RecordBlob(path, string(records[name]))
 				if damage == "missing" {
 					err = os.Remove(blob)
 				} else {
@@ -73,7 +74,7 @@ func TestOperationQueriesReadOnlySelectedBodies(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				store = newDispatchStore(t, dir)
+				store = fixtures.NewDispatchStore(t, dir)
 				task, err := store.GetTask(t.Context(), op.ID, op.Tasks[0].ID)
 				if err != nil {
 					t.Fatalf("task detail read an unrelated %s body: %v", kind, err)
@@ -115,7 +116,7 @@ func TestOperationQueriesReadOnlySelectedBodies(t *testing.T) {
 func TestOperationEventRecordsRejectInvalidIdentity(t *testing.T) {
 	for _, kind := range []string{"zero", "duplicate", "foreign operation"} {
 		t.Run(kind, func(t *testing.T) {
-			store := newDispatchStore(t, t.TempDir())
+			store := fixtures.NewDispatchStore(t, t.TempDir())
 			op := operations.Operation{ID: id.OperationID(), Events: []operations.Event{{Sequence: 1}}}
 			switch kind {
 			case "zero":
@@ -133,12 +134,12 @@ func TestOperationEventRecordsRejectInvalidIdentity(t *testing.T) {
 	for _, kind := range []string{"duplicate index", "zero index", "foreign operation", "noncanonical key"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
+			store := fixtures.NewDispatchStore(t, dir)
 			op := operations.Operation{ID: id.OperationID(), Events: []operations.Event{{Sequence: 1}}}
 			if err := store.Create(t.Context(), op); err != nil {
 				t.Fatal(err)
 			}
-			records := openRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
+			records := fixtures.OpenRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
 			if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
 				switch kind {
 				case "duplicate index", "zero index":

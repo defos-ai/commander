@@ -6,15 +6,16 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestSessionDiscoveryValidatesQueriesAndDocumentsLookup(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, append(fixture.localArgs(), "--swagger"))
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--swagger"))
 	missing := id.New()
 	for _, query := range []string{"", "?scope_id=" + missing, "?owner_agent_id=fixture-agent-00000001", "?scope_id=" + missing + "&owner_agent_id=fixture-agent-00000001"} {
-		result := decodeResponse[models.ListResponse[models.RuntimeSessionResponse]](t, server.request(t, http.MethodGet, "/api/v1/sessions"+query, authenticate))
+		result := decodeResponse[models.ListResponse[models.RuntimeSessionResponse]](t, server.Request(t, http.MethodGet, "/api/v1/sessions"+query, hostfixtures.Authenticate))
 		if result.Items == nil || len(result.Items) != 0 {
 			t.Fatalf("empty discovery did not retain an empty items array: %+v", result)
 		}
@@ -28,12 +29,12 @@ func TestSessionDiscoveryValidatesQueriesAndDocumentsLookup(t *testing.T) {
 		{"/invalid", "invalid_session_id"}, {"/00000000-0000-4000-8000-000000ABCDEF", "invalid_session_id"},
 		{"/" + missing + "?scope_id=" + missing, "invalid_query"},
 	} {
-		result := decodeResponse[struct{ Error string }](t, server.request(t, http.MethodGet, "/api/v1/sessions"+tc.path, authenticate), http.StatusBadRequest)
+		result := decodeResponse[struct{ Error string }](t, server.Request(t, http.MethodGet, "/api/v1/sessions"+tc.path, hostfixtures.Authenticate), http.StatusBadRequest)
 		if result.Error != tc.code {
 			t.Errorf("%s: got %q, want %q", tc.path, result.Error, tc.code)
 		}
 	}
-	absent := decodeResponse[struct{ Error string }](t, server.request(t, http.MethodGet, "/api/v1/sessions/"+missing, authenticate), http.StatusNotFound)
+	absent := decodeResponse[struct{ Error string }](t, server.Request(t, http.MethodGet, "/api/v1/sessions/"+missing, hostfixtures.Authenticate), http.StatusNotFound)
 	if absent.Error != "session_not_found" {
 		t.Fatalf("missing ID lookup: %+v", absent)
 	}
@@ -47,7 +48,7 @@ func TestSessionDiscoveryValidatesQueriesAndDocumentsLookup(t *testing.T) {
 			}
 			Responses map[string]struct{ Description string }
 		}
-	}](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	}](t, server.Request(t, http.MethodGet, "/openapi.json", hostfixtures.Authenticate))
 	list := document.Paths["/api/v1/sessions"]["get"]
 	if len(list.Parameters) != 2 || list.Parameters[0].Name != "scope_id" || list.Parameters[1].Name != "owner_agent_id" {
 		t.Fatalf("session discovery parameters: %+v", list.Parameters)

@@ -1,10 +1,10 @@
+import { expect } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { expect } from '@playwright/test';
 import type { OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
 import type { Action, Agent } from '../../src/api/types';
-import { test, connect, startOperation, publicAPIURL, username, password } from './fixtures';
+import { connect, password, publicAPIURL, startOperation, test, username } from '../fixtures/e2e';
 
 test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api }) => {
   const operation = await api.post<{ id: string }>('/operations', {

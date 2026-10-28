@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	e2efixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/e2e"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -86,17 +87,17 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	password := id.New()
 	env := append(os.Environ(), "BUS_URL="+filepath.Join(state, "bus"), "DATABASE_URL="+filepath.Join(state, "database"),
 		"STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=error")
-	startE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
+	e2efixtures.StartE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
 	var controllerArgs []string
-	stopController := startE2E(t, binaries["controller"], controllerArgs, env)
+	stopController := e2efixtures.StartE2E(t, binaries["controller"], controllerArgs, env)
 	for i := range 2 {
 		workerEnv := append(append([]string{}, env...), fmt.Sprintf("FIXTURE_AGENT_ID=fixture-agent-%08x", i+1), "FIXTURE_PEER="+peer.URL)
-		startE2E(t, binaries["worker"], nil, workerEnv)
+		e2efixtures.StartE2E(t, binaries["worker"], nil, workerEnv)
 	}
 	client := &http.Client{Timeout: 8 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	t.Cleanup(client.CloseIdleConnections)
 	url := "http://" + address
-	waitUntil(t, 10*time.Second, func() bool {
+	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
 		response, err := client.Get(url + "/readyz")
 		if err != nil {
 			return false
@@ -134,7 +135,7 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 			}
 		}
 	}
-	waitUntil(t, 10*time.Second, func() bool {
+	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
 		var catalog struct{ Items []struct{ Status string } }
 		request("GET", "/api/v1/agents", nil, 200, &catalog)
 		return len(catalog.Items) == 2 && catalog.Items[0].Status == "ready" && catalog.Items[1].Status == "ready"
@@ -168,10 +169,10 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	request("POST", second+"/tasks", map[string]any{"action_name": "connect-resource", "input": input}, 422, nil)
 	// Durable admission survives controller restart before the first observation.
 	stopController()
-	stopController = startE2E(t, binaries["controller"], controllerArgs, env)
+	stopController = e2efixtures.StartE2E(t, binaries["controller"], controllerArgs, env)
 	assertReserved(time.Second)
 	unblock()
-	waitUntil(t, 10*time.Second, func() bool {
+	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
 		var operation operations.Operation
 		request("GET", first, nil, 200, &operation)
 		for _, task := range operation.Tasks {
@@ -185,10 +186,10 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	assertReserved(time.Second)
 	request("POST", first+"/cancel", map[string]any{}, 200, nil)
 	stopController()
-	startE2E(t, binaries["controller"], controllerArgs, env)
+	e2efixtures.StartE2E(t, binaries["controller"], controllerArgs, env)
 	assertReserved(time.Second)
 	publishInventory()
-	waitUntil(t, 5*time.Second, func() bool {
+	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
 		var catalog struct {
 			Items []struct{ Sessions []json.RawMessage }
 		}
@@ -226,56 +227,4 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 			t.Fatalf("unexpected proposed connection outcomes: %+v", operation.Tasks)
 		}
 	}
-}
-
-func waitUntil(t *testing.T, timeout time.Duration, ready func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for !ready() {
-		if time.Now().After(deadline) {
-			t.Fatal("public state did not become ready")
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-}
-
-func startE2E(t *testing.T, binary string, args, env []string) func() {
-	_, stop := startE2EProcess(t, binary, args, env)
-	return stop
-}
-
-func startE2EProcess(t *testing.T, binary string, args, env []string) (*os.Process, func()) {
-	t.Helper()
-	log, err := os.CreateTemp(t.TempDir(), "process-*.log")
-	if err != nil {
-		t.Fatal(err)
-	}
-	command := exec.Command(binary, args...)
-	command.Env, command.Stdout, command.Stderr = env, log, log
-	if err := command.Start(); err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan struct{})
-	go func() { command.Wait(); close(done) }()
-	var once sync.Once
-	stop := func() {
-		once.Do(func() {
-			command.Process.Signal(os.Interrupt)
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-				command.Process.Kill()
-				<-done
-			}
-			log.Close()
-		})
-	}
-	t.Cleanup(func() {
-		stop()
-		if t.Failed() {
-			data, _ := os.ReadFile(log.Name())
-			t.Logf("%s: %s", filepath.Base(binary), data)
-		}
-	})
-	return command.Process, stop
 }

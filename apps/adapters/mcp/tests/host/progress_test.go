@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -25,9 +27,9 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	const token = "progress-test-token"
-	endpoint, client, _ := startMCPWithOptions(t, []string{"--database-url=" + database},
+	endpoint, client, _ := hostfixtures.StartWithOptions(t, []string{"--database-url=" + database},
 		cli.Options{Credentials: &host.BearerCredentials{Token: token}}, io.Discard)
-	client.Transport = bearerTransport{token: token, next: client.Transport}
+	client.Transport = fakes.BearerTransport{Token: token, Next: client.Transport}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	session, err := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "progress-test", Version: "1"}, nil).Connect(ctx,

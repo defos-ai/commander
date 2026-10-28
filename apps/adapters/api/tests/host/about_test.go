@@ -14,33 +14,34 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api"
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 )
 
 func TestAboutIsPublicAndLimitedToDeployment(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, fixture.localArgs())
-	result := server.request(t, http.MethodGet, "/aboutz")
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	result := server.Request(t, http.MethodGet, "/aboutz")
 	assertAbout(t, result, "native", "commander-api")
 	assertSecurityHeaders(t, result, false)
-	if result.header.Get("WWW-Authenticate") != "" {
+	if result.Header.Get("WWW-Authenticate") != "" {
 		t.Error("public metadata unexpectedly requires authentication")
 	}
-	if !strings.HasPrefix(result.header.Get("Content-Type"), "application/json") {
-		t.Errorf("unexpected content type: %q", result.header.Get("Content-Type"))
+	if !strings.HasPrefix(result.Header.Get("Content-Type"), "application/json") {
+		t.Errorf("unexpected content type: %q", result.Header.Get("Content-Type"))
 	}
-	head := server.request(t, http.MethodHead, "/aboutz")
-	if head.status != http.StatusOK || head.body != "" {
-		t.Fatalf("HEAD /aboutz: status=%d body=%q", head.status, head.body)
+	head := server.Request(t, http.MethodHead, "/aboutz")
+	if head.Status != http.StatusOK || head.Body != "" {
+		t.Fatalf("HEAD /aboutz: status=%d body=%q", head.Status, head.Body)
 	}
 	assertSecurityHeaders(t, head, false)
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions} {
-		assertAPIError(t, server.request(t, method, "/aboutz"), http.StatusUnauthorized, "authentication_required")
-		if result := server.request(t, method, "/aboutz", authenticate); result.status != http.StatusMethodNotAllowed {
-			t.Errorf("authenticated %s /aboutz returned %d, want 405", method, result.status)
+		assertAPIError(t, server.Request(t, method, "/aboutz"), http.StatusUnauthorized, "authentication_required")
+		if result := server.Request(t, method, "/aboutz", hostfixtures.Authenticate); result.Status != http.StatusMethodNotAllowed {
+			t.Errorf("authenticated %s /aboutz returned %d, want 405", method, result.Status)
 		}
 	}
 	for _, path := range []string{"/aboutz/", "/aboutz/private"} {
-		assertAPIError(t, server.request(t, http.MethodGet, path), http.StatusUnauthorized, "authentication_required")
+		assertAPIError(t, server.Request(t, http.MethodGet, path), http.StatusUnauthorized, "authentication_required")
 	}
 }
 
@@ -58,13 +59,13 @@ func TestAboutPreservesHostOriginAndProxyChecks(t *testing.T) {
 		{name: "invalid forwarding", trusted: "127.0.0.1", host: "api.example", forwarded: "malformed", status: http.StatusBadRequest},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
-			args := append(fixture.localArgs(), "--allowed-hosts=api.example")
+			fixture := hostfixtures.New(t)
+			args := append(fixture.LocalArgs(), "--allowed-hosts=api.example")
 			if test.trusted != "" {
 				args = append(args, "--trusted-proxies="+test.trusted, "--proxy-headers=forwarded")
 			}
-			server := startAPI(t, args)
-			result := server.request(t, http.MethodGet, "/aboutz", func(r *http.Request) {
+			server := hostfixtures.Start(t, args)
+			result := server.Request(t, http.MethodGet, "/aboutz", func(r *http.Request) {
 				r.Host = test.host
 				if test.forwarded != "" {
 					r.Header.Set("Forwarded", test.forwarded)
@@ -73,8 +74,8 @@ func TestAboutPreservesHostOriginAndProxyChecks(t *testing.T) {
 					r.Header.Set("Origin", test.origin)
 				}
 			})
-			if result.status != test.status {
-				t.Fatalf("status=%d, want %d: %s", result.status, test.status, result.body)
+			if result.Status != test.status {
+				t.Fatalf("status=%d, want %d: %s", result.Status, test.status, result.Body)
 			}
 			assertSecurityHeaders(t, result, test.https)
 		})
@@ -92,18 +93,18 @@ func TestAboutUsesRuntimeConfigurationAndEmbeddedApplication(t *testing.T) {
 		{name: "embedded Docker", environment: "docker", application: "commander", runtime: "docker"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("API_RUNTIME", test.environment)
-			args := fixture.localArgs()
+			args := fixture.LocalArgs()
 			if test.flag != "" {
 				args = append(args, "--runtime="+test.flag)
 			}
-			server := startAPI(t, args, cli.Options{Application: test.application})
+			server := hostfixtures.Start(t, args, cli.Options{Application: test.application})
 			application := test.application
 			if application == "" {
 				application = "commander-api"
 			}
-			assertAbout(t, server.request(t, http.MethodGet, "/aboutz"), test.runtime, application)
+			assertAbout(t, server.Request(t, http.MethodGet, "/aboutz"), test.runtime, application)
 		})
 	}
 }
@@ -117,9 +118,9 @@ func TestInvalidDeploymentFailsBeforeOpeningProviders(t *testing.T) {
 		{name: "embedded application", application: "private-invalid-application", diagnostic: "application"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("API_RUNTIME", test.environment)
-			args := fixture.localArgs()
+			args := fixture.LocalArgs()
 			if test.flag != "" {
 				args = append(args, "--runtime="+test.flag)
 			}
@@ -136,7 +137,7 @@ func TestInvalidDeploymentFailsBeforeOpeningProviders(t *testing.T) {
 				}
 			}
 			for _, name := range []string{"bus", "database", "storage"} {
-				if _, err := os.Stat(filepath.Join(fixture.root, name)); !os.IsNotExist(err) {
+				if _, err := os.Stat(filepath.Join(fixture.Root, name)); !os.IsNotExist(err) {
 					t.Errorf("invalid deployment opened %s before validation", name)
 				}
 			}
@@ -154,8 +155,8 @@ func TestInvalidDeploymentFailsBeforeOpeningProviders(t *testing.T) {
 }
 
 func TestAboutOpenAPIContract(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, append(fixture.localArgs(), "--swagger"))
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--swagger"))
 	document := decodeResponse[struct {
 		Paths map[string]struct {
 			Get struct {
@@ -172,7 +173,7 @@ func TestAboutOpenAPIContract(t *testing.T) {
 		Components struct {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
-	}](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	}](t, server.Request(t, http.MethodGet, "/openapi.json", hostfixtures.Authenticate))
 	get := document.Paths["/aboutz"].Get
 	if string(get.Security) != "[]" || get.Responses["200"].Content["application/json"].Schema.Ref != "#/components/schemas/About" {
 		t.Fatal("OpenAPI must expose the public GET /aboutz response schema")
@@ -191,7 +192,7 @@ func TestAboutOpenAPIContract(t *testing.T) {
 	}
 }
 
-func assertAbout(t *testing.T, result response, runtime, application string) {
+func assertAbout(t *testing.T, result hostfixtures.Response, runtime, application string) {
 	t.Helper()
 	body := decodeResponse[map[string]string](t, result)
 	if len(body) != 2 || body["runtime"] != runtime || body["application"] != application {

@@ -3,7 +3,6 @@ package providers_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,13 +11,14 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	controllerfs "github.com/defos-ai/commander/providers/fs/controllers"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestControllerFsStoreRoundTripAndOrdering(t *testing.T) {
 	root := t.TempDir()
-	first := openControllerFsStore(t, root)
-	second := openControllerFsStore(t, root)
-	record := fsController(1)
+	first := fixtures.OpenControllerStore(t, root)
+	second := fixtures.OpenControllerStore(t, root)
+	record := fixtures.Controller(1)
 	record.Stale = true
 	if err := first.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestControllerFsStoreRoundTripAndOrdering(t *testing.T) {
 	if err := first.Upsert(t.Context(), record); !errors.Is(err, controllers.ErrStaleObservation) {
 		t.Fatalf("old instance overwrote newer heartbeat: %v", err)
 	}
-	third := openControllerFsStore(t, root)
+	third := fixtures.OpenControllerStore(t, root)
 	items, err := third.List(t.Context())
 	if err != nil || !reflect.DeepEqual(items, []controllers.Controller{newer}) {
 		t.Fatalf("reopened inventory = %#v, %v", items, err)
@@ -64,7 +64,7 @@ func TestControllerFsStoreRoundTripAndOrdering(t *testing.T) {
 
 func TestControllerFsStoreConcurrentRegistrations(t *testing.T) {
 	root := t.TempDir()
-	stores := []controllers.ControllerStore{openControllerFsStore(t, root), openControllerFsStore(t, root)}
+	stores := []controllers.ControllerStore{fixtures.OpenControllerStore(t, root), fixtures.OpenControllerStore(t, root)}
 	const count = 24
 	start := make(chan struct{})
 	results := make(chan error, count*2)
@@ -72,7 +72,7 @@ func TestControllerFsStoreConcurrentRegistrations(t *testing.T) {
 		for revision := range 2 {
 			go func() {
 				<-start
-				record := fsController(i)
+				record := fixtures.Controller(i)
 				record.LastHeartbeat = record.LastHeartbeat.Add(time.Duration(revision) * time.Nanosecond)
 				results <- stores[revision].Upsert(t.Context(), record)
 			}()
@@ -89,7 +89,7 @@ func TestControllerFsStoreConcurrentRegistrations(t *testing.T) {
 		t.Fatalf("concurrent inventory contains %d records, %v", len(items), err)
 	}
 	for i, got := range items {
-		want := fsController(i)
+		want := fixtures.Controller(i)
 		want.LastHeartbeat = want.LastHeartbeat.Add(time.Nanosecond)
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("lost update or unsorted inventory: got %#v, want %#v", got, want)
@@ -98,8 +98,8 @@ func TestControllerFsStoreConcurrentRegistrations(t *testing.T) {
 }
 
 func TestControllerFsStoreSortsByID(t *testing.T) {
-	catalog := openControllerFsStore(t, t.TempDir())
-	short := fsController(1)
+	catalog := fixtures.OpenControllerStore(t, t.TempDir())
+	short := fixtures.Controller(1)
 	short.ID, short.Type = "a-controller-12345678", "a"
 	long := short
 	long.ID, long.Type = "a-controller-12345678-controller-12345678", "a-controller-12345678"
@@ -116,8 +116,8 @@ func TestControllerFsStoreSortsByID(t *testing.T) {
 
 func TestControllerFsStoreRejectedWritesPreserveRecords(t *testing.T) {
 	root := t.TempDir()
-	catalog := openControllerFsStore(t, root)
-	record := fsController(1)
+	catalog := fixtures.OpenControllerStore(t, root)
+	record := fixtures.Controller(1)
 	if err := catalog.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
 	}
@@ -162,23 +162,5 @@ func TestControllerFsStoreRejectedWritesPreserveRecords(t *testing.T) {
 	}
 	if _, err := controllerfs.NewControllerFsStore(root); err == nil {
 		t.Fatal("reopened malformed inventory")
-	}
-}
-
-func openControllerFsStore(t *testing.T, root string) *controllerfs.ControllerFsStore {
-	t.Helper()
-	catalog, err := controllerfs.NewControllerFsStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return catalog
-}
-
-func fsController(index int) controllers.Controller {
-	heartbeat := time.Date(2026, 10, 6, 12, 0, 0, 123456789, time.UTC)
-	return controllers.Controller{
-		ID: fmt.Sprintf("default-controller-%08x", index), Type: "default", Status: controllers.Ready,
-		Server: controllers.ServerInfo{Hostname: "worker-1", OS: "linux", Arch: "amd64"}, Version: "v1", AgentSelector: "*", RuleSelector: "mission-rules",
-		StartedAt: heartbeat.Add(-time.Minute), LastHeartbeat: heartbeat, LeaseExpiresAt: heartbeat.Add(45 * time.Second),
 	}
 }

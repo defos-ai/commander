@@ -6,12 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/framework/agent/consumers"
-	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/comms"
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
@@ -19,13 +17,14 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
 )
 
 func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	bus := &resultBus{results: make(chan messages.Message, 16)}
-	runtime := &countingRuntime{}
+	bus := fakes.NewResultBus()
+	runtime := &fakes.CountingRuntime{}
 	outcomes := &consumers.Outcomes{}
 	outcomesDone := outcomes.Start(ctx)
 	t.Cleanup(func() { cancel(); <-outcomesDone })
@@ -39,7 +38,7 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	next := func() messages.Message {
 		t.Helper()
 		select {
-		case result := <-bus.results:
+		case result := <-bus.Results():
 			return result
 		case <-ctx.Done():
 			t.Fatal("result was not published")
@@ -70,12 +69,12 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	})
 	retry := next()
 
-	if runtime.calls != 1 || !reflect.DeepEqual(first, replay) || !reflect.DeepEqual(first, retry) || first.CorrelationID != command.ID || first.Work != command.Work {
-		t.Fatalf("execution repeated or result changed: calls=%d first=%+v replay=%+v retry=%+v", runtime.calls, first, replay, retry)
+	if runtime.Calls() != 1 || !reflect.DeepEqual(first, replay) || !reflect.DeepEqual(first, retry) || first.CorrelationID != command.ID || first.Work != command.Work {
+		t.Fatalf("execution repeated or result changed: calls=%d first=%+v replay=%+v retry=%+v", runtime.Calls(), first, replay, retry)
 	}
 	conflict := command
 	conflict.Payload = []byte(`{"action_name":"different"}`)
-	if err := consumer.Consume(ctx, conflict); err == nil || runtime.calls != 1 {
+	if err := consumer.Consume(ctx, conflict); err == nil || runtime.Calls() != 1 {
 		t.Fatal("conflicting command reused the original identity")
 	}
 
@@ -92,7 +91,7 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	}
 
 	select {
-	case result := <-bus.results:
+	case result := <-bus.Results():
 		t.Fatalf("accepted result was retried: %+v", result)
 	case <-time.After(1200 * time.Millisecond):
 	case <-ctx.Done():
@@ -100,39 +99,14 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	}
 }
 
-type countingRuntime struct{ calls int }
-
-func (r *countingRuntime) Execute(_ context.Context, call actions.ActionCall, _ string) (actions.ActionOutput, error) {
-	r.calls++
-	return actions.ActionOutput{ActionName: call.ActionName, Output: []byte(`{"observed":true}`)}, nil
-}
-func (*countingRuntime) Discover(context.Context, *environment.DiscoveryScope) error      { return nil }
-func (*countingRuntime) PublishState(context.Context, messages.MessageType, string) error { return nil }
-func (*countingRuntime) Shutdown(context.Context, string) error                           { return nil }
-
-type resultBus struct{ results chan messages.Message }
-
-func (b *resultBus) Publish(ctx context.Context, _ string, message messages.Message) error {
-	select {
-	case b.results <- message:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-func (*resultBus) Subscribe(context.Context, comms.Inbox) (comms.Subscription, error) {
-	return nil, errors.New("subscriptions are unused in this fault test")
-}
-func (*resultBus) Close() error { return nil }
-
 func TestFailedPublicationWaitsForReceiptAndPreservesOutcomeAcrossRestart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	lifetime, stop := context.WithCancel(ctx)
 	outcomes := &consumers.Outcomes{}
 	outcomesDone := outcomes.Start(lifetime)
-	bus := &flakyResultBus{resultBus: resultBus{results: make(chan messages.Message, 16)}}
-	runtime := &countingRuntime{}
+	bus := fakes.NewFlakyResultBus()
+	runtime := &fakes.CountingRuntime{}
 	consumer := consumers.ActionConsumer{Runtime: runtime, AgentID: "fixture-agent-12345678", Outcomes: outcomes,
 		Events: controllerevents.Client{Bus: bus}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	command, err := agentcommands.NewRunAction(consumer.AgentID, actions.ActionCall{ActionName: "inspect", Input: []byte(`{"page":1}`)})
@@ -146,7 +120,7 @@ func TestFailedPublicationWaitsForReceiptAndPreservesOutcomeAcrossRestart(t *tes
 
 	var result messages.Message
 	select {
-	case result = <-bus.results:
+	case result = <-bus.Results():
 	case <-ctx.Done():
 		t.Fatal("failed publication was not retried")
 	}
@@ -190,23 +164,11 @@ func TestFailedPublicationWaitsForReceiptAndPreservesOutcomeAcrossRestart(t *tes
 		t.Fatal(err)
 	}
 	select {
-	case replay := <-bus.results:
-		if runtime.calls != 1 || !reflect.DeepEqual(result, replay) {
-			t.Fatalf("restart repeated work or changed its result: calls=%d replay=%+v", runtime.calls, replay)
+	case replay := <-bus.Results():
+		if runtime.Calls() != 1 || !reflect.DeepEqual(result, replay) {
+			t.Fatalf("restart repeated work or changed its result: calls=%d replay=%+v", runtime.Calls(), replay)
 		}
 	case <-ctx.Done():
 		t.Fatal("restart did not replay the saved outcome")
 	}
-}
-
-type flakyResultBus struct {
-	resultBus
-	failed atomic.Bool
-}
-
-func (b *flakyResultBus) Publish(ctx context.Context, topic string, message messages.Message) error {
-	if b.failed.CompareAndSwap(false, true) {
-		return errors.New("temporary publication failure")
-	}
-	return b.resultBus.Publish(ctx, topic, message)
 }

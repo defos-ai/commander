@@ -7,12 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestMissionCreationOpenAPIContract(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, append(fixture.localArgs(), "--swagger"))
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--swagger"))
 	document := decodeResponse[struct {
 		Security []map[string][]string `json:"security"`
 		Paths    map[string]map[string]struct {
@@ -41,7 +42,7 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 		Components struct {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
-	}](t, server.request(t, http.MethodGet, "/openapi.json", authenticate))
+	}](t, server.Request(t, http.MethodGet, "/openapi.json", hostfixtures.Authenticate))
 	create := document.Paths["/api/v1/missions"]["post"]
 	if create.OperationID != "createMission" || !create.RequestBody.Required || create.RequestBody.Content["application/json"].Schema.Ref != "#/components/schemas/CreateMissionRequest" {
 		t.Fatal("mission creation must document its required JSON request")

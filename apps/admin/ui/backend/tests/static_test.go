@@ -12,15 +12,16 @@ import (
 	"testing/fstest"
 
 	"github.com/defos-ai/commander/apps/admin/ui/backend/static"
+	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
 func TestStaticFrontend(t *testing.T) {
-	directory := builtFrontend(t)
+	directory := fixtures.BuiltFrontend(t)
 	if err := os.WriteFile(filepath.Join(directory, ".env"), []byte("not frontend content"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	files := fstest.MapFS{}
-	for name, content := range frontendFiles() {
+	for name, content := range fixtures.FrontendFiles() {
 		files[name] = &fstest.MapFile{Data: []byte(content), Mode: 0600}
 	}
 	files[".env"] = &fstest.MapFile{Data: []byte("not frontend content"), Mode: 0600}
@@ -55,7 +56,9 @@ func TestStaticFrontend(t *testing.T) {
 		}
 		defer handler.Close()
 		recorder := httptest.NewRecorder()
+
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/escaped.txt", nil))
+
 		if recorder.Code != http.StatusNotFound || strings.Contains(recorder.Body.String(), "secret outside frontend") {
 			t.Fatalf("symlink escaped frontend: %d %q", recorder.Code, recorder.Body.String())
 		}
@@ -100,7 +103,9 @@ func checkStaticFrontend(t *testing.T, handler http.Handler) {
 			if test.byteRange != "" {
 				request.Header.Set("Range", test.byteRange)
 			}
+
 			handler.ServeHTTP(recorder, request)
+
 			if recorder.Code != test.status {
 				t.Fatalf("status = %d, want %d", recorder.Code, test.status)
 			}
@@ -146,27 +151,4 @@ func TestStaticFSRequiresIndex(t *testing.T) {
 			}
 		})
 	}
-}
-
-func frontendFiles() map[string]string {
-	return map[string]string{
-		"index.html":                 "<html>Commander</html>",
-		"assets/app-abcd1234.js":     "console.log('Commander')",
-		"assets/app-abcd1234.css":    "body{color:black}",
-		"assets/font-abcd1234.woff2": "font fixture",
-	}
-}
-
-func builtFrontend(t *testing.T) string {
-	t.Helper()
-	directory := t.TempDir()
-	if err := os.Mkdir(filepath.Join(directory, "assets"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	for name, value := range frontendFiles() {
-		if err := os.WriteFile(filepath.Join(directory, name), []byte(value), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return directory
 }

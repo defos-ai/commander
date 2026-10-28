@@ -109,9 +109,11 @@ The user's current instructions take precedence over repository guidance.
 - Prefer public API/MCP scenarios for cross-host behavior and unit tests for
   complex invariants, recovery and failures. Use deterministic fixtures and bounded
   waits; avoid implementation-mirroring tests or paid model calls.
-- Read the [test guidance](framework/tests/AGENTS.md) when changing tests or
-  fixtures; it covers shared-stack isolation and cleanup. Keep Docker lifecycle in
-  setup/CI, outside Go test fixtures.
+- Follow the shared [test rules](framework/tests/AGENTS.md) throughout the repo:
+  `tests/fixtures` owns setup/data, `tests/fakes` owns substitutes, and test files
+  own Arrange/Act/Assert scenarios. Keep synchronization private and remove
+  duplicate coverage only after identifying the retained covering scenario.
+  Keep Docker lifecycle in setup/CI, outside Go test fixtures.
 - Documentation-only edits need local link/anchor checks, plus README/AGENTS
   pairing checks when adding or moving files. Ignore changes need `git check-ignore`
   checks. Application test runs are unnecessary for those edits.

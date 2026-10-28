@@ -1,44 +1,24 @@
 package packages_test
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
-	fscomms "github.com/defos-ai/commander/providers/fs/comms"
-)
-
-const (
-	fixtureReference         = "github.com/defos-ai/fixture-agent@v0.1.0"
-	fixtureModuleReference   = "github.com/defos-ai/fixture-agent/apps/agents/fixture@v0.1.0"
-	fixtureReleaseURL        = "https://github.com/defos-ai/fixture-agent/releases/download/v0.1.0/"
-	fixtureModuleReleaseURL  = "https://github.com/defos-ai/fixture-agent/releases/download/apps%2Fagents%2Ffixture%2Fv0.1.0/"
-	fixtureBuilderReference  = "github.com/defos-ai/commander/apps/agents/builder@v0.1.0"
-	fixtureBuilderReleaseURL = "https://github.com/defos-ai/commander/releases/download/apps%2Fagents%2Fbuilder%2Fv0.1.0/"
 )
 
 func nativeDetails(t *testing.T, result runtimes.Result) runtimes.NativeRuntimeDetails {
@@ -50,151 +30,10 @@ func nativeDetails(t *testing.T, result runtimes.Result) runtimes.NativeRuntimeD
 	return details
 }
 
-var fixtureBuild struct {
-	once      sync.Once
-	directory string
-	binary    []byte
-	err       error
-}
-
 func TestMain(m *testing.M) {
 	code := m.Run()
-	if fixtureBuild.directory != "" {
-		_ = os.RemoveAll(fixtureBuild.directory)
-	}
+	fixtures.CleanupNativeBuild()
 	os.Exit(code)
-}
-
-func nativeFixtureBinary(t *testing.T) []byte {
-	t.Helper()
-	fixtureBuild.once.Do(func() {
-		fixtureBuild.directory, fixtureBuild.err = os.MkdirTemp("", "commander-spawner-fixture-")
-		if fixtureBuild.err != nil {
-			return
-		}
-		path := filepath.Join(fixtureBuild.directory, "fixture-agent")
-		if runtime.GOOS == "windows" {
-			path += ".exe"
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, "go", "build", "-o", path, "./fixture")
-		output, err := command.CombinedOutput()
-		if err != nil {
-			fixtureBuild.err = fmt.Errorf("build local agent fixture: %w: %s", err, output)
-			return
-		}
-		fixtureBuild.binary, fixtureBuild.err = os.ReadFile(path)
-	})
-	if fixtureBuild.err != nil {
-		t.Fatal(fixtureBuild.err)
-	}
-	return fixtureBuild.binary
-}
-
-func nativeFixtureResolver(t *testing.T, mode string) (*packages.Resolver, *atomic.Int32) {
-	t.Helper()
-	binary := nativeFixtureBinary(t)
-	asset := "fixture-agent" + mode
-	if runtime.GOOS == "windows" {
-		asset += ".exe"
-	}
-	checksum := sha256.Sum256(binary)
-	agentType := "fixture-agent"
-	if mode == "-builder" {
-		agentType = "builder-agent"
-	}
-	manifest := fmt.Sprintf("schema_version: 1\ntype: %s\nversion: v0.1.0\nnative:\n  %s/%s:\n    asset: %s\n    sha256: %q\n", agentType, runtime.GOOS, runtime.GOARCH, asset, fmt.Sprintf("%x", checksum))
-	requests := new(atomic.Int32)
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		requests.Add(1)
-		switch request.URL.String() {
-		case fixtureReleaseURL + "agent.yaml", fixtureModuleReleaseURL + "agent.yaml", fixtureBuilderReleaseURL + "agent.yaml":
-			return response(request, http.StatusOK, manifest), nil
-		case fixtureReleaseURL + asset, fixtureModuleReleaseURL + asset, fixtureBuilderReleaseURL + asset:
-			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(binary)), Request: request}, nil
-		default:
-			return response(request, http.StatusNotFound, "not found"), nil
-		}
-	}))
-	t.Cleanup(resolver.CloseIdleConnections)
-	return resolver, requests
-}
-
-type nativeFixture struct {
-	manager  *native.Manager
-	config   native.Config
-	bus      *fscomms.FsBus
-	storage  string
-	requests *atomic.Int32
-}
-
-func newNativeFixture(t *testing.T, mode string, timeout time.Duration, bootstrap ...*runtimes.SecretBootstrap) nativeFixture {
-	t.Helper()
-	root := t.TempDir()
-	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := bus.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	resolver, requests := nativeFixtureResolver(t, mode)
-	config := native.Config{
-		Directory: filepath.Join(root, "spawner"), Bus: bus, BusURL: filepath.Join(root, "bus"),
-		StorageURL: filepath.Join(root, "storage"), Resolver: resolver, RegistrationTimeout: timeout,
-		Environment: map[string]string{
-			"AWS_REGION": "fixture-region", "CHROMIUM_PATH": filepath.Join(root, "chromium"), "CHROMIUM_NO_SANDBOX": "true",
-		},
-	}
-	if len(bootstrap) > 0 {
-		config.SecretBootstrap = bootstrap[0]
-	}
-	manager, err := native.NewManager(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := manager.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	return nativeFixture{manager: manager, config: config, bus: bus, storage: config.StorageURL, requests: requests}
-}
-
-type childReport struct {
-	AgentID           string          `json:"agent_id"`
-	AgentIDSuffix     string          `json:"agent_id_suffix"`
-	PID               int             `json:"pid"`
-	InheritedSecret   bool            `json:"inherited_secret"`
-	SecretChallenge   *secrets.Secret `json:"secret_challenge"`
-	Region            string          `json:"region"`
-	Home              string          `json:"home"`
-	ChromiumPath      string          `json:"chromium_path"`
-	ChromiumNoSandbox string          `json:"chromium_no_sandbox"`
-}
-
-func childReports(t *testing.T, directory string) []childReport {
-	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(directory, "*.started"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	reports := make([]childReport, 0, len(paths))
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var report childReport
-		if err := json.Unmarshal(data, &report); err != nil {
-			t.Fatal(err)
-		}
-		reports = append(reports, report)
-	}
-	return reports
 }
 
 func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) {
@@ -202,38 +41,44 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 	for _, key := range []string{"SPAWNER_PARENT_SECRET", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN"} {
 		t.Setenv(key, "private-parent-sentinel")
 	}
-	fixture := newNativeFixture(t, "", 5*time.Second)
-	firstCtx, firstRequest, firstJournal := newSpawnCheckpoints(t)
-	first, err := fixture.manager.Spawn(firstCtx, firstRequest, fixtureReference)
+	fixture := fixtures.NewNativeManager(t, "", 5*time.Second)
+	firstCtx, firstRequest, firstJournal := fixtures.SpawnCheckpoints(t)
+
+	first, err := fixture.Manager.Spawn(firstCtx, firstRequest, fixtures.Reference)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.AgentType != "fixture-agent" || !strings.HasPrefix(first.AgentID, "fixture-agent-") || !id.ValidAgent(first.AgentID) || first.Package != fixtureReference || nativeDetails(t, first).PID <= 0 {
+	if first.AgentType != "fixture-agent" || !strings.HasPrefix(first.AgentID, "fixture-agent-") || !id.ValidAgent(first.AgentID) || first.Package != fixtures.Reference || nativeDetails(t, first).PID <= 0 {
 		t.Fatalf("unexpected spawned identity: %+v", first)
 	}
 	if len(first.Actions) != 1 || first.Actions[0].Name != "fixture-action" || first.Actions[0].Status != actionmodel.Ready {
 		t.Fatalf("registration action inventory was not returned: %+v", first.Actions)
 	}
-	ctx, requestID, journal := newSpawnCheckpoints(t)
-	second, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
+	ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+
+	second, err := fixture.Manager.Spawn(ctx, requestID, fixtures.ModuleReferenceFixture)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.AgentID == first.AgentID || nativeDetails(t, second).PID == nativeDetails(t, first).PID || second.Package != fixtureModuleReference {
+	if second.AgentID == first.AgentID || nativeDetails(t, second).PID == nativeDetails(t, first).PID || second.Package != fixtures.ModuleReferenceFixture {
 		t.Fatal("independent requests reused an agent identity or process")
 	}
-	before := fixture.requests.Load()
-	repeated, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
+	before := fixture.RequestCount()
+
+	repeated, err := fixture.Manager.Spawn(ctx, requestID, fixtures.ModuleReferenceFixture)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repeated.AgentID != second.AgentID || nativeDetails(t, repeated).PID != nativeDetails(t, second).PID || fixture.requests.Load() != before {
+	if repeated.AgentID != second.AgentID || nativeDetails(t, repeated).PID != nativeDetails(t, second).PID || fixture.RequestCount() != before {
 		t.Fatal("same request did not reuse the existing child without downloading again")
 	}
-	if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+	if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 		t.Fatal("request identity accepted a conflicting package")
 	}
-	reports := childReports(t, fixture.storage)
+	reports := fixtures.ChildReports(t, fixture.Storage)
 	if len(reports) != 2 {
 		t.Fatalf("started %d children; want two", len(reports))
 	}
@@ -244,21 +89,21 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		if report.InheritedSecret || report.SecretChallenge != nil || report.Region != "fixture-region" || report.Home == "" {
 			t.Fatalf("unexpected child environment: %+v", report)
 		}
-		if report.ChromiumPath != fixture.config.Environment["CHROMIUM_PATH"] || report.ChromiumNoSandbox != "true" {
+		if report.ChromiumPath != fixture.Config.Environment["CHROMIUM_PATH"] || report.ChromiumNoSandbox != "true" {
 			t.Fatalf("child did not receive browser deployment settings: %+v", report)
 		}
-		if relative, err := filepath.Rel(fixture.config.Directory, report.Home); err != nil || !filepath.IsLocal(relative) {
+		if relative, err := filepath.Rel(fixture.Config.Directory, report.Home); err != nil || !filepath.IsLocal(relative) {
 			t.Fatalf("child home is not isolated within its spawner directory: %s", report.Home)
 		}
 	}
 	assertCheckpointExcludes(t, firstJournal, "private-parent-sentinel", "fixture-region")
 	assertCheckpointExcludes(t, journal, "private-parent-sentinel", "fixture-region")
-	if err := fixture.manager.Close(); err != nil {
+	if err := fixture.Manager.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
 		for _, report := range reports {
-			if _, err := os.Stat(filepath.Join(fixture.storage, report.AgentID+".stopped")); err != nil {
+			if _, err := os.Stat(filepath.Join(fixture.Storage, report.AgentID+".stopped")); err != nil {
 				t.Fatalf("Close returned before child shutdown finished: %v", err)
 			}
 		}
@@ -281,20 +126,20 @@ func TestNativeBootstrapSharesUsableKeyOnlyWithTrustedBuilder(t *testing.T) {
 		name, mode, reference string
 		receivesKey           bool
 	}{
-		{"trusted builder", "-builder", fixtureBuilderReference, true},
-		{"untrusted builder type", "-builder", fixtureReference, false},
-		{"wrong manifest type", "", fixtureBuilderReference, false},
-		{"ordinary agent", "", fixtureReference, false},
+		{"trusted builder", "-builder", fixtures.BuilderReference, true},
+		{"untrusted builder type", "-builder", fixtures.Reference, false},
+		{"wrong manifest type", "", fixtures.BuilderReference, false},
+		{"ordinary agent", "", fixtures.Reference, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newNativeFixture(t, test.mode, 5*time.Second, bootstrap)
-			ctx, requestID, journal := newSpawnCheckpoints(t)
+			fixture := fixtures.NewNativeManager(t, test.mode, 5*time.Second, bootstrap)
+			ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			if _, err := fixture.manager.Spawn(ctx, requestID, test.reference); err != nil {
+			if _, err := fixture.Manager.Spawn(ctx, requestID, test.reference); err != nil {
 				t.Fatal(err)
 			}
-			report := awaitChildReport(t, ctx, fixture.storage)
+			report := fixtures.AwaitChildReport(t, ctx, fixture.Storage)
 			if report.InheritedSecret {
 				t.Fatal("child inherited unrelated host credentials")
 			}
@@ -316,18 +161,18 @@ func TestNativeBootstrapSharesUsableKeyOnlyWithTrustedBuilder(t *testing.T) {
 func TestNativeRejectsInvalidRegistrationsWithoutRelaunching(t *testing.T) {
 	for _, mode := range []string{"-wrong-type", "-wrong-id", "-invalid-schema"} {
 		t.Run(mode, func(t *testing.T) {
-			fixture := newNativeFixture(t, mode, time.Second)
-			ctx, requestID, _ := newSpawnCheckpoints(t)
+			fixture := fixtures.NewNativeManager(t, mode, time.Second)
+			ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+			if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 				t.Fatal("registration with an incorrect identity, type, or action schema was accepted")
 			}
-			before := fixture.requests.Load()
-			if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+			before := fixture.RequestCount()
+			if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 				t.Fatal("retry accepted a mismatched registration")
 			}
-			if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
+			if fixture.RequestCount() != before || len(fixtures.ChildReports(t, fixture.Storage)) != 1 {
 				t.Fatal("timed-out request started another process")
 			}
 		})
@@ -335,18 +180,18 @@ func TestNativeRejectsInvalidRegistrationsWithoutRelaunching(t *testing.T) {
 }
 
 func TestNativeCanceledWaitRetainsOneOwnedLaunch(t *testing.T) {
-	fixture := newNativeFixture(t, "-silent", 5*time.Second)
-	executionCtx, requestID, _ := newSpawnCheckpoints(t)
+	fixture := fixtures.NewNativeManager(t, "-silent", 5*time.Second)
+	executionCtx, requestID, _ := fixtures.SpawnCheckpoints(t)
 	ctx, cancel := context.WithCancel(executionCtx)
 	finished := make(chan error, 1)
-	go func() { _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); finished <- err }()
+	go func() { _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); finished <- err }()
 	defer cancel()
 	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		paths, err := filepath.Glob(filepath.Join(fixture.storage, "*.started"))
+		paths, err := filepath.Glob(filepath.Join(fixture.Storage, "*.started"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -368,13 +213,13 @@ func TestNativeCanceledWaitRetainsOneOwnedLaunch(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("canceled spawn did not return")
 	}
-	before := fixture.requests.Load()
+	before := fixture.RequestCount()
 	retryCtx, retryCancel := context.WithTimeout(executionCtx, 200*time.Millisecond)
 	defer retryCancel()
-	if _, err := fixture.manager.Spawn(retryCtx, requestID, fixtureReference); err == nil {
+	if _, err := fixture.Manager.Spawn(retryCtx, requestID, fixtures.Reference); err == nil {
 		t.Fatal("silent child unexpectedly registered")
 	}
-	if fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
+	if fixture.RequestCount() != before || len(fixtures.ChildReports(t, fixture.Storage)) != 1 {
 		t.Fatal("retry after cancellation launched a duplicate")
 	}
 }
@@ -386,11 +231,11 @@ func TestNativeRetryReceivesRegistrationAnnouncedAfterItsInitialWaitEnded(t *tes
 			name, timeout = "timed out", 100*time.Millisecond
 		}
 		t.Run(name, func(t *testing.T) {
-			fixture := newNativeFixture(t, "-delayed", timeout)
-			ctx, requestID, _ := newSpawnCheckpoints(t)
+			fixture := fixtures.NewNativeManager(t, "-delayed", timeout)
+			ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			observer, err := fixture.bus.Subscribe(ctx, comms.Inbox{
+			observer, err := fixture.Bus.Subscribe(ctx, comms.Inbox{
 				Topic: messages.ControllerEvents(messages.DefaultControllerType), Name: "late-registration-observer", Mode: comms.TransientExclusive,
 			})
 			if err != nil {
@@ -400,8 +245,8 @@ func TestNativeRetryReceivesRegistrationAnnouncedAfterItsInitialWaitEnded(t *tes
 			requestCtx, cancelRequest := context.WithCancel(ctx)
 			defer cancelRequest()
 			finished := make(chan error, 1)
-			go func() { _, err := fixture.manager.Spawn(requestCtx, requestID, fixtureReference); finished <- err }()
-			report := awaitChildReport(t, ctx, fixture.storage)
+			go func() { _, err := fixture.Manager.Spawn(requestCtx, requestID, fixtures.Reference); finished <- err }()
+			report := fixtures.AwaitChildReport(t, ctx, fixture.Storage)
 			if canceled {
 				cancelRequest()
 			}
@@ -426,32 +271,17 @@ func TestNativeRetryReceivesRegistrationAnnouncedAfterItsInitialWaitEnded(t *tes
 			if snapshot.Type != "fixture-agent" {
 				t.Fatalf("unexpected registration: %+v", snapshot)
 			}
-			before := fixture.requests.Load()
-			result, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+			before := fixture.RequestCount()
+
+			result, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference)
+
 			if err != nil {
 				t.Fatalf("retry missed the child's registration: %v", err)
 			}
-			if result.AgentID != report.AgentID || nativeDetails(t, result).PID != report.PID || fixture.requests.Load() != before || len(childReports(t, fixture.storage)) != 1 {
+			if result.AgentID != report.AgentID || nativeDetails(t, result).PID != report.PID || fixture.RequestCount() != before || len(fixtures.ChildReports(t, fixture.Storage)) != 1 {
 				t.Fatal("retry did not reconcile the original process")
 			}
 		})
-	}
-}
-
-func awaitChildReport(t *testing.T, ctx context.Context, directory string) childReport {
-	t.Helper()
-	tick := time.NewTicker(10 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		reports := childReports(t, directory)
-		if len(reports) == 1 {
-			return reports[0]
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("fixture child did not start")
-		case <-tick.C:
-		}
 	}
 }
 

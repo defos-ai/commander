@@ -8,18 +8,18 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestOperationPreflightUsesLatestContentWithoutRewritingNoop(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op := createMaintenanceOperation(t, first)
-	records := maintenanceInventory()
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op := fixtures.CreateMaintenanceOperation(t, first)
+	records := fixtures.MaintenanceInventory()
 	published, err := first.RefreshPreflight(t.Context(), op.ID, records)
 	if err != nil || published.Preflight == nil || !published.Preflight.Ready || published.Preflight.Version != 1 {
 		t.Fatalf("initial preflight was not published: %+v, %v", published, err)
@@ -33,13 +33,13 @@ func TestOperationPreflightUsesLatestContentWithoutRewritingNoop(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "operations", op.ID+".json")
-	before := readDispatchFile(t, path)
+	before := fixtures.ReadDispatchFile(t, path)
 	unchanged, err := first.RefreshPreflight(t.Context(), op.ID, records)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertResultJSONEqual(t, unchanged, latest)
-	if !bytes.Equal(before, readDispatchFile(t, path)) {
+	if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 		t.Fatal("identical observations changed bytes, timestamp, events, or storage revision")
 	}
 	records[0].Stale = true
@@ -51,7 +51,7 @@ func TestOperationPreflightUsesLatestContentWithoutRewritingNoop(t *testing.T) {
 	expected := latest.Clone()
 	expected.Preflight, expected.Status = changed.Preflight, operations.Waiting
 	assertTerminalSnapshot(t, expected, changed, operations.PreflightUpdated, started)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +60,8 @@ func TestOperationPreflightUsesLatestContentWithoutRewritingNoop(t *testing.T) {
 
 func TestOperationConcurrentIdenticalPreflightPublishesOneEvent(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op := createMaintenanceOperation(t, first)
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op := fixtures.CreateMaintenanceOperation(t, first)
 	type result struct {
 		op  operations.Operation
 		err error
@@ -70,7 +70,7 @@ func TestOperationConcurrentIdenticalPreflightPublishesOneEvent(t *testing.T) {
 	for _, store := range []*operationfs.OperationFsStore{first, second} {
 		go func() {
 			<-gate
-			published, err := store.RefreshPreflight(t.Context(), op.ID, maintenanceInventory())
+			published, err := store.RefreshPreflight(t.Context(), op.ID, fixtures.MaintenanceInventory())
 			results <- result{published, err}
 		}()
 	}
@@ -80,7 +80,7 @@ func TestOperationConcurrentIdenticalPreflightPublishesOneEvent(t *testing.T) {
 		t.Fatalf("identical concurrent observations failed: %v, %v", a.err, b.err)
 	}
 	assertResultJSONEqual(t, a.op, b.op)
-	saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,9 +92,9 @@ func TestOperationConcurrentIdenticalPreflightPublishesOneEvent(t *testing.T) {
 
 func TestOperationPreflightReassessesLatestMissionAndTerminalStatus(t *testing.T) {
 	dir := t.TempDir()
-	first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-	op := createMaintenanceOperation(t, first)
-	if _, err := first.RefreshPreflight(t.Context(), op.ID, maintenanceInventory()); err != nil {
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op := fixtures.CreateMaintenanceOperation(t, first)
+	if _, err := first.RefreshPreflight(t.Context(), op.ID, fixtures.MaintenanceInventory()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
@@ -104,7 +104,7 @@ func TestOperationPreflightReassessesLatestMissionAndTerminalStatus(t *testing.T
 	}); err != nil {
 		t.Fatal(err)
 	}
-	published, err := first.RefreshPreflight(t.Context(), op.ID, maintenanceInventory())
+	published, err := first.RefreshPreflight(t.Context(), op.ID, fixtures.MaintenanceInventory())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestOperationPreflightReassessesLatestMissionAndTerminalStatus(t *testing.T
 				t.Fatal(err)
 			}
 			assertTerminalRejected(t, dir, op.ID, func() (operations.Operation, error) {
-				return first.RefreshPreflight(t.Context(), op.ID, maintenanceInventory())
+				return first.RefreshPreflight(t.Context(), op.ID, fixtures.MaintenanceInventory())
 			}, operations.ErrFinished)
 		})
 	}
@@ -138,8 +138,8 @@ func TestOperationRecoveryPreservesLatestResultsAndExpiresDueQuestions(t *testin
 		}
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op := createMaintenanceOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op := fixtures.CreateMaintenanceOperation(t, first)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				taskID := id.TaskID()
@@ -178,20 +178,20 @@ func TestOperationRecoveryPreservesLatestResultsAndExpiresDueQuestions(t *testin
 				wantEvents = append(wantEvents, operations.OperationRecovered)
 			}
 			assertMaintenanceEvents(t, expected, published, started, wantEvents...)
-			saved, err := newDispatchStore(t, dir).Get(t.Context(), op.ID)
+			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
 			assertResultJSONEqual(t, saved, published)
 			path := filepath.Join(dir, "operations", op.ID+".json")
-			before := readDispatchFile(t, path)
+			before := fixtures.ReadDispatchFile(t, path)
 			again, err := second.Recover(t.Context(), op.ID, cutoff)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if terminal {
 				assertResultJSONEqual(t, again, published)
-				if !bytes.Equal(before, readDispatchFile(t, path)) {
+				if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 					t.Fatal("terminal recovery without due questions changed bytes or storage revision")
 				}
 			} else {
@@ -205,8 +205,8 @@ func TestOperationRecoveryRetainsTerminalInFlightTasks(t *testing.T) {
 	for _, status := range []operations.TaskStatus{operations.TaskRunning, operations.TaskInterrupted} {
 		t.Run(string(status), func(t *testing.T) {
 			dir := t.TempDir()
-			store := newDispatchStore(t, dir)
-			op := createMaintenanceOperation(t, store)
+			store := fixtures.NewDispatchStore(t, dir)
+			op := fixtures.CreateMaintenanceOperation(t, store)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			latest, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
@@ -221,7 +221,7 @@ func TestOperationRecoveryRetainsTerminalInFlightTasks(t *testing.T) {
 				t.Fatal(err)
 			}
 			started := time.Now().UTC()
-			published, err := newDispatchStore(t, dir).Recover(t.Context(), op.ID, cutoff)
+			published, err := fixtures.NewDispatchStore(t, dir).Recover(t.Context(), op.ID, cutoff)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -246,8 +246,8 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			first, second := newDispatchStore(t, dir), newDispatchStore(t, dir)
-			op := createMaintenanceOperation(t, first)
+			first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+			op := fixtures.CreateMaintenanceOperation(t, first)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			if _, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
 				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
@@ -266,7 +266,7 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 			if tc.change == nil {
 				// The store rejects duplicate task IDs on write. Corrupt the
 				// metadata directly to exercise recovery's persisted-state guard.
-				records := openRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
+				records := fixtures.OpenRecords(t, filepath.Join(dir, "operations", op.ID+".json"))
 				if err := records.Update(t.Context(), func(next map[string]json.RawMessage) error {
 					var metadata map[string]json.RawMessage
 					if err := json.Unmarshal(next["operation"], &metadata); err != nil {
@@ -291,30 +291,12 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 	}
 	t.Run("zero cutoff", func(t *testing.T) {
 		dir := t.TempDir()
-		store := newDispatchStore(t, dir)
-		op := createMaintenanceOperation(t, store)
+		store := fixtures.NewDispatchStore(t, dir)
+		op := fixtures.CreateMaintenanceOperation(t, store)
 		assertTerminalRejected(t, dir, op.ID, func() (operations.Operation, error) {
 			return store.Recover(t.Context(), op.ID, time.Time{})
 		}, nil)
 	})
-}
-
-func createMaintenanceOperation(t *testing.T, store *operationfs.OperationFsStore) operations.Operation {
-	t.Helper()
-	created := time.Date(2026, time.September, 29, 10, 0, 0, 0, time.UTC)
-	op := operations.Operation{ID: id.OperationID(), Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
-		Mission: missions.Mission{RequiredActions: []string{"inspect"}},
-	}
-	if err := store.Create(t.Context(), op); err != nil {
-		t.Fatal(err)
-	}
-	return op
-}
-
-func maintenanceInventory() []agents.Agent {
-	return []agents.Agent{{AgentSnapshot: agents.AgentSnapshot{ID: "review-agent-00000001", Status: agents.AgentReady,
-		Actions: []actions.Action{{Name: "inspect", Status: actions.Ready}},
-	}}}
 }
 
 func assertMaintenanceEvents(t *testing.T, expected, published operations.Operation, started time.Time, kinds ...operations.EventType) {

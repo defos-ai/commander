@@ -11,6 +11,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/playground/internal/local"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	fixtures "github.com/defos-ai/commander/apps/playground/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -18,9 +19,9 @@ import (
 )
 
 func testAllInOneDefaultAgents(t *testing.T) {
-	allInOneEnvironment(t)
+	fixtures.AllInOneEnvironment(t)
 	t.Setenv("PATH", t.TempDir()) // Starting the built-in hosts must not require Git.
-	session, _ := startLocalAdminSession(t, local.Options{})
+	session, _ := fixtures.StartLocalAdminSession(t, local.Options{})
 	client, err := bridge.Connect(session.Context, session.MCPURL, session.MCPCredentials)
 	if err != nil {
 		t.Fatal(err)

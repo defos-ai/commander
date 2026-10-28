@@ -10,13 +10,14 @@ import (
 
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/comms"
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/id"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/agent"
 )
 
 func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
@@ -47,8 +48,8 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			a := stateAgent(t, executor)
-			bus := &workBus{agentID: a.ID(), resultBus: resultBus{results: make(chan messages.Message, 16)}, commands: make(chan messages.Message, 1)}
+			a := fixtures.StateAgent(t, executor)
+			bus := fakes.NewWorkBus(a.ID())
 			serving, stop := context.WithCancel(ctx)
 			defer stop()
 			finished := make(chan error, 1)
@@ -56,7 +57,7 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 			next := func(kind messages.MessageType) messages.Message {
 				t.Helper()
 				select {
-				case message := <-bus.results:
+				case message := <-bus.Results():
 					if message.Type != kind {
 						t.Fatalf("event type=%s, want %s", message.Type, kind)
 					}
@@ -73,7 +74,9 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bus.commands <- command
+			if err := bus.SendCommand(ctx, command); err != nil {
+				t.Fatal(err)
+			}
 			working := next(controllerevents.AgentUpdated)
 			var snapshot agent.AgentSnapshot
 			if err := agent.Decode(working.Payload, &snapshot); err != nil {
@@ -138,45 +141,3 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 		})
 	}
 }
-
-type workBus struct {
-	resultBus
-	agentID  string
-	commands chan messages.Message
-}
-
-func (b *workBus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subscription, error) {
-	if inbox.Name != b.agentID || inbox.Mode != comms.TransientExclusive {
-		return nil, errors.New("agent inbox must be transient and owned by its process ID")
-	}
-	switch inbox.Topic {
-	case "agents." + b.agentID + ".commands":
-		return workSubscription{commands: b.commands}, nil
-	case "agents." + b.agentID + ".events":
-		return idleSubscription{}, nil
-	default:
-		return nil, errors.New("unexpected agent destination: " + inbox.Topic)
-	}
-}
-
-type workSubscription struct {
-	idleSubscription
-	commands <-chan messages.Message
-}
-
-func (s workSubscription) Next(ctx context.Context) (comms.Delivery, error) {
-	select {
-	case message := <-s.commands:
-		return testDelivery{message: message}, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
-type testDelivery struct {
-	message messages.Message
-}
-
-func (d testDelivery) Message() messages.Message  { return d.message }
-func (testDelivery) Ack(context.Context) error    { return nil }
-func (testDelivery) Reject(context.Context) error { return nil }

@@ -9,10 +9,11 @@ import (
 	"time"
 
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
 func TestControllerSetsAgentCommandExpiry(t *testing.T) {
@@ -22,7 +23,7 @@ func TestControllerSetsAgentCommandExpiry(t *testing.T) {
 			name = "caller deadline"
 		}
 		t.Run(name, func(t *testing.T) {
-			ctx, c, bus, _ := fixture(t, time.Hour)
+			ctx, c, bus, _ := fixtures.Controller(t, time.Hour)
 			caller, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
 			deadline := time.Now().Add(3 * time.Second)
@@ -32,8 +33,8 @@ func TestControllerSetsAgentCommandExpiry(t *testing.T) {
 				t.Cleanup(stop)
 			}
 
-			finished := discover(caller, c)
-			command := receive(t, ctx, bus.commands)
+			finished := fixtures.Discover(caller, c)
+			command := fixtures.Receive(t, ctx, bus.Commands())
 
 			if !explicit {
 				deadline = command.CreatedAt.Add(5 * time.Minute)
@@ -41,8 +42,8 @@ func TestControllerSetsAgentCommandExpiry(t *testing.T) {
 			if !command.ExpiresAt.Equal(deadline) {
 				t.Fatalf("command expiry = %s, want %s", command.ExpiresAt, deadline)
 			}
-			bus.observe(t, ctx, controllerevents.AgentUpdated, command.ID)
-			if err := receive(t, ctx, finished); err != nil {
+			fixtures.Observe(t, ctx, bus, controllerevents.AgentUpdated, command.ID)
+			if err := fixtures.Receive(t, ctx, finished); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -52,13 +53,13 @@ func TestControllerSetsAgentCommandExpiry(t *testing.T) {
 func TestControllerRedeliversOriginalExpiry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	command, _, _ := artifactResult(t)
+	command, _, _ := fixtures.ArtifactResult(t)
 	command.CreatedAt = time.Now().UTC().Add(-2 * time.Minute)
 	command.ExpiresAt = command.CreatedAt.Add(time.Minute)
-	durable := savedCommand{record: executions.Execution{Command: command, StartedAt: command.CreatedAt}}
-	bus := artifactBus()
+	durable := fakes.NewSavedCommand(executions.Execution{Command: command, StartedAt: command.CreatedAt})
+	bus := fakes.NewBus()
 	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
-		AgentStore: &inventory{}, ActionStore: unusedActions{}, ExecutionStore: durable, ArtifactStore: unusedArtifacts{},
+		AgentStore: &fakes.Inventory{}, ActionStore: fakes.UnusedActions{}, ExecutionStore: durable, ArtifactStore: fakes.UnusedArtifacts{},
 		HeartbeatTimeout: time.Hour, LeaseSweepInterval: time.Hour,
 	})
 	if err != nil {
@@ -71,7 +72,7 @@ func TestControllerRedeliversOriginalExpiry(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	bus.observe(t, ctx, controllerevents.AgentStarted, "")
+	fixtures.Observe(t, ctx, bus, controllerevents.AgentStarted, "")
 	var call actions.ActionCall
 	if err := json.Unmarshal(command.Payload, &call); err != nil {
 		t.Fatal(err)
@@ -80,27 +81,14 @@ func TestControllerRedeliversOriginalExpiry(t *testing.T) {
 	defer stop()
 	finished := make(chan error, 1)
 
-	go func() { _, err := c.DispatchAction(caller, agentID, call); finished <- err }()
-	replayed := receive(t, ctx, bus.commands)
+	go func() { _, err := c.DispatchAction(caller, fixtures.AgentID, call); finished <- err }()
+	replayed := fixtures.Receive(t, ctx, bus.Commands())
 
 	if !reflect.DeepEqual(replayed, command) {
 		t.Fatalf("recovery extended expiry or changed saved command: %+v", replayed)
 	}
 	stop()
-	if err := receive(t, ctx, finished); !errors.Is(err, context.Canceled) {
+	if err := fixtures.Receive(t, ctx, finished); !errors.Is(err, context.Canceled) {
 		t.Fatalf("recovery wait did not stop: %v", err)
 	}
-}
-
-type savedCommand struct {
-	executions.ExecutionStore
-	record executions.Execution
-}
-
-func (s savedCommand) Get(context.Context, string, string) (executions.Execution, error) {
-	return s.record, nil
-}
-
-func (s savedCommand) Claim(context.Context, messages.Message) (executions.Execution, bool, error) {
-	return s.record, false, nil
 }

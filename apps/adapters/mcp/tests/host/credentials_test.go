@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/host"
 )
 
@@ -16,7 +17,7 @@ func TestMissingCredentialsExplainHowToStart(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("MCP_TOKEN", "")
 	var output, diagnostic bytes.Buffer
-	if code := cli.Main(hostArgs(root), &output, &diagnostic); code != 1 {
+	if code := cli.Main(hostfixtures.Args(root), &output, &diagnostic); code != 1 {
 		t.Fatalf("missing credentials exit code = %d, want 1", code)
 	}
 	for _, instruction := range []string{"MCP_TOKEN", `export MCP_TOKEN="$(openssl rand -hex 32)"`, "$env:MCP_TOKEN", "commander-mcp"} {
@@ -34,7 +35,7 @@ func TestMissingCredentialsExplainHowToStart(t *testing.T) {
 
 func TestEmbeddedCredentialsMustBeComplete(t *testing.T) {
 	t.Setenv("MCP_TOKEN", "environment-token")
-	err := cli.RunWithOptions(t.Context(), hostArgs(t.TempDir()), io.Discard, cli.Options{Credentials: &host.BearerCredentials{}})
+	err := cli.RunWithOptions(t.Context(), hostfixtures.Args(t.TempDir()), io.Discard, cli.Options{Credentials: &host.BearerCredentials{}})
 	if err == nil || !strings.Contains(err.Error(), "MCP_TOKEN must be set") {
 		t.Fatal("empty embedded credentials must fail instead of using environment credentials")
 	}
@@ -80,7 +81,7 @@ func TestCredentialsCommand(t *testing.T) {
 func TestCLIRejectsInvalidCredentialsWithoutLeaking(t *testing.T) {
 	for _, secret := range []string{"", " ", "private invalid token", "private\ninvalid-token", "private=invalid-token"} {
 		t.Setenv("MCP_TOKEN", secret)
-		for _, args := range [][]string{hostArgs(t.TempDir()), {"credentials"}, {"credentials", "--raw"}} {
+		for _, args := range [][]string{hostfixtures.Args(t.TempDir()), {"credentials"}, {"credentials", "--raw"}} {
 			var output, diagnostic bytes.Buffer
 			if code := cli.Main(args, &output, &diagnostic); code != 1 || output.Len() != 0 || diagnostic.Len() == 0 {
 				t.Error("invalid credentials must fail with a diagnostic and no credentials")

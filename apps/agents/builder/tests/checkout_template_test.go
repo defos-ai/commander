@@ -9,29 +9,35 @@ import (
 	"testing"
 
 	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
+	"github.com/defos-ai/commander/apps/agents/builder/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 )
 
 func TestConcurrentCheckoutsKeepSourceIndependent(t *testing.T) {
-	source, revision := templateFixture(t)
+	source, revision := fixtures.Template(t)
 	root := t.TempDir()
-	executor := localCheckout(t, root, source)
+	executor := fixtures.LocalCheckout(t, root, source)
 	type outcome struct {
 		result action.Result
 		err    error
 	}
 	completed := make(chan outcome, 2)
+
 	for range 2 {
 		go func() {
 			result, err := executor.Run(t.Context(), json.RawMessage(`{}`))
 			completed <- outcome{result, err}
 		}()
 	}
+	outcomes := make([]outcome, 2)
+	for i := range outcomes {
+		outcomes[i] = <-completed
+	}
+
 	var outputs []builderactions.CheckoutTemplateOutput
-	for range 2 {
-		got := <-completed
+	for _, got := range outcomes {
 		if got.err != nil {
 			t.Errorf("concurrent checkout: %v", got.err)
 			continue
@@ -82,7 +88,7 @@ func TestConcurrentCheckoutsKeepSourceIndependent(t *testing.T) {
 
 func TestCheckoutTemplateRejectsCallerControlledSourceAndPaths(t *testing.T) {
 	root := t.TempDir()
-	executor := localCheckout(t, root, "")
+	executor := fixtures.LocalCheckout(t, root, "")
 	for _, input := range []string{
 		`{"url":"https://untrusted.invalid/template"}`,
 		`{"path":"../../outside"}`,
@@ -100,9 +106,9 @@ func TestCheckoutTemplateRejectsCallerControlledSourceAndPaths(t *testing.T) {
 }
 
 func TestCheckoutTemplateGitDiscoveryAndRediscovery(t *testing.T) {
-	source, _ := templateFixture(t)
+	source, _ := fixtures.Template(t)
 	root := t.TempDir()
-	executor := localCheckout(t, root, source)
+	executor := fixtures.LocalCheckout(t, root, source)
 	status, err := executor.Discover(t.Context(), &environment.Local{}, &environment.DiscoveryScope{Paths: []string{}})
 	if err != nil || status != action.Unavailable {
 		t.Fatalf("empty discovery scope: status=%s error=%v", status, err)
@@ -115,7 +121,7 @@ func TestCheckoutTemplateGitDiscoveryAndRediscovery(t *testing.T) {
 		t.Fatal("rediscovery retained the previous Git executable")
 	}
 	assertEmptyWorkspaceRoot(t, root)
-	executor.discover(t)
+	executor.DiscoverReady(t)
 	if len(executor.Action().MissingRequirements) != 0 {
 		t.Fatal("successful rediscovery retained missing requirements")
 	}
@@ -124,7 +130,7 @@ func TestCheckoutTemplateGitDiscoveryAndRediscovery(t *testing.T) {
 
 func TestCheckoutTemplateFailureRemovesWorkspace(t *testing.T) {
 	root := t.TempDir()
-	executor := localCheckout(t, root, filepath.Join(t.TempDir(), "missing-repository"))
+	executor := fixtures.LocalCheckout(t, root, filepath.Join(t.TempDir(), "missing-repository"))
 	if _, err := executor.Run(t.Context(), json.RawMessage(`{}`)); err == nil {
 		t.Fatal("nonexistent repository checkout succeeded")
 	}
@@ -133,7 +139,7 @@ func TestCheckoutTemplateFailureRemovesWorkspace(t *testing.T) {
 
 func TestCheckoutTemplateAlreadyCancelled(t *testing.T) {
 	root := t.TempDir()
-	executor := localCheckout(t, root, filepath.Join(t.TempDir(), "missing-repository"))
+	executor := fixtures.LocalCheckout(t, root, filepath.Join(t.TempDir(), "missing-repository"))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := executor.Run(ctx, json.RawMessage(`{}`)); err == nil {
@@ -142,38 +148,11 @@ func TestCheckoutTemplateAlreadyCancelled(t *testing.T) {
 	assertEmptyWorkspaceRoot(t, root)
 }
 
-type checkoutFixture struct {
-	*builderactions.CheckoutTemplate
-	scope *environment.DiscoveryScope
-}
-
-func localCheckout(t *testing.T, root, source string) *checkoutFixture {
-	t.Helper()
-	return configuredCheckout(t, root, gitFixtureConfig{Source: source})
-}
-
-func configuredCheckout(t *testing.T, root string, config gitFixtureConfig) *checkoutFixture {
-	t.Helper()
-	executor, err := builderactions.NewCheckoutTemplate(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture := &checkoutFixture{CheckoutTemplate: executor, scope: gitFixtureScope(t, config)}
-	fixture.discover(t)
-	return fixture
-}
-
-func (f *checkoutFixture) discover(t *testing.T) {
-	t.Helper()
-	status, err := f.Discover(t.Context(), &environment.Local{}, f.scope)
-	if err != nil || status != action.Ready {
-		t.Fatalf("Git discovery: status=%s error=%v", status, err)
-	}
-}
-
 func runCheckout(t *testing.T, executor action.Executor) builderactions.CheckoutTemplateOutput {
 	t.Helper()
+
 	result, err := executor.Run(t.Context(), json.RawMessage(`{}`))
+
 	if err != nil {
 		t.Fatal(err)
 	}

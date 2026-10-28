@@ -12,14 +12,15 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 )
 
 const adminOrigin = "https://admin.example"
 
 func TestCORSApprovedOriginsKeepAuthenticationAndExposeResponses(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	t.Setenv("API_ALLOWED_ORIGINS", "")
-	server := startAPI(t, append(fixture.localArgs(), "--allowed-origins="+adminOrigin+",http://localhost:4275"))
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--allowed-origins="+adminOrigin+",http://localhost:4275"))
 	for _, origin := range []string{adminOrigin, "http://localhost:4275"} {
 		for _, tc := range []struct {
 			method, path, code string
@@ -32,49 +33,49 @@ func TestCORSApprovedOriginsKeepAuthenticationAndExposeResponses(t *testing.T) {
 			{http.MethodDelete, "/api/v1/missions", "", 405, true},
 			{http.MethodPost, "/api/v1/operations", "invalid_request", 400, true},
 		} {
-			result := server.request(t, tc.method, tc.path, corsOrigin(origin), func(r *http.Request) {
+			result := server.Request(t, tc.method, tc.path, corsOrigin(origin), func(r *http.Request) {
 				if tc.authenticated {
-					authenticate(r)
+					hostfixtures.Authenticate(r)
 				}
 				r.Header.Set("Sec-Fetch-Site", "cross-site")
 			})
-			if result.status != tc.status {
-				t.Fatalf("%s %s from %s: status=%d body=%s", tc.method, tc.path, origin, result.status, result.body)
+			if result.Status != tc.status {
+				t.Fatalf("%s %s from %s: status=%d body=%s", tc.method, tc.path, origin, result.Status, result.Body)
 			}
 			if tc.code != "" {
 				assertAPIError(t, result, tc.status, tc.code)
 			}
 			assertCORSActual(t, result, origin)
-			if tc.status == http.StatusUnauthorized && result.header.Get("WWW-Authenticate") == "" {
+			if tc.status == http.StatusUnauthorized && result.Header.Get("WWW-Authenticate") == "" {
 				t.Fatal("readable authentication failure lost its Basic challenge")
 			}
 		}
 	}
 	for _, fetchSite := range []string{"same-site", "cross-site"} {
-		result := server.request(t, http.MethodGet, "/api/v1/actions", authenticate, corsOrigin(adminOrigin), func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", fetchSite) })
-		if result.status != http.StatusOK {
+		result := server.Request(t, http.MethodGet, "/api/v1/actions", hostfixtures.Authenticate, corsOrigin(adminOrigin), func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", fetchSite) })
+		if result.Status != http.StatusOK {
 			t.Fatalf("approved Origin with %s metadata was rejected: %+v", fetchSite, result)
 		}
 	}
-	wrongPassword := server.request(t, http.MethodGet, "/api/v1/missions", corsOrigin(adminOrigin), func(r *http.Request) { r.SetBasicAuth("api-fixture-user", "wrong-password") })
+	wrongPassword := server.Request(t, http.MethodGet, "/api/v1/missions", corsOrigin(adminOrigin), func(r *http.Request) { r.SetBasicAuth("api-fixture-user", "wrong-password") })
 	assertAPIError(t, wrongPassword, http.StatusUnauthorized, "authentication_required")
 	assertCORSActual(t, wrongPassword, adminOrigin)
 }
 
 func TestCORSPreflightAuthorizesMethodsAndHeadersWithoutCredentials(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	t.Setenv("API_ALLOWED_ORIGINS", adminOrigin)
-	server := startAPI(t, fixture.localArgs())
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete} {
 		for _, headers := range []string{"", "Authorization", "authorization, CONTENT-TYPE, Accept"} {
-			result := server.request(t, http.MethodOptions, "/api/v1/operations", corsPreflight(adminOrigin, method, headers))
-			if result.status != http.StatusNoContent || result.body != "" || result.header.Get("WWW-Authenticate") != "" {
+			result := server.Request(t, http.MethodOptions, "/api/v1/operations", corsPreflight(adminOrigin, method, headers))
+			if result.Status != http.StatusNoContent || result.Body != "" || result.Header.Get("WWW-Authenticate") != "" {
 				t.Fatalf("preflight must be empty and unauthenticated: %+v", result)
 			}
 			assertCORSOrigin(t, result, adminOrigin)
-			assertCORSTokens(t, result.header, "Access-Control-Allow-Methods", "GET", "HEAD", "POST", "PUT", "DELETE")
-			assertCORSTokens(t, result.header, "Access-Control-Allow-Headers", "Authorization", "Content-Type", "Accept")
-			assertCORSVary(t, result.header, "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers")
+			assertCORSTokens(t, result.Header, "Access-Control-Allow-Methods", "GET", "HEAD", "POST", "PUT", "DELETE")
+			assertCORSTokens(t, result.Header, "Access-Control-Allow-Headers", "Authorization", "Content-Type", "Accept")
+			assertCORSVary(t, result.Header, "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers")
 		}
 	}
 	for _, tc := range []struct {
@@ -90,32 +91,32 @@ func TestCORSPreflightAuthorizesMethodsAndHeadersWithoutCredentials(t *testing.T
 		{"repeated method", "GET", "", "invalid_cors_preflight", 400, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			result := server.request(t, http.MethodOptions, "/api/v1/missions", corsPreflight(adminOrigin, tc.method, tc.headers), func(r *http.Request) {
+			result := server.Request(t, http.MethodOptions, "/api/v1/missions", corsPreflight(adminOrigin, tc.method, tc.headers), func(r *http.Request) {
 				if tc.repeatMethod {
 					r.Header.Add("Access-Control-Request-Method", tc.method)
 				}
 			})
 			assertAPIError(t, result, tc.status, tc.code)
 			assertCORSOrigin(t, result, adminOrigin)
-			assertCORSVary(t, result.header, "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers")
-			if result.header.Get("WWW-Authenticate") != "" || result.header.Get("Access-Control-Allow-Methods") != "" {
-				t.Fatalf("rejected preflight issued a challenge or grant: %v", result.header)
+			assertCORSVary(t, result.Header, "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers")
+			if result.Header.Get("WWW-Authenticate") != "" || result.Header.Get("Access-Control-Allow-Methods") != "" {
+				t.Fatalf("rejected preflight issued a challenge or grant: %v", result.Header)
 			}
 		})
 	}
 }
 
 func TestCORSRejectsUnapprovedAndMalformedOrigins(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	t.Setenv("API_ALLOWED_ORIGINS", adminOrigin)
-	server := startAPI(t, fixture.localArgs())
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	for _, origin := range []string{
 		"https://attacker.invalid", "https://admin.example.attacker.invalid", "http://admin.example", "https://admin.example:444",
 		"null", "*", adminOrigin + "/", adminOrigin + "?query", adminOrigin + "#fragment", "https://user@admin.example",
 		adminOrigin + " https://other.example", adminOrigin + ",https://other.example",
 	} {
 		for _, method := range []string{http.MethodGet, http.MethodOptions} {
-			result := server.request(t, method, "/api/v1/missions", authenticate, corsOrigin(origin), func(r *http.Request) {
+			result := server.Request(t, method, "/api/v1/missions", hostfixtures.Authenticate, corsOrigin(origin), func(r *http.Request) {
 				if method == http.MethodOptions {
 					r.Header.Set("Access-Control-Request-Method", "GET")
 				}
@@ -125,17 +126,17 @@ func TestCORSRejectsUnapprovedAndMalformedOrigins(t *testing.T) {
 		}
 	}
 	for _, method := range []string{http.MethodGet, http.MethodOptions} {
-		result := server.request(t, method, "/api/v1/missions", authenticate, corsPreflight(adminOrigin, "GET", ""), func(r *http.Request) { r.Header.Add("Origin", adminOrigin) })
+		result := server.Request(t, method, "/api/v1/missions", hostfixtures.Authenticate, corsPreflight(adminOrigin, "GET", ""), func(r *http.Request) { r.Header.Add("Origin", adminOrigin) })
 		assertAPIError(t, result, http.StatusForbidden, "cross_origin_request")
 		assertCORSNotGranted(t, result)
 	}
 	for _, fetchSite := range []string{"same-site", "cross-site"} {
-		result := server.request(t, http.MethodGet, "/api/v1/missions", authenticate, func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", fetchSite) })
+		result := server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate, func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", fetchSite) })
 		assertAPIError(t, result, http.StatusForbidden, "cross_origin_request")
 		assertCORSNotGranted(t, result)
 	}
 	for _, values := range [][]string{{"invalid"}, {"same-site, cross-site"}, {"same-site", "cross-site"}} {
-		result := server.request(t, http.MethodGet, "/api/v1/missions", authenticate, corsOrigin(adminOrigin), func(r *http.Request) {
+		result := server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate, corsOrigin(adminOrigin), func(r *http.Request) {
 			r.Header["Sec-Fetch-Site"] = values
 		})
 		assertAPIError(t, result, http.StatusForbidden, "cross_origin_request")
@@ -144,35 +145,35 @@ func TestCORSRejectsUnapprovedAndMalformedOrigins(t *testing.T) {
 }
 
 func TestCORSNonPreflightOptionsKeepAuthenticationAndRouting(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	t.Setenv("API_ALLOWED_ORIGINS", adminOrigin)
-	server := startAPI(t, fixture.localArgs())
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	for _, configure := range []func(*http.Request){
 		func(*http.Request) {},
 		corsOrigin(adminOrigin),
 		func(r *http.Request) { r.Header.Set("Access-Control-Request-Method", "GET") },
 	} {
-		unauthorized := server.request(t, http.MethodOptions, "/api/v1/missions", configure)
+		unauthorized := server.Request(t, http.MethodOptions, "/api/v1/missions", configure)
 		assertAPIError(t, unauthorized, http.StatusUnauthorized, "authentication_required")
-		authenticated := server.request(t, http.MethodOptions, "/api/v1/missions", configure, authenticate)
-		if authenticated.status != http.StatusMethodNotAllowed || authenticated.header.Get("Access-Control-Allow-Methods") != "" {
+		authenticated := server.Request(t, http.MethodOptions, "/api/v1/missions", configure, hostfixtures.Authenticate)
+		if authenticated.Status != http.StatusMethodNotAllowed || authenticated.Header.Get("Access-Control-Allow-Methods") != "" {
 			t.Fatalf("ordinary OPTIONS bypassed routing: %+v", authenticated)
 		}
 	}
 }
 
 func TestCORSHealthBypassAndProtectedProxyValidation(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	t.Setenv("API_ALLOWED_ORIGINS", adminOrigin)
-	server := startAPI(t, append(fixture.localArgs(), "--allowed-hosts=api.example", "--trusted-proxies=127.0.0.1", "--proxy-headers=forwarded"))
+	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--allowed-hosts=api.example", "--trusted-proxies=127.0.0.1", "--proxy-headers=forwarded"))
 	for _, path := range []string{"/healthz", "/readyz"} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
 			for _, origin := range []string{adminOrigin, "https://unapproved.example", "null"} {
-				result := server.request(t, method, path, corsOrigin(origin), func(r *http.Request) {
+				result := server.Request(t, method, path, corsOrigin(origin), func(r *http.Request) {
 					r.Host = "internal-load-balancer.invalid"
 					r.Header.Set("Forwarded", "malformed-forwarding")
 				})
-				if result.status != http.StatusOK {
+				if result.Status != http.StatusOK {
 					t.Fatalf("public probe lost its host/proxy bypass: %+v", result)
 				}
 				if origin == adminOrigin {
@@ -184,11 +185,11 @@ func TestCORSHealthBypassAndProtectedProxyValidation(t *testing.T) {
 		}
 	}
 	for _, path := range []string{"/api/v1/missions", "/healthz"} {
-		approved := server.request(t, http.MethodOptions, path, corsPreflight(adminOrigin, "GET", "Authorization"), func(r *http.Request) {
+		approved := server.Request(t, http.MethodOptions, path, corsPreflight(adminOrigin, "GET", "Authorization"), func(r *http.Request) {
 			r.Host = "internal.invalid"
 			r.Header.Set("Forwarded", "host=api.example;proto=https")
 		})
-		if approved.status != http.StatusNoContent || approved.header.Get("Strict-Transport-Security") == "" {
+		if approved.Status != http.StatusNoContent || approved.Header.Get("Strict-Transport-Security") == "" {
 			t.Fatalf("trusted proxy preflight did not use effective origin: %+v", approved)
 		}
 		assertCORSOrigin(t, approved, adminOrigin)
@@ -199,31 +200,31 @@ func TestCORSHealthBypassAndProtectedProxyValidation(t *testing.T) {
 			{"host=blocked.example;proto=https", "host_not_allowed", 403},
 			{"malformed-forwarding", "invalid_request_origin", 400},
 		} {
-			result := server.request(t, http.MethodOptions, path, corsPreflight(adminOrigin, "GET", "Authorization"), func(r *http.Request) {
+			result := server.Request(t, http.MethodOptions, path, corsPreflight(adminOrigin, "GET", "Authorization"), func(r *http.Request) {
 				r.Host = "api.example"
 				r.Header.Set("Forwarded", tc.forwarded)
 			})
 			assertAPIError(t, result, tc.status, tc.code)
 			assertCORSActual(t, result, adminOrigin)
-			if result.header.Get("Access-Control-Allow-Methods") != "" {
+			if result.Header.Get("Access-Control-Allow-Methods") != "" {
 				t.Fatal("proxy or host rejection granted preflight access")
 			}
 		}
 	}
-	if err := os.WriteFile(filepath.Join(fixture.root, "database", "missions.json"), []byte("invalid fixture data"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(fixture.Root, "database", "missions.json"), []byte("invalid fixture data"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	unready := server.request(t, http.MethodGet, "/readyz", corsOrigin(adminOrigin))
-	if unready.status != http.StatusServiceUnavailable {
+	unready := server.Request(t, http.MethodGet, "/readyz", corsOrigin(adminOrigin))
+	if unready.Status != http.StatusServiceUnavailable {
 		t.Fatalf("unreadable database should report unavailable: %+v", unready)
 	}
 	assertCORSActual(t, unready, adminOrigin)
 
 	t.Run("untrusted proxy", func(t *testing.T) {
-		fixture := newFixture(t)
+		fixture := hostfixtures.New(t)
 		t.Setenv("API_ALLOWED_ORIGINS", adminOrigin)
-		server := startAPI(t, append(fixture.localArgs(), "--allowed-hosts=api.example", "--trusted-proxies=192.0.2.0/24", "--proxy-headers=forwarded"))
-		result := server.request(t, http.MethodOptions, "/api/v1/missions", corsPreflight(adminOrigin, "GET", ""), func(r *http.Request) {
+		server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--allowed-hosts=api.example", "--trusted-proxies=192.0.2.0/24", "--proxy-headers=forwarded"))
+		result := server.Request(t, http.MethodOptions, "/api/v1/missions", corsPreflight(adminOrigin, "GET", ""), func(r *http.Request) {
 			r.Host = "internal.invalid"
 			r.Header.Set("Forwarded", "host=api.example;proto=https")
 		})
@@ -249,27 +250,27 @@ func TestCORSOriginConfigurationPrecedenceAndDefault(t *testing.T) {
 		{"flag overrides invalid environment", "null", "--allowed-origins=" + adminOrigin, adminOrigin, "https://other.example"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("API_ALLOWED_ORIGINS", tc.environment)
-			args := fixture.localArgs()
+			args := fixture.LocalArgs()
 			if tc.flag != "" {
 				args = append(args, tc.flag)
 			}
-			server := startAPI(t, args)
+			server := hostfixtures.Start(t, args)
 			if tc.allowed != "" {
-				result := server.request(t, http.MethodGet, "/api/v1/missions", authenticate, corsOrigin(tc.allowed))
-				if result.status != http.StatusOK {
+				result := server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate, corsOrigin(tc.allowed))
+				if result.Status != http.StatusOK {
 					t.Fatalf("allowed origin was rejected: %+v", result)
 				}
 				assertCORSActual(t, result, tc.allowed)
-				preflight := server.request(t, http.MethodOptions, "/api/v1/missions", corsPreflight(tc.allowed, "GET", "Authorization"))
-				if preflight.status != http.StatusNoContent {
+				preflight := server.Request(t, http.MethodOptions, "/api/v1/missions", corsPreflight(tc.allowed, "GET", "Authorization"))
+				if preflight.Status != http.StatusNoContent {
 					t.Fatalf("allowed origin preflight was rejected: %+v", preflight)
 				}
 			}
-			assertAPIError(t, server.request(t, http.MethodGet, "/api/v1/missions", authenticate, corsOrigin(tc.denied)), http.StatusForbidden, "cross_origin_request")
-			sameOrigin := server.request(t, http.MethodGet, "/api/v1/missions", authenticate, corsOrigin(server.url))
-			if sameOrigin.status != http.StatusOK {
+			assertAPIError(t, server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate, corsOrigin(tc.denied)), http.StatusForbidden, "cross_origin_request")
+			sameOrigin := server.Request(t, http.MethodGet, "/api/v1/missions", hostfixtures.Authenticate, corsOrigin(server.URL))
+			if sameOrigin.Status != http.StatusOK {
 				t.Fatalf("same-origin access changed: %+v", sameOrigin)
 			}
 		})
@@ -279,12 +280,12 @@ func TestCORSOriginConfigurationPrecedenceAndDefault(t *testing.T) {
 func TestCORSRejectsInvalidConfiguredOriginsAtStartup(t *testing.T) {
 	for _, origin := range []string{"*", "https://*.example", "null", "ftp://admin.example", adminOrigin + "/", adminOrigin + "/path", adminOrigin + "?query", adminOrigin + "#fragment", "https://user:private-origin-password@admin.example", "https://admin.example:0", "https://admin.example:65536", "https://admin.example:bad", "https://admin.example:", adminOrigin + ","} {
 		t.Run(origin, func(t *testing.T) {
-			fixture := newFixture(t)
+			fixture := hostfixtures.New(t)
 			t.Setenv("API_ALLOWED_ORIGINS", origin)
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			var logs bytes.Buffer
-			err := cli.Run(ctx, fixture.localArgs(), &logs)
+			err := cli.Run(ctx, fixture.LocalArgs(), &logs)
 			if err == nil || ctx.Err() != nil {
 				t.Fatalf("invalid origin did not fail startup promptly: %v", err)
 			}
@@ -312,27 +313,27 @@ func corsPreflight(origin, method, headers string) func(*http.Request) {
 	}
 }
 
-func assertCORSOrigin(t *testing.T, result response, origin string) {
+func assertCORSOrigin(t *testing.T, result hostfixtures.Response, origin string) {
 	t.Helper()
-	if values := result.header.Values("Access-Control-Allow-Origin"); len(values) != 1 || values[0] != origin {
-		t.Fatalf("CORS did not echo one approved origin: %v", result.header)
+	if values := result.Header.Values("Access-Control-Allow-Origin"); len(values) != 1 || values[0] != origin {
+		t.Fatalf("CORS did not echo one approved origin: %v", result.Header)
 	}
-	if result.header.Get("Access-Control-Allow-Credentials") != "" {
+	if result.Header.Get("Access-Control-Allow-Credentials") != "" {
 		t.Fatal("CORS must not allow browser-managed credentials")
 	}
-	assertCORSVary(t, result.header, "Origin")
+	assertCORSVary(t, result.Header, "Origin")
 }
 
-func assertCORSActual(t *testing.T, result response, origin string) {
+func assertCORSActual(t *testing.T, result hostfixtures.Response, origin string) {
 	t.Helper()
 	assertCORSOrigin(t, result, origin)
-	assertCORSTokens(t, result.header, "Access-Control-Expose-Headers", "Location", "Content-Disposition", "WWW-Authenticate")
+	assertCORSTokens(t, result.Header, "Access-Control-Expose-Headers", "Location", "Content-Disposition", "WWW-Authenticate")
 }
 
-func assertCORSNotGranted(t *testing.T, result response) {
+func assertCORSNotGranted(t *testing.T, result hostfixtures.Response) {
 	t.Helper()
-	if result.header.Get("Access-Control-Allow-Origin") != "" || result.header.Get("Access-Control-Allow-Credentials") != "" {
-		t.Fatalf("unapproved origin received CORS access: %v", result.header)
+	if result.Header.Get("Access-Control-Allow-Origin") != "" || result.Header.Get("Access-Control-Allow-Credentials") != "" {
+		t.Fatalf("unapproved origin received CORS access: %v", result.Header)
 	}
 }
 

@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
 )
 
 func TestSpawnedAgentExecutesOperation(t *testing.T) {
-	a := connect(t)
+	a := fixtures.Connect(t)
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
-	provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", object{"package": reference})
+	provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", fixtures.Object{"package": reference})
 	var launched struct {
 		AgentID        string                  `json:"agent_id"`
 		AgentType      string                  `json:"agent_type"`
@@ -26,7 +27,7 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 		Actions        []models.ActionResponse `json:"actions"`
 	}
 	decodeSpawnOutput(t, spawn.Result.Output, &launched)
-	if launched.AgentID == "" || launched.AgentType != "fixture-agent" || launched.Package != reference || launched.Runtime != environment("COMMANDER_TEST_SPAWNER_RUNTIME", "native") || !slices.Equal(actionNames(launched.Actions), []string{"fixture-echo"}) {
+	if launched.AgentID == "" || launched.AgentType != "fixture-agent" || launched.Package != reference || launched.Runtime != fixtures.Environment("COMMANDER_TEST_SPAWNER_RUNTIME", "native") || !slices.Equal(fixtures.ActionNames(launched.Actions), []string{"fixture-echo"}) {
 		t.Fatalf("spawn result lost package, runtime or registered capability: %+v", launched)
 	}
 	switch launched.Runtime {
@@ -62,46 +63,46 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 
 	// The spawner observes the registration announcement. Wait separately for
 	// the controller to accept it before checking public operation readiness.
-	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context, 30*time.Second)
 	defer cancel()
 	for {
-		result := a.request(http.MethodGet, "/api/v1/agents/"+launched.AgentID, nil)
-		if result.status == http.StatusOK {
-			agent := decode[models.AgentResponse](t, result, http.StatusOK)
-			if agent.ID == launched.AgentID && agent.Type == launched.AgentType && agent.Status == "ready" && !agent.Stale && slices.Equal(actionNames(agent.Actions), []string{"fixture-echo"}) {
+		result := a.Request(http.MethodGet, "/api/v1/agents/"+launched.AgentID, nil)
+		if result.Status == http.StatusOK {
+			agent := fixtures.Decode[models.AgentResponse](t, result, http.StatusOK)
+			if agent.ID == launched.AgentID && agent.Type == launched.AgentType && agent.Status == "ready" && !agent.Stale && slices.Equal(fixtures.ActionNames(agent.Actions), []string{"fixture-echo"}) {
 				break
 			}
-		} else if result.status != http.StatusNotFound {
+		} else if result.Status != http.StatusNotFound {
 			t.Fatalf("query spawned registration: %+v", result)
 		}
-		if err := pause(ctx); err != nil {
-			t.Fatalf("controller did not accept registration for %s: %s: %v", launched.AgentID, result.body, err)
+		if err := fixtures.Pause(ctx); err != nil {
+			t.Fatalf("controller did not accept registration for %s: %s: %v", launched.AgentID, result.Body, err)
 		}
 	}
-	decision := modelDecision(a.wait(provision.ID, func(op models.OperationResponse) bool { return modelDecision(op) != nil }))
+	decision := fixtures.ModelDecision(a.Wait(provision.ID, func(op models.OperationResponse) bool { return fixtures.ModelDecision(op) != nil }))
 	if decision.ID != spawn.ID {
 		t.Fatalf("install mission requested a decision for a different task: %+v", decision)
 	}
-	a.resolve(provision.ID, *decision, []object{})
-	post[models.OperationResponse](a, operationPath(provision.ID)+"/complete", object{"output": object{"agent_id": launched.AgentID}}, http.StatusOK)
-	installed := read[models.OperationResponse](a, operationPath(provision.ID))
+	a.Resolve(provision.ID, *decision, []fixtures.Object{})
+	fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(provision.ID)+"/complete", fixtures.Object{"output": fixtures.Object{"agent_id": launched.AgentID}}, http.StatusOK)
+	installed := fixtures.Read[models.OperationResponse](a, fixtures.OperationPath(provision.ID))
 	var installedOutput struct {
 		AgentID string `json:"agent_id"`
 	}
 	if err := json.Unmarshal(installed.Output, &installedOutput); err != nil {
 		t.Fatal(err)
 	}
-	if installed.Status != "completed" || installed.ReportID == "" || installedOutput.AgentID != launched.AgentID || modelDecision(installed) != nil {
+	if installed.Status != "completed" || installed.ReportID == "" || installedOutput.AgentID != launched.AgentID || fixtures.ModelDecision(installed) != nil {
 		t.Fatalf("install mission did not save the reviewed agent identity: %+v", installed)
 	}
 
 	const message = "Executed through the API on a dynamically spawned agent"
-	op := post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": "fixture-use-agent", "input": object{"message": message}}, http.StatusCreated)
+	op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": "fixture-use-agent", "input": fixtures.Object{"message": message}}, http.StatusCreated)
 	if op.Preflight == nil || !op.Preflight.Ready || len(op.Preflight.Actions) != 1 || !slices.Contains(op.Preflight.Actions[0].ReadyAgentIDs, launched.AgentID) {
 		t.Fatalf("new agent was not available to the next operation: %+v", op.Preflight)
 	}
-	post[models.TaskResponse](a, operationPath(op.ID)+"/tasks", object{"action_name": "fixture-echo", "input": object{"message": message}}, http.StatusCreated)
-	finished := a.wait(op.ID, tasksSettled)
+	fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{"action_name": "fixture-echo", "input": fixtures.Object{"message": message}}, http.StatusCreated)
+	finished := a.Wait(op.ID, fixtures.TasksSettled)
 	if len(finished.Tasks) != 1 || finished.Tasks[0].Status != "succeeded" || finished.Tasks[0].Result == nil {
 		t.Fatalf("spawned capability did not execute: %+v", finished.Tasks)
 	}
@@ -115,7 +116,7 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	}
 	// Other suites may already have spawned this fixture. The controller owns
 	// selection; the result must identify the registered executor it chose.
-	executor := read[models.AgentResponse](a, "/api/v1/agents/"+task.AgentID)
+	executor := fixtures.Read[models.AgentResponse](a, "/api/v1/agents/"+task.AgentID)
 	if echoed.Message != message || echoed.AgentID != task.AgentID || executor.Type != "fixture-agent" || !slices.Contains(op.Preflight.Actions[0].ReadyAgentIDs, task.AgentID) {
 		t.Fatalf("fixture execution lost input or assigned identity: task=%+v output=%+v agent=%+v", task, echoed, executor)
 	}
@@ -124,11 +125,11 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	}
 	artifact := task.Result.Artifacts[0]
 	file := artifact.Files[0]
-	download := a.request(http.MethodGet, "/api/v1/artifacts/"+artifact.ID+"/files/"+file.ID, nil)
-	if artifact.AgentID != task.AgentID || artifact.CommandID != task.CommandID || file.Name != "echo.txt" || file.MediaType != "text/plain" || download.status != http.StatusOK || download.body != message {
+	download := a.Request(http.MethodGet, "/api/v1/artifacts/"+artifact.ID+"/files/"+file.ID, nil)
+	if artifact.AgentID != task.AgentID || artifact.CommandID != task.CommandID || file.Name != "echo.txt" || file.MediaType != "text/plain" || download.Status != http.StatusOK || download.Body != message {
 		t.Fatalf("spawned agent evidence lost bytes or ownership: artifact=%+v download=%+v", artifact, download)
 	}
-	completed := post[models.OperationResponse](a, operationPath(op.ID)+"/complete", object{"output": object{}}, http.StatusOK)
+	completed := fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(op.ID)+"/complete", fixtures.Object{"output": fixtures.Object{}}, http.StatusOK)
 	if completed.Status != "completed" || completed.ReportID == "" {
 		t.Fatalf("fixture operation did not complete: %+v", completed)
 	}
@@ -143,14 +144,14 @@ func decodeSpawnOutput(t *testing.T, data []byte, target any) {
 	}
 }
 
-func runFixtureAction(t *testing.T, a *api, mission, action string, input object) (models.OperationResponse, models.TaskResponse) {
+func runFixtureAction(t *testing.T, a *fixtures.Client, mission, action string, input fixtures.Object) (models.OperationResponse, models.TaskResponse) {
 	t.Helper()
-	op := post[models.OperationResponse](a, "/api/v1/operations", object{"mission_name": mission, "input": input}, http.StatusCreated)
+	op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": mission, "input": input}, http.StatusCreated)
 	if op.Preflight == nil || !op.Preflight.Ready {
 		t.Fatalf("fixture mission is unavailable: %+v", op.Preflight)
 	}
-	post[models.TaskResponse](a, operationPath(op.ID)+"/tasks", object{"action_name": action, "input": input}, http.StatusCreated)
-	finished := a.wait(op.ID, tasksSettled)
+	fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{"action_name": action, "input": input}, http.StatusCreated)
+	finished := a.Wait(op.ID, fixtures.TasksSettled)
 	if len(finished.Tasks) != 1 || finished.Tasks[0].Status != "succeeded" || finished.Tasks[0].Result == nil {
 		t.Fatalf("fixture action %s failed: %+v", action, finished.Tasks)
 	}

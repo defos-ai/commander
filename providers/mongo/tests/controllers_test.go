@@ -3,19 +3,18 @@ package mongo_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	mongocontrollers "github.com/defos-ai/commander/providers/mongo/controllers"
-
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestControllerMongoStoreRoundTripAndOrdering(t *testing.T) {
-	database := openStore(t, "controllers")
+	database := fixtures.OpenStore(t, "controllers")
 	first, err := mongocontrollers.NewControllerMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +23,7 @@ func TestControllerMongoStoreRoundTripAndOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := mongoController(1)
+	record := fixtures.Controller(1)
 	record.Stale = true
 	if err := first.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
@@ -68,7 +67,7 @@ func TestControllerMongoStoreRoundTripAndOrdering(t *testing.T) {
 }
 
 func TestControllerMongoStoreConcurrentRegistrations(t *testing.T) {
-	database := openStore(t, "controllers")
+	database := fixtures.OpenStore(t, "controllers")
 	first, err := mongocontrollers.NewControllerMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +84,7 @@ func TestControllerMongoStoreConcurrentRegistrations(t *testing.T) {
 		for revision := range 2 {
 			go func() {
 				<-start
-				record := mongoController(i)
+				record := fixtures.Controller(i)
 				record.LastHeartbeat = record.LastHeartbeat.Add(time.Duration(revision) * time.Nanosecond)
 				results <- stores[revision].Upsert(t.Context(), record)
 			}()
@@ -102,7 +101,7 @@ func TestControllerMongoStoreConcurrentRegistrations(t *testing.T) {
 		t.Fatalf("concurrent inventory contains %d records, %v", len(items), err)
 	}
 	for i, got := range items {
-		want := mongoController(i)
+		want := fixtures.Controller(i)
 		want.LastHeartbeat = want.LastHeartbeat.Add(time.Nanosecond)
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("lost update or unsorted inventory: got %#v, want %#v", got, want)
@@ -111,12 +110,12 @@ func TestControllerMongoStoreConcurrentRegistrations(t *testing.T) {
 }
 
 func TestControllerMongoStoreRejectedWritesPreserveRecords(t *testing.T) {
-	database := openStore(t, "controllers")
+	database := fixtures.OpenStore(t, "controllers")
 	catalog, err := mongocontrollers.NewControllerMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := mongoController(1)
+	record := fixtures.Controller(1)
 	if err := catalog.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
 	}
@@ -160,14 +159,5 @@ func TestControllerMongoStoreRejectedWritesPreserveRecords(t *testing.T) {
 	}
 	if _, err := catalog.Get(t.Context(), record.ID); err == nil {
 		t.Fatal("read accepted malformed timestamp")
-	}
-}
-
-func mongoController(index int) controllers.Controller {
-	heartbeat := time.Date(2026, 10, 6, 12, 0, 0, 123456789, time.UTC)
-	return controllers.Controller{
-		ID: fmt.Sprintf("default-controller-%08x", index), Type: "default", Status: controllers.Ready,
-		Server: controllers.ServerInfo{Hostname: "worker-1", OS: "linux", Arch: "amd64"}, Version: "v1", AgentSelector: "*", RuleSelector: "mission-rules",
-		StartedAt: heartbeat.Add(-time.Minute), LastHeartbeat: heartbeat, LeaseExpiresAt: heartbeat.Add(45 * time.Second),
 	}
 }

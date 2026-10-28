@@ -11,15 +11,16 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/host"
 )
 
 func TestMissingCredentialsExplainHowToStart(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	t.Setenv("API_USERNAME", "")
 	t.Setenv("API_PASSWORD", "")
 	var output, diagnostic bytes.Buffer
-	if code := cli.Main(fixture.localArgs(), &output, &diagnostic); code != 1 {
+	if code := cli.Main(fixture.LocalArgs(), &output, &diagnostic); code != 1 {
 		t.Fatalf("missing credentials exit code = %d, want 1", code)
 	}
 	for _, instruction := range []string{"export API_USERNAME=commander", `export API_PASSWORD="$(openssl rand -hex 32)"`, "commander-api"} {
@@ -30,13 +31,13 @@ func TestMissingCredentialsExplainHowToStart(t *testing.T) {
 	if output.Len() != 0 {
 		t.Error("failed startup wrote to standard output")
 	}
-	if _, err := os.Stat(filepath.Join(fixture.root, "database")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(fixture.Root, "database")); !os.IsNotExist(err) {
 		t.Error("failed authentication setup opened the database")
 	}
 }
 
 func TestCredentialsCommandReadsOnlyEnvironment(t *testing.T) {
-	newFixture(t)
+	hostfixtures.New(t)
 	t.Setenv("DATABASE_URL", "unsupported://do-not-open")
 	t.Setenv("PORT", "invalid-do-not-parse")
 	var output, diagnostic bytes.Buffer
@@ -49,7 +50,7 @@ func TestCredentialsCommandReadsOnlyEnvironment(t *testing.T) {
 }
 
 func TestCredentialsCommandRaw(t *testing.T) {
-	newFixture(t)
+	hostfixtures.New(t)
 	t.Setenv("DATABASE_URL", "unsupported://do-not-open")
 	t.Setenv("PORT", "invalid-do-not-parse")
 	var output, diagnostic bytes.Buffer
@@ -62,10 +63,10 @@ func TestCredentialsCommandRaw(t *testing.T) {
 }
 
 func TestEmbeddedCredentialsMustBeComplete(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := hostfixtures.New(t)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
-	err := cli.RunWithOptions(ctx, fixture.localArgs(), io.Discard, cli.Options{
+	err := cli.RunWithOptions(ctx, fixture.LocalArgs(), io.Discard, cli.Options{
 		Credentials: &host.BasicCredentials{Username: "embedded-user"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "API_USERNAME and API_PASSWORD") {
@@ -82,7 +83,7 @@ func TestCredentialsCommandRejectsInvalidCredentials(t *testing.T) {
 		{name: "invalid password", username: "private-command-user", password: "private\ncommand\npassword"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			newFixture(t)
+			hostfixtures.New(t)
 			t.Setenv("API_USERNAME", test.username)
 			t.Setenv("API_PASSWORD", test.password)
 			for _, args := range [][]string{{"credentials"}, {"credentials", "--raw"}} {
@@ -101,7 +102,7 @@ func TestCredentialsCommandRejectsInvalidCredentials(t *testing.T) {
 }
 
 func TestCredentialsCommandHelpDoesNotRevealCredentials(t *testing.T) {
-	newFixture(t)
+	hostfixtures.New(t)
 	t.Setenv("API_USERNAME", "invalid:private-help-user")
 	t.Setenv("API_PASSWORD", "private-help-password")
 	var output, diagnostic bytes.Buffer
@@ -119,7 +120,7 @@ func TestCredentialsCommandHelpDoesNotRevealCredentials(t *testing.T) {
 }
 
 func TestCredentialsCommandRejectsArgumentsWithoutEchoing(t *testing.T) {
-	newFixture(t)
+	hostfixtures.New(t)
 	const secret = "private-argument-password"
 	for _, args := range [][]string{{"credentials", secret}, {"credentials", "--raw=" + secret}, {"credentials", "--" + secret}} {
 		var output, diagnostic bytes.Buffer

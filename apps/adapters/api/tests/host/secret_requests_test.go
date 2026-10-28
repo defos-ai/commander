@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
+	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/crypto"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
-	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
 )
 
 const secretRequestsPath = "/api/v1/secrets/requests"
@@ -31,14 +31,14 @@ type pendingSecretView struct {
 }
 
 func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
-	requests, values := secretRequestStores(t, fixture)
-	request := pendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
+	fixture := hostfixtures.New(t)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
+	requests, values := hostfixtures.SecretRequestStores(t, fixture)
+	request := hostfixtures.PendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
-	server := startAPI(t, fixture.localArgs())
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	assertStatus := func(want string) {
 		t.Helper()
 		items := listSecretRequests(t, server, "")
@@ -55,26 +55,26 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 		}
 	}
 	assertStatus("needs_value")
-	createBody := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + secretTestValue + `"}`
-	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath, createBody), http.StatusCreated)
+	createBody := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
+	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, createBody), http.StatusCreated)
 	assertStatus("awaiting_delivery")
-	reserveSecretDelivery(t, requests, values, request)
+	hostfixtures.ReserveSecretDelivery(t, requests, values, request)
 	assertStatus("awaiting_installation")
 	// A reservation is not an acknowledgement, and reads must not settle it.
 	unchanged, err := requests.Get(t.Context(), request.ID)
 	if err != nil || unchanged.Request.Status != secretmodel.Pending || unchanged.Installation != nil {
 		t.Fatal("reading a reserved delivery claimed installation")
 	}
-	replaced := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, secretPath,
-		fmt.Sprintf(`{"id":%q,"version":1,"value":%q}`, created.ID, secretTestReplacement)), http.StatusOK)
+	replaced := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, hostfixtures.SecretPath,
+		fmt.Sprintf(`{"id":%q,"version":1,"value":%q}`, created.ID, hostfixtures.SecretTestReplacement)), http.StatusOK)
 	assertStatus("awaiting_delivery")
 	deleted := secretRequest(t, server, http.MethodDelete,
-		fmt.Sprintf("%s?id=%s&version=%d", secretPath, replaced.ID, replaced.Version), "")
-	if deleted.status != http.StatusNoContent {
+		fmt.Sprintf("%s?id=%s&version=%d", hostfixtures.SecretPath, replaced.ID, replaced.Version), "")
+	if deleted.Status != http.StatusNoContent {
 		t.Fatal("could not remove test secret")
 	}
 	assertStatus("needs_value")
-	recreated := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, secretsPath, createBody), http.StatusCreated)
+	recreated := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, createBody), http.StatusCreated)
 	if recreated.ID == created.ID || recreated.Version != 1 {
 		t.Fatal("recreation did not allocate a new identity")
 	}
@@ -82,11 +82,11 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 	if err := requests.Cancel(t.Context(), request.ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	request = pendingSecretRequest("builder-agent", "GITHUB_TOKEN", request.AgentID)
+	request = hostfixtures.PendingSecretRequest("builder-agent", "GITHUB_TOKEN", request.AgentID)
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
-	delivery := reserveSecretDelivery(t, requests, values, request)
+	delivery := hostfixtures.ReserveSecretDelivery(t, requests, values, request)
 	assertStatus("awaiting_installation")
 	installedAt := time.Now().UTC()
 	if err := requests.Acknowledge(t.Context(), secretmodel.Installation{
@@ -102,16 +102,16 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 }
 
 func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
-	requests, _ := secretRequestStores(t, fixture)
-	one := pendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
-	two := pendingSecretRequest("builder-agent", "BUILD_TOKEN", "builder-agent-00000002")
-	three := pendingSecretRequest("web-agent", "SERVICE_TOKEN", "web-agent-00000001")
-	cancelled := pendingSecretRequest("builder-agent", "CANCELLED_TOKEN", one.AgentID)
-	overdue := pendingSecretRequest("builder-agent", "OVERDUE_TOKEN", one.AgentID)
+	fixture := hostfixtures.New(t)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
+	requests, _ := hostfixtures.SecretRequestStores(t, fixture)
+	one := hostfixtures.PendingSecretRequest("builder-agent", "GITHUB_TOKEN", "builder-agent-00000001")
+	two := hostfixtures.PendingSecretRequest("builder-agent", "BUILD_TOKEN", "builder-agent-00000002")
+	three := hostfixtures.PendingSecretRequest("web-agent", "SERVICE_TOKEN", "web-agent-00000001")
+	cancelled := hostfixtures.PendingSecretRequest("builder-agent", "CANCELLED_TOKEN", one.AgentID)
+	overdue := hostfixtures.PendingSecretRequest("builder-agent", "OVERDUE_TOKEN", one.AgentID)
 	overdue.ExpiresAt = time.Now().UTC().Add(-time.Minute)
-	expired := pendingSecretRequest("builder-agent", "EXPIRED_TOKEN", one.AgentID)
+	expired := hostfixtures.PendingSecretRequest("builder-agent", "EXPIRED_TOKEN", one.AgentID)
 	expired.ExpiresAt = overdue.ExpiresAt
 	for _, request := range []secretmodel.Request{three, two, one, cancelled, overdue, expired} {
 		if err := requests.Create(t.Context(), request); err != nil {
@@ -124,8 +124,8 @@ func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *
 	if err := requests.Expire(t.Context(), expired.ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	server := startAPI(t, fixture.localArgs())
-	path := filepath.Join(fixture.root, "database", "secret-requests.json")
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	path := filepath.Join(fixture.Root, "database", "secret-requests.json")
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *
 	var raw struct {
 		Items []map[string]json.RawMessage `json:"items"`
 	}
-	if err := json.Unmarshal([]byte(result.body), &raw); err != nil {
+	if err := json.Unmarshal([]byte(result.Body), &raw); err != nil {
 		t.Fatal(err)
 	}
 	for _, item := range raw.Items {
@@ -174,17 +174,17 @@ func TestPendingSecretRequestsFilterAndExcludeClosedOrOverdueWithoutMutation(t *
 }
 
 func TestPendingSecretRequestsRespectSecretAndDeliveryTimeBounds(t *testing.T) {
-	fixture := newFixture(t)
-	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
-	requests, values := secretRequestStores(t, fixture)
-	cipher, err := crypto.NewSecretCipher(secretTestKey)
+	fixture := hostfixtures.New(t)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
+	requests, values := hostfixtures.SecretRequestStores(t, fixture)
+	cipher, err := crypto.NewSecretCipher(hostfixtures.SecretTestKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
 	want := map[string]string{"EXPIRED_TOKEN": "needs_value", "FUTURE_TOKEN": "needs_value", "RESERVED_LATER_TOKEN": "awaiting_delivery"}
 	for name := range want {
-		request := pendingSecretRequest("builder-agent", name, "builder-agent-00000001")
+		request := hostfixtures.PendingSecretRequest("builder-agent", name, "builder-agent-00000001")
 		request.RequestedAt, request.ExpiresAt = now.Add(-2*time.Hour), now.Add(2*time.Hour)
 		if err := requests.Create(t.Context(), request); err != nil {
 			t.Fatal(err)
@@ -196,7 +196,7 @@ func TestPendingSecretRequestsRespectSecretAndDeliveryTimeBounds(t *testing.T) {
 		} else if name == "FUTURE_TOKEN" {
 			metadata.CreatedAt, metadata.UpdatedAt = now.Add(time.Hour), now.Add(time.Hour)
 		}
-		encrypted, err := cipher.Encrypt(metadata, []byte(secretTestValue))
+		encrypted, err := cipher.Encrypt(metadata, []byte(hostfixtures.SecretTestValue))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -212,7 +212,7 @@ func TestPendingSecretRequestsRespectSecretAndDeliveryTimeBounds(t *testing.T) {
 			}
 		}
 	}
-	server := startAPI(t, fixture.localArgs())
+	server := hostfixtures.Start(t, fixture.LocalArgs())
 	items := listSecretRequests(t, server, "")
 	if len(items) != len(want) {
 		t.Fatal("pending requests were lost while projecting availability")
@@ -225,22 +225,22 @@ func TestPendingSecretRequestsRespectSecretAndDeliveryTimeBounds(t *testing.T) {
 }
 
 func TestPendingSecretRequestsRequireAuthenticationAndEnabledSecrets(t *testing.T) {
-	fixture := newFixture(t)
-	server := startAPI(t, fixture.localArgs())
-	assertSecretError(t, server.request(t, http.MethodGet, secretRequestsPath), http.StatusUnauthorized, "authentication_required")
+	fixture := hostfixtures.New(t)
+	server := hostfixtures.Start(t, fixture.LocalArgs())
+	assertSecretError(t, server.Request(t, http.MethodGet, secretRequestsPath), http.StatusUnauthorized, "authentication_required")
 	disabled := secretRequest(t, server, http.MethodGet, secretRequestsPath, "")
 	assertSecretError(t, disabled, http.StatusServiceUnavailable, "secrets_unavailable")
-	if disabled.header.Get("Cache-Control") != "no-store" {
+	if disabled.Header.Get("Cache-Control") != "no-store" {
 		t.Fatal("disabled request inventory may be cached")
 	}
 	for _, name := range []string{"secrets.json", "secret-requests.json"} {
-		if _, err := os.Stat(filepath.Join(fixture.root, "database", name)); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(fixture.Root, "database", name)); !os.IsNotExist(err) {
 			t.Fatalf("disabled secret feature opened %s", name)
 		}
 	}
-	server.stop(t)
-	t.Setenv("SECRETS_ENCRYPTION_KEY", secretTestKey)
-	server = startAPI(t, fixture.localArgs())
+	server.Stop(t)
+	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
+	server = hostfixtures.Start(t, fixture.LocalArgs())
 	if items := listSecretRequests(t, server, ""); len(items) != 0 {
 		t.Fatal("empty database had pending requests")
 	}
@@ -251,38 +251,16 @@ func TestPendingSecretRequestsRequireAuthenticationAndEnabledSecrets(t *testing.
 	} {
 		result := secretRequest(t, server, http.MethodGet, secretRequestsPath+query, "")
 		assertSecretError(t, result, http.StatusBadRequest, "invalid_request")
-		if result.header.Get("Cache-Control") != "no-store" {
+		if result.Header.Get("Cache-Control") != "no-store" {
 			t.Fatal("invalid pending inventory query may be cached")
 		}
 	}
 }
 
-func secretRequestStores(t *testing.T, fixture fixture) (secretmodel.RequestStore, secretmodel.SecretStore) {
-	t.Helper()
-	path := filepath.Join(fixture.root, "database")
-	requests, err := fssecrets.NewRequestFsStore(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	values, err := fssecrets.NewSecretFsStore(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return requests, values
-}
-
-func pendingSecretRequest(agentType, name, agentID string) secretmodel.Request {
-	now := time.Now().UTC()
-	return secretmodel.Request{
-		ID: id.New(), Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: agentType}, Name: name},
-		AgentID: agentID, Status: secretmodel.Pending, RequestedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour),
-	}
-}
-
-func listSecretRequests(t *testing.T, server *runningAPI, query string) []pendingSecretView {
+func listSecretRequests(t *testing.T, server *hostfixtures.API, query string) []pendingSecretView {
 	t.Helper()
 	result := secretRequest(t, server, http.MethodGet, secretRequestsPath+query, "")
-	if result.header.Get("Cache-Control") != "no-store" {
+	if result.Header.Get("Cache-Control") != "no-store" {
 		t.Fatal("pending secret request metadata may be cached")
 	}
 	payload := decodeSecretResponse[struct {
@@ -292,24 +270,4 @@ func listSecretRequests(t *testing.T, server *runningAPI, query string) []pendin
 		t.Fatal("empty pending request inventory must use an array")
 	}
 	return payload.Items
-}
-
-func reserveSecretDelivery(t *testing.T, requests secretmodel.RequestStore, values secretmodel.SecretStore, request secretmodel.Request) secretmodel.Delivery {
-	t.Helper()
-	secret, err := values.Get(t.Context(), request.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deadline := request.ExpiresAt
-	if expiry := secret.Metadata.ExpiresAt; !expiry.IsZero() && expiry.Before(deadline) {
-		deadline = expiry
-	}
-	delivery := secretmodel.Delivery{
-		ID: id.New(), RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
-		CreatedAt: time.Now().UTC(), ExpiresAt: deadline,
-	}
-	if err := requests.SaveDelivery(t.Context(), delivery); err != nil {
-		t.Fatal(err)
-	}
-	return delivery
 }

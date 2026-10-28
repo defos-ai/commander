@@ -15,14 +15,15 @@ import (
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	mongoexecutions "github.com/defos-ai/commander/providers/mongo/executions"
+	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 )
 
 func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
-	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := executionCommand(1)
+	command := fixtures.ExecutionCommand(1)
 
 	saved, claimed, err := catalog.Claim(t.Context(), command)
 
@@ -54,7 +55,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 			t.Fatalf("changed command was not rejected: %v", err)
 		}
 	}
-	result := executionResult(command)
+	result := fixtures.ExecutionResult(command)
 	wrongWork := result
 	wrongWork.Work.StepID = "different"
 	if err := catalog.Complete(t.Context(), wrongWork); err == nil {
@@ -74,7 +75,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, change := range []func(*messages.Message){
-		func(m *messages.Message) { m.ID = executionResult(executionCommand(2)).ID },
+		func(m *messages.Message) { m.ID = fixtures.ExecutionResult(fixtures.ExecutionCommand(2)).ID },
 		func(m *messages.Message) { m.Type = messages.CommandFailed },
 		func(m *messages.Message) { m.Work.StepID = "different" },
 		func(m *messages.Message) {
@@ -109,12 +110,12 @@ func TestExecutionMongoClaimPreservesOriginalDeadlineAcrossReopen(t *testing.T) 
 		{"nanosecond deadline", deadline},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			database := openStore(t, "executions")
+			database := fixtures.OpenStore(t, "executions")
 			catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), database)
 			if err != nil {
 				t.Fatal(err)
 			}
-			command := executionCommand(1)
+			command := fixtures.ExecutionCommand(1)
 			command.ExpiresAt = tc.expiresAt
 			saved, claimed, err := catalog.Claim(t.Context(), command)
 			if err != nil || !claimed || !reflect.DeepEqual(saved.Command, command) {
@@ -138,16 +139,16 @@ func TestExecutionMongoClaimPreservesOriginalDeadlineAcrossReopen(t *testing.T) 
 }
 
 func TestConcurrentExecutionClaimsAndCompletions(t *testing.T) {
-	first, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	first, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	second, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	catalogs := []executions.ExecutionStore{first, second}
-	command := executionCommand(1)
+	command := fixtures.ExecutionCommand(1)
 	type claim struct {
 		record  executions.Execution
 		created bool
@@ -186,9 +187,9 @@ func TestConcurrentExecutionClaimsAndCompletions(t *testing.T) {
 	if winners != 1 {
 		t.Fatalf("claim winners=%d, want 1", winners)
 	}
-	responses := []messages.Message{executionResult(command), executionResult(command)}
-	responses[1].ID = executionResult(executionCommand(2)).ID
-	references := []artifacts.Artifact{executionArtifact(command, 1), executionArtifact(command, 2)}
+	responses := []messages.Message{fixtures.ExecutionResult(command), fixtures.ExecutionResult(command)}
+	responses[1].ID = fixtures.ExecutionResult(fixtures.ExecutionCommand(2)).ID
+	references := []artifacts.Artifact{fixtures.ExecutionArtifact(command, 1), fixtures.ExecutionArtifact(command, 2)}
 	for i, ref := range references {
 		responses[i].Payload, _ = json.Marshal(actions.ActionOutput{ActionName: "check", Output: json.RawMessage(`{}`), Artifacts: []artifacts.Artifact{ref}})
 	}
@@ -224,13 +225,13 @@ func TestConcurrentExecutionClaimsAndCompletions(t *testing.T) {
 }
 
 func TestExecutionMongoStoreRejectsMissingInvalidAndCancelledWrites(t *testing.T) {
-	database := openStore(t, "executions")
+	database := fixtures.OpenStore(t, "executions")
 	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := executionCommand(1)
-	result := executionResult(command)
+	command := fixtures.ExecutionCommand(1)
+	result := fixtures.ExecutionResult(command)
 	if err := catalog.Complete(t.Context(), result); !errors.Is(err, executions.ErrUnknownExecution) {
 		t.Fatalf("unclaimed completion: %v", err)
 	}
@@ -258,7 +259,7 @@ func TestExecutionMongoStoreRejectsMissingInvalidAndCancelledWrites(t *testing.T
 	if _, err := mongoexecutions.NewExecutionMongoStore(cancelled, database); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled constructor: %v", err)
 	}
-	if _, _, err := catalog.Claim(cancelled, executionCommand(2)); !errors.Is(err, context.Canceled) {
+	if _, _, err := catalog.Claim(cancelled, fixtures.ExecutionCommand(2)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled claim: %v", err)
 	}
 	if _, err := catalog.Get(cancelled, command.AgentID, command.ID); !errors.Is(err, context.Canceled) {
@@ -271,21 +272,21 @@ func TestExecutionMongoStoreRejectsMissingInvalidAndCancelledWrites(t *testing.T
 	if err != nil || stored.Result != nil || stored.CompletedAt != nil {
 		t.Fatalf("cancelled write completed a reservation: %#v, error=%v", stored, err)
 	}
-	if _, err := catalog.Get(t.Context(), command.AgentID, executionCommand(2).ID); !errors.Is(err, executions.ErrUnknownExecution) {
+	if _, err := catalog.Get(t.Context(), command.AgentID, fixtures.ExecutionCommand(2).ID); !errors.Is(err, executions.ErrUnknownExecution) {
 		t.Fatalf("cancelled claim created state: %v", err)
 	}
 }
 
 func TestExecutionMongoStorePreservesFailedOutcome(t *testing.T) {
-	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), openStore(t, "executions"))
+	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), fixtures.OpenStore(t, "executions"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := executionCommand(1)
+	command := fixtures.ExecutionCommand(1)
 	if _, _, err := catalog.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
-	failure := executionResult(command)
+	failure := fixtures.ExecutionResult(command)
 	failure.Type = messages.CommandFailed
 	failure.Payload = json.RawMessage(`{"error_type":"fixture","message":"failed"}`)
 
@@ -301,33 +302,11 @@ func TestExecutionMongoStorePreservesFailedOutcome(t *testing.T) {
 	if err := catalog.Complete(t.Context(), replay); err != nil {
 		t.Fatal(err)
 	}
-	if err := catalog.Complete(t.Context(), executionResult(command)); !errors.Is(err, executions.ErrExecutionConflict) {
+	if err := catalog.Complete(t.Context(), fixtures.ExecutionResult(command)); !errors.Is(err, executions.ErrExecutionConflict) {
 		t.Fatalf("success replaced a failed outcome: %v", err)
 	}
 	unchanged, err := catalog.Get(t.Context(), command.AgentID, command.ID)
 	if err != nil || !reflect.DeepEqual(unchanged, stored) {
 		t.Fatalf("failed replay changed saved outcome: %#v, error=%v", unchanged, err)
-	}
-}
-
-func executionCommand(index int) messages.Message {
-	work := messages.WorkContext{OperationID: "10000000-0000-4000-8000-000000000001", TaskID: "20000000-0000-4000-8000-000000000001", StepID: "review"}
-	payload, _ := json.Marshal(actions.ActionCall{ActionName: "check", Work: work, Input: json.RawMessage(`{"serial":9007199254740993,"site":"example.test"}`)})
-	return messages.Message{ID: fmt.Sprintf("00000000-0000-4000-8000-%012x", index), Type: messages.RunAction, AgentID: "browser-agent-00000001", Work: work, Payload: payload, CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)}
-}
-
-func executionResult(command messages.Message) messages.Message {
-	return messages.Message{ID: "30000000" + command.ID[8:], Type: messages.ActionSucceeded, AgentID: command.AgentID, CorrelationID: command.ID, Work: command.Work, Payload: json.RawMessage(`{"action_name":"check","output":{"serial":9007199254740993}}`), CreatedAt: command.CreatedAt.Add(time.Nanosecond)}
-}
-
-func executionArtifact(command messages.Message, index int) artifacts.Artifact {
-	return artifacts.Artifact{
-		ID: fmt.Sprintf("40000000-0000-4000-8000-%012x", index), Name: "result",
-		AgentID: command.AgentID, ActionName: "check", CommandID: command.ID,
-		CreatedAt: command.CreatedAt.Add(2 * time.Nanosecond),
-		Files: []artifacts.ArtifactFile{{
-			ID: fmt.Sprintf("50000000-0000-4000-8000-%012x", index), Name: "result.json",
-			MediaType: "application/json", Size: 2, SHA256: strings.Repeat("a", 64),
-		}},
 	}
 }

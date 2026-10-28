@@ -9,14 +9,16 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	agentpackages "github.com/defos-ai/commander/framework/agent/packages"
 )
 
 func TestPinStableUsesScopedAuthenticationAndKeepsExactPins(t *testing.T) {
-	for _, reference := range []string{packageReference, moduleReference} {
+	for _, reference := range []string{fixtures.PackageReference, fixtures.ModuleReference} {
 		t.Run(reference, func(t *testing.T) {
 			requests := 0
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				if request.Method != http.MethodGet || request.URL.String() != githubReleases+"latest" || request.Header.Get("Accept") != "application/vnd.github+json" {
 					t.Fatalf("unexpected latest-release request: %s %s", request.Method, request.URL)
 				}
@@ -35,9 +37,9 @@ func TestPinStableUsesScopedAuthenticationAndKeepsExactPins(t *testing.T) {
 				if requests >= len(versions) {
 					t.Fatal("an exact pin contacted the network")
 				}
-				body := privateRelease(versions[requests])
+				body := fixtures.PrivateRelease(versions[requests])
 				requests++
-				return response(request, http.StatusOK, body), nil
+				return fixtures.Response(request, http.StatusOK, body), nil
 			}))
 			t.Cleanup(resolver.CloseIdleConnections)
 			selector := strings.TrimSuffix(reference, "@v0.1.0")
@@ -66,7 +68,7 @@ func TestPinStableUsesScopedAuthenticationAndKeepsExactPins(t *testing.T) {
 }
 
 func TestPinRejectsInvalidLatestWithoutFallbackOrSecretLeaks(t *testing.T) {
-	valid := privateRelease("v0.1.0")
+	valid := fixtures.PrivateRelease("v0.1.0")
 	for _, test := range []struct {
 		name, body, redirect string
 		status               int
@@ -79,9 +81,9 @@ func TestPinRejectsInvalidLatestWithoutFallbackOrSecretLeaks(t *testing.T) {
 		{name: "draft", body: strings.Replace(valid, `"draft":false`, `"draft":true`, 1)},
 		{name: "prerelease", body: strings.Replace(valid, `"prerelease":false`, `"prerelease":true`, 1)},
 		{name: "unpublished", body: strings.Replace(valid, `"2026-10-01T12:00:00Z"`, "null", 1)},
-		{name: "zero version", body: privateRelease("v0.0.0")},
-		{name: "prerelease tag", body: privateRelease("v0.2.0-rc.1")},
-		{name: "module tag", body: privateRelease("apps/agents/example/v0.1.0")},
+		{name: "zero version", body: fixtures.PrivateRelease("v0.0.0")},
+		{name: "prerelease tag", body: fixtures.PrivateRelease("v0.2.0-rc.1")},
+		{name: "module tag", body: fixtures.PrivateRelease("apps/agents/example/v0.1.0")},
 		{name: "trailing JSON", body: valid + `{ "token": "` + privateToken + `" }`},
 		{name: "oversized metadata", body: strings.Repeat(" ", 2<<20) + valid},
 		{name: "unauthorized", status: http.StatusUnauthorized, body: privateToken},
@@ -95,7 +97,7 @@ func TestPinRejectsInvalidLatestWithoutFallbackOrSecretLeaks(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			requests := 0
-			resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+			resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 				requests++
 				if requests > 1 || request.URL.String() != githubReleases+"latest" {
 					t.Fatal("invalid latest metadata caused a redirect or release fallback")
@@ -107,7 +109,7 @@ func TestPinRejectsInvalidLatestWithoutFallbackOrSecretLeaks(t *testing.T) {
 				if status == 0 {
 					status = http.StatusOK
 				}
-				result := response(request, status, test.body)
+				result := fixtures.Response(request, status, test.body)
 				if test.redirect != "" {
 					result.StatusCode = http.StatusFound
 					result.Header.Set("Location", test.redirect)
@@ -116,7 +118,7 @@ func TestPinRejectsInvalidLatestWithoutFallbackOrSecretLeaks(t *testing.T) {
 			}))
 			t.Cleanup(resolver.CloseIdleConnections)
 			ctx := packages.WithGitHubToken(t.Context(), []byte(privateToken))
-			pin, err := resolver.Pin(ctx, strings.TrimSuffix(packageReference, "@v0.1.0"))
+			pin, err := resolver.Pin(ctx, strings.TrimSuffix(fixtures.PackageReference, "@v0.1.0"))
 			if err == nil || pin != (agentpackages.Reference{}) || strings.Contains(err.Error(), privateToken) {
 				t.Fatalf("invalid latest response accepted or leaked: %#v, %v", pin, err)
 			}
@@ -130,18 +132,18 @@ func TestPinPreservesCancellation(t *testing.T) {
 		if cancelBefore {
 			cancel()
 		}
-		resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
+		resolver := packages.NewResolver(fakes.Transport(func(request *http.Request) (*http.Response, error) {
 			if cancelBefore {
 				t.Fatal("already canceled resolution reached transport")
 			}
 			cancel()
-			return response(request, http.StatusOK, privateRelease("v0.1.0")), nil
+			return fixtures.Response(request, http.StatusOK, fixtures.PrivateRelease("v0.1.0")), nil
 		}))
 		t.Cleanup(resolver.CloseIdleConnections)
-		if _, err := resolver.Pin(ctx, strings.TrimSuffix(packageReference, "@v0.1.0")); !errors.Is(err, context.Canceled) {
+		if _, err := resolver.Pin(ctx, strings.TrimSuffix(fixtures.PackageReference, "@v0.1.0")); !errors.Is(err, context.Canceled) {
 			t.Fatalf("lost cancellation: %v", err)
 		}
-		if _, err := resolver.Pin(ctx, packageReference); !errors.Is(err, context.Canceled) {
+		if _, err := resolver.Pin(ctx, fixtures.PackageReference); !errors.Is(err, context.Canceled) {
 			t.Fatalf("exact pin ignored cancellation: %v", err)
 		}
 		cancel()

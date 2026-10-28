@@ -2,7 +2,6 @@ package providers_test
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,15 +9,15 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/agents"
-	agentfs "github.com/defos-ai/commander/providers/fs/agents"
+	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
 func TestAgentFsStoreObservationOrdering(t *testing.T) {
 	root := t.TempDir()
-	first := openAgentFsStore(t, root)
-	second := openAgentFsStore(t, root)
+	first := fixtures.OpenAgentStore(t, root)
+	second := fixtures.OpenAgentStore(t, root)
 	observed := time.Date(2026, 10, 1, 12, 0, 0, 123456789, time.UTC)
-	record := fsInventoryAgent(1, observed)
+	record := fixtures.Agent(1, observed)
 	if err := first.Upsert(t.Context(), record); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +55,7 @@ func TestAgentFsStoreObservationOrdering(t *testing.T) {
 		t.Fatalf("newer observation = %#v, %v", stored, err)
 	}
 
-	unordered := fsInventoryAgent(2, observed)
+	unordered := fixtures.Agent(2, observed)
 	unordered.ObservedAt = time.Time{}
 	if err := first.Upsert(t.Context(), unordered); err != nil {
 		t.Fatal(err)
@@ -73,14 +72,14 @@ func TestAgentFsStoreObservationOrdering(t *testing.T) {
 
 func TestAgentFsStoreExpiryRetainsBoundedObservationTombstones(t *testing.T) {
 	root := t.TempDir()
-	store := openAgentFsStore(t, root)
+	store := fixtures.OpenAgentStore(t, root)
 	cutoff := time.Date(2026, 10, 1, 12, 0, 0, 123456789, time.UTC)
-	retained := fsInventoryAgent(1, cutoff.Add(time.Nanosecond))
+	retained := fixtures.Agent(1, cutoff.Add(time.Nanosecond))
 	retained.LastHeartbeat = cutoff
 	reactivated := retained.Clone()
-	reactivated.ID = fsInventoryAgent(2, cutoff).ID
-	old := fsInventoryAgent(3, cutoff)
-	unordered := fsInventoryAgent(4, cutoff)
+	reactivated.ID = fixtures.Agent(2, cutoff).ID
+	old := fixtures.Agent(3, cutoff)
+	unordered := fixtures.Agent(4, cutoff)
 	unordered.ObservedAt = time.Time{}
 	records := []agents.Agent{retained, reactivated, old, unordered}
 	for _, record := range records {
@@ -104,7 +103,7 @@ func TestAgentFsStoreExpiryRetainsBoundedObservationTombstones(t *testing.T) {
 			t.Fatalf("old source mark was not removed: %v", err)
 		}
 	}
-	reopened := openAgentFsStore(t, root)
+	reopened := fixtures.OpenAgentStore(t, root)
 	visible, err := reopened.List(t.Context())
 	if err != nil || len(visible) != 0 {
 		t.Fatalf("reopened tombstones were visible: %#v, %v", visible, err)
@@ -134,10 +133,10 @@ func TestAgentFsStoreExpiryRetainsBoundedObservationTombstones(t *testing.T) {
 
 func TestAgentFsStoreConcurrentRenewalAndExpiry(t *testing.T) {
 	root := t.TempDir()
-	first, second := openAgentFsStore(t, root), openAgentFsStore(t, root)
+	first, second := fixtures.OpenAgentStore(t, root), fixtures.OpenAgentStore(t, root)
 	cutoff := time.Date(2026, 10, 1, 12, 0, 0, 123456789, time.UTC)
 	for i := range 12 {
-		old := fsInventoryAgent(i+1, cutoff.Add(time.Nanosecond))
+		old := fixtures.Agent(i+1, cutoff.Add(time.Nanosecond))
 		old.LastHeartbeat = cutoff
 		if err := first.Upsert(t.Context(), old); err != nil {
 			t.Fatal(err)
@@ -168,24 +167,5 @@ func TestAgentFsStoreConcurrentRenewalAndExpiry(t *testing.T) {
 		if err := first.Upsert(t.Context(), old); !errors.Is(err, agents.ErrStaleObservation) {
 			t.Fatalf("old observation replaced concurrent renewal: %v", err)
 		}
-	}
-}
-
-func openAgentFsStore(t *testing.T, root string) *agentfs.AgentFsStore {
-	t.Helper()
-	store, err := agentfs.NewAgentFsStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store
-}
-
-func fsInventoryAgent(number int, observed time.Time) agents.Agent {
-	return agents.Agent{
-		AgentSnapshot: agents.AgentSnapshot{
-			ID: fmt.Sprintf("browser-agent-%08d", number), Type: "browser-agent", Status: agents.AgentReady,
-			Server: agents.ServerInfo{IPAddress: "192.0.2.1", Hostname: "worker-1"}, Config: []byte(`{}`),
-		},
-		ObservedAt: observed, LastSeen: observed.Add(time.Second), LastHeartbeat: observed,
 	}
 }

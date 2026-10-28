@@ -13,18 +13,8 @@ import (
 
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/secrets"
 )
-
-const encryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-func newSecretCipher(t *testing.T) *crypto.SecretCipher {
-	t.Helper()
-	cipher, err := crypto.NewSecretCipher(encryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cipher
-}
 
 func TestEncryptionKeyConfiguration(t *testing.T) {
 	for _, test := range []struct {
@@ -32,10 +22,10 @@ func TestEncryptionKeyConfiguration(t *testing.T) {
 		want      error
 	}{
 		{"missing", "", crypto.ErrMissingKey},
-		{"short", encryptionKey[:62], crypto.ErrInvalidKey},
-		{"long", encryptionKey + "00", crypto.ErrInvalidKey},
+		{"short", fixtures.EncryptionKey[:62], crypto.ErrInvalidKey},
+		{"long", fixtures.EncryptionKey + "00", crypto.ErrInvalidKey},
 		{"nonhex", strings.Repeat("z", 64), crypto.ErrInvalidKey},
-		{"whitespace", " " + encryptionKey, crypto.ErrInvalidKey},
+		{"whitespace", " " + fixtures.EncryptionKey, crypto.ErrInvalidKey},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cipher, err := crypto.NewSecretCipher(test.key)
@@ -48,12 +38,12 @@ func TestEncryptionKeyConfiguration(t *testing.T) {
 		})
 	}
 
-	lower := newSecretCipher(t)
-	upper, err := crypto.NewSecretCipher(strings.ToUpper(encryptionKey))
+	lower := fixtures.Cipher(t)
+	upper, err := crypto.NewSecretCipher(strings.ToUpper(fixtures.EncryptionKey))
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := lower.Encrypt(secretFixture().Metadata, []byte("sample value"))
+	secret, err := lower.Encrypt(fixtures.Secret().Metadata, []byte("sample value"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,10 +54,10 @@ func TestEncryptionKeyConfiguration(t *testing.T) {
 }
 
 func TestSecretEncryptionRoundTripAndIsolation(t *testing.T) {
-	cipher := newSecretCipher(t)
+	cipher := fixtures.Cipher(t)
 	for _, plaintext := range [][]byte{nil, {}, []byte("test secret"), {0, 255, 10, 128}} {
 		expected := bytes.Clone(plaintext)
-		secret, err := cipher.Encrypt(secretFixture().Metadata, plaintext)
+		secret, err := cipher.Encrypt(fixtures.Secret().Metadata, plaintext)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,11 +86,11 @@ func TestSecretEncryptionRoundTripAndIsolation(t *testing.T) {
 		}
 	}
 
-	first, err := cipher.Encrypt(secretFixture().Metadata, []byte("same value"))
+	first, err := cipher.Encrypt(fixtures.Secret().Metadata, []byte("same value"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := cipher.Encrypt(secretFixture().Metadata, []byte("same value"))
+	second, err := cipher.Encrypt(fixtures.Secret().Metadata, []byte("same value"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,15 +122,15 @@ func TestSecretEncryptionPersistedV2Envelope(t *testing.T) {
 	if err := json.Unmarshal([]byte(encoded), &record); err != nil {
 		t.Fatal(err)
 	}
-	plaintext, err := newSecretCipher(t).Decrypt(record)
+	plaintext, err := fixtures.Cipher(t).Decrypt(record)
 	if err != nil || string(plaintext) != "persisted v2 secret fixture" {
 		t.Fatalf("persisted v2 envelope could not be decrypted: %v", err)
 	}
 }
 
 func TestSecretEncryptionAuthenticatesMetadata(t *testing.T) {
-	cipher := newSecretCipher(t)
-	original, err := cipher.Encrypt(secretFixture().Metadata, []byte("test secret"))
+	cipher := fixtures.Cipher(t)
+	original, err := cipher.Encrypt(fixtures.Secret().Metadata, []byte("test secret"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +138,7 @@ func TestSecretEncryptionAuthenticatesMetadata(t *testing.T) {
 		name   string
 		change func(*secrets.Metadata)
 	}{
-		{"identity", func(m *secrets.Metadata) { m.ID = deliveryID }},
+		{"identity", func(m *secrets.Metadata) { m.ID = fixtures.DeliveryID }},
 		{"agent type", func(m *secrets.Metadata) { m.Key.Scope.AgentType = "other-agent" }},
 		{"name", func(m *secrets.Metadata) { m.Key.Name = "OTHER_TOKEN" }},
 		{"version", func(m *secrets.Metadata) { m.Version++ }},
@@ -172,8 +162,8 @@ func TestSecretEncryptionAuthenticatesMetadata(t *testing.T) {
 }
 
 func TestSecretEncryptionRejectsCorruptEnvelopes(t *testing.T) {
-	cipher := newSecretCipher(t)
-	original, err := cipher.Encrypt(secretFixture().Metadata, []byte("test secret"))
+	cipher := fixtures.Cipher(t)
+	original, err := cipher.Encrypt(fixtures.Secret().Metadata, []byte("test secret"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,8 +211,8 @@ func TestSecretEncryptionRejectsCorruptEnvelopes(t *testing.T) {
 }
 
 func TestSecretEncryptionCanonicalTimeAndNoFreshnessPolicy(t *testing.T) {
-	cipher := newSecretCipher(t)
-	metadata := secretFixture().Metadata
+	cipher := fixtures.Cipher(t)
+	metadata := fixtures.Secret().Metadata
 	metadata.CreatedAt = time.Date(1500, 1, 1, 0, 0, 0, 123456789, time.UTC)
 	metadata.UpdatedAt = metadata.CreatedAt.Add(time.Hour)
 	metadata.ExpiresAt = metadata.UpdatedAt.Add(time.Hour)
@@ -254,18 +244,18 @@ func TestUnconfiguredSecretCipherFailsClosed(t *testing.T) {
 		if err := cipher.Validate(); !errors.Is(err, crypto.ErrMissingKey) {
 			t.Fatal("unconfigured cipher passed startup validation")
 		}
-		if _, err := cipher.Encrypt(secretFixture().Metadata, []byte("test secret")); err == nil {
+		if _, err := cipher.Encrypt(fixtures.Secret().Metadata, []byte("test secret")); err == nil {
 			t.Fatal("unconfigured cipher encrypted a value")
 		}
-		if plaintext, err := cipher.Decrypt(secretFixture()); err == nil || plaintext != nil {
+		if plaintext, err := cipher.Decrypt(fixtures.Secret()); err == nil || plaintext != nil {
 			t.Fatal("unconfigured cipher decrypted a value")
 		}
 	}
-	cipher := newSecretCipher(t)
+	cipher := fixtures.Cipher(t)
 	if err := cipher.Validate(); err != nil {
 		t.Fatalf("configured cipher failed startup validation: %v", err)
 	}
-	invalid := secretFixture().Metadata
+	invalid := fixtures.Secret().Metadata
 	invalid.Version = 0
 	if _, err := cipher.Encrypt(invalid, []byte("test secret")); err == nil {
 		t.Fatal("invalid metadata was encrypted")
@@ -273,7 +263,7 @@ func TestUnconfiguredSecretCipherFailsClosed(t *testing.T) {
 }
 
 func TestSecretCipherConcurrentUse(t *testing.T) {
-	cipher := newSecretCipher(t)
+	cipher := fixtures.Cipher(t)
 	type result struct {
 		nonce []byte
 		err   error
@@ -283,7 +273,7 @@ func TestSecretCipherConcurrentUse(t *testing.T) {
 	for worker := range workers {
 		go func() {
 			plaintext := []byte{byte(worker), 0, 255}
-			secret, err := cipher.Encrypt(secretFixture().Metadata, plaintext)
+			secret, err := cipher.Encrypt(fixtures.Secret().Metadata, plaintext)
 			if err != nil {
 				results <- result{err: err}
 				return

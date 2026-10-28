@@ -1,41 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FileTooLargeError, getArtifact, getArtifactFile, MAX_FILE_BYTES } from '../src/api/artifacts';
 import { getOperationReport } from '../src/api/reports';
-import type { Report } from '../src/api/reports';
-import type { OperationArtifact } from '../src/api/operation-types';
-
-const url = 'https://commander.example/team';
-const credentials = { url, username: 'operator' };
-const artifact: OperationArtifact = {
-  id: 'artifact-1', name: 'Website screenshot', agent_id: 'agent-1', action_name: 'capture-page',
-  created_at: '2026-10-05T12:00:00Z',
-  files: [{ id: 'file-1', name: 'desktop.png', media_type: 'image/png', size: 4, sha256: 'abcd' }],
-};
-const report: Report = {
-  id: 'report-1', operation_id: 'operation-1', mission: 'review-website-with-browser',
-  output: { summary: 'Review complete' }, created_at: '2026-10-05T12:00:00Z',
-};
+import { respondJSON as respond } from './fakes/fetch';
+import { artifact, credentials, report, url } from './fixtures/artifact-report-client';
+import { blobText } from './fixtures/blob';
 
 function proxyTarget(input: RequestInfo | URL) {
   const endpoint = new URL(String(input), window.location.origin);
   expect(endpoint.origin).toBe(window.location.origin);
   expect(endpoint.pathname).toBe('/ui/proxy');
   return Object.fromEntries(endpoint.searchParams);
-}
-
-function respond(body: unknown, status = 200) {
-  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(body, { status }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
-
-function blobText(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsText(blob);
-  });
 }
 
 afterEach(() => { vi.useRealTimers(); });

@@ -1,8 +1,6 @@
 package controller_test
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -14,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/internal/state"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
 func TestAgentObservationMatchesTypeWithOrWithoutRoleSuffix(t *testing.T) {
@@ -29,8 +28,8 @@ func TestAgentObservationMatchesTypeWithOrWithoutRoleSuffix(t *testing.T) {
 		{name: "malformed type", agentType: "browser--agent", invalid: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			consumer, store, catalog := observationFixture(t)
-			snapshot := observationSnapshot()
+			consumer, store, catalog := fixtures.ObservationConsumer(t)
+			snapshot := fixtures.ObservationSnapshot()
 			snapshot.ID, snapshot.Type = "browser-agent-12345678", test.agentType
 			message, err := messages.NewMessage(controllerevents.AgentStarted, snapshot.ID, snapshot)
 			if err != nil {
@@ -40,52 +39,52 @@ func TestAgentObservationMatchesTypeWithOrWithoutRoleSuffix(t *testing.T) {
 			err = consumer.Consume(t.Context(), message)
 
 			if test.invalid {
-				if !errors.Is(err, consumers.ErrInvalidMessage) || store.record.Load() != nil || catalog.writes != 0 {
-					t.Fatalf("invalid observation changed inventory: error=%v record=%+v writes=%d", err, store.record.Load(), catalog.writes)
+				if !errors.Is(err, consumers.ErrInvalidMessage) || store.Snapshot() != nil || catalog.Count() != 0 {
+					t.Fatalf("invalid observation changed inventory: error=%v record=%+v writes=%d", err, store.Snapshot(), catalog.Count())
 				}
 				return
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			record := store.record.Load()
-			if record == nil || record.ID != snapshot.ID || record.Type != test.agentType || catalog.writes != 1 {
-				t.Fatalf("observation changed public identity or missed catalog: record=%+v writes=%d", record, catalog.writes)
+			record := store.Snapshot()
+			if record == nil || record.ID != snapshot.ID || record.Type != test.agentType || catalog.Count() != 1 {
+				t.Fatalf("observation changed public identity or missed catalog: record=%+v writes=%d", record, catalog.Count())
 			}
 		})
 	}
 }
 
 func TestDelayedAgentEventsKeepLatestSnapshot(t *testing.T) {
-	consumer, store, catalog := observationFixture(t)
+	consumer, store, catalog := fixtures.ObservationConsumer(t)
 	newest := time.Now().UTC().Add(-time.Second)
-	current := observationSnapshot()
+	current := fixtures.ObservationSnapshot()
 	current.Status = agents.AgentWorking
 	current.Work = &agents.Work{CommandID: "current", ActionName: "inspect"}
 	current.Actions[0].Description = "current definition"
-	if err := consumer.Consume(t.Context(), observationMessage(t, controllerevents.AgentHeartbeat, newest, current)); err != nil {
+	if err := consumer.Consume(t.Context(), fixtures.ObservationMessage(t, controllerevents.AgentHeartbeat, newest, current)); err != nil {
 		t.Fatal(err)
 	}
-	before := store.record.Load().Clone()
+	before := store.Snapshot().Clone()
 	changed := consumer.State.Changed()
-	waiting := &state.PendingCommand{AgentID: agentID, Reply: make(chan state.CommandReply, 1)}
+	waiting := &state.PendingCommand{AgentID: fixtures.AgentID, Reply: make(chan state.CommandReply, 1)}
 	consumer.State.Pending["current"] = waiting
-	older := observationSnapshot()
+	older := fixtures.ObservationSnapshot()
 	older.Actions[0].Description = "outdated definition"
 
 	for _, kind := range []messages.MessageType{controllerevents.AgentHeartbeat, controllerevents.AgentUpdated, controllerevents.AgentStopped} {
 		if kind == controllerevents.AgentStopped {
 			older.Status = agents.AgentStopped
 		}
-		if err := consumer.Consume(t.Context(), observationMessage(t, kind, newest.Add(-time.Second), older)); err != nil {
+		if err := consumer.Consume(t.Context(), fixtures.ObservationMessage(t, kind, newest.Add(-time.Second), older)); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if after := store.record.Load(); !reflect.DeepEqual(before, *after) {
+	if after := store.Snapshot(); !reflect.DeepEqual(before, *after) {
 		t.Fatalf("older events replaced current inventory: %+v", after)
 	}
-	if catalog.writes != 1 || catalog.last.Description != "current definition" {
+	if catalog.Count() != 1 || catalog.Last().Description != "current definition" {
 		t.Fatalf("older events changed action catalog: %+v", catalog)
 	}
 	select {
@@ -99,14 +98,14 @@ func TestDelayedAgentEventsKeepLatestSnapshot(t *testing.T) {
 }
 
 func TestAgentLeaseUsesSourceHeartbeatTime(t *testing.T) {
-	consumer, store, _ := observationFixture(t)
+	consumer, store, _ := fixtures.ObservationConsumer(t)
 	observed := time.Now().UTC().Add(-20 * time.Second)
-	message := observationMessage(t, controllerevents.AgentHeartbeat, observed, observationSnapshot())
+	message := fixtures.ObservationMessage(t, controllerevents.AgentHeartbeat, observed, fixtures.ObservationSnapshot())
 
 	if err := consumer.Consume(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
-	before := store.record.Load().Clone()
+	before := store.Snapshot().Clone()
 	if err := consumer.Consume(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +113,7 @@ func TestAgentLeaseUsesSourceHeartbeatTime(t *testing.T) {
 	if !before.LastHeartbeat.Equal(observed) || !before.ObservedAt.Equal(observed) || !before.LeaseExpiresAt.Equal(observed.Add(time.Minute)) {
 		t.Fatalf("late heartbeat received a fresh lease: %+v", before)
 	}
-	if after := store.record.Load(); !reflect.DeepEqual(before, *after) {
+	if after := store.Snapshot(); !reflect.DeepEqual(before, *after) {
 		t.Fatalf("duplicate heartbeat renewed inventory: %+v", after)
 	}
 }
@@ -130,15 +129,15 @@ func TestUnusableAgentObservationsCannotCreateInventory(t *testing.T) {
 		{"future time", time.Now().Add(time.Hour), true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			consumer, store, catalog := observationFixture(t)
-			message := observationMessage(t, controllerevents.AgentHeartbeat, test.timestamp, observationSnapshot())
+			consumer, store, catalog := fixtures.ObservationConsumer(t)
+			message := fixtures.ObservationMessage(t, controllerevents.AgentHeartbeat, test.timestamp, fixtures.ObservationSnapshot())
 
 			err := consumer.Consume(t.Context(), message)
 
 			if errors.Is(err, consumers.ErrInvalidMessage) != test.invalid || (!test.invalid && err != nil) {
 				t.Fatalf("unexpected handling result: %v", err)
 			}
-			if store.record.Load() != nil || catalog.writes != 0 {
+			if store.Snapshot() != nil || catalog.Count() != 0 {
 				t.Fatal("unusable observation created inventory or action definitions")
 			}
 		})
@@ -152,29 +151,29 @@ func TestDelayedDiscoveryReplyReleasesCaller(t *testing.T) {
 			name = "reply expired"
 		}
 		t.Run(name, func(t *testing.T) {
-			consumer, store, _ := observationFixture(t)
+			consumer, store, _ := fixtures.ObservationConsumer(t)
 			newest := time.Now().UTC().Add(-time.Second)
-			current := observationSnapshot()
+			current := fixtures.ObservationSnapshot()
 			current.Actions[0].Status = actions.Unavailable
 			current.Actions[0].StatusReason = "dependency removed"
-			if err := consumer.Consume(t.Context(), observationMessage(t, controllerevents.AgentHeartbeat, newest, current)); err != nil {
+			if err := consumer.Consume(t.Context(), fixtures.ObservationMessage(t, controllerevents.AgentHeartbeat, newest, current)); err != nil {
 				t.Fatal(err)
 			}
-			before := store.record.Load().Clone()
+			before := store.Snapshot().Clone()
 			reply := make(chan state.CommandReply, 1)
-			consumer.State.Pending["discovery"] = &state.PendingCommand{AgentID: agentID, Expected: controllerevents.AgentUpdated, Reply: reply}
+			consumer.State.Pending["discovery"] = &state.PendingCommand{AgentID: fixtures.AgentID, Expected: controllerevents.AgentUpdated, Reply: reply}
 			observed := newest.Add(-time.Second)
 			if expired {
 				observed = newest.Add(-time.Hour)
 			}
-			message := observationMessage(t, controllerevents.AgentUpdated, observed, observationSnapshot())
+			message := fixtures.ObservationMessage(t, controllerevents.AgentUpdated, observed, fixtures.ObservationSnapshot())
 			message.CorrelationID = "discovery"
 
 			if err := consumer.Consume(t.Context(), message); err != nil {
 				t.Fatal(err)
 			}
 
-			if !reflect.DeepEqual(before, *store.record.Load()) {
+			if !reflect.DeepEqual(before, *store.Snapshot()) {
 				t.Fatal("delayed discovery changed current inventory")
 			}
 			select {
@@ -194,29 +193,29 @@ func TestDelayedDiscoveryReplyReleasesCaller(t *testing.T) {
 }
 
 func TestObservationReplayRepairsPartialSave(t *testing.T) {
-	consumer, store, catalog := observationFixture(t)
+	consumer, store, catalog := fixtures.ObservationConsumer(t)
 	observed := time.Now().UTC().Add(-time.Second)
-	if err := consumer.Consume(t.Context(), observationMessage(t, controllerevents.AgentStarted, observed.Add(-time.Second), observationSnapshot())); err != nil {
+	if err := consumer.Consume(t.Context(), fixtures.ObservationMessage(t, controllerevents.AgentStarted, observed.Add(-time.Second), fixtures.ObservationSnapshot())); err != nil {
 		t.Fatal(err)
 	}
-	stopped := observationSnapshot()
+	stopped := fixtures.ObservationSnapshot()
 	stopped.Status = agents.AgentStopped
-	message := observationMessage(t, controllerevents.AgentStopped, observed, stopped)
+	message := fixtures.ObservationMessage(t, controllerevents.AgentStopped, observed, stopped)
 	reply := make(chan state.CommandReply, 1)
-	consumer.State.Pending["running"] = &state.PendingCommand{AgentID: agentID, Reply: reply}
+	consumer.State.Pending["running"] = &state.PendingCommand{AgentID: fixtures.AgentID, Reply: reply}
 	failure := errors.New("catalog unavailable")
-	catalog.failure = failure
+	catalog.Fail(failure)
 	if err := consumer.Consume(t.Context(), message); !errors.Is(err, failure) {
 		t.Fatalf("catalog failure was not reported: %v", err)
 	}
-	before := store.record.Load().Clone()
-	catalog.failure = nil
+	before := store.Snapshot().Clone()
+	catalog.Fail(nil)
 
 	if err := consumer.Consume(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(before, *store.record.Load()) || catalog.last.Name != "inspect" {
+	if !reflect.DeepEqual(before, *store.Snapshot()) || catalog.Last().Name != "inspect" {
 		t.Fatal("replay did not preserve inventory while repairing catalog")
 	}
 	select {
@@ -227,42 +226,4 @@ func TestObservationReplayRepairsPartialSave(t *testing.T) {
 	default:
 		t.Fatal("partial save left pending work waiting after replay")
 	}
-}
-
-func observationFixture(t *testing.T) (consumers.AgentEventConsumer, *inventory, *observationCatalog) {
-	t.Helper()
-	store, catalog := &inventory{}, &observationCatalog{}
-	return consumers.AgentEventConsumer{Inventory: store, Actions: catalog, State: state.New(t.Context(), time.Minute)}, store, catalog
-}
-
-func observationSnapshot() agents.AgentSnapshot {
-	return agents.AgentSnapshot{ID: agentID, Type: "fixture", Status: agents.AgentReady,
-		Server:  agents.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"},
-		Actions: []actions.Action{{Name: "inspect", Status: actions.Ready, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
-	}
-}
-
-func observationMessage(t *testing.T, kind messages.MessageType, at time.Time, snapshot agents.AgentSnapshot) messages.Message {
-	t.Helper()
-	message, err := messages.NewMessage(kind, agentID, snapshot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	message.CreatedAt = at
-	return message
-}
-
-type observationCatalog struct {
-	actions.ActionStore
-	last    actions.Action
-	writes  int
-	failure error
-}
-
-func (s *observationCatalog) Upsert(_ context.Context, entry actions.Action) error {
-	if s.failure != nil {
-		return s.failure
-	}
-	s.last, s.writes = entry, s.writes+1
-	return nil
 }

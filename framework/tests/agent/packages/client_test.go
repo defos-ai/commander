@@ -10,25 +10,9 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/agent/packages"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/agent"
 )
-
-const clientCatalog = "schema_version: 1\nagents:\n  builder:\n    description: Build an agent\n    package: github.com/acme/agents/apps/agents/builder@stable\n    visibility: public\n"
-
-type metadataTransport func(*http.Request) (*http.Response, error)
-
-func (f metadataTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
-}
-
-type metadataReadError struct{}
-
-func (metadataReadError) Read([]byte) (int, error) {
-	return 0, errors.New("private-marker body read failure")
-}
-
-func metadataResponse(request *http.Request, status int, body io.ReadCloser) *http.Response {
-	return &http.Response{StatusCode: status, Header: make(http.Header), Body: body, Request: request, ContentLength: -1}
-}
 
 func checkPublicMetadataRequest(t *testing.T, request *http.Request) {
 	t.Helper()
@@ -48,15 +32,17 @@ func checkPublicMetadataRequest(t *testing.T, request *http.Request) {
 
 func TestClientLoadsConfiguredCatalog(t *testing.T) {
 	const source = "https://catalog.example/agents.yaml"
-	client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
+	client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
 		checkPublicMetadataRequest(t, request)
 		if request.URL.String() != source {
 			t.Fatalf("unexpected catalog source: %s", request.URL)
 		}
-		return metadataResponse(request, http.StatusOK, io.NopCloser(strings.NewReader(clientCatalog))), nil
+		return fakes.MetadataResponse(request, http.StatusOK, io.NopCloser(strings.NewReader(fixtures.ClientCatalog))), nil
 	}))
 	t.Cleanup(client.CloseIdleConnections)
+
 	catalog, err := client.LoadCatalog(context.Background(), source)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +53,7 @@ func TestClientLoadsConfiguredCatalog(t *testing.T) {
 }
 
 func TestClientRejectsUnsafeSourcesBeforeRequest(t *testing.T) {
-	client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
+	client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
 		t.Fatalf("invalid input contacted the network: %s", request.URL)
 		return nil, nil
 	}))
@@ -86,30 +72,13 @@ func TestClientRejectsUnsafeSourcesBeforeRequest(t *testing.T) {
 	}
 }
 
-type countedMetadataBody struct {
-	io.Reader
-	read   int
-	closed bool
-}
-
-func (b *countedMetadataBody) Read(data []byte) (int, error) {
-	n, err := b.Reader.Read(data)
-	b.read += n
-	return n, err
-}
-
-func (b *countedMetadataBody) Close() error {
-	b.closed = true
-	return nil
-}
-
 func TestClientBoundsMetadataAndClosesBodies(t *testing.T) {
 	for _, metadata := range []struct {
 		name, body string
 		limit      int
 		load       func(*packages.Client) error
 	}{
-		{"catalog", clientCatalog, packages.MaxCatalogBytes, func(client *packages.Client) error {
+		{"catalog", fixtures.ClientCatalog, packages.MaxCatalogBytes, func(client *packages.Client) error {
 			_, err := client.LoadCatalog(context.Background(), "https://catalog.example/agents.yaml")
 			return err
 		}},
@@ -120,17 +89,17 @@ func TestClientBoundsMetadataAndClosesBodies(t *testing.T) {
 				name, size = metadata.name+" over limit", metadata.limit*2
 			}
 			t.Run(name, func(t *testing.T) {
-				body := &countedMetadataBody{Reader: strings.NewReader(metadata.body + strings.Repeat(" ", size-len(metadata.body)))}
-				client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
-					return metadataResponse(request, http.StatusOK, body), nil
+				body := fakes.NewMetadataBody(strings.NewReader(metadata.body + strings.Repeat(" ", size-len(metadata.body))))
+				client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
+					return fakes.MetadataResponse(request, http.StatusOK, body), nil
 				}))
 				t.Cleanup(client.CloseIdleConnections)
 				err := metadata.load(client)
 				if (err != nil) != oversized {
 					t.Fatalf("size %d, limit %d: %v", size, metadata.limit, err)
 				}
-				if body.read > metadata.limit+1 || !body.closed {
-					t.Fatalf("metadata body read %d bytes, limit %d; closed: %t", body.read, metadata.limit, body.closed)
+				if body.BytesRead() > metadata.limit+1 || !body.Closed() {
+					t.Fatalf("metadata body read %d bytes, limit %d; closed: %t", body.BytesRead(), metadata.limit, body.Closed())
 				}
 			})
 		}
@@ -153,13 +122,13 @@ func TestClientRejectsHTTPFailuresWithoutLeakingMetadata(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
-			body := &countedMetadataBody{Reader: strings.NewReader("private-marker response body")}
-			client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
+			body := fakes.NewMetadataBody(strings.NewReader("private-marker response body"))
+			client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
 				calls++
 				if calls > 1 {
 					t.Fatal("client followed a metadata redirect")
 				}
-				response := metadataResponse(request, tc.status, body)
+				response := fakes.MetadataResponse(request, tc.status, body)
 				response.Header.Set("Location", tc.location)
 				return response, nil
 			}))
@@ -168,7 +137,7 @@ func TestClientRejectsHTTPFailuresWithoutLeakingMetadata(t *testing.T) {
 			if err == nil || strings.Contains(err.Error(), "private-marker") || !strings.Contains(strings.ToLower(err.Error()), tc.want) {
 				t.Fatalf("unexpected HTTP failure: %v", err)
 			}
-			if !body.closed {
+			if !body.Closed() {
 				t.Fatal("failed response body was not closed")
 			}
 		})
@@ -182,15 +151,15 @@ func TestClientSanitizesTransportAndParseErrors(t *testing.T) {
 		err  error
 	}{
 		{"transport", nil, errors.New("private-marker transport failure")},
-		{"body read", metadataReadError{}, nil},
+		{"body read", fakes.MetadataReadError{}, nil},
 		{"catalog", strings.NewReader("schema_version: 1\nprivate-marker: true\nagents: {}\n"), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
+			client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
 				if tc.err != nil {
 					return nil, tc.err
 				}
-				return metadataResponse(request, http.StatusOK, io.NopCloser(tc.body)), nil
+				return fakes.MetadataResponse(request, http.StatusOK, io.NopCloser(tc.body)), nil
 			}))
 			t.Cleanup(client.CloseIdleConnections)
 			_, err := client.LoadCatalog(context.Background(), "https://catalog.example/private-marker.yaml")
@@ -212,7 +181,7 @@ func TestClientPreservesContextCancellation(t *testing.T) {
 			defer cancel()
 		}
 		t.Run(name, func(t *testing.T) {
-			client := packages.NewClient(metadataTransport(func(request *http.Request) (*http.Response, error) {
+			client := packages.NewClient(fakes.MetadataTransport(func(request *http.Request) (*http.Response, error) {
 				return nil, request.Context().Err()
 			}))
 			t.Cleanup(client.CloseIdleConnections)

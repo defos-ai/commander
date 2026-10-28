@@ -1,47 +1,10 @@
-import { upstreamURL } from './proxy';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/App';
 import { CONNECTIONS_STORAGE_KEY } from '../src/connections/storage';
 import { parseRoute, routeHash, type Route } from '../src/navigation/routes';
-
-const connection = { id: 'saved-local', name: 'Local Commander', url: 'http://localhost:4274' };
-const mission = { name: 'review-website-with-browser', objectives: ['Review website quality.'], required_actions: ['discover-pages'],
-  starting_actions: ['discover-pages'], input_schema: {}, output_schema: {} };
-const operation = { id: 'operation-review', mission, input: { url: 'https://defos.ai' }, status: 'running',
-  progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
-  tasks: [], questions: [], events: [], created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
-const resourceSession = { id: '11111111-1111-4111-8111-111111111111', scope_id: '22222222-2222-4222-8222-222222222222',
-  owner_agent_id: 'shell-agent-12345678', kind: 'shell', label: 'Saved development host', state: 'connected', disposition: 'active',
-  busy: false, revision: 1, created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
-
-function mockAPI(snapshot: typeof operation & { preflight?: unknown } = operation) {
-  let session: { url: string; username: string } | undefined;
-  let savedMission = mission;
-  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const url = upstreamURL(input);
-    if (url === '/ui/connections') {
-      if (init.method === 'POST') { const data = JSON.parse(init.body as string); session = { url: data.url, username: data.username }; return Response.json(session); }
-      return Response.json({ items: session ? [session] : [] });
-    }
-    if (url.endsWith('/healthz') || url.endsWith('/readyz')) return Response.json({ status: 'ok' });
-    if (!session) return new Response(null, { status: 401 });
-    if (url.endsWith('/missions')) {
-      if (init.method === 'POST') { savedMission = JSON.parse(init.body as string); return Response.json(savedMission, { status: 201 }); }
-      return Response.json({ items: [savedMission] });
-    }
-    if (url.endsWith(`/missions/${encodeURIComponent(savedMission.name)}`)) return Response.json(savedMission);
-    if (url.endsWith('/operations')) return Response.json({ items: [snapshot] });
-    if (url.endsWith(`/operations/${operation.id}`)) return Response.json(snapshot);
-    if (url.endsWith('/secrets/requests') || url.endsWith('/agents')) return Response.json({ items: [] });
-    if (url.startsWith(`${connection.url}/api/v1/sessions?`) || url.endsWith('/api/v1/sessions')) return Response.json({ items: [resourceSession] });
-    if (url.endsWith(`/api/v1/sessions/${resourceSession.id}`)) return Response.json(resourceSession);
-    if (url.endsWith('/graph')) return Response.json({ operation_id: operation.id, status: operation.status, updated_at: operation.updated_at, nodes: [], edges: [] });
-    return new Response(null, { status: 404 });
-  });
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+import { upstreamURL } from './fakes/proxy';
+import { connection, mission, mockAPI, operation, resourceSession, visit } from './fixtures/navigation';
 
 async function signIn() {
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -51,8 +14,6 @@ async function signIn() {
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save connection' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 }
-
-function visit(route: Route) { window.history.replaceState(null, '', routeHash(route)); }
 
 beforeEach(() => {
   localStorage.clear();

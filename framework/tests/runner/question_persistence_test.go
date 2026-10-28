@@ -12,14 +12,16 @@ import (
 	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
 func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 	for _, transition := range []string{"ask", "answer"} {
 		t.Run(transition, func(t *testing.T) {
-			config := fixture()
-			exec, calls := controlledExecutor()
-			r := newRunner(t, config, exec)
+			config := fixtures.Config()
+			exec, calls := fakes.ControlledExecutor()
+			r := fixtures.NewRunner(t, config, exec)
 			before := operationAwaitingDecision(t, r, calls)
 			ask := commands.AskQuestionCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID,
 				Version: before.Tasks[0].Continuation.Version, Text: "Continue?", Options: []string{"yes", "no"}}
@@ -44,7 +46,7 @@ func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 				return err
 			}
 			failure := errors.New("database unavailable")
-			config.OperationStore.(*operationStore).failNextUpdate(failure)
+			config.OperationStore.(*fakes.OperationStore).FailNextUpdate(failure)
 
 			changeErr := change()
 			stored, err := r.Get(t.Context(), before.ID)
@@ -78,20 +80,20 @@ func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 	for _, transition := range []string{"ask", "answer", "expire"} {
 		t.Run(transition, func(t *testing.T) {
-			config := fixture()
+			config := fixtures.Config()
 			failure := errors.New("directory sync failed")
 			uncertain := func(operations.Operation) error { return errors.Join(operations.ErrWriteUncertain, failure) }
-			store := &uncertainWriteStore{OperationStore: config.OperationStore}
+			store := &fakes.UncertainWriteStore{OperationStore: config.OperationStore}
 			switch transition {
 			case "ask":
-				store.afterAsk = uncertain
+				store.AfterAsk = uncertain
 			case "answer":
-				store.afterAnswer = uncertain
+				store.AfterAnswer = uncertain
 			case "expire":
-				store.afterExpire = uncertain
+				store.AfterExpire = uncertain
 			}
 			config.OperationStore = store
-			exec, calls := controlledExecutor()
+			exec, calls := fakes.ControlledExecutor()
 			first, err := runner.NewRunner(t.Context(), exec, config)
 			if err != nil {
 				t.Fatal(err)
@@ -117,7 +119,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 					_, changeErr = first.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: before.ID, QuestionID: question.ID, Answer: "yes"})
 					wantStatus = operations.QuestionAnswered
 				} else {
-					awaitOperation(t, first, before.ID, func(op operations.Operation) bool { return op.Questions[0].Status == operations.QuestionExpired })
+					fixtures.AwaitOperation(t, first, before.ID, func(op operations.Operation) bool { return op.Questions[0].Status == operations.QuestionExpired })
 					_, changeErr = first.Events(t.Context(), before.ID, 0, false)
 					wantStatus = operations.QuestionExpired
 				}
@@ -147,7 +149,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 				}
 			}
 
-			restarted := newRunner(t, config, exec)
+			restarted := fixtures.NewRunner(t, config, exec)
 			recovered, err := restarted.Get(t.Context(), before.ID)
 			if err != nil || !reflect.DeepEqual(recovered.Questions, stored.Questions) || !reflect.DeepEqual(recovered.Tasks, stored.Tasks) || recovered.Status != stored.Status {
 				t.Fatalf("recovery changed the question, deadline, or decision version: %+v, %v", recovered, err)
@@ -173,10 +175,10 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 }
 
 func TestLateAnswerPersistsExpirationBeforeReturningError(t *testing.T) {
-	config := fixture()
-	config.OperationStore = &deadlineOnAnswerStore{operationStore: config.OperationStore.(*operationStore)}
-	exec, calls := controlledExecutor()
-	r := newRunner(t, config, exec)
+	config := fixtures.Config()
+	config.OperationStore = &fakes.DeadlineOnAnswerStore{OperationStore: config.OperationStore.(*fakes.OperationStore)}
+	exec, calls := fakes.ControlledExecutor()
+	r := fixtures.NewRunner(t, config, exec)
 	before := operationAwaitingDecision(t, r, calls)
 	question, err := r.Ask(t.Context(), commands.AskQuestionCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID,
 		Version: before.Tasks[0].Continuation.Version, Text: "Continue?"})
@@ -199,28 +201,10 @@ func TestLateAnswerPersistsExpirationBeforeReturningError(t *testing.T) {
 	}
 }
 
-func operationAwaitingDecision(t *testing.T, r *runner.Runner, calls <-chan invocation) operations.Operation {
+func operationAwaitingDecision(t *testing.T, r *runner.Runner, calls <-chan fakes.Invocation) operations.Operation {
 	t.Helper()
-	op := start(t, r)
-	assign(t, r, op.ID, "inspect")
-	receive(t, calls).reply <- output("inspect")
-	return awaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-}
-
-// Expire the durable deadline within AnswerQuestion so the runner's periodic
-// sweep cannot handle expiration before the answer reaches the store.
-type deadlineOnAnswerStore struct{ *operationStore }
-
-func (s *deadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
-	if _, err := s.operationStore.Update(ctx, operationID, func(op *operations.Operation) error {
-		for i := range op.Questions {
-			if op.Questions[i].ID == questionID {
-				op.Questions[i].ExpiresAt = time.Now().Add(-time.Second)
-			}
-		}
-		return nil
-	}); err != nil {
-		return operations.Operation{}, err
-	}
-	return s.operationStore.AnswerQuestion(ctx, operationID, questionID, answer)
+	op := fixtures.Start(t, r)
+	fixtures.Assign(t, r, op.ID, "inspect")
+	fixtures.Receive(t, calls).Reply <- fixtures.Output("inspect")
+	return fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 }

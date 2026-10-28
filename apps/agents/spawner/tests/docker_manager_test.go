@@ -4,29 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"maps"
-	"net/http"
-	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
+	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	"github.com/defos-ai/commander/framework/agent"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
-	fscomms "github.com/defos-ai/commander/providers/fs/comms"
-)
-
-const (
-	dockerFixtureImage      = "ghcr.io/defos-ai/fixture-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	dockerBuilderReference  = "github.com/defos-ai/commander/apps/agents/builder@v0.1.0"
-	dockerImpostorReference = "github.com/other/builder-agent@v0.1.0"
 )
 
 func dockerDetails(t *testing.T, result runtimes.Result) runtimes.DockerRuntimeDetails {
@@ -38,223 +26,8 @@ func dockerDetails(t *testing.T, result runtimes.Result) runtimes.DockerRuntimeD
 	return details
 }
 
-type fakeDockerEngine struct {
-	mu        sync.Mutex
-	current   map[string]docker.Container
-	created   chan docker.Spec
-	onStart   func(context.Context, docker.Container) error
-	pullErr   error
-	createErr error
-	startErr  error
-	pulls     int
-	creates   int
-	starts    int
-	closes    int
-}
-
-func (e *fakeDockerEngine) Pull(ctx context.Context, image string) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.pulls++
-	if image != dockerFixtureImage {
-		return errors.New("fixture received unexpected image")
-	}
-	if e.pullErr != nil {
-		return e.pullErr
-	}
-	return ctx.Err()
-}
-
-func (e *fakeDockerEngine) Inspect(ctx context.Context, name string) (docker.Container, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return docker.Container{}, err
-	}
-	for _, current := range e.current {
-		if current.Name == name || current.ID == name {
-			return copyDockerContainer(current), nil
-		}
-	}
-	return docker.Container{}, docker.ErrNotFound
-}
-
-func (e *fakeDockerEngine) Create(ctx context.Context, spec docker.Spec) (docker.Container, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return docker.Container{}, err
-	}
-	e.creates++
-	if _, exists := e.current[spec.Name]; exists {
-		return docker.Container{}, errors.New("fixture container name already exists")
-	}
-	current := docker.Container{
-		ID: fmt.Sprintf("%064x", e.creates), Name: spec.Name, Image: spec.Image,
-		Labels: maps.Clone(spec.Labels), Environment: maps.Clone(spec.Environment),
-		Networks: []string{spec.Network}, Status: "created", Safe: true,
-	}
-	e.current[spec.Name] = current
-	spec.Environment, spec.Labels = maps.Clone(spec.Environment), maps.Clone(spec.Labels)
-	e.created <- spec
-	err := e.createErr
-	e.createErr = nil
-	if err != nil {
-		return docker.Container{}, err
-	}
-	return copyDockerContainer(current), nil
-}
-
-func (e *fakeDockerEngine) Start(ctx context.Context, containerID string) error {
-	e.mu.Lock()
-	var current docker.Container
-	for name, candidate := range e.current {
-		if candidate.ID == containerID {
-			candidate.Status = "running"
-			e.current[name], current = candidate, copyDockerContainer(candidate)
-			break
-		}
-	}
-	if current.ID == "" {
-		e.mu.Unlock()
-		return docker.ErrNotFound
-	}
-	e.starts++
-	callback, err := e.onStart, e.startErr
-	e.startErr = nil
-	e.mu.Unlock()
-	if callback != nil {
-		if publishErr := callback(ctx, current); publishErr != nil {
-			return publishErr
-		}
-	}
-	return err
-}
-
-func (e *fakeDockerEngine) Close() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.closes++
-	return nil
-}
-
-func (e *fakeDockerEngine) change(change func(*docker.Container)) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	for name, current := range e.current {
-		change(&current)
-		e.current[name] = current
-	}
-}
-
-func (e *fakeDockerEngine) counts() (creates, starts, closes int) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.creates, e.starts, e.closes
-}
-
-func copyDockerContainer(current docker.Container) docker.Container {
-	current.Labels = maps.Clone(current.Labels)
-	current.Environment = maps.Clone(current.Environment)
-	current.Networks = append([]string(nil), current.Networks...)
-	return current
-}
-
-type dockerManagerFixture struct {
-	manager *docker.Manager
-	config  docker.Config
-	engine  *fakeDockerEngine
-	bus     *fscomms.FsBus
-}
-
-func newDockerManagerFixture(t *testing.T) dockerManagerFixture {
-	t.Helper()
-	root := t.TempDir()
-	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := bus.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	engine := &fakeDockerEngine{current: make(map[string]docker.Container), created: make(chan docker.Spec, 10)}
-	engine.onStart = func(ctx context.Context, current docker.Container) error {
-		return publishDockerRegistration(ctx, bus, current, nil)
-	}
-	resolver := packages.NewResolver(transportFunc(func(request *http.Request) (*http.Response, error) {
-		agentType := "fixture-agent"
-		switch request.URL.String() {
-		case fixtureReleaseURL + "agent.yaml", fixtureModuleReleaseURL + "agent.yaml":
-		case "https://github.com/defos-ai/commander/releases/download/apps%2Fagents%2Fbuilder%2Fv0.1.0/agent.yaml",
-			"https://github.com/other/builder-agent/releases/download/v0.1.0/agent.yaml":
-			agentType = "builder-agent"
-		default:
-			return response(request, http.StatusNotFound, "not found"), nil
-		}
-		manifest := "schema_version: 1\ntype: " + agentType + "\nversion: v0.1.0\ndocker:\n  image: " + dockerFixtureImage + "\n"
-		return response(request, http.StatusOK, manifest), nil
-	}))
-	t.Cleanup(resolver.CloseIdleConnections)
-	config := docker.Config{
-		Bus:    bus,
-		BusURL: "amqp://fixture/", StorageURL: "s3://fixture", Network: "fixture-network",
-		Engine: engine, Resolver: resolver, RegistrationTimeout: time.Second,
-		Environment: map[string]string{"AWS_REGION": "fixture-region", "AWS_SECRET_ACCESS_KEY": "private-storage-sentinel"},
-	}
-	manager, err := docker.NewManager(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := manager.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	return dockerManagerFixture{manager: manager, config: config, engine: engine, bus: bus}
-}
-
-func publishDockerRegistration(ctx context.Context, bus *fscomms.FsBus, current docker.Container, change func(*agent.AgentSnapshot)) error {
-	agentID := strings.TrimPrefix(current.Name, "commander-")
-	agentType, valid := id.RuntimeType(agentID, id.Agent)
-	if !valid {
-		return errors.New("fixture container has an invalid assigned agent ID")
-	}
-	snapshot := agent.AgentSnapshot{
-		ID: agentID, Type: agent.AgentType(agentType + "-agent"), Status: agent.AgentReady,
-		Server:  agent.ServerInfo{Hostname: "fixture", IPAddress: "127.0.0.1"},
-		Actions: []actionmodel.Action{{Name: "fixture-action", Status: actionmodel.Ready, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}},
-	}
-	if change != nil {
-		change(&snapshot)
-	}
-	message, err := messages.NewMessage(messages.AgentHeartbeat, snapshot.ID, snapshot)
-	if err != nil {
-		return err
-	}
-	return bus.Publish(ctx, messages.ControllerEvents(messages.DefaultControllerType), message)
-}
-
-func restartDockerManager(t *testing.T, fixture dockerManagerFixture) *docker.Manager {
-	t.Helper()
-	if err := fixture.manager.Close(); err != nil {
-		t.Fatal(err)
-	}
-	manager, err := docker.NewManager(t.Context(), fixture.config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := manager.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	return manager
-}
-
 func TestDockerManagerRejectsInvalidConfiguration(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
+	fixture := fixtures.NewDockerManager(t)
 	for _, test := range []struct {
 		name   string
 		change func(*docker.Config)
@@ -295,7 +68,7 @@ func TestDockerManagerRejectsInvalidConfiguration(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config := fixture.config
+			config := fixture.Config
 			test.change(&config)
 			manager, err := docker.NewManager(t.Context(), config)
 			if err == nil {
@@ -310,12 +83,12 @@ func TestDockerManagerRejectsInvalidConfiguration(t *testing.T) {
 }
 
 func TestDockerManagerForwardsRawS3CredentialURL(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	if err := fixture.manager.Close(); err != nil {
+	fixture := fixtures.NewDockerManager(t)
+	if err := fixture.Manager.Close(); err != nil {
 		t.Fatal(err)
 	}
 	const storageURL = "s3://key:raw/secret+=@bucket/prefix"
-	config := fixture.config
+	config := fixture.Config
 	config.StorageURL = storageURL
 	manager, err := docker.NewManager(t.Context(), config)
 	if err != nil {
@@ -326,55 +99,26 @@ func TestDockerManagerForwardsRawS3CredentialURL(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	ctx, requestID, journal := newSpawnCheckpoints(t)
-	result, err := manager.Spawn(ctx, requestID, fixtureReference)
+	ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+
+	result, err := manager.Spawn(ctx, requestID, fixtures.Reference)
+
 	if err != nil || result.Runtime != runtimes.RuntimeDocker || dockerDetails(t, result).ContainerID == "" || len(result.Actions) != 1 || result.Actions[0].Status != actionmodel.Ready {
 		t.Fatal("Docker spawn did not register its child with raw S3 credentials")
 	}
-	spec := <-fixture.engine.created
+	spec := <-fixture.Engine.Created()
 	if spec.Environment["STORAGE_URL"] != storageURL {
 		t.Fatal("Docker spawn changed the credential-bearing storage URL")
 	}
 	assertCheckpointExcludes(t, journal, storageURL, "raw/secret+=")
-	repeated, err := manager.Spawn(ctx, requestID, fixtureReference)
+
+	repeated, err := manager.Spawn(ctx, requestID, fixtures.Reference)
+
 	if err != nil || repeated.AgentID != result.AgentID || dockerDetails(t, repeated).ContainerID != dockerDetails(t, result).ContainerID {
 		t.Fatal("Docker spawn did not reconcile the existing child with raw S3 credentials")
 	}
-	if creates, starts, _ := fixture.engine.counts(); creates != 1 || starts != 1 {
+	if creates, starts, _ := fixture.Engine.Counts(); creates != 1 || starts != 1 {
 		t.Fatal("retry launched another child with the same raw storage credentials")
-	}
-}
-
-// A running container sends heartbeats independently of the spawner's lifetime.
-func dockerHeartbeats(t *testing.T, fixture dockerManagerFixture, name string) func() {
-	t.Helper()
-	ctx, cancel := context.WithCancel(t.Context())
-	done := make(chan error, 1)
-	go func() {
-		ticker := time.NewTicker(10 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			current, err := fixture.engine.Inspect(ctx, name)
-			if err == nil {
-				err = publishDockerRegistration(ctx, fixture.bus, current, nil)
-			}
-			if err != nil {
-				done <- err
-				return
-			}
-			select {
-			case <-ctx.Done():
-				done <- ctx.Err()
-				return
-			case <-ticker.C:
-			}
-		}
-	}()
-	return func() {
-		cancel()
-		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
 	}
 }
 
@@ -382,26 +126,28 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 	for _, name := range []string{"SECRETS_ENCRYPTION_KEY", "GITHUB_TOKEN", "API_PASSWORD", "MCP_TOKEN", "OPENAI_API_KEY"} {
 		t.Setenv(name, "private-parent-sentinel")
 	}
-	fixture := newDockerManagerFixture(t)
-	ctx, requestID, journal := newSpawnCheckpoints(t)
-	first, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+	fixture := fixtures.NewDockerManager(t)
+	ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+
+	first, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Runtime != runtimes.RuntimeDocker || dockerDetails(t, first).ContainerID == "" || first.Package != fixtureReference || first.AgentType != "fixture-agent" || !id.ValidAgent(first.AgentID) {
+	if first.Runtime != runtimes.RuntimeDocker || dockerDetails(t, first).ContainerID == "" || first.Package != fixtures.Reference || first.AgentType != "fixture-agent" || !id.ValidAgent(first.AgentID) {
 		t.Fatalf("unexpected Docker result: %+v", first)
 	}
 	if len(first.Actions) != 1 || first.Actions[0].Name != "fixture-action" || first.Actions[0].Status != actionmodel.Ready {
 		t.Fatalf("missing observed action readiness: %+v", first.Actions)
 	}
-	spec := <-fixture.engine.created
-	if spec.Name != "commander-"+first.AgentID || spec.Image != dockerFixtureImage || spec.Network != fixture.config.Network {
+	spec := <-fixture.Engine.Created()
+	if spec.Name != "commander-"+first.AgentID || spec.Image != fixtures.DockerImage || spec.Network != fixture.Config.Network {
 		t.Fatal("container did not use its assigned identity, pinned image, and configured network")
 	}
 	if len(spec.Environment["COMMANDER_AGENT_ID_SUFFIX"]) != 8 || first.AgentID != "fixture-agent-"+spec.Environment["COMMANDER_AGENT_ID_SUFFIX"] {
 		t.Fatal("container did not receive its assigned suffix")
 	}
-	if spec.Environment["BUS_URL"] != fixture.config.BusURL || spec.Environment["STORAGE_URL"] != fixture.config.StorageURL || spec.Environment["AWS_SECRET_ACCESS_KEY"] != "private-storage-sentinel" {
+	if spec.Environment["BUS_URL"] != fixture.Config.BusURL || spec.Environment["STORAGE_URL"] != fixture.Config.StorageURL || spec.Environment["AWS_SECRET_ACCESS_KEY"] != "private-storage-sentinel" {
 		t.Fatal("provider bootstrap configuration was not passed to container")
 	}
 	for _, name := range []string{"COMMANDER_AGENT_ID", "SECRETS_ENCRYPTION_KEY", "GITHUB_TOKEN", "API_PASSWORD", "MCP_TOKEN", "OPENAI_API_KEY", "PATH", "HOME"} {
@@ -409,11 +155,13 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 			t.Errorf("container inherited %s", name)
 		}
 	}
-	second, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+
+	second, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference)
+
 	if err != nil || second.AgentID != first.AgentID || dockerDetails(t, second).ContainerID != dockerDetails(t, first).ContainerID {
 		t.Fatalf("same request did not reuse its container: result=%+v error=%v", second, err)
 	}
-	if _, err := fixture.manager.Spawn(ctx, requestID, "github.com/defos-ai/other-agent@v0.1.0"); err == nil {
+	if _, err := fixture.Manager.Spawn(ctx, requestID, "github.com/defos-ai/other-agent@v0.1.0"); err == nil {
 		t.Fatal("existing request accepted a conflicting package")
 	}
 	for _, name := range []string{"package-selection", "launch-intent"} {
@@ -422,65 +170,69 @@ func TestDockerManagerAssignsIdentityAndReusesOwnedContainer(t *testing.T) {
 		}
 	}
 	assertCheckpointExcludes(t, journal, "private-parent-sentinel", "private-storage-sentinel")
-	if err := fixture.manager.Close(); err != nil {
+	if err := fixture.Manager.Close(); err != nil {
 		t.Fatal(err)
 	}
-	creates, starts, closes := fixture.engine.counts()
+	creates, starts, closes := fixture.Engine.Counts()
 	if creates != 1 || starts != 1 || closes != 0 {
 		t.Fatalf("unexpected lifecycle counts: create=%d start=%d engine close=%d", creates, starts, closes)
 	}
-	current, err := fixture.engine.Inspect(t.Context(), dockerDetails(t, first).ContainerID)
+	current, err := fixture.Engine.Inspect(t.Context(), dockerDetails(t, first).ContainerID)
 	if err != nil || current.Status != "running" {
 		t.Fatal("manager shutdown did not retain the running container")
 	}
 }
 
 func TestDockerManagerRestartAdoptsRunningContainerAfterFreshRegistration(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	ctx, requestID, _ := newSpawnCheckpoints(t)
-	first, err := fixture.manager.Spawn(ctx, requestID, fixtureModuleReference)
+	fixture := fixtures.NewDockerManager(t)
+	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
+
+	first, err := fixture.Manager.Spawn(ctx, requestID, fixtures.ModuleReferenceFixture)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted := restartDockerManager(t, fixture)
-	if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil || !strings.Contains(err.Error(), "different package") {
+	restarted := fixtures.RestartDockerManager(t, fixture)
+	if _, err := restarted.Spawn(ctx, requestID, fixtures.Reference); err == nil || !strings.Contains(err.Error(), "different package") {
 		t.Fatalf("record did not preserve its module package: %v", err)
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 	defer cancel()
-	if _, err := restarted.Spawn(waitCtx, requestID, fixtureModuleReference); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := restarted.Spawn(waitCtx, requestID, fixtures.ModuleReferenceFixture); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("restarted manager did not wait for fresh registration: %v", err)
 	}
-	stop := dockerHeartbeats(t, fixture, dockerDetails(t, first).ContainerID)
+	stop := fixtures.DockerHeartbeats(t, fixture, dockerDetails(t, first).ContainerID)
 	defer stop()
-	result, err := restarted.Spawn(ctx, requestID, fixtureModuleReference)
-	if err != nil || result.AgentID != first.AgentID || dockerDetails(t, result).ContainerID != dockerDetails(t, first).ContainerID || result.Package != fixtureModuleReference {
+
+	result, err := restarted.Spawn(ctx, requestID, fixtures.ModuleReferenceFixture)
+
+	if err != nil || result.AgentID != first.AgentID || dockerDetails(t, result).ContainerID != dockerDetails(t, first).ContainerID || result.Package != fixtures.ModuleReferenceFixture {
 		t.Fatalf("restart did not adopt original container: result=%+v error=%v", result, err)
 	}
-	creates, starts, _ := fixture.engine.counts()
+	creates, starts, _ := fixture.Engine.Counts()
 	if creates != 1 || starts != 1 {
 		t.Fatalf("restart relaunched a running instance: create=%d start=%d", creates, starts)
 	}
 }
 
 func TestDockerManagerBootstrapsSecretsOnlyForTrustedBuilder(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
+	fixture := fixtures.NewDockerManager(t)
 	key := strings.Repeat("ab", 32)
 	var err error
-	fixture.config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
+	fixture.Config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.manager = restartDockerManager(t, fixture)
-	for _, reference := range []string{dockerBuilderReference, dockerImpostorReference, fixtureReference} {
-		ctx, requestID, journal := newSpawnCheckpoints(t)
-		if _, err := fixture.manager.Spawn(ctx, requestID, reference); err != nil {
+	fixture.Manager = fixtures.RestartDockerManager(t, fixture)
+	for _, reference := range []string{fixtures.DockerBuilderReference, fixtures.DockerImpostorReference, fixtures.Reference} {
+		ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+		if _, err := fixture.Manager.Spawn(ctx, requestID, reference); err != nil {
 			t.Fatal(err)
 		}
 		assertCheckpointExcludes(t, journal, key)
-		spec := <-fixture.engine.created
+		spec := <-fixture.Engine.Created()
 		value, supplied := spec.Environment["SECRETS_ENCRYPTION_KEY"]
-		if reference == dockerBuilderReference {
+		if reference == fixtures.DockerBuilderReference {
 			if !supplied || value != key {
 				t.Fatal("trusted builder did not receive the deployment key")
 			}
@@ -491,36 +243,39 @@ func TestDockerManagerBootstrapsSecretsOnlyForTrustedBuilder(t *testing.T) {
 }
 
 func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
+	fixture := fixtures.NewDockerManager(t)
 	key := strings.Repeat("ab", 32)
 	var err error
-	fixture.config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
+	fixture.Config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.manager = restartDockerManager(t, fixture)
-	ctx, requestID, _ := newSpawnCheckpoints(t)
-	first, err := fixture.manager.Spawn(ctx, requestID, dockerBuilderReference)
+	fixture.Manager = fixtures.RestartDockerManager(t, fixture)
+	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
+
+	first, err := fixture.Manager.Spawn(ctx, requestID, fixtures.DockerBuilderReference)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.manager = restartDockerManager(t, fixture)
-	stop := dockerHeartbeats(t, fixture, dockerDetails(t, first).ContainerID)
-	repeated, err := fixture.manager.Spawn(ctx, requestID, dockerBuilderReference)
+	fixture.Manager = fixtures.RestartDockerManager(t, fixture)
+	stop := fixtures.DockerHeartbeats(t, fixture, dockerDetails(t, first).ContainerID)
+
+	repeated, err := fixture.Manager.Spawn(ctx, requestID, fixtures.DockerBuilderReference)
 	stop()
 	if err != nil || dockerDetails(t, repeated).ContainerID != dockerDetails(t, first).ContainerID {
 		t.Fatalf("unchanged bootstrap did not reuse the builder: %v", err)
 	}
 	for _, replacement := range []string{strings.Repeat("cd", 32), ""} {
-		fixture.config.SecretBootstrap = nil
+		fixture.Config.SecretBootstrap = nil
 		if replacement != "" {
-			fixture.config.SecretBootstrap, err = runtimes.NewSecretBootstrap(replacement)
+			fixture.Config.SecretBootstrap, err = runtimes.NewSecretBootstrap(replacement)
 			if err != nil {
 				t.Fatal(err)
 			}
 		}
-		fixture.manager = restartDockerManager(t, fixture)
-		_, err := fixture.manager.Spawn(ctx, requestID, dockerBuilderReference)
+		fixture.Manager = fixtures.RestartDockerManager(t, fixture)
+		_, err := fixture.Manager.Spawn(ctx, requestID, fixtures.DockerBuilderReference)
 		if err == nil || !strings.Contains(err.Error(), "secrets bootstrap") {
 			t.Fatalf("changed or removed bootstrap was accepted: %v", err)
 		}
@@ -528,50 +283,48 @@ func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
 			t.Fatal("bootstrap mismatch disclosed an encryption key")
 		}
 	}
-	creates, starts, _ := fixture.engine.counts()
+	creates, starts, _ := fixture.Engine.Counts()
 	if creates != 1 || starts != 1 {
 		t.Fatalf("bootstrap reconciliation relaunched builder: creates=%d starts=%d", creates, starts)
 	}
 }
 
 func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
-	cases := map[string]func(*fakeDockerEngine){
-		"missing": func(engine *fakeDockerEngine) {
-			engine.mu.Lock()
-			clear(engine.current)
-			engine.mu.Unlock()
+	cases := map[string]func(*fakes.DockerEngine){
+		"missing": func(engine *fakes.DockerEngine) {
+			engine.ForgetAll()
 		},
-		"exited": func(engine *fakeDockerEngine) { engine.change(func(c *docker.Container) { c.Status = "exited" }) },
-		"unsafe": func(engine *fakeDockerEngine) { engine.change(func(c *docker.Container) { c.Safe = false }) },
-		"changed image": func(engine *fakeDockerEngine) {
-			engine.change(func(c *docker.Container) { c.Image = strings.Replace(c.Image, "aaaa", "bbbb", 1) })
+		"exited": func(engine *fakes.DockerEngine) { engine.Change(func(c *docker.Container) { c.Status = "exited" }) },
+		"unsafe": func(engine *fakes.DockerEngine) { engine.Change(func(c *docker.Container) { c.Safe = false }) },
+		"changed image": func(engine *fakes.DockerEngine) {
+			engine.Change(func(c *docker.Container) { c.Image = strings.Replace(c.Image, "aaaa", "bbbb", 1) })
 		},
-		"changed network": func(engine *fakeDockerEngine) {
-			engine.change(func(c *docker.Container) { c.Networks = []string{"different-network"} })
+		"changed network": func(engine *fakes.DockerEngine) {
+			engine.Change(func(c *docker.Container) { c.Networks = []string{"different-network"} })
 		},
-		"changed ownership": func(engine *fakeDockerEngine) {
-			engine.change(func(c *docker.Container) { c.Labels = map[string]string{} })
+		"changed ownership": func(engine *fakes.DockerEngine) {
+			engine.Change(func(c *docker.Container) { c.Labels = map[string]string{} })
 		},
-		"changed suffix": func(engine *fakeDockerEngine) {
-			engine.change(func(c *docker.Container) { c.Environment["COMMANDER_AGENT_ID_SUFFIX"] = "invalid" })
+		"changed suffix": func(engine *fakes.DockerEngine) {
+			engine.Change(func(c *docker.Container) { c.Environment["COMMANDER_AGENT_ID_SUFFIX"] = "invalid" })
 		},
-		"unexpected secrets key": func(engine *fakeDockerEngine) {
-			engine.change(func(c *docker.Container) { c.Environment["SECRETS_ENCRYPTION_KEY"] = strings.Repeat("ab", 32) })
+		"unexpected secrets key": func(engine *fakes.DockerEngine) {
+			engine.Change(func(c *docker.Container) { c.Environment["SECRETS_ENCRYPTION_KEY"] = strings.Repeat("ab", 32) })
 		},
 	}
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {
-			fixture := newDockerManagerFixture(t)
-			ctx, requestID, _ := newSpawnCheckpoints(t)
-			if _, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err != nil {
+			fixture := fixtures.NewDockerManager(t)
+			ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
+			if _, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err != nil {
 				t.Fatal(err)
 			}
-			change(fixture.engine)
-			restarted := restartDockerManager(t, fixture)
-			if _, err := restarted.Spawn(ctx, requestID, fixtureReference); err == nil {
+			change(fixture.Engine)
+			restarted := fixtures.RestartDockerManager(t, fixture)
+			if _, err := restarted.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 				t.Fatal("manager trusted a missing, stopped, unsafe, or changed container")
 			}
-			creates, starts, _ := fixture.engine.counts()
+			creates, starts, _ := fixture.Engine.Counts()
 			if creates != 1 || starts != 1 {
 				t.Fatalf("uncertain request created or restarted a container: create=%d start=%d", creates, starts)
 			}
@@ -580,19 +333,19 @@ func TestDockerManagerRefusesUncertainOrChangedContainer(t *testing.T) {
 }
 
 func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
-	fixture := newDockerManagerFixture(t)
-	fixture.engine.onStart = nil
-	executionCtx, requestID, _ := newSpawnCheckpoints(t)
+	fixture := fixtures.NewDockerManager(t)
+	fixture.Engine.SetOnStart(nil)
+	executionCtx, requestID, _ := fixtures.SpawnCheckpoints(t)
 	ctx, cancel := context.WithCancel(executionCtx)
 	defer cancel()
 	finished := make(chan error, 1)
 	go func() {
-		_, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+		_, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference)
 		finished <- err
 	}()
 	var spec docker.Spec
 	select {
-	case spec = <-fixture.engine.created:
+	case spec = <-fixture.Engine.Created():
 	case <-time.After(2 * time.Second):
 		t.Fatal("container was not created")
 	}
@@ -602,7 +355,7 @@ func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
 	tick := time.NewTicker(time.Millisecond)
 	defer tick.Stop()
 	for {
-		_, starts, _ := fixture.engine.counts()
+		_, starts, _ := fixture.Engine.Counts()
 		if starts > 0 {
 			break
 		}
@@ -621,18 +374,20 @@ func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("canceled registration wait did not return")
 	}
-	current, err := fixture.engine.Inspect(t.Context(), spec.Name)
+	current, err := fixture.Engine.Inspect(t.Context(), spec.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publishDockerRegistration(t.Context(), fixture.bus, current, nil); err != nil {
+	if err := fixtures.PublishDockerRegistration(t.Context(), fixture.Bus, current, nil); err != nil {
 		t.Fatal(err)
 	}
-	result, err := fixture.manager.Spawn(executionCtx, requestID, fixtureReference)
+
+	result, err := fixture.Manager.Spawn(executionCtx, requestID, fixtures.Reference)
+
 	if err != nil || dockerDetails(t, result).ContainerID != current.ID {
 		t.Fatalf("retry missed late registration: result=%+v error=%v", result, err)
 	}
-	creates, starts, _ := fixture.engine.counts()
+	creates, starts, _ := fixture.Engine.Counts()
 	if creates != 1 || starts != 1 {
 		t.Fatalf("cancelled wait caused duplicate launch: create=%d start=%d", creates, starts)
 	}
@@ -641,19 +396,21 @@ func TestDockerManagerCancelledWaitRetainsLateRegistration(t *testing.T) {
 func TestDockerManagerReconcilesUncertainCreateAndStart(t *testing.T) {
 	for _, phase := range []string{"create", "start"} {
 		t.Run(phase, func(t *testing.T) {
-			fixture := newDockerManagerFixture(t)
+			fixture := fixtures.NewDockerManager(t)
 			if phase == "create" {
-				fixture.engine.createErr = errors.New("fixture lost Create reply after daemon accepted it")
+				fixture.Engine.SetCreateError(errors.New("fixture lost Create reply after daemon accepted it"))
 			} else {
-				fixture.engine.startErr = errors.New("fixture lost Start reply after daemon accepted it")
+				fixture.Engine.SetStartError(errors.New("fixture lost Start reply after daemon accepted it"))
 			}
-			ctx, requestID, _ := newSpawnCheckpoints(t)
-			_, _ = fixture.manager.Spawn(ctx, requestID, fixtureReference)
-			result, err := fixture.manager.Spawn(ctx, requestID, fixtureReference)
+			ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
+			_, _ = fixture.Manager.Spawn(ctx, requestID, fixtures.Reference)
+
+			result, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference)
+
 			if err != nil || result.Runtime != runtimes.RuntimeDocker || dockerDetails(t, result).ContainerID == "" {
 				t.Fatalf("retry did not reconcile accepted %s: result=%+v error=%v", phase, result, err)
 			}
-			creates, starts, _ := fixture.engine.counts()
+			creates, starts, _ := fixture.Engine.Counts()
 			if creates != 1 || starts != 1 {
 				t.Fatalf("ambiguous %s launched twice: create=%d start=%d", phase, creates, starts)
 			}
@@ -668,14 +425,14 @@ func TestDockerManagerRejectsInvalidRegistration(t *testing.T) {
 		"invalid action": func(snapshot *agent.AgentSnapshot) { snapshot.Actions[0].InputSchema = json.RawMessage(`[]`) },
 	} {
 		t.Run(name, func(t *testing.T) {
-			fixture := newDockerManagerFixture(t)
-			fixture.engine.onStart = func(ctx context.Context, current docker.Container) error {
-				return publishDockerRegistration(ctx, fixture.bus, current, change)
-			}
-			ctx, requestID, _ := newSpawnCheckpoints(t)
+			fixture := fixtures.NewDockerManager(t)
+			fixture.Engine.SetOnStart(func(ctx context.Context, current docker.Container) error {
+				return fixtures.PublishDockerRegistration(ctx, fixture.Bus, current, change)
+			})
+			ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 			ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
-			if result, err := fixture.manager.Spawn(ctx, requestID, fixtureReference); err == nil {
+			if result, err := fixture.Manager.Spawn(ctx, requestID, fixtures.Reference); err == nil {
 				t.Fatalf("invalid registration was accepted: %+v", result)
 			}
 		})
