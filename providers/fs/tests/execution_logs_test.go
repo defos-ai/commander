@@ -192,17 +192,22 @@ func TestExecutionLogsRejectMalformedSavedState(t *testing.T) {
 	}{
 		{"non-array", []byte(`{}`)},
 		{"null", []byte(`null`)},
+		{"empty array", []byte(`[]`)},
 		{"invalid JSON", []byte(`[`)},
 		{"trailing data", append(bytes.Clone(encoded), []byte(` []`)...)},
 		{"unknown field", bytes.Replace(encoded, []byte(`"message":`), []byte(`"unknown":true,"message":`), 1)},
 		{"multiple records", fixtures.ExecutionLogJSON(t, log, fixtures.ExecutionLog(2))},
 		{"different identity", fixtures.ExecutionLogJSON(t, fixtures.ExecutionLog(2))},
 		{"invalid record", fixtures.ExecutionLogJSON(t, invalidRecord)},
+		{"zero sequence", bytes.Replace(encoded, []byte(`"sequence":1`), []byte(`"sequence":0`), 1)},
 		{"invalid UTF-8", bytes.Replace(encoded, []byte("Compiling"), []byte("Compiling\xff"), 1)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
 			store := fixtures.CheckpointStore(t, root)
+			if err := store.AppendLog(t.Context(), log); err != nil {
+				t.Fatal(err)
+			}
 			path := fixtures.WriteExecutionLogState(t, root, log.ID, test.data)
 
 			_, readErr := store.GetLog(t.Context(), log.ID)
@@ -213,15 +218,6 @@ func TestExecutionLogsRejectMalformedSavedState(t *testing.T) {
 				t.Fatalf("malformed saved state was exposed or overwritten: read=%v append=%v file=%v", readErr, appendErr, err)
 			}
 		})
-	}
-	root := t.TempDir()
-	store := fixtures.CheckpointStore(t, root)
-	fixtures.WriteExecutionLogState(t, root, log.ID, []byte(`[]`))
-	if _, err := store.GetLog(t.Context(), log.ID); !errors.Is(err, executions.ErrUnknownLog) {
-		t.Fatalf("empty collection did not mean unknown log: %v", err)
-	}
-	if err := store.AppendLog(t.Context(), log); err != nil {
-		t.Fatalf("empty collection rejected its first log: %v", err)
 	}
 }
 
@@ -237,6 +233,12 @@ func TestExecutionLogsIsolateRecordsAndExecutionState(t *testing.T) {
 	}
 	before, err := store.Get(t.Context(), command.AgentID, command.ID)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendLog(t.Context(), fixtures.ExecutionLog(1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendLog(t.Context(), fixtures.ExecutionLog(4)); err != nil {
 		t.Fatal(err)
 	}
 	fixtures.WriteExecutionLogState(t, root, fixtures.ExecutionLog(1).ID, []byte(`corrupted unrelated history`))
@@ -269,6 +271,11 @@ func TestExecutionLogsRejectLinksAndRetriesPublication(t *testing.T) {
 			root := t.TempDir()
 			store := fixtures.CheckpointStore(t, root)
 			log := fixtures.ExecutionLog(1)
+			if kind != "namespace symlink" {
+				if err := store.AppendLog(t.Context(), fixtures.ExecutionLog(2)); err != nil {
+					t.Fatal(err)
+				}
+			}
 			outside := filepath.Join(t.TempDir(), "outside")
 			if err := os.WriteFile(outside, []byte("unchanged"), 0600); err != nil {
 				t.Fatal(err)

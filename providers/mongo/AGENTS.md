@@ -33,13 +33,24 @@ artifact bytes and reports belong to the separate storage provider.
   to preserve number precision. Read and update their map inside one transaction;
   concurrent checkpoint writes or completion must retry against current state.
   Return failed commit confirmation to the caller for reconciliation.
-- [`ExecutionMongoStore`](executions/logs.go) implements `AppendLog` and `GetLog`
-  for immutable execution logs in separate `execution_logs` documents keyed by
-  log ID. JSON binary payloads
-  preserve timestamp nanoseconds and message bytes; validate the decoded ID against
-  `_id`. Atomic inserts accept identical duplicate-ID retries through readback and
-  reject changed content. Preserve other write errors for caller reconciliation;
-  logs never update execution records.
+- [`ExecutionMongoStore`](executions/logs.go) keeps immutable logs in separate
+  `execution_logs` documents. JSON binary preserves timestamp nanoseconds and
+  message bytes; validate ID and indexed provenance against the decoded payload.
+  Allocate each positive position from `execution_log_counters` and insert the log
+  in one transaction: publishing the counter first could let live readers skip
+  a delayed insert. Identical retries retain their original position; conflicting
+  content fails, and uncertain commit errors reach the caller for reconciliation.
+  Logs never enlarge or rewrite execution records.
+- Initialize log collections/indexes and the counter before the first transaction.
+  Reject unpositioned existing records or a counter inconsistent with the saved
+  tail; do not backfill, reset or delete data. [`ListLogs`](executions/log_queries.go)
+  resolves `AfterLogID`, captures the head and reads matching positions in one
+  snapshot, applying exact filters, ascending sort and the requested limit before
+  decoding. The cursor must identify a committed log matching every supplied
+  filter; otherwise return `ErrUnknownLog`. Keep simple collation on
+  equality/position indexes and queries. Return a nonnil slice on success;
+  callers continue after the last returned log ID and retain their cursor on an
+  empty result. Producer timestamps and UUIDs never determine ingestion order.
 - Keep [`operationWriteError`](operations/operation_mongo_store.go) conservative
   about ambiguous commits. Do not turn an unknown commit outcome into a definite
   rollback or discard `operations.ErrWriteUncertain` while wrapping errors.

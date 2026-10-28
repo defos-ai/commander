@@ -4,20 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/id"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 const logCollection = "execution_logs"
 
 type logDocument struct {
-	ID   string          `bson:"_id"`
-	Data json.RawMessage `bson:"data"`
+	ID          string          `bson:"_id"`
+	Position    int64           `bson:"position"`
+	AgentID     string          `bson:"agent_id"`
+	ActionName  string          `bson:"action_name"`
+	OperationID string          `bson:"operation_id"`
+	TaskID      string          `bson:"task_id"`
+	StepID      string          `bson:"step_id"`
+	Data        json.RawMessage `bson:"data"`
 }
 
 func (s *ExecutionMongoStore) AppendLog(ctx context.Context, log executions.Log) error {
@@ -31,18 +39,64 @@ func (s *ExecutionMongoStore) AppendLog(ctx context.Context, log executions.Log)
 	if err != nil {
 		return err
 	}
-	err = s.database.Insert(ctx, logCollection, logDocument{ID: log.ID, Data: data})
-	if !mongo.IsDuplicateKeyError(err) {
-		return err
+	for attempt := range 2 {
+		wrote := false
+		err := s.database.WithTransaction(ctx, func(tx context.Context) error {
+			wrote = false
+			previous, err := s.GetLog(tx, log.ID)
+			if err == nil {
+				if !previous.Equal(log) {
+					return executions.ErrLogConflict
+				}
+				return nil
+			}
+			if !errors.Is(err, executions.ErrUnknownLog) {
+				return err
+			}
+			head, err := s.readLogHead(tx)
+			if err != nil {
+				return err
+			}
+			if head == math.MaxInt64 {
+				return errors.New("execution log ingestion position exhausted")
+			}
+			// The shared counter and insert commit together so a live cursor
+			// cannot pass an allocated position before its log is visible.
+			position := head + 1
+			updated, err := s.database.Update(tx, logCounterCollection, bson.M{"_id": logCounterID, "position": head},
+				bson.M{"$set": bson.M{"position": position}})
+			if err != nil {
+				return err
+			}
+			if updated.MatchedCount != 1 {
+				return errors.New("execution log ingestion counter changed")
+			}
+			if err := s.database.Insert(tx, logCollection, newLogDocument(log, position, data)); err != nil {
+				return err
+			}
+			wrote = true
+			return nil
+		})
+		// A failed commit confirmation remains uncertain even if a later read
+		// could see the inserted log. The caller retains its immutable identity.
+		if err == nil || wrote || !mongo.IsDuplicateKeyError(err) {
+			return err
+		}
+		previous, readErr := s.GetLog(ctx, log.ID)
+		if readErr == nil {
+			if !previous.Equal(log) {
+				return executions.ErrLogConflict
+			}
+			return nil
+		}
+		if !errors.Is(readErr, executions.ErrUnknownLog) {
+			return readErr
+		}
+		if attempt == 1 {
+			return err
+		}
 	}
-	saved, err := s.GetLog(ctx, log.ID)
-	if err != nil {
-		return err
-	}
-	if !saved.Equal(log) {
-		return executions.ErrLogConflict
-	}
-	return nil
+	return errors.New("execution log append did not settle")
 }
 
 func (s *ExecutionMongoStore) GetLog(ctx context.Context, logID string) (executions.Log, error) {
@@ -67,10 +121,19 @@ func (document logDocument) decode() (executions.Log, error) {
 	if !utf8.Valid(document.Data) || domain.Decode(document.Data, &log) != nil {
 		return executions.Log{}, errors.New("invalid stored execution log encoding")
 	}
-	if log.ID != document.ID {
-		return executions.Log{}, errors.New("stored execution log ID does not match its document")
+	if document.Position <= 0 {
+		return executions.Log{}, errors.New("stored execution log has no valid ingestion position")
+	}
+	if log.ID != document.ID || log.AgentID != document.AgentID || log.ActionName != document.ActionName ||
+		log.Work.OperationID != document.OperationID || log.Work.TaskID != document.TaskID || log.Work.StepID != document.StepID {
+		return executions.Log{}, errors.New("stored execution log does not match its indexed metadata")
 	}
 	return log, nil
+}
+
+func newLogDocument(log executions.Log, position int64, data json.RawMessage) logDocument {
+	return logDocument{ID: log.ID, Position: position, AgentID: log.AgentID, ActionName: log.ActionName,
+		OperationID: log.Work.OperationID, TaskID: log.Work.TaskID, StepID: log.Work.StepID, Data: data}
 }
 
 func checkLogContext(ctx context.Context) error {

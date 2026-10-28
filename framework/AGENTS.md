@@ -172,6 +172,15 @@
   retries succeed; conflicting reuse fails.
   Write errors may follow a commit: read by ID or retry the identical observation.
   Stores validate the record shape; controllers must verify saved execution claims.
+  [`ExecutionStore.ListLogs`](domain/executions/execution_store.go) follows task
+  pagination: an empty log-ID cursor starts the first page; subsequent cursors
+  must identify committed logs matching all operation/task/agent/action filters.
+  Unknown or mismatched cursors return `ErrUnknownLog`. Return matching logs in
+  append order, strictly after the cursor, up to the requested limit. Adapters
+  use the last returned ID for the next cursor and preserve it on empty pages.
+  Append positions stay private to providers; producer timestamps and UUID order
+  do not determine pagination. Store filters neither authorize access nor verify
+  operation/task existence; adapters own those scope checks.
   `Agent.Serve` binds the logging capability to the accepted agent, command, action
   and work context. Standalone `Work` clears inherited providers. Caller, action
   and serving lifetimes bound publication, including detached caller contexts.
@@ -181,8 +190,8 @@
   observation before ACK. Valid delayed logs remain acceptable after completion.
   Log-processing failures reject that delivery and allow other work to continue;
   receive and settlement failures retain their normal shutdown behavior. Logging
-  never extends deadlines or changes operation state. Operation/task queries
-  follow later.
+  never extends deadlines or changes operation state. Public operation/task log
+  queries follow later.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

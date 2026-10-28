@@ -13,7 +13,6 @@ import (
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/id"
 	mongoexecutions "github.com/defos-ai/commander/providers/mongo/executions"
-	mongostore "github.com/defos-ai/commander/providers/mongo/store"
 	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -32,9 +31,14 @@ func TestExecutionMongoStoreRequiresContextAndDatabase(t *testing.T) {
 }
 
 func TestExecutionMongoStoreLogsPreservesContentAndIdenticalReplays(t *testing.T) {
-	database := fixtures.OpenStore(t, "execution_logs")
+	database := fixtures.OpenLogDatabase(t)
 	catalog := fixtures.OpenExecutionStore(t, database)
 	value := fixtures.ExecutionLog()
+	value.CreatedAt = value.CreatedAt.In(time.FixedZone("stored", 3*60*60))
+	payload, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := catalog.GetLog(t.Context(), value.ID); !errors.Is(err, executions.ErrUnknownLog) {
 		t.Fatalf("absent execution log: %v", err)
 	}
@@ -55,12 +59,12 @@ func TestExecutionMongoStoreLogsPreservesContentAndIdenticalReplays(t *testing.T
 	if err := database.GetByID(t.Context(), "execution_logs", value.ID, &document); err != nil {
 		t.Fatal(err)
 	}
-	if document.Lookup("data").Type != bson.TypeBinary {
-		t.Fatal("execution log payload was not stored as JSON binary")
+	if _, data, ok := document.Lookup("data").BinaryOK(); !ok || !bytes.Equal(data, payload) {
+		t.Fatal("execution log payload was not preserved as JSON binary")
 	}
 	before := fixtures.CollectionDocuments(t, database, "execution_logs")
 	replay := value
-	replay.CreatedAt = replay.CreatedAt.In(time.FixedZone("same instant", 3*60*60))
+	replay.CreatedAt = replay.CreatedAt.UTC()
 
 	if err := reopened.AppendLog(t.Context(), replay); err != nil {
 		t.Fatalf("identical replay with another timezone: %v", err)
@@ -82,7 +86,7 @@ func TestExecutionMongoStoreLogsPreservesContentAndIdenticalReplays(t *testing.T
 }
 
 func TestExecutionMongoStoreLogsRejectsConflictingContent(t *testing.T) {
-	database := fixtures.OpenStore(t, "execution_logs")
+	database := fixtures.OpenLogDatabase(t)
 	catalog := fixtures.OpenExecutionStore(t, database)
 	value := fixtures.ExecutionLog()
 	if err := catalog.AppendLog(t.Context(), value); err != nil {
@@ -119,7 +123,7 @@ func TestExecutionMongoStoreLogsRejectsConflictingContent(t *testing.T) {
 }
 
 func TestExecutionMongoStoreLogsRejectsInvalidAndCancelledRequests(t *testing.T) {
-	catalog := fixtures.OpenExecutionStore(t, &mongostore.MongoStore{})
+	catalog := &mongoexecutions.ExecutionMongoStore{}
 	value := fixtures.ExecutionLog()
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -149,7 +153,7 @@ func TestExecutionMongoStoreLogsConcurrentAppends(t *testing.T) {
 			name = "identical"
 		}
 		t.Run(name, func(t *testing.T) {
-			database := fixtures.OpenStore(t, "execution_logs")
+			database := fixtures.OpenLogDatabase(t)
 			stores := []executions.ExecutionStore{fixtures.OpenExecutionStore(t, database), fixtures.OpenExecutionStore(t, database)}
 			value := fixtures.ExecutionLog()
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -206,6 +210,7 @@ func TestExecutionMongoStoreLogsRejectsCorruptDocuments(t *testing.T) {
 		corrupt func([]byte) []byte
 	}{
 		{"malformed JSON", func([]byte) []byte { return []byte("{") }},
+		{"invalid record", func([]byte) []byte { return []byte(`{}`) }},
 		{"wrong ID", func(data []byte) []byte {
 			return bytes.Replace(data, []byte(`"id":"10000000-0000-4000-8000-000000000001"`), []byte(`"id":"10000000-0000-4000-8000-000000000002"`), 1)
 		}},
@@ -214,7 +219,7 @@ func TestExecutionMongoStoreLogsRejectsCorruptDocuments(t *testing.T) {
 		{"invalid UTF-8", func(data []byte) []byte { return bytes.Replace(data, []byte("Compiling"), []byte{0xff}, 1) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			database := fixtures.OpenStore(t, "execution_logs")
+			database := fixtures.OpenLogDatabase(t)
 			catalog := fixtures.OpenExecutionStore(t, database)
 			value := fixtures.ExecutionLog()
 			if err := catalog.AppendLog(t.Context(), value); err != nil {
@@ -238,6 +243,40 @@ func TestExecutionMongoStoreLogsRejectsCorruptDocuments(t *testing.T) {
 			var saved struct{ Data []byte }
 			if err := database.GetByID(t.Context(), "execution_logs", value.ID, &saved); err != nil || !bytes.Equal(saved.Data, payload) {
 				t.Fatalf("rejected append changed the corrupt document: %v", err)
+			}
+		})
+	}
+}
+
+func TestExecutionMongoStoreLogsRejectsInvalidStoredPositions(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		update bson.M
+	}{
+		{"missing", bson.M{"$unset": bson.M{"position": ""}}},
+		{"zero", bson.M{"$set": bson.M{"position": int64(0)}}},
+		{"negative", bson.M{"$set": bson.M{"position": int64(-1)}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := fixtures.OpenLogDatabase(t)
+			catalog := fixtures.OpenExecutionStore(t, database)
+			value := fixtures.ExecutionLog()
+			if err := catalog.AppendLog(t.Context(), value); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := database.Update(t.Context(), "execution_logs", bson.M{"_id": value.ID}, test.update); err != nil {
+				t.Fatal(err)
+			}
+			before := fixtures.CollectionDocuments(t, database, "execution_logs")
+
+			_, readErr := catalog.GetLog(t.Context(), value.ID)
+			appendErr := catalog.AppendLog(t.Context(), value)
+
+			if readErr == nil || appendErr == nil {
+				t.Fatalf("invalid stored position was accepted: read=%v append=%v", readErr, appendErr)
+			}
+			if after := fixtures.CollectionDocuments(t, database, "execution_logs"); !slices.Equal(before, after) {
+				t.Fatal("rejected access changed the saved execution log")
 			}
 		})
 	}

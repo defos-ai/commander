@@ -52,10 +52,24 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   after completion. Use domain transitions so a late checkpoint cannot extend a
   completed execution or overwrite an earlier checkpoint.
 - [`ExecutionFsStore` log methods](executions/logs.go) keep each immutable
-  observation in its own `execution_logs/<UUID>.json` collection, independent of
-  execution state and other logs. Identical retries republish the original bytes
-  to confirm durability; conflicting IDs never replace saved provenance or content.
-  Reads create no state. The controller verifies the saved execution claim before append.
+  observation in its own `execution_logs/<UUID>.json` collection with a private
+  append sequence, independent of execution state. A persistent coordination lock
+  serializes a constant-size [index and pending intent](executions/log_index.go);
+  write the intent before its body and position entry, then publish the committed
+  head. Finish pending work before allocating another position. Identical retries
+  retain the sequence and republish the original body bytes. Conflicting IDs never
+  replace provenance or content; the controller verifies the saved execution claim.
+- [Log queries](executions/log_queries.go) capture the committed head and read
+  directly addressed positions in append order, returning matching logs up to
+  the requested limit or captured head. `AfterLogID` must identify a committed log
+  matching every supplied filter; unknown, pending or mismatched anchors return
+  `ErrUnknownLog`. Resolve its private position and continue strictly after it.
+  Sparse scans honor cancellation; source timestamps do not determine pagination.
+  Reads neither publish pending work nor create state, but `jsonfile.ReadDurable`
+  confirms the observed head's directory publication. Missing or
+  inconsistent index metadata is an error; verify the committed tail's position
+  and body before reading or extending the stream. This takes two bounded lookups
+  and never scans older history. No legacy log format is supported.
 
 - Session persistence uses [scope aggregates](sessions/session_fs_store.go) under
   one collection lock. Reserve/release and retained identity evidence commit

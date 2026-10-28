@@ -87,6 +87,16 @@ func (c *Collection) Path() string { return c.path }
 // Read returns an atomic array snapshot without locking or creating any paths.
 // It rejects symlinks and reports os.ErrNotExist for a missing collection.
 func Read(ctx context.Context, path string) ([]byte, error) {
+	return readSnapshot(ctx, path, false)
+}
+
+// ReadDurable confirms directory publication before exposing an atomic snapshot.
+// It does not create paths or take a writer lock.
+func ReadDurable(ctx context.Context, path string) ([]byte, error) {
+	return readSnapshot(ctx, path, true)
+}
+
+func readSnapshot(ctx context.Context, path string, confirm bool) ([]byte, error) {
 	if ctx == nil {
 		return nil, errors.New("JSON collection requires a context")
 	}
@@ -101,6 +111,15 @@ func Read(ctx context.Context, path string) ([]byte, error) {
 	data, exists, err := c.read(ctx)
 	if err == nil && !exists {
 		err = &os.PathError{Op: "read", Path: path, Err: os.ErrNotExist}
+	}
+	if err == nil && confirm {
+		err = syncRoot(c.root)
+	}
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return nil, err
 	}
 	return data, err
 }

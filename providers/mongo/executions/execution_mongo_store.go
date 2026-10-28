@@ -36,7 +36,11 @@ func NewExecutionMongoStore(ctx context.Context, database *store.MongoStore) (*E
 	if database == nil {
 		return nil, errors.New("execution database is required")
 	}
-	return &ExecutionMongoStore{database: database}, nil
+	result := &ExecutionMongoStore{database: database}
+	if err := result.initializeLogs(ctx); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *ExecutionMongoStore) Claim(ctx context.Context, command messages.Message) (executions.Execution, bool, error) {
