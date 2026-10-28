@@ -69,3 +69,63 @@ func TestPrivateAccessProgressPreservesSecretScopeAndFailureRedaction(t *testing
 		})
 	}
 }
+
+func TestUnapprovedSpawnSourcesStopBeforeCredentialsOrProgress(t *testing.T) {
+	for _, access := range []string{"no secret capability", "managed secret", "environment token"} {
+		t.Run(access, func(t *testing.T) {
+			token := ""
+			if access == "environment token" {
+				token = "private-environment-token"
+			}
+			t.Setenv("GITHUB_TOKEN", token)
+			for _, visibility := range []string{"public", "private"} {
+				for _, source := range []struct {
+					name, reference string
+					needsApproval   bool
+				}{
+					{"third-party owner", "github.com/acme/worker-agent@v1.2.3", true},
+					{"owner prefix", "github.com/defos-ai-attacker/worker-agent@stable", true},
+					{"owner suffix", "github.com/attacker-defos-ai/worker-agent", true},
+					{"official repository name", "github.com/acme/defos-ai@v1.2.3", true},
+					{"official repository prefix", "github.com/acme/defos-ai-worker@v1.2.3", true},
+					{"official module path", "https://github.com/acme/worker-agent/defos-ai/worker@v1.2.3", true},
+					{"spoofed host", "https://github.com.attacker.example/defos-ai/worker-agent", false},
+					{"non-GitHub host", "https://attacker.example/defos-ai/worker-agent", false},
+					{"credential host", "https://github.com@attacker.example/defos-ai/worker-agent", false},
+					{"traversal module", "github.com/acme/worker-agent/../defos-ai@v1.2.3", false},
+					{"GitHub tree URL", "https://github.com/acme/worker-agent/tree/defos-ai", false},
+				} {
+					t.Run(visibility+"/"+source.name, func(t *testing.T) {
+						logs := fakes.NewProgressLogs(nil)
+						ctx := action.WithExecution(action.WithLogs(t.Context(), logs), action.Execution{CommandID: id.MessageID()})
+						requests := 0
+						if access == "managed secret" {
+							ctx = action.WithSecrets(ctx, fakes.SecretRequester(func(context.Context, string) ([]byte, error) {
+								requests++
+								return nil, errors.New("unapproved source requested a private token")
+							}))
+						}
+						launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Result: fixtures.SpawnResult()})
+						executor := fixtures.SpawnAction(t, launcher)
+						input, err := json.Marshal(map[string]string{"package": source.reference, "visibility": visibility})
+						if err != nil {
+							t.Fatal(err)
+						}
+
+						result, err := executor.Run(ctx, input)
+
+						if err == nil || source.needsApproval && !errors.Is(err, packages.ErrSourceApprovalRequired) {
+							t.Fatalf("source did not stop at its policy or validation boundary: %v", err)
+						}
+						if requests != 0 || len(logs.Messages()) != 0 || len(launcher.Calls()) != 0 || len(result.Output) != 0 {
+							t.Fatalf("unapproved source acquired credentials, reported progress or launched: requests=%d logs=%v launches=%v", requests, logs.Messages(), launcher.Calls())
+						}
+						if token != "" && strings.Contains(err.Error(), token) {
+							t.Fatal("source rejection exposed an environment credential")
+						}
+					})
+				}
+			}
+		})
+	}
+}

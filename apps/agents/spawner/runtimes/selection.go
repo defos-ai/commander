@@ -26,6 +26,9 @@ func PinPackage(ctx context.Context, requestID, selector string, resolver *packa
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	if err := packages.RequireTrustedSource(selector); err != nil {
+		return "", err
+	}
 	requested, err := agentpackages.ParseSelector(selector)
 	if err != nil {
 		return "", err

@@ -10,6 +10,7 @@ import (
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
 	spawneractions "github.com/defos-ai/commander/apps/agents/spawner/actions"
+	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
 	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
@@ -85,7 +86,16 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 	executor := fixtures.SpawnAction(t, launcher)
 	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
 	for _, execution := range []action.Execution{{CommandID: id.MessageID(), Work: work}, {CommandID: id.MessageID()}} {
-		for _, reference := range []string{fixtures.ActionPackage, "https://github.com/defos-ai/commander-example-agent", "github.com/defos-ai/commander-example-agent@stable"} {
+		for _, reference := range []string{
+			fixtures.ActionPackage,
+			"github.com/defos-ai/commander-example-agent",
+			"https://github.com/defos-ai/commander-example-agent",
+			"github.com/defos-ai/commander-example-agent@stable",
+			"github.com/defos-ai/commander-example-agent@v0.1.0",
+			"github.com/defos-ai/commander/apps/agents/example@stable",
+			"https://" + fixtures.ActionPackage,
+			"https://github.com/DeFoS-AI/commander-example-agent@v0.1.0",
+		} {
 			ctx := action.WithExecution(t.Context(), execution)
 			input := json.RawMessage(`{"package":"` + reference + `"}`)
 
@@ -106,6 +116,48 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 				t.Fatalf("launcher received wrong dispatch identity: %+v", call)
 			}
 		}
+	}
+}
+
+func TestSpawnAgentApprovalFlagsAreNotActionInputs(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "approval-field-test-token")
+	launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{Result: fixtures.SpawnResult()})
+	executor := fixtures.SpawnAction(t, launcher)
+	schema, err := actionmodel.ResolveSchema(executor.Action().InputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, reference := range []string{fixtures.ActionPackage, "github.com/acme/worker-agent@v1.2.3"} {
+		for _, field := range []string{"confirmed", "approved"} {
+			t.Run(reference+"/"+field, func(t *testing.T) {
+				values := map[string]any{"package": reference, "visibility": "private", field: true}
+				input, err := json.Marshal(values)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID()})
+
+				_, runErr := executor.Run(ctx, input)
+				schemaErr := schema.Validate(values)
+
+				if runErr == nil || schemaErr == nil || errors.Is(runErr, packages.ErrSourceApprovalRequired) || len(launcher.Calls()) != 0 {
+					t.Fatalf("caller approval flag bypassed strict action decoding or schema: run=%v schema=%v", runErr, schemaErr)
+				}
+			})
+		}
+	}
+}
+
+func TestSpawnAgentValidatesExecutionBeforeSourcePolicy(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	launcher := fakes.NewActionLauncher(fakes.ActionLauncherConfig{})
+	executor := fixtures.SpawnAction(t, launcher)
+	input := json.RawMessage(`{"package":"github.com/acme/worker-agent@v1.2.3","visibility":"private"}`)
+
+	_, err := executor.Run(t.Context(), input)
+
+	if err == nil || !strings.Contains(err.Error(), "controller-dispatched execution") || errors.Is(err, packages.ErrSourceApprovalRequired) || len(launcher.Calls()) != 0 {
+		t.Fatalf("source policy bypassed execution validation: %v", err)
 	}
 }
 

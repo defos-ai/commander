@@ -8,7 +8,9 @@ In Playground, ask:
 
 > Install the web agent.
 
-You can also supply any compatible GitHub package URL. No source-list entry is required.
+You can also supply a GitHub package URL without a source-list entry.
+Spawner currently permits repositories owned by `github.com/defos-ai` only.
+Other owners are blocked until operator-only installation approval is available.
 
 ## Run
 

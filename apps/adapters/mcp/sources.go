@@ -24,7 +24,7 @@ type agentSources struct {
 }
 
 func addSourceTools(server *mcp.Server, config Config) {
-	addTool(server, "get_agent_sources", "Discover agents from Commander's public source list, including name, description, GitHub source reference and repository visibility. Pass source as the package input and preserve visibility in the installation workflow described by the relevant agent's responsibilities. The spawner resolves the release during installation. Direct GitHub URLs and references also work without source-list membership. Discovery does not verify release availability or grant permissions. Use list_agents for running agents and current readiness.", emptySchema,
+	addTool(server, "get_agent_sources", "Discover agents from Commander's public source list, including name, description, GitHub source reference and repository visibility. Pass source as the package input and preserve visibility in the installation workflow described by the relevant agent's responsibilities. The spawner resolves the release during installation. Direct GitHub URLs and references do not require source-list membership; follow the registered spawner source policy. Discovery does not verify release availability or grant permissions. Use list_agents for running agents and current readiness.", emptySchema,
 		func(ctx context.Context, _ struct{}) (agentSources, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()

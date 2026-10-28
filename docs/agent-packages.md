@@ -16,6 +16,9 @@ trusted GitHub repository directly:
 
 > Install https://github.com/defos-ai/commander-web-agent
 
+Spawner currently allows repositories owned by `github.com/defos-ai` only.
+Other owners require operator-only installation approval, which is not available yet.
+
 | Reference | Version |
 | --- | --- |
 | `https://github.com/owner/repository` | Promoted GitHub **Latest** release |

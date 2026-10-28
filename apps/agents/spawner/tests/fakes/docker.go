@@ -130,6 +130,12 @@ func (e *DockerEngine) Counts() (creates, starts, closes int) {
 	return e.creates, e.starts, e.closes
 }
 
+func (e *DockerEngine) PullCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.pulls
+}
+
 func CloneContainer(current docker.Container) docker.Container {
 	current.Labels = maps.Clone(current.Labels)
 	current.Environment = maps.Clone(current.Environment)

@@ -26,8 +26,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Default registered `Responsibilities` in `agent.go` own installation guidance;
   action descriptions own their input behavior. MCP and Playground discover this
   metadata instead of maintaining a package list or installation instructions.
-  Accept any compatible GitHub package, including packages outside the
-  source list. Preserve caller-supplied responsibilities. Keep mission
+  Permit compatible GitHub packages owned by `defos-ai`, including packages
+  outside the source list. Preserve caller-supplied responsibilities. Keep mission
   rules in `install-agent`; agent guidance must not bypass controller dispatch.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
   resources and closes them in reverse order. `cli.Run` uses deployment
@@ -72,13 +72,23 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
 - Source lookup belongs to the Commander client. `spawn-agent` accepts the
-  `package` URL/reference and optional `visibility` (`public` by default). Never load a
+  `package` URL/reference and optional `visibility` (`public` by default). Never load
   source definitions in the spawner or add source configuration to its host. Private input
   uses environment `GITHUB_TOKEN` first, otherwise `action.RequestSecret` within
   the current execution. Keep discovery ready without a token; do not declare
   it as a static requirement for public installs. Clear temporary token bytes
   after spawning. Public input must remain anonymous even with an inherited
   download token. Visibility selects authentication, not authorization or trust.
+- [`packages.RequireTrustedSource`](packages/trust.go) applies the host's source
+  admission policy using the shared parser and an exact case-insensitive GitHub
+  owner comparison with `defos-ai`. Keep the check in the action before token
+  handling and in `runtimes.PinPackage` before checkpoints, network access or
+  runtime effects. Other owners return `ErrSourceApprovalRequired`; operator-only
+  approval is not implemented in this step. No input confirmation boolean,
+  environment override, source-list entry or claimed agent type can bypass it.
+  Shared parsing/resolution remains unrestricted metadata functionality. The
+  existing official-builder encryption-key bootstrap restriction remains separate
+  and narrower than admission. Do not change registration or secret delivery here.
 - The shared [package metadata](../../../framework/agent/packages/) package owns
   reference parsing and discovery source definitions. `ParseSelector` accepts GitHub HTTPS
   URLs or `github.com/owner/repository[/module/path]`, with an optional exact

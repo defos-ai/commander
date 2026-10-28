@@ -23,7 +23,7 @@ import (
 const (
 	DockerImage             = "ghcr.io/defos-ai/fixture-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	DockerBuilderReference  = "github.com/defos-ai/commander/apps/agents/builder@v0.1.0"
-	DockerImpostorReference = "github.com/other/builder-agent@v0.1.0"
+	DockerImpostorReference = "github.com/defos-ai/builder-agent@v0.1.0"
 )
 
 type DockerManager struct {
@@ -54,7 +54,7 @@ func NewDockerManager(t *testing.T) DockerManager {
 		switch request.URL.String() {
 		case FixtureReleaseURL + "agent.yaml", FixtureModuleReleaseURL + "agent.yaml":
 		case "https://github.com/defos-ai/commander/releases/download/apps%2Fagents%2Fbuilder%2Fv0.1.0/agent.yaml",
-			"https://github.com/other/builder-agent/releases/download/v0.1.0/agent.yaml":
+			"https://github.com/defos-ai/builder-agent/releases/download/v0.1.0/agent.yaml":
 			agentType = "builder-agent"
 		default:
 			return Response(request, http.StatusNotFound, "not found"), nil
