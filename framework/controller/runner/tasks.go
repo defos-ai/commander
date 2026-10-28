@@ -71,12 +71,15 @@ func (r *Runner) runTask(task operations.Task, call actionmodel.ActionCall) {
 }
 
 func (r *Runner) finishTask(s *operationState, task operations.Task, result actionmodel.ActionOutput, runErr error) {
+	if s.err != nil {
+		return
+	}
 	// Stopping the host suspends observation, not the remote action. Leave the
 	// persisted running record for the next runner to reconcile.
 	if runErr != nil && r.ctx.Err() != nil {
 		return
 	}
-	if runErr == nil && len(result.NextActions) != 0 {
+	if runErr == nil && len(result.NextActions) != 0 && !s.operation.Status.Terminal() {
 		ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 		records, err := r.catalog.Agents(ctx)
 		var resolved []actionmodel.NextAction

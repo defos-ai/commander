@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 type taskResult struct {
-	task   operations.Task
-	output actions.ActionOutput
-	err    error
+	task        operations.Task
+	output      actions.ActionOutput
+	err         error
+	observation bool
 }
 
 // After startup recovery, this loop owns all mutable runner state. Workers only
@@ -35,10 +37,12 @@ func (r *Runner) run() {
 			r.signalScheduler()
 		case <-r.wake:
 			r.retryResults()
+			r.observeInterruptedTasks()
 			r.expireOperatorQuestions()
 			r.dispatchQueued()
 		case <-ticker.C:
 			r.retryResults()
+			r.observeInterruptedTasks()
 			r.expireOperatorQuestions()
 			r.dispatchQueued()
 		}
@@ -57,6 +61,16 @@ func (r *Runner) run() {
 
 func (r *Runner) acceptResult(result taskResult) {
 	r.workers--
+	if result.observation {
+		delete(r.observations, result.task.ID)
+		var failure *executions.CommandFailure
+		if result.err != nil && !errors.As(result.err, &failure) {
+			// An observation error says nothing new about the remote execution.
+			// Retain the original interruption and retry without adding history.
+			r.observations[result.task.ID] = taskObservation{nextAttempt: time.Now().Add(taskObservationInterval)}
+			return
+		}
+	}
 	r.finishTask(r.states[result.task.OperationID], result.task, result.output, result.err)
 }
 

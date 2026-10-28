@@ -50,21 +50,22 @@ func (r *Runner) recover(ctx context.Context) error {
 func (r *Runner) resumeTasks() {
 	for _, state := range r.states {
 		for _, task := range state.operation.Clone().Tasks {
-			if task.NeedsRecovery() {
+			if task.Status == operations.TaskRunning {
 				allowDispatch := !state.operation.Status.Terminal() && task.DeadlineAt.After(time.Now())
 				r.workers++
 				go r.recoverTask(task, allowDispatch)
 			}
 		}
 	}
+	r.observeInterruptedTasks()
 }
 
 func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
 	deadline := *task.DeadlineAt
-	if task.Status == operations.TaskInterrupted || !deadline.After(time.Now()) {
-		// Even an interrupted or expired task may have a durable result.
-		// Allow one bounded reconciliation window to retrieve its saved outcome.
-		deadline = time.Now().Add(5 * time.Second)
+	if !deadline.After(time.Now()) {
+		// An expired running task may already have a durable result. Bound this
+		// startup check; inconclusive outcomes move to periodic observation.
+		deadline = time.Now().Add(taskObservationTimeout)
 	}
 	ctx, cancel := context.WithDeadline(r.ctx, deadline)
 	defer cancel()

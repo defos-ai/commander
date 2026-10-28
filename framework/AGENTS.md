@@ -120,6 +120,13 @@
 - Reconcile uncertain writes before dispatching more work. Dispatched work stays
   bound to its recorded agent and command; never reassign an unknown outcome.
   `RecoverAction` only observes work; it must not execute or republish commands.
+- The runner's [bounded observations](controller/runner/observations.go) reconcile
+  interrupted executions while the controller remains running, including after an
+  operation is completed, failed or cancelled. Only successful output or a typed
+  `executions.CommandFailure` establishes a known outcome. Inconclusive checks
+  preserve the original interruption, deadline, continuation and event history.
+  Suspend observation and result writes for operations with uncertain state;
+  retain terminal operation status and immutable reports when late evidence arrives.
 - [`Operation.AssessProgress`](domain/operations/progress.go) derives task counts,
   pending model decisions and unexpired questions using one supplied time. Only
   succeeded, failed and cancelled tasks are finished; interrupted outcomes remain

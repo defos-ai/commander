@@ -18,6 +18,7 @@ import (
 
 // ActionExecutor dispatches new work and observes previously dispatched work.
 // RecoverAction must never execute or republish the command.
+// It reports a confirmed remote failure as executions.CommandFailure.
 type ActionExecutor interface {
 	RunAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
 	RecoverAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
@@ -85,6 +86,7 @@ type Runner struct {
 	wake           chan struct{}
 	requests       chan func()
 	pendingResults map[string]taskResult
+	observations   map[string]taskObservation
 	results        chan taskResult
 	workers        int
 	closeErr       error // written before done closes
