@@ -134,6 +134,16 @@
   to receive late results. Settlement is separate from active status: it does not
   enable commands or prove agent idleness for cleanup. Preserve local question
   expiry checks and the active-only secret/command controls.
+- Operation **Logs** uses the single operation log API with route-preserved
+  task/agent/action filters. Validate flat response provenance and cursors; keep
+  server append order rather than sorting timestamps or UUIDs. Read recent pages
+  with `desc`, reverse for display, then follow with `asc` from the newest entry.
+  Keep one active request, cancel and ignore stale reads on source changes, and
+  poll every two seconds only while following and visible, including after
+  terminal operation status. Pause aborts pending reads; history and scrolling up
+  pause following too. Keep at most 1,000 entries and resume after the newest
+  retained row when history trimming drops newer entries. Render messages as
+  plain text and keep controls and filter drafts local to the current source.
 - Open the dedicated Secrets page from Agents via **Manage secrets**, with
   **All agents** returning to the catalog. Keep Secrets out of the sidebar and
   highlight Agents while it is open. Preserve its route and operation shortcuts.

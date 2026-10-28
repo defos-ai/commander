@@ -6,6 +6,7 @@ import actions from './actions';
 import operations from './operations';
 import operationCommands from './operationCommands';
 import operationGraph from './operationGraph';
+import operationLogs from './operationLogs';
 import missionRules from './missionRules';
 import artifacts from './artifacts';
 import secrets from './secrets';
@@ -21,6 +22,7 @@ export default {
   operations,
   operationCommands,
   operationGraph,
+  operationLogs,
   missionRules,
   artifacts,
   secrets,

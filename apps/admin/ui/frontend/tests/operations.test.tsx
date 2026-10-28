@@ -1,11 +1,47 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Operation } from '../src/api/operation-types';
 import { OperationsPage } from '../src/pages/OperationsPage';
 import { upstreamURL } from './fakes/proxy';
 import { connection, credentials, mockAPI, now, operation, secretWait, task } from './fixtures/operations';
+import { operationWithLogs } from './fixtures/navigation';
 
 describe('operations browser', () => {
+  it('keeps local task log filters across views and clears them for a different operation', async () => {
+    let snapshot = operationWithLogs();
+    const savedTask = snapshot.tasks![0];
+    const fetch = mockAPI(url => Response.json(url.includes('/logs?') ? { items: [], next_cursor: '' } : snapshot));
+    const props = { connection, credentials, onSignIn: vi.fn(), selectedID: snapshot.id, onSelect: vi.fn() };
+    const page = render(<OperationsPage {...props} />);
+    expect(await screen.findByRole('heading', { name: 'Operation summary' })).toBeVisible();
+    expect(fetch.mock.calls.some(([url]) => upstreamURL(url).includes('/logs?'))).toBe(false);
+    fireEvent.click(screen.getByText(savedTask.action_name, { selector: 'summary *' }).closest('summary')!);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View logs' }));
+
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(screen.getByLabelText('Task')).toHaveValue(savedTask.id);
+    fireEvent.change(screen.getByLabelText('Agent ID'), { target: { value: savedTask.agent_id } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByRole('heading', { name: 'Operation summary' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Logs' }));
+
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(screen.getByLabelText('Task')).toHaveValue(savedTask.id);
+    expect(screen.getByLabelText('Agent ID')).toHaveValue(savedTask.agent_id);
+    snapshot = { ...snapshot, id: '11111111-1111-4111-8111-111111111112', tasks: [],
+      progress: { ...snapshot.progress, task_counts: {}, total_tasks: 0 } };
+
+    page.rerender(<OperationsPage {...props} selectedID={snapshot.id} />);
+
+    expect(await screen.findByRole('heading', { name: snapshot.id, level: 1 })).toBeVisible();
+    await waitFor(() => expect(screen.getByLabelText('Task')).toHaveValue(''));
+    expect(screen.getByLabelText('Agent ID')).toHaveValue('');
+    expect(window.location.hash).toBe('');
+  });
+
   it('shows affinity before dispatch, preserves its owner, and limits queue hints to grouped active tasks', async () => {
     const actions = ['checkout-template', 'build-agent'];
     const owner = 'builder-agent-1234abcd';

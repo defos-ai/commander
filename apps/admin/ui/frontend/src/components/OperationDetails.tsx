@@ -133,8 +133,9 @@ function Continuation({ continuation }: { continuation: OperationContinuation })
   </div>;
 }
 
-function Task({ task, queuedFor, placement, onOpenSession }: {
+function Task({ task, queuedFor, placement, onOpenSession, onOpenLogs }: {
   task: OperationTask; queuedFor?: string; placement?: OperationTaskPlacement; onOpenSession?: (target: SessionNavigationTarget) => void;
+  onOpenLogs?: (taskID: string) => void;
 }) {
   const { t } = useTranslation();
   return <details className="operation-card"><summary>
@@ -154,6 +155,7 @@ function Task({ task, queuedFor, placement, onOpenSession }: {
       {task.deadline_at && <div><dt>{t($ => $.operations.deadlineAt)}</dt><dd><Timestamp value={task.deadline_at} /></dd></div>}
     </dl>
     <TaskSessions task={task} placement={placement} onOpenSession={onOpenSession} />
+    {onOpenLogs && <Button variant="secondary" onClick={() => onOpenLogs(task.id)}>{t($ => $.operationLogs.viewTask)}</Button>}
     <OperationData label={t($ => $.operations.input)} value={task.input} />
     {task.result ? <>
       <OperationData label={t($ => $.operations.result)} value={task.result.output} />
@@ -257,12 +259,13 @@ function Artifact({ artifact, onOpen }: { artifact: OperationArtifact; onOpen?: 
   </details>;
 }
 
-export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenReport, onOpenSession }: {
+export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenReport, onOpenSession, onOpenLogs }: {
   operation: Operation;
   onAnswer?: (question: OperationQuestion) => void;
   onOpenArtifact?: (artifactID: string, fileID?: string) => void;
   onOpenReport?: () => void;
   onOpenSession?: (target: SessionNavigationTarget) => void;
+  onOpenLogs?: (taskID: string) => void;
 }) {
   const { t } = useTranslation();
   const progress = operation.progress;
@@ -292,7 +295,7 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
     {operation.preflight && <Preflight preflight={operation.preflight} />}
     <section className="catalog-section"><h2>{t($ => $.operations.tasks)}</h2>
       {operation.tasks?.length ? <ul className="operation-items">{operation.tasks.map(task => <li key={task.id}><Task task={task}
-        placement={operation.preflight?.tasks?.find(placement => placement.task_id === task.id)} onOpenSession={onOpenSession}
+        placement={operation.preflight?.tasks?.find(placement => placement.task_id === task.id)} onOpenSession={onOpenSession} onOpenLogs={onOpenLogs}
         queuedFor={isActiveOperation(operation.status) && task.status === 'queued' && !affinity?.error && affinity?.for_actions.includes(task.action_name)
           ? affinity.agent_id : undefined} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noTasks)}</p>}
     </section>

@@ -98,11 +98,13 @@ export function App() {
           onFiltersChange={sessionFilters => navigate({ connectionID: active.id, section: 'sessions', sessionFilters })}
           onOpenAgent={id => navigate({ connectionID: active.id, section: 'agents', itemID: id })} />
         : section === 'operations' ? <OperationsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
-          selectedID={selectedID} onSelect={select} view={route.connectionID && route.view === 'graph' ? 'graph' : 'details'}
+          selectedID={selectedID} onSelect={select} view={route.connectionID && (route.view === 'graph' || route.view === 'logs') ? route.view : 'details'}
+          logFilters={route.connectionID ? route.logFilters : undefined}
+          onLogFiltersChange={logFilters => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view: 'logs', logFilters })}
           onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
           onOpenSession={target => navigate({ connectionID: active.id, section: 'sessions', itemID: target.id,
             sessionFilters: { ...(target.scope_id ? { scope_id: target.scope_id } : {}), ...(target.owner_agent_id ? { owner_agent_id: target.owner_agent_id } : {}) } })}
-          onViewChange={view => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view })} />
+          onViewChange={(view, logFilters) => navigate({ connectionID: active.id, section: 'operations', itemID: selectedID, view, logFilters })} />
         : section === 'create-mission' ? <CreateMissionPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           onBack={() => navigate({ connectionID: active.id, section: 'missions' })}
           onSelect={name => navigate({ connectionID: active.id, section: 'missions', itemID: name })} />

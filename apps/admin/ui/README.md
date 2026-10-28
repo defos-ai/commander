@@ -40,6 +40,13 @@ Choose a mission and enter its JSON input to start an operation. Open the
 execution graph to inspect tasks, results and artifacts; download the final
 report as JSON. Use **Manage secrets** when an agent needs a value.
 
+Open **Logs** for recent execution progress, or use a task's **View logs** button.
+Filter by task, agent or action. **Load older** reads history; **Pause following**
+freezes updates and scrolling while work continues. Scrolling up also pauses.
+Use **Follow live** to catch up or **Jump to latest** to return to recent entries.
+The view keeps up to 1,000 logs at a time; older entries remain available through
+**Load older**.
+
 Answer questions with an option or your own text. Cancelling stops queued work;
 dispatched tasks may finish. After a command timeout, refresh the operation
 before trying again.

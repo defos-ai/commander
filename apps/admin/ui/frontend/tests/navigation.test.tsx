@@ -4,7 +4,7 @@ import { App } from '../src/App';
 import { CONNECTIONS_STORAGE_KEY } from '../src/connections/storage';
 import { parseRoute, routeHash, type Route } from '../src/navigation/routes';
 import { upstreamURL } from './fakes/proxy';
-import { connection, mission, mockAPI, operation, resourceSession, visit } from './fixtures/navigation';
+import { connection, mission, mockAPI, operation, operationWithLogs, resourceSession, visit } from './fixtures/navigation';
 
 async function signIn() {
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -22,6 +22,7 @@ beforeEach(() => {
 
 describe('location navigation', () => {
   it('round-trips entity names and IDs without treating their punctuation as route segments', () => {
+    const logOperation = operationWithLogs();
     const routes: Route[] = [{}, { connect: { url: 'http://127.0.0.1:4274', username: 'commander' } },
       { connect: { url: 'http://127.0.0.1:4274', username: 'commander', operation: 'Résumé / a?#b' } },
       { operation: 'Résumé / a?#b' },
@@ -33,6 +34,9 @@ describe('location navigation', () => {
       { connectionID: 'local', section: 'missions', itemID: 'create-mission' },
       ...(['missions', 'controllers', 'actions', 'agents', 'operations'] as const).map(section => ({ connectionID: 'private/team', section, itemID: 'Résumé / a?#b' })),
       { connectionID: 'local', section: 'operations', itemID: operation.id, view: 'graph' },
+      { connectionID: 'local', section: 'operations', itemID: logOperation.id, view: 'logs' },
+      { connectionID: 'local', section: 'operations', itemID: logOperation.id, view: 'logs', logFilters: {
+        task_id: logOperation.tasks![0].id, agent_id: 'worker-agent-12345678', action_name: 'Inspect / page?mode=full#latest ' } },
       { connectionID: 'private/team', section: 'missions', itemID: 'Résumé / a?#b', view: 'json' }];
 
     for (const route of routes) expect(parseRoute(routeHash(route))).toEqual(route);
@@ -45,6 +49,12 @@ describe('location navigation', () => {
       '#/connections/id/create-mission/item/graph', '#/connections/id/operations/item/unknown', '#/connections/id/agents/item/graph', '#/connections/id/operations/item/graph/extra',
       '#/connections/id/sessions/item/graph', '#/connections/id/sessions?token=secret', '#/connections/id/sessions?scope_id=',
       '#/connections/id/sessions?owner_agent_id=a&owner_agent_id=b', '#/connections/id/agents?owner_agent_id=a',
+      '#/connections/id/operations/item/logs?token=secret', '#/connections/id/operations/item/logs?task_id=',
+      '#/connections/id/operations/item/logs?agent_id=a&agent_id=b', '#/connections/id/operations/item/logs?action_name=',
+      '#/connections/id/operations/item/logs?action_name=%', '#/connections/id/operations/item/logs?action_name=%FF',
+      '#/connections/id/operations/item/logs?order=desc', '#/connections/id/operations/item/logs/extra',
+      '#/connections/id/operations/item?task_id=a', '#/connections/id/operations/item/graph?task_id=a',
+      '#/connections/id/missions/item/logs', '#/connections/id/agents/item/logs',
       '#/operations/', '#/operations/id/extra', '#/operations/id?token=secret', '#/operations/id#fragment',
       '#/operations/%0A', '#/operations/%', '#/operations/' + 'a'.repeat(257)]) {
       expect(parseRoute(hash)).toEqual({});
@@ -138,6 +148,86 @@ describe('location navigation', () => {
     expect(window.location.hash).not.toContain(connection.url);
     expect(localStorage.getItem(CONNECTIONS_STORAGE_KEY)).not.toContain('private-password');
     expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+  });
+
+  it('keeps operation log filters through sign-in, task links, view switches, history and reload', async () => {
+    const snapshot = operationWithLogs();
+    const task = snapshot.tasks![0];
+    const filters = { task_id: task.id, agent_id: task.agent_id, action_name: task.action_name };
+    const logsRoute: Route = { connectionID: connection.id, section: 'operations', itemID: snapshot.id, view: 'logs', logFilters: filters };
+    const fetch = mockAPI(snapshot);
+    const logRequests = () => fetch.mock.calls.map(([url]) => upstreamURL(url)).filter(url => url.includes(`/operations/${snapshot.id}/logs?`));
+    visit(logsRoute);
+    const first = render(<App />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in to view operations');
+    expect(screen.queryByRole('heading', { name: 'Logs' })).not.toBeInTheDocument();
+    expect(logRequests()).toHaveLength(0);
+
+    await signIn();
+
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(screen.getByLabelText('Task')).toHaveValue(task.id);
+    expect(screen.getByLabelText('Agent ID')).toHaveValue(filters.agent_id);
+    expect(screen.getByLabelText('Action')).toHaveValue(filters.action_name);
+    await waitFor(() => {
+      const request = new URL(logRequests().at(-1)!);
+      expect(request.searchParams.get('task_id')).toBe(task.id);
+      expect(request.searchParams.get('agent_id')).toBe(filters.agent_id);
+      expect(request.searchParams.get('action_name')).toBe(filters.action_name);
+    });
+    expect(window.location.hash).toBe(routeHash(logsRoute));
+    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Snapshots refresh every 10 seconds/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel operation' })).toBeVisible();
+    expect(within(screen.getByRole('navigation', { name: 'Workspace navigation' })).queryByRole('button', { name: 'Logs' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByRole('heading', { name: 'Operation summary' })).toBeVisible();
+    fetch.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => upstreamURL(url).endsWith(`/operations/${snapshot.id}`))).toBe(true));
+    expect(logRequests()).toHaveLength(0);
+    fireEvent.click(screen.getByText(task.action_name, { selector: 'summary *' }).closest('summary')!);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View logs' }));
+
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(screen.getByLabelText('Task')).toHaveValue(task.id);
+    expect(screen.getByLabelText('Agent ID')).toHaveValue('');
+    expect(screen.getByLabelText('Action')).toHaveValue('');
+    expect(parseRoute(window.location.hash)).toEqual({ ...logsRoute, logFilters: { task_id: task.id } });
+    fireEvent.change(screen.getByLabelText('Agent ID'), { target: { value: filters.agent_id } });
+    fireEvent.change(screen.getByLabelText('Action'), { target: { value: filters.action_name } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+
+    expect(window.location.hash).toBe(routeHash(logsRoute));
+    fetch.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Execution graph' }));
+    expect(await screen.findByText('No work recorded yet')).toBeVisible();
+    expect(logRequests()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Logs' }));
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(screen.getByLabelText('Task')).toHaveValue(task.id);
+    expect(screen.getByLabelText('Agent ID')).toHaveValue(filters.agent_id);
+    expect(screen.getByLabelText('Action')).toHaveValue(filters.action_name);
+    expect(window.location.hash).toBe(routeHash(logsRoute));
+    act(() => { window.history.back(); });
+    expect(await screen.findByText('No work recorded yet')).toBeVisible();
+    act(() => { window.history.forward(); });
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(parseRoute(window.location.hash)).toEqual(logsRoute);
+    first.unmount();
+    fetch.mockClear();
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Logs', level: 2 })).toBeVisible();
+    expect(screen.getByLabelText('Task')).toHaveValue(task.id);
+    expect(screen.getByLabelText('Agent ID')).toHaveValue(filters.agent_id);
+    expect(screen.getByLabelText('Action')).toHaveValue(filters.action_name);
+    expect(parseRoute(window.location.hash)).toEqual(logsRoute);
+    await waitFor(() => expect(logRequests().length).toBeGreaterThan(0));
   });
 
   it.each(['missions', 'controllers', 'agents', 'actions'] as const)('opens a saved %s detail location behind the sign-in gate', async section => {

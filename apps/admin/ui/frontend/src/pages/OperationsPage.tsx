@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, LoaderCircle, Plus, RefreshCw, Search, Workflow } from 'lucide-react';
 import { getOperation, listOperations } from '../api/operations';
 import type { Operation, OperationQuestion } from '../api/operation-types';
+import type { OperationLogFilters } from '../api/operation-logs';
 import { isActiveOperation, OperationDetails, OperationSecretsNotice, OperationStatus, type SessionNavigationTarget } from '../components/OperationDetails';
 import { StartOperationDialog } from '../components/StartOperationDialog';
 import { OperationCommandDialog } from '../components/OperationCommandDialog';
 import { OperationGraphPanel } from '../components/OperationGraphPanel';
+import { OperationLogsPanel } from '../components/OperationLogsPanel';
 import { ArtifactDialog } from '../components/ArtifactDialog';
 import { ReportDialog } from '../components/ReportDialog';
 import { Button } from '../components/Button';
@@ -17,6 +19,7 @@ import '../styles/catalog.css';
 import '../styles/operations.css';
 
 const knownStatuses = ['planning', 'running', 'waiting', 'completed', 'failed', 'cancelled'] as const;
+const emptyLogFilters: OperationLogFilters = {};
 type CommandModal = { url: string; credentials: Session } & (
   { kind: 'start' } | { kind: 'cancel'; operation: Operation } | { kind: 'answer'; operation: Operation; question: OperationQuestion }
 );
@@ -24,14 +27,17 @@ type ResourceModal = { url: string; credentials: Session; operationID: string } 
   { kind: 'artifact'; artifactID: string; fileID?: string } | { kind: 'report' }
 );
 
-export function OperationsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, view: routeView, onViewChange, onManageSecrets, onOpenSession }: {
+export function OperationsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, view: routeView, onViewChange,
+  logFilters: routeLogFilters, onLogFiltersChange, onManageSecrets, onOpenSession }: {
   connection: Connection;
   credentials?: Session;
   onSignIn: () => void;
   selectedID?: string;
   onSelect?: (id?: string) => void;
   view?: OperationView;
-  onViewChange?: (view: OperationView) => void;
+  onViewChange?: (view: OperationView, logFilters?: OperationLogFilters) => void;
+  logFilters?: OperationLogFilters;
+  onLogFiltersChange?: (filters: OperationLogFilters) => void;
   onManageSecrets?: () => void;
   onOpenSession?: (target: SessionNavigationTarget) => void;
 }) {
@@ -42,6 +48,10 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
   const [status, setStatus] = useState('');
   const [localView, setLocalView] = useState<OperationView>('details');
   const view = onViewChange ? routeView ?? 'details' : localView;
+  const [rememberedLogs, setRememberedLogs] = useState({ operationID: selectedID, filters: routeLogFilters ?? emptyLogFilters });
+  const localLogFilters = rememberedLogs.operationID === selectedID ? rememberedLogs.filters : emptyLogFilters;
+  const controlledLogFilters = Boolean(onLogFiltersChange);
+  const logFilters = controlledLogFilters && view === 'logs' ? routeLogFilters ?? emptyLogFilters : localLogFilters;
   const [modal, setModal] = useState<CommandModal>();
   const [resource, setResource] = useState<ResourceModal>();
   const [notice, setNotice] = useState<{ kind: 'created' | 'cancelled' | 'answered'; operationID: string }>();
@@ -65,13 +75,27 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
   }, [selectedID]);
 
   useEffect(() => { setModal(undefined); setResource(undefined); }, [selectedID, view]);
+  useEffect(() => {
+    if (view === 'logs' && controlledLogFilters) setRememberedLogs({ operationID: selectedID, filters: routeLogFilters ?? emptyLogFilters });
+  }, [selectedID, view, controlledLogFilters, routeLogFilters]);
 
   function select(id?: string) {
     focusHeading.current = true;
     if (onSelect) onSelect(id); else setLocalID(id);
-    setNotice(undefined); setLocalView('details'); setResource(undefined);
+    setNotice(undefined); setLocalView('details'); setResource(undefined); setRememberedLogs({ operationID: id, filters: emptyLogFilters });
   }
-  function changeView(next: OperationView) { if (onViewChange) onViewChange(next); else setLocalView(next); }
+  function changeView(next: OperationView, filters = logFilters) {
+    setRememberedLogs({ operationID: selectedID, filters });
+    if (onViewChange) onViewChange(next, filters);
+    else {
+      setLocalView(next);
+      if (next === 'logs' && onLogFiltersChange) onLogFiltersChange(filters);
+    }
+  }
+  function changeLogFilters(filters: OperationLogFilters) {
+    setRememberedLogs({ operationID: selectedID, filters });
+    onLogFiltersChange?.(filters);
+  }
   function clearFilters() { setSearch(''); setStatus(''); }
   function inspect(id: string) { setModal(undefined); select(id); query.refresh(); }
   function openArtifact(artifactID: string, fileID?: string) {
@@ -89,7 +113,7 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
       <div><h1 ref={heading} tabIndex={-1}>{selectedID ?? t($ => $.operations.title)}</h1>
         {selectedID === undefined && <p>{t($ => $.operations.description)}</p>}
       </div>
-      <div className="operation-controls">{credentials && view !== 'graph' && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>
+      <div className="operation-controls">{credentials && view === 'details' && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>
         <RefreshCw size={15} aria-hidden="true" />{query.refreshing ? t($ => $.operations.refreshing) : t($ => $.operations.refresh)}
       </Button>}
         {credentials && !error && selectedID === undefined && <Button onClick={() => setModal({ kind: 'start', url: connection.url, credentials })}>
@@ -111,11 +135,15 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
       <div className="operation-view-switch" role="group" aria-label={t($ => $.operationGraph.viewLabel)}>
         <button type="button" aria-pressed={view === 'details'} onClick={() => changeView('details')}>{t($ => $.operationGraph.details)}</button>
         <button type="button" aria-pressed={view === 'graph'} onClick={() => changeView('graph')}>{t($ => $.operationGraph.title)}</button>
+        <button type="button" aria-pressed={view === 'logs'} onClick={() => changeView('logs')}>{t($ => $.operationLogs.title)}</button>
       </div>
       <OperationSecretsNotice operation={query.item} onManageSecrets={onManageSecrets} />
       {view === 'graph' ? <OperationGraphPanel url={connection.url} credentials={credentials} operationID={query.item.id} tasks={query.item.tasks}
         placements={query.item.preflight?.tasks} onSignIn={onSignIn} onOpenArtifact={openArtifact} onOpenSession={onOpenSession} />
+        : view === 'logs' ? <OperationLogsPanel url={connection.url} credentials={credentials} operationID={query.item.id} tasks={query.item.tasks ?? []}
+          filters={logFilters} onFiltersChange={changeLogFilters} onSignIn={onSignIn} />
         : <OperationDetails operation={query.item} onOpenArtifact={openArtifact} onOpenReport={openReport} onOpenSession={onOpenSession}
+          onOpenLogs={taskID => changeView('logs', { task_id: taskID })}
           onAnswer={credentials ? question => setModal({ kind: 'answer', operation: query.item!, question, url: connection.url, credentials }) : undefined} />}
     </> : <>
       {(items.length > 0 || filter || status) && <div className="catalog-toolbar">
@@ -147,7 +175,7 @@ export function OperationsPage({ connection, credentials, onSignIn, selectedID: 
         {filter || status ? <Button variant="secondary" onClick={clearFilters}>{t($ => $.operations.clearSearch)}</Button> : <p>{t($ => $.operations.emptyDescription)}</p>}
       </div>}
     </>}
-    {credentials && !query.loading && !error && view !== 'graph' && <p className="catalog-updated">{t($ => $.operations.polling)} {query.checkedAt !== undefined && t($ => $.operations.checked, { time: new Date(query.checkedAt).toLocaleTimeString() })}</p>}
+    {credentials && !query.loading && !error && view === 'details' && <p className="catalog-updated">{t($ => $.operations.polling)} {query.checkedAt !== undefined && t($ => $.operations.checked, { time: new Date(query.checkedAt).toLocaleTimeString() })}</p>}
     {currentResource?.kind === 'artifact' && <ArtifactDialog key={`${currentResource.url}:${currentResource.artifactID}:${currentResource.fileID ?? ''}`}
       url={currentResource.url} credentials={currentResource.credentials} artifactID={currentResource.artifactID} initialFileID={currentResource.fileID} onClose={() => setResource(undefined)} />}
     {currentResource?.kind === 'report' && <ReportDialog key={`${currentResource.url}:${currentResource.operationID}`}

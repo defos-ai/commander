@@ -1,8 +1,9 @@
 import { parseConnectionPrefill, validOperationID, type ConnectionPrefill } from './connection-link';
 import type { SessionFilters } from '../api/runtime-sessions';
+import type { OperationLogFilters } from '../api/operation-logs';
 
 export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'create-mission' | 'controllers' | 'agents' | 'actions' | 'sessions' | 'secrets' | 'settings';
-export type OperationView = 'details' | 'graph';
+export type OperationView = 'details' | 'graph' | 'logs';
 export type MissionView = 'details' | 'json';
 
 export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | null; operation?: string } | {
@@ -13,6 +14,7 @@ export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | nu
   itemID?: string;
   view?: OperationView | MissionView;
   sessionFilters?: SessionFilters;
+  logFilters?: OperationLogFilters;
 };
 
 const sections: readonly string[] = ['overview', 'operations', 'missions', 'create-mission', 'controllers', 'agents', 'actions', 'sessions', 'secrets', 'settings'];
@@ -29,18 +31,27 @@ export function parseRoute(hash: string): Route {
       && section === undefined && !/[?#]/u.test(hash.slice(1))) return { operation: connectionID };
     if (prefix !== '' || collection !== 'connections' || !connectionID || !sections.includes(section ?? '') || extra.length) return {};
     if (itemID !== undefined && (!itemID || section === 'overview' || section === 'settings' || section === 'secrets' || section === 'create-mission')) return {};
-    if (view !== undefined && (!itemID || !(section === 'operations' && view === 'graph' || section === 'missions' && view === 'json'))) return {};
+    if (view !== undefined && (!itemID || !(section === 'operations' && (view === 'graph' || view === 'logs') || section === 'missions' && view === 'json'))) return {};
     const sessionFilters: SessionFilters = {};
+    const logFilters: OperationLogFilters = {};
     if (queryStart >= 0) {
-      if (section !== 'sessions') return {};
+      const logs = section === 'operations' && view === 'logs';
+      if (section !== 'sessions' && !logs) return {};
+      if (logs) decodeURIComponent(hash.slice(queryStart + 1));
       const query = new URLSearchParams(hash.slice(queryStart + 1));
       for (const [key, value] of query) {
-        if ((key !== 'scope_id' && key !== 'owner_agent_id') || !value || query.getAll(key).length !== 1) return {};
-        sessionFilters[key] = value;
+        if (!value || query.getAll(key).length !== 1) return {};
+        if (logs) {
+          if (key !== 'task_id' && key !== 'agent_id' && key !== 'action_name') return {};
+          logFilters[key] = value;
+        } else {
+          if (key !== 'scope_id' && key !== 'owner_agent_id') return {};
+          sessionFilters[key] = value;
+        }
       }
     }
-    return { connectionID, section: section as WorkspaceSection, ...(itemID ? { itemID } : {}), ...(view ? { view: view as 'graph' | 'json' } : {}),
-      ...(Object.keys(sessionFilters).length ? { sessionFilters } : {}) };
+    return { connectionID, section: section as WorkspaceSection, ...(itemID ? { itemID } : {}), ...(view ? { view: view as 'graph' | 'logs' | 'json' } : {}),
+      ...(Object.keys(sessionFilters).length ? { sessionFilters } : {}), ...(Object.keys(logFilters).length ? { logFilters } : {}) };
   } catch {
     return {};
   }
@@ -56,12 +67,17 @@ export function routeHash(route: Route): string {
   const parts = ['connections', route.connectionID, route.section];
   if (route.itemID) {
     parts.push(route.itemID);
-    if (route.section === 'operations' && route.view === 'graph' || route.section === 'missions' && route.view === 'json') parts.push(route.view);
+    if (route.section === 'operations' && (route.view === 'graph' || route.view === 'logs') || route.section === 'missions' && route.view === 'json') parts.push(route.view);
   }
   const query = new URLSearchParams();
   if (route.section === 'sessions') {
     if (route.sessionFilters?.scope_id) query.set('scope_id', route.sessionFilters.scope_id);
     if (route.sessionFilters?.owner_agent_id) query.set('owner_agent_id', route.sessionFilters.owner_agent_id);
+  }
+  if (route.section === 'operations' && route.itemID && route.view === 'logs') {
+    if (route.logFilters?.task_id) query.set('task_id', route.logFilters.task_id);
+    if (route.logFilters?.agent_id) query.set('agent_id', route.logFilters.agent_id);
+    if (route.logFilters?.action_name) query.set('action_name', route.logFilters.action_name);
   }
   return `#/${parts.map(encodeURIComponent).join('/')}${query.size ? `?${query}` : ''}`;
 }

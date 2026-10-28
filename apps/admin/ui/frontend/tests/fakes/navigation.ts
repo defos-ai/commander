@@ -13,7 +13,7 @@ interface Defaults {
 }
 
 export function mockAPI(defaults: Defaults, snapshot: Omit<Operation, 'preflight'> & { preflight?: unknown } = defaults.operation) {
-  const { operation, mission, connection, resourceSession } = structuredClone(defaults);
+  const { mission, connection, resourceSession } = structuredClone(defaults);
 
   const observedSnapshot = structuredClone(snapshot);
   let session: { url: string; username: string } | undefined;
@@ -32,11 +32,14 @@ export function mockAPI(defaults: Defaults, snapshot: Omit<Operation, 'preflight
     }
     if (url.endsWith(`/missions/${encodeURIComponent(savedMission.name)}`)) return Response.json(savedMission);
     if (url.endsWith('/operations')) return Response.json({ items: [observedSnapshot] });
-    if (url.endsWith(`/operations/${operation.id}`)) return Response.json(observedSnapshot);
+    if (url.endsWith(`/operations/${observedSnapshot.id}`)) return Response.json(observedSnapshot);
+    if (url.startsWith(`${connection.url}/api/v1/operations/${observedSnapshot.id}/logs?`)) {
+      return Response.json({ items: [], next_cursor: new URL(url).searchParams.get('cursor') ?? '' });
+    }
     if (url.endsWith('/secrets/requests') || url.endsWith('/agents')) return Response.json({ items: [] });
     if (url.startsWith(`${connection.url}/api/v1/sessions?`) || url.endsWith('/api/v1/sessions')) return Response.json({ items: [resourceSession] });
     if (url.endsWith(`/api/v1/sessions/${resourceSession.id}`)) return Response.json(resourceSession);
-    if (url.endsWith('/graph')) return Response.json({ operation_id: operation.id, status: operation.status, updated_at: operation.updated_at, nodes: [], edges: [] });
+    if (url.endsWith('/graph')) return Response.json({ operation_id: observedSnapshot.id, status: observedSnapshot.status, updated_at: observedSnapshot.updated_at, nodes: [], edges: [] });
     return new Response(null, { status: 404 });
   });
   vi.stubGlobal('fetch', fetch);

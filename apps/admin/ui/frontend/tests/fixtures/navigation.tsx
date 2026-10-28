@@ -16,6 +16,16 @@ export const resourceSession: RuntimeSession = { id: '11111111-1111-4111-8111-11
   owner_agent_id: 'shell-agent-12345678', kind: 'shell', label: 'Saved development host', state: 'connected', disposition: 'active',
   busy: false, revision: 1, created_at: '2026-10-06T10:00:00Z', updated_at: '2026-10-06T10:00:00Z' };
 
+export function operationWithLogs(): Operation {
+  const snapshot = structuredClone(operation);
+  snapshot.id = '11111111-1111-4111-8111-111111111111';
+  snapshot.tasks = [{ id: '22222222-2222-4222-8222-222222222222', operation_id: snapshot.id,
+    agent_id: 'worker-agent-12345678', action_name: 'inspect-progress', status: 'running',
+    command_id: '33333333-3333-4333-8333-333333333333', started_at: snapshot.created_at }];
+  snapshot.progress = { ...snapshot.progress, task_counts: { running: 1 }, total_tasks: 1 };
+  return snapshot;
+}
+
 export function visit(route: Route) { window.history.replaceState(null, '', routeHash(route)); }
 
 export function mockAPI(snapshot?: Parameters<typeof fakeAPI>[1]) {
