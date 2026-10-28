@@ -14,6 +14,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/git"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -104,7 +105,12 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	result, err := a.checkout(ctx, *executable)
+	var result action.Result
+	err := progress.Run(ctx, "Template checkout", func() error {
+		var checkoutErr error
+		result, checkoutErr = a.checkout(ctx, *executable)
+		return checkoutErr
+	})
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
 		// An executable can disappear between the readiness check and process start.
 		if !process.Available(*executable) {

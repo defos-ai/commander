@@ -16,6 +16,7 @@ import (
 	"github.com/defos-ai/commander/apps/agents/builder/internal/git"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/github"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/publish"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
@@ -161,6 +162,16 @@ func (a *PublishAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 	if len(token) == 0 || strings.ContainsAny(string(token), "\x00\r\n") {
 		return action.Result{}, action.ErrSecretUnavailable
 	}
+	var result action.Result
+	err = progress.Run(ctx, "Source publication request handling", func() error {
+		var err error
+		result, err = a.publishSource(ctx, *executable, execution.CommandID, intent, found, token)
+		return err
+	})
+	return result, err
+}
+
+func (a *PublishAgent) publishSource(ctx context.Context, executable, commandID string, intent publicationIntent, found bool, token []byte) (action.Result, error) {
 	archive, err := a.files.Get(ctx, intent.Input.SourceArtifactID, intent.Input.SourceFile)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -182,8 +193,8 @@ func (a *PublishAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 	if err := publish.ExtractSource(ctx, archive, source, token); err != nil {
 		return action.Result{}, err
 	}
-	command := git.Command{Executable: *executable, Home: home}
-	sha, err := command.CommitSnapshot(ctx, source, intent.CreatedAt, execution.CommandID)
+	command := git.Command{Executable: executable, Home: home}
+	sha, err := command.CommitSnapshot(ctx, source, intent.CreatedAt, commandID)
 	if err != nil {
 		return action.Result{}, err
 	}

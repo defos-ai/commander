@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/github"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/manifest"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -100,6 +101,16 @@ func (a *ReleaseAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 	if len(token) == 0 || strings.ContainsAny(string(token), "\x00\r\n") {
 		return action.Result{}, action.ErrSecretUnavailable
 	}
+	var result action.Result
+	err = progress.Run(ctx, "Release request handling", func() error {
+		var err error
+		result, err = a.release(ctx, input, saved, found, token, execution.CommandID)
+		return err
+	})
+	return result, err
+}
+
+func (a *ReleaseAgent) release(ctx context.Context, input ReleaseAgentInput, saved releaseIntent, found bool, token []byte, commandID string) (action.Result, error) {
 	client := github.Client{Token: token}
 	repository, err := client.GetRepository(ctx, input.Repository)
 	if err != nil {
@@ -140,7 +151,7 @@ func (a *ReleaseAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 	}
 	runID := input.WorkflowRunID
 	if runID == 0 {
-		runID, err = dispatchRelease(ctx, client, intent, execution.CommandID)
+		runID, err = dispatchRelease(ctx, client, intent, commandID)
 		if err != nil {
 			return action.Result{}, err
 		}
@@ -149,7 +160,7 @@ func (a *ReleaseAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 			return action.JSONResult(output)
 		}
 	}
-	return observeRelease(ctx, client, intent, runID, output, execution.CommandID)
+	return observeRelease(ctx, client, intent, runID, output, commandID)
 }
 
 func validateReleaseInput(input ReleaseAgentInput) error {
