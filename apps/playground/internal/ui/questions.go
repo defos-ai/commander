@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +27,8 @@ type questionPanel struct {
 	input                        textinput.Model
 	error                        string
 	answered                     map[questionKey]bool
+	cancel                       context.CancelFunc
+	done                         <-chan struct{}
 }
 
 func (m *Model) initQuestions() {

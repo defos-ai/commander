@@ -108,6 +108,10 @@ func nextTick() tea.Cmd {
 }
 
 func (m *Model) Close() {
+	if m.questions.cancel != nil {
+		m.questions.cancel()
+		<-m.questions.done
+	}
 	if m.providerSecretCancel != nil {
 		m.providerSecretCancel()
 		<-m.providerSecretDone
@@ -132,6 +136,9 @@ func (m *Model) Close() {
 }
 
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	if result, ok := message.(operatorAnswerResult); ok {
+		return m, m.operatorAnswerResult(result)
+	}
 	if cmd, handled := m.adminResult(message); handled {
 		return m, cmd
 	}
@@ -162,6 +169,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case eventMessage:
 		if msg.closed {
 			return m, tea.Quit
+		}
+		if msg.event.Kind == "answer_request" {
+			return m, tea.Batch(waitEvent(m.engine), m.submitOperatorAnswer(msg.event))
 		}
 		m.receive(msg.event)
 		return m, tea.Batch(waitEvent(m.engine), m.syncSecrets())

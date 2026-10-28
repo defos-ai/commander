@@ -287,6 +287,14 @@
 - Only explicit operator input answers a question. An expired question returns
   the decision for review; it never supplies approval. Keep task/continuation
   revisions when deciding whether a review is new or stale.
+  The engine validates panel and `/answer` requests, then emits `answer_request`
+  for [`internal/ui/answers.go`](internal/ui/answers.go). Submit through the retained
+  authenticated API connection, with local login when needed; recheck question
+  validity after login. Snapshot credentials before asynchronous work, cancel and
+  await submissions on exit, and never retry an uncertain write. Feed confirmed
+  operation snapshots back to the engine without clearing prior review identities.
+  Model guidance points operators to the question panel or Admin's Questions
+  section, using configured links only. Keep API credentials outside model/MCP data.
 - Show readable errors by default and redacted provider details with `--debug`.
   Keep keys/history in memory and avoid repeating full schemas/results in prompts.
 - After a successful MCP connection, share the selected provider's key through the

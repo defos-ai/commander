@@ -73,7 +73,7 @@ func (e *Engine) Send(text string) error {
 }
 
 // AnswerQuestion accepts explicit operator input without parsing command text or
-// sending the choice to the model first. Completion arrives as answer_end.
+// sending the choice to the model first. The UI submits answer_request via API.
 func (e *Engine) AnswerQuestion(operationID, questionID, answer string) error {
 	if strings.TrimSpace(operationID) == "" || strings.TrimSpace(questionID) == "" || strings.TrimSpace(answer) == "" {
 		return errors.New("an operation, question and non-empty answer are required")
@@ -85,6 +85,17 @@ func (e *Engine) AnswerQuestion(operationID, questionID, answer string) error {
 		return nil
 	default:
 		return errors.New("answer queue is full; wait for the current request")
+	}
+}
+
+func (e *Engine) ObserveOperation(operation bridge.Operation) error {
+	select {
+	case <-e.ctx.Done():
+		return e.ctx.Err()
+	case e.updates <- operation:
+		return nil
+	default:
+		return errors.New("operation update queue is full; waiting for background refresh")
 	}
 }
 func (e *Engine) emit(event Event) {

@@ -17,19 +17,9 @@ func (e *Engine) control(name string, args map[string]any) {
 		defer e.wg.Done()
 		e.emit(Event{Kind: "control_start"})
 		defer e.emit(Event{Kind: "control_end"})
-		operationID, _ := args["operation_id"].(string)
-		questionID, _ := args["question_id"].(string)
-		answerEnd := Event{Kind: "answer_end", OperationID: operationID, QuestionID: questionID}
-		if name == "answer_question" {
-			e.emit(Event{Kind: "answer_start", OperationID: operationID, QuestionID: questionID})
-		}
 		encoded, _ := json.Marshal(args)
 		result := e.call(e.ctx, llm.Call{Name: name, Arguments: encoded})
 		if result.IsError {
-			if name == "answer_question" {
-				answerEnd.Text = result.Text
-				e.emit(answerEnd)
-			}
 			return
 		}
 		if name == "list_operations" {
@@ -52,16 +42,6 @@ func (e *Engine) control(name string, args map[string]any) {
 				text = strings.Join(lines, "\n")
 			}
 			e.emit(Event{Kind: "notice", Text: text})
-		} else if name == "answer_question" {
-			answerEnd.Answer, _ = args["answer"].(string)
-			e.emit(answerEnd)
-			if operation, err := e.commander.Operation(e.ctx, operationID); err == nil {
-				select {
-				case e.updates <- operation:
-				case <-e.ctx.Done():
-					return
-				}
-			}
 		}
 	}()
 }
@@ -97,7 +77,7 @@ func (e *Engine) submitAnswer(answer answerRequest, operations map[string]bridge
 		}
 		for _, question := range questions {
 			if question.ID == answer.questionID && question.Pending(time.Now()) {
-				e.control("answer_question", map[string]any{"operation_id": answer.operationID, "question_id": answer.questionID, "answer": answer.answer})
+				e.emit(Event{Kind: "answer_request", OperationID: answer.operationID, QuestionID: answer.questionID, Answer: answer.answer})
 				return
 			}
 		}

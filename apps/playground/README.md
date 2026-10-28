@@ -183,6 +183,11 @@ its own API connection. Compose supplies the default internal API login; a custo
 
 The terminal help stays compact; this table includes the additional commands.
 
+Answer operation questions in the **Operator input** panel or Admin's operation
+**Questions** section. Playground sends panel and `/answer` submissions directly
+to the API, using the same login as `/admin`; enter that login locally if prompted.
+If submission cannot be confirmed, inspect the saved question before submitting again.
+
 Tool calls update their pending line when they complete or fail. The progress
 area shows up to three recently updated operations; `+N more · /operations`
 points to the full list. Watching and model review continue for hidden operations.

@@ -404,15 +404,15 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 func TestQuestionSelector(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	op := bridge.Operation{ID: "operation-1", Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, PendingQuestions: 2}, Questions: []bridge.Question{
-		{ID: "older", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Minute)},
-		{ID: "latest", Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), ExpiresAt: time.Now().Add(2 * time.Minute)},
+	op := bridge.Operation{ID: fixtures.QuestionOperationID, Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, PendingQuestions: 2}, Questions: []bridge.Question{
+		{ID: "37a57205-2705-4818-bf6e-4c00f1b9821d", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Minute)},
+		{ID: fixtures.QuestionID, Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), ExpiresAt: time.Now().Add(2 * time.Minute)},
 	}}
-	u, questions := fixtures.QuestionUI(t, ctx, op, "latest")
+	u, questions := fixtures.QuestionUI(t, ctx, op, fixtures.QuestionID)
 	defer u.Close()
 	model, key, text, wait := u.Model, u.Key, u.Text, u.Wait
 
-	text("/watch operation-1")
+	text("/watch " + op.ID)
 	key(tea.KeyMsg{Type: tea.KeyEnter})
 	text("unsent chat draft")
 	wait("latest question", func(view string) bool { return strings.Contains(view, "Which release priority?") })
@@ -444,6 +444,11 @@ func TestQuestionSelector(t *testing.T) {
 	wait("derived question progress", func(view string) bool { return !strings.Contains(view, "question(s)") })
 	if !strings.Contains(model.View(), "unsent chat draft") {
 		t.Fatal("answering or expiry lost the chat draft")
+	}
+	u.Close()
+	requests := questions.APIRequests()
+	if len(requests) != 1 || requests[0].Username != "commander" || requests[0].Password != fixtures.QuestionAPIPassword || requests[0].Answer != "Broken links" || questions.MCPAnswerCount() != 0 {
+		t.Fatal("operator selection did not use its authenticated API connection exactly once")
 	}
 }
 
