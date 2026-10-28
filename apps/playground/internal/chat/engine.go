@@ -24,6 +24,7 @@ type Commander interface {
 
 type Event struct {
 	Kind, Text, ID          string
+	CallID                  string
 	OperationID, QuestionID string
 	Answer                  string
 	Operation               *bridge.Operation

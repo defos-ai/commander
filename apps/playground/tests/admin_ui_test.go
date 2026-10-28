@@ -491,15 +491,18 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 			}
 			view := ansi.Strip(u.Model.View())
 			previous := -1
-			for _, id := range []string{"delta", "zulu", "charlie", "bravo"} {
+			for _, id := range []string{"delta", "zulu", "charlie"} {
 				position := strings.Index(view, id+" · completed")
 				if position <= previous {
 					t.Fatal("progress does not show the most recent operations first with a stable ID tie-break")
 				}
 				previous = position
 			}
-			if strings.Contains(view, "alpha · completed") || !strings.Contains(view, "+1 more · /operations") {
-				t.Fatal("progress did not keep its four-operation limit and overflow count")
+			if strings.Contains(view, "alpha · completed") || strings.Contains(view, "bravo · completed") || !strings.Contains(view, "+2 more · /operations") {
+				t.Fatal("progress did not keep its three-operation limit and overflow count")
+			}
+			if strings.Count(view, "\n") != 99 || !strings.HasSuffix(view, "/help · /exit\n") {
+				t.Fatal("chat does not leave exactly one blank line below its footer")
 			}
 			const draft = "Keep this draft"
 			u.Text(draft)
@@ -507,8 +510,8 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 				u.Model.Update(size)
 				view := u.Model.View()
 				plain := ansi.Strip(view)
-				if strings.Count(view, "\n") > size.Height {
-					t.Fatalf("operation progress pushes input beyond a %dx%d terminal", size.Width, size.Height)
+				if strings.Count(view, "\n") != size.Height-1 || !strings.HasSuffix(plain, "/help · /exit\n") {
+					t.Fatalf("chat does not fit a %dx%d terminal with one bottom margin line", size.Width, size.Height)
 				}
 				for _, line := range strings.Split(view, "\n") {
 					if ansi.StringWidth(line) > size.Width {
@@ -519,7 +522,7 @@ func TestOperationProgressKeepsRecentLinksWithinTerminal(t *testing.T) {
 					t.Fatal("resizing hid the newest operation, input or footer")
 				}
 				displayed := strings.Count(strings.Join(strings.Fields(plain), " "), "Review on Admin UI")
-				if displayed == 0 || displayed >= 5 || !strings.Contains(plain, fmt.Sprintf("+%d more · /operations", 5-displayed)) {
+				if displayed == 0 || displayed > 3 || !strings.Contains(plain, fmt.Sprintf("+%d more · /operations", 5-displayed)) {
 					t.Fatal("progress does not account for the operations hidden by its height budget")
 				}
 				for _, id := range []string{"delta", "zulu", "charlie", "bravo"} {

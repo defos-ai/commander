@@ -52,18 +52,8 @@ func (m *Model) refresh() {
 	bottom := m.forceBottom || m.viewport.AtBottom()
 	m.forceBottom = false
 	m.viewport.Width = max(20, m.width-4)
-	activityLines := 0
-	if m.admin.running {
-		activityLines++
-	}
-	for _, line := range m.operationProgress() {
-		activityLines += strings.Count(line, "\n") + 1
-	}
-	questionLines := 0
-	if question := m.questionView(time.Now()); question != "" {
-		questionLines = strings.Count(question, "\n") + 2
-	}
-	m.viewport.Height = max(3, m.height-10-activityLines-questionLines-strings.Count(m.footerView(), "\n"))
+	// Reserve the header and spacer; the footer's trailing newline leaves one empty row.
+	m.viewport.Height = max(1, m.height-2-strings.Count(m.bottomView(m.operationProgress()), "\n"))
 	var lines []string
 	for i := range m.entries {
 		item := &m.entries[i]
@@ -176,6 +166,10 @@ func (m *Model) View() string {
 		}
 		content = strings.Join(lines, "\n")
 	}
+	return header + "\n\n" + content + m.bottomView(m.operationProgress())
+}
+
+func (m *Model) bottomView(progress []string) string {
 	var activity []string
 	if m.admin.running {
 		activity = append(activity, m.color(stars[m.frame%len(stars)], ReticleGreen)+" Running Admin command")
@@ -185,7 +179,7 @@ func (m *Model) View() string {
 	} else if m.controls > 0 {
 		activity = append(activity, m.color(stars[m.frame%len(stars)], ReticleGreen)+" Loading Commander data")
 	}
-	activity = append(activity, m.operationProgress()...)
+	activity = append(activity, progress...)
 	input := m.input.View()
 	if !m.config.NoColor {
 		input = m.renderer.NewStyle().Background(lipgloss.Color(StealthBlack)).Foreground(lipgloss.Color(SmokeWhite)).Padding(0, 1).Render(input)
@@ -197,7 +191,11 @@ func (m *Model) View() string {
 	if panel := m.questionView(time.Now()); panel != "" {
 		question = panel + "\n\n"
 	}
-	return header + "\n\n" + content + "\n\n" + strings.Join(activity, "\n") + "\n" + question + input + "\n" + m.color(m.footerView(), MutedGray) + "\n"
+	bottom := "\n\n"
+	if len(activity) > 0 {
+		bottom += ansi.Wrap(strings.Join(activity, "\n"), max(20, m.width-4), "") + "\n"
+	}
+	return bottom + question + input + "\n" + m.color(m.footerView(), MutedGray) + "\n"
 }
 
 func (m *Model) footerView() string {
@@ -225,15 +223,12 @@ func (m *Model) operationProgress() []string {
 		}
 		return a.UpdatedAt.After(b.UpdatedAt)
 	})
-	// Keep room for chat, input and the wrapped footer before adding whole rows.
-	available := max(0, m.height-13-strings.Count(m.footerView(), "\n"))
-	if question := m.questionView(time.Now()); question != "" {
-		available = max(0, available-strings.Count(question, "\n")-2)
-	}
+	// Reserve the header, three chat rows and the actual controls before adding whole rows.
+	available := max(0, m.height-5-strings.Count(m.bottomView(nil), "\n"))
 	more := func(count int) string {
 		return ansi.Wrap(fmt.Sprintf("  +%d more · /operations", count), max(20, m.width-4), "")
 	}
-	for i, id := range ids[:min(4, len(ids))] {
+	for i, id := range ids[:min(3, len(ids))] {
 		op := m.operations[id]
 		marker := stars[m.frame%len(stars)]
 		if op.Terminal() {

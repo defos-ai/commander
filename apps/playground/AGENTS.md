@@ -261,6 +261,15 @@
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts
   throughout streams and tool calls; do not block the Bubble Tea update loop.
+- Tool events retain a call identity separate from operation IDs. Replace the
+  matching pending transcript entry on completion/failure while retaining error
+  detail and unrelated notices. Repeated action names and provider IDs reused
+  across turns must preserve their separate call history.
+- Show at most three recently updated operations with a stable ID tie-break,
+  plus the actual hidden count and `/operations`. Small terminals may show fewer
+  whole rows; hidden work remains watched. Measure rendered status, question,
+  input and footer lines when sizing the chat viewport, keeping one empty line
+  below the footer rather than reserving an unused fixed block.
 - Render the server's `progress` counts and use its `settled` flag for watcher
   completion, final model review and Admin review links. Do not recalculate task
   completion locally: interrupted outcomes remain unknown even on terminal

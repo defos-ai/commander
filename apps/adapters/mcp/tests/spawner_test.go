@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"slices"
@@ -95,6 +96,7 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	if installed.Status != operations.Completed || installed.ReportID == "" || installedOutput.AgentID != spawned.AgentID || fixtures.ModelDecision(installed) != nil {
 		t.Fatalf("install mission did not save the reviewed agent identity: %+v", installed)
 	}
+	progressID := assertSavedSpawnProgress(t, a, spawnTask)
 
 	// A separate mission can now use the capability. Previous API/MCP scenarios
 	// may have spawned another instance; the controller chooses the executor.
@@ -107,6 +109,8 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	}
 	a.Call("assign_task", fixtures.Object{"operation_id": operation.ID, "action_name": "fixture-echo", "input": input}, &assigned)
 	executed := waitSpawnerTask(t, a, operation.ID, assigned.ID)
+	a.Fails("operation_logs", fixtures.Object{"operation_id": provision.ID, "task_id": executed.ID}, "unknown task")
+	a.Fails("operation_logs", fixtures.Object{"operation_id": operation.ID, "cursor": progressID}, "unknown execution log")
 	var output struct {
 		Message string `json:"message"`
 		AgentID string `json:"agent_id"`
@@ -133,6 +137,113 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 		t.Fatalf("spawned agent artifact bytes did not reach storage: %+v", resource)
 	}
 	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": fixtures.Object{"message": output.Message, "agent_id": output.AgentID}}, nil)
+}
+
+type spawnLog struct {
+	ID          string    `json:"id"`
+	AgentID     string    `json:"agent_id"`
+	CommandID   string    `json:"command_id"`
+	ActionName  string    `json:"action_name"`
+	OperationID string    `json:"operation_id"`
+	TaskID      string    `json:"task_id"`
+	StepID      string    `json:"step_id"`
+	Message     string    `json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type spawnLogPage struct {
+	Logs       []spawnLog `json:"logs"`
+	NextCursor string     `json:"next_cursor"`
+}
+
+func assertSavedSpawnProgress(t *testing.T, client *fixtures.Client, task operations.Task) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(client.Context, 15*time.Second)
+	defer cancel()
+	a := *client
+	a.Context = ctx
+	if !id.ValidAgent(task.AgentID) || !id.Valid(task.CommandID) || task.ActionName != "spawn-agent" {
+		t.Fatalf("spawn task is missing its dispatched identity: %+v", task)
+	}
+	read := func(order, cursor string, limit int) spawnLogPage {
+		var page spawnLogPage
+		a.Call("operation_logs", fixtures.Object{"operation_id": task.OperationID, "task_id": task.ID,
+			"agent_id": task.AgentID, "action_name": task.ActionName, "order": order, "cursor": cursor, "limit": limit}, &page)
+		if page.Logs == nil || len(page.Logs) > limit {
+			t.Fatalf("invalid saved spawn log page: %+v", page)
+		}
+		seen := make(map[string]bool, len(page.Logs))
+		for _, log := range page.Logs {
+			if !id.Valid(log.ID) || seen[log.ID] || log.AgentID != task.AgentID || log.CommandID != task.CommandID ||
+				log.ActionName != task.ActionName || log.OperationID != task.OperationID || log.TaskID != task.ID ||
+				log.StepID != task.StepID || log.CreatedAt.IsZero() || strings.TrimSpace(log.Message) == "" {
+				t.Fatalf("saved progress lost its execution identity or repeated an observation: %+v", log)
+			}
+			seen[log.ID] = true
+		}
+		wantCursor := cursor
+		if len(page.Logs) != 0 {
+			wantCursor = page.Logs[len(page.Logs)-1].ID
+		}
+		if page.NextCursor != wantCursor {
+			t.Fatalf("saved log page changed its continuation: got %q, want %q", page.NextCursor, wantCursor)
+		}
+		return page
+	}
+	// Task-result delivery does not order the controller's persistence of progress events.
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		page := read("asc", "", 1000)
+		var started, completed bool
+		for _, log := range page.Logs {
+			started = started || log.Message == "Package version selection started"
+			completed = completed || log.Message == "Package version selection completed"
+		}
+		if started && completed {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("spawner package-selection progress was not persisted: %+v (%v)", page, ctx.Err())
+		case <-tick.C:
+		}
+	}
+
+	var logs []spawnLog
+	seen := make(map[string]bool)
+	cursor := ""
+	for {
+		page := read("asc", cursor, 1)
+		if len(page.Logs) == 0 {
+			break
+		}
+		if page.NextCursor == cursor || seen[page.Logs[0].ID] {
+			t.Fatalf("saved spawn log pagination repeated a cursor or entry: %+v", page)
+		}
+		seen[page.Logs[0].ID] = true
+		logs = append(logs, page.Logs[0])
+		cursor = page.NextCursor
+		if len(logs) >= 1000 {
+			t.Fatal("spawn progress pagination did not reach its bounded history tail")
+		}
+	}
+	if len(logs) < 2 {
+		t.Fatalf("saved spawn progress disappeared while paging: %+v", logs)
+	}
+
+	// Anchor at the observed tail so later appends cannot change this history comparison.
+	for index := len(logs) - 2; index >= 0; index-- {
+		page := read("desc", cursor, 1)
+		if len(page.Logs) != 1 || page.Logs[0] != logs[index] {
+			t.Fatalf("descending saved history differs from ascending at %d: got %+v, want %+v", index, page, logs[index])
+		}
+		cursor = page.NextCursor
+	}
+	if page := read("desc", cursor, 1); len(page.Logs) != 0 {
+		t.Fatalf("descending saved history did not reach its empty tail: %+v", page)
+	}
+	return logs[0].ID
 }
 
 func decodeSpawnOutput(t *testing.T, data []byte, target any) {

@@ -38,6 +38,7 @@ type Connection[C host.Credentials] struct {
 }
 type entry struct {
 	kind, text    string
+	callID        string
 	rendered      string
 	renderedWidth int
 	dirty         bool
@@ -269,21 +270,30 @@ func (m *Model) receive(event chat.Event) {
 	switch event.Kind {
 	case "control_start":
 		m.controls++
+		m.refresh()
 	case "control_end":
 		m.controls = max(0, m.controls-1)
+		m.refresh()
 	case "busy":
 		m.busy = true
 		m.activity = event.Text
+		m.refresh()
 	case "idle":
 		m.busy = false
 		m.activity = ""
 		m.streamIndex = -1
+		m.refresh()
 	case "tool":
 		m.activity = "Running " + event.Text
-		m.add("tool", event.Text)
+		m.addEntry(event.Kind, event.Text, event.CallID)
+	case "success", "error":
+		if !m.finishTool(event) {
+			m.addEntry(event.Kind, event.Text, event.CallID)
+		}
 	case "response":
 		m.streamIndex = -1
 		m.activity = "Thinking"
+		m.refresh()
 	case "response_end":
 		m.streamIndex = -1
 	case "delta":
@@ -328,12 +338,32 @@ func (m *Model) receive(event chat.Event) {
 		m.add(event.Kind, event.Text)
 	}
 }
+
+func (m *Model) finishTool(event chat.Event) bool {
+	if event.CallID == "" {
+		return false
+	}
+	for i := len(m.entries) - 1; i >= 0; i-- {
+		item := &m.entries[i]
+		if item.callID == event.CallID && item.kind == "tool" {
+			item.kind, item.text, item.dirty = event.Kind, clean(event.Text), true
+			m.refresh()
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Model) add(kind, text string) {
+	m.addEntry(kind, text, "")
+}
+
+func (m *Model) addEntry(kind, text, callID string) {
 	if kind == "error" && m.stage != stageChat {
 		m.setupError = clean(text)
 		return
 	}
-	m.entries = append(m.entries, entry{kind: kind, text: clean(text), dirty: true})
+	m.entries = append(m.entries, entry{kind: kind, text: clean(text), callID: callID, dirty: true})
 	if len(m.entries) > 500 {
 		m.entries = m.entries[len(m.entries)-500:]
 		m.streamIndex = -1

@@ -169,6 +169,10 @@ its own API connection. Compose supplies the default internal API login; a custo
 | `/clear` | Clear the conversation. |
 | `/exit` or **Ctrl+D** | Exit; all-in-one hosts stop too. |
 
+Tool calls update their pending line when they complete or fail. The progress
+area shows up to three recently updated operations; `+N more · /operations`
+points to the full list. Watching and model review continue for hidden operations.
+
 `completed` means a final report was accepted; it may include limitations.
 Terminal operations show a static marker and list unknown task outcomes.
 Playground keeps watching for late results and artifacts. `/stop` pauses model

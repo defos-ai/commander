@@ -9,14 +9,18 @@ import (
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
+	if call.ID == "" {
+		call.ID = id.New()
+	}
 	// Capture a stable ID before a potentially ambiguous network failure.
 	if call.Name == "start_operation" {
 		call.Arguments = withOperationID(call.Arguments)
 	}
-	e.emit(Event{Kind: "tool", Text: call.Name})
+	e.emit(Event{Kind: "tool", Text: call.Name, CallID: call.ID})
 	result, err := e.commander.Call(ctx, call.Name, call.Arguments)
 	if err != nil {
 		result = bridge.Result{IsError: true, Text: "Tool failed: " + err.Error() + ". Execution may have been accepted; inspect state before retrying."}
@@ -26,7 +30,7 @@ func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
 			}
 		}
 	}
-	e.reportCall(call.Name, result)
+	e.reportCall(call, result)
 	if !result.IsError {
 		e.follow(call, result)
 	} else if call.Name == "start_operation" {
@@ -37,15 +41,15 @@ func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
 	return result
 }
 
-func (e *Engine) reportCall(name string, result bridge.Result) {
-	kind, label := "success", name+" completed"
+func (e *Engine) reportCall(call llm.Call, result bridge.Result) {
+	kind, label := "success", call.Name+" completed"
 	if result.IsError {
-		kind, label = "error", name+" failed"
+		kind, label = "error", call.Name+" failed"
 		if detail := strings.TrimSpace(result.Text); detail != "" {
 			label += ": " + detail
 		}
 	}
-	e.emit(Event{Kind: kind, Text: label})
+	e.emit(Event{Kind: kind, Text: label, CallID: call.ID})
 }
 
 func operationID(arguments json.RawMessage) string {

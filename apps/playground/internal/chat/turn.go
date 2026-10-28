@@ -93,10 +93,10 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 			var result bridge.Result
 			if err := ctx.Err(); err != nil {
 				result = bridge.Result{IsError: true, Text: err.Error()}
-				e.reportCall(call.Name, result)
+				e.reportCall(call, result)
 			} else if !allowed[call.Name] {
 				result = bridge.Result{IsError: true, Text: "This tool is not available to the model; answers require explicit operator input."}
-				e.reportCall(call.Name, result)
+				e.reportCall(call, result)
 			} else {
 				result = e.call(ctx, call)
 			}
