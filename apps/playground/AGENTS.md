@@ -311,12 +311,15 @@
   question focus. Do not emit terminal mode controls to files.
   Leave selection and copying to the terminal. Do not draw an application-owned
   selection, intercept copy shortcuts or send clipboard control sequences.
-  Ctrl+C retains its stop/quit behavior. Keep selection/copy instructions in
-  `/help`, out of the footer. Explain plain drag and the terminal's normal copy
-  command in help. Live output can change selected cells; do not promise a
-  frozen screen. Do not add a mouse mode command.
-  Keep chat scrolling hints in `/help`; show the footer's stop shortcut only
-  while a reply is active.
+  Ctrl+C retains its stop/quit behavior. Keep `/help` compact, retaining
+  `/credentials` and `/secrets` in chat and linking to the GitHub Playground
+  README's Chat reference. Setup help advertises local credentials only in
+  all-in-one mode. Reject help arguments locally; there is no expanded help
+  subcommand. Keep the full command list and scrolling/copy instructions in that
+  README. Preserve the static hyperlink target through terminal wrapping, with
+  a plain URL in no-color output. Live output can change selected cells; do not
+  promise a frozen screen or add a mouse mode command. Show the footer's stop
+  shortcut only while a reply is active.
   All-in-one startup shows the provider/model, readiness with the actual connected
   agent count (one by default), one agent-installation prompt and the
   temporary-state note. Keep URLs, host inventories and

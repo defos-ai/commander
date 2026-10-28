@@ -43,7 +43,7 @@ func TestChatScrolling(t *testing.T) {
 			u.Model.Update(tea.WindowSizeMsg{Width: 110, Height: 18})
 			u.Text("/help")
 			u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-			u.Wait("help content", func(view string) bool { return strings.Contains(view, "Ctrl+D exits.") })
+			u.Wait("help content", func(view string) bool { return strings.Contains(view, "README.md#chat") })
 			const draft = "Keep this draft while I read the help"
 			u.Text(draft)
 			bottom := u.Model.View()
@@ -63,7 +63,7 @@ func TestChatScrolling(t *testing.T) {
 				u.Model.Update(input.up)
 			}
 			top := u.Model.View()
-			if !strings.Contains(top, "Commander connected") || strings.Contains(top, "Ctrl+D exits.") || !strings.Contains(top, draft) {
+			if !strings.Contains(top, "Commander connected") || strings.Contains(top, "README.md#chat") || !strings.Contains(top, draft) {
 				t.Fatal("scrolling up did not reach earlier chat content while preserving the draft")
 			}
 			before, after := strings.Split(bottom, "\n"), strings.Split(top, "\n")

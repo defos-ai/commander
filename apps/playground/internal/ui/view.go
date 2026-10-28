@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/defos-ai/commander/apps/playground/internal/chat"
 )
 
 const (
@@ -83,6 +84,8 @@ func (m *Model) refresh() {
 			body = m.renderMarkdown(body)
 		} else if item.kind == "admin" {
 			body = m.adminLink(body)
+		} else if item.kind == "notice" {
+			body = m.helpDocsLink(body)
 		}
 		text := m.color(label, color) + "  " + body
 		if item.kind == "notice" && strings.Contains(body, "\n") {
@@ -158,6 +161,8 @@ func (m *Model) View() string {
 			text := item.text
 			if item.kind == "admin" {
 				text = m.adminLink(text)
+			} else if item.kind == "notice" {
+				text = m.helpDocsLink(text)
 			}
 			lines = append(lines, "", m.color(text, color))
 		}
@@ -315,4 +320,12 @@ func (m *Model) adminLink(label string) string {
 	// insert whitespace into the address a terminal opens.
 	base, _, _ := strings.Cut(target, "#")
 	return label + " " + ansi.SetHyperlink(target) + m.color(base, ReticleGreen) + ansi.ResetHyperlink()
+}
+
+func (m *Model) helpDocsLink(text string) string {
+	if m.config.NoColor {
+		return text
+	}
+	link := ansi.SetHyperlink(chat.HelpDocsURL) + m.color("Playground docs", ReticleGreen) + ansi.ResetHyperlink()
+	return strings.ReplaceAll(text, chat.HelpDocsURL, link)
 }

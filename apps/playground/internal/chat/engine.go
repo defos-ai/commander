@@ -155,6 +155,7 @@ func (e *Engine) run() {
 			if text == "" {
 				continue
 			}
+			fields := strings.Fields(text)
 			switch {
 			case text == "/stop":
 				paused = true
@@ -174,8 +175,12 @@ func (e *Engine) run() {
 					notice = "No reply is running."
 				}
 				e.emit(Event{Kind: "notice", Text: notice})
-			case text == "/help":
-				e.emit(Event{Kind: "notice", Text: Help})
+			case fields[0] == "/help":
+				if len(fields) == 1 {
+					e.emit(Event{Kind: "notice", Text: Help})
+				} else {
+					e.emit(Event{Kind: "error", Text: "Usage: /help"})
+				}
 			case text == "/clear":
 				if cancelTurn != nil {
 					e.emit(Event{Kind: "error", Text: "Use /stop before clearing the conversation."})
@@ -241,20 +246,15 @@ func (e *Engine) run() {
 	}
 }
 
-const Help = `/help — Show this help
-/status — Show connection and queue status
-/admin [command] — Admin UI and commands
+const Help = `/admin [command] — Admin UI and commands
 /credentials — Show API login and MCP token (all-in-one)
 /secrets — Provide secrets needed by watched operations
 /operations — List saved operations
-/watch <operation-id> — Follow an operation and resume model review
-/run <operation-id> <action> <json-input> — Queue an action directly through MCP
-/cancel <operation-id> — Cancel a server-side operation
-/stop — Stop model work and clear queued messages
-/clear — Clear model conversation; keep saved operations
-/exit — Exit; server-side work keeps running
+/watch <id> — Follow work and resume review
+/stop — Stop the reply and clear queued messages
+/clear — Clear conversation; keep saved operations
+/exit — Exit Playground
 
-Try: "Install the web agent, then review defos.ai."
-Scroll with the wheel, trackpad or PgUp/PgDown.
-Drag to select, then copy normally: Ctrl+Shift+C in GNOME Terminal, Cmd+C in macOS Terminal, or the Copy menu.
-Ctrl+C stops a reply; Ctrl+D exits.`
+Docs: ` + HelpDocsURL
+
+const HelpDocsURL = "https://github.com/defos-ai/commander/blob/main/apps/playground/README.md#chat"

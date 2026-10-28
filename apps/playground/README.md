@@ -121,6 +121,7 @@ deadline while waiting.
 Choose a provider and model with **↑/↓** and **Enter**. Key prompts link to the
 provider's API key page. **Other** supports an OpenAI-compatible base URL and model.
 Messages and requested tool results go to that provider and incur its API charges.
+Choose **Enter model name…** for an unlisted model; use `/back` to restart setup.
 
 To connect to an existing MCP server:
 
@@ -157,7 +158,9 @@ its own API connection. Compose supplies the default internal API login; a custo
 
 | Command | Use it to… |
 | --- | --- |
-| `/help`, `/status`, `/operations` | Read help, connection status or saved operations. |
+| `/help` | Show essential commands and a link to this reference. |
+| `/status` | Read connection and queue status. |
+| `/operations` | List saved operations. |
 | `/credentials`, `/admin` | Get the all-in-one login or Admin link, including during setup. |
 | `/admin serve` | Start Admin UI for this session. |
 | `/admin help` | List Admin commands. |
@@ -165,9 +168,13 @@ its own API connection. Compose supplies the default internal API login; a custo
 | `/watch <operation-id>` | Follow work and resume model review. |
 | `/run <operation-id> <action-name> <json-input>` | Queue an action through MCP. |
 | `/cancel <operation-id>` | Cancel queued operation work. Dispatched tasks may finish. |
+| `/answer <question-id> <answer>` | Answer a pending question with text or an option number. |
 | `/stop` or **Ctrl+C** | Stop the reply, clear queued messages and pause model review. |
 | `/clear` | Clear the conversation. |
 | `/exit` or **Ctrl+D** | Exit; all-in-one hosts stop too. |
+| `/back` | Restart setup, before connecting to Commander. |
+
+The terminal help stays compact; this table includes the additional commands.
 
 Tool calls update their pending line when they complete or fail. The progress
 area shows up to three recently updated operations; `+N more · /operations`
@@ -179,7 +186,8 @@ Playground keeps watching for late results and artifacts. `/stop` pauses model
 review while operation updates continue; `/watch <operation-id>` resumes review.
 
 Scroll with the wheel, trackpad or **PgUp/PgDown**. Drag to select, then use your
-terminal's copy command, such as **Ctrl+Shift+C** in GNOME Terminal.
+terminal's copy command, such as **Ctrl+Shift+C** in GNOME Terminal, **Cmd+C** in
+macOS Terminal, or the Copy menu. Live updates can change the selected cells.
 Answer questions with **↑/↓** and **Enter**, or type your own answer.
 **Tab** returns to chat.
 

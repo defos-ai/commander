@@ -17,6 +17,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/defos-ai/commander/apps/playground/internal/chat"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
 	"github.com/defos-ai/commander/apps/playground/tests/fakes"
@@ -67,26 +68,28 @@ func TestHelpLayout(t *testing.T) {
 				u.Model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
 				u.Text("/help")
 				u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-				u.Wait("help", func(view string) bool { return strings.Contains(view, "Show this help") })
+				u.Wait("help", func(view string) bool { return strings.Contains(view, "Docs:") })
 
 				for _, width := range []int{120, 60, 120} {
 					u.Model.Update(tea.WindowSizeMsg{Width: width, Height: 80})
-					view := ansi.Strip(u.Model.View())
-					start := strings.Index(view, "\n  /help — Show this help")
+					rawView := u.Model.View()
+					view := ansi.Strip(rawView)
+					start := strings.Index(view, "\n  /admin [command] — Admin UI and commands")
 					if start < 0 {
 						t.Fatalf("help is not aligned with the chat inset at width %d", width)
 					}
 					start++
-					end := strings.Index(view[start:], "exits.")
-					if end < 0 {
-						t.Fatalf("help was truncated at width %d", width)
-					}
-					help := view[start : start+end+len("exits.")]
-					if !strings.Contains(strings.Join(strings.Fields(help), " "), "Ctrl+D exits.") {
-						t.Fatal("help lost its final keyboard shortcut")
-					}
-					if !strings.Contains(help, "\n  /run <operation-id> <action> <json-input> —") || !strings.Contains(help, "\n  /exit —") {
+					help := view[start:]
+					if !strings.Contains(help, "\n  /exit —") {
 						t.Fatal("help command rows are misaligned")
+					}
+					assertCompactHelp(t, help)
+					if noColor {
+						if !strings.Contains(strings.Join(strings.Fields(help), ""), chat.HelpDocsURL) {
+							t.Fatal("plain help lost its complete documentation URL")
+						}
+					} else if !strings.Contains(rawView, "]8;;"+chat.HelpDocsURL) || !strings.Contains(help, "Playground docs") {
+						t.Fatal("colored help lost its labeled documentation link")
 					}
 					if !strings.Contains(strings.Join(strings.Fields(help), " "), "/credentials — Show API login and MCP token (all-in-one)") {
 						t.Fatal("credential lookup is missing from the help command rows")
