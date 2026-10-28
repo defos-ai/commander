@@ -1,6 +1,8 @@
 # Secret management
 
-Secrets belong to an agent type, independently of operations. Users manage them
+Manage service credentials across agent workflows with encrypted storage,
+action requirements and tracked delivery. Secrets belong to an agent type,
+independently of operations. Users manage them
 through [Admin UI](../../apps/admin/ui/README.md) or the authenticated
 [HTTP API](../../apps/adapters/api/README.md#secrets); values stay out of chat.
 

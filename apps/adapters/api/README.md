@@ -1,6 +1,8 @@
 # HTTP API adapter
 
-Create missions, submit operation commands and read results from your application.
+Integrate Commander with internal applications and services to run mission workflows.
+Submit work, handle operator questions and review saved results, execution logs and
+artifacts through authenticated HTTP endpoints.
 
 ## Quick start
 

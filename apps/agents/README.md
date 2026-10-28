@@ -1,6 +1,8 @@
 # Agents
 
-Agents give Commander actions it can use in a mission.
+Build or install agents to connect Commander missions to your services, business
+systems and specialist tools. Each agent advertises typed actions and readiness,
+then returns results or artifacts for review.
 
 | You want to… | Use |
 | --- | --- |

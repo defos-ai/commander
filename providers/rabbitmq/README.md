@@ -1,7 +1,8 @@
 # RabbitMQ provider
 
-Connect Commander hosts through AMQP 0-9-1. Set `BUS_URL` to an `amqp://` or
-`amqps://` URL. [Compose](../../compose.yaml) configures the broker automatically.
+Route operation commands, execution outcomes and progress events between
+Commander hosts through AMQP 0-9-1. Set `BUS_URL` to an `amqp://` or `amqps://` URL.
+[Compose](../../compose.yaml) configures the broker automatically.
 
 ## Quick start
 

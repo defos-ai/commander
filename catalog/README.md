@@ -1,6 +1,9 @@
 # Agent catalog
 
-Find agents in [`agents.yaml`](agents.yaml), or ask Playground:
+Find reusable agents for workflows such as building software and reviewing
+websites. The catalog pairs capability descriptions with package references,
+so operators and model clients can select specialist agents to install.
+Browse [`agents.yaml`](agents.yaml), or ask Playground:
 
 > Install the web agent.
 

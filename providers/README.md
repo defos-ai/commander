@@ -1,6 +1,8 @@
 # Providers
 
-Choose messaging, database and file storage independently:
+Configure the infrastructure behind multi-agent operations: messaging connects
+Commander hosts, database stores retain workflow state and execution history, and
+file storage holds artifact bytes and reports. Choose each backend independently:
 
 | Host setting | Provider | Connection |
 | --- | --- | --- |

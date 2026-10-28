@@ -1,6 +1,9 @@
 # Messaging
 
-Use `comms.Bus` to connect adapters, the controller and agents. Choose the
+Connect adapters, the controller and agents through a shared messaging contract.
+Commands and events carry work between services; inbox modes and explicit
+delivery settlement give hosts control over failures and duplicate deliveries.
+Use `comms.Bus` with the
 [FS or RabbitMQ provider](../../providers/README.md) in your host factory.
 
 ## Consuming messages

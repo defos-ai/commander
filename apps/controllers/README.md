@@ -1,6 +1,7 @@
 # Controllers
 
-The controller assigns mission tasks to agents and saves their progress and results.
+The controller coordinates multi-step missions across agents, applies rules for
+follow-up work, and saves progress and results for operational review.
 Use Admin's **Controllers** page to check its health.
 
 ## Quick start

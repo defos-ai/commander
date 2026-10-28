@@ -1,6 +1,8 @@
 # Cryptography
 
-Use `crypto.SecretCipher` to encrypt stored secrets with AES-256-GCM.
+Use `crypto.SecretCipher` to encrypt stored agent secrets, such as integration
+credentials, with AES-256-GCM. Values and their metadata are authenticated
+together so modified records fail authentication.
 For versioned create/update/delete operations, use the
 [secret management service](../secrets/README.md).
 

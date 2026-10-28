@@ -1,7 +1,9 @@
 # Commander framework
 
-Build agents, coordinate operations and connect your own clients. Apps provide
-host configuration; [providers](../providers/README.md) supply messaging and storage.
+Build workflows that coordinate specialist agents across tools and services.
+Typed action contracts, mission rules and operator decisions guide execution;
+saved outcomes and artifacts support review. Apps provide host configuration;
+[providers](../providers/README.md) supply messaging and storage.
 
 ## Quick start
 

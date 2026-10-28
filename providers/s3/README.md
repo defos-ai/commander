@@ -1,7 +1,8 @@
 # S3 provider
 
-Store artifact files and reports in Amazon S3 or MinIO. Metadata stays in the
-database. [Compose](../../compose.yaml) configures MinIO and creates its bucket.
+Store the artifact files and reports produced by multi-agent operations in
+Amazon S3 or MinIO, independently of agent runtimes. Artifact metadata stays in
+the database. [Compose](../../compose.yaml) configures MinIO and creates its bucket.
 
 ## Quick start
 

@@ -1,7 +1,10 @@
 # Message contracts
 
-Use the typed [`comms/clients`](../clients/) publishers for controller, adapter
-and agent messages. Use [`routing.go`](routing.go) when constructing destinations.
+Keep clients, controllers and agents aligned as operations cross process
+boundaries. Typed commands and events preserve correlation IDs and work context
+so execution messages can be associated with their operations and tasks.
+Use the typed [`comms/clients`](../clients/) publishers and
+[`routing.go`](routing.go) when constructing destinations.
 
 ## Destinations
 
@@ -56,7 +59,11 @@ Success confirms publication to the bus. The controller checks the saved executi
 claim and stores the log before acknowledging its delivery; the action receives
 no persistence receipt. Calls are not retried automatically, and another call
 creates another observation. Logs do not extend task deadlines or replace
-checkpoints. Operation/task log queries are a later increment.
+checkpoints.
+
+Query saved operation logs through the
+[HTTP API](../../../apps/adapters/api/README.md#execution-logs)
+or MCP's [`operation_logs`](../../../apps/adapters/README.md#queries-and-artifacts).
 
 ## Secret synchronization contracts
 

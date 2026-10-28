@@ -1,7 +1,8 @@
 # Commander Admin UI
 
-Run missions, answer questions and inspect operation results, screenshots and
-files in a browser.
+Operate multi-step missions in a browser: review execution graphs and live logs,
+answer questions, and inspect reports, screenshots and files. Connect to separate
+Commander APIs to manage operational work from one interface.
 
 ## Quick start
 

@@ -1,7 +1,8 @@
 # Filesystem provider
 
-Store messages, database records and artifact files in local directories.
-All-in-one uses this provider automatically.
+Run multi-agent workflows with filesystem-backed operation state, execution
+checkpoints, progress logs and artifact storage, without a separate database or
+broker. All-in-one uses this provider automatically.
 
 ## Quick start
 
@@ -50,7 +51,8 @@ Use the [testing guide](../../framework/tests/README.md) for cross-host checks.
 ## Delivery and recovery
 
 Use `TransientExclusive` inboxes; durable inboxes are unsupported. Subscribe before
-publishing. Reopening a closed inbox receives new publications only.
+publishing. A lost lease closes the subscription; reopening receives new
+publications only.
 
 Inspect retained rejected or unsettled files when investigating a failure; they
 are not automatically replayed. See [messaging](../../framework/comms/README.md).

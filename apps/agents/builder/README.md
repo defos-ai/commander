@@ -1,7 +1,8 @@
 # Builder Agent
 
-Build a Commander agent with Codex, download its source, and optionally publish
-and release it on GitHub.
+Build custom agents for internal workflows from explicit action contracts using
+Codex. Review the generated source and validation results, then choose whether to
+publish and release the agent on GitHub.
 
 After starting a builder, ask Playground:
 

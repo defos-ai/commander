@@ -1,6 +1,7 @@
 # Adapters
 
-Connect an MCP client or an application to Commander:
+Connect AI clients and internal applications to Commander to automate multi-step
+operational workflows. Submit work and review saved results through either interface:
 
 - **MCP:** let a model choose missions, assign work and review results.
 - **[HTTP API](api/README.md):** create missions and manage operations from your app.

@@ -1,7 +1,8 @@
 # Playground
 
-Chat with a model to run Commander missions and review results. Start a temporary
-all-in-one session, or connect to existing hosts.
+Run complex operational workflows through a terminal conversation with a model,
+reviewing evidence and answering operator questions as work proceeds. Start a
+temporary all-in-one session or connect to existing hosts.
 
 ## Quick start
 

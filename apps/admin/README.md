@@ -1,5 +1,8 @@
 # Commander Admin
 
+Manage mission definitions, agent secrets and runtime sessions from the CLI for
+operational setup and maintenance. Use the same tool to serve the browser Admin UI.
+
 Build the CLI from the repository root:
 
 ```sh
