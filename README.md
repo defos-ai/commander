@@ -2,9 +2,7 @@
   <img src="./docs/cover.png" alt="DEFOS Commander: framework and runtime for distributed agents" width="100%">
 </p>
 
-**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions.
-
-Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
+**DEFOS Commander is a framework and runtime** for building distributed agents and orchestrating complex missions. Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
 Run missions and operations lasting months, orchestrating agents with different models and levels of intelligence.
 
