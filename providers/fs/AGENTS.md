@@ -51,11 +51,11 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   writes require an existing claim; exact retries still publish/sync, including
   after completion. Use domain transitions so a late checkpoint cannot extend a
   completed execution or overwrite an earlier checkpoint.
-- [`LogFsStore`](executions/log_fs_store.go) keeps each immutable observation in
-  its own `execution_logs/<UUID>.json` collection, independent of execution state
-  and other logs. Identical retries republish the original bytes to confirm
-  durability; conflicting IDs never replace saved provenance or content. Reads
-  create no state. The controller verifies the saved execution claim before append.
+- [`ExecutionFsStore` log methods](executions/logs.go) keep each immutable
+  observation in its own `execution_logs/<UUID>.json` collection, independent of
+  execution state and other logs. Identical retries republish the original bytes
+  to confirm durability; conflicting IDs never replace saved provenance or content.
+  Reads create no state. The controller verifies the saved execution claim before append.
 
 - Session persistence uses [scope aggregates](sessions/session_fs_store.go) under
   one collection lock. Reserve/release and retained identity evidence commit

@@ -167,12 +167,22 @@
   preserve nonblank UTF-8 text up to 2048 bytes; keep secret values out of them.
   [`action.Log`](agent/action/log.go) accepts only the message through an injected
   `LogProvider`; public execution metadata does not grant that capability.
-  [`LogStore`](domain/executions/log_store.go) retains each observation separately
-  from execution state. Exact ID/content retries succeed; conflicting reuse fails.
+  [`ExecutionStore.AppendLog`](domain/executions/execution_store.go) retains each
+  observation in separate storage from claims/checkpoints/results. Exact ID/content
+  retries succeed; conflicting reuse fails.
   Write errors may follow a commit: read by ID or retry the identical observation.
   Stores validate the record shape; controllers must verify saved execution claims.
-  `Agent.Serve` does not yet inject logging. Runtime delivery, host factory wiring
-  and operation/task queries follow in later increments.
+  `Agent.Serve` binds the logging capability to the accepted agent, command, action
+  and work context. Standalone `Work` clears inherited providers. Caller, action
+  and serving lifetimes bound publication, including detached caller contexts.
+  A successful `Log` confirms bus publication only; there is no persistence receipt
+  or automatic retry. Each call creates a new observation ID.
+  The controller owner loop verifies the saved claim, appends and reads back the
+  observation before ACK. Valid delayed logs remain acceptable after completion.
+  Log-processing failures reject that delivery and allow other work to continue;
+  receive and settlement failures retain their normal shutdown behavior. Logging
+  never extends deadlines or changes operation state. Operation/task queries
+  follow later.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

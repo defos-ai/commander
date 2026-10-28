@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -17,26 +16,8 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-type LogFsStore struct{ directory string }
-
-var _ executions.LogStore = (*LogFsStore)(nil)
-
-func NewLogFsStore(root string) (*LogFsStore, error) {
-	if root == "" {
-		root = filepath.Join("state", "database")
-	}
-	if strings.TrimSpace(root) == "" {
-		return nil, errors.New("execution log database root must not be blank")
-	}
-	directory, err := filepath.Abs(filepath.Join(root, "execution_logs"))
-	if err != nil {
-		return nil, err
-	}
-	return &LogFsStore{directory: directory}, nil
-}
-
-func (s *LogFsStore) Append(ctx context.Context, log executions.Log) error {
-	path, err := s.path(ctx, log.ID)
+func (s *ExecutionFsStore) AppendLog(ctx context.Context, log executions.Log) error {
+	path, err := s.logPath(ctx, log.ID)
 	if err != nil {
 		return err
 	}
@@ -47,14 +28,15 @@ func (s *LogFsStore) Append(ctx context.Context, log executions.Log) error {
 	if err != nil {
 		return err
 	}
-	if info, err := os.Lstat(s.directory); err == nil {
+	directory := filepath.Dir(path)
+	if info, err := os.Lstat(directory); err == nil {
 		if !info.IsDir() {
 			return errors.New("execution log directory must not be a symlink or file")
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := jsonfile.PrepareDirectory(s.directory); err != nil {
+	if err := jsonfile.PrepareDirectory(directory); err != nil {
 		return err
 	}
 	collection, err := jsonfile.OpenContext(ctx, path)
@@ -77,8 +59,8 @@ func (s *LogFsStore) Append(ctx context.Context, log executions.Log) error {
 	})
 }
 
-func (s *LogFsStore) Get(ctx context.Context, logID string) (executions.Log, error) {
-	path, err := s.path(ctx, logID)
+func (s *ExecutionFsStore) GetLog(ctx context.Context, logID string) (executions.Log, error) {
+	path, err := s.logPath(ctx, logID)
 	if err != nil {
 		return executions.Log{}, err
 	}
@@ -92,7 +74,7 @@ func (s *LogFsStore) Get(ctx context.Context, logID string) (executions.Log, err
 	return decodeLog(data, logID)
 }
 
-func (s *LogFsStore) path(ctx context.Context, logID string) (string, error) {
+func (s *ExecutionFsStore) logPath(ctx context.Context, logID string) (string, error) {
 	if ctx == nil {
 		return "", errors.New("execution log database requires a context")
 	}
@@ -102,7 +84,7 @@ func (s *LogFsStore) path(ctx context.Context, logID string) (string, error) {
 	if !id.Valid(logID) {
 		return "", errors.New("execution log ID must be a canonical UUID")
 	}
-	return filepath.Join(s.directory, logID+".json"), nil
+	return filepath.Join(s.root, "execution_logs", logID+".json"), nil
 }
 
 func decodeLog(data []byte, logID string) (executions.Log, error) {

@@ -19,11 +19,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func TestExecutionLogMongoStoreRequiresContextAndDatabase(t *testing.T) {
+func TestExecutionMongoStoreRequiresContextAndDatabase(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, ctx := range []context.Context{nil, cancelled, t.Context()} {
-		_, err := mongoexecutions.NewLogMongoStore(ctx, nil)
+		_, err := mongoexecutions.NewExecutionMongoStore(ctx, nil)
 
 		if err == nil || (ctx == cancelled && !errors.Is(err, context.Canceled)) {
 			t.Fatalf("invalid constructor arguments were accepted: %v", err)
@@ -31,23 +31,23 @@ func TestExecutionLogMongoStoreRequiresContextAndDatabase(t *testing.T) {
 	}
 }
 
-func TestExecutionLogMongoStorePreservesContentAndIdenticalReplays(t *testing.T) {
+func TestExecutionMongoStoreLogsPreservesContentAndIdenticalReplays(t *testing.T) {
 	database := fixtures.OpenStore(t, "execution_logs")
-	catalog := fixtures.OpenLogStore(t, database)
+	catalog := fixtures.OpenExecutionStore(t, database)
 	value := fixtures.ExecutionLog()
-	if _, err := catalog.Get(t.Context(), value.ID); !errors.Is(err, executions.ErrUnknownLog) {
+	if _, err := catalog.GetLog(t.Context(), value.ID); !errors.Is(err, executions.ErrUnknownLog) {
 		t.Fatalf("absent execution log: %v", err)
 	}
 	if documents := fixtures.CollectionDocuments(t, database, "execution_logs"); len(documents) != 0 {
 		t.Fatal("missing-record read created execution logs")
 	}
 
-	if err := catalog.Append(t.Context(), value); err != nil {
+	if err := catalog.AppendLog(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
 
-	reopened := fixtures.OpenLogStore(t, database)
-	saved, err := reopened.Get(t.Context(), value.ID)
+	reopened := fixtures.OpenExecutionStore(t, database)
+	saved, err := reopened.GetLog(t.Context(), value.ID)
 	if err != nil || !saved.Equal(value) || saved.Message != value.Message || saved.CreatedAt.Nanosecond() != 123456789 {
 		t.Fatalf("execution log lost content or timestamp precision: %+v, %v", saved, err)
 	}
@@ -62,7 +62,7 @@ func TestExecutionLogMongoStorePreservesContentAndIdenticalReplays(t *testing.T)
 	replay := value
 	replay.CreatedAt = replay.CreatedAt.In(time.FixedZone("same instant", 3*60*60))
 
-	if err := reopened.Append(t.Context(), replay); err != nil {
+	if err := reopened.AppendLog(t.Context(), replay); err != nil {
 		t.Fatalf("identical replay with another timezone: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestExecutionLogMongoStorePreservesContentAndIdenticalReplays(t *testing.T)
 	distinct := value
 	distinct.ID = id.New()
 
-	if err := catalog.Append(t.Context(), distinct); err != nil {
+	if err := catalog.AppendLog(t.Context(), distinct); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,11 +81,11 @@ func TestExecutionLogMongoStorePreservesContentAndIdenticalReplays(t *testing.T)
 	}
 }
 
-func TestExecutionLogMongoStoreRejectsConflictingContent(t *testing.T) {
+func TestExecutionMongoStoreLogsRejectsConflictingContent(t *testing.T) {
 	database := fixtures.OpenStore(t, "execution_logs")
-	catalog := fixtures.OpenLogStore(t, database)
+	catalog := fixtures.OpenExecutionStore(t, database)
 	value := fixtures.ExecutionLog()
-	if err := catalog.Append(t.Context(), value); err != nil {
+	if err := catalog.AppendLog(t.Context(), value); err != nil {
 		t.Fatal(err)
 	}
 	before := fixtures.CollectionDocuments(t, database, "execution_logs")
@@ -106,7 +106,7 @@ func TestExecutionLogMongoStoreRejectsConflictingContent(t *testing.T) {
 			conflicting := value
 			test.change(&conflicting)
 
-			err := catalog.Append(t.Context(), conflicting)
+			err := catalog.AppendLog(t.Context(), conflicting)
 
 			if !errors.Is(err, executions.ErrLogConflict) {
 				t.Fatalf("conflicting execution log was accepted: %v", err)
@@ -118,31 +118,31 @@ func TestExecutionLogMongoStoreRejectsConflictingContent(t *testing.T) {
 	}
 }
 
-func TestExecutionLogMongoStoreRejectsInvalidAndCancelledRequests(t *testing.T) {
-	catalog := fixtures.OpenLogStore(t, &mongostore.MongoStore{})
+func TestExecutionMongoStoreLogsRejectsInvalidAndCancelledRequests(t *testing.T) {
+	catalog := fixtures.OpenExecutionStore(t, &mongostore.MongoStore{})
 	value := fixtures.ExecutionLog()
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	invalid := value
 	invalid.Message = ""
 
-	if err := catalog.Append(t.Context(), invalid); err == nil {
+	if err := catalog.AppendLog(t.Context(), invalid); err == nil {
 		t.Fatal("invalid execution log was accepted")
 	}
-	if _, err := catalog.Get(t.Context(), "not-a-uuid"); err == nil {
+	if _, err := catalog.GetLog(t.Context(), "not-a-uuid"); err == nil {
 		t.Fatal("invalid execution log ID was accepted")
 	}
 	for _, ctx := range []context.Context{nil, cancelled} {
-		if err := catalog.Append(ctx, value); err == nil || (ctx != nil && !errors.Is(err, context.Canceled)) {
+		if err := catalog.AppendLog(ctx, value); err == nil || (ctx != nil && !errors.Is(err, context.Canceled)) {
 			t.Fatalf("invalid append context was accepted: %v", err)
 		}
-		if _, err := catalog.Get(ctx, value.ID); err == nil || (ctx != nil && !errors.Is(err, context.Canceled)) {
+		if _, err := catalog.GetLog(ctx, value.ID); err == nil || (ctx != nil && !errors.Is(err, context.Canceled)) {
 			t.Fatalf("invalid read context was accepted: %v", err)
 		}
 	}
 }
 
-func TestExecutionLogMongoStoreConcurrentAppends(t *testing.T) {
+func TestExecutionMongoStoreLogsConcurrentAppends(t *testing.T) {
 	for _, sameContent := range []bool{true, false} {
 		name := "conflicting"
 		if sameContent {
@@ -150,7 +150,7 @@ func TestExecutionLogMongoStoreConcurrentAppends(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			database := fixtures.OpenStore(t, "execution_logs")
-			stores := []executions.LogStore{fixtures.OpenLogStore(t, database), fixtures.OpenLogStore(t, database)}
+			stores := []executions.ExecutionStore{fixtures.OpenExecutionStore(t, database), fixtures.OpenExecutionStore(t, database)}
 			value := fixtures.ExecutionLog()
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			var workers sync.WaitGroup
@@ -168,7 +168,7 @@ func TestExecutionLogMongoStoreConcurrentAppends(t *testing.T) {
 				}
 				workers.Go(func() {
 					<-start
-					results <- result{candidate, stores[i%len(stores)].Append(ctx, candidate)}
+					results <- result{candidate, stores[i%len(stores)].AppendLog(ctx, candidate)}
 				})
 			}
 
@@ -189,7 +189,7 @@ func TestExecutionLogMongoStoreConcurrentAppends(t *testing.T) {
 			if (sameContent && successes != 8) || (!sameContent && successes != 1) {
 				t.Fatalf("concurrent append successes=%d", successes)
 			}
-			saved, err := stores[0].Get(ctx, value.ID)
+			saved, err := stores[0].GetLog(ctx, value.ID)
 			if err != nil || !saved.Equal(winner) {
 				t.Fatalf("concurrent append lost the accepted record: %+v, %v", saved, err)
 			}
@@ -200,7 +200,7 @@ func TestExecutionLogMongoStoreConcurrentAppends(t *testing.T) {
 	}
 }
 
-func TestExecutionLogMongoStoreRejectsCorruptDocuments(t *testing.T) {
+func TestExecutionMongoStoreLogsRejectsCorruptDocuments(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		corrupt func([]byte) []byte
@@ -215,9 +215,9 @@ func TestExecutionLogMongoStoreRejectsCorruptDocuments(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			database := fixtures.OpenStore(t, "execution_logs")
-			catalog := fixtures.OpenLogStore(t, database)
+			catalog := fixtures.OpenExecutionStore(t, database)
 			value := fixtures.ExecutionLog()
-			if err := catalog.Append(t.Context(), value); err != nil {
+			if err := catalog.AppendLog(t.Context(), value); err != nil {
 				t.Fatal(err)
 			}
 			data, err := json.Marshal(value)
@@ -229,8 +229,8 @@ func TestExecutionLogMongoStoreRejectsCorruptDocuments(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, readErr := catalog.Get(t.Context(), value.ID)
-			appendErr := catalog.Append(t.Context(), value)
+			_, readErr := catalog.GetLog(t.Context(), value.ID)
+			appendErr := catalog.AppendLog(t.Context(), value)
 
 			if readErr == nil || appendErr == nil {
 				t.Fatalf("corrupt document was accepted: read=%v append=%v", readErr, appendErr)

@@ -18,19 +18,19 @@ import (
 	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
 
-func TestExecutionLogFsStorePreservesReplayAndExactText(t *testing.T) {
+func TestExecutionLogsPreserveReplayAndExactText(t *testing.T) {
 	for _, message := range []string{strings.Repeat("a", executions.MaxLogMessageSize), strings.Repeat("é", executions.MaxLogMessageSize/2)} {
 		t.Run(fmt.Sprintf("%d UTF-8 runes", len([]rune(message))), func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "database")
-			store := fixtures.ExecutionLogStore(t, root)
+			store := fixtures.CheckpointStore(t, root)
 			log := fixtures.ExecutionLog(1)
 			log.Message = message
 
-			if err := store.Append(t.Context(), log); err != nil {
+			if err := store.AppendLog(t.Context(), log); err != nil {
 				t.Fatal(err)
 			}
-			reopened := fixtures.ExecutionLogStore(t, root)
-			saved, err := reopened.Get(t.Context(), log.ID)
+			reopened := fixtures.CheckpointStore(t, root)
+			saved, err := reopened.GetLog(t.Context(), log.ID)
 
 			if err != nil || !saved.Equal(log) || saved.CreatedAt.Format(time.RFC3339Nano) != log.CreatedAt.Format(time.RFC3339Nano) {
 				t.Fatalf("log changed across reopen: %+v, %v", saved, err)
@@ -43,7 +43,7 @@ func TestExecutionLogFsStorePreservesReplayAndExactText(t *testing.T) {
 			replay := log
 			replay.CreatedAt = replay.CreatedAt.UTC()
 
-			if err := reopened.Append(t.Context(), replay); err != nil {
+			if err := reopened.AppendLog(t.Context(), replay); err != nil {
 				t.Fatalf("same-instant replay was rejected: %v", err)
 			}
 			after, err := os.ReadFile(path)
@@ -55,11 +55,11 @@ func TestExecutionLogFsStorePreservesReplayAndExactText(t *testing.T) {
 	}
 }
 
-func TestExecutionLogFsStoreRejectsConflictingIdentityAndContent(t *testing.T) {
+func TestExecutionLogsRejectConflictingIdentityAndContent(t *testing.T) {
 	root := t.TempDir()
-	store := fixtures.ExecutionLogStore(t, root)
+	store := fixtures.CheckpointStore(t, root)
 	original := fixtures.ExecutionLog(1)
-	if err := store.Append(t.Context(), original); err != nil {
+	if err := store.AppendLog(t.Context(), original); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
@@ -80,8 +80,8 @@ func TestExecutionLogFsStoreRejectsConflictingIdentityAndContent(t *testing.T) {
 			conflict := original
 			test.change(&conflict)
 
-			err := store.Append(t.Context(), conflict)
-			saved, readErr := store.Get(t.Context(), original.ID)
+			err := store.AppendLog(t.Context(), conflict)
+			saved, readErr := store.GetLog(t.Context(), original.ID)
 
 			if !errors.Is(err, executions.ErrLogConflict) || readErr != nil || !saved.Equal(original) {
 				t.Fatalf("conflicting log changed the saved observation: append=%v read=%v", err, readErr)
@@ -90,9 +90,9 @@ func TestExecutionLogFsStoreRejectsConflictingIdentityAndContent(t *testing.T) {
 	}
 }
 
-func TestExecutionLogFsStoreSerializesIndependentWriters(t *testing.T) {
+func TestExecutionLogsSerializeIndependentWriters(t *testing.T) {
 	root := t.TempDir()
-	stores := []executions.LogStore{fixtures.ExecutionLogStore(t, root), fixtures.ExecutionLogStore(t, root)}
+	stores := []executions.ExecutionStore{fixtures.CheckpointStore(t, root), fixtures.CheckpointStore(t, root)}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	const writers = 12
@@ -107,7 +107,7 @@ func TestExecutionLogFsStoreSerializesIndependentWriters(t *testing.T) {
 		log.Message = fmt.Sprintf("Writer %d", index)
 		go func() {
 			<-start
-			finished <- outcome{log, stores[index%len(stores)].Append(ctx, log)}
+			finished <- outcome{log, stores[index%len(stores)].AppendLog(ctx, log)}
 		}()
 	}
 
@@ -126,13 +126,13 @@ func TestExecutionLogFsStoreSerializesIndependentWriters(t *testing.T) {
 			t.Error(result.err)
 		}
 	}
-	saved, err := stores[0].Get(ctx, fixtures.ExecutionLog(1).ID)
+	saved, err := stores[0].GetLog(ctx, fixtures.ExecutionLog(1).ID)
 
 	if winners != 1 || conflicts != writers-1 || err != nil || !saved.Equal(winner) {
 		t.Fatalf("concurrent writers lost the unique winner: winners=%d conflicts=%d read=%v", winners, conflicts, err)
 	}
 	for index := range writers {
-		go func() { finished <- outcome{winner, stores[index%len(stores)].Append(ctx, winner)} }()
+		go func() { finished <- outcome{winner, stores[index%len(stores)].AppendLog(ctx, winner)} }()
 	}
 	for range writers {
 		if result := <-finished; result.err != nil {
@@ -141,20 +141,20 @@ func TestExecutionLogFsStoreSerializesIndependentWriters(t *testing.T) {
 	}
 }
 
-func TestExecutionLogFsStoreValidatesBeforeCreatingState(t *testing.T) {
+func TestExecutionLogsValidateBeforeCreatingState(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "absent")
-	store := fixtures.ExecutionLogStore(t, root)
+	store := fixtures.CheckpointStore(t, root)
 	log := fixtures.ExecutionLog(1)
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := executionfs.NewLogFsStore(" \t"); err == nil {
+	if _, err := executionfs.NewExecutionFsStore(" \t"); err == nil {
 		t.Fatal("blank database root was accepted")
 	}
 	for _, ctx := range []context.Context{nil, canceled} {
-		if err := store.Append(ctx, log); err == nil || ctx != nil && !errors.Is(err, context.Canceled) {
+		if err := store.AppendLog(ctx, log); err == nil || ctx != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("invalid context appended a log: %v", err)
 		}
-		if _, err := store.Get(ctx, log.ID); err == nil || ctx != nil && !errors.Is(err, context.Canceled) {
+		if _, err := store.GetLog(ctx, log.ID); err == nil || ctx != nil && !errors.Is(err, context.Canceled) {
 			t.Fatalf("invalid context read a log: %v", err)
 		}
 	}
@@ -166,14 +166,14 @@ func TestExecutionLogFsStoreValidatesBeforeCreatingState(t *testing.T) {
 	} {
 		invalid := log
 		change(&invalid)
-		if err := store.Append(t.Context(), invalid); err == nil {
+		if err := store.AppendLog(t.Context(), invalid); err == nil {
 			t.Fatal("invalid log was appended")
 		}
 	}
-	if _, err := store.Get(t.Context(), "../outside"); err == nil {
+	if _, err := store.GetLog(t.Context(), "../outside"); err == nil {
 		t.Fatal("path-like log identity was accepted")
 	}
-	if _, err := store.Get(t.Context(), log.ID); !errors.Is(err, executions.ErrUnknownLog) {
+	if _, err := store.GetLog(t.Context(), log.ID); !errors.Is(err, executions.ErrUnknownLog) {
 		t.Fatalf("absent log: %v", err)
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
@@ -181,7 +181,7 @@ func TestExecutionLogFsStoreValidatesBeforeCreatingState(t *testing.T) {
 	}
 }
 
-func TestExecutionLogFsStoreRejectsMalformedSavedState(t *testing.T) {
+func TestExecutionLogsRejectMalformedSavedState(t *testing.T) {
 	log := fixtures.ExecutionLog(1)
 	encoded := fixtures.ExecutionLogJSON(t, log)
 	invalidRecord := log
@@ -202,11 +202,11 @@ func TestExecutionLogFsStoreRejectsMalformedSavedState(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
-			store := fixtures.ExecutionLogStore(t, root)
+			store := fixtures.CheckpointStore(t, root)
 			path := fixtures.WriteExecutionLogState(t, root, log.ID, test.data)
 
-			_, readErr := store.Get(t.Context(), log.ID)
-			appendErr := store.Append(t.Context(), log)
+			_, readErr := store.GetLog(t.Context(), log.ID)
+			appendErr := store.AppendLog(t.Context(), log)
 			after, err := os.ReadFile(path)
 
 			if readErr == nil || errors.Is(readErr, executions.ErrUnknownLog) || appendErr == nil || err != nil || !bytes.Equal(after, test.data) {
@@ -215,28 +215,27 @@ func TestExecutionLogFsStoreRejectsMalformedSavedState(t *testing.T) {
 		})
 	}
 	root := t.TempDir()
-	store := fixtures.ExecutionLogStore(t, root)
+	store := fixtures.CheckpointStore(t, root)
 	fixtures.WriteExecutionLogState(t, root, log.ID, []byte(`[]`))
-	if _, err := store.Get(t.Context(), log.ID); !errors.Is(err, executions.ErrUnknownLog) {
+	if _, err := store.GetLog(t.Context(), log.ID); !errors.Is(err, executions.ErrUnknownLog) {
 		t.Fatalf("empty collection did not mean unknown log: %v", err)
 	}
-	if err := store.Append(t.Context(), log); err != nil {
+	if err := store.AppendLog(t.Context(), log); err != nil {
 		t.Fatalf("empty collection rejected its first log: %v", err)
 	}
 }
 
-func TestExecutionLogFsStoreIsolatesRecordsAndExecutionState(t *testing.T) {
+func TestExecutionLogsIsolateRecordsAndExecutionState(t *testing.T) {
 	root := t.TempDir()
-	store := fixtures.ExecutionLogStore(t, root)
-	executionStore := fixtures.CheckpointStore(t, root)
+	store := fixtures.CheckpointStore(t, root)
 	command, result := fixtures.CheckpointMessages(t)
-	if _, _, err := executionStore.Claim(t.Context(), command); err != nil {
+	if _, _, err := store.Claim(t.Context(), command); err != nil {
 		t.Fatal(err)
 	}
-	if err := executionStore.SaveCheckpoint(t.Context(), command.AgentID, command.ID, "intent", []byte(`{"started":true}`)); err != nil {
+	if err := store.SaveCheckpoint(t.Context(), command.AgentID, command.ID, "intent", []byte(`{"started":true}`)); err != nil {
 		t.Fatal(err)
 	}
-	before, err := executionStore.Get(t.Context(), command.AgentID, command.ID)
+	before, err := store.Get(t.Context(), command.AgentID, command.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,31 +243,31 @@ func TestExecutionLogFsStoreIsolatesRecordsAndExecutionState(t *testing.T) {
 	log := fixtures.ExecutionLog(2)
 	log.AgentID, log.CommandID, log.Work, log.ActionName = command.AgentID, command.ID, command.Work, "inspect"
 
-	if err := store.Append(t.Context(), log); err != nil {
+	if err := store.AppendLog(t.Context(), log); err != nil {
 		t.Fatal(err)
 	}
-	saved, err := store.Get(t.Context(), log.ID)
-	after, executionErr := executionStore.Get(t.Context(), command.AgentID, command.ID)
+	saved, err := store.GetLog(t.Context(), log.ID)
+	after, executionErr := store.Get(t.Context(), command.AgentID, command.ID)
 
 	if err != nil || !saved.Equal(log) || executionErr != nil || !reflect.DeepEqual(before, after) {
 		t.Fatalf("independent log storage touched execution state or unrelated history: log=%v execution=%v", err, executionErr)
 	}
-	if err := executionStore.Complete(t.Context(), result); err != nil {
+	if err := store.Complete(t.Context(), result); err != nil {
 		t.Fatal(err)
 	}
 	late := log
 	late.ID = fixtures.ExecutionLog(3).ID
 	late.Message = "Late progress delivery"
-	if err := store.Append(t.Context(), late); err != nil {
+	if err := store.AppendLog(t.Context(), late); err != nil {
 		t.Fatalf("completed execution rejected an independent observation: %v", err)
 	}
 }
 
-func TestExecutionLogFsStoreRejectsLinksAndRetriesPublication(t *testing.T) {
+func TestExecutionLogsRejectLinksAndRetriesPublication(t *testing.T) {
 	for _, kind := range []string{"record symlink", "lock symlink", "record directory", "namespace symlink"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			store := fixtures.ExecutionLogStore(t, root)
+			store := fixtures.CheckpointStore(t, root)
 			log := fixtures.ExecutionLog(1)
 			outside := filepath.Join(t.TempDir(), "outside")
 			if err := os.WriteFile(outside, []byte("unchanged"), 0600); err != nil {
@@ -293,14 +292,14 @@ func TestExecutionLogFsStoreRejectsLinksAndRetriesPublication(t *testing.T) {
 				}
 			}
 
-			err := store.Append(t.Context(), log)
+			err := store.AppendLog(t.Context(), log)
 			data, readErr := os.ReadFile(outside)
 
 			if err == nil || readErr != nil || string(data) != "unchanged" {
 				t.Fatalf("unsafe log path was followed: append=%v outside=%v", err, readErr)
 			}
 			if kind != "lock symlink" {
-				if _, err := store.Get(t.Context(), log.ID); err == nil || errors.Is(err, executions.ErrUnknownLog) {
+				if _, err := store.GetLog(t.Context(), log.ID); err == nil || errors.Is(err, executions.ErrUnknownLog) {
 					t.Fatalf("unsafe read path was followed or treated as absent: %v", err)
 				}
 			}
@@ -308,21 +307,21 @@ func TestExecutionLogFsStoreRejectsLinksAndRetriesPublication(t *testing.T) {
 	}
 	t.Run("identical retry still publishes", func(t *testing.T) {
 		root := t.TempDir()
-		store := fixtures.ExecutionLogStore(t, root)
+		store := fixtures.CheckpointStore(t, root)
 		log := fixtures.ExecutionLog(1)
-		if err := store.Append(t.Context(), log); err != nil {
+		if err := store.AppendLog(t.Context(), log); err != nil {
 			t.Fatal(err)
 		}
 		restore := fixtures.DenyExecutionLogWrites(t, filepath.Dir(fixtures.ExecutionLogPath(root, log.ID)))
 
-		err := store.Append(t.Context(), log)
-		saved, readErr := store.Get(t.Context(), log.ID)
+		err := store.AppendLog(t.Context(), log)
+		saved, readErr := store.GetLog(t.Context(), log.ID)
 
 		if !errors.Is(err, os.ErrPermission) || readErr != nil || !saved.Equal(log) {
 			t.Fatalf("retry skipped publication or lost saved data: append=%v read=%v", err, readErr)
 		}
 		restore()
-		if err := store.Append(t.Context(), log); err != nil {
+		if err := store.AppendLog(t.Context(), log); err != nil {
 			t.Fatalf("retry did not recover after restoring storage: %v", err)
 		}
 	})

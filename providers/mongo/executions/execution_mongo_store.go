@@ -27,8 +27,14 @@ type ExecutionMongoStore struct {
 var _ executions.ExecutionStore = (*ExecutionMongoStore)(nil)
 
 func NewExecutionMongoStore(ctx context.Context, database *store.MongoStore) (*ExecutionMongoStore, error) {
+	if ctx == nil {
+		return nil, errors.New("execution database requires a context")
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if database == nil {
+		return nil, errors.New("execution database is required")
 	}
 	return &ExecutionMongoStore{database: database}, nil
 }

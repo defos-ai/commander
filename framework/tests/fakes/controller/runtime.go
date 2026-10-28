@@ -17,6 +17,7 @@ type Bus struct {
 	events   chan messages.Message
 	commands chan messages.Message
 	acked    chan string
+	rejected chan string
 	closed   chan struct{}
 	inbox    comms.Inbox
 }
@@ -39,6 +40,12 @@ func (b *Bus) Next(ctx context.Context) (comms.Delivery, error) {
 		return delivery{message: m, onAck: func(context.Context) error {
 			b.acked <- m.ID
 			return nil
+		}, onReject: func(context.Context) error {
+			select {
+			case b.rejected <- m.ID:
+			default:
+			}
+			return nil
 		}}, nil
 	case <-b.closed:
 		return nil, comms.ErrClosed
@@ -49,13 +56,19 @@ func (b *Bus) Next(ctx context.Context) (comms.Delivery, error) {
 func (b *Bus) Close() error { close(b.closed); return nil }
 
 type delivery struct {
-	message messages.Message
-	onAck   func(context.Context) error
+	message  messages.Message
+	onAck    func(context.Context) error
+	onReject func(context.Context) error
 }
 
 func (d delivery) Message() messages.Message     { return d.message }
 func (d delivery) Ack(ctx context.Context) error { return d.onAck(ctx) }
-func (delivery) Reject(context.Context) error    { return nil }
+func (d delivery) Reject(ctx context.Context) error {
+	if d.onReject != nil {
+		return d.onReject(ctx)
+	}
+	return nil
+}
 
 type Gate struct {
 	entered chan struct{}
@@ -119,10 +132,11 @@ type UnusedExecutions struct{ executions.ExecutionStore }
 type UnusedArtifacts struct{ artifacts.ArtifactStore }
 
 func NewBus() *Bus {
-	return &Bus{events: make(chan messages.Message, 16), commands: make(chan messages.Message, 16), acked: make(chan string, 16), closed: make(chan struct{})}
+	return &Bus{events: make(chan messages.Message, 16), commands: make(chan messages.Message, 16), acked: make(chan string, 16), rejected: make(chan string, 16), closed: make(chan struct{})}
 }
 func (b *Bus) Commands() <-chan messages.Message { return b.commands }
 func (b *Bus) Acknowledged() <-chan string       { return b.acked }
+func (b *Bus) Rejected() <-chan string           { return b.rejected }
 func (b *Bus) Closed() <-chan struct{}           { return b.closed }
 func (b *Bus) Inbox() comms.Inbox                { return b.inbox }
 func (b *Bus) Send(ctx context.Context, message messages.Message) error {

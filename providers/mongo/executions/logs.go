@@ -9,33 +9,18 @@ import (
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/id"
-	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 const logCollection = "execution_logs"
 
-type LogMongoStore struct{ database *store.MongoStore }
-
-var _ executions.LogStore = (*LogMongoStore)(nil)
-
 type logDocument struct {
 	ID   string          `bson:"_id"`
 	Data json.RawMessage `bson:"data"`
 }
 
-func NewLogMongoStore(ctx context.Context, database *store.MongoStore) (*LogMongoStore, error) {
-	if err := checkLogContext(ctx); err != nil {
-		return nil, err
-	}
-	if database == nil {
-		return nil, errors.New("execution log database is required")
-	}
-	return &LogMongoStore{database: database}, nil
-}
-
-func (s *LogMongoStore) Append(ctx context.Context, log executions.Log) error {
+func (s *ExecutionMongoStore) AppendLog(ctx context.Context, log executions.Log) error {
 	if err := checkLogContext(ctx); err != nil {
 		return err
 	}
@@ -50,7 +35,7 @@ func (s *LogMongoStore) Append(ctx context.Context, log executions.Log) error {
 	if !mongo.IsDuplicateKeyError(err) {
 		return err
 	}
-	saved, err := s.Get(ctx, log.ID)
+	saved, err := s.GetLog(ctx, log.ID)
 	if err != nil {
 		return err
 	}
@@ -60,7 +45,7 @@ func (s *LogMongoStore) Append(ctx context.Context, log executions.Log) error {
 	return nil
 }
 
-func (s *LogMongoStore) Get(ctx context.Context, logID string) (executions.Log, error) {
+func (s *ExecutionMongoStore) GetLog(ctx context.Context, logID string) (executions.Log, error) {
 	if err := checkLogContext(ctx); err != nil {
 		return executions.Log{}, err
 	}

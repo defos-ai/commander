@@ -10,9 +10,9 @@ import (
 	"github.com/defos-ai/commander/providers/mongo/store"
 )
 
-func OpenLogStore(t *testing.T, database *store.MongoStore) *mongoexecutions.LogMongoStore {
+func OpenExecutionStore(t *testing.T, database *store.MongoStore) *mongoexecutions.ExecutionMongoStore {
 	t.Helper()
-	catalog, err := mongoexecutions.NewLogMongoStore(t.Context(), database)
+	catalog, err := mongoexecutions.NewExecutionMongoStore(t.Context(), database)
 	if err != nil {
 		t.Fatal(err)
 	}

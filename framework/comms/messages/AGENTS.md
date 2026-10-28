@@ -19,6 +19,13 @@
   must match the saved execution claim before reading or writing; an inventory
   lease is not ownership evidence. Saves acknowledge persisted data, and identical
   request retries must not rerun actions. Use the independent agent event inbox.
+- Execution logs use [`DecodeExecutionLog`](../clients/controller/events/logs.go)
+  to match envelope ID, agent, command correlation, work and timestamp against the
+  record. Keep the 2048-byte message bound and 64 KiB encoded payload bound; JSON
+  escaping may expand the message. Logs have no admission expiry or receipt.
+  The controller verifies the saved command and action before persisting, including
+  delayed logs for completed claims. Reject failed log processing while continuing
+  other events; receive and settlement failures still stop the consumer.
 - Secret synchronization uses the controller owner loop and agent event inbox. Keep encrypted
   deliveries separate from action commands. Match requests, recipients, scoped
   keys, deadlines and exact secret IDs/versions through the typed validators.

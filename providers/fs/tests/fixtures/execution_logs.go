@@ -11,7 +11,6 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/executions"
-	executionfs "github.com/defos-ai/commander/providers/fs/executions"
 )
 
 func ExecutionLog(index int) executions.Log {
@@ -21,15 +20,6 @@ func ExecutionLog(index int) executions.Log {
 		Work:    messages.WorkContext{OperationID: "33333333-3333-4333-8333-333333333333", TaskID: "44444444-4444-4444-8444-444444444444", StepID: "build"},
 		Message: "  Compiling packages\nTests are next ✓  ", CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.FixedZone("fixture", 3*60*60)),
 	}
-}
-
-func ExecutionLogStore(t *testing.T, root string) *executionfs.LogFsStore {
-	t.Helper()
-	store, err := executionfs.NewLogFsStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store
 }
 
 func ExecutionLogJSON(t *testing.T, logs ...executions.Log) []byte {

@@ -51,8 +51,8 @@ func (c *Controller) consumeEvents(actions actions.ActionStore) {
 	}
 	consumer := comms.Consumer{
 		Subscription: c.events, Logger: c.logger,
-		ContinueOnError: func(_ messages.Message, err error) bool {
-			return errors.Is(err, consumers.ErrInvalidMessage)
+		ContinueOnError: func(message messages.Message, err error) bool {
+			return message.Type == messages.ExecutionLogged || errors.Is(err, consumers.ErrInvalidMessage)
 		},
 	}
 	err := consumer.Consume(c.state.Context, func(ctx context.Context, message messages.Message) error {
@@ -62,7 +62,7 @@ func (c *Controller) consumeEvents(actions actions.ActionStore) {
 				err = c.sessions.Observe(ctx, runtimeSessions.Evidence{AgentID: message.AgentID})
 			}
 			// Stop before another command can be admitted after a failed observation.
-			if err != nil && !errors.Is(err, consumers.ErrInvalidMessage) {
+			if err != nil && message.Type != messages.ExecutionLogged && !errors.Is(err, consumers.ErrInvalidMessage) {
 				c.beginClose(err)
 			}
 			return struct{}{}, err

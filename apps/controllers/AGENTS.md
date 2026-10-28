@@ -19,6 +19,12 @@
   inject them into coordination. The controller routes ciphertext and must not
   load `SECRETS_ENCRYPTION_KEY`. Framework reconciliation owns delivery retries,
   pending request recovery and installation acknowledgements.
+- `ExecutionStore` owns claim, checkpoint, result and log persistence through the
+  existing filesystem/Mongo selection. Keep log records in separate collections;
+  the same wiring serves the embedded Playground controller. Log events verify their
+  saved execution claim and persist before delivery ACK. Log-processing failures
+  reject the event without ending coordination; transport/settlement failures
+  remain fatal. Logging never changes task deadlines or outcomes.
 
 ## Selection and durable work
 

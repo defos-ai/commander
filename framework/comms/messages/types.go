@@ -20,4 +20,5 @@ const (
 	SecretInstalled        MessageType = "secret.installed"
 	CheckpointRequested    MessageType = "execution.checkpoint.requested"
 	CheckpointResponded    MessageType = "execution.checkpoint.responded"
+	ExecutionLogged        MessageType = "execution.logged"
 )

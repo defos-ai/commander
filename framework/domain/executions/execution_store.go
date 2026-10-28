@@ -26,4 +26,11 @@ type ExecutionStore interface {
 	SaveCheckpoint(ctx context.Context, agentID, commandID, name string, data json.RawMessage) error
 	Complete(ctx context.Context, result messages.Message) error
 	Get(ctx context.Context, agentID, commandID string) (Execution, error)
+	// AppendLog retains an immutable observation separately from execution state.
+	// Identical ID/content replays succeed; conflicting reuse returns ErrLogConflict.
+	// Errors may follow a committed write: retry the same record or use GetLog to
+	// inspect it. The controller verifies its saved claim before appending a log.
+	AppendLog(ctx context.Context, log Log) error
+	// GetLog returns ErrUnknownLog for a missing ID without creating a record.
+	GetLog(ctx context.Context, logID string) (Log, error)
 }

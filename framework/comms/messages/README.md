@@ -46,6 +46,18 @@ Checkpoint values are immutable. An identical save can be retried; a checkpoint
 does not authorize repeating an external side effect. See
 [checkpoint guidance](AGENTS.md) when changing the exchange.
 
+## Execution logs
+
+Call [`action.Log(ctx, message)`](../../agent/action/log.go) inside an action served
+by `Agent.Serve` to report progress. Messages preserve up to 2048 bytes of nonblank
+UTF-8 text. Keep secret values and file contents out of them.
+
+Success confirms publication to the bus. The controller checks the saved execution
+claim and stores the log before acknowledging its delivery; the action receives
+no persistence receipt. Calls are not retried automatically, and another call
+creates another observation. Logs do not extend task deadlines or replace
+checkpoints. Operation/task log queries are a later increment.
+
 ## Secret synchronization contracts
 
 Use [secret helpers](../../secrets/README.md#agent-requirements) in actions instead

@@ -36,6 +36,10 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		if _, err := DecodeCheckpointRequest(message); err != nil {
 			return err
 		}
+	case ExecutionLogged:
+		if _, err := DecodeExecutionLog(message); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported controller event type %q", message.Type)
 	}
