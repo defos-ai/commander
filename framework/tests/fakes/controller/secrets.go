@@ -18,6 +18,25 @@ type SecretRecipients struct {
 	records map[string]agents.Agent
 }
 
+type FailingSecretDecryptor struct {
+	value   []byte
+	failure error
+}
+
+func NewFailingSecretDecryptor(value []byte, failure error) *FailingSecretDecryptor {
+	return &FailingSecretDecryptor{value: bytes.Clone(value), failure: failure}
+}
+
+func (decryptor *FailingSecretDecryptor) Decrypt(secret secrets.Secret) ([]byte, error) {
+	clear(secret.Value.Nonce)
+	clear(secret.Value.Ciphertext)
+	return decryptor.value, decryptor.failure
+}
+
+func (decryptor *FailingSecretDecryptor) Cleared() bool {
+	return bytes.Count(decryptor.value, []byte{0}) == len(decryptor.value)
+}
+
 func NewSecretRecipients(records ...agents.Agent) *SecretRecipients {
 	store := &SecretRecipients{records: make(map[string]agents.Agent, len(records))}
 	for _, record := range records {

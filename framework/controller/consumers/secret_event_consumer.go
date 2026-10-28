@@ -15,6 +15,10 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 )
 
+type SecretDecryptor interface {
+	Decrypt(secrets.Secret) ([]byte, error)
+}
+
 // SecretEventConsumer transfers encrypted values only. Its caller serializes
 // Consume and Reconcile with inventory observations on the controller owner loop.
 // The bus remains a trusted deployment boundary. Agents may request shared names;
@@ -24,6 +28,7 @@ type SecretEventConsumer struct {
 	Inventory agents.AgentStore
 	Secrets   secrets.SecretStore
 	Requests  secrets.RequestStore
+	Decryptor SecretDecryptor
 }
 
 func (c SecretEventConsumer) Consume(ctx context.Context, message messages.Message) error {
@@ -132,7 +137,14 @@ func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.Request
 		}
 		record.Delivery = &delivery
 	}
-	// Reservation can block on storage. Recheck validity and the latest value
+	if c.Decryptor != nil {
+		value, err := c.Decryptor.Decrypt(record.Delivery.Secret.Clone())
+		clear(value)
+		if err != nil {
+			return errors.New("cannot authenticate secret for delivery")
+		}
+	}
+	// Storage and decryption can take time. Recheck validity and the latest value
 	// before sending; this is not a cross-store transaction with rotation.
 	now = time.Now().UTC()
 	if !now.Before(request.ExpiresAt) {

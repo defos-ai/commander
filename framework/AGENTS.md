@@ -30,6 +30,11 @@
   terminal records. Fulfillment matches saved delivery evidence, not a separate
   SecretStore's latest value or a live agent's readiness; hosts own those checks.
   Delivery history retains encrypted copies even after deleting the primary secret.
+- `ControllerConfig.SecretDecryptor` optionally authenticates the reserved secret
+  snapshot before ciphertext publication. Inject the host's cipher; clear returned
+  plaintext, sanitize decryptor errors and recheck deadlines/versions afterward.
+  Failed authentication leaves the encrypted reservation available for recovery.
+  Agents still decrypt deliveries; host wiring and plaintext delivery are separate steps.
 - [`crypto.SecretCipher`](crypto/) encrypts records using an explicitly configured
   key. Apps load `SECRETS_ENCRYPTION_KEY` and inject the cipher; providers receive
   ciphertext only. Preserve all authenticated metadata, including nanosecond

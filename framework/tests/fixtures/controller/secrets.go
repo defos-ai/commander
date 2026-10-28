@@ -11,6 +11,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
+	secretfixtures "github.com/defos-ai/commander/framework/tests/fixtures/secrets"
 )
 
 func SecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretRequests, *fakes.SecretValues, *fakes.SecretPublishBus) {
@@ -28,6 +29,19 @@ func SecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretR
 	})
 	bus := &fakes.SecretPublishBus{}
 	return consumers.SecretEventConsumer{Bus: bus, Inventory: inventory, Secrets: values, Requests: requests}, requests, values, bus
+}
+
+func AuthenticatingSecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretRequests, *fakes.SecretValues, *fakes.SecretPublishBus) {
+	t.Helper()
+	consumer, requests, values, bus := SecretConsumer(t)
+	cipher := secretfixtures.Cipher(t)
+	secret, err := cipher.Encrypt(values.Snapshot().Metadata, []byte("plaintext-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	values.Set(&secret)
+	consumer.Decryptor = cipher
+	return consumer, requests, values, bus
 }
 
 func SharedSecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretRequests, *fakes.SecretValues, *fakes.SecretPublishBus, []secrets.Request) {

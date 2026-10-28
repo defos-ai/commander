@@ -44,9 +44,9 @@ type ControllerConfig struct {
 	ActionStore    actionmodel.ActionStore
 	ExecutionStore executions.ExecutionStore
 	// SecretStore and SecretRequestStore enable encrypted delivery together.
-	// The controller does not receive encryption keys or plaintext values.
 	SecretStore        secrets.SecretStore
 	SecretRequestStore secrets.RequestStore
+	SecretDecryptor    consumers.SecretDecryptor
 	HeartbeatTimeout   time.Duration
 	LeaseSweepInterval time.Duration
 	Logger             *slog.Logger
@@ -131,6 +131,9 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	if (config.SecretStore == nil) != (config.SecretRequestStore == nil) {
 		return nil, errors.New("controller secret distribution requires both secret and request stores")
 	}
+	if config.SecretDecryptor != nil && config.SecretStore == nil {
+		return nil, errors.New("controller secret decryption requires secret and request stores")
+	}
 	if config.Logger == nil {
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -166,6 +169,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	if config.SecretStore != nil {
 		c.secrets = &consumers.SecretEventConsumer{
 			Bus: bus, Inventory: config.AgentStore, Secrets: config.SecretStore, Requests: config.SecretRequestStore,
+			Decryptor: config.SecretDecryptor,
 		}
 	}
 	if err := c.reconcileSecrets(); err != nil {

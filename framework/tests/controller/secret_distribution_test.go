@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -403,7 +404,7 @@ func TestSecretDeliveryRechecksRotationAfterReservation(t *testing.T) {
 }
 
 func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
-	consumer, requests, _, _ := fixtures.SecretConsumer(t)
+	consumer, requests, _, _ := fixtures.AuthenticatingSecretConsumer(t)
 	request := fixtures.SecretSyncRequest()
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
@@ -414,6 +415,7 @@ func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
 	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
 		AgentStore: consumer.Inventory, ActionStore: fakes.UnusedActions{}, ExecutionStore: fakes.UnusedExecutions{}, ArtifactStore: fakes.UnusedArtifacts{},
 		SecretStore: consumer.Secrets, SecretRequestStore: requests, LeaseSweepInterval: time.Hour,
+		SecretDecryptor: consumer.Decryptor,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -442,6 +444,76 @@ func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
 	record, _ := requests.Get(ctx, request.ID)
 	if record.Request.Status != secrets.Fulfilled {
 		t.Fatal("bus acknowledged installation before saving fulfillment")
+	}
+}
+
+func TestControllerRejectsUnauthenticatedSecretDuringStartup(t *testing.T) {
+	consumer, requests, values, _ := fixtures.AuthenticatingSecretConsumer(t)
+	secret := values.Snapshot().Clone()
+	secret.Value.Ciphertext[0] ^= 1
+	values.Set(&secret)
+	request := fixtures.SecretSyncRequest()
+	if err := requests.Create(t.Context(), request); err != nil {
+		t.Fatal(err)
+	}
+	bus := fakes.NewBus()
+
+	c, err := controller.NewController(t.Context(), bus, controller.ControllerConfig{
+		AgentStore: consumer.Inventory, ActionStore: fakes.UnusedActions{}, ExecutionStore: fakes.UnusedExecutions{}, ArtifactStore: fakes.UnusedArtifacts{},
+		SecretStore: consumer.Secrets, SecretRequestStore: requests, SecretDecryptor: consumer.Decryptor,
+	})
+
+	if c != nil || err == nil || !strings.Contains(err.Error(), "cannot authenticate secret for delivery") {
+		t.Fatal("controller did not reject the unauthenticated secret")
+	}
+	select {
+	case <-bus.Commands():
+		t.Fatal("controller published an unauthenticated secret")
+	default:
+	}
+	select {
+	case <-bus.Closed():
+	default:
+		t.Fatal("failed startup leaked the event subscription")
+	}
+}
+
+func TestSecretDecryptionFailurePreservesReservationForRecovery(t *testing.T) {
+	consumer, requests, values, bus := fixtures.AuthenticatingSecretConsumer(t)
+	cipher := consumer.Decryptor
+	secret := values.Snapshot().Clone()
+	failure := errors.New("private decryptor detail")
+	decryptor := fakes.NewFailingSecretDecryptor([]byte("plaintext-secret"), failure)
+	consumer.Decryptor = decryptor
+	request := fixtures.SecretSyncRequest()
+
+	err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request))
+
+	if err == nil || strings.Contains(err.Error(), failure.Error()) || errors.Is(err, failure) {
+		t.Fatal("secret decryption failure was ignored or leaked private diagnostics")
+	}
+	if len(bus.Messages()) != 0 || !decryptor.Cleared() {
+		t.Fatal("failed decryption published a delivery or retained plaintext")
+	}
+	reserved, err := requests.Get(t.Context(), request.ID)
+	if err != nil || reserved.Delivery == nil || reserved.Request.Status != secrets.Pending ||
+		!reflect.DeepEqual(reserved.Delivery.Secret, secret) || !reflect.DeepEqual(values.Snapshot(), &secret) {
+		t.Fatal("decryption changed the reserved secret or its stored value")
+	}
+	restarted := consumers.SecretEventConsumer{
+		Bus: bus, Inventory: consumer.Inventory, Secrets: consumer.Secrets, Requests: requests, Decryptor: cipher,
+	}
+
+	err = restarted.Reconcile(t.Context())
+
+	if err != nil || len(bus.Messages()) != 1 {
+		t.Fatal("corrected decryptor did not recover the pending delivery")
+	}
+	delivery := bus.Messages()[0]
+	payload, err := agentevents.DecodeSecretDelivery(delivery)
+	if err != nil || delivery.ID != reserved.Delivery.ID || !delivery.CreatedAt.Equal(reserved.Delivery.CreatedAt) ||
+		!reflect.DeepEqual(payload.Secret, reserved.Delivery.Secret) || bytes.Contains(delivery.Payload, []byte("plaintext-secret")) {
+		t.Fatal("recovery changed the saved delivery or published plaintext")
 	}
 }
 
