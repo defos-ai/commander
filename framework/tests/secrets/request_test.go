@@ -23,7 +23,7 @@ func TestFulfillmentRecordsMatchingSecretAndDelivery(t *testing.T) {
 		t.Fatalf("unexpected fulfillment: %+v", fulfilled)
 	}
 	if fulfilled.Key != request.Key || fulfilled.AgentID != request.AgentID {
-		t.Fatal("fulfillment changed the request's scope or recipient")
+		t.Fatal("fulfillment changed the request's shared key or recipient")
 	}
 	if err := fulfilled.Validate(); err != nil {
 		t.Fatal(err)
@@ -35,7 +35,6 @@ func TestFulfillmentRecordsMatchingSecretAndDelivery(t *testing.T) {
 		name   string
 		change func(*secrets.Metadata)
 	}{
-		{"different agent type", func(s *secrets.Metadata) { s.Key.Scope.AgentType = "web" }},
 		{"different name", func(s *secrets.Metadata) { s.Key.Name = "OTHER_TOKEN" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {

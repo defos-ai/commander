@@ -11,6 +11,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/admin/client"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const (
@@ -25,12 +26,12 @@ var (
 	ErrDisabled = errors.New("secret management is unavailable; configure API secret encryption")
 )
 
-// Get returns nil only when the API confirms that the exact scoped key is absent.
+// Get returns nil only when the API confirms that the exact key is absent.
 func Get(ctx context.Context, api *client.Client, key secretmodel.Key) (*Metadata, error) {
 	if key.Validate() != nil {
-		return nil, errors.New("invalid secret scope or name")
+		return nil, errors.New("invalid secret name")
 	}
-	response, err := api.Do(ctx, http.MethodGet, scopedPath(key), nil, maxMetadataBytes)
+	response, err := api.Do(ctx, http.MethodGet, secretPath(key), nil, maxMetadataBytes)
 	if hasStatus(err, http.StatusNotFound, "secret_not_found") {
 		return nil, nil
 	}
@@ -44,11 +45,8 @@ func Get(ctx context.Context, api *client.Client, key secretmodel.Key) (*Metadat
 	return readMetadata(response.Data, key)
 }
 
-func List(ctx context.Context, api *client.Client, agentType string) ([]Metadata, error) {
-	if (secretmodel.Scope{AgentType: agentType}).Validate() != nil {
-		return nil, errors.New("a valid agent type is required")
-	}
-	response, err := api.Do(ctx, http.MethodGet, collectionPath+"?agent_type="+url.QueryEscape(agentType), nil, maxListBytes)
+func List(ctx context.Context, api *client.Client) ([]Metadata, error) {
+	response, err := api.Do(ctx, http.MethodGet, collectionPath, nil, maxListBytes)
 	if err != nil {
 		return nil, secretError(err, false)
 	}
@@ -62,7 +60,7 @@ func List(ctx context.Context, api *client.Client, agentType string) ([]Metadata
 	seenIDs, seenKeys := make(map[string]bool), make(map[secretmodel.Key]bool)
 	for _, metadata := range envelope.Items {
 		key := metadata.key()
-		if metadata.AgentType != agentType || !validMetadata(metadata, key) || seenIDs[metadata.ID] || seenKeys[key] {
+		if !validMetadata(metadata, key) || seenIDs[metadata.ID] || seenKeys[key] {
 			return nil, client.ErrInvalidResponse
 		}
 		seenIDs[metadata.ID], seenKeys[key] = true, true
@@ -71,9 +69,9 @@ func List(ctx context.Context, api *client.Client, agentType string) ([]Metadata
 }
 
 func Requests(ctx context.Context, api *client.Client, agentType string) ([]Request, error) {
-	path := collectionPath + "/requests"
+	path := "/api/v1/secret-requests"
 	if agentType != "" {
-		if (secretmodel.Scope{AgentType: agentType}).Validate() != nil {
+		if !id.ValidType(agentType) {
 			return nil, errors.New("invalid agent type")
 		}
 		path += "?agent_type=" + url.QueryEscape(agentType)
@@ -102,22 +100,21 @@ func Requests(ctx context.Context, api *client.Client, agentType string) ([]Requ
 // A completed but unconfirmed write must be inspected, never retried automatically.
 func Save(ctx context.Context, api *client.Client, key secretmodel.Key, value string, expected *Metadata) (*Metadata, error) {
 	if key.Validate() != nil {
-		return nil, errors.New("invalid secret scope or name")
+		return nil, errors.New("invalid secret name")
 	}
 	method, path := http.MethodPost, collectionPath
 	var body []byte
 	var err error
 	if expected == nil {
 		body, err = json.Marshal(struct {
-			AgentType string `json:"agent_type"`
-			Name      string `json:"name"`
-			Value     string `json:"value"`
-		}{key.Scope.AgentType, key.Name, value})
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		}{key.Name, value})
 	} else {
 		if !validMetadata(*expected, key) || expected.Version == ^uint64(0) {
 			return nil, errors.New("invalid saved secret metadata; load its current version")
 		}
-		method, path = http.MethodPut, scopedPath(key)
+		method, path = http.MethodPut, secretPath(key)
 		// Rotation preserves future expiry. Replacing an expired value renews it
 		// without expiry, matching the existing terminal and browser forms.
 		var expiresAt *time.Time
@@ -158,7 +155,7 @@ func Delete(ctx context.Context, api *client.Client, key secretmodel.Key, expect
 		return errors.New("invalid saved secret metadata; load its current version")
 	}
 	query := url.Values{"id": {expected.ID}, "version": {strconv.FormatUint(expected.Version, 10)}}
-	response, err := api.Do(ctx, http.MethodDelete, scopedPath(key)+"?"+query.Encode(), nil, maxMetadataBytes)
+	response, err := api.Do(ctx, http.MethodDelete, secretPath(key)+"?"+query.Encode(), nil, maxMetadataBytes)
 	if err != nil {
 		return secretError(err, true)
 	}
@@ -169,8 +166,8 @@ func Delete(ctx context.Context, api *client.Client, key secretmodel.Key, expect
 	return nil
 }
 
-func scopedPath(key secretmodel.Key) string {
-	return collectionPath + "/" + url.PathEscape(key.Scope.AgentType) + "/" + url.PathEscape(key.Name)
+func secretPath(key secretmodel.Key) string {
+	return collectionPath + "/" + url.PathEscape(key.Name)
 }
 
 func readMetadata(data []byte, key secretmodel.Key) (*Metadata, error) {

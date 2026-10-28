@@ -10,6 +10,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
+	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
@@ -71,8 +72,8 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterReports(mux, config.ReportStore)
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
 	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.AgentStore, config.ExecutionStore, config.Operations)
-	endpoints.RegisterSecrets(mux, config.SecretService)
-	endpoints.RegisterSecretRequests(mux, config.SecretService, config.SecretRequestStore)
+	secretendpoints.Register(mux, config.SecretService)
+	secretendpoints.RegisterRequests(mux, config.SecretService, config.SecretRequestStore)
 	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
 		endpoints.RegisterTestCleanup(mux, config.TestCleaner)
 	}

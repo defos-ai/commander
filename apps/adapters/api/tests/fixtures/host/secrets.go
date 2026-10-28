@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	"github.com/defos-ai/commander/framework/crypto"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
@@ -21,7 +21,7 @@ import (
 func PendingRequestRecord(name string) secretmodel.RequestRecord {
 	now := time.Now().UTC()
 	return secretmodel.RequestRecord{Request: secretmodel.Request{
-		ID: id.New(), AgentID: "builder-agent-01234567", Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: name},
+		ID: id.New(), AgentID: "builder-agent-01234567", AgentType: "builder-agent", Key: secretmodel.Key{Name: name},
 		Status: secretmodel.Pending, RequestedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour),
 	}}
 }
@@ -41,9 +41,24 @@ func PendingRequestService(t *testing.T, store secretmodel.SecretStore) *secrets
 
 func PendingRequestResponse(ctx context.Context, service *secretservice.Service, requests secretmodel.RequestStore) Response {
 	mux := http.NewServeMux()
-	endpoints.RegisterSecretRequests(mux, service, requests)
+	secretendpoints.RegisterRequests(mux, service, requests)
 	recorder := httptest.NewRecorder()
-	mux.ServeHTTP(recorder, httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/secrets/requests", nil))
+	mux.ServeHTTP(recorder, httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/secret-requests", nil))
+	return Response{Status: recorder.Code, Header: recorder.Header(), Body: recorder.Body.String()}
+}
+
+func SecretEndpoints(service *secretservice.Service, requests secretmodel.RequestStore) http.Handler {
+	mux := http.NewServeMux()
+	secretendpoints.Register(mux, service)
+	secretendpoints.RegisterRequests(mux, service, requests)
+	return mux
+}
+
+func SecretEndpointResponse(ctx context.Context, handler http.Handler, method, path, body string) Response {
+	request := httptest.NewRequestWithContext(ctx, method, path, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
 	return Response{Status: recorder.Code, Header: recorder.Header(), Body: recorder.Body.String()}
 }
 
@@ -64,8 +79,8 @@ func SecretRequestStores(t *testing.T, fixture Fixture) (secretmodel.RequestStor
 func PendingSecretRequest(agentType, name, agentID string) secretmodel.Request {
 	now := time.Now().UTC()
 	return secretmodel.Request{
-		ID: id.New(), Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: agentType}, Name: name},
-		AgentID: agentID, Status: secretmodel.Pending, RequestedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour),
+		ID: id.New(), Key: secretmodel.Key{Name: name},
+		AgentID: agentID, AgentType: agentType, Status: secretmodel.Pending, RequestedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour),
 	}
 }
 
@@ -94,7 +109,7 @@ const (
 	SecretTestValue       = "host-test-private-token-original"
 	SecretTestReplacement = "host-test-private-token-replaced"
 	SecretsPath           = "/api/v1/secrets"
-	SecretPath            = SecretsPath + "/builder-agent/GITHUB_TOKEN"
+	SecretPath            = SecretsPath + "/GITHUB_TOKEN"
 )
 
 func SecretBody(body, contentType string) func(*http.Request) {

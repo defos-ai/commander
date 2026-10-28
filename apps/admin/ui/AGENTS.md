@@ -148,9 +148,9 @@
   **All agents** returning to the catalog. Keep Secrets out of the sidebar and
   highlight Agents while it is open. Preserve its route and operation shortcuts.
   The Secrets page uses authenticated `/api/v1/secrets` metadata and
-  `/api/v1/secrets/requests`. Group refresh requests by agent type/name; their
-  progress is not agent readiness or proof of installation. Inventory requires an
-  explicit agent type, including types with no live agent. Provide-value actions
+  `/api/v1/secret-requests`. Group refresh requests by shared secret name; their
+  progress is not agent readiness or proof of installation. Inventory lists all
+  saved names without an agent-type selector. Provide-value actions
   read current metadata before choosing create or replace; only a confirmed 404
   permits create. Replacement/deletion use the saved ID and version.
   Keep values in temporary form/request memory; mask by default and require an
@@ -171,8 +171,8 @@
   Merge execution-scoped task `agent_type`/`missing_requirements` into the same
   notice for running tasks with future deadlines. These are live API projections,
   not persisted task state; refresh even when the operation timestamp is unchanged.
-  Ignore terminal operations and interrupted/expired tasks. Deduplicate type/name
-  pairs across preflight and runtime waits; installation, not storage, clears a wait.
+  Ignore terminal operations and interrupted/expired tasks. Deduplicate secret names
+  across preflight and runtime waits; installation, not storage, clears a wait.
 - Preserve routes across reload/back/forward, stale-request cancellation and
   per-connection state. Keep expired questions unanswerable and handle conflicts.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning

@@ -1,42 +1,16 @@
-// Package secrets describes scoped secret metadata, encrypted values and requests.
+// Package secrets describes shared secret metadata, encrypted values and requests.
 // It does not provide encryption or authorize access to secrets.
 package secrets
 
-import (
-	"errors"
+import "errors"
 
-	"github.com/defos-ai/commander/framework/id"
-)
-
-// Scope is independent of an operation or an individual agent process.
-// AgentType uses the registered type, not a prefix extracted from an agent ID.
-type Scope struct {
-	AgentType string `json:"agent_type"`
-}
-
-func NewScope(agentType string) (Scope, error) {
-	scope := Scope{AgentType: agentType}
-	return scope, scope.Validate()
-}
-
-func (scope Scope) Validate() error {
-	if !id.ValidType(scope.AgentType) {
-		return errors.New("secret scope requires a valid agent type")
-	}
-	return nil
-}
-
-// Key identifies a named secret within a scope. Names describe configuration,
+// Key identifies a shared secret by name. Names describe configuration,
 // never its value. Providers must not treat keys as filesystem paths.
 type Key struct {
-	Scope Scope  `json:"scope"`
-	Name  string `json:"name"`
+	Name string `json:"name"`
 }
 
 func (key Key) Validate() error {
-	if err := key.Scope.Validate(); err != nil {
-		return err
-	}
 	return ValidateName(key.Name)
 }
 

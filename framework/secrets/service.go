@@ -106,14 +106,11 @@ func (s *Service) GetMetadata(ctx context.Context, key secretmodel.Key) (secretm
 	return s.store.GetMetadata(ctx, key)
 }
 
-func (s *Service) List(ctx context.Context, scope secretmodel.Scope) ([]secretmodel.Metadata, error) {
+func (s *Service) List(ctx context.Context) ([]secretmodel.Metadata, error) {
 	if err := validateContext(ctx); err != nil {
 		return nil, err
 	}
-	if err := scope.Validate(); err != nil {
-		return nil, invalidInput(err)
-	}
-	return s.store.List(ctx, scope)
+	return s.store.List(ctx)
 }
 
 func (s *Service) encrypt(ctx context.Context, metadata secretmodel.Metadata, value []byte) (secretmodel.Secret, error) {

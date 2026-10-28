@@ -31,7 +31,7 @@ func TestRequestMongoStoreRequiresDatabaseAndContext(t *testing.T) {
 func TestRequestDocumentPreservesAuthenticatedDelivery(t *testing.T) {
 	cipher, secret := encryptedDocumentFixture(t, math.MaxUint64)
 	stamp := secret.Metadata.UpdatedAt.Add(time.Second)
-	request := secretmodel.Request{ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678",
+	request := secretmodel.Request{ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678", AgentType: "builder-agent",
 		Status: secretmodel.Pending, RequestedAt: stamp, ExpiresAt: stamp.Add(time.Hour)}
 	record, err := secretmodel.NewRequestRecord(request)
 	if err != nil {

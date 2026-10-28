@@ -47,12 +47,13 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 			return
 		}
 		var input struct {
-			AgentType string `json:"agent_type"`
-			Name      string `json:"name"`
-			Value     string `json:"value"`
+			Name  string `json:"name"`
+			Value string `json:"value"`
 		}
-		if json.NewDecoder(request.Body).Decode(&input) != nil || input.AgentType != "builder-agent" || input.Value != values[input.Name] {
-			t.Error("secret form changed a scoped value")
+		decoder := json.NewDecoder(request.Body)
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&input) != nil || input.Value != values[input.Name] {
+			t.Error("secret form changed a shared value")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -73,7 +74,7 @@ func testSecretFormSavesOutsideChatAndPreservesDraft(t *testing.T, runtime bool)
 	const draft = "Keep my unsent chat draft"
 	u.Text(draft)
 	u.Wait("automatic multi-secret form", func(view string) bool {
-		return strings.Contains(view, "builder-agent · GITHUB_TOKEN") && strings.Contains(view, "builder-agent · OPENAI_API_KEY")
+		return strings.Contains(view, "GITHUB_TOKEN") && strings.Contains(view, "OPENAI_API_KEY")
 	})
 	u.Text(values["GITHUB_TOKEN"])
 	u.Key(tea.KeyMsg{Type: tea.KeyTab})
@@ -147,7 +148,7 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 		op.Tasks[0].MissingRequirements = []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}
 		operations.Publish(op)
 	}
-	u.Wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("secret field", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	u.Text("discarded-private-token")
 	u.Key(tea.KeyMsg{Type: tea.KeyEsc})
 	if !runtime {
@@ -157,7 +158,7 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	operations.Publish(op)
 	target := operations.ReadCount() + 2
 	u.Wait("repeated requirement snapshots", func(string) bool { return operations.ReadCount() >= target })
-	if strings.Contains(u.Model.View(), "Agent secrets") || writes.Load() != 0 {
+	if strings.Contains(u.Model.View(), "Shared secrets") || writes.Load() != 0 {
 		t.Fatal("dismissed requirement reopened or saved itself")
 	}
 	if runtime && strings.Contains(u.Model.View(), "Operation reviewed") {
@@ -165,7 +166,7 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	}
 	u.Text("/secrets")
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("manually reopened secret form", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("manually reopened secret form", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	if strings.Contains(u.Model.View(), strings.Repeat("•", len("discarded-private-token"))) {
 		t.Fatal("dismissed value was retained when the form reopened")
 	}
@@ -180,7 +181,7 @@ func testSecretFormDismissalAndManualReopen(t *testing.T, runtime bool) {
 	operations.Publish(op)
 	u.Wait("requirement cleared while editing", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	if strings.Contains(u.Model.View(), "Agent secrets") || writes.Load() != 0 {
+	if strings.Contains(u.Model.View(), "Shared secrets") || writes.Load() != 0 {
 		t.Fatal("cleared requirement stayed open or saved a discarded value")
 	}
 	// Clearing requirements schedules a preflight or completion review. Let it
@@ -232,8 +233,8 @@ func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.URL.Path != "/api/v1/secrets/builder-agent/GITHUB_TOKEN" {
-			t.Error("Admin secret form used an unexpected secret scope")
+		if r.URL.Path != "/api/v1/secrets/GITHUB_TOKEN" {
+			t.Error("Admin secret form used an unexpected shared secret name")
 			http.NotFound(w, r)
 			return
 		}
@@ -252,12 +253,12 @@ func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
 			return
 		}
 		writes.Add(1)
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": secretID, "agent_type": "builder-agent", "name": "GITHUB_TOKEN", "version": 2, "status": "available"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": secretID, "name": "GITHUB_TOKEN", "version": 2, "status": "available"})
 	}))
 	defer api.Close()
 	u, _ := fixtures.SecretFormUI(t, ctx, ui.Connection[host.BasicCredentials]{}, password, value, api.URL)
 	defer u.Close()
-	u.Text("/admin secrets set builder-agent GITHUB_TOKEN")
+	u.Text("/admin secrets set GITHUB_TOKEN")
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.Wait("Admin API login", func(view string) bool { return strings.Contains(view, "Connect to API") })
 	u.Text(api.URL)
@@ -265,10 +266,10 @@ func TestAdminSecretFormRotatesWithoutWatchedOperation(t *testing.T) {
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.Text(password)
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("available secret opened for rotation", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("available secret opened for rotation", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	afterRefresh := time.Now().Add(280 * time.Millisecond)
 	u.Wait("manual form retained across requirement refresh", func(view string) bool {
-		if !strings.Contains(view, "builder-agent · GITHUB_TOKEN") {
+		if !strings.Contains(view, "GITHUB_TOKEN") {
 			t.Fatal("an unrelated requirement refresh closed the manual secret form")
 		}
 		return time.Now().After(afterRefresh)
@@ -309,7 +310,7 @@ func TestSecretFormClearsExpiredTaskWait(t *testing.T) {
 	operations.Publish(op)
 	u.Text("/watch " + op.ID)
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("secret field before task timeout", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("secret field before task timeout", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	u.Text("expired-private-token")
 	// The server keeps returning this same snapshot, including its old wait.
 	u.Wait("expired task wait cleared", func(view string) bool { return strings.Contains(view, "These secrets are no longer required.") })
@@ -361,7 +362,7 @@ func TestSecretFormConnectsRemoteAPIWithoutModelCredentials(t *testing.T) {
 		t.Fatal("remote API password was not masked")
 	}
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("remote secret input", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("remote secret input", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	u.Text(token)
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.Wait("remote secret saved", func(view string) bool { return strings.Contains(view, "Secrets saved. Waiting for the agent.") })
@@ -393,7 +394,7 @@ func TestSecretFormFailedSaveDoesNotRetryOrRetainValue(t *testing.T) {
 	operations.Publish(op)
 	u.Text("/watch " + op.ID)
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("secret field", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("secret field", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	u.Text(value)
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.Wait("unconfirmed save", func(view string) bool { return strings.Contains(view, "API write could not be confirmed") })
@@ -403,12 +404,12 @@ func TestSecretFormFailedSaveDoesNotRetryOrRetainValue(t *testing.T) {
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	target := operations.ReadCount() + 2
 	u.Wait("updates after failed save", func(string) bool { return operations.ReadCount() >= target })
-	if writes.Load() != 1 || strings.Contains(u.Model.View(), "Agent secrets") {
+	if writes.Load() != 1 || strings.Contains(u.Model.View(), "Shared secrets") {
 		t.Fatal("returning to chat retried or reopened the failed save")
 	}
 	u.Text("/secrets")
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("reloaded form", func(view string) bool { return strings.Contains(view, "builder-agent · GITHUB_TOKEN") })
+	u.Wait("reloaded form", func(view string) bool { return strings.Contains(view, "GITHUB_TOKEN") })
 	if strings.Contains(u.Model.View(), strings.Repeat("•", len(value))) {
 		t.Fatal("failed save value was retained in the reloaded form")
 	}

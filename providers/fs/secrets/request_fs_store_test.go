@@ -41,8 +41,8 @@ func TestRequestFsStorePublicationFailures(t *testing.T) {
 			}
 			stamp := time.Date(2026, 10, 17, 12, 0, 0, 123456789, time.UTC)
 			request := secretmodel.Request{
-				ID: id.New(), Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: "TOKEN"},
-				AgentID: "builder-agent-12345678", Status: secretmodel.Pending,
+				ID: id.New(), Key: secretmodel.Key{Name: "TOKEN"},
+				AgentID: "builder-agent-12345678", AgentType: "builder-agent", Status: secretmodel.Pending,
 				RequestedAt: stamp, ExpiresAt: stamp.Add(time.Hour),
 			}
 			if err := store.Create(t.Context(), request); err != nil {

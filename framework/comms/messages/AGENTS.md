@@ -26,13 +26,14 @@
   The controller verifies the saved command and action before persisting, including
   delayed logs for completed claims. Reject failed log processing while continuing
   other events; receive and settlement failures still stop the consumer.
-- Secret synchronization uses the controller owner loop and agent event inbox. Keep encrypted
-  deliveries separate from action commands. Match requests, recipients, scoped
-  keys, deadlines and exact secret IDs/versions through the typed validators.
-  Consumers must separately verify scope authorization, active requests,
+- Secret synchronization uses the controller owner loop and agent event inbox.
+  Keep encrypted deliveries separate from action commands. Match requests,
+  recipient identities/types, shared names, deadlines and exact secret IDs/versions
+  through the typed validators.
+  Consumers must separately verify the live registered recipient, active requests,
   receipt-time expiry and current stored versions before installation/fulfillment.
   Broker/filesystem access is the trusted publisher boundary; envelope fields do
-  not authenticate an untrusted publisher. No cross-type grants are enabled.
+  not authenticate an untrusted publisher.
   An installation acknowledgement never proves ongoing readiness or revocation.
 - Preserve `expires_at` as a start deadline. Cached outcomes can replay after
   expiry; new command work cannot. No expiry means no admission limit.

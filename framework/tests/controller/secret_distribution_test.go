@@ -72,6 +72,74 @@ func TestSecretDeliveryPersistsBeforePublishingAndReplaysExactEvidence(t *testin
 	}
 }
 
+func TestSharedSecretReachesWaitingAndLaterAgentTypes(t *testing.T) {
+	consumer, store, values, bus, requests := fixtures.SharedSecretConsumer(t)
+	shared := values.Snapshot()
+	values.Set(nil)
+	for _, request := range requests[:2] {
+		if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(bus.Messages()) != 0 {
+		t.Fatal("missing shared secret produced a delivery")
+	}
+	values.Set(shared)
+
+	if err := consumer.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	deliveries := bus.Messages()
+	if len(deliveries) != 2 {
+		t.Fatal("shared value did not reach both waiting agent types")
+	}
+	recipients := make(map[string]bool)
+	for _, delivery := range deliveries {
+		payload, err := agentevents.DecodeSecretDelivery(delivery)
+		if err != nil || !reflect.DeepEqual(payload.Secret, *shared) {
+			t.Fatalf("recipient did not receive the same shared version: %v", err)
+		}
+		recipients[delivery.AgentID] = true
+	}
+	if !recipients[requests[0].AgentID] || !recipients[requests[1].AgentID] {
+		t.Fatal("shared deliveries lost their independent recipients")
+	}
+	ack, err := controllerevents.NewSecretInstalled(deliveries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := consumer.Consume(t.Context(), ack); err != nil {
+		t.Fatal(err)
+	}
+	for _, delivery := range deliveries {
+		record, err := store.Get(t.Context(), delivery.CorrelationID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := secrets.Pending
+		if delivery.ID == deliveries[0].ID {
+			want = secrets.Fulfilled
+		}
+		if record.Request.Status != want {
+			t.Fatal("one acknowledgement settled another recipient's request")
+		}
+	}
+
+	if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, requests[2])); err != nil {
+		t.Fatal(err)
+	}
+
+	deliveries = bus.Messages()
+	if len(deliveries) != 3 || deliveries[2].AgentID != requests[2].AgentID {
+		t.Fatal("later agent did not receive the stored shared value")
+	}
+	payload, err := agentevents.DecodeSecretDelivery(deliveries[2])
+	if err != nil || !reflect.DeepEqual(payload.Secret, *shared) {
+		t.Fatalf("later agent received a different shared version: %v", err)
+	}
+}
+
 func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testing.T) {
 	for _, uncertain := range []bool{false, true} {
 		name := "failed publication"
@@ -122,7 +190,7 @@ func TestSecretRequestsRequireLiveOwnType(t *testing.T) {
 			request := fixtures.SecretSyncRequest()
 			switch name {
 			case "wrong type":
-				request.Key.Scope.AgentType = "other"
+				request.AgentType = "other"
 			case "unknown recipient":
 				request.AgentID = "fixture-agent-ffffffff"
 			case "stale agent":

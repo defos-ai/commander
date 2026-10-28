@@ -27,7 +27,7 @@ func SecretRequest(t *testing.T) (secrets.Request, secrets.Delivery, secrets.Ins
 	stamp := secret.Metadata.UpdatedAt.Add(time.Second)
 	secret.Metadata.ExpiresAt = stamp.Add(time.Minute)
 	secret = EncryptSecret(t, secret.Metadata)
-	request := secrets.Request{ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678",
+	request := secrets.Request{ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678", AgentType: "builder-agent",
 		Status: secrets.Pending, RequestedAt: stamp, ExpiresAt: stamp.Add(time.Hour)}
 	delivery := secrets.Delivery{ID: id.New(), RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
 		CreatedAt: stamp.Add(time.Nanosecond), ExpiresAt: stamp.Add(time.Minute)}

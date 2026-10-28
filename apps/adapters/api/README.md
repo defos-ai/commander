@@ -96,8 +96,9 @@ restarts and trusted hosts that encrypt/decrypt secrets. Replacing the key makes
 existing encrypted values unreadable.
 
 Manage secrets through [Admin](../../admin/ui/README.md#secrets) or the authenticated
-`/api/v1/secrets` routes in Swagger. Scope each value by agent type and name.
-Values are write-only; responses contain metadata.
+`/api/v1/secrets` routes in Swagger. Each name identifies one shared value across
+agents. Detail routes use `/api/v1/secrets/{name}`; `/api/v1/secret-requests` shows
+waiting recipients. Values are write-only; responses contain metadata.
 
 Without a key, secret routes return `503 secrets_unavailable`; other API features
 remain available. After saving, wait for the agent's requirement to clear.

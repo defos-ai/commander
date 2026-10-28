@@ -1,8 +1,8 @@
 # Secret management
 
 Manage service credentials across agent workflows with encrypted storage,
-action requirements and tracked delivery. Secrets belong to an agent type,
-independently of operations. Users manage them
+action requirements and tracked delivery. One name identifies one shared value
+across the Commander deployment, independently of agents and operations. Users manage it
 through [Admin UI](../../apps/admin/ui/README.md) or the authenticated
 [HTTP API](../../apps/adapters/api/README.md#secrets); values stay out of chat.
 
@@ -35,8 +35,10 @@ if err != nil {
 defer clear(value)
 ```
 
-Missing secrets block only the affected actions. Values stay in memory and are
-scoped to the agent's registered type; they are not environment variables.
+Missing secrets block only the affected actions. Save a value once to serve all
+requesting agents, including those started later. Each agent retains its own
+delivery and installation tracking. Values stay in memory rather than process
+environment variables.
 
 Updates arrive on refresh, normally within 30 seconds. Installed copies expire
 after at most one minute. Deletion does not cancel running actions or erase copies

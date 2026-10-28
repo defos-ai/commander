@@ -40,7 +40,7 @@ test('operation secret guidance stays visible in graph and opens the matching co
 
   await page.goto(operationURL);
   await expect(page.getByText('Secrets needed', { exact: true })).toBeVisible();
-  await expect(page.getByText('builder-agent / SOURCE_TOKEN', { exact: true })).toBeVisible();
+  await expect(page.getByText('SOURCE_TOKEN', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Execution graph', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Execution graph', exact: true })).toBeVisible();
   await expect(page.getByText('Secrets needed', { exact: true })).toBeVisible();

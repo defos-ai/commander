@@ -55,7 +55,7 @@ func Secret(ctx context.Context, name string) ([]byte, error) {
 	return copy, nil
 }
 
-// RequestSecret obtains a named secret for the running agent type. It requires a
+// RequestSecret obtains a shared named secret for the running agent. It requires a
 // serving agent with secret synchronization configured and may wait for operator
 // input. Clear returned bytes when finished; never include them in results or logs.
 func RequestSecret(ctx context.Context, name string) ([]byte, error) {

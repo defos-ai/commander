@@ -16,6 +16,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 	protocol "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -249,11 +250,14 @@ func (o Operation) MissingSecrets() []secrets.Key {
 	var missing []secrets.Key
 	seen := map[secrets.Key]bool{}
 	collect := func(agentType string, requirements []actions.Requirement) {
+		if !id.ValidType(agentType) {
+			return
+		}
 		for _, requirement := range requirements {
 			if requirement.Kind != actions.SecretRequirement {
 				continue
 			}
-			key := secrets.Key{Scope: secrets.Scope{AgentType: agentType}, Name: requirement.Name}
+			key := secrets.Key{Name: requirement.Name}
 			if key.Validate() == nil && !seen[key] {
 				seen[key] = true
 				missing = append(missing, key)
@@ -279,9 +283,6 @@ func (o Operation) MissingSecrets() []secrets.Key {
 		}
 	}
 	slices.SortFunc(missing, func(a, b secrets.Key) int {
-		if order := strings.Compare(a.Scope.AgentType, b.Scope.AgentType); order != 0 {
-			return order
-		}
 		return strings.Compare(a.Name, b.Name)
 	})
 	return missing

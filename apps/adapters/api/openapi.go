@@ -7,6 +7,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
+	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -80,7 +81,7 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. same-agent binds its for_actions to the first selected agent instance within each operation, with no fallback; it accepts no parameters and does not order tasks. Failures and empty proposals also require model review."
 		case "ActionRequirement":
 			schema.Properties["kind"].Enum = []any{"executable", "configuration", "secret"}
-			schema.Properties["kind"].Description = "executable and configuration requirements need host setup. secret identifies an unavailable declared Commander-managed secret, scoped to the agent type."
+			schema.Properties["kind"].Description = "executable and configuration requirements need host setup. secret identifies an unavailable declared Commander-managed secret shared by name across agents."
 			schema.Properties["name"].Description = "Requirement identifier, never its value. Managed secret names match [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}."
 			schema.Properties["sensitive"].Description = "Marks sensitive host configuration only; it does not identify a Commander-managed secret. Managed secrets use kind=secret without this flag."
 		case "Action":
@@ -170,10 +171,7 @@ func openAPIDocument() ([]byte, error) {
 	if err := operationendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
-	if err := endpoints.RegisterSecretsOpenAPI(paths, components, options); err != nil {
-		return nil, err
-	}
-	if err := endpoints.RegisterSecretRequestsOpenAPI(paths, components, options); err != nil {
+	if err := secretendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
 	return json.Marshal(map[string]any{

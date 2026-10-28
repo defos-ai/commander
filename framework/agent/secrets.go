@@ -304,7 +304,7 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 			continue
 		}
 		if entry.request.ID == "" || !now.Before(entry.request.ExpiresAt) || !now.Before(entry.request.RequestedAt.Add(r.config.RefreshInterval)) {
-			request := secretmodel.Request{ID: id.New(), AgentID: r.agentID, Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: r.typeName}, Name: name}, Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(r.config.RequestTTL)}
+			request := secretmodel.Request{ID: id.New(), AgentID: r.agentID, AgentType: r.typeName, Key: secretmodel.Key{Name: name}, Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(r.config.RequestTTL)}
 			message, err := controllerevents.NewSecretSyncRequested(request)
 			if err != nil {
 				return nil, err
@@ -327,7 +327,7 @@ func (r *secretRuntime) install(message messages.Message, now time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry := r.entries[payload.Secret.Metadata.Key.Name]
-	if entry == nil || message.AgentID != r.agentID || payload.Secret.Metadata.Key.Scope.AgentType != r.typeName ||
+	if entry == nil || message.AgentID != r.agentID ||
 		message.CorrelationID != entry.request.ID || now.Before(message.CreatedAt) || !now.Before(message.ExpiresAt) {
 		return errors.New("secret delivery does not match a current valid request")
 	}

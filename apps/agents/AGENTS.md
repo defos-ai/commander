@@ -75,8 +75,8 @@
 - Advertise secret names, never values. Recheck required configuration during
   execution and invalidate stale discovery state when rediscovering dependencies.
 - Declare persistent names in `Action.RequiredSecrets`; do not infer them from
-  transient `MissingRequirements`. The registered agent type determines the
-  secret scope; a type and secret name identify one shared value.
+  transient `MissingRequirements`. A secret name identifies one shared value
+  across the Commander deployment; each recipient retains its own delivery state.
   Configure the framework secret runtime with an injected decryptor only for
   hosts that need managed secrets. Builder and spawner support this configuration.
   Web and browser actions do not need managed secrets; do

@@ -45,11 +45,11 @@ func testAllInOneSecrets(t *testing.T) {
 			session, stop := fixtures.StartLocalAdminSession(t, local.Options{})
 			assertLocalSecretEnvironment(t, test.key, !test.unset)
 			created := localSecretRequest(t, session, http.MethodPost, "/api/v1/secrets",
-				`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+localSecretValue+`"}`, http.StatusCreated)
-			if created.ID == "" || created.AgentType != "builder-agent" || created.Name != "GITHUB_TOKEN" || created.Version != 1 || created.Status != "available" {
+				`{"name":"GITHUB_TOKEN","value":"`+localSecretValue+`"}`, http.StatusCreated)
+			if created.ID == "" || created.Name != "GITHUB_TOKEN" || created.Version != 1 || created.Status != "available" {
 				t.Fatal("all-in-one API did not create secret metadata")
 			}
-			fetched := localSecretRequest(t, session, http.MethodGet, "/api/v1/secrets/builder-agent/GITHUB_TOKEN", "", http.StatusOK)
+			fetched := localSecretRequest(t, session, http.MethodGet, "/api/v1/secrets/GITHUB_TOKEN", "", http.StatusOK)
 			if fetched.ID != created.ID || fetched.Version != created.Version || fetched.Status != created.Status {
 				t.Fatal("all-in-one API did not return the saved secret metadata")
 			}
@@ -57,7 +57,7 @@ func testAllInOneSecrets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			stored, err := store.Get(t.Context(), secretmodel.Key{Scope: secretmodel.Scope{AgentType: created.AgentType}, Name: created.Name})
+			stored, err := store.Get(t.Context(), secretmodel.Key{Name: created.Name})
 			if err != nil || stored.Validate() != nil || stored.Metadata.ID != created.ID || stored.Metadata.Version != created.Version {
 				t.Fatal("all-in-one API did not persist an encrypted secret with its metadata")
 			}

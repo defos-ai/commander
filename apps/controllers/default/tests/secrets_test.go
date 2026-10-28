@@ -52,7 +52,7 @@ func TestCLITransfersSavedEncryptedSecretsWithoutEncryptionKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	key := secrets.Key{Scope: secrets.Scope{AgentType: "fixture"}, Name: "API_TOKEN"}
+	key := secrets.Key{Name: "API_TOKEN"}
 	secret, err := cipher.Encrypt(secrets.Metadata{ID: id.New(), Key: key, Version: 1, CreatedAt: now, UpdatedAt: now}, []byte("local-only-fixture-token"))
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestCLITransfersSavedEncryptedSecretsWithoutEncryptionKey(t *testing.T) {
 			t.Fatal("controller did not observe the agent")
 		}
 	}
-	request := secrets.Request{ID: id.New(), Key: key, AgentID: agentID, Status: secrets.Pending, RequestedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Minute)}
+	request := secrets.Request{ID: id.New(), Key: key, AgentID: agentID, AgentType: "fixture", Status: secrets.Pending, RequestedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Minute)}
 	message, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)

@@ -32,7 +32,7 @@ func TestSecretServiceLifecycle(t *testing.T) {
 	if !id.Valid(created.ID) || created.Version != 1 || created.Key != key ||
 		!created.CreatedAt.Equal(created.UpdatedAt) || created.CreatedAt.Before(before) ||
 		created.UpdatedAt.After(time.Now()) || created.CreatedAt.Location() != time.UTC || !created.ExpiresAt.Equal(expires) {
-		t.Fatal("create did not assign identity, scope, version and server timestamps")
+		t.Fatal("create did not assign identity, name, version and server timestamps")
 	}
 	if bytes.Contains(store.Snapshot().Value.Ciphertext, plaintext) {
 		t.Fatal("store received plaintext")
@@ -45,7 +45,7 @@ func TestSecretServiceLifecycle(t *testing.T) {
 	if metadata, err := service.GetMetadata(ctx, key); err != nil || metadata != created {
 		t.Fatalf("get metadata: %v", err)
 	}
-	if values, err := service.List(ctx, key.Scope); err != nil || len(values) != 1 || values[0] != created {
+	if values, err := service.List(ctx); err != nil || len(values) != 1 || values[0] != created {
 		t.Fatalf("list metadata: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func TestSecretServiceValidationHasNoSideEffects(t *testing.T) {
 			return err
 		},
 		"list": func(ctx context.Context, key secretmodel.Key) error {
-			_, err := service.List(ctx, key.Scope)
+			_, err := service.List(ctx)
 			return err
 		},
 	}
@@ -198,11 +198,14 @@ func TestSecretServiceValidationHasNoSideEffects(t *testing.T) {
 			if err := call(cancelled, key); !errors.Is(err, context.Canceled) {
 				t.Fatalf("cancelled context: %v", err)
 			}
+			if name == "list" {
+				return
+			}
 			invalid := key
-			invalid.Scope.AgentType = "bad/value-that-must-not-appear-in-errors"
+			invalid.Name = "bad/value-that-must-not-appear-in-errors"
 			err := call(context.Background(), invalid)
-			if !errors.Is(err, domain.ErrInvalidInput) || strings.Contains(err.Error(), invalid.Scope.AgentType) {
-				t.Fatalf("invalid scope was accepted or disclosed: %v", err)
+			if !errors.Is(err, domain.ErrInvalidInput) || strings.Contains(err.Error(), invalid.Name) {
+				t.Fatalf("invalid secret name was accepted or disclosed: %v", err)
 			}
 		})
 	}
@@ -324,7 +327,7 @@ func TestSecretServiceStoreFailuresAreNotRetried(t *testing.T) {
 	if _, err := service.GetMetadata(ctx, key); !errors.Is(err, failure) {
 		t.Fatalf("metadata failure: %v", err)
 	}
-	if _, err := service.List(ctx, key.Scope); !errors.Is(err, failure) {
+	if _, err := service.List(ctx); !errors.Is(err, failure) {
 		t.Fatalf("list failure: %v", err)
 	}
 	if _, err := service.Replace(ctx, key, id.New(), 1, nil, time.Time{}); !errors.Is(err, failure) {

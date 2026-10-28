@@ -59,22 +59,19 @@ func TestSecretMongoStoreEncryptedRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSecretMongoStoreScopedInventory(t *testing.T) {
+func TestSecretMongoStoreSharedInventory(t *testing.T) {
 	catalog := fixtures.OpenSecretStore(t, fixtures.OpenStore(t, "secrets"))
 	first, last, lower := fixtures.Secret(t, "API_TOKEN"), fixtures.Secret(t, "Z_TOKEN"), fixtures.Secret(t, "api_token")
 	first.Metadata.ExpiresAt = first.Metadata.UpdatedAt.Add(time.Hour)
 	first = fixtures.EncryptSecret(t, first.Metadata)
-	agent := fixtures.Secret(t, "API_TOKEN")
-	agent.Metadata.Key.Scope.AgentType = "other-agent"
-	agent = fixtures.EncryptSecret(t, agent.Metadata)
-	for _, value := range []secrets.Secret{lower, last, first, agent} {
+	for _, value := range []secrets.Secret{lower, last, first} {
 		if err := catalog.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
 		}
 	}
-	items, err := catalog.List(t.Context(), first.Metadata.Key.Scope)
+	items, err := catalog.List(t.Context())
 	if err != nil || !reflect.DeepEqual(items, []secrets.Metadata{first.Metadata, last.Metadata, lower.Metadata}) {
-		t.Fatalf("inventory must be sorted and scoped: count=%d, error=%v", len(items), err)
+		t.Fatalf("shared inventory must be sorted: count=%d, error=%v", len(items), err)
 	}
 	if secrets.AvailabilityAt(&items[0], first.Metadata.ExpiresAt) != secrets.Expired {
 		t.Fatal("inventory lost expiration")
@@ -86,10 +83,9 @@ func TestSecretMongoStoreScopedInventory(t *testing.T) {
 	}
 	assertMongoSecret(t, catalog, first)
 	assertMongoSecret(t, catalog, lower)
-	assertMongoSecret(t, catalog, agent)
-	otherItems, err := catalog.List(t.Context(), agent.Metadata.Key.Scope)
-	if err != nil || !reflect.DeepEqual(otherItems, []secrets.Metadata{agent.Metadata}) {
-		t.Fatalf("same secret name crossed agent types: count=%d, error=%v", len(otherItems), err)
+	duplicate := fixtures.Secret(t, "API_TOKEN")
+	if err := catalog.Create(t.Context(), duplicate); !errors.Is(err, secrets.ErrSecretConflict) {
+		t.Fatalf("another identity must not reserve the same shared name: %v", err)
 	}
 	missing := first.Metadata.Key
 	missing.Name = "MISSING"
@@ -113,7 +109,7 @@ func TestSecretMongoStoreCreateIdentityAndReplay(t *testing.T) {
 	}
 	for _, change := range []func(*secrets.Secret){
 		func(s *secrets.Secret) { s.Metadata.ID = id.New() },
-		func(s *secrets.Secret) { s.Metadata.Key.Scope.AgentType = "other-agent" },
+		func(s *secrets.Secret) { s.Metadata.Key.Name = "OTHER_TOKEN" },
 		func(s *secrets.Secret) { s.Value.Ciphertext[0] ^= 1 },
 	} {
 		conflict := initial.Clone()
@@ -278,7 +274,7 @@ func TestSecretMongoStoreInvalidContexts(t *testing.T) {
 			func() error { return catalog.Delete(ctx, initial.Metadata.Key, initial.Metadata.ID, 1) },
 			func() error { _, err := catalog.Get(ctx, initial.Metadata.Key); return err },
 			func() error { _, err := catalog.GetMetadata(ctx, initial.Metadata.Key); return err },
-			func() error { _, err := catalog.List(ctx, initial.Metadata.Key.Scope); return err },
+			func() error { _, err := catalog.List(ctx); return err },
 		}
 		for i, check := range checks {
 			if err := check(); err == nil || (ctx != nil && !errors.Is(err, context.Canceled)) {
@@ -392,7 +388,7 @@ func TestSecretMongoStoreRejectsCorruptPayloads(t *testing.T) {
 			for i, check := range []func() error{
 				func() error { _, err := catalog.Get(t.Context(), initial.Metadata.Key); return err },
 				func() error { _, err := catalog.GetMetadata(t.Context(), initial.Metadata.Key); return err },
-				func() error { _, err := catalog.List(t.Context(), initial.Metadata.Key.Scope); return err },
+				func() error { _, err := catalog.List(t.Context()); return err },
 				func() error { return catalog.Create(t.Context(), initial) },
 				func() error { return catalog.Replace(t.Context(), replacement, 1) },
 				func() error { return catalog.Delete(t.Context(), initial.Metadata.Key, initial.Metadata.ID, 1) },

@@ -37,8 +37,8 @@ func (f *SecretAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets" {
 		f.requests = append(f.requests, "GET list")
-		if r.URL.Query().Get("agent_type") != "builder-agent" {
-			f.t.Error("list lost agent scope")
+		if r.URL.RawQuery != "" {
+			f.t.Error("global list unexpectedly filters by agent type")
 		}
 		item, _ := json.Marshal(f.saved)
 		// Extra fields from a server must not leak through metadata output.
@@ -46,7 +46,7 @@ func (f *SecretAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"items": []json.RawMessage{item}})
 		return
 	}
-	if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets/requests" {
+	if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secret-requests" {
 		f.requests = append(f.requests, "GET requests")
 		if r.URL.Query().Get("agent_type") != "builder-agent" {
 			f.t.Error("requests lost agent scope")
@@ -57,7 +57,7 @@ func (f *SecretAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}}})
 		return
 	}
-	if r.URL.Path != "/api/v1/secrets/builder-agent/GITHUB_TOKEN" && !(r.Method == http.MethodPost && r.URL.Path == "/api/v1/secrets") {
+	if r.URL.Path != "/api/v1/secrets/GITHUB_TOKEN" && !(r.Method == http.MethodPost && r.URL.Path == "/api/v1/secrets") {
 		f.t.Errorf("unexpected secret path: %s", r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -98,10 +98,10 @@ func (f *SecretAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.values = append(f.values, *input.Value)
 		if r.Method == http.MethodPost {
-			if f.saved != nil || input.AgentType != "builder-agent" || input.Name != "GITHUB_TOKEN" || input.ID != "" || input.Version != 0 {
-				f.t.Error("create did not preserve scope or new-secret semantics")
+			if f.saved != nil || input.AgentType != "" || input.Name != "GITHUB_TOKEN" || input.ID != "" || input.Version != 0 {
+				f.t.Error("create did not preserve global-name or new-secret semantics")
 			}
-			f.saved = &adminsecrets.Metadata{ID: SecretID, AgentType: "builder-agent", Name: "GITHUB_TOKEN", Version: 1, Status: "available"}
+			f.saved = &adminsecrets.Metadata{ID: SecretID, Name: "GITHUB_TOKEN", Version: 1, Status: "available"}
 			w.WriteHeader(http.StatusCreated)
 		} else if r.Method == http.MethodPut {
 			if f.saved == nil || input.ID != f.saved.ID || input.Version != f.saved.Version {

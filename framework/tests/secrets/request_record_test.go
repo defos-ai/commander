@@ -31,7 +31,7 @@ func TestRequestRecordRequiresPendingCreationAndPreservesOriginalIdentity(t *tes
 	for _, mutate := range []func(*secrets.Request){
 		func(r *secrets.Request) { r.ID = fixtures.InstallationID },
 		func(r *secrets.Request) { r.AgentID = "builder-agent-87654321" },
-		func(r *secrets.Request) { r.Key.Scope.AgentType = "another-agent" },
+		func(r *secrets.Request) { r.AgentType = "another-agent" },
 		func(r *secrets.Request) { r.Key.Name = "OTHER_TOKEN" },
 		func(r *secrets.Request) { r.RequestedAt = r.RequestedAt.Add(-time.Second) },
 		func(r *secrets.Request) { r.ExpiresAt = r.ExpiresAt.Add(time.Second) },
@@ -59,7 +59,6 @@ func TestRequestRecordDeliveryIsImmutableAndBoundToRequest(t *testing.T) {
 	}{
 		{"request", func(d *secrets.Delivery) { d.RequestID = fixtures.InstallationID }},
 		{"recipient", func(d *secrets.Delivery) { d.AgentID = "builder-agent-87654321" }},
-		{"agent type", func(d *secrets.Delivery) { d.Secret.Metadata.Key.Scope.AgentType = "other-agent" }},
 		{"name", func(d *secrets.Delivery) { d.Secret.Metadata.Key.Name = "OTHER_TOKEN" }},
 		{"before request", func(d *secrets.Delivery) { d.CreatedAt = fixtures.RequestedAt().Add(-time.Second) }},
 		{"request deadline", func(d *secrets.Delivery) { d.ExpiresAt = d.ExpiresAt.Add(time.Second) }},

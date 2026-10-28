@@ -29,7 +29,7 @@ describe('secret management client', () => {
     vi.stubGlobal('fetch', fetch);
     const stored = vi.spyOn(Storage.prototype, 'setItem');
 
-    expect(await listSecrets(`${url}/`, credentials, key.agent_type)).toEqual([metadata]);
+    expect(await listSecrets(`${url}/`, credentials)).toEqual([metadata]);
     expect(await listSecretRequests(url, credentials)).toEqual([pending]);
     expect(await getSecret(url, credentials, key)).toEqual(metadata);
     expect(await createSecret(url, credentials, createInput)).toEqual(metadata);
@@ -37,7 +37,7 @@ describe('secret management client', () => {
     expect(await deleteSecret(url, credentials, updated)).toBeUndefined();
 
     expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
-      '/api/v1/secrets?agent_type=builder-agent', '/api/v1/secrets/requests', itemPath,
+      '/api/v1/secrets', '/api/v1/secret-requests', itemPath,
       '/api/v1/secrets', itemPath, `${itemPath}?id=${id}&version=2`,
     ]);
     expect(fetch.mock.calls.map(([, options]) => options?.method)).toEqual(['GET', 'GET', 'GET', 'POST', 'PUT', 'DELETE']);
@@ -53,10 +53,26 @@ describe('secret management client', () => {
     expect(stored).not.toHaveBeenCalled();
   });
 
+  it('keeps the secret named requests separate from pending requests', async () => {
+    const secret = { ...metadata, name: 'requests' };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json(secret, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(secret))
+      .mockResolvedValueOnce(Response.json({ items: [pending] }));
+    vi.stubGlobal('fetch', fetch);
+
+    expect(await createSecret(url, credentials, { ...createInput, name: 'requests' })).toEqual(secret);
+    expect(await getSecret(url, credentials, { name: 'requests' })).toEqual(secret);
+    expect(await listSecretRequests(url, credentials)).toEqual([pending]);
+    expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
+      '/api/v1/secrets', '/api/v1/secrets/requests', '/api/v1/secret-requests',
+    ]);
+  });
+
   it('projects only public fields, ignoring encrypted envelopes or accidentally returned plaintext', async () => {
     const extra = { value: secretValue, ciphertext: secretValue, nonce: secretValue, key_id: secretValue };
     respond({ items: [{ ...metadata, ...extra }] });
-    expect(await listSecrets(url, credentials, key.agent_type)).toEqual([metadata]);
+    expect(await listSecrets(url, credentials)).toEqual([metadata]);
     respond({ items: [{ ...pending, ...extra, delivery: extra }] });
     expect(await listSecretRequests(url, credentials)).toEqual([pending]);
     respond({ ...metadata, ...extra }, 201);
@@ -65,7 +81,7 @@ describe('secret management client', () => {
 
   it('accepts empty inventories, expired metadata and each pending delivery stage', async () => {
     respond({ items: [] });
-    expect(await listSecrets(url, credentials, key.agent_type)).toEqual([]);
+    expect(await listSecrets(url, credentials)).toEqual([]);
     expect(await listSecretRequests(url, credentials)).toEqual([]);
     respond({ ...metadata, status: 'expired', expires_at: undefined });
     expect(await getSecret(url, credentials, key)).toEqual({ ...metadata, status: 'expired', expires_at: undefined });
@@ -83,7 +99,7 @@ describe('secret management client', () => {
     { expires_at: null }, { expires_at: '2026-10-17' }, { updated_at: '2026-10-17T25:00:00Z' },
   ])('rejects malformed secret metadata: %j', async patch => {
     respond({ items: [{ ...metadata, ...patch }] });
-    await expect(listSecrets(url, credentials, key.agent_type)).rejects.toEqual(new SecretError('invalid_response'));
+    await expect(listSecrets(url, credentials)).rejects.toEqual(new SecretError('invalid_response'));
   });
 
   it.each([
@@ -98,7 +114,7 @@ describe('secret management client', () => {
   it('rejects mismatched identities, duplicate inventory entries and malformed envelopes', async () => {
     for (const body of [{}, [], { items: null }, { items: [metadata, metadata] }, { items: [{ ...metadata, agent_type: 'web-agent' }] }]) {
       respond(body);
-      await expect(listSecrets(url, credentials, key.agent_type)).rejects.toEqual(new SecretError('invalid_response'));
+      await expect(listSecrets(url, credentials)).rejects.toEqual(new SecretError('invalid_response'));
     }
     respond({ ...metadata, name: 'OTHER_TOKEN' });
     await expect(getSecret(url, credentials, key)).rejects.toEqual(new SecretError('invalid_response'));
@@ -108,7 +124,6 @@ describe('secret management client', () => {
 
   it('validates local inputs and session identity before sending values', async () => {
     const fetch = respond(metadata, 201);
-    await expect(listSecrets(url, credentials, '')).rejects.toEqual(new SecretError('invalid_input'));
     await expect(getSecret(url, credentials, { ...key, name: '../escape' })).rejects.toEqual(new SecretError('invalid_input'));
     await expect(createSecret(url, credentials, { ...createInput, expires_at: 'invalid' })).rejects.toEqual(new SecretError('invalid_input'));
     await expect(replaceSecret(url, credentials, key, { ...replacement, version: Number.MAX_SAFE_INTEGER })).rejects.toEqual(new SecretError('invalid_input'));

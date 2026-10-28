@@ -71,8 +71,9 @@ Open **JSON** on a saved mission to view or copy its definition. See
 
 ## Secrets
 
-Open **Agents → Manage secrets** to provide, replace or delete an agent type's
-secrets. You can also set an expiration. Values are write-only.
+Open **Agents → Manage secrets** to provide, replace or delete shared
+secrets. Each name identifies one value for all requesting agents. You can also
+set an expiration. Values are write-only.
 
 Compose and all-in-one configure encryption automatically. Standalone hosts need
 an [encryption key](../../adapters/api/README.md#secrets). After saving, wait for

@@ -50,7 +50,7 @@ func TestSecretFsStorePublicationFailures(t *testing.T) {
 			}
 			stamp := time.Date(2026, 10, 16, 12, 0, 0, 123456789, time.UTC)
 			metadata := secretmodel.Metadata{
-				ID: id.New(), Key: secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: "TOKEN"},
+				ID: id.New(), Key: secretmodel.Key{Name: "TOKEN"},
 				Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
 			}
 			initial, err := cipher.Encrypt(metadata, []byte("initial-test-token"))

@@ -30,10 +30,27 @@ func SecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretR
 	return consumers.SecretEventConsumer{Bus: bus, Inventory: inventory, Secrets: values, Requests: requests}, requests, values, bus
 }
 
+func SharedSecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretRequests, *fakes.SecretValues, *fakes.SecretPublishBus, []secrets.Request) {
+	t.Helper()
+	consumer, requests, values, bus := SecretConsumer(t)
+	first := consumer.Inventory.(*fakes.Inventory).Snapshot().Clone()
+	second, later := first.Clone(), first.Clone()
+	second.ID, second.Type = "research-agent-01234567", "research-agent"
+	later.ID, later.Type = "review-agent-01234567", "review-agent"
+	consumer.Inventory = fakes.NewSecretRecipients(first, second, later)
+	var recipients []secrets.Request
+	for _, record := range []agents.Agent{first, second, later} {
+		request := SecretSyncRequest()
+		request.AgentID, request.AgentType = record.ID, string(record.Type)
+		recipients = append(recipients, request)
+	}
+	return consumer, requests, values, bus, recipients
+}
+
 func SecretSyncRequest() secrets.Request {
 	now := time.Now().UTC()
 	return secrets.Request{
-		ID: id.MessageID(), AgentID: AgentID, Key: secrets.Key{Scope: secrets.Scope{AgentType: "fixture"}, Name: "API_TOKEN"},
+		ID: id.MessageID(), AgentID: AgentID, AgentType: "fixture", Key: secrets.Key{Name: "API_TOKEN"},
 		Status: secrets.Pending, RequestedAt: now, ExpiresAt: now.Add(time.Minute),
 	}
 }

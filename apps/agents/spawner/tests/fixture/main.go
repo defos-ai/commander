@@ -61,7 +61,7 @@ func run() error {
 	for _, key := range []string{"SPAWNER_PARENT_SECRET", "API_PASSWORD", "MCP_TOKEN"} {
 		privateEnvironment = privateEnvironment || os.Getenv(key) != ""
 	}
-	challenge, err := secretChallenge(agentType)
+	challenge, err := secretChallenge()
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func run() error {
 }
 
 // Only ciphertext crosses back to the parent; the key stays in this process.
-func secretChallenge(agentType string) (*secrets.Secret, error) {
+func secretChallenge() (*secrets.Secret, error) {
 	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
 	if key == "" {
 		return nil, nil
@@ -160,7 +160,7 @@ func secretChallenge(agentType string) (*secrets.Secret, error) {
 	}
 	now := time.Now().UTC()
 	encrypted, err := cipher.Encrypt(secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: agentType}, Name: "BOOTSTRAP_CHECK"},
+		ID: id.New(), Key: secrets.Key{Name: "BOOTSTRAP_CHECK"},
 		Version: 1, CreatedAt: now, UpdatedAt: now,
 	}, []byte("fixture secret bootstrap"))
 	return &encrypted, err

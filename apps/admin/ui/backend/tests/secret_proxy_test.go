@@ -47,8 +47,8 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 		method, path, body string
 		status             int
 	}{
-		{http.MethodPut, "/api/v1/secrets/builder-agent/GITHUB_TOKEN", `{"id":"00000000-0000-4000-8000-000000000001","version":1,"value":"private-test-value"}`, http.StatusOK},
-		{http.MethodDelete, "/api/v1/secrets/builder-agent/GITHUB_TOKEN?id=00000000-0000-4000-8000-000000000001&version=2", "", http.StatusNoContent},
+		{http.MethodPut, "/api/v1/secrets/GITHUB_TOKEN", `{"id":"00000000-0000-4000-8000-000000000001","version":1,"value":"private-test-value"}`, http.StatusOK},
+		{http.MethodDelete, "/api/v1/secrets/GITHUB_TOKEN?id=00000000-0000-4000-8000-000000000001&version=2", "", http.StatusNoContent},
 	} {
 		t.Run(tc.method, func(t *testing.T) {
 			path := fixtures.ProxyPath(upstream.URL, tc.path)

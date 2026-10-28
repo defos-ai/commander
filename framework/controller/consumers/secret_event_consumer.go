@@ -17,8 +17,8 @@ import (
 
 // SecretEventConsumer transfers encrypted values only. Its caller serializes
 // Consume and Reconcile with inventory observations on the controller owner loop.
-// The bus remains a trusted deployment boundary. Agents may request any name in
-// their registered type; declarations are readiness metadata, not authorization.
+// The bus remains a trusted deployment boundary. Agents may request shared names;
+// declarations are readiness metadata, not authorization.
 type SecretEventConsumer struct {
 	Bus       comms.Bus
 	Inventory agents.AgentStore
@@ -207,7 +207,7 @@ func (c SecretEventConsumer) allowed(ctx context.Context, request secrets.Reques
 		return false, err
 	}
 	record = record.Snapshot(now)
-	if record.ID != request.AgentID || record.Stale || record.Status == agents.AgentStopped || string(record.Type) != request.Key.Scope.AgentType {
+	if record.ID != request.AgentID || record.Stale || record.Status == agents.AgentStopped || string(record.Type) != request.AgentType {
 		return false, nil
 	}
 	return true, nil

@@ -80,7 +80,7 @@ func (record RequestRecord) MatchesRequest(request Request) bool {
 		return false
 	}
 	saved := record.Request
-	return saved.ID == request.ID && saved.Key == request.Key && saved.AgentID == request.AgentID &&
+	return saved.ID == request.ID && saved.Key == request.Key && saved.AgentID == request.AgentID && saved.AgentType == request.AgentType &&
 		saved.RequestedAt.Equal(request.RequestedAt) &&
 		saved.ExpiresAt.Equal(request.ExpiresAt)
 }

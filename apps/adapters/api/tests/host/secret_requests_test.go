@@ -18,7 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const secretRequestsPath = "/api/v1/secrets/requests"
+const secretRequestsPath = "/api/v1/secret-requests"
 
 type pendingSecretView struct {
 	ID          string    `json:"id"`
@@ -46,7 +46,7 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 			t.Fatalf("pending inventory has %d requests, want one", len(items))
 		}
 		expected := pendingSecretView{
-			ID: request.ID, AgentType: request.Key.Scope.AgentType, Name: request.Key.Name,
+			ID: request.ID, AgentType: request.AgentType, Name: request.Key.Name,
 			AgentID:     request.AgentID,
 			RequestedAt: request.RequestedAt, ExpiresAt: request.ExpiresAt, Status: want,
 		}
@@ -55,7 +55,7 @@ func TestPendingSecretRequestsFollowValueDeliveryAndInstallation(t *testing.T) {
 		}
 	}
 	assertStatus("needs_value")
-	createBody := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
+	createBody := `{"name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
 	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, createBody), http.StatusCreated)
 	assertStatus("awaiting_delivery")
 	hostfixtures.ReserveSecretDelivery(t, requests, values, request)

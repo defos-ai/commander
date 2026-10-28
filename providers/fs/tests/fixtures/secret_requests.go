@@ -22,7 +22,7 @@ func SecretRequest(t *testing.T) (secrets.Request, secrets.Delivery, secrets.Ins
 	t.Helper()
 	secret := Secret(t, "API_TOKEN")
 	request := secrets.Request{
-		ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678", Status: secrets.Pending,
+		ID: id.New(), Key: secret.Metadata.Key, AgentID: "builder-agent-12345678", AgentType: "builder-agent", Status: secrets.Pending,
 		RequestedAt: secret.Metadata.CreatedAt, ExpiresAt: secret.Metadata.CreatedAt.Add(time.Hour),
 	}
 	delivery := secrets.Delivery{

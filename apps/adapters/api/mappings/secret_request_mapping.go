@@ -7,7 +7,7 @@ import (
 
 func ToSecretRequestResponse(request secrets.Request, status string) models.SecretRequestResponse {
 	return models.SecretRequestResponse{
-		ID: request.ID, AgentType: request.Key.Scope.AgentType, Name: request.Key.Name,
+		ID: request.ID, AgentType: request.AgentType, Name: request.Key.Name,
 		AgentID:     request.AgentID,
 		RequestedAt: request.RequestedAt, ExpiresAt: request.ExpiresAt, Status: status,
 	}

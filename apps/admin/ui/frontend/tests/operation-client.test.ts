@@ -12,7 +12,7 @@ function proxyTarget(input: RequestInfo | URL) {
 }
 
 describe('operations client', () => {
-  it('requires a valid secret scope for runtime task requirements', async () => {
+  it('requires a valid recipient type for runtime secret requirements', async () => {
     const task = { ...operation.tasks![0], status: 'running', agent_type: 'web-agent', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] };
     const waiting = { ...operation, tasks: [task] };
     respond(waiting, { ...operation, tasks: [{ ...task, agent_type: undefined }] });
@@ -145,7 +145,7 @@ describe('operations client', () => {
       agent_type: 'builder', missing_requirements: [{ kind: 'secret', name }],
     })),
     { missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] },
-  ])('rejects malformed managed secret scopes: %j', async patch => {
+  ])('rejects malformed managed secret recipient types: %j', async patch => {
     respond({ ...operation, preflight: { ready: false, version: 1, actions: [{ action_name: 'build',
       unavailable_agents: [{ agent_id: 'builder-agent-1234abcd', reason: 'Missing', ...patch }],
     }] } });

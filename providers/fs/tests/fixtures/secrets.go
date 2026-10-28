@@ -27,7 +27,7 @@ func Secret(t *testing.T, name string) secrets.Secret {
 	t.Helper()
 	stamp := time.Date(2026, 10, 16, 12, 0, 0, 123456789, time.UTC)
 	return EncryptSecret(t, secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: name},
+		ID: id.New(), Key: secrets.Key{Name: name},
 		Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
 	})
 }

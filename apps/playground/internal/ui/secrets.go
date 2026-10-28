@@ -159,9 +159,6 @@ func (m *Model) openSecrets(manual bool) tea.Cmd {
 	}
 	sort.Slice(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]
-		if a.Scope.AgentType != b.Scope.AgentType {
-			return a.Scope.AgentType < b.Scope.AgentType
-		}
 		return a.Name < b.Name
 	})
 	m.beginSecretPanel(ordered, false)
@@ -350,7 +347,7 @@ func (m *Model) secretResult(message tea.Msg) (tea.Cmd, bool) {
 			continue
 		}
 		key := panel.keys[i]
-		field := m.newSecretField(key.Scope.AgentType+" · "+key.Name, "", true)
+		field := m.newSecretField(key.Name, "", true)
 		field.key, field.metadata = key, metadata
 		panel.fields = append(panel.fields, field)
 	}
@@ -495,7 +492,7 @@ func (m *Model) secretKey(key tea.KeyMsg) tea.Cmd {
 
 func (m *Model) secretView() string {
 	panel := &m.secrets
-	title, description := "Agent secrets", "Sent directly to the API, never to the model."
+	title, description := "Shared secrets", "Sent directly to the API, never to the model."
 	if panel.stage == secretConnect {
 		title, description = "Connect to API", "API login · Kept in memory for this session."
 	}

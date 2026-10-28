@@ -108,7 +108,7 @@ describe('operations browser', () => {
       onSelect={vi.fn()} onManageSecrets={manage} />);
 
     expect(await screen.findByText('Secrets needed')).toBeVisible();
-    expect(screen.getAllByText('web-agent / TOKEN')).toHaveLength(1);
+    expect(within(screen.getByText('Secrets needed').parentElement!).getAllByText('TOKEN')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
     expect(manage).toHaveBeenCalledTimes(1);
 
@@ -128,9 +128,9 @@ describe('operations browser', () => {
       onSelect={vi.fn()} onManageSecrets={manage} />);
 
     expect(await screen.findByText('Secrets needed')).toBeVisible();
-    expect(screen.getAllByText('builder / TOKEN')).toHaveLength(1);
+    expect(within(screen.getByText('Secrets needed').parentElement!).getAllByText('TOKEN')).toHaveLength(1);
     fireEvent.click(screen.getByText('build', { selector: 'summary *' }).closest('summary')!);
-    expect(screen.getAllByText('TOKEN')[0].closest('li')).toHaveTextContent('Secret: TOKEN');
+    expect(screen.getAllByText('TOKEN').some(node => node.closest('li')?.textContent?.includes('Secret: TOKEN'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Manage secrets' }));
     expect(manage).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Execution graph' }));
@@ -143,7 +143,7 @@ describe('operations browser', () => {
     expect(await screen.findByText('Planning', { selector: '.catalog-status' })).toBeVisible();
     expect(screen.queryByText('Secrets needed')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Manage secrets' })).not.toBeInTheDocument();
-    expect(fetch.mock.calls.every(([url, init]) => !upstreamURL(url).includes('/secrets/requests') && init?.method === 'GET')).toBe(true);
+    expect(fetch.mock.calls.every(([url, init]) => !upstreamURL(url).includes('/secret-requests') && init?.method === 'GET')).toBe(true);
   });
 
   it.each([

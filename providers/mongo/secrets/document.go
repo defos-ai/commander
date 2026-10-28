@@ -8,23 +8,24 @@ import (
 
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 const collection = "secrets"
 
 // JSON preserves authenticated timestamp nanoseconds and the full uint64 version
 // range. Indexed fields are checked against that payload on every read. Retired
-// documents retain only identity and scope, never the encrypted value.
+// documents retain only identity and name, never the encrypted value.
 type secretDocument struct {
-	ID        string          `bson:"_id"`
-	AgentType string          `bson:"agent_type"`
-	Name      string          `bson:"name"`
-	Active    bool            `bson:"active"`
-	Data      json.RawMessage `bson:"data,omitempty"`
+	ID     string          `bson:"_id"`
+	Name   string          `bson:"name"`
+	Active bool            `bson:"active"`
+	Data   json.RawMessage `bson:"data,omitempty"`
+	Extra  bson.M          `bson:",inline"`
 }
 
 func identityDocument(secretID string, key secretmodel.Key) secretDocument {
-	return secretDocument{ID: secretID, AgentType: key.Scope.AgentType, Name: key.Name}
+	return secretDocument{ID: secretID, Name: key.Name}
 }
 
 func encode(secret secretmodel.Secret) (secretDocument, error) {
@@ -39,10 +40,13 @@ func encode(secret secretmodel.Secret) (secretDocument, error) {
 }
 
 func (d secretDocument) key() secretmodel.Key {
-	return secretmodel.Key{Scope: secretmodel.Scope{AgentType: d.AgentType}, Name: d.Name}
+	return secretmodel.Key{Name: d.Name}
 }
 
 func (d secretDocument) decode() (secretmodel.Secret, error) {
+	if len(d.Extra) != 0 {
+		return secretmodel.Secret{}, errors.New("stored secret document contains unsupported fields")
+	}
 	if !id.Valid(d.ID) {
 		return secretmodel.Secret{}, errors.New("stored secret ID must be a canonical UUID")
 	}

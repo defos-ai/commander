@@ -11,12 +11,12 @@ func ToolDelta(name string, args map[string]any) map[string]any {
 }
 
 func WriteSecretFormMetadata(w http.ResponseWriter, name string) {
-	_ = json.NewEncoder(w).Encode(map[string]any{"id": "da378c90-63eb-46da-b186-552e1e144510", "agent_type": "builder-agent", "name": name, "version": 1, "status": "available"})
+	_ = json.NewEncoder(w).Encode(map[string]any{"id": "da378c90-63eb-46da-b186-552e1e144510", "name": name, "version": 1, "status": "available"})
 }
 
 func MissingSecretFormMetadata(w http.ResponseWriter, r *http.Request, names ...string) bool {
 	for _, name := range names {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets/builder-agent/"+name {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/secrets/"+name {
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "secret_not_found"})
 			return true

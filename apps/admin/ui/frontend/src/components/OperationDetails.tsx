@@ -55,11 +55,11 @@ export function isActiveOperation(status: string) {
 export function OperationSecretsNotice({ operation, onManageSecrets }: { operation: Operation; onManageSecrets?: () => void }) {
   const { t } = useTranslation();
   if (!isActiveOperation(operation.status)) return null;
-  const scopes = new Set<string>();
+  const names = new Set<string>();
   const addRequirements = (type: string | undefined, requirements?: ActionRequirement[] | null) => {
     if (!type) return;
     for (const requirement of requirements ?? []) {
-      if (requirement.kind === 'secret') scopes.add(`${type} / ${requirement.name}`);
+      if (requirement.kind === 'secret') names.add(requirement.name);
     }
   };
   for (const action of operation.preflight?.ready ? [] : operation.preflight?.actions ?? []) {
@@ -72,11 +72,11 @@ export function OperationSecretsNotice({ operation, onManageSecrets }: { operati
     if (task.status !== 'running' || !task.deadline_at || Date.parse(task.deadline_at) <= Date.now()) continue;
     addRequirements(task.agent_type, task.missing_requirements);
   }
-  if (!scopes.size) return null;
+  if (!names.size) return null;
   return <div className="notice operation-secrets" role="status">
     <strong>{t($ => $.operations.secretsNeeded)}</strong>
     <p>{t($ => $.operations.secretsNeededDescription)}</p>
-    <ul className="catalog-tags">{[...scopes].sort().map(scope => <li key={scope}><code>{scope}</code></li>)}</ul>
+    <ul className="catalog-tags">{[...names].sort().map(name => <li key={name}><code>{name}</code></li>)}</ul>
     {onManageSecrets && <Button variant="secondary" onClick={onManageSecrets}>{t($ => $.operations.manageSecrets)}</Button>}
   </div>;
 }

@@ -9,7 +9,7 @@
   this into the domain envelope on encryption and reconstruct it on decryption.
   Reject bad nonce/tag lengths before calling the standard library. Do not offer
   caller-selected nonces or a plaintext fallback.
-- [`secret_binding.go`](secret_binding.go) fixes v2 authenticated data independently of domain
+- [`secret_binding.go`](secret_binding.go) fixes v3 authenticated data independently of domain
   struct layout. Bind all metadata, format and key ID. Preserve UTC nanosecond
   timestamp precision across JSON and provider serialization; BSON dates alone
   lose precision. A format change must be explicit.

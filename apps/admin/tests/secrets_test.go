@@ -62,7 +62,7 @@ func TestSecretCommandsPreserveValuesAndVersionedMutations(t *testing.T) {
 			t.Cleanup(func() { file.Close() })
 			input = file
 		}
-		output, err := secretCommand(t, fixture.Connection(), input, "secrets", "set", "builder-agent", "GITHUB_TOKEN", "--json")
+		output, err := secretCommand(t, fixture.Connection(), input, "secrets", "set", "GITHUB_TOKEN", "--json")
 		if err != nil {
 			t.Fatalf("set secret: %v", err)
 		}
@@ -91,7 +91,7 @@ func TestSecretCommandsPreserveValuesAndVersionedMutations(t *testing.T) {
 		}
 	}
 	for _, args := range [][]string{
-		{"secrets", "list", "builder-agent", "--json"},
+		{"secrets", "list", "--json"},
 		{"secrets", "requests", "builder-agent", "--json"},
 	} {
 		output, err := secretCommand(t, fixture.Connection(), nil, args...)
@@ -102,7 +102,7 @@ func TestSecretCommandsPreserveValuesAndVersionedMutations(t *testing.T) {
 			t.Fatalf("list must return metadata only: %v", err)
 		}
 	}
-	if _, err := secretCommand(t, fixture.Connection(), nil, "secrets", "delete", "builder-agent", "GITHUB_TOKEN", "--json"); err != nil {
+	if _, err := secretCommand(t, fixture.Connection(), nil, "secrets", "delete", "GITHUB_TOKEN", "--json"); err != nil {
 		t.Fatalf("delete secret: %v", err)
 	}
 	state := fixture.Snapshot()
@@ -123,14 +123,14 @@ func TestSecretCommandsRejectUnsafeInputBeforeMutation(t *testing.T) {
 	defer server.Close()
 	connection := client.Connection{URL: server.URL, Credentials: host.BasicCredentials{Username: "operator", Password: "private-password"}}
 	reader := &fakes.CountingReader{}
-	_, err := secretCommand(t, connection, reader, "secrets", "set", "builder-agent", "GITHUB_TOKEN")
+	_, err := secretCommand(t, connection, reader, "secrets", "set", "GITHUB_TOKEN")
 	if err == nil || reader.ReadCount() != 0 || writes.Load() != 0 {
 		t.Fatal("an unrelated 404 prompted for a value or created a secret")
 	}
 	fixture := fixtures.NewSecretAPI(t)
 	for _, args := range [][]string{
-		{"secrets", "set", "builder-agent", "GITHUB_TOKEN", "private-positional-value"},
-		{"secrets", "set", "builder-agent", "GITHUB_TOKEN", "--value", "private-flag-value"},
+		{"secrets", "set", "GITHUB_TOKEN", "private-positional-value"},
+		{"secrets", "set", "GITHUB_TOKEN", "--value", "private-flag-value"},
 	} {
 		output, err := secretCommand(t, fixture.Connection(), reader, args...)
 		var usage *cli.UsageError
@@ -139,7 +139,7 @@ func TestSecretCommandsRejectUnsafeInputBeforeMutation(t *testing.T) {
 		}
 	}
 	for _, value := range []string{strings.Repeat("x", 64<<10+1), string([]byte{0xff})} {
-		if _, err := secretCommand(t, fixture.Connection(), strings.NewReader(value), "secrets", "set", "builder-agent", "GITHUB_TOKEN"); err == nil {
+		if _, err := secretCommand(t, fixture.Connection(), strings.NewReader(value), "secrets", "set", "GITHUB_TOKEN"); err == nil {
 			t.Error("unsafe or oversized stdin secret was accepted")
 		}
 	}
@@ -150,9 +150,9 @@ func TestSecretCommandsRejectUnsafeInputBeforeMutation(t *testing.T) {
 
 func TestSecretWritesValidateMetadataWithoutRetrying(t *testing.T) {
 	const marker = "private-secret-never-display"
-	valid := `{"id":"` + fakes.SecretID + `","agent_type":"builder-agent","name":"GITHUB_TOKEN","version":2,"status":"available"}`
-	key := secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"}
-	expected := adminsecrets.Metadata{ID: fakes.SecretID, AgentType: key.Scope.AgentType, Name: key.Name, Version: 1, Status: "available"}
+	valid := `{"id":"` + fakes.SecretID + `","name":"GITHUB_TOKEN","version":2,"status":"available"}`
+	key := secretmodel.Key{Name: "GITHUB_TOKEN"}
+	expected := adminsecrets.Metadata{ID: fakes.SecretID, Name: key.Name, Version: 1, Status: "available"}
 	for _, test := range []struct {
 		name   string
 		status int
@@ -161,7 +161,6 @@ func TestSecretWritesValidateMetadataWithoutRetrying(t *testing.T) {
 	}{
 		{"concurrent rotation", 409, `{"error":"secret_conflict"}`, adminsecrets.ErrConflict},
 		{"uncertain save", 503, `{"error":"secret_write_uncertain"}`, client.ErrWriteUncertain},
-		{"wrong scope", 200, strings.Replace(valid, "builder-agent", "other-agent", 1), client.ErrWriteUncertain},
 		{"wrong name", 200, strings.Replace(valid, "GITHUB_TOKEN", "OTHER_TOKEN", 1), client.ErrWriteUncertain},
 		{"invalid identity", 200, strings.Replace(valid, fakes.SecretID, marker, 1), client.ErrWriteUncertain},
 		{"changed identity", 200, strings.Replace(valid, fakes.SecretID, "5123e0e2-d5e1-41d0-a321-5cce05fe70d0", 1), client.ErrWriteUncertain},
@@ -190,8 +189,8 @@ func TestSecretWritesValidateMetadataWithoutRetrying(t *testing.T) {
 	defer server.Close()
 	api := fixtures.NewClient(t, server.URL)
 	for _, metadata := range []adminsecrets.Metadata{
-		{ID: fakes.SecretID, AgentType: "other-agent", Name: key.Name, Version: 1, Status: "available"},
-		{ID: fakes.SecretID, AgentType: key.Scope.AgentType, Name: key.Name, Version: ^uint64(0), Status: "available"},
+		{ID: fakes.SecretID, Name: "OTHER_TOKEN", Version: 1, Status: "available"},
+		{ID: fakes.SecretID, Name: key.Name, Version: ^uint64(0), Status: "available"},
 	} {
 		if _, err := adminsecrets.Save(t.Context(), api, key, marker, &metadata); err == nil {
 			t.Error("invalid concurrency metadata was accepted")

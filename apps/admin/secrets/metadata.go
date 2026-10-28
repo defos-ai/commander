@@ -11,7 +11,6 @@ import (
 // are retained so a later mutation cannot replace a concurrently changed secret.
 type Metadata struct {
 	ID        string     `json:"id"`
-	AgentType string     `json:"agent_type"`
 	Name      string     `json:"name"`
 	Version   uint64     `json:"version"`
 	Status    string     `json:"status"`
@@ -32,7 +31,7 @@ type Request struct {
 }
 
 func (metadata Metadata) key() secretmodel.Key {
-	return secretmodel.Key{Scope: secretmodel.Scope{AgentType: metadata.AgentType}, Name: metadata.Name}
+	return secretmodel.Key{Name: metadata.Name}
 }
 
 func validMetadata(metadata Metadata, key secretmodel.Key) bool {
@@ -49,8 +48,8 @@ func validMetadata(metadata Metadata, key secretmodel.Key) bool {
 }
 
 func validRequest(request Request) bool {
-	key := secretmodel.Key{Scope: secretmodel.Scope{AgentType: request.AgentType}, Name: request.Name}
-	if !id.Valid(request.ID) || key.Validate() != nil || !id.ValidAgent(request.AgentID) ||
+	key := secretmodel.Key{Name: request.Name}
+	if !id.Valid(request.ID) || key.Validate() != nil || !id.ValidType(request.AgentType) || !id.ValidAgent(request.AgentID) ||
 		!validTime(request.RequestedAt) || !validTime(request.ExpiresAt) || !request.ExpiresAt.After(request.RequestedAt) {
 		return false
 	}

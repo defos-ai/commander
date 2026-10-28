@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/apps/admin/client"
 	adminsecrets "github.com/defos-ai/commander/apps/admin/secrets"
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	"github.com/defos-ai/commander/framework/id"
 	"github.com/muesli/cancelreader"
 	"golang.org/x/term"
 )
@@ -32,17 +33,14 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 		return &UsageError{cause: errors.New("invalid secret command or arguments; run commander-admin secrets --help")}
 	}
 	var key secrets.Key
-	if len(args) > 1 {
-		key.Scope.AgentType = args[1]
-		if err := key.Scope.Validate(); err != nil {
-			return &UsageError{cause: err}
-		}
-	}
 	if command == "set" || command == "delete" {
-		key.Name = args[2]
+		key.Name = args[1]
 		if err := key.Validate(); err != nil {
 			return &UsageError{cause: err}
 		}
+	}
+	if command == "requests" && len(args) == 2 && !id.ValidType(args[1]) {
+		return &UsageError{cause: errors.New("invalid agent type")}
 	}
 	api, err := client.New(configuration.connection)
 	if err != nil {
@@ -51,7 +49,7 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 	defer api.Close()
 	switch command {
 	case "list":
-		items, err := adminsecrets.List(ctx, api, key.Scope.AgentType)
+		items, err := adminsecrets.List(ctx, api)
 		if err != nil {
 			return err
 		}
@@ -70,7 +68,11 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 		}
 		return err
 	case "requests":
-		items, err := adminsecrets.Requests(ctx, api, key.Scope.AgentType)
+		agentType := ""
+		if len(args) == 2 {
+			agentType = args[1]
+		}
+		items, err := adminsecrets.Requests(ctx, api, agentType)
 		if err != nil {
 			return err
 		}
@@ -102,12 +104,11 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 		}
 		if configuration.json {
 			return writeJSON(stdout, struct {
-				AgentType string `json:"agent_type"`
-				Name      string `json:"name"`
-				Deleted   bool   `json:"deleted"`
-			}{key.Scope.AgentType, key.Name, true})
+				Name    string `json:"name"`
+				Deleted bool   `json:"deleted"`
+			}{key.Name, true})
 		}
-		_, err := fmt.Fprintf(stdout, "Deleted %s · %s.\n", key.Scope.AgentType, key.Name)
+		_, err := fmt.Fprintf(stdout, "Deleted %s.\n", key.Name)
 		return err
 	}
 	if stdin == nil {
@@ -125,7 +126,7 @@ func runSecrets(ctx context.Context, configuration config, stdin io.Reader, stdo
 	if configuration.json {
 		return writeJSON(stdout, saved)
 	}
-	_, err = fmt.Fprintf(stdout, "Saved %s · %s · v%d. Waiting for agent readiness.\n", saved.AgentType, saved.Name, saved.Version)
+	_, err = fmt.Fprintf(stdout, "Saved %s · v%d. Waiting for agent readiness.\n", saved.Name, saved.Version)
 	return err
 }
 
@@ -135,11 +136,11 @@ func validSecretArguments(command string, args []string, configuration config) b
 	}
 	switch command {
 	case "list":
-		return len(args) == 2
+		return len(args) == 1
 	case "requests":
 		return len(args) == 1 || len(args) == 2
 	case "set", "delete":
-		return len(args) == 3
+		return len(args) == 2
 	default:
 		return false
 	}
@@ -268,10 +269,10 @@ func secretHelp(output io.Writer) error {
 	_, err := io.WriteString(output, `Usage: commander-admin secrets <command> [options]
 
 Commands:
-  list AGENT_TYPE              List saved secret metadata
+  list                         List saved secret metadata
   requests [AGENT_TYPE]        List pending request metadata
-  set AGENT_TYPE NAME          Read piped input or open a masked terminal prompt
-  delete AGENT_TYPE NAME       Delete the observed secret ID and version
+  set NAME                    Read piped input or open a masked terminal prompt
+  delete NAME                 Delete the observed secret ID and version
 
 Values are write-only. Use --json for metadata results; never pass values as arguments.
 Piped or redirected input preserves exact bytes, including newlines (UTF-8, up to 64 KiB).

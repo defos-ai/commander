@@ -193,7 +193,7 @@ Answer questions with **↑/↓** and **Enter**, or type your own answer.
 **Tab** returns to chat.
 
 Manage missions with `/admin missions list`, `/admin missions import FILE` or
-`/admin missions export NAME`. Use `/admin secrets set AGENT_TYPE NAME` to open
+`/admin missions export NAME`. Use `/admin secrets set NAME` to open
 a masked value form. These commands call the API directly, outside the model.
 
 For failures, use `--debug` for redacted details and inspect saved work before

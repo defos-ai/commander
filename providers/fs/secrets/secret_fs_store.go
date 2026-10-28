@@ -14,7 +14,7 @@ import (
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
 )
 
-// One persistent OS lock protects both global ID and scoped-name uniqueness;
+// One persistent OS lock protects both global ID and name uniqueness;
 // deletion and identity retirement commit through the same atomic replacement.
 type SecretFsStore struct{ file *jsonfile.Collection }
 
@@ -96,17 +96,14 @@ func (s *SecretFsStore) GetMetadata(ctx context.Context, key secretmodel.Key) (s
 	return secret.Metadata, err
 }
 
-func (s *SecretFsStore) List(ctx context.Context, scope secretmodel.Scope) ([]secretmodel.Metadata, error) {
+func (s *SecretFsStore) List(ctx context.Context) ([]secretmodel.Metadata, error) {
 	if err := checkContext(ctx); err != nil {
-		return nil, err
-	}
-	if err := scope.Validate(); err != nil {
 		return nil, err
 	}
 	result := []secretmodel.Metadata{}
 	err := s.view(ctx, func(records []storedRecord) error {
 		for _, record := range records {
-			if record.Secret != nil && record.Secret.Metadata.Key.Scope == scope {
+			if record.Secret != nil {
 				result = append(result, record.Secret.Metadata)
 			}
 		}

@@ -10,7 +10,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Retirement drops ciphertext and retains only identity and scope. Keep markers
+// Retirement drops ciphertext and retains only identity and name. Keep markers
 // indefinitely so delayed writes cannot recreate old identities after a restart.
 type retiredSecret struct {
 	ID  string          `json:"id"`

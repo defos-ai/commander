@@ -4,9 +4,8 @@ import type { SecretMetadata } from '../../src/api/secrets';
 import { apiURL, connect, password, username } from '../fixtures/e2e';
 
 test('manage write-only secrets through the signed-in Admin connection', async ({ page, playwright }) => {
-  const agentType = `ui-test-${randomUUID()}`;
-  const name = 'SERVICE_TOKEN';
-  const secretPath = `/api/v1/secrets/${agentType}/${name}`;
+  const name = `UI_TEST_${randomUUID()}`;
+  const secretPath = `/api/v1/secrets/${name}`;
   const firstValue = `test-value-${randomUUID()}`;
   const replacement = `replacement-${randomUUID()}\nsecond line`;
   const urls: string[] = [];
@@ -26,7 +25,6 @@ test('manage write-only secrets through the signed-in Admin connection', async (
     await expect(navigation.getByRole('button', { name: 'Agents', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.getByRole('button', { name: 'Add secret', exact: true }).click();
     const create = page.getByRole('dialog', { name: 'Add secret', exact: true });
-    await create.getByLabel('Agent type', { exact: true }).fill(agentType);
     await create.getByLabel('Name', { exact: true }).fill(name);
     await expect(create.getByLabel('Value', { exact: true })).toHaveAttribute('type', 'password');
     await create.getByLabel('Value', { exact: true }).fill(firstValue);
@@ -41,8 +39,6 @@ test('manage write-only secrets through the signed-in Admin connection', async (
 
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
-    await page.getByLabel('Agent type', { exact: true }).fill(agentType);
-    await page.getByRole('button', { name: 'Show', exact: true }).click();
     await page.getByRole('button', { name: `Replace ${name}`, exact: true }).click();
     const replace = page.getByRole('dialog', { name: 'Replace secret', exact: true });
     await expect(replace.getByLabel('Value', { exact: true })).toHaveValue('');

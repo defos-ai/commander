@@ -99,32 +99,14 @@ func TestSecretEncryptionRoundTripAndIsolation(t *testing.T) {
 	}
 }
 
-func TestSecretEncryptionPersistedV2Envelope(t *testing.T) {
-	// Created independently with standard AES-GCM and literal v2 authenticated
-	// data. Keep this fixture fixed so an AAD change cannot silently strand records.
-	const encoded = `{
-		"metadata": {
-			"id": "00000000-0000-4000-8000-000000000001",
-			"key": {"scope": {"agent_type": "browser"}, "name": "API_TOKEN"},
-			"version": 2,
-			"created_at": "2026-10-16T11:00:00Z",
-			"updated_at": "2026-10-16T12:00:00Z",
-			"expires_at": "2026-10-16T13:00:00Z"
-		},
-		"value": {
-			"format": "aes-256-gcm-v2",
-			"key_id": "sha256-4884fdaafea47c29fea7159d0daddd9c",
-			"nonce": "AAECAwQFBgcICQoL",
-			"ciphertext": "8WHobm+UVm3+678hV8zHozqpYJ69mVJp3aji4wolEwTQ5bzaIYw1mQ8WGw=="
-		}
-	}`
+func TestSecretEncryptionPersistedV3Envelope(t *testing.T) {
 	var record secrets.Secret
-	if err := json.Unmarshal([]byte(encoded), &record); err != nil {
+	if err := json.Unmarshal([]byte(fixtures.PersistedV3Envelope), &record); err != nil {
 		t.Fatal(err)
 	}
 	plaintext, err := fixtures.Cipher(t).Decrypt(record)
-	if err != nil || string(plaintext) != "persisted v2 secret fixture" {
-		t.Fatalf("persisted v2 envelope could not be decrypted: %v", err)
+	if err != nil || string(plaintext) != "persisted v3 secret fixture" {
+		t.Fatalf("persisted v3 envelope could not be decrypted: %v", err)
 	}
 }
 
@@ -139,7 +121,6 @@ func TestSecretEncryptionAuthenticatesMetadata(t *testing.T) {
 		change func(*secrets.Metadata)
 	}{
 		{"identity", func(m *secrets.Metadata) { m.ID = fixtures.DeliveryID }},
-		{"agent type", func(m *secrets.Metadata) { m.Key.Scope.AgentType = "other-agent" }},
 		{"name", func(m *secrets.Metadata) { m.Key.Name = "OTHER_TOKEN" }},
 		{"version", func(m *secrets.Metadata) { m.Version++ }},
 		{"creation", func(m *secrets.Metadata) { m.CreatedAt = m.CreatedAt.Add(-time.Second) }},
@@ -172,7 +153,7 @@ func TestSecretEncryptionRejectsCorruptEnvelopes(t *testing.T) {
 		change func(*secrets.EncryptedValue)
 	}{
 		{"format", func(v *secrets.EncryptedValue) { v.Format = "unsupported-v3" }},
-		{"previous format", func(v *secrets.EncryptedValue) { v.Format = "aes-256-gcm-v1" }},
+		{"previous format", func(v *secrets.EncryptedValue) { v.Format = "aes-256-gcm-v2" }},
 		{"key identifier", func(v *secrets.EncryptedValue) { v.KeyID = "unknown-key" }},
 		{"missing nonce", func(v *secrets.EncryptedValue) { v.Nonce = nil }},
 		{"short nonce", func(v *secrets.EncryptedValue) { v.Nonce = v.Nonce[:11] }},

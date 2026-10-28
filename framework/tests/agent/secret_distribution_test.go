@@ -50,7 +50,7 @@ func TestAgentSecretDeliveryChecksBindingAndRetriesExactAcknowledgement(t *testi
 		func(m messages.Message) messages.Message { m.CorrelationID = id.New(); return m },
 		func(m messages.Message) messages.Message {
 			copy := secret.Clone()
-			copy.Metadata.Key.Scope.AgentType = "other"
+			copy.Metadata.Key.Name = "OTHER_TOKEN"
 			m.Payload, _ = json.Marshal(agentevents.SecretDelivery{Secret: copy})
 			return m
 		},
@@ -299,8 +299,8 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-private"}
 	command := fixture.Command(t, "inspect", `{"private":true}`, work)
 	request := fixture.Request(t, "")
-	if request.Key.Scope.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.Runtime().ID() {
-		t.Fatal("dynamic request lost its agent scope")
+	if request.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.Runtime().ID() {
+		t.Fatal("dynamic request lost its recipient or shared name")
 	}
 	if fixture.Runtime().Status() != agent.AgentWorking || privateCalls.Load() != 1 {
 		t.Fatal("request did not suspend the active action")

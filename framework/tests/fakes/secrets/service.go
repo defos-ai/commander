@@ -58,7 +58,7 @@ func (s *ServiceStore) GetMetadata(ctx context.Context, key secretmodel.Key) (se
 	return s.record.Metadata, nil
 }
 
-func (s *ServiceStore) List(ctx context.Context, scope secretmodel.Scope) ([]secretmodel.Metadata, error) {
+func (s *ServiceStore) List(ctx context.Context) ([]secretmodel.Metadata, error) {
 	s.reads++
 	if s.readErr != nil {
 		return nil, s.readErr
@@ -66,7 +66,7 @@ func (s *ServiceStore) List(ctx context.Context, scope secretmodel.Scope) ([]sec
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if s.record.Metadata.ID != "" && s.record.Metadata.Key.Scope == scope {
+	if s.record.Metadata.ID != "" {
 		return []secretmodel.Metadata{s.record.Metadata}, nil
 	}
 	return []secretmodel.Metadata{}, nil

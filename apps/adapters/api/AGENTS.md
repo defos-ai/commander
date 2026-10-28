@@ -11,8 +11,9 @@
 - Use plural endpoint names. Operation routes, handlers and their OpenAPI schemas
   belong in [endpoints/operations/](endpoints/operations/). The root
   [openapi.go](openapi.go) assembles the document and catalog schemas. Secret
-  handlers and schemas live together in [endpoints/secrets.go](endpoints/secrets.go)
-  and [endpoints/secret_requests.go](endpoints/secret_requests.go).
+  handlers live in [endpoints/secrets/secrets.go](endpoints/secrets/secrets.go)
+  and [endpoints/secrets/requests.go](endpoints/secrets/requests.go); keep their
+  schemas in [endpoints/secrets/openapi.go](endpoints/secrets/openapi.go).
 - Derive schemas from API models and update routes, mappings, validation, schemas
   and consumers together when API behavior changes. Keep Swagger assets local and
   documentation disabled unless the host explicitly enables it.
@@ -122,15 +123,16 @@
   and generation outside the standalone API host.
   `cli/secrets.go` selects FS or Mongo via `DATABASE_URL` and injects the framework
   service. `/api/v1/secrets` accepts write-only values and returns explicit metadata
-  mappings. Keys contain the agent type and secret name; detail routes are
-  `/api/v1/secrets/{agent_type}/{name}`. Replacements/deletions require current
+  mappings. Keys contain only the shared secret name; detail routes are
+  `/api/v1/secrets/{name}`. Replacements/deletions require current
   ID and version. Preserve
   `secret_write_uncertain` ahead of timeout errors; never retry automatically.
   Saving secrets makes them available to controller reconciliation; API success
   does not confirm agent installation. Keep distribution outside HTTP handlers.
-- `/api/v1/secrets/requests` shares the secret feature gate and database. It projects
+- `/api/v1/secret-requests` shares the secret feature gate and database. It projects
   pending, unexpired requests into explicit metadata DTOs, sorted by request ID;
-  optional `agent_type` and `agent_id` filters intersect. Reject empty, repeated,
+  optional recipient `agent_type` and `agent_id` filters intersect. Secret metadata
+  has no agent type; requests retain their registered recipient type. Reject empty, repeated,
   unknown or malformed filters. Capture one time per response and never settle or
   expire requests while reading. Missing/expired values need input; available
   values await delivery unless a valid reserved delivery matches their ID/version.

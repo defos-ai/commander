@@ -201,7 +201,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		t.Fatal("API did not retain the accepted task while waiting for its secret")
 	}
 	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath,
-		`{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`), http.StatusCreated)
+		`{"name":"GITHUB_TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`), http.StatusCreated)
 	hostfixtures.AwaitSecretInstallation(t, config.SecretRequestStore, deliveries, created.ID, 1)
 	var resumed models.OperationResponse
 	hostfixtures.AwaitSecretCondition(t, "queued operation task resuming after secret installation", func() bool {
@@ -313,7 +313,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		t.Fatal("runtime wait leaked into another operation")
 	}
 	decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath,
-		`{"agent_type":"builder-agent","name":"RUNTIME_TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`), http.StatusCreated)
+		`{"name":"RUNTIME_TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`), http.StatusCreated)
 	var runtimeResumed models.OperationResponse
 	hostfixtures.AwaitSecretCondition(t, "same execution resumes after on-demand secret submission", func() bool {
 		runtimeResumed = decodeResponse[models.OperationResponse](t, secretRequest(t, server, http.MethodGet, runtimePath, ""))

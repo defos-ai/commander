@@ -114,7 +114,6 @@ func TestSecretDeliveryRequiresMatchingPendingRequest(t *testing.T) {
 		{"request identity", func(r *secretmodel.Request) { r.ID = id.New() }},
 		{"recipient", func(r *secretmodel.Request) { r.AgentID = "builder-agent-87654321" }},
 		{"key", func(r *secretmodel.Request) { r.Key.Name = "OTHER_TOKEN" }},
-		{"agent type", func(r *secretmodel.Request) { r.Key.Scope.AgentType = "other-agent" }},
 		{"deadline", func(r *secretmodel.Request) { r.ExpiresAt = delivery.ExpiresAt.Add(-time.Second) }},
 		{"not yet requested", func(r *secretmodel.Request) { r.RequestedAt = delivery.CreatedAt.Add(time.Second) }},
 		{"cancelled", func(r *secretmodel.Request) {
@@ -132,7 +131,7 @@ func TestSecretDeliveryRequiresMatchingPendingRequest(t *testing.T) {
 	wrongKey := secret.Clone()
 	wrongKey.Metadata.Key.Name = "OTHER_TOKEN"
 	if _, err := agentevents.NewSecretDelivery(request, wrongKey); err == nil {
-		t.Fatal("constructor delivered a different scoped key")
+		t.Fatal("constructor delivered a different shared name")
 	}
 	expired := request.Clone()
 	expired.ExpiresAt = expired.RequestedAt.Add(time.Second)

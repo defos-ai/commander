@@ -15,8 +15,9 @@
   and types in plural packages, such as `agents.Agent` and `agents.AgentStore`.
   Transport commands belong in [`comms/clients`](comms/clients/).
 - [`secrets`](domain/secrets/) separates public metadata from encrypted storage
-  records. Keys use the registered agent type and a secret name. Secret versions
-  identify value/validity changes, not provider revisions; recreated keys get fresh IDs.
+  records. Keys identify one shared value by name within a deployment.
+  Secret versions identify value/validity changes, not provider revisions;
+  recreated keys get fresh IDs.
   Requests identify the recipient agent and secret key; operation/task waits use
   `MissingRequirements` separately. Request fulfillment
   records a specific delivery acknowledged by its recipient, never mere availability.
@@ -286,11 +287,11 @@
 - `Action.RequiredSecrets` declares names even when discovery succeeds;
   `MissingRequirements` describes only current blockers. Requirement kind `secret`
   identifies managed secrets; the `Sensitive` flag on `configuration` identifies
-  sensitive host configuration and does not imply a managed value. Resolve declarations
-  against the registered agent type. Preserve declarations in snapshots, catalog
+  sensitive host configuration and does not imply a managed value. Resolve
+  declarations by shared secret name. Preserve declarations in snapshots, catalog
   projections and independent copies.
   Use per-agent actions for secret distribution; the global action catalog does
-  not identify the recipient or scope. Gate declared names in agent snapshots and
+  not identify the recipient. Gate declared names in agent snapshots and
   again before execution; missing secret configuration must not bypass the gate.
 - Agent secret synchronization uses `AgentConfig.Secrets` and the existing event
   inbox, independently of long action commands. Keep values in memory and expose
@@ -299,7 +300,7 @@
   request/delivery/acknowledgement identities on retry; refresh with fresh requests
   and reject inactive or expired deliveries. Clear held values at shutdown.
   `action.RequestSecret(ctx, name)` lets a running action request a valid name
-  on demand within its agent type. Keep that decision in action code; do not add
+  on demand by its shared name. Keep that decision in action code; do not add
   input-condition rules to action metadata or controller preflight. Restrict the
   request capability to active execution in `Serve`, and end waits on caller or
   host cancellation. Wake waiters directly on installation, independently of
@@ -315,7 +316,7 @@
 - Controller secret synchronization runs in the existing owner loop with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any
-  valid name within that type; static declarations govern readiness, not access.
+  valid shared name; static declarations govern readiness, not access.
   The controller never decrypts. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
 - Preserve schema validation of action input, output and proposed next actions.

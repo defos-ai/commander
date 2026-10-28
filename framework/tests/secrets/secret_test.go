@@ -11,13 +11,11 @@ import (
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/secrets"
 )
 
-func TestScopeAndInvalidIdentities(t *testing.T) {
-	scope, err := secrets.NewScope("browser")
-	if err != nil || scope.AgentType != "browser" {
-		t.Fatalf("scope = %+v, error = %v", scope, err)
-	}
+func TestSecretKeysAndRecipientIdentities(t *testing.T) {
 	for _, agentType := range []string{"", "../browser", "browser/other", "Browser", "browser--agent"} {
-		if _, err := secrets.NewScope(agentType); err == nil {
+		request := fixtures.Request()
+		request.AgentType = agentType
+		if err := request.Validate(); err == nil {
 			t.Errorf("invalid agent type accepted: %q", agentType)
 		}
 	}
@@ -26,6 +24,12 @@ func TestScopeAndInvalidIdentities(t *testing.T) {
 	key.Name = "../API_TOKEN"
 	if err := key.Validate(); err == nil {
 		t.Error("path-like secret name accepted")
+	}
+	for _, name := range []string{"requests", "Requests", "REQUESTS", "request", "requests.token", "requests-token"} {
+		key.Name = name
+		if err := key.Validate(); err != nil {
+			t.Errorf("valid secret name %q rejected: %v", name, err)
+		}
 	}
 	metadata := fixtures.Secret().Metadata
 	metadata.ID = "secret-1"

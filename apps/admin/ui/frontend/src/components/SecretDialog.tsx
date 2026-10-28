@@ -7,7 +7,7 @@ import { Button } from './Button';
 import { Dialog } from './Dialog';
 
 export type SecretDialogTarget =
-  | { mode: 'create'; agentType: string }
+  | { mode: 'create' }
   | { mode: 'provide'; key: SecretKey }
   | { mode: 'replace' | 'delete'; secret: SecretMetadata };
 
@@ -17,7 +17,7 @@ type Props = {
   target: SecretDialogTarget;
   onClose: () => void;
   onRefresh: () => void;
-  onCompleted: (agentType: string, deleted: boolean) => void;
+  onCompleted: (deleted: boolean) => void;
 };
 
 function localExpiry(secret?: SecretMetadata): string {
@@ -31,7 +31,6 @@ export function SecretDialog({ connection, credentials, target, onClose, onRefre
   const identity = useId();
   const initial = 'secret' in target ? target.secret : undefined;
   const key = target.mode === 'provide' ? target.key : initial;
-  const [agentType, setAgentType] = useState(target.mode === 'create' ? target.agentType : key?.agent_type ?? '');
   const [name, setName] = useState(key?.name ?? '');
   const [metadata, setMetadata] = useState(initial);
   const [value, setValue] = useState('');
@@ -109,13 +108,13 @@ export function SecretDialog({ connection, credentials, target, onClose, onRefre
       } else {
         const input = { value: newValue, expires_at: expiresAt?.toISOString() };
         if (metadata) {
-          await replaceSecret(connection.url, credentials, { agent_type: metadata.agent_type, name: metadata.name },
+          await replaceSecret(connection.url, credentials, { name: metadata.name },
             { ...input, id: metadata.id, version: metadata.version }, controller.signal);
         } else {
-          await createSecret(connection.url, credentials, { ...input, agent_type: agentType, name }, controller.signal);
+          await createSecret(connection.url, credentials, { ...input, name }, controller.signal);
         }
       }
-      if (!controller.signal.aborted && pending.current === controller) onCompleted(agentType, deleting);
+      if (!controller.signal.aborted && pending.current === controller) onCompleted(deleting);
     } catch (cause) {
       if (!controller.signal.aborted && pending.current === controller) setError(cause instanceof SecretError ? cause : new SecretError('unknown'));
     } finally {
@@ -129,13 +128,10 @@ export function SecretDialog({ connection, credentials, target, onClose, onRefre
   return <Dialog open title={title} description={deleting ? t($ => $.secrets.deleteDescription) : undefined} onClose={() => close()}>
     <form className="secret-form" onSubmit={submit} autoComplete="off">
       {target.mode === 'create' ? <>
-        <div className="form-field"><label htmlFor={`${identity}-type`}>{t($ => $.secrets.agentType)}</label>
-          <input ref={!agentType ? firstField : undefined} id={`${identity}-type`} value={agentType} required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={63}
-            disabled={blocked} autoCapitalize="none" spellCheck={false} onChange={event => setAgentType(event.target.value)} /></div>
         <div className="form-field"><label htmlFor={`${identity}-name`}>{t($ => $.secrets.name)}</label>
-          <input ref={agentType ? firstField : undefined} id={`${identity}-name`} value={name} required pattern={'[A-Za-z0-9_][A-Za-z0-9_.\\-]*'} maxLength={128}
+          <input ref={firstField} id={`${identity}-name`} value={name} required pattern={'[A-Za-z0-9_][A-Za-z0-9_.\\-]*'} maxLength={128}
             disabled={blocked} autoCapitalize="none" spellCheck={false} onChange={event => setName(event.target.value)} /></div>
-      </> : <p className="secret-key"><span>{agentType}</span><strong>{name}</strong></p>}
+      </> : <p className="secret-key"><strong>{name}</strong></p>}
       {loading && <p className="catalog-loading" role="status"><LoaderCircle size={16} className="connection-form-spinner" aria-hidden="true" />{t($ => $.secrets.loadingMetadata)}</p>}
       {!deleting && <>
         <div className="form-field"><label htmlFor={`${identity}-value`}>{t($ => $.secrets.value)}</label>

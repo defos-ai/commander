@@ -79,7 +79,7 @@ func TestSecretDeclarationMappingsDoNotAliasSource(t *testing.T) {
 	}}}
 	mapped := mappings.ToPreflightResponse(preflight)
 	if mapped.Actions[0].UnavailableAgents[0].AgentType != "builder-agent" {
-		t.Fatal("API preflight lost the managed secret scope")
+		t.Fatal("API preflight lost the shared secret name or requesting agent type")
 	}
 	if mapped.Actions[0].UnavailableAgents[0].MissingRequirements[0].Kind != "secret" {
 		t.Fatal("API preflight lost the managed secret kind")

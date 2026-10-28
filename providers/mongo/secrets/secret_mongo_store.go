@@ -25,11 +25,11 @@ func NewSecretMongoStore(ctx context.Context, database *store.MongoStore) (*Secr
 	if database == nil {
 		return nil, errors.New("secret database is required")
 	}
-	// _id is permanent, while only active records reserve the scoped name.
+	// _id is permanent, while only active records reserve the shared name.
 	// Never expire these documents: tombstones prevent delayed resurrection.
 	index := mongo.IndexModel{
-		Keys: bson.D{{Key: "agent_type", Value: 1}, {Key: "name", Value: 1}},
-		Options: options.Index().SetName("active_secret_key").SetUnique(true).
+		Keys: bson.D{{Key: "name", Value: 1}},
+		Options: options.Index().SetName("active_secret_name").SetUnique(true).
 			SetPartialFilterExpression(bson.M{"active": true}).SetCollation(&options.Collation{Locale: "simple"}),
 	}
 	if err := database.EnsureIndexes(ctx, collection, []mongo.IndexModel{index}); err != nil {
@@ -88,15 +88,12 @@ func (s *SecretMongoStore) GetMetadata(ctx context.Context, key secretmodel.Key)
 	return secret.Metadata, err
 }
 
-func (s *SecretMongoStore) List(ctx context.Context, scope secretmodel.Scope) ([]secretmodel.Metadata, error) {
+func (s *SecretMongoStore) List(ctx context.Context) ([]secretmodel.Metadata, error) {
 	if err := checkContext(ctx); err != nil {
 		return nil, err
 	}
-	if err := scope.Validate(); err != nil {
-		return nil, err
-	}
 	var documents []secretDocument
-	filter := bson.M{"agent_type": scope.AgentType, "active": true}
+	filter := bson.M{"active": true}
 	err := s.database.Find(ctx, collection, filter, &documents,
 		options.Find().SetSort(bson.D{{Key: "name", Value: 1}}).SetCollation(&options.Collation{Locale: "simple"}))
 	if err != nil {
@@ -180,7 +177,7 @@ func (s *SecretMongoStore) Delete(ctx context.Context, key secretmodel.Key, secr
 }
 
 func activeKey(key secretmodel.Key) bson.M {
-	return bson.M{"agent_type": key.Scope.AgentType, "name": key.Name, "active": true}
+	return bson.M{"name": key.Name, "active": true}
 }
 
 func (s *SecretMongoStore) find(ctx context.Context, filter bson.M) (secretDocument, secretmodel.Secret, error) {

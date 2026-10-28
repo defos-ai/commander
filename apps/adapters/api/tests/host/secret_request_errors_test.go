@@ -171,7 +171,7 @@ func TestPendingSecretRequestOpenAPIDescribesSafeProgress(t *testing.T) {
 	if result.Status != http.StatusOK || json.Unmarshal([]byte(result.Body), &document) != nil {
 		t.Fatal("could not read pending secret request documentation")
 	}
-	operation, exists := document.Paths["/api/v1/secrets/requests"]["get"]
+	operation, exists := document.Paths["/api/v1/secret-requests"]["get"]
 	if !exists {
 		t.Fatal("pending secret request query is undocumented")
 	}

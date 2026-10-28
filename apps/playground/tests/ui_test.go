@@ -641,7 +641,7 @@ func TestPreflightUpdatesReachModelWithoutRepeatingUnchangedRequirements(t *test
 			}
 		}
 		if !strings.Contains(last, `"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]`) || !strings.Contains(last, `"agent_type":"builder-agent"`) {
-			t.Error("managed secret names and scope did not reach the model's preflight evidence")
+			t.Error("managed secret names and recipient type did not reach the model's preflight evidence")
 		}
 		message := "Requirements need operator attention"
 		if requests.Add(1) > 1 {

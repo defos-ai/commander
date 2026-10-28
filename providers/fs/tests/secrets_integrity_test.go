@@ -54,7 +54,7 @@ func TestSecretFsStoreRejectsCorruptSnapshots(t *testing.T) {
 			replacement := fixtures.EncryptSecret(t, metadata)
 			checks := []func() error{
 				func() error { _, err := store.Get(t.Context(), value.Metadata.Key); return err },
-				func() error { _, err := store.List(t.Context(), value.Metadata.Key.Scope); return err },
+				func() error { _, err := store.List(t.Context()); return err },
 				func() error { return store.Create(t.Context(), value) },
 				func() error { return store.Replace(t.Context(), replacement, 1) },
 				func() error { return store.Delete(t.Context(), value.Metadata.Key, value.Metadata.ID, 1) },
@@ -144,7 +144,7 @@ func TestSecretFsStoreRejectsInvalidRecords(t *testing.T) {
 		}
 	}
 	assertFsSecret(t, store, value)
-	items, err := store.List(t.Context(), value.Metadata.Key.Scope)
+	items, err := store.List(t.Context())
 	if err != nil || len(items) != 1 {
 		t.Fatalf("invalid writes changed inventory: count=%d, error=%v", len(items), err)
 	}

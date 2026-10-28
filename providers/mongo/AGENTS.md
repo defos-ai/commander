@@ -60,7 +60,7 @@ artifact bytes and reports belong to the separate storage provider.
   rollback or discard `operations.ErrWriteUncertain` while wrapping errors.
 - [`SecretMongoStore`](secrets/secret_mongo_store.go) retains every secret UUID in
   `secrets`; deletion drops its encrypted payload and marks the identity inactive.
-  A partial unique index reserves agent-type/name pairs only for active records. Use simple
+  A partial unique index reserves shared secret names only for active records. Use simple
   collation for case-sensitive names and never TTL-delete expired or retired IDs.
   JSON payloads preserve authenticated nanoseconds and uint64 versions; validate
   their identity against indexed fields. The store never decrypts or loads keys.

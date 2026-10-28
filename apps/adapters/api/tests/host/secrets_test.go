@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/cli"
-	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	"github.com/defos-ai/commander/apps/adapters/api/tests/fakes"
 	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	"github.com/defos-ai/commander/framework/crypto"
@@ -31,7 +31,6 @@ import (
 
 type secretMetadata struct {
 	ID        string     `json:"id"`
-	AgentType string     `json:"agent_type"`
 	Name      string     `json:"name"`
 	Version   uint64     `json:"version"`
 	CreatedAt time.Time  `json:"created_at"`
@@ -44,11 +43,11 @@ func TestSecretAPILifecyclePersistsOnlyEncryptedValues(t *testing.T) {
 	fixture := hostfixtures.New(t)
 	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
 	server := hostfixtures.Start(t, fixture.LocalArgs())
-	createBody := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
+	createBody := `{"name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
 	createdResponse := secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, createBody)
 	created := decodeSecretResponse[secretMetadata](t, createdResponse, http.StatusCreated)
-	if createdResponse.Header.Get("Location") != hostfixtures.SecretPath || created.AgentType != "builder-agent" || created.Name != "GITHUB_TOKEN" || created.Version != 1 || created.Status != "available" || created.ExpiresAt != nil || created.CreatedAt.IsZero() || !created.CreatedAt.Equal(created.UpdatedAt) {
-		t.Fatal("create did not return the new scoped metadata and its resource location")
+	if createdResponse.Header.Get("Location") != hostfixtures.SecretPath || created.Name != "GITHUB_TOKEN" || created.Version != 1 || created.Status != "available" || created.ExpiresAt != nil || created.CreatedAt.IsZero() || !created.CreatedAt.Equal(created.UpdatedAt) {
+		t.Fatal("create did not return the new shared metadata and its resource location")
 	}
 	assertSecretError(t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, createBody), http.StatusConflict, "secret_conflict")
 	fetched := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretPath, ""), http.StatusOK)
@@ -104,7 +103,7 @@ func TestInjectedSecretCipherOverridesEnvironment(t *testing.T) {
 				t.Fatal(err)
 			}
 			server := hostfixtures.Start(t, fixture.LocalArgs(), cli.Options{SecretCipher: cipher})
-			body := `{"agent_type":"builder-agent","name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
+			body := `{"name":"GITHUB_TOKEN","value":"` + hostfixtures.SecretTestValue + `"}`
 			created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, body), http.StatusCreated)
 			assertSecretOnDisk(t, fixture.Root, created, hostfixtures.SecretTestValue)
 			server.Stop(t)
@@ -140,13 +139,9 @@ func TestUninitializedInjectedSecretCipherFailsBeforeStartup(t *testing.T) {
 	}
 }
 
-func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
+func TestSecretInventorySharesNamesAndProjectsExpiry(t *testing.T) {
 	fixture := hostfixtures.New(t)
-	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
-	store, err := fssecrets.NewSecretFsStore(filepath.Join(fixture.Root, "database"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	requests, store := hostfixtures.SecretRequestStores(t, fixture)
 	cipher, err := crypto.NewSecretCipher(hostfixtures.SecretTestKey)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +149,7 @@ func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	created := time.Date(2000, 1, 1, 0, 0, 0, 123456789, time.UTC)
 	expired, err := cipher.Encrypt(secretmodel.Metadata{
 		ID:      "00000000-0000-4000-8000-000000000001",
-		Key:     secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: "OLD_TOKEN"},
+		Key:     secretmodel.Key{Name: "OLD_TOKEN"},
 		Version: 1, CreatedAt: created, UpdatedAt: created, ExpiresAt: created.Add(time.Hour),
 	}, []byte(hostfixtures.SecretTestValue))
 	if err != nil {
@@ -163,39 +158,49 @@ func TestSecretInventoryScopesAndProjectsExpiry(t *testing.T) {
 	if err := store.Create(t.Context(), expired); err != nil {
 		t.Fatal(err)
 	}
-	server := hostfixtures.Start(t, fixture.LocalArgs())
-	for _, body := range []string{
-		`{"agent_type":"builder-agent","name":"A_TOKEN","value":""}`,
-		`{"agent_type":"web-agent","name":"A_TOKEN","value":""}`,
-	} {
-		decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, body), http.StatusCreated)
+	handler := hostfixtures.SecretEndpoints(hostfixtures.PendingRequestService(t, store), requests)
+	send := func(method, path, body string) hostfixtures.Response {
+		return hostfixtures.SecretEndpointResponse(t.Context(), handler, method, path, body)
 	}
+	const create = `{"name":"A_TOKEN","value":""}`
+	decodeSecretResponse[secretMetadata](t, send(http.MethodPost, hostfixtures.SecretsPath, create), http.StatusCreated)
+	assertSecretError(t, send(http.MethodPost, hostfixtures.SecretsPath, create), http.StatusConflict, "secret_conflict")
 	list := decodeSecretResponse[struct {
 		Items []secretMetadata `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretsPath+"?agent_type=builder-agent", ""), http.StatusOK)
+	}](t, send(http.MethodGet, hostfixtures.SecretsPath, ""), http.StatusOK)
 	if len(list.Items) != 2 || list.Items[0].Name != "A_TOKEN" || list.Items[0].Status != "available" || list.Items[1].Name != "OLD_TOKEN" || list.Items[1].Status != "expired" {
-		t.Fatal("inventory did not sort and restrict metadata to the agent type including expiry")
+		t.Fatal("shared inventory did not sort metadata and project expiry")
 	}
-	old := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretsPath+"/builder-agent/OLD_TOKEN", ""), http.StatusOK)
+	old := decodeSecretResponse[secretMetadata](t, send(http.MethodGet, hostfixtures.SecretsPath+"/OLD_TOKEN", ""), http.StatusOK)
 	if old.Status != "expired" || !old.CreatedAt.Equal(created) {
 		t.Fatal("expired secret metadata was changed or timestamp precision was lost")
 	}
-	other := decodeSecretResponse[struct {
-		Items []secretMetadata `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretsPath+"?agent_type=web-agent", ""), http.StatusOK)
-	if len(other.Items) != 1 || other.Items[0].Name != "A_TOKEN" || other.Items[0].ID == list.Items[0].ID {
-		t.Fatal("agent-type filtering returned another scope")
+	createdRequestName := decodeSecretResponse[secretMetadata](t, send(http.MethodPost, hostfixtures.SecretsPath, `{"name":"requests","value":""}`), http.StatusCreated)
+	fetchedRequestName := decodeSecretResponse[secretMetadata](t, send(http.MethodGet, hostfixtures.SecretsPath+"/requests", ""), http.StatusOK)
+	if createdRequestName.ID != fetchedRequestName.ID || fetchedRequestName.Name != "requests" {
+		t.Fatal("secret named requests collided with pending request inventory")
 	}
+	replacedRequestName := decodeSecretResponse[secretMetadata](t, send(http.MethodPut, hostfixtures.SecretsPath+"/requests", fmt.Sprintf(`{"id":%q,"version":1,"value":""}`, createdRequestName.ID)), http.StatusOK)
+	if replacedRequestName.ID != createdRequestName.ID || replacedRequestName.Version != 2 {
+		t.Fatal("secret named requests did not retain normal replacement semantics")
+	}
+	deletedRequestName := send(http.MethodDelete, fmt.Sprintf("%s/requests?id=%s&version=2", hostfixtures.SecretsPath, replacedRequestName.ID), "")
+	if deletedRequestName.Status != http.StatusNoContent {
+		t.Fatal("secret named requests could not be deleted")
+	}
+	assertSecretError(t, send(http.MethodGet, hostfixtures.SecretsPath+"/requests", ""), http.StatusNotFound, "secret_not_found")
 	empty := decodeSecretResponse[struct {
-		Items []secretMetadata `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretsPath+"?agent_type=unknown-agent", ""), http.StatusOK)
+		Items []pendingSecretView `json:"items"`
+	}](t, send(http.MethodGet, secretRequestsPath, ""), http.StatusOK)
 	if empty.Items == nil || len(empty.Items) != 0 {
-		t.Fatal("missing scope must return an empty array")
+		t.Fatal("pending request inventory did not remain separate from secret metadata")
 	}
+	assertSecretError(t, send(http.MethodPost, hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":""}`), http.StatusBadRequest, "invalid_request")
+	assertSecretError(t, send(http.MethodGet, hostfixtures.SecretsPath+"?agent_type=builder-agent", ""), http.StatusBadRequest, "invalid_request")
 	if _, err := store.Get(t.Context(), expired.Metadata.Key); err != nil {
 		t.Fatal("inventory deleted the expired record")
 	}
-	renewed := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPut, hostfixtures.SecretsPath+"/builder-agent/OLD_TOKEN", fmt.Sprintf(`{"id":%q,"version":1,"value":""}`, old.ID)), http.StatusOK)
+	renewed := decodeSecretResponse[secretMetadata](t, send(http.MethodPut, hostfixtures.SecretsPath+"/OLD_TOKEN", fmt.Sprintf(`{"id":%q,"version":1,"value":""}`, old.ID)), http.StatusOK)
 	if renewed.ExpiresAt != nil || renewed.Status != "available" || renewed.Version != 2 {
 		t.Fatal("replacement with omitted expiry did not clear the previous expiration")
 	}
@@ -205,7 +210,7 @@ func TestSecretRoutesRequireAuthenticationAndExplicitEncryptionKey(t *testing.T)
 	fixture := hostfixtures.New(t)
 	server := hostfixtures.Start(t, fixture.LocalArgs())
 	for _, route := range []struct{ method, path string }{
-		{http.MethodGet, hostfixtures.SecretsPath + "?agent_type=builder-agent"},
+		{http.MethodGet, hostfixtures.SecretsPath},
 		{http.MethodPost, hostfixtures.SecretsPath}, {http.MethodGet, hostfixtures.SecretPath},
 		{http.MethodPut, hostfixtures.SecretPath}, {http.MethodDelete, hostfixtures.SecretPath},
 	} {
@@ -226,20 +231,20 @@ func TestSecretRequestsRejectMalformedAndAmbiguousInput(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
 	server := hostfixtures.Start(t, fixture.LocalArgs())
 	for _, tc := range []struct{ name, method, path, body string }{
-		{"missing value", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN"}`},
-		{"null value", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":null}`},
-		{"nonstring value", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":1}`},
-		{"unknown field", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":"","ciphertext":"private-value"}`},
-		{"obsolete profile", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","profile":"default","name":"TOKEN","value":""}`},
-		{"multiple bodies", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":""}{}`},
+		{"missing value", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN"}`},
+		{"null value", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN","value":null}`},
+		{"nonstring value", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN","value":1}`},
+		{"unknown field", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN","value":"","ciphertext":"private-value"}`},
+		{"obsolete profile", "POST", hostfixtures.SecretsPath, `{"profile":"default","name":"TOKEN","value":""}`},
+		{"multiple bodies", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN","value":""}{}`},
 		{"empty body", "POST", hostfixtures.SecretsPath, ""},
 		{"null body", "POST", hostfixtures.SecretsPath, "null"},
-		{"invalid scope", "POST", hostfixtures.SecretsPath, `{"agent_type":"../builder","name":"TOKEN","value":""}`},
-		{"invalid name", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"../TOKEN","value":""}`},
-		{"past expiry", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":"","expires_at":"2000-01-01T00:00:00Z"}`},
-		{"zero expiry", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":"","expires_at":"0001-01-01T00:00:00Z"}`},
+		{"obsolete scope", "POST", hostfixtures.SecretsPath, `{"agent_type":"builder-agent","name":"TOKEN","value":""}`},
+		{"invalid name", "POST", hostfixtures.SecretsPath, `{"name":"../TOKEN","value":""}`},
+		{"past expiry", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN","value":"","expires_at":"2000-01-01T00:00:00Z"}`},
+		{"zero expiry", "POST", hostfixtures.SecretsPath, `{"name":"TOKEN","value":"","expires_at":"0001-01-01T00:00:00Z"}`},
 		{"unknown list query", "GET", hostfixtures.SecretsPath + "?agent_type=builder-agent&value=private-query-value", ""},
-		{"missing scope", "GET", hostfixtures.SecretsPath, ""},
+		{"obsolete scope", "GET", hostfixtures.SecretsPath + "?agent_type=builder-agent", ""},
 		{"duplicated scope", "GET", hostfixtures.SecretsPath + "?agent_type=builder-agent&agent_type=web-agent", ""},
 		{"obsolete profile query", "GET", hostfixtures.SecretsPath + "?agent_type=builder-agent&profile=default", ""},
 		{"delete missing precondition", "DELETE", hostfixtures.SecretPath, ""},
@@ -256,14 +261,14 @@ func TestSecretRequestsRejectMalformedAndAmbiguousInput(t *testing.T) {
 		})
 	}
 	for _, contentType := range []string{"", "text/plain"} {
-		result := server.Request(t, http.MethodPost, hostfixtures.SecretsPath, hostfixtures.Authenticate, hostfixtures.SecretBody(`{"agent_type":"builder-agent","name":"TOKEN","value":""}`, contentType))
+		result := server.Request(t, http.MethodPost, hostfixtures.SecretsPath, hostfixtures.Authenticate, hostfixtures.SecretBody(`{"name":"TOKEN","value":""}`, contentType))
 		assertSecretError(t, result, http.StatusUnsupportedMediaType, "unsupported_media_type")
 	}
-	large := `{"agent_type":"builder-agent","name":"TOKEN","value":"` + strings.Repeat("x", 1<<20) + `"}`
+	large := `{"name":"TOKEN","value":"` + strings.Repeat("x", 1<<20) + `"}`
 	assertSecretError(t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, large), http.StatusRequestEntityTooLarge, "request_too_large")
 	list := decodeSecretResponse[struct {
 		Items []secretMetadata `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretsPath+"?agent_type=builder-agent", ""), http.StatusOK)
+	}](t, secretRequest(t, server, http.MethodGet, hostfixtures.SecretsPath, ""), http.StatusOK)
 	if len(list.Items) != 0 {
 		t.Fatal("rejected request mutated the secret inventory")
 	}
@@ -321,8 +326,8 @@ func TestSecretFailuresAreSanitizedAndNeverRetried(t *testing.T) {
 				t.Fatal(err)
 			}
 			mux := http.NewServeMux()
-			endpoints.RegisterSecrets(mux, service)
-			request := httptest.NewRequest(http.MethodPost, hostfixtures.SecretsPath, strings.NewReader(`{"agent_type":"builder-agent","name":"TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`))
+			secretendpoints.Register(mux, service)
+			request := httptest.NewRequest(http.MethodPost, hostfixtures.SecretsPath, strings.NewReader(`{"name":"TOKEN","value":"`+hostfixtures.SecretTestValue+`"}`))
 			request.Header.Set("Content-Type", "application/json")
 			recorder := httptest.NewRecorder()
 
@@ -357,8 +362,8 @@ func TestSecretOpenAPIDescribesWriteOnlyValuesAndMetadata(t *testing.T) {
 		t.Fatal("API documentation still exposes secret profiles")
 	}
 	for path, methods := range map[string][]string{
-		hostfixtures.SecretsPath:                          {"get", "post"},
-		hostfixtures.SecretsPath + "/{agent_type}/{name}": {"get", "put", "delete"},
+		hostfixtures.SecretsPath:             {"get", "post"},
+		hostfixtures.SecretsPath + "/{name}": {"get", "put", "delete"},
 	} {
 		for _, method := range methods {
 			if len(document.Paths[path][method]) == 0 {
@@ -382,6 +387,11 @@ func TestSecretOpenAPIDescribesWriteOnlyValuesAndMetadata(t *testing.T) {
 	for _, name := range []string{"CreateSecretRequest", "ReplaceSecretRequest"} {
 		if !properties(name)["value"].WriteOnly {
 			t.Errorf("%s value is not write-only", name)
+		}
+	}
+	for _, name := range []string{"Secret", "CreateSecretRequest"} {
+		if _, present := properties(name)["agent_type"]; present {
+			t.Errorf("shared secret schema %s still contains an agent-type scope", name)
 		}
 	}
 	metadata := properties("Secret")
@@ -420,8 +430,8 @@ func TestSecretsWithMongo(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", hostfixtures.SecretTestKey)
 	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--database-url="+uri))
 	name := "HOST_TEST_" + id.New()
-	path := hostfixtures.SecretsPath + "/builder-agent/" + name
-	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, fmt.Sprintf(`{"agent_type":"builder-agent","name":%q,"value":%q}`, name, hostfixtures.SecretTestValue)), http.StatusCreated)
+	path := hostfixtures.SecretsPath + "/" + name
+	created := decodeSecretResponse[secretMetadata](t, secretRequest(t, server, http.MethodPost, hostfixtures.SecretsPath, fmt.Sprintf(`{"name":%q,"value":%q}`, name, hostfixtures.SecretTestValue)), http.StatusCreated)
 	defer func() {
 		// Read the current version so failure midway through replacement still
 		// cleans up only this test's record; shared catalogs are never dropped.
@@ -460,7 +470,7 @@ func TestSecretsWithMongo(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not reopen MongoDB secret store")
 	}
-	stored, err := store.Get(ctx, secretmodel.Key{Scope: secretmodel.Scope{AgentType: "builder-agent"}, Name: name})
+	stored, err := store.Get(ctx, secretmodel.Key{Name: name})
 	if err != nil {
 		t.Fatal("API did not persist secret in MongoDB")
 	}
@@ -500,7 +510,7 @@ func TestSecretsWithMongo(t *testing.T) {
 			ID     string `json:"id"`
 			Status string `json:"status"`
 		} `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secrets/requests?agent_id="+agentID, ""))
+	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secret-requests?agent_id="+agentID, ""))
 	if len(pending.Items) != 1 || pending.Items[0].ID != request.ID || pending.Items[0].Status != "awaiting_delivery" {
 		t.Fatal("API did not read pending requests and metadata from MongoDB")
 	}
@@ -558,7 +568,7 @@ func assertSecretOnDisk(t *testing.T, root string, expected secretMetadata, plai
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, err := store.Get(t.Context(), secretmodel.Key{Scope: secretmodel.Scope{AgentType: expected.AgentType}, Name: expected.Name})
+	stored, err := store.Get(t.Context(), secretmodel.Key{Name: expected.Name})
 	if err != nil {
 		t.Fatal(err)
 	}

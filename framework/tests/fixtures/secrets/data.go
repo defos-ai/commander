@@ -18,8 +18,7 @@ func Secret() secrets.Secret {
 		Metadata: secrets.Metadata{
 			ID: "00000000-0000-4000-8000-000000000001",
 			Key: secrets.Key{
-				Scope: secrets.Scope{AgentType: "browser"},
-				Name:  "API_TOKEN",
+				Name: "API_TOKEN",
 			},
 			Version: 2, CreatedAt: RequestedAt().Add(-time.Hour), UpdatedAt: RequestedAt(),
 			ExpiresAt: RequestedAt().Add(time.Hour),
@@ -34,7 +33,7 @@ func Secret() secrets.Secret {
 func Request() secrets.Request {
 	return secrets.Request{
 		ID: "00000000-0000-4000-8000-000000000002", Key: Secret().Metadata.Key,
-		AgentID: "builder-agent-01234567", Status: secrets.Pending,
+		AgentID: "builder-agent-01234567", AgentType: "builder-agent", Status: secrets.Pending,
 		RequestedAt: RequestedAt(), ExpiresAt: RequestedAt().Add(15 * time.Minute),
 	}
 }

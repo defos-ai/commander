@@ -31,8 +31,8 @@ func TestOperationNeedsSecrets(t *testing.T) {
 		{"mixed requirements", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"},{"kind":"executable","name":"git"}]}]}]}`, true},
 		{"sensitive environment", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"configuration","name":"GITHUB_TOKEN","sensitive":true}]}]}]}`, false},
 		{"stale candidate", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","reason":"Agent heartbeat has expired"}]}]}`, false},
-		{"missing scope", "waiting", `{"actions":[{"unavailable_agents":[{"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
-		{"invalid scope", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"../builder","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
+		{"missing recipient type", "waiting", `{"actions":[{"unavailable_agents":[{"missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
+		{"invalid recipient type", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"../builder","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]}]}`, false},
 		{"invalid name", "waiting", `{"actions":[{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"../TOKEN"},{"kind":"secret","name":""}]}]}]}`, false},
 		{"completed", "completed", `{"actions":[{"unavailable_agents":[` + managed + `]}]}`, false},
 		{"failed", "failed", `{"actions":[{"unavailable_agents":[` + managed + `]}]}`, false},
@@ -48,7 +48,7 @@ func TestOperationNeedsSecrets(t *testing.T) {
 			}
 			var want []secrets.Key
 			if test.want {
-				want = []secrets.Key{{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"}}
+				want = []secrets.Key{{Name: "GITHUB_TOKEN"}}
 			}
 			if got := operation.MissingSecrets(); !slices.Equal(got, want) {
 				t.Fatalf("MissingSecrets() = %v, want %v", got, want)
@@ -72,8 +72,8 @@ func TestOperationNeedsRuntimeSecrets(t *testing.T) {
 		{"failed operation", "failed", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
 		{"cancelled operation", "cancelled", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
 		{"unknown operation", "unknown", "running", "builder-agent", "secret", "GITHUB_TOKEN", false},
-		{"missing scope", "running", "running", "", "secret", "GITHUB_TOKEN", false},
-		{"invalid scope", "running", "running", "../builder", "secret", "GITHUB_TOKEN", false},
+		{"missing recipient type", "running", "running", "", "secret", "GITHUB_TOKEN", false},
+		{"invalid recipient type", "running", "running", "../builder", "secret", "GITHUB_TOKEN", false},
 		{"invalid name", "running", "running", "builder-agent", "secret", "../TOKEN", false},
 		{"host configuration", "running", "running", "builder-agent", "configuration", "GITHUB_TOKEN", false},
 	} {
@@ -111,7 +111,7 @@ func TestOperationRuntimeSecretDeadline(t *testing.T) {
 	}
 }
 
-func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
+func TestOperationMissingSecretsDeduplicatesAcrossAgentTypes(t *testing.T) {
 	var operation bridge.Operation
 	err := json.Unmarshal([]byte(`{"status":"waiting","preflight":{"actions":[
 		{"unavailable_agents":[
@@ -133,13 +133,12 @@ func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
 		{Status: "running", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "RUNTIME_TOKEN"}}},
 	}
 	want := []secrets.Key{
-		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"},
-		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "OPENAI_API_KEY"},
-		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "RUNTIME_TOKEN"},
-		{Scope: secrets.Scope{AgentType: "spawner-agent"}, Name: "GITHUB_TOKEN"},
+		{Name: "GITHUB_TOKEN"},
+		{Name: "OPENAI_API_KEY"},
+		{Name: "RUNTIME_TOKEN"},
 	}
 	if got := operation.MissingSecrets(); !slices.Equal(got, want) {
-		t.Fatalf("missing secrets = %v, want ordered unique scoped keys %v", got, want)
+		t.Fatalf("missing secrets = %v, want ordered unique shared names %v", got, want)
 	}
 }
 

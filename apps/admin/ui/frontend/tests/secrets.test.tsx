@@ -13,10 +13,6 @@ async function provide() {
 }
 
 async function showSaved() {
-  fireEvent.change(await screen.findByLabelText('Agent type'), { target: { value: secret.agent_type } });
-  const show = screen.getByRole('button', { name: 'Show' });
-  await waitFor(() => expect(show).toBeEnabled());
-  fireEvent.click(show);
   return screen.findByRole('button', { name: `Delete ${secret.name}` });
 }
 
@@ -42,11 +38,12 @@ describe('secret management', () => {
   it('supplies a pending secret through the authenticated proxy and refreshes delivery metadata without exposing its value', async () => {
     const saved = deferredResponse();
     const api = fixture((path, init) => path === secretsPath && init.method === 'POST' ? saved.promise : undefined);
+    api.change(state => { state.requests.push({ ...pending, id: '32345678-1234-4234-8234-123456789abc', agent_type: 'fixer-agent', agent_id: 'fixer-agent-abcdef12' }); });
     const storage = vi.spyOn(Storage.prototype, 'setItem');
     view();
     const dialog = await provide();
+    expect(screen.getByText('2 agents')).toBeVisible();
     const input = fillValue(dialog);
-    expect(dialog).toHaveTextContent(secret.agent_type);
     expect(dialog).toHaveTextContent(secret.name);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save secret' }));
     fireEvent.submit(dialog.querySelector('form')!);
@@ -58,7 +55,7 @@ describe('secret management', () => {
     expect(upstreamURL(url)).toBe(`${connection.url}${secretsPath}`);
     expect(options).toMatchObject({ method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error' });
     expect(new Headers(options.headers).get('Authorization')).toBeNull();
-    expect(JSON.parse(options.body as string)).toEqual({ agent_type: secret.agent_type, name: secret.name, value: secretValue });
+    expect(JSON.parse(options.body as string)).toEqual({ name: secret.name, value: secretValue });
     expect(storage).not.toHaveBeenCalled();
     expect(document.body).not.toHaveTextContent(secretValue);
 
@@ -139,11 +136,11 @@ describe('secret management', () => {
     expect(JSON.parse(init.body as string)).not.toHaveProperty('expires_at');
   });
 
-  it('adds a secret for an agent type that has no registered agent', async () => {
+  it('adds a shared secret without requiring a registered agent', async () => {
     const api = fixture((path, init) => {
       if (path !== secretsPath || init.method !== 'POST') return undefined;
       const body = JSON.parse(init.body as string);
-      api.change(state => { state.secrets = [{ ...secret, version: 1, agent_type: body.agent_type, name: body.name }]; });
+      api.change(state => { state.secrets = [{ ...secret, version: 1, name: body.name }]; });
       return Response.json(api.snapshot().secrets[0], { status: 201 });
     });
     api.change(state => { state.requests = []; });
@@ -152,14 +149,13 @@ describe('secret management', () => {
     await waitFor(() => expect(add).toBeEnabled());
     fireEvent.click(add);
     const dialog = screen.getByRole('dialog', { name: 'Add secret' });
-    fireEvent.change(within(dialog).getByLabelText('Agent type'), { target: { value: 'deployer-agent' } });
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'DEPLOY_TOKEN' } });
     fillValue(dialog);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save secret' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(api.writes()).toHaveLength(1);
-    expect(JSON.parse(api.writes()[0][1].body as string)).toEqual({ agent_type: 'deployer-agent', name: 'DEPLOY_TOKEN', value: secretValue });
+    expect(JSON.parse(api.writes()[0][1].body as string)).toEqual({ name: 'DEPLOY_TOKEN', value: secretValue });
   });
 
   it('requires confirmation before deleting and sends the displayed record identity and version', async () => {

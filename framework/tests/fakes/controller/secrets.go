@@ -9,8 +9,33 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 )
+
+type SecretRecipients struct {
+	agents.AgentStore
+	records map[string]agents.Agent
+}
+
+func NewSecretRecipients(records ...agents.Agent) *SecretRecipients {
+	store := &SecretRecipients{records: make(map[string]agents.Agent, len(records))}
+	for _, record := range records {
+		store.records[record.ID] = record.Clone()
+	}
+	return store
+}
+
+func (store *SecretRecipients) Get(ctx context.Context, agentID string) (agents.Agent, error) {
+	if err := ctx.Err(); err != nil {
+		return agents.Agent{}, err
+	}
+	record, ok := store.records[agentID]
+	if !ok {
+		return agents.Agent{}, agents.ErrUnknownAgent
+	}
+	return record.Clone(), nil
+}
 
 type SecretPublishBus struct {
 	comms.Bus

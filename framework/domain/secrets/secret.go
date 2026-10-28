@@ -59,7 +59,7 @@ func AvailabilityAt(value *Metadata, now time.Time) Availability {
 
 // EncryptedValue is an opaque encryption envelope. Validate checks structure
 // only: the encryption service must authenticate the ciphertext and its binding
-// to secret identity, scope, version and validity before using any plaintext.
+// to secret identity, name, version and validity before using any plaintext.
 // Format identifies the encryption service's envelope format, not a secret version.
 type EncryptedValue struct {
 	Format     string `json:"format"`

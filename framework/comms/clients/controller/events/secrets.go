@@ -15,8 +15,7 @@ const (
 	SecretInstalled     = messages.SecretInstalled
 )
 
-// SecretSyncRequest asks for one scoped secret. Pending requests are independent
-// of operations and may name a different scope from the requesting agent's type.
+// SecretSyncRequest asks for one shared secret independently of operations.
 type SecretSyncRequest struct {
 	Request secretmodel.Request `json:"request"`
 }
@@ -59,7 +58,7 @@ func NewSecretSyncRequested(request secretmodel.Request) (messages.Message, erro
 }
 
 // DecodeSecretSyncRequested validates a request's shape and source fields.
-// It does not authorize the agent to obtain this scope or prove sender identity.
+// It does not prove sender identity or establish recipient authorization.
 func DecodeSecretSyncRequested(message messages.Message) (SecretSyncRequest, error) {
 	if err := message.Validate(); err != nil {
 		return SecretSyncRequest{}, err

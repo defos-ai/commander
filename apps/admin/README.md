@@ -38,17 +38,20 @@ inspect saved state before submitting again. Use `missions --help` for options.
 
 ## Secrets
 
+Secrets are shared by name across Commander. Supply a value once for all agents
+that request it.
+
 ```sh
 bin/commander-admin secrets requests
-bin/commander-admin secrets list builder-agent
-bin/commander-admin secrets set builder-agent OPENAI_API_KEY
-bin/commander-admin secrets delete builder-agent OPENAI_API_KEY
+bin/commander-admin secrets list
+bin/commander-admin secrets set OPENAI_API_KEY
+bin/commander-admin secrets delete OPENAI_API_KEY
 ```
 
 `set` opens a hidden terminal prompt or reads piped/redirected input automatically:
 
 ```sh
-printf '%s' "$OPENAI_API_KEY" | bin/commander-admin secrets set builder-agent OPENAI_API_KEY
+printf '%s' "$OPENAI_API_KEY" | bin/commander-admin secrets set OPENAI_API_KEY
 ```
 
 Piped input preserves newlines. Values never appear in output. `--json` returns metadata.

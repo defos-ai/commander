@@ -4,7 +4,6 @@ import type { ApiErrorKind } from './client';
 import { isObject } from './validation';
 
 export interface SecretKey {
-  agent_type: string;
   name: string;
 }
 
@@ -18,6 +17,7 @@ export interface SecretMetadata extends SecretKey {
 }
 
 export interface PendingSecretRequest extends SecretKey {
+  agent_type: string;
   id: string;
   agent_id: string;
   requested_at: string;
@@ -61,8 +61,7 @@ function isUUID(value: unknown): value is string {
 }
 
 function isKey(value: unknown): value is SecretKey {
-  return isObject(value) && isAgentType(value.agent_type) &&
-    typeof value.name === 'string' && secretNamePattern.test(value.name);
+  return isObject(value) && typeof value.name === 'string' && secretNamePattern.test(value.name);
 }
 
 function isVersion(value: unknown): value is number {
@@ -87,18 +86,18 @@ function isOptionalTimestamp(value: unknown): value is string | undefined {
 }
 
 function readMetadata(value: unknown): SecretMetadata {
-  if (!isObject(value) || !isKey(value) || !isUUID(value.id) || !isVersion(value.version) ||
+  if (!isObject(value) || !isKey(value) || 'agent_type' in value || !isUUID(value.id) || !isVersion(value.version) ||
     !isTimestamp(value.created_at) || !isTimestamp(value.updated_at) || !isOptionalTimestamp(value.expires_at) ||
     (value.status !== 'available' && value.status !== 'expired')) throw new SecretError('invalid_response');
   return {
-    id: value.id, agent_type: value.agent_type, name: value.name, version: value.version,
+    id: value.id, name: value.name, version: value.version,
     created_at: value.created_at, updated_at: value.updated_at, status: value.status,
     ...(value.expires_at === undefined ? {} : { expires_at: value.expires_at }),
   };
 }
 
 function readPendingRequest(value: unknown): PendingSecretRequest {
-  if (!isObject(value) || !isKey(value) || !isUUID(value.id) || typeof value.agent_id !== 'string' ||
+  if (!isObject(value) || !isKey(value) || !isAgentType(value.agent_type) || !isUUID(value.id) || typeof value.agent_id !== 'string' ||
     value.agent_id.length > 63 || !agentIDPattern.test(value.agent_id) ||
     !isTimestamp(value.requested_at) || !isTimestamp(value.expires_at) ||
     (value.status !== 'needs_value' && value.status !== 'awaiting_delivery' && value.status !== 'awaiting_installation')) {
@@ -119,13 +118,13 @@ function readList<T extends { id: string }>(body: unknown, read: (value: unknown
 
 function readMatchingMetadata(body: unknown, key: SecretKey): SecretMetadata {
   const metadata = readMetadata(body);
-  if (metadata.agent_type !== key.agent_type || metadata.name !== key.name) throw new SecretError('invalid_response');
+  if (metadata.name !== key.name) throw new SecretError('invalid_response');
   return metadata;
 }
 
 function keyPath(key: SecretKey): string {
   if (!isKey(key)) throw new SecretError('invalid_input');
-  return `${secretsPath}/${encodeURIComponent(key.agent_type)}/${encodeURIComponent(key.name)}`;
+  return `${secretsPath}/${encodeURIComponent(key.name)}`;
 }
 
 function responseError(status: number, body: unknown, mutation: boolean): SecretError {
@@ -207,19 +206,16 @@ async function request<T>(
   }
 }
 
-export async function listSecrets(url: string, credentials: Session, agentType: string, signal?: AbortSignal): Promise<SecretMetadata[]> {
-  if (!isAgentType(agentType)) throw new SecretError('invalid_input');
-  return request(url, credentials, `${secretsPath}?${new URLSearchParams({ agent_type: agentType })}`, 'GET', 200, body => {
+export async function listSecrets(url: string, credentials: Session, signal?: AbortSignal): Promise<SecretMetadata[]> {
+  return request(url, credentials, secretsPath, 'GET', 200, body => {
     const items = readList(body, readMetadata);
-    if (items.some(item => item.agent_type !== agentType) || new Set(items.map(item => item.name)).size !== items.length) {
-      throw new SecretError('invalid_response');
-    }
+    if (new Set(items.map(item => item.name)).size !== items.length) throw new SecretError('invalid_response');
     return items;
   }, undefined, signal);
 }
 
 export async function listSecretRequests(url: string, credentials: Session, signal?: AbortSignal): Promise<PendingSecretRequest[]> {
-  return request(url, credentials, `${secretsPath}/requests`, 'GET', 200, body => readList(body, readPendingRequest), undefined, signal);
+  return request(url, credentials, '/api/v1/secret-requests', 'GET', 200, body => readList(body, readPendingRequest), undefined, signal);
 }
 
 export async function getSecret(url: string, credentials: Session, key: SecretKey, signal?: AbortSignal): Promise<SecretMetadata> {
@@ -228,7 +224,7 @@ export async function getSecret(url: string, credentials: Session, key: SecretKe
 
 export async function createSecret(url: string, credentials: Session, input: CreateSecretInput, signal?: AbortSignal): Promise<SecretMetadata> {
   if (!isKey(input) || typeof input.value !== 'string' || !isOptionalTimestamp(input.expires_at)) throw new SecretError('invalid_input');
-  const body = { agent_type: input.agent_type, name: input.name, value: input.value, expires_at: input.expires_at };
+  const body = { name: input.name, value: input.value, expires_at: input.expires_at };
   return request(url, credentials, secretsPath, 'POST', 201, result => {
     const metadata = readMatchingMetadata(result, input);
     if (metadata.version !== 1) throw new SecretError('invalid_response');

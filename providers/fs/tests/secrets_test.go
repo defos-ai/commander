@@ -63,22 +63,19 @@ func TestSecretFsStoreEncryptedRoundTripAndIsolation(t *testing.T) {
 	}
 }
 
-func TestSecretFsStoreInventoryScopesAndExpiration(t *testing.T) {
+func TestSecretFsStoreSharedInventoryAndExpiration(t *testing.T) {
 	store := fixtures.OpenSecretStore(t, t.TempDir())
 	first, last := fixtures.Secret(t, "A_TOKEN"), fixtures.Secret(t, "Z_TOKEN")
 	first.Metadata.ExpiresAt = first.Metadata.UpdatedAt.Add(time.Hour)
 	first = fixtures.EncryptSecret(t, first.Metadata)
-	agent := fixtures.Secret(t, "A_TOKEN")
-	agent.Metadata.Key.Scope.AgentType = "other-agent"
-	agent = fixtures.EncryptSecret(t, agent.Metadata)
-	for _, value := range []secrets.Secret{last, first, agent} {
+	for _, value := range []secrets.Secret{last, first} {
 		if err := store.Create(t.Context(), value); err != nil {
 			t.Fatal(err)
 		}
 	}
-	items, err := store.List(t.Context(), first.Metadata.Key.Scope)
+	items, err := store.List(t.Context())
 	if err != nil || !reflect.DeepEqual(items, []secrets.Metadata{first.Metadata, last.Metadata}) {
-		t.Fatalf("inventory must be sorted and scoped: count=%d, error=%v", len(items), err)
+		t.Fatalf("shared inventory must be sorted: count=%d, error=%v", len(items), err)
 	}
 	if secrets.AvailabilityAt(&items[0], first.Metadata.ExpiresAt) != secrets.Expired {
 		t.Fatal("inventory lost expired secret")
@@ -89,10 +86,9 @@ func TestSecretFsStoreInventoryScopesAndExpiration(t *testing.T) {
 		t.Fatalf("inventory reader changed stored metadata: %v", err)
 	}
 	assertFsSecret(t, store, first)
-	assertFsSecret(t, store, agent)
-	otherItems, err := store.List(t.Context(), agent.Metadata.Key.Scope)
-	if err != nil || !reflect.DeepEqual(otherItems, []secrets.Metadata{agent.Metadata}) {
-		t.Fatalf("same secret name crossed agent types: count=%d, error=%v", len(otherItems), err)
+	duplicate := fixtures.Secret(t, "A_TOKEN")
+	if err := store.Create(t.Context(), duplicate); !errors.Is(err, secrets.ErrSecretConflict) {
+		t.Fatalf("another identity must not reserve the same shared name: %v", err)
 	}
 	unknown := first.Metadata.Key
 	unknown.Name = "UNKNOWN"
@@ -311,7 +307,7 @@ func TestSecretFsStoreCancelledAndNilContexts(t *testing.T) {
 				func() error { return store.Delete(test.ctx, value.Metadata.Key, value.Metadata.ID, 1) },
 				func() error { _, err := store.Get(test.ctx, value.Metadata.Key); return err },
 				func() error { _, err := store.GetMetadata(test.ctx, value.Metadata.Key); return err },
-				func() error { _, err := store.List(test.ctx, value.Metadata.Key.Scope); return err },
+				func() error { _, err := store.List(test.ctx); return err },
 			}
 			for i, check := range checks {
 				err := check()

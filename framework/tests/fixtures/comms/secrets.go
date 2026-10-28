@@ -16,9 +16,9 @@ const EncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef012345678
 func SecretProtocol(t *testing.T) (secretmodel.Request, secretmodel.Secret) {
 	t.Helper()
 	now := time.Now().UTC()
-	key := secretmodel.Key{Scope: secretmodel.Scope{AgentType: "generated"}, Name: "API_TOKEN"}
+	key := secretmodel.Key{Name: "API_TOKEN"}
 	request := secretmodel.Request{
-		ID: id.New(), Key: key, AgentID: "builder-agent-12345678", Status: secretmodel.Pending,
+		ID: id.New(), Key: key, AgentID: "builder-agent-12345678", AgentType: "builder-agent", Status: secretmodel.Pending,
 		RequestedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour),
 	}
 	metadata := secretmodel.Metadata{

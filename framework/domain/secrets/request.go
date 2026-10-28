@@ -31,12 +31,12 @@ type Fulfillment struct {
 
 // Request tracks an agent's need for a secret independently of operations and
 // secret storage.
-// AgentID is the recipient, which may differ from the type in Key's scope (for
-// example a builder preparing configuration for a generated agent).
+// AgentID and AgentType identify the recipient; neither scopes the shared value.
 type Request struct {
 	ID          string        `json:"id"`
 	Key         Key           `json:"key"`
 	AgentID     string        `json:"agent_id"`
+	AgentType   string        `json:"agent_type"`
 	Status      RequestStatus `json:"status"`
 	RequestedAt time.Time     `json:"requested_at"`
 	ExpiresAt   time.Time     `json:"expires_at"`
@@ -45,8 +45,8 @@ type Request struct {
 }
 
 func (request Request) Validate() error {
-	if !id.Valid(request.ID) || !id.ValidAgent(request.AgentID) {
-		return errors.New("secret request requires a canonical UUID and recipient agent ID")
+	if !id.Valid(request.ID) || !id.ValidAgent(request.AgentID) || !id.ValidType(request.AgentType) {
+		return errors.New("secret request requires a canonical UUID and valid recipient identity and type")
 	}
 	if err := request.Key.Validate(); err != nil {
 		return err
