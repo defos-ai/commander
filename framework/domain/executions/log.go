@@ -50,6 +50,12 @@ func (l Log) Validate() error {
 	return ValidateLogMessage(l.Message)
 }
 
+func (l Log) Equal(other Log) bool {
+	return l.ID == other.ID && l.AgentID == other.AgentID && l.CommandID == other.CommandID &&
+		l.ActionName == other.ActionName && l.Work == other.Work && l.Message == other.Message &&
+		l.CreatedAt.Equal(other.CreatedAt)
+}
+
 func ValidateLogMessage(message string) error {
 	if len(message) > MaxLogMessageSize {
 		return fmt.Errorf("execution log message must not exceed %d bytes", MaxLogMessageSize)

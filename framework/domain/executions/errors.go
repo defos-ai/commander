@@ -11,6 +11,8 @@ var (
 	ErrCheckpointConflict = errors.New("checkpoint already exists with different content")
 	ErrExecutionCompleted = errors.New("completed execution cannot accept new checkpoints")
 	ErrIndeterminate      = errors.New("execution outcome is unknown; automatic retry is unsafe")
+	ErrUnknownLog         = errors.New("unknown execution log")
+	ErrLogConflict        = errors.New("execution log ID already has different content")
 )
 
 type CommandError struct {

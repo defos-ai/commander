@@ -167,8 +167,12 @@
   preserve nonblank UTF-8 text up to 2048 bytes; keep secret values out of them.
   [`action.Log`](agent/action/log.go) accepts only the message through an injected
   `LogProvider`; public execution metadata does not grant that capability.
-  This first slice defines the record and helper only. `Agent.Serve` does not yet
-  inject logging; transport, persistence and operation/task queries follow later.
+  [`LogStore`](domain/executions/log_store.go) retains each observation separately
+  from execution state. Exact ID/content retries succeed; conflicting reuse fails.
+  Write errors may follow a commit: read by ID or retry the identical observation.
+  Stores validate the record shape; controllers must verify saved execution claims.
+  `Agent.Serve` does not yet inject logging. Runtime delivery, host factory wiring
+  and operation/task queries follow in later increments.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

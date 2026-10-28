@@ -33,6 +33,12 @@ artifact bytes and reports belong to the separate storage provider.
   to preserve number precision. Read and update their map inside one transaction;
   concurrent checkpoint writes or completion must retry against current state.
   Return failed commit confirmation to the caller for reconciliation.
+- [`LogMongoStore`](executions/log_mongo_store.go) stores immutable execution logs
+  in separate `execution_logs` documents keyed by log ID. JSON binary payloads
+  preserve timestamp nanoseconds and message bytes; validate the decoded ID against
+  `_id`. Atomic inserts accept identical duplicate-ID retries through readback and
+  reject changed content. Preserve other write errors for caller reconciliation;
+  logs never update execution records.
 - Keep [`operationWriteError`](operations/operation_mongo_store.go) conservative
   about ambiguous commits. Do not turn an unknown commit outcome into a definite
   rollback or discard `operations.ErrWriteUncertain` while wrapping errors.
