@@ -3,8 +3,9 @@
 **Commander decides what; the controller decides who; agents execute.**
 Commander is usually the model in Playground or another MCP client.
 
-See [10 practical use cases](use-cases.md) for missions across security,
-software delivery and business operations.
+See [11 practical use cases](use-cases.md) for missions across security,
+software delivery, business operations and long-running research at universities
+and R&D centers.
 
 ## Execution flow
 

@@ -6,6 +6,8 @@
 
 Automate predictable steps, delegate decisions to AI or people, and track execution, results, and artifacts in one place.
 
+Run missions and operations lasting months, orchestrating agents with different models and levels of intelligence.
+
 What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=What%20are%20the%20use%20cases%20for%20defos-ai/commander?)
 
 ## Quick start

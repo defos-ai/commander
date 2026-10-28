@@ -149,8 +149,8 @@ hostname must still be allowed.
 [Test setup](../../../framework/tests/README.md#mcp-api-tests) ·
 [OpenAPI source](openapi.go)
 
-Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+Explore [11 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
 security operations, authorized security testing, compliance monitoring,
 multi-agent development, incident response, prospect research and outreach,
-competitive intelligence, data processing, ticket resolution and infrastructure
-monitoring.
+competitive intelligence, data processing, ticket resolution, infrastructure
+monitoring and long-running research for universities and R&D centers.

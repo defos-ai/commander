@@ -1,13 +1,14 @@
 # Commander use cases
 
 Commander (`defos-ai/commander`) coordinates agents to automate complex processes
-across engineering, security and business systems. A mission defines the goal and
-rules; agents connect it to the tools and data needed to carry out the work.
+across engineering, security, business systems and research. A mission defines
+the goal and rules; agents connect it to the tools and data needed to carry out
+the work.
 
 Use these examples to design missions with suitable agents and integrations.
 Install or implement the required actions for your systems before running them.
 
-## 10 practical use cases
+## 11 practical use cases
 
 | Area | Use case | Example mission |
 | --- | --- | --- |
@@ -21,6 +22,7 @@ Install or implement the required actions for your systems before running them.
 | Data engineering | Distributed data processing | Retrieve data from multiple sources, validate quality, transform records and publish results. |
 | Customer support | Complex ticket resolution | Investigate an issue across CRM, documentation, billing and infrastructure systems. |
 | Industrial / OT | Infrastructure monitoring | Correlate operational anomalies, security events and maintenance records across sites. |
+| Universities / R&D centers | Long-running research programs | Coordinate literature reviews, collect and analyze data, track experiments, and update findings and reports over weeks or months. |
 
 ## Build a mission
 

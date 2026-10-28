@@ -84,8 +84,8 @@ The `commander-admin` Docker image starts the UI by default. Pass `missions`,
 In Playground, use `/admin help` for the same commands and `/admin serve` to
 start the UI. Secret values use a local masked form.
 
-Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+Explore [11 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
 security operations, authorized security testing, compliance monitoring,
 multi-agent development, incident response, prospect research and outreach,
-competitive intelligence, data processing, ticket resolution and infrastructure
-monitoring.
+competitive intelligence, data processing, ticket resolution, infrastructure
+monitoring and long-running research for universities and R&D centers.
