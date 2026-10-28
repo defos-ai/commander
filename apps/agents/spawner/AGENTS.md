@@ -27,7 +27,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   action descriptions own their input behavior. MCP and Playground discover this
   metadata instead of maintaining a package list or installation instructions.
   Accept any compatible GitHub package, including packages outside the
-  saved source list. Preserve caller-supplied responsibilities. Keep mission
+  source list. Preserve caller-supplied responsibilities. Keep mission
   rules in `install-agent`; agent guidance must not bypass controller dispatch.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
   resources and closes them in reverse order. `cli.Run` uses deployment

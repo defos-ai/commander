@@ -248,7 +248,7 @@ func TestBrowserSessionRequestBoundaries(t *testing.T) {
 		{name: "about subpath is not public", path: fixtures.ProxyPath(upstream.URL, "/aboutz/secret"), status: 400},
 		{name: "about trailing slash is rejected", path: fixtures.ProxyPath(upstream.URL, "/aboutz/"), status: 400},
 		{name: "about requires same origin", path: fixtures.ProxyPath(upstream.URL, "/aboutz"), header: "Origin", value: "http://attacker.example", status: 403},
-		{name: "proxy trace unsupported", method: http.MethodTrace, path: fixtures.ProxyPath(upstream.URL, "/api/v1/missions"), status: 405},
+		{name: "proxy patch unsupported", method: http.MethodPatch, path: fixtures.ProxyPath(upstream.URL, "/api/v1/missions"), status: 405},
 		{name: "about metadata cannot be replaced", method: http.MethodPut, path: fixtures.ProxyPath(upstream.URL, "/aboutz"), status: 400},
 		{name: "health cannot be deleted", method: http.MethodDelete, path: fixtures.ProxyPath(upstream.URL, "/healthz"), status: 400},
 		{name: "unknown UI route", path: "/ui/missing", status: 404},
@@ -275,7 +275,7 @@ func TestBrowserSessionRequestBoundaries(t *testing.T) {
 			if response.Code != test.status {
 				t.Fatalf("status=%d want=%d body=%s", response.Code, test.status, response.Body.String())
 			}
-			if test.status == http.StatusMethodNotAllowed && response.Header().Get("Allow") != "GET, HEAD, POST, PUT, PATCH, DELETE" {
+			if test.status == http.StatusMethodNotAllowed && response.Header().Get("Allow") != "GET, HEAD, POST, PUT, DELETE" {
 				t.Fatal("proxy did not advertise its supported methods")
 			}
 			if response.Header().Get("Access-Control-Allow-Origin") != "" || response.Header().Get("Cache-Control") != "no-store" || strings.Contains(response.Body.String(), "private-password") {

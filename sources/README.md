@@ -7,7 +7,7 @@ Browse [`agents.yaml`](agents.yaml), or ask Playground:
 
 > Install the browser agent.
 
-API and MCP read the deployment's saved sources. For MCP clients, use
+MCP loads the official source list on demand. Use
 `get_agent_sources` and use the selected source reference and
 visibility to the [installation workflow](../apps/agents/spawner/README.md#during-a-mission).
 You can also install any compatible GitHub package directly.
@@ -42,19 +42,6 @@ agents:
     source: github.com/defos-ai/commander-example-agent@stable
     visibility: public
 ```
-
-Add deployment entries through `POST /api/v1/agent-sources` with `name`,
-`description`, a full canonical `source` selector and `visibility`. New entries
-are untrusted. Read them through `GET /api/v1/agent-sources` or MCP's
-`get_agent_sources`. Default seeding from `agents.yaml` is deferred, so a new
-deployment's saved source list starts empty.
-
-To approve or revoke an exact release, use
-`PATCH /api/v1/agent-sources/{source}` with the current `version` and
-`trusted: true` or `false`. Encode the full source reference as one path segment. Approval
-requires an exact version; `@stable` remains a moving discovery reference.
-Read the entry before retrying an uncertain write. Saved trust does not yet
-enforce installation or secret access.
 
 See [package publishing](../docs/agent-packages.md) and [AGENTS.md](AGENTS.md)
 for validation and source rules.

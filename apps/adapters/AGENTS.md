@@ -104,14 +104,15 @@
   the `install-agent` mission, not in adapter constants or known-package lists.
   Preserve responsibilities in both `list_agents` and `describe_agent` so any
   client can discover an agent's usage guidance.
-- MCP agent discovery lives in `mcp/sources.go`: `get_agent_sources` reads
-  the required `agents.AgentSourceStore` and returns a `sources` list with public
+- MCP agent discovery lives in `mcp/sources.go`: `get_agent_sources` loads the
+  official `sources/agents.yaml` through the caller-owned `SourceClient` and
+  returns a `sources` list with public
   entries first, then aliases sorted within each visibility group and package
-  selectors breaking ties. Preserve source, visibility, trust and business
-  version. API and MCP factories select this store through `DATABASE_URL` and
-  reuse their cached Mongo connection. Backend errors stay sanitized and tool-local.
-  Do not fetch remote YAML or seed defaults during startup or source reads.
-  Direct GitHub URLs and references work without a saved source entry; aliases are
+  selectors breaking ties. Entries expose only name, description, source and
+  visibility. The factory constructs and closes the anonymous client; no source
+  database or trust approvals are involved. Fetch only on tool calls, never
+  during startup. Keep bounded loading/parse failures sanitized and tool-local.
+  Direct GitHub URLs and references work without a listed source; aliases are
   discovery names only. Resolution and durable pinning belong to the spawner,
   including private `@stable` references. Keep MCP guidance generic and follow
   agent responsibilities; do not reintroduce a package-resolution tool or acquire

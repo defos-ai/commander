@@ -1,10 +1,8 @@
 package agents
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
-	"slices"
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
@@ -12,119 +10,18 @@ import (
 )
 
 func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOptions) error {
-	for _, model := range []struct {
-		name   string
-		typeOf reflect.Type
-	}{
-		{"Agent", reflect.TypeFor[models.AgentResponse]()},
-		{"AgentSource", reflect.TypeFor[models.AgentSourceResponse]()},
-		{"CreateAgentSourceRequest", reflect.TypeFor[models.CreateAgentSourceRequest]()},
-		{"SetAgentSourceTrustRequest", reflect.TypeFor[models.SetAgentSourceTrustRequest]()},
-	} {
-		schema, err := jsonschema.ForType(model.typeOf, options)
-		if err != nil {
-			return fmt.Errorf("describe API %s: %w", model.name, err)
-		}
-		constrainAgentSourceSchema(schema, model.name)
-		data, err := json.Marshal(schema)
-		if err != nil {
-			return fmt.Errorf("encode API %s schema: %w", model.name, err)
-		}
-		var document map[string]any
-		if err := json.Unmarshal(data, &document); err != nil {
-			return fmt.Errorf("decode API %s schema: %w", model.name, err)
-		}
-		// JSON Schema's Go type stores numeric bounds as float64.
-		if version, ok := document["properties"].(map[string]any)["version"].(map[string]any); ok {
-			version["maximum"] = ^uint64(0)
-		}
-		components[model.name] = document
-		options.TypeSchemas[model.typeOf] = schema
+	typeOf := reflect.TypeFor[models.AgentResponse]()
+	schema, err := jsonschema.ForType(typeOf, options)
+	if err != nil {
+		return fmt.Errorf("describe API Agent: %w", err)
 	}
+	schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
+	schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
+	schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
+	components["Agent"] = schema
+	options.TypeSchemas[typeOf] = schema
 	registerAgentPaths(paths)
-	registerAgentSourcePaths(paths)
 	return nil
-}
-
-func constrainAgentSourceSchema(schema *jsonschema.Schema, model string) {
-	if model == "Agent" {
-		schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
-		schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
-		schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
-		return
-	}
-	if property := schema.Properties["name"]; property != nil {
-		property.Pattern = `^[a-z][a-z0-9-]*$`
-		property.Description = "Display alias; source is the immutable key. Names need not be unique."
-	}
-	if property := schema.Properties["description"]; property != nil {
-		property.MinLength = new(1)
-		property.Description = "Nonempty description without leading or trailing whitespace."
-	}
-	if property := schema.Properties["source"]; property != nil {
-		property.Description = "Canonical full selector github.com/owner/repository[/module/path]@vMAJOR.MINOR.PATCH or @stable, with no URL prefix, omitted version, query or fragment. Different release selectors are separate entries."
-	}
-	if property := schema.Properties["visibility"]; property != nil {
-		property.Enum = []any{"public", "private"}
-		property.Description = "Repository access metadata; independent of trust."
-	}
-	if property := schema.Properties["version"]; property != nil {
-		property.Minimum = new(float64(1))
-		property.Description = "Saved business version; an explicit trust decision requires the current version and increments it by one."
-	}
-	if model == "AgentSource" {
-		schema.Description = "Saved agent source metadata, separate from live agents and action availability. Trust is recorded for this exact source selector; it does not yet authorize runtime secret delivery."
-		for _, property := range schema.Properties {
-			property.ReadOnly = true
-		}
-		schema.Required = slices.DeleteFunc(schema.Required, func(field string) bool { return field == "trust_updated_by" || field == "trust_updated_at" })
-		schema.Properties["trust_updated_by"].Description = "Authenticated API username responsible for the latest explicit trust decision. Present together with trust_updated_at after a decision."
-		schema.Properties["trust_updated_at"].Description = "Server timestamp of the latest explicit trust decision. Present together with trust_updated_by after a decision."
-		return
-	}
-	schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-	if model == "SetAgentSourceTrustRequest" {
-		trusted := schema.Properties["trusted"]
-		trusted.Type, trusted.Types, trusted.AnyOf = "boolean", nil, nil
-		trusted.Description = "Required boolean. Grants require an exact release; @stable may only be revoked. Omission and null are invalid."
-	}
-}
-
-func registerAgentSourcePaths(paths map[string]any) {
-	list := agentSourceOperation("listAgentSources", "List saved agent sources", map[string]any{
-		"type": "object", "required": []string{"items"},
-		"properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef("AgentSource")}},
-	})
-	list["description"] = "Returns saved entries sorted by canonical source selector. Empty source lists return a nonnull items array. No query parameters are accepted. Reads need neither the controller nor external metadata access."
-	create := agentSourceOperation("createAgentSource", "Add an untrusted agent source", endpoints.OpenAPIRef("AgentSource"))
-	create["description"] = "Creates one immutable canonical source identity as untrusted, version 1, with server timestamps. Trust, audit fields and version cannot be supplied. Existing sources return agent_source_exists even for identical metadata. No query parameters are accepted."
-	setAgentSourceBody(create, "CreateAgentSourceRequest")
-	responses := create["responses"].(map[string]any)
-	delete(responses, "200")
-	success := endpoints.OpenAPIResponse("Created untrusted source", endpoints.OpenAPIRef("AgentSource"))
-	success["headers"] = map[string]any{"Location": map[string]any{
-		"description": "Relative detail URL with the full canonical selector escaped as one path segment.", "required": true,
-		"schema": map[string]any{"type": "string", "format": "uri-reference"},
-	}}
-	responses["201"] = success
-	responses["409"] = endpoints.OpenAPIResponse("agent_source_exists", endpoints.OpenAPIRef("Error"))
-	paths[agentSourcesPath] = map[string]any{"get": list, "post": create}
-
-	get := agentSourceOperation("getAgentSource", "Get a saved agent source", endpoints.OpenAPIRef("AgentSource"))
-	get["description"] = "Reads one canonical source identity. Escape the entire source selector as one URL path segment, including its slashes. No query parameters are accepted."
-	trust := agentSourceOperation("setAgentSourceTrust", "Grant or revoke source trust", endpoints.OpenAPIRef("AgentSource"))
-	trust["description"] = "Records an explicit decision only when version matches the saved entry. Grants require an exact release selector; mutable @stable entries may only be revoked. Updates increment the version, preserve identity and creation time, and record the authenticated API username and server time. The request cannot choose its actor or audit timestamp. No automatic retries; after an uncertain response read the source before deciding whether to submit another change. This records source policy; runtime secret enforcement is separate. No query parameters are accepted."
-	setAgentSourceBody(trust, "SetAgentSourceTrustRequest")
-	trust["responses"].(map[string]any)["409"] = endpoints.OpenAPIResponse("agent_source_conflict", endpoints.OpenAPIRef("Error"))
-	for _, operation := range []map[string]any{get, trust} {
-		operation["parameters"] = []any{map[string]any{
-			"name": "source", "in": "path", "required": true,
-			"description": "Full canonical selector, encoded as one URL path segment.",
-			"schema":      map[string]any{"type": "string"},
-		}}
-		operation["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("agent_source_not_found", endpoints.OpenAPIRef("Error"))
-	}
-	paths[agentSourcePath] = map[string]any{"get": get, "patch": trust}
 }
 
 func registerAgentPaths(paths map[string]any) {
@@ -140,24 +37,4 @@ func registerAgentPaths(paths map[string]any) {
 	}}
 	detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("agent_not_found", endpoints.OpenAPIRef("Error"))
 	paths["/api/v1/agents/{agent_id}"] = map[string]any{"get": detail}
-}
-
-func agentSourceOperation(id, summary string, schema any) map[string]any {
-	operation := endpoints.OpenAPIQueryOperation(id, summary, "Agent sources", schema)
-	responses := operation["responses"].(map[string]any)
-	responses["400"] = endpoints.OpenAPIResponse("invalid_request or invalid_request_origin", endpoints.OpenAPIRef("Error"))
-	responses["503"] = endpoints.OpenAPIResponse("agent_source_write_uncertain or request_canceled. Uncertain writes take precedence over simultaneous cancellation or timeout; read saved state before another mutation.", endpoints.OpenAPIRef("Error"))
-	responses["504"] = endpoints.OpenAPIResponse("request_timeout after at most 10 seconds. Writes may have succeeded; read saved state before another mutation.", endpoints.OpenAPIRef("Error"))
-	return operation
-}
-
-func setAgentSourceBody(operation map[string]any, schema string) {
-	operation["requestBody"] = map[string]any{
-		"required":    true,
-		"description": "At most 1 MiB. Requires application/json; charset parameters are accepted. Unknown fields and invalid values are rejected.",
-		"content":     map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef(schema)}},
-	}
-	responses := operation["responses"].(map[string]any)
-	responses["413"] = endpoints.OpenAPIResponse("request_too_large", endpoints.OpenAPIRef("Error"))
-	responses["415"] = endpoints.OpenAPIResponse("unsupported_media_type", endpoints.OpenAPIRef("Error"))
 }

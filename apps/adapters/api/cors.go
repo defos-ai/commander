@@ -94,7 +94,7 @@ func writePreflight(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch methods[0] {
-	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete:
 	default:
 		endpoints.WriteError(w, http.StatusForbidden, "cors_method_not_allowed")
 		return
@@ -109,7 +109,7 @@ func writePreflight(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
 	w.Header().Set("Access-Control-Max-Age", "600")
 	w.WriteHeader(http.StatusNoContent)

@@ -10,7 +10,7 @@ import (
 	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
-func TestSecretAndCatalogMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
+func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 	type mutation struct{ method, path, body, contentType string }
 	observed := make(chan mutation, 8)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,6 @@ func TestSecretAndCatalogMutationsUseAuthenticatedSameOriginProxy(t *testing.T) 
 	}{
 		{http.MethodPut, "/api/v1/secrets/GITHUB_TOKEN", `{"id":"00000000-0000-4000-8000-000000000001","version":1,"value":"private-test-value"}`, http.StatusOK},
 		{http.MethodDelete, "/api/v1/secrets/GITHUB_TOKEN?id=00000000-0000-4000-8000-000000000001&version=2", "", http.StatusNoContent},
-		{http.MethodPatch, "/api/v1/agent-sources/github.com%2facme%2fworker-agent@v1.2.3", `{"trusted":true,"version":1}`, http.StatusOK},
 	} {
 		t.Run(tc.method, func(t *testing.T) {
 			path := fixtures.ProxyPath(upstream.URL, tc.path)

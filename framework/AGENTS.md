@@ -265,8 +265,8 @@
   parsing, strict source definitions and bounded remote source loading. Selectors
   accept GitHub HTTPS URLs or canonical references, with omitted versions meaning
   `@stable`; exact persisted references remain strict. The official source is
-  [`sources/agents.yaml`](../sources/agents.yaml); its remote loader remains separate
-  from deployment source queries. Source entries require repository
+  [`sources/agents.yaml`](../sources/agents.yaml); MCP loads it anonymously for
+  discovery. Source entries require repository
   `visibility: public | private`; this describes access, not trust or image
   visibility. The shared source client remains anonymous. Source entries
   support discovery, not an enforced installation allowlist. The spawner owns
@@ -276,18 +276,6 @@
   module tag. The spawner runtime saves the exact pin before preparing a launch. The framework
   must not depend on the spawner. Cover source/reference behavior and the
   official source definitions in [`tests/agent/packages`](tests/agent/packages/).
-- [`agents.AgentSource`](domain/agents/agent_source.go) and
-  [`AgentSourceStore`](domain/agents/agent_source_store.go) persist the deployment's
-  agent sources separately from live agent inventory. Full canonical selectors are
-  immutable keys; `@stable` and exact releases remain distinct records. Names are
-  display aliases, not runtime identity. Stores reserve new entries at version 1
-  and replace only the expected business version, preserving creation time and
-  advancing the version once. Read after uncertain writes before mutating again.
-  Explicit trust decisions retain `TrustUpdatedBy` and `TrustUpdatedAt`; grants
-  require an exact release, and initial untrusted records may omit the audit pair.
-  Audit times stay within the record timestamps. Saved trust is metadata;
-  runtime authorization is not wired yet. Seeding belongs in a later Admin CLI
-  workflow through the API, following mission seeding, with existing records preserved.
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.
 - Hosts accepting a preassigned agent ID from outside accept only an eight-digit

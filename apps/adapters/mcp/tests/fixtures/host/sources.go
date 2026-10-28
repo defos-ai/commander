@@ -1,35 +1,59 @@
 package host
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
-	"time"
 
+	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
 	"github.com/defos-ai/commander/framework/agent/packages"
-	"github.com/defos-ai/commander/framework/domain/agents"
-	fsagents "github.com/defos-ai/commander/providers/fs/agents"
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func AgentSources(t *testing.T) (*fsagents.AgentSourceFsStore, []agents.AgentSource) {
+const AgentSources = `schema_version: 1
+agents:
+  zeta:
+    description: Second public source fixture.
+    source: github.com/acme/zeta-agent@stable
+    visibility: public
+  alpha:
+    description: First private source fixture.
+    source: github.com/private-org/alpha-agent@v1.2.3
+    visibility: private
+  gamma:
+    description: Second private source fixture.
+    source: github.com/private-org/gamma-agent@stable
+    visibility: private
+  beta:
+    description: First public source fixture.
+    source: github.com/acme/beta-agent@v1.2.3
+    visibility: public
+`
+
+const EmptyAgentSources = "schema_version: 1\nagents: {}\n"
+
+type SourceEntry struct {
+	Name, Description, Source, Visibility string
+}
+
+func ExpectedSources() []SourceEntry {
+	return []SourceEntry{
+		{"beta", "First public source fixture.", "github.com/acme/beta-agent@v1.2.3", "public"},
+		{"zeta", "Second public source fixture.", "github.com/acme/zeta-agent@stable", "public"},
+		{"alpha", "First private source fixture.", "github.com/private-org/alpha-agent@v1.2.3", "private"},
+		{"gamma", "Second private source fixture.", "github.com/private-org/gamma-agent@stable", "private"},
+	}
+}
+
+func AgentSourcesSession(t *testing.T, transport http.RoundTripper) (context.Context, *sdkmcp.ClientSession) {
 	t.Helper()
-	store, err := fsagents.NewAgentSourceFsStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
-	entries := []agents.AgentSource{
-		{Name: "zeta", Description: "Second public source fixture.", Source: "github.com/acme/zeta-agent@stable", Visibility: packages.Public},
-		{Name: "alpha", Description: "First private source fixture.", Source: "github.com/private-org/alpha-agent@v1.2.3", Visibility: packages.Private},
-		{Name: "gamma", Description: "Second private source fixture.", Source: "github.com/private-org/gamma-agent@stable", Visibility: packages.Private},
-		{Name: "beta", Description: "First public source fixture.", Source: "github.com/acme/beta-agent@v2.0.0", Visibility: packages.Public},
-		{Name: "beta", Description: "Trusted public source fixture.", Source: "github.com/acme/beta-agent@v1.2.3", Visibility: packages.Public, Trusted: true, TrustUpdatedBy: "fixture-operator", TrustUpdatedAt: now},
-	}
-	for index := range entries {
-		entries[index].Version = 1
-		entries[index].CreatedAt = now
-		entries[index].UpdatedAt = now
-		if err := store.Create(t.Context(), entries[index]); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return store, entries
+	client := packages.NewClient(transport)
+	t.Cleanup(client.CloseIdleConnections)
+	return Session(t, adapter.Config{SourceClient: client})
+}
+
+func SourceResponse(request *http.Request, status int, body string) *http.Response {
+	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}
 }

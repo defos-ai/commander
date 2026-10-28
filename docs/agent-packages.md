@@ -27,10 +27,8 @@ stable version marked Latest; it does not fall back to other tags. Each new
 installation creates an instance. Check the result and action readiness before
 starting dependent work.
 
-The deployment's saved [agent sources](../sources/README.md) help discovery through
-API and MCP. Add entries through `/api/v1/agent-sources`; default seeding is
-deferred. Saved trust is management metadata until controller enforcement is
-implemented; it does not currently restrict installation or secret delivery.
+The official [agent source list](../sources/README.md) helps discovery through
+MCP. It contains metadata, without saved trust approvals or an installation allowlist.
 
 ### Private repositories
 

@@ -66,14 +66,14 @@ func TestCORSPreflightAuthorizesMethodsAndHeadersWithoutCredentials(t *testing.T
 	fixture := hostfixtures.New(t)
 	t.Setenv("API_ALLOWED_ORIGINS", adminOrigin)
 	server := hostfixtures.Start(t, fixture.LocalArgs())
-	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete} {
 		for _, headers := range []string{"", "Authorization", "authorization, CONTENT-TYPE, Accept"} {
 			result := server.Request(t, http.MethodOptions, "/api/v1/operations", corsPreflight(adminOrigin, method, headers))
 			if result.Status != http.StatusNoContent || result.Body != "" || result.Header.Get("WWW-Authenticate") != "" {
 				t.Fatalf("preflight must be empty and unauthenticated: %+v", result)
 			}
 			assertCORSOrigin(t, result, adminOrigin)
-			assertCORSTokens(t, result.Header, "Access-Control-Allow-Methods", "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE")
+			assertCORSTokens(t, result.Header, "Access-Control-Allow-Methods", "GET", "HEAD", "POST", "PUT", "DELETE")
 			assertCORSTokens(t, result.Header, "Access-Control-Allow-Headers", "Authorization", "Content-Type", "Accept")
 			assertCORSVary(t, result.Header, "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers")
 		}
@@ -83,7 +83,7 @@ func TestCORSPreflightAuthorizesMethodsAndHeadersWithoutCredentials(t *testing.T
 		status                      int
 		repeatMethod                bool
 	}{
-		{"unsupported method", "TRACE", "", "cors_method_not_allowed", 403, false},
+		{"unsupported method", "PATCH", "", "cors_method_not_allowed", 403, false},
 		{"unsupported header", "POST", "Authorization, X-Private", "cors_headers_not_allowed", 403, false},
 		{"malformed method", "GET, POST", "", "invalid_cors_preflight", 400, false},
 		{"invalid method token", "GET/POST", "", "invalid_cors_preflight", 400, false},

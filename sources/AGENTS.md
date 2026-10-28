@@ -41,30 +41,13 @@ Read the [root guide](../AGENTS.md) and
   remain independent of the spawner and must not require this checkout at runtime.
 - MCP exposes `get_agent_sources` for discovery, returning public entries first
   and sorting aliases alphabetically within each visibility group, with package
-  selectors breaking ties. It reads the same deployment `AgentSourceStore` as API,
-  preserving saved trust and business versions. No remote fetch or automatic seed
-  happens during reads or startup. Version resolution belongs to the spawner;
+  selectors breaking ties. It loads this document anonymously on demand and
+  returns name, description, source and visibility only. Do not load during
+  startup or introduce a source database, seed workflow or saved trust.
+  Version resolution belongs to the spawner;
   sources failure must not prevent direct installs. Spawner action
   inputs accept GitHub URLs, bare references, `@stable` or exact pins;
   aliases remain discovery names, not installation inputs.
-
-## Persisted sources
-
-- [`AgentSource`](../framework/domain/agents/agent_source.go) and
-  [`AgentSourceStore`](../framework/domain/agents/agent_source_store.go) describe saved
-  package metadata and trust state independently of live agent inventory.
-  FS uses `agent-sources.json`; Mongo uses `agent_sources`.
-- The full canonical package selector is the key. Aliases are display metadata;
-  `@stable` must not silently imply repository-wide authorization. API approvals
-  require exact releases. Controller secret authorization will match declared
-  agent source identity to approved entries in a later step.
-- Create-only insertion and versioned replacement preserve edited or revoked
-  records. There is no unrestricted upsert or delete that could reset trust.
-  Explicit trust decisions save the authenticated API actor and decision time;
-  untouched untrusted entries omit both. API mutation bodies cannot set audit fields.
-- Seeding is postponed. Implement it later through Admin CLI and the API, like
-  mission seeding; never load defaults automatically in the controller. MCP trust
-  writes with operator confirmation and runtime enforcement remain later steps.
 
 ## Validation
 
