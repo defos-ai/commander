@@ -256,7 +256,7 @@
   Wait for spawner to register. The web agent
   owns HTTP work and remains ready without Chromium; the browser advertises rendering
   requirements. Any separately started builder discovers Git, Go and Codex itself;
-  its tools and managed `CODEX_API_KEY` affect action readiness. Keep readiness in
+  its tools and managed `OPENAI_API_KEY` affect action readiness. Keep readiness in
   the agent rather than adding builder startup or installation to the client.
 - Preserve the chat engine's single-owner state and responsive queued input,
   cancellation, slash commands and background operation updates. Respect contexts

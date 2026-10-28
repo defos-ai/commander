@@ -21,7 +21,7 @@ import (
 )
 
 func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T) {
-	definition := actions.Action{Name: "build", RequiredSecrets: []string{"CODEX_API_KEY", "GITHUB_TOKEN"},
+	definition := actions.Action{Name: "build", RequiredSecrets: []string{"OPENAI_API_KEY", "GITHUB_TOKEN"},
 		InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 	executor := &fakes.SecretAction{Base: action.NewBase(definition)}
 	definition.RequiredSecrets[0] = "CHANGED"
@@ -36,9 +36,9 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 		t.Fatal(err)
 	}
 	snapshot := runtime.Describe()
-	want := []string{"CODEX_API_KEY", "GITHUB_TOKEN"}
+	want := []string{"OPENAI_API_KEY", "GITHUB_TOKEN"}
 	wantMissing := []actions.Requirement{
-		{Kind: actions.SecretRequirement, Name: "CODEX_API_KEY"},
+		{Kind: actions.SecretRequirement, Name: "OPENAI_API_KEY"},
 		{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"},
 	}
 	if snapshot.Type != "builder-agent" ||
@@ -63,7 +63,7 @@ func TestSecretDeclarationsSurviveDiscoveryAndIndependentSnapshots(t *testing.T)
 	}
 	// Host configuration and a managed secret can share a name without sharing
 	// a source or resolution path.
-	hostRequirement := actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "CODEX_API_KEY", Sensitive: true}
+	hostRequirement := actions.Requirement{Kind: actions.ConfigurationRequirement, Name: "OPENAI_API_KEY", Sensitive: true}
 	executor.SetUnavailable("Missing configuration", hostRequirement)
 	mixed := runtime.Describe().Actions[0]
 	if !slices.Equal(mixed.MissingRequirements, append([]actions.Requirement{hostRequirement}, wantMissing...)) {

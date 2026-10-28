@@ -35,7 +35,7 @@ func executePublicationGit(realGit string, config PublicationGit) error {
 		return errors.New("publication did not restrict Git protocols")
 	}
 	name := args[index]
-	for _, key := range []string{"GITHUB_TOKEN", "CODEX_API_KEY", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD"} {
+	for _, key := range []string{"GITHUB_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD"} {
 		if _, found := os.LookupEnv(key); found {
 			return fmt.Errorf("publication inherited host variable %s", key)
 		}

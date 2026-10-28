@@ -27,7 +27,7 @@ func BuildExecutor(t *testing.T, root, workspaceID, mode string) (*builderaction
 	if err != nil || status != action.Ready {
 		t.Fatalf("build discovery: status=%s err=%v", status, err)
 	}
-	if names := executor.Action().RequiredSecrets; len(names) != 1 || names[0] != "CODEX_API_KEY" {
+	if names := executor.Action().RequiredSecrets; len(names) != 1 || names[0] != "OPENAI_API_KEY" {
 		t.Fatalf("build secret declaration: %v", names)
 	}
 	return executor, config, scope

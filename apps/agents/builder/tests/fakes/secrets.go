@@ -7,7 +7,7 @@ import (
 type BuildSecrets string
 
 func (s BuildSecrets) Secret(name string) ([]byte, error) {
-	if name != "CODEX_API_KEY" {
+	if name != "OPENAI_API_KEY" {
 		return nil, action.ErrSecretUnavailable
 	}
 	return []byte(s), nil

@@ -30,7 +30,7 @@ Use the [controller's](../../controllers/README.md#quick-start) `BUS_URL` and
 ## Build an agent
 
 1. Describe the behavior and expected inputs/outputs in Playground.
-2. Supply `CODEX_API_KEY` through the secret form when asked.
+2. Supply `OPENAI_API_KEY` through the secret form when asked.
 3. Review the generated agent and download its `source.tar.gz` artifact in Admin.
 
 The `build-agent` mission defines action contracts, checks out the

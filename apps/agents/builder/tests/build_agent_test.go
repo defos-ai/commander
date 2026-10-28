@@ -242,6 +242,7 @@ func TestBuildAgentProtectsManagedSecretsAndFailedOutput(t *testing.T) {
 			}
 			executor, config, _ := fixtures.BuildExecutor(t, root, workspaceID, mode)
 			t.Setenv("CODEX_API_KEY", "ambient-value-is-not-a-managed-secret")
+			t.Setenv("OPENAI_API_KEY", "ambient-value-is-not-a-managed-secret")
 			ctx := t.Context()
 			if scenario == "empty secret" {
 				ctx = action.WithSecrets(ctx, fakes.BuildSecrets(""))

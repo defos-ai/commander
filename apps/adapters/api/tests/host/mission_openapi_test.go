@@ -96,7 +96,7 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 		{name: "parent name", missionName: ".."},
 		{name: "uninstalled actions", fields: `,"required_actions":["future-action"],"starting_actions":["future-action"]`, valid: true},
 		{name: "nullable omitted collections", fields: `,"required_actions":null,"optional_actions":null,"starting_actions":null,"steps":null,"rules":null,"action_definitions":null`, valid: true},
-		{name: "action definition", fields: `,"required_actions":["build"],"action_definitions":[{"name":"build","description":"Build an agent","input_schema":{"type":"object","x-extra":true},"output_schema":{"type":"object"},"required_secrets":["CODEX_API_KEY"]}]`, valid: true},
+		{name: "action definition", fields: `,"required_actions":["build"],"action_definitions":[{"name":"build","description":"Build an agent","input_schema":{"type":"object","x-extra":true},"output_schema":{"type":"object"},"required_secrets":["OPENAI_API_KEY"]}]`, valid: true},
 		{name: "minimal action definition", fields: `,"required_actions":["build"],"action_definitions":[{"name":"build","input_schema":{"type":"object"},"output_schema":{"type":"object"},"required_secrets":null}]`, valid: true},
 		{name: "unknown action definition field", fields: `,"action_definitions":[{"name":"build","input_schema":{"type":"object"},"output_schema":{"type":"object"},"status":"ready"}]`},
 		{name: "missing action schema type", fields: `,"action_definitions":[{"name":"build","input_schema":{},"output_schema":{"type":"object"}}]`},

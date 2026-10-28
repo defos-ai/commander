@@ -24,7 +24,7 @@ func TestPublishAgentPublishesVerifiedSourceAndRetriesSameCommit(t *testing.T) {
 		{name: "explicit public overrides private default", defaultVisibility: "private", visibility: "public", want: "public"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			for _, key := range []string{"GITHUB_TOKEN", "CODEX_API_KEY", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD"} {
+			for _, key := range []string{"GITHUB_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD"} {
 				t.Setenv(key, "ambient-secret-must-not-reach-publication")
 			}
 			f := fixtures.NewPublication(t, scenario.defaultVisibility, "")

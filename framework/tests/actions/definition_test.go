@@ -9,7 +9,7 @@ import (
 )
 
 func TestDefinitionValidatesStaticContractWithoutReadiness(t *testing.T) {
-	definition := actions.Definition{Name: "build-agent", RequiredSecrets: []string{"CODEX_API_KEY"},
+	definition := actions.Definition{Name: "build-agent", RequiredSecrets: []string{"OPENAI_API_KEY"},
 		InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 	if err := definition.Validate(); err != nil {
 		t.Fatalf("empty description and unconstrained schemas must remain valid: %v", err)
@@ -40,7 +40,7 @@ func TestDefinitionValidatesStaticContractWithoutReadiness(t *testing.T) {
 	}
 	runtime := actions.Action{Name: definition.Name, RequiredSecrets: definition.RequiredSecrets,
 		InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema, Status: actions.Ready,
-		MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "CODEX_API_KEY"}}}
+		MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "OPENAI_API_KEY"}}}
 	if err := runtime.Definition().Validate(); err != nil {
 		t.Fatalf("runtime blockers must not invalidate the static contract: %v", err)
 	}
@@ -50,24 +50,24 @@ func TestDefinitionValidatesStaticContractWithoutReadiness(t *testing.T) {
 }
 
 func TestDefinitionSnapshotsOwnSchemasAndSecretNames(t *testing.T) {
-	runtime := actions.Action{Name: "build-agent", RequiredSecrets: []string{"CODEX_API_KEY"},
+	runtime := actions.Action{Name: "build-agent", RequiredSecrets: []string{"OPENAI_API_KEY"},
 		InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}
 	definition := runtime.Definition()
 	clone := definition.Clone()
 	clone.RequiredSecrets[0] = "GITHUB_TOKEN"
 	clone.InputSchema[0], clone.OutputSchema[0] = '[', '['
-	if definition.RequiredSecrets[0] != "CODEX_API_KEY" || string(definition.InputSchema) != `{"type":"object"}` || string(definition.OutputSchema) != `{"type":"object"}` {
+	if definition.RequiredSecrets[0] != "OPENAI_API_KEY" || string(definition.InputSchema) != `{"type":"object"}` || string(definition.OutputSchema) != `{"type":"object"}` {
 		t.Fatal("mutating a cloned definition changed its source")
 	}
 	definition.RequiredSecrets[0] = "GITHUB_TOKEN"
 	definition.InputSchema[0], definition.OutputSchema[0] = '[', '['
-	if runtime.RequiredSecrets[0] != "CODEX_API_KEY" || string(runtime.InputSchema) != `{"type":"object"}` || string(runtime.OutputSchema) != `{"type":"object"}` {
+	if runtime.RequiredSecrets[0] != "OPENAI_API_KEY" || string(runtime.InputSchema) != `{"type":"object"}` || string(runtime.OutputSchema) != `{"type":"object"}` {
 		t.Fatal("mutating a definition projection changed the runtime action")
 	}
 }
 
 func TestDefinitionJSONSeparatesStaticMetadataFromFlatRuntimeAction(t *testing.T) {
-	raw := []byte(`{"name":"build-agent","description":"Build an agent","status":"unavailable","status_reason":"Requires CODEX_API_KEY","missing_requirements":[{"kind":"secret","name":"CODEX_API_KEY"}],"required_secrets":["CODEX_API_KEY"],"input_schema":{"type":"object"},"output_schema":{}}`)
+	raw := []byte(`{"name":"build-agent","description":"Build an agent","status":"unavailable","status_reason":"Requires OPENAI_API_KEY","missing_requirements":[{"kind":"secret","name":"OPENAI_API_KEY"}],"required_secrets":["OPENAI_API_KEY"],"input_schema":{"type":"object"},"output_schema":{}}`)
 	var runtime actions.Action
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)

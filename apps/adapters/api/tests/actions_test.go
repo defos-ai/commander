@@ -36,7 +36,7 @@ func TestActionCatalogMatchesReadyAgents(t *testing.T) {
 		for _, action := range agent.Actions {
 			names = append(names, action.Name)
 			if action.Name == "build-agent" || action.Name == "publish-agent" || action.Name == "release-agent" {
-				secret := "CODEX_API_KEY"
+				secret := "OPENAI_API_KEY"
 				if action.Name != "build-agent" {
 					secret = "GITHUB_TOKEN"
 				}

@@ -30,7 +30,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   Define contracts from the operator's request before checkout and pass the
   mission's instructions and actions unchanged into the build continuation.
   Declared secret names belong to the generated agent, not builder readiness;
-  only managed `CODEX_API_KEY` gates this action. It runs Codex and Go
+  only managed `OPENAI_API_KEY` gates this action. It runs Codex and Go
   tests/build, validates the generated release structure and actual registration,
   and exports
   `source.tar.gz` through the normal artifact runtime. Its successful output
@@ -110,9 +110,11 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   Those stages need their own actions and managed-secret declarations. Do not add
   environment fallbacks for managed secrets.
 - Build uses Codex's workspace-write sandbox with temporary configuration and
-  no inherited user authentication. Independent Go checks run with `GOWORK=off`
-  and no managed key in their environment. They execute generated code as the
-  builder's operating-system user; environment isolation is not an OS sandbox.
+  no inherited user authentication. Map managed `OPENAI_API_KEY` to `CODEX_API_KEY`
+  only for the Codex process. Generated shell commands and independent Go checks
+  use a clean environment without either key; Go checks run with `GOWORK=off`.
+  They execute generated code as the builder's operating-system user;
+  environment isolation is not an OS sandbox.
   Preserve redacted subprocess errors and never return raw model/tool output.
 - After ordinary Go tests/build, verify release entry points and reject the
   unchanged example identity/module or checkout-local Go replacements. Reuse the

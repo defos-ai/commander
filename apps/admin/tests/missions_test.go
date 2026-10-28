@@ -317,7 +317,7 @@ func checkBuildAgentMission(t *testing.T, catalog map[string]missions.Mission) {
 		`{"instructions":"Build an agent"}`,
 		`{"instructions":"Build an agent","actions":[]}`,
 		`{"instructions":" ","actions":` + requestedActions + `}`,
-		`{"instructions":"Build an agent","actions":` + requestedActions + `,"CODEX_API_KEY":"value"}`,
+		`{"instructions":"Build an agent","actions":` + requestedActions + `,"OPENAI_API_KEY":"value"}`,
 		`{"instructions":"Build an agent","actions":` + requestedActions + `,"repository":"example/json-agent","visibility":"internal"}`,
 		`{"instructions":"Build an agent","actions":` + requestedActions + `,"release_version":"stable"}`,
 		`{"instructions":"Build an agent","actions":` + requestedActions + `,"release_version":"v0.1.0-rc.1"}`,

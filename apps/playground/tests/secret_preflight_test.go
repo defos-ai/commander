@@ -116,7 +116,7 @@ func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
 	err := json.Unmarshal([]byte(`{"status":"waiting","preflight":{"actions":[
 		{"unavailable_agents":[
 			{"agent_type":"spawner-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]},
-			{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"},{"kind":"secret","name":"CODEX_API_KEY"},{"kind":"secret","name":"../invalid"}]}
+			{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"},{"kind":"secret","name":"OPENAI_API_KEY"},{"kind":"secret","name":"../invalid"}]}
 		]},
 		{"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"GITHUB_TOKEN"}]}]},
 		{"ready_agent_ids":["ready-agent"],"unavailable_agents":[{"agent_type":"builder-agent","missing_requirements":[{"kind":"secret","name":"NOT_NEEDED"}]}]}
@@ -133,8 +133,8 @@ func TestOperationMissingSecretsDeduplicatesWithinScope(t *testing.T) {
 		{Status: "running", DeadlineAt: &deadline, AgentType: "builder-agent", MissingRequirements: []actions.Requirement{{Kind: actions.SecretRequirement, Name: "RUNTIME_TOKEN"}}},
 	}
 	want := []secrets.Key{
-		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "CODEX_API_KEY"},
 		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "GITHUB_TOKEN"},
+		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "OPENAI_API_KEY"},
 		{Scope: secrets.Scope{AgentType: "builder-agent"}, Name: "RUNTIME_TOKEN"},
 		{Scope: secrets.Scope{AgentType: "spawner-agent"}, Name: "GITHUB_TOKEN"},
 	}
