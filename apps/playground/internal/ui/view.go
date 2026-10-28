@@ -236,6 +236,9 @@ func (m *Model) operationProgress() []string {
 	for i, id := range ids[:min(4, len(ids))] {
 		op := m.operations[id]
 		marker := stars[m.frame%len(stars)]
+		if op.Terminal() {
+			marker = "○"
+		}
 		if op.Settled() {
 			marker = "✓"
 		}
@@ -248,6 +251,13 @@ func (m *Model) operationProgress() []string {
 			label = label[:8]
 		}
 		line := fmt.Sprintf("%s %s · %s · %d/%d tasks finished", m.color(marker, color), label, op.Status, op.Progress.FinishedTasks, op.Progress.TotalTasks)
+		if unknown := op.Progress.TaskCounts["interrupted"]; unknown > 0 {
+			label := "task outcome"
+			if unknown > 1 {
+				label = "task outcomes"
+			}
+			line += fmt.Sprintf(" · %d %s unknown", unknown, label)
+		}
 		needsSecrets := op.NeedsSecrets()
 		if needsSecrets {
 			line += " · secrets needed · /secrets"

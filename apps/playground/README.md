@@ -19,7 +19,8 @@ The image includes Admin and spawner, plus Git, Go, Codex and browser tools for
 installed agents. Only spawner starts automatically; other agents install on demand.
 
 Type `/admin` to open [Admin](http://localhost:4275) and `/credentials` for the
-API login. Completed operation rows link to their Admin details.
+API login. Completed operation rows link to their Admin details once all task
+outcomes are known.
 
 **All-in-one deletes results, artifacts, downloaded agents and their working files
 on exit.** Use Compose to retain work.
@@ -164,9 +165,14 @@ its own API connection. Compose supplies the default internal API login; a custo
 | `/watch <operation-id>` | Follow work and resume model review. |
 | `/run <operation-id> <action-name> <json-input>` | Queue an action through MCP. |
 | `/cancel <operation-id>` | Cancel queued operation work. Dispatched tasks may finish. |
-| `/stop` or **Ctrl+C** | Stop the reply; server-side work continues. |
+| `/stop` or **Ctrl+C** | Stop the reply, clear queued messages and pause model review. |
 | `/clear` | Clear the conversation. |
 | `/exit` or **Ctrl+D** | Exit; all-in-one hosts stop too. |
+
+`completed` means a final report was accepted; it may include limitations.
+Terminal operations show a static marker and list unknown task outcomes.
+Playground keeps watching for late results and artifacts. `/stop` pauses model
+review while operation updates continue; `/watch <operation-id>` resumes review.
 
 Scroll with the wheel, trackpad or **PgUp/PgDown**. Drag to select, then use your
 terminal's copy command, such as **Ctrl+Shift+C** in GNOME Terminal.

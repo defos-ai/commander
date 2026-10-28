@@ -157,11 +157,22 @@ func (e *Engine) run() {
 			switch {
 			case text == "/stop":
 				paused = true
+				notice := ""
 				if cancelTurn != nil {
 					cancelTurn()
+					notice = "Reply stopped."
 				}
 				pending, automatic = nil, nil
-				e.emit(Event{Kind: "notice", Text: "Reply stopped. Server-side operations continue; /watch <id> resumes model review."})
+				for id := range watched {
+					if operation, known := operations[id]; !known || !operation.Settled() {
+						notice = strings.TrimSpace(notice + " Model review paused; /watch <id> resumes it. Operation updates remain visible.")
+						break
+					}
+				}
+				if notice == "" {
+					notice = "No reply is running."
+				}
+				e.emit(Event{Kind: "notice", Text: notice})
 			case text == "/help":
 				e.emit(Event{Kind: "notice", Text: Help})
 			case text == "/clear":
@@ -238,7 +249,7 @@ const Help = `/help — Show this help
 /watch <operation-id> — Follow an operation and resume model review
 /run <operation-id> <action> <json-input> — Queue an action directly through MCP
 /cancel <operation-id> — Cancel a server-side operation
-/stop — Stop this reply and clear queued messages
+/stop — Stop model work and clear queued messages
 /clear — Clear model conversation; keep saved operations
 /exit — Exit; server-side work keeps running
 

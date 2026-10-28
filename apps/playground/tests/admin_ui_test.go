@@ -248,7 +248,7 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	command("/watch cancelled")
 	targetReads := reads.Load() + 3
 	u.wait("cancelled work awaiting its outcome", func(view string) bool {
-		return strings.Contains(view, "cancelle · cancelled · 1/2 tasks finished") && reads.Load() >= targetReads
+		return strings.Contains(view, "○ cancelle · cancelled · 1/2 tasks finished · 1 task outcome unknown") && reads.Load() >= targetReads
 	})
 	if strings.Contains(u.model.View(), "✓ cancelle") || strings.Count(u.model.View(), "Operation reviewed") != 1 {
 		t.Fatal("interrupted cancellation was marked settled or reviewed before its outcome arrived")
@@ -281,13 +281,20 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	countLinks(0)
 
 	op.Status, op.UpdatedAt = "completed", now.Add(2*time.Second)
+	op.Tasks[0].Status = "interrupted"
+	op.Progress = bridge.Progress{TaskCounts: map[string]int{"interrupted": 1}, TotalTasks: 1}
 	publish(op)
-	u.wait("completion still draining", func(view string) bool { return strings.Contains(view, "target · completed · 0/1 tasks finished") })
+	u.wait("completion with an unknown outcome", func(view string) bool {
+		return strings.Contains(view, "○ target · completed · 0/1 tasks finished · 1 task outcome unknown")
+	})
 	countLinks(0)
 	op.UpdatedAt = now.Add(3 * time.Second)
 	publish(op)
 	targetReads = reads.Load() + 2
 	u.wait("repeated completion snapshots", func(string) bool { return reads.Load() >= targetReads })
+	if !strings.Contains(u.model.View(), "○ target · completed · 0/1 tasks finished · 1 task outcome unknown") || strings.Count(u.model.View(), "Operation reviewed") != 2 {
+		t.Fatal("completed operation animated or triggered another model review while its outcome remained unknown")
+	}
 	op.Tasks[0].Status, op.UpdatedAt = "succeeded", now.Add(4*time.Second)
 	op.Progress = bridge.Progress{TaskCounts: map[string]int{"succeeded": 1}, TotalTasks: 1, FinishedTasks: 1, Settled: true}
 	publish(op)
@@ -295,6 +302,9 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 		return strings.Contains(view, "target · completed · 1/1 tasks finished") && strings.Count(view, "Operation reviewed") == 3 && !strings.Contains(view, "Thinking")
 	})
 	countLinks(1)
+	if strings.Contains(u.model.View(), "task outcome unknown") || strings.Contains(u.model.View(), "task outcomes unknown") {
+		t.Fatal("known late outcomes still appear as unknown")
+	}
 	const targetURL = "http://localhost:4275/#/connect?api=http%3A%2F%2Flocalhost%3A4274&operation=target&username=commander"
 	if !strings.Contains(u.model.View(), "target · completed · 1/1 tasks finished · Review on Admin UI ("+targetURL+")") {
 		t.Fatal("review link does not appear on its operation's progress row")
@@ -330,6 +340,38 @@ func TestAdminCompletionWithoutURLIsSilent(t *testing.T) {
 	u.key(tea.KeyMsg{Type: tea.KeyEnter})
 	if !strings.Contains(u.model.View(), "Start Admin with /admin serve.") {
 		t.Fatal("explicit Admin lookup did not explain missing configuration")
+	}
+}
+
+func TestFailedOperationShowsUnknownTaskOutcomes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	u, publish, reads := adminOperationUI(t, ctx, "", true)
+	defer u.model.Close()
+	u.model.Update(tea.WindowSizeMsg{Width: 180, Height: 60})
+	op := bridge.Operation{
+		ID: "failed", Status: "failed", UpdatedAt: time.Now(),
+		Tasks:    []bridge.Task{{ID: "first", Status: "interrupted"}, {ID: "second", Status: "interrupted"}},
+		Progress: bridge.Progress{TaskCounts: map[string]int{"interrupted": 2}, TotalTasks: 2},
+	}
+	publish(op)
+	u.text("/watch failed")
+	u.key(tea.KeyMsg{Type: tea.KeyEnter})
+	u.wait("failed operation with unknown outcomes", func(view string) bool {
+		return strings.Contains(view, "○ failed · failed · 0/2 tasks finished · 2 task outcomes unknown") && reads.Load() >= 3
+	})
+	if strings.Contains(u.model.View(), "Operation reviewed") {
+		t.Fatal("unknown outcomes triggered a final model review")
+	}
+	op.Tasks[0].Status, op.Tasks[1].Status = "failed", "failed"
+	op.UpdatedAt = op.UpdatedAt.Add(time.Second)
+	op.Progress = bridge.Progress{TaskCounts: map[string]int{"failed": 2}, TotalTasks: 2, FinishedTasks: 2, Settled: true}
+	publish(op)
+	u.wait("failed operation with known outcomes", func(view string) bool {
+		return strings.Contains(view, "✓ failed · failed · 2/2 tasks finished") && strings.Contains(view, "Operation reviewed") && !strings.Contains(view, "Thinking")
+	})
+	if strings.Contains(u.model.View(), "task outcomes unknown") {
+		t.Fatal("settled operation still shows unknown outcomes")
 	}
 }
 

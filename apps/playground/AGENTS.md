@@ -264,13 +264,19 @@
 - Render the server's `progress` counts and use its `settled` flag for watcher
   completion, final model review and Admin review links. Do not recalculate task
   completion locally: interrupted outcomes remain unknown even on terminal
-  operations. Compare derived progress separately from `updated_at`, since a
+  operations. Use a static marker for terminal operations until settled and show
+  unknown outcomes from the server's interrupted-task count. Completion accepts
+  a final report that may include limitations; keep watching for late evidence
+  without reopening the operation or scheduling another decision before settlement.
+  Compare derived progress separately from `updated_at`, since a
   question deadline can change counts without a saved write. Keep local question
   and secret deadlines for input safety and continuation versions for review
   scheduling.
 - `/stop` ends model work, not the server operation. Watching an operation can
-  resume model review. Do not automatically retry failed model or mutating MCP
-  requests: their execution outcome may be unknown.
+  resume model review. Distinguish an active reply from an idle stop and only
+  describe paused review for watched operations whose settlement is not known.
+  Keep operation updates flowing while review is paused. Do not automatically
+  retry failed model or mutating MCP requests: their execution outcome may be unknown.
 - Only explicit operator input answers a question. An expired question returns
   the decision for review; it never supplies approval. Keep task/continuation
   revisions when deciding whether a review is new or stale.
