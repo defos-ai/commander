@@ -22,7 +22,7 @@ import (
 func TestExecutionMongoStoreLogQueriesValidateBeforeDatabaseAccess(t *testing.T) {
 	catalog := &mongoexecutions.ExecutionMongoStore{}
 	for _, query := range []executions.LogQuery{
-		{}, {Limit: executions.MaxLogPageSize + 1}, {Limit: 1, OperationID: "invalid"},
+		{}, {Limit: domain.MaxPageSize + 1}, {Limit: 1, OperationID: "invalid"},
 		{Limit: 1, TaskID: "invalid"}, {Limit: 1, AgentID: "invalid"}, {Limit: 1, ActionName: " "},
 		{Limit: 1, AfterLogID: "invalid"},
 	} {

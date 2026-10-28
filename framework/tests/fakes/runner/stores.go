@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -61,8 +62,8 @@ func (s *OperationStore) List(context.Context) ([]operations.Operation, error) {
 	return result, nil
 }
 func (s *OperationStore) ListEvents(ctx context.Context, id string, after uint64, limit int) ([]operations.Event, error) {
-	if limit <= 0 {
-		return nil, errors.New("event limit must be positive")
+	if err := domain.ValidatePageLimit(limit); err != nil {
+		return nil, err
 	}
 	op, err := s.Get(ctx, id)
 	if err != nil {
@@ -92,8 +93,8 @@ func (s *OperationStore) GetTask(ctx context.Context, operationID, taskID string
 	return operations.Task{}, operations.ErrUnknownTask
 }
 func (s *OperationStore) ListTasks(ctx context.Context, operationID, afterTaskID string, limit int) ([]operations.Task, error) {
-	if limit <= 0 {
-		return nil, errors.New("task limit must be positive")
+	if err := domain.ValidatePageLimit(limit); err != nil {
+		return nil, err
 	}
 	op, err := s.Get(ctx, operationID)
 	if err != nil {

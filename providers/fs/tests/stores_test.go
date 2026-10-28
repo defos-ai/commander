@@ -13,6 +13,7 @@ import (
 
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -277,6 +278,7 @@ func TestOperationEventsPagination(t *testing.T) {
 		{"first page", 0, 2, []operations.Event{op.Events[1], op.Events[2]}},
 		{"second page", 7, 2, []operations.Event{op.Events[0]}},
 		{"cursor between events", 3, 1, []operations.Event{op.Events[2]}},
+		{"maximum page limit", 0, 1000, []operations.Event{op.Events[1], op.Events[2], op.Events[0]}},
 		{"at end", 10, 2, []operations.Event{}},
 		{"beyond end", 100, 2, []operations.Event{}},
 	} {
@@ -297,9 +299,9 @@ func TestOperationEventsPagination(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(stored.Events, op.Events) {
 		t.Fatalf("querying or modifying a page changed stored events: %+v, %v", stored.Events, err)
 	}
-	for _, limit := range []int{0, -1} {
-		if _, err := store.ListEvents(t.Context(), op.ID, 0, limit); err == nil {
-			t.Errorf("invalid event limit %d was accepted", limit)
+	for _, limit := range []int{-1, 0, 1001} {
+		if _, err := store.ListEvents(t.Context(), op.ID, 0, limit); !errors.Is(err, domain.ErrInvalidInput) {
+			t.Errorf("invalid event limit %d did not return invalid input: %v", limit, err)
 		}
 	}
 	if _, err := store.ListEvents(t.Context(), id.OperationID(), 0, 2); !errors.Is(err, operations.ErrUnknownOperation) {
@@ -333,7 +335,7 @@ func TestOperationTaskQueries(t *testing.T) {
 		}
 	}
 
-	listed, err := store.ListTasks(t.Context(), first.ID, "", 100)
+	listed, err := store.ListTasks(t.Context(), first.ID, "", 1000)
 	if err != nil || !reflect.DeepEqual(listed, first.Clone().Tasks) {
 		t.Fatalf("task list must preserve assignment order and complete details: %+v, %v", listed, err)
 	}
@@ -416,10 +418,27 @@ func TestOperationTaskQueries(t *testing.T) {
 			}
 		}
 	}
-	for _, limit := range []int{0, -1} {
-		if _, err := store.ListTasks(t.Context(), first.ID, "", limit); err == nil {
-			t.Errorf("invalid task limit %d was accepted", limit)
+	for _, limit := range []int{-1, 0, 1001} {
+		if _, err := store.ListTasks(t.Context(), first.ID, "", limit); !errors.Is(err, domain.ErrInvalidInput) {
+			t.Errorf("invalid task limit %d did not return invalid input: %v", limit, err)
 		}
+	}
+}
+
+func TestOperationPageLimitsAreValidatedBeforeReadingState(t *testing.T) {
+	root := t.TempDir()
+	store := fixtures.NewDispatchStore(t, root)
+	operationID := id.OperationID()
+
+	_, taskErr := store.ListTasks(t.Context(), operationID, "", 1001)
+	_, eventErr := store.ListEvents(t.Context(), operationID, 0, 1001)
+
+	if !errors.Is(taskErr, domain.ErrInvalidInput) || !errors.Is(eventErr, domain.ErrInvalidInput) {
+		t.Fatalf("page limits were not rejected before looking up the unknown operation: tasks=%v events=%v", taskErr, eventErr)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "operations"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("invalid page limits created operation state: entries=%v error=%v", entries, err)
 	}
 }
 

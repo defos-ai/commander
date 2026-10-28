@@ -35,7 +35,7 @@ type ExecutionStore interface {
 	GetLog(ctx context.Context, logID string) (Log, error)
 	// ListLogs returns observations in committed append order, independent of
 	// producer timestamps and UUID order. Nonempty filters intersect exactly.
-	// Limit must be 1..MaxLogPageSize. An empty AfterLogID starts the first page;
+	// Limit must be 1..1000. An empty AfterLogID starts the first page;
 	// otherwise it must identify a committed log matching the supplied filters,
 	// or ErrUnknownLog is returned. Results start strictly after that observation.
 	// Use the last returned ID for the next page; retain the cursor on empty pages.

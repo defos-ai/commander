@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/providers/fs/internal/jsonfile"
@@ -32,8 +33,8 @@ func (s *OperationFsStore) GetTask(ctx context.Context, operationID, taskID stri
 }
 
 func (s *OperationFsStore) ListTasks(ctx context.Context, operationID, afterTaskID string, limit int) ([]operations.Task, error) {
-	if limit <= 0 {
-		return nil, errors.New("task limit must be positive")
+	if err := domain.ValidatePageLimit(limit); err != nil {
+		return nil, err
 	}
 	if afterTaskID != "" && !id.Valid(afterTaskID) {
 		return nil, errors.New("task cursor must be a canonical UUID")
@@ -67,8 +68,8 @@ func (s *OperationFsStore) ListTasks(ctx context.Context, operationID, afterTask
 }
 
 func (s *OperationFsStore) ListEvents(ctx context.Context, operationID string, afterSequence uint64, limit int) ([]operations.Event, error) {
-	if limit <= 0 {
-		return nil, errors.New("event limit must be positive")
+	if err := domain.ValidatePageLimit(limit); err != nil {
+		return nil, err
 	}
 	var events []operations.Event
 	err := s.viewOperation(ctx, operationID, func(metadata operationMetadata, view *jsonfile.RecordView) error {

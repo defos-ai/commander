@@ -9,8 +9,6 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const MaxLogPageSize = 1000
-
 type LogQuery struct {
 	OperationID string
 	TaskID      string
@@ -21,8 +19,8 @@ type LogQuery struct {
 }
 
 func (q LogQuery) Validate() error {
-	if q.Limit < 1 || q.Limit > MaxLogPageSize {
-		return fmt.Errorf("%w: log page limit must be between 1 and %d", domain.ErrInvalidInput, MaxLogPageSize)
+	if err := domain.ValidatePageLimit(q.Limit); err != nil {
+		return err
 	}
 	if q.OperationID != "" && !id.Valid(q.OperationID) {
 		return fmt.Errorf("%w: log operation ID must be a canonical UUID", domain.ErrInvalidInput)

@@ -141,6 +141,9 @@
   listings skip inventory. Report reads verify operation ownership, and event
   waits use saved-work settlement with a final event reread. Keep wire formats,
   pagination validation and wait deadlines in adapters; query views are not stored.
+- Task, event and execution-log store pages use
+  [`domain.ValidatePageLimit`](domain/pagination.go) to enforce `1..MaxPageSize`
+  before storage I/O. Adapters supply defaults and validate their wire parameters.
 - Preserve immutable execution outcomes and reports. Save reports before
   completing operations. Agents upload bytes through `ArtifactFileStore`;
   controllers accept metadata through `ArtifactStore`. Bytes alone are not evidence.

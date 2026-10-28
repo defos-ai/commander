@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/providers/mongo/store"
 
@@ -42,8 +43,8 @@ func (s *OperationMongoStore) ListTasks(ctx context.Context, operationID, afterT
 	if err := checkOperationID(ctx, operationID); err != nil {
 		return nil, err
 	}
-	if limit <= 0 {
-		return nil, errors.New("task page limit must be positive")
+	if err := domain.ValidatePageLimit(limit); err != nil {
+		return nil, err
 	}
 	if afterTaskID != "" {
 		if err := validateRecordID(afterTaskID); err != nil {
@@ -96,8 +97,8 @@ func (s *OperationMongoStore) ListEvents(ctx context.Context, operationID string
 	if err := checkOperationID(ctx, operationID); err != nil {
 		return nil, err
 	}
-	if limit <= 0 {
-		return nil, errors.New("event page limit must be positive")
+	if err := domain.ValidatePageLimit(limit); err != nil {
+		return nil, err
 	}
 	var events []operations.Event
 	err := s.database.WithTransaction(ctx, func(tx context.Context) error {

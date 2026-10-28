@@ -11,11 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	mongooperations "github.com/defos-ai/commander/providers/mongo/operations"
 	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -226,9 +228,6 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 	}
 	if _, err := first.ListTasks(t.Context(), op.ID, id.TaskID(), 1); !errors.Is(err, operations.ErrUnknownTask) {
 		t.Fatalf("unknown cursor: %v", err)
-	}
-	if _, err := first.ListEvents(t.Context(), op.ID, 0, 0); err == nil {
-		t.Fatal("zero page limit accepted")
 	}
 	for _, task := range tasks {
 		if _, err := second.QueueTask(t.Context(), op.ID, task); err != nil {
@@ -617,6 +616,21 @@ func assertOperationEqual(t *testing.T, got, want any) {
 	}
 }
 
+func TestOperationMongoQueriesRejectInvalidPageLimitsBeforeDatabaseAccess(t *testing.T) {
+	catalog := &mongooperations.OperationMongoStore{}
+	operationID := "30000000-0000-4000-8000-000000000001"
+	for _, limit := range []int{-1, 0, domain.MaxPageSize + 1} {
+		t.Run(fmt.Sprint(limit), func(t *testing.T) {
+			_, taskErr := catalog.ListTasks(t.Context(), operationID, "", limit)
+			_, eventErr := catalog.ListEvents(t.Context(), operationID, 0, limit)
+
+			if !errors.Is(taskErr, domain.ErrInvalidInput) || !errors.Is(eventErr, domain.ErrInvalidInput) {
+				t.Fatalf("invalid limit reached database: tasks=%v events=%v", taskErr, eventErr)
+			}
+		})
+	}
+}
+
 func TestOperationMongoQueriesUseOrderedCursors(t *testing.T) {
 	catalog, database := fixtures.OpenOperations(t)
 	op := fixtures.Operation()
@@ -636,7 +650,7 @@ func TestOperationMongoQueriesUseOrderedCursors(t *testing.T) {
 	if err != nil || len(page) != 1 || page[0].Sequence != 10 {
 		t.Fatalf("event sequence ordering: %+v, %v", page, err)
 	}
-	page, err = catalog.ListEvents(t.Context(), op.ID, 10, 2)
+	page, err = catalog.ListEvents(t.Context(), op.ID, 10, domain.MaxPageSize)
 	if err != nil || len(page) != 1 || page[0].Sequence != math.MaxUint64 {
 		t.Fatalf("unsigned event sequence: %+v, %v", page, err)
 	}
@@ -653,7 +667,7 @@ func TestOperationMongoQueriesUseOrderedCursors(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertOperationEqual(t, task, op.Tasks[1])
-	tasks, err := catalog.ListTasks(t.Context(), op.ID, op.Tasks[0].ID, 1)
+	tasks, err := catalog.ListTasks(t.Context(), op.ID, op.Tasks[0].ID, domain.MaxPageSize)
 	if err != nil || len(tasks) != 1 {
 		t.Fatalf("task cursor loaded an unrelated body: %+v, %v", tasks, err)
 	}
