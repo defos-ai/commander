@@ -4,21 +4,27 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
 )
 
 type TerminalOutput struct {
+	mu     sync.Mutex
 	buffer bytes.Buffer
 }
 
 func (b *TerminalOutput) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return b.buffer.Write(p)
 }
 
 func (b *TerminalOutput) String() string {
+	b.mu.Lock()
 	output := b.buffer.String()
+	b.mu.Unlock()
 	return ansi.Strip(output)
 }
 

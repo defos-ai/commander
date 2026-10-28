@@ -21,6 +21,7 @@ import (
 
 type ContextSecretAction struct {
 	*action.Base
+	mu                 sync.Mutex
 	ctx                context.Context
 	discoveryStarted   chan struct{}
 	discoveryRelease   chan struct{}
@@ -29,9 +30,11 @@ type ContextSecretAction struct {
 }
 
 func (a *ContextSecretAction) Discover(ctx context.Context, env environment.Environment, scope *environment.DiscoveryScope) (action.Status, error) {
+	a.mu.Lock()
 	a.ctx = context.WithoutCancel(ctx)
 	started, release := a.discoveryStarted, a.discoveryRelease
 	a.discoveryStarted, a.discoveryRelease = nil, nil
+	a.mu.Unlock()
 	if started != nil {
 		close(started)
 		select {
@@ -51,6 +54,8 @@ func (a *ContextSecretAction) Discover(ctx context.Context, env environment.Envi
 	return a.Base.Discover(ctx, env, scope)
 }
 func (a *ContextSecretAction) Context() context.Context {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	return a.ctx
 }
 func (a *ContextSecretAction) Run(ctx context.Context, _ json.RawMessage) (action.Result, error) {
@@ -149,6 +154,8 @@ func NewContextSecretAction(requireOnDiscovery bool) *ContextSecretAction {
 	return &ContextSecretAction{Base: action.NewBase(actions.Action{Name: "build", RequiredSecrets: []string{"TOKEN"}, InputSchema: []byte(`{}`), OutputSchema: []byte(`{}`)}), requireOnDiscovery: requireOnDiscovery}
 }
 func (a *ContextSecretAction) PauseDiscovery(started, release chan struct{}) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.discoveryStarted, a.discoveryRelease = started, release
 }
 func (a *ContextSecretAction) Calls() int32 { return a.calls.Load() }

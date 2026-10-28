@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -23,6 +24,7 @@ type MissionAPISnapshot struct {
 
 type MissionAPI struct {
 	t                   testing.TB
+	mu                  sync.Mutex
 	records             map[string]json.RawMessage
 	requests            []string
 	dropAcknowledgement string
@@ -38,6 +40,8 @@ func NewMissionAPI(t testing.TB, config MissionAPIConfig) *MissionAPI {
 }
 
 func (a *MissionAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == http.MethodGet && r.URL.Path == "/api/v1/missions" {
 		a.requests = append(a.requests, "GET list")
@@ -97,6 +101,8 @@ func (a *MissionAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *MissionAPI) Snapshot() MissionAPISnapshot {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	state := MissionAPISnapshot{Records: make(map[string]json.RawMessage, len(a.records)), Requests: slices.Clone(a.requests)}
 	for name, definition := range a.records {
 		state.Records[name] = bytes.Clone(definition)
@@ -105,6 +111,8 @@ func (a *MissionAPI) Snapshot() MissionAPISnapshot {
 }
 
 func (a *MissionAPI) ReplaceMissionAndResetRequests(name string, definition json.RawMessage) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.records[name] = bytes.Clone(definition)
 	a.requests = nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -12,6 +13,7 @@ import (
 // The runtime failure tests use the real immutable execution transitions while
 // controlling acknowledgement failures. Public API/MCP tests cover bus delivery.
 type Checkpoints struct {
+	mu         sync.Mutex
 	record     executions.Execution
 	beforeSave func(context.Context, string, json.RawMessage) error
 	afterSave  func(context.Context, string, json.RawMessage) error
@@ -21,19 +23,25 @@ func (s *Checkpoints) LoadCheckpoint(ctx context.Context, name string) (json.Raw
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	data, found := s.record.Checkpoints[name]
 	return bytes.Clone(data), found, nil
 }
 
 func (s *Checkpoints) SaveCheckpoint(ctx context.Context, name string, data json.RawMessage) error {
+	s.mu.Lock()
 	before := s.beforeSave
+	s.mu.Unlock()
 	if before != nil {
 		if err := before(ctx, name, data); err != nil {
 			return err
 		}
 	}
+	s.mu.Lock()
 	_, err := s.record.RecordCheckpoint(name, data)
 	after := s.afterSave
+	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -48,12 +56,18 @@ func NewCheckpoints(command messages.Message) *Checkpoints {
 	return &Checkpoints{record: executions.Execution{Command: command, StartedAt: command.CreatedAt}}
 }
 func (s *Checkpoints) SetBeforeSave(hook func(context.Context, string, json.RawMessage) error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.beforeSave = hook
 }
 func (s *Checkpoints) SetAfterSave(hook func(context.Context, string, json.RawMessage) error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.afterSave = hook
 }
 func (s *Checkpoints) Checkpoints() map[string]json.RawMessage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	result := make(map[string]json.RawMessage, len(s.record.Checkpoints))
 	for name, data := range s.record.Checkpoints {
 		result[name] = bytes.Clone(data)
@@ -61,18 +75,24 @@ func (s *Checkpoints) Checkpoints() map[string]json.RawMessage {
 	return result
 }
 func (s *Checkpoints) ReplaceCheckpoint(name string, data json.RawMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.record.Checkpoints == nil {
 		s.record.Checkpoints = make(map[string]json.RawMessage)
 	}
 	s.record.Checkpoints[name] = bytes.Clone(data)
 }
 func (s *Checkpoints) ReplaceCheckpoints(data map[string]json.RawMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.record.Checkpoints = make(map[string]json.RawMessage, len(data))
 	for name, value := range data {
 		s.record.Checkpoints[name] = bytes.Clone(value)
 	}
 }
 func (s *Checkpoints) KeepOnlyCheckpoints(names ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for name := range s.record.Checkpoints {
 		keep := false
 		for _, retained := range names {

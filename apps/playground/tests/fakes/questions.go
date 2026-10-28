@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 type QuestionServer struct {
 	t          *testing.T
 	server     *mcp.Server
+	mu         sync.Mutex
 	operation  bridge.Operation
 	questionID string
 	answers    chan string
@@ -40,6 +42,8 @@ func NewQuestionServer(t *testing.T, operation bridge.Operation, questionID stri
 func (s *QuestionServer) Answers() <-chan string { return s.answers }
 
 func (s *QuestionServer) ClearPendingCount() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.operation.Progress.PendingQuestions = 0
 }
 
@@ -48,6 +52,8 @@ func (s *QuestionServer) Handler() http.Handler {
 }
 
 func (s *QuestionServer) call(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var payload any = s.operation
 	switch req.Params.Name {
 	case "operation_events":

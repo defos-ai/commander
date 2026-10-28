@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/defos-ai/commander/framework/agent/action"
@@ -17,6 +18,7 @@ type Resources struct {
 	ctx     context.Context
 	peer    string
 	state   string
+	mu      sync.Mutex
 	items   []sessions.Session
 	claims  map[string]sessions.CreationClaim
 	closed  map[string]bool
@@ -24,10 +26,14 @@ type Resources struct {
 }
 
 func (r *Resources) Snapshot() []sessions.Session {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return sessions.CloneAll(r.items)
 }
 func (r *Resources) Changes() <-chan struct{} { return r.changes }
 func (r *Resources) Prepare(_ context.Context, claim sessions.CreationClaim) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if err := claim.Validate(); err != nil {
 		return err
 	}
@@ -55,6 +61,8 @@ func (r *Resources) Control(ctx context.Context, request sessions.Control) (sess
 			return sessions.Session{}, errors.New("fixture closure unconfirmed")
 		}
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if request.Method == "close" {
 		if request.Creation == nil {
 			return sessions.Session{}, errors.New("creation claim required")
@@ -155,7 +163,10 @@ func (a *Action) Run(ctx context.Context, raw json.RawMessage) (action.Result, e
 	if response.StatusCode != http.StatusNoContent {
 		return action.Result{}, errors.New("fixture rejected creation")
 	}
+
+	a.resources.mu.Lock()
 	if a.resources.closed[binding.ID] {
+		a.resources.mu.Unlock()
 		return action.Result{}, errors.New("resource closed while starting")
 	}
 	now := time.Now().UTC()
@@ -163,6 +174,7 @@ func (a *Action) Run(ctx context.Context, raw json.RawMessage) (action.Result, e
 	if a.resources.state == "listening" {
 		resource.State, resource.VerifiedAt = "listening", nil
 	}
+	a.resources.mu.Unlock()
 	// The accepted task result can precede the first inventory announcement.
 	go func() {
 		request, err := http.NewRequestWithContext(a.resources.ctx, http.MethodGet, a.peer+"/inventory", nil)
@@ -174,9 +186,11 @@ func (a *Action) Run(ctx context.Context, raw json.RawMessage) (action.Result, e
 			return
 		}
 		response.Body.Close()
+		a.resources.mu.Lock()
 		if !a.resources.closed[resource.ID] {
 			a.resources.items = append(a.resources.items, resource)
 		}
+		a.resources.mu.Unlock()
 		select {
 		case a.resources.changes <- struct{}{}:
 		case <-a.resources.ctx.Done():

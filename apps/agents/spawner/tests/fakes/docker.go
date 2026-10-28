@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"sync"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 )
 
 type DockerEngine struct {
 	image     string
+	mu        sync.Mutex
 	current   map[string]docker.Container
 	created   chan docker.Spec
 	onStart   func(context.Context, docker.Container) error
@@ -24,6 +26,8 @@ type DockerEngine struct {
 }
 
 func (e *DockerEngine) Pull(ctx context.Context, image string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.pulls++
 	if image != e.image {
 		return errors.New("fixture received unexpected image")
@@ -35,6 +39,8 @@ func (e *DockerEngine) Pull(ctx context.Context, image string) error {
 }
 
 func (e *DockerEngine) Inspect(ctx context.Context, name string) (docker.Container, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return docker.Container{}, err
 	}
@@ -47,11 +53,14 @@ func (e *DockerEngine) Inspect(ctx context.Context, name string) (docker.Contain
 }
 
 func (e *DockerEngine) Create(ctx context.Context, spec docker.Spec) (docker.Container, error) {
+	e.mu.Lock()
 	if err := ctx.Err(); err != nil {
+		e.mu.Unlock()
 		return docker.Container{}, err
 	}
 	e.creates++
 	if _, exists := e.current[spec.Name]; exists {
+		e.mu.Unlock()
 		return docker.Container{}, errors.New("fixture container name already exists")
 	}
 	current := docker.Container{
@@ -61,16 +70,19 @@ func (e *DockerEngine) Create(ctx context.Context, spec docker.Spec) (docker.Con
 	}
 	e.current[spec.Name] = current
 	spec.Environment, spec.Labels = maps.Clone(spec.Environment), maps.Clone(spec.Labels)
-	e.created <- spec
 	err := e.createErr
 	e.createErr = nil
+	result := CloneContainer(current)
+	e.mu.Unlock()
+	e.created <- spec
 	if err != nil {
 		return docker.Container{}, err
 	}
-	return CloneContainer(current), nil
+	return result, nil
 }
 
 func (e *DockerEngine) Start(ctx context.Context, containerID string) error {
+	e.mu.Lock()
 	var current docker.Container
 	for name, candidate := range e.current {
 		if candidate.ID == containerID {
@@ -80,11 +92,13 @@ func (e *DockerEngine) Start(ctx context.Context, containerID string) error {
 		}
 	}
 	if current.ID == "" {
+		e.mu.Unlock()
 		return docker.ErrNotFound
 	}
 	e.starts++
 	callback, err := e.onStart, e.startErr
 	e.startErr = nil
+	e.mu.Unlock()
 	if callback != nil {
 		if publishErr := callback(ctx, current); publishErr != nil {
 			return publishErr
@@ -94,11 +108,15 @@ func (e *DockerEngine) Start(ctx context.Context, containerID string) error {
 }
 
 func (e *DockerEngine) Close() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.closes++
 	return nil
 }
 
 func (e *DockerEngine) Change(change func(*docker.Container)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	for name, current := range e.current {
 		current = CloneContainer(current)
 		change(&current)
@@ -107,6 +125,8 @@ func (e *DockerEngine) Change(change func(*docker.Container)) {
 }
 
 func (e *DockerEngine) Counts() (creates, starts, closes int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	return e.creates, e.starts, e.closes
 }
 
@@ -122,9 +142,11 @@ func NewDockerEngine(image string) *DockerEngine {
 }
 func (e *DockerEngine) Created() <-chan docker.Spec { return e.created }
 func (e *DockerEngine) SetOnStart(hook func(context.Context, docker.Container) error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.onStart = hook
 }
-func (e *DockerEngine) SetPullError(err error)   { e.pullErr = err }
-func (e *DockerEngine) SetCreateError(err error) { e.createErr = err }
-func (e *DockerEngine) SetStartError(err error)  { e.startErr = err }
-func (e *DockerEngine) ForgetAll()               { clear(e.current) }
+func (e *DockerEngine) SetPullError(err error)   { e.mu.Lock(); defer e.mu.Unlock(); e.pullErr = err }
+func (e *DockerEngine) SetCreateError(err error) { e.mu.Lock(); defer e.mu.Unlock(); e.createErr = err }
+func (e *DockerEngine) SetStartError(err error)  { e.mu.Lock(); defer e.mu.Unlock(); e.startErr = err }
+func (e *DockerEngine) ForgetAll()               { e.mu.Lock(); defer e.mu.Unlock(); clear(e.current) }
