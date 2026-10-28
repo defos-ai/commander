@@ -30,11 +30,11 @@
   terminal records. Fulfillment matches saved delivery evidence, not a separate
   SecretStore's latest value or a live agent's readiness; hosts own those checks.
   Delivery history retains encrypted copies even after deleting the primary secret.
-- `ControllerConfig.SecretDecryptor` optionally authenticates the reserved secret
-  snapshot before ciphertext publication. Inject the host's cipher; clear returned
-  plaintext, sanitize decryptor errors and recheck deadlines/versions afterward.
+- `ControllerConfig.SecretDecryptor` decrypts the reserved encrypted snapshot
+  before publishing its metadata and requested value to the recipient. Inject
+  the host's cipher; clear returned plaintext, sanitize decryptor errors and
+  recheck deadlines/versions afterward. Missing decryptors cannot deliver values.
   Failed authentication leaves the encrypted reservation available for recovery.
-  Agents still decrypt deliveries; host wiring and plaintext delivery are separate steps.
 - [`crypto.SecretCipher`](crypto/) encrypts records using an explicitly configured
   key. Apps load `SECRETS_ENCRYPTION_KEY` and inject the cipher; providers receive
   ciphertext only. Preserve all authenticated metadata, including nanosecond
@@ -299,7 +299,8 @@
   not identify the recipient. Gate declared names in agent snapshots and
   again before execution; missing secret configuration must not bypass the gate.
 - Agent secret synchronization uses `AgentConfig.Secrets` and the existing event
-  inbox, independently of long action commands. Keep values in memory and expose
+  inbox, independently of long action commands. An empty `SecretConfig` enables
+  it without a decryptor or encryption key. Keep received values in memory and expose
   independent copies through `action.Secret(ctx, name)` only for the current
   action's declared names. Never use process-wide environment mutation. Reuse
   request/delivery/acknowledgement identities on retry; refresh with fresh requests
@@ -322,7 +323,7 @@
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any
   valid shared name; static declarations govern readiness, not access.
-  The controller never decrypts. Keep trusted-bus and finite-lease revocation limits
+  Only the controller decrypts for delivery. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
 - Preserve schema validation of action input, output and proposed next actions.
   Public snapshots must remain independent.

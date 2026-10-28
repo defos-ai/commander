@@ -77,10 +77,9 @@
 - Declare persistent names in `Action.RequiredSecrets`; do not infer them from
   transient `MissingRequirements`. A secret name identifies one shared value
   across the Commander deployment; each recipient retains its own delivery state.
-  Configure the framework secret runtime with an injected decryptor only for
-  hosts that need managed secrets. Builder and spawner support this configuration.
-  Web and browser actions do not need managed secrets; do
-  not load or distribute the encryption key to their hosts.
+  Enable the framework secret runtime with `AgentConfig.Secrets: &agent.SecretConfig{}`
+  for hosts that need managed secrets. Builder and spawner enable it without a key.
+  Agents receive requested values from the controller rather than decrypting records.
   Access declared values with `action.Secret(ctx, name)`, never action inputs or
   global `os.Setenv`. Keep returned values out of outputs/logs and clear temporary
   byte copies. Missing values gate the affected action even without a decryptor.

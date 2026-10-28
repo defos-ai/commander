@@ -108,7 +108,7 @@ For a separate host:
 | `SPAWNER_RUNTIME` | Select `native` (default), `docker` or `kubernetes` |
 | `SPAWNER_DOCKER_NETWORK` | Select the Docker network; required in Docker mode |
 | `SPAWNER_STATE_DIR` | Change native downloads and working directories from `state/spawner` |
-| `SECRETS_ENCRYPTION_KEY` | Use the API's key for managed secret forms |
+| `SECRETS_ENCRYPTION_KEY` | Existing official-builder bootstrap in native/Docker mode |
 | `GITHUB_TOKEN` | Preconfigure access to private GitHub packages |
 
 Children receive provider settings, not your API, MCP or model tokens. The

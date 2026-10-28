@@ -23,25 +23,22 @@ func SecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretR
 	inventory.Set(&agents.Agent{AgentSnapshot: snapshot, LastHeartbeat: now, LeaseExpiresAt: now.Add(time.Minute)})
 	requests := fakes.NewSecretRequests()
 	values := &fakes.SecretValues{}
-	values.Set(&secrets.Secret{
-		Metadata: secrets.Metadata{ID: id.MessageID(), Key: SecretSyncRequest().Key, Version: 1, CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute)},
-		Value:    secrets.EncryptedValue{Format: "test-envelope", KeyID: "test-key", Nonce: []byte("nonce"), Ciphertext: []byte("ciphertext")},
-	})
+	secret := EncryptedSecret(t, secrets.Metadata{
+		ID: id.MessageID(), Key: SecretSyncRequest().Key, Version: 1,
+		CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute),
+	}, "plaintext-secret")
+	values.Set(&secret)
 	bus := &fakes.SecretPublishBus{}
-	return consumers.SecretEventConsumer{Bus: bus, Inventory: inventory, Secrets: values, Requests: requests}, requests, values, bus
+	return consumers.SecretEventConsumer{Bus: bus, Inventory: inventory, Secrets: values, Requests: requests, Decryptor: secretfixtures.Cipher(t)}, requests, values, bus
 }
 
-func AuthenticatingSecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretRequests, *fakes.SecretValues, *fakes.SecretPublishBus) {
+func EncryptedSecret(t *testing.T, metadata secrets.Metadata, value string) secrets.Secret {
 	t.Helper()
-	consumer, requests, values, bus := SecretConsumer(t)
-	cipher := secretfixtures.Cipher(t)
-	secret, err := cipher.Encrypt(values.Snapshot().Metadata, []byte("plaintext-secret"))
+	secret, err := secretfixtures.Cipher(t).Encrypt(metadata, []byte(value))
 	if err != nil {
 		t.Fatal(err)
 	}
-	values.Set(&secret)
-	consumer.Decryptor = cipher
-	return consumer, requests, values, bus
+	return secret
 }
 
 func SharedSecretConsumer(t *testing.T) (consumers.SecretEventConsumer, *fakes.SecretRequests, *fakes.SecretValues, *fakes.SecretPublishBus, []secrets.Request) {

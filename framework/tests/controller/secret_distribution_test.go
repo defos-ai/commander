@@ -39,8 +39,13 @@ func TestSecretDeliveryPersistsBeforePublishingAndReplaysExactEvidence(t *testin
 	if bus.Topics()[0] != messages.AgentEvents(request.AgentID) {
 		t.Fatal("secret delivery used the action command channel")
 	}
-	if bytes.Contains(first.Payload, []byte("plaintext-secret")) {
-		t.Fatal("delivery exposed plaintext")
+	payload, err := agentevents.DecodeSecretDelivery(first)
+	if err != nil || !reflect.DeepEqual(payload.Metadata, values.Snapshot().Metadata) || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
+		t.Fatal("delivery did not carry the requested metadata and value")
+	}
+	reserved, err := requests.Get(t.Context(), request.ID)
+	if err != nil || reserved.Delivery == nil || !reflect.DeepEqual(reserved.Delivery.Secret, *values.Snapshot()) {
+		t.Fatal("delivery did not retain its encrypted snapshot in storage")
 	}
 	if err := consumer.Consume(t.Context(), requestMessage); err != nil {
 		t.Fatal(err)
@@ -98,7 +103,7 @@ func TestSharedSecretReachesWaitingAndLaterAgentTypes(t *testing.T) {
 	recipients := make(map[string]bool)
 	for _, delivery := range deliveries {
 		payload, err := agentevents.DecodeSecretDelivery(delivery)
-		if err != nil || !reflect.DeepEqual(payload.Secret, *shared) {
+		if err != nil || !reflect.DeepEqual(payload.Metadata, shared.Metadata) || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
 			t.Fatalf("recipient did not receive the same shared version: %v", err)
 		}
 		recipients[delivery.AgentID] = true
@@ -136,7 +141,7 @@ func TestSharedSecretReachesWaitingAndLaterAgentTypes(t *testing.T) {
 		t.Fatal("later agent did not receive the stored shared value")
 	}
 	payload, err := agentevents.DecodeSecretDelivery(deliveries[2])
-	if err != nil || !reflect.DeepEqual(payload.Secret, *shared) {
+	if err != nil || !reflect.DeepEqual(payload.Metadata, shared.Metadata) || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
 		t.Fatalf("later agent received a different shared version: %v", err)
 	}
 }
@@ -169,7 +174,7 @@ func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testi
 			}
 			requests.SetSaveError(nil)
 			bus.FailPublish(nil)
-			restarted := consumers.SecretEventConsumer{Bus: bus, Inventory: consumer.Inventory, Secrets: consumer.Secrets, Requests: requests}
+			restarted := consumers.SecretEventConsumer{Bus: bus, Inventory: consumer.Inventory, Secrets: consumer.Secrets, Requests: requests, Decryptor: consumer.Decryptor}
 			if err := restarted.Reconcile(t.Context()); err != nil {
 				t.Fatal(err)
 			}
@@ -177,8 +182,8 @@ func TestSecretDeliveryRecoversUncertainReservationAndFailedPublication(t *testi
 				t.Fatal("recovery generated a replacement delivery")
 			}
 			payload, err := agentevents.DecodeSecretDelivery(bus.Messages()[0])
-			if err != nil || !reflect.DeepEqual(payload.Secret, reserved.Delivery.Secret) {
-				t.Fatal("recovery changed encrypted snapshot")
+			if err != nil || !reflect.DeepEqual(payload.Metadata, reserved.Delivery.Secret.Metadata) || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
+				t.Fatal("recovery changed the reserved metadata or value")
 			}
 		})
 	}
@@ -268,7 +273,7 @@ func TestSecretPendingRequestsAwaitAvailabilityAndRejectRotatedAcknowledgements(
 	rotated := initial.Clone()
 	rotated.Metadata.Version++
 	rotated.Metadata.UpdatedAt = time.Now().UTC()
-	rotated.Value.Ciphertext = []byte("new-ciphertext")
+	rotated = fixtures.EncryptedSecret(t, rotated.Metadata, "rotated-secret")
 	values.Set(&rotated)
 	if err := consumer.Consume(t.Context(), ack); !errors.Is(err, consumers.ErrInvalidMessage) {
 		t.Fatalf("superseded value was acknowledged: %v", err)
@@ -281,7 +286,7 @@ func TestSecretPendingRequestsAwaitAvailabilityAndRejectRotatedAcknowledgements(
 		t.Fatal(err)
 	}
 	payload, err := agentevents.DecodeSecretDelivery(bus.Messages()[1])
-	if err != nil || payload.Secret.Metadata.Version != 2 {
+	if err != nil || payload.Metadata.Version != 2 || !bytes.Equal(payload.Value, []byte("rotated-secret")) {
 		t.Fatal("fresh request did not receive rotated value")
 	}
 }
@@ -336,6 +341,7 @@ func TestSecretAcknowledgementMustMatchDeliveryAndReceiptDeadline(t *testing.T) 
 				request.RequestedAt, request.ExpiresAt = now.Add(-2*time.Minute), now.Add(-time.Minute)
 				secret := values.Snapshot().Clone()
 				secret.Metadata.CreatedAt, secret.Metadata.UpdatedAt = now.Add(-3*time.Minute), now.Add(-3*time.Minute)
+				secret = fixtures.EncryptedSecret(t, secret.Metadata, "plaintext-secret")
 				values.Set(&secret)
 				if err := requests.Create(t.Context(), request); err != nil {
 					t.Fatal(err)
@@ -345,7 +351,7 @@ func TestSecretAcknowledgementMustMatchDeliveryAndReceiptDeadline(t *testing.T) 
 				if err := requests.SaveDelivery(t.Context(), reserved); err != nil {
 					t.Fatal(err)
 				}
-				payload, _ := json.Marshal(agentevents.SecretDelivery{Secret: secret})
+				payload, _ := json.Marshal(agentevents.SecretDelivery{Metadata: secret.Metadata, Value: []byte("plaintext-secret")})
 				delivery = messages.Message{ID: reserved.ID, Type: agentevents.SecretDelivered, AgentID: fixtures.AgentID,
 					CorrelationID: request.ID, Payload: payload, CreatedAt: reserved.CreatedAt, ExpiresAt: reserved.ExpiresAt}
 			} else {
@@ -355,7 +361,7 @@ func TestSecretAcknowledgementMustMatchDeliveryAndReceiptDeadline(t *testing.T) 
 				delivery = bus.Messages()[0]
 			}
 			secret, _ := agentevents.DecodeSecretDelivery(delivery)
-			payload := controllerevents.SecretInstallation{RequestID: request.ID, SecretID: secret.Secret.Metadata.ID, SecretVersion: secret.Secret.Metadata.Version}
+			payload := controllerevents.SecretInstallation{RequestID: request.ID, SecretID: secret.Metadata.ID, SecretVersion: secret.Metadata.Version}
 			ack, err := messages.NewMessage(controllerevents.SecretInstalled, fixtures.AgentID, payload)
 			if err != nil {
 				t.Fatal(err)
@@ -391,6 +397,7 @@ func TestSecretDeliveryRechecksRotationAfterReservation(t *testing.T) {
 		rotated := values.Snapshot().Clone()
 		rotated.Metadata.Version++
 		rotated.Metadata.UpdatedAt = time.Now().UTC()
+		rotated = fixtures.EncryptedSecret(t, rotated.Metadata, "rotated-secret")
 		values.Set(&rotated)
 	})
 	request := fixtures.SecretSyncRequest()
@@ -404,7 +411,7 @@ func TestSecretDeliveryRechecksRotationAfterReservation(t *testing.T) {
 }
 
 func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
-	consumer, requests, _, _ := fixtures.AuthenticatingSecretConsumer(t)
+	consumer, requests, _, _ := fixtures.SecretConsumer(t)
 	request := fixtures.SecretSyncRequest()
 	if err := requests.Create(t.Context(), request); err != nil {
 		t.Fatal(err)
@@ -448,7 +455,7 @@ func TestControllerRecoversSecretDeliveryAndConsumesInstallation(t *testing.T) {
 }
 
 func TestControllerRejectsUnauthenticatedSecretDuringStartup(t *testing.T) {
-	consumer, requests, values, _ := fixtures.AuthenticatingSecretConsumer(t)
+	consumer, requests, values, _ := fixtures.SecretConsumer(t)
 	secret := values.Snapshot().Clone()
 	secret.Value.Ciphertext[0] ^= 1
 	values.Set(&secret)
@@ -479,11 +486,11 @@ func TestControllerRejectsUnauthenticatedSecretDuringStartup(t *testing.T) {
 }
 
 func TestSecretDecryptionFailurePreservesReservationForRecovery(t *testing.T) {
-	consumer, requests, values, bus := fixtures.AuthenticatingSecretConsumer(t)
+	consumer, requests, values, bus := fixtures.SecretConsumer(t)
 	cipher := consumer.Decryptor
 	secret := values.Snapshot().Clone()
 	failure := errors.New("private decryptor detail")
-	decryptor := fakes.NewFailingSecretDecryptor([]byte("plaintext-secret"), failure)
+	decryptor := fakes.NewSecretDecryptor([]byte("plaintext-secret"), failure)
 	consumer.Decryptor = decryptor
 	request := fixtures.SecretSyncRequest()
 
@@ -512,8 +519,111 @@ func TestSecretDecryptionFailurePreservesReservationForRecovery(t *testing.T) {
 	delivery := bus.Messages()[0]
 	payload, err := agentevents.DecodeSecretDelivery(delivery)
 	if err != nil || delivery.ID != reserved.Delivery.ID || !delivery.CreatedAt.Equal(reserved.Delivery.CreatedAt) ||
-		!reflect.DeepEqual(payload.Secret, reserved.Delivery.Secret) || bytes.Contains(delivery.Payload, []byte("plaintext-secret")) {
-		t.Fatal("recovery changed the saved delivery or published plaintext")
+		!reflect.DeepEqual(payload.Metadata, reserved.Delivery.Secret.Metadata) || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
+		t.Fatal("recovery changed the saved delivery metadata or value")
+	}
+}
+
+func TestSecretDeliveryWithoutDecryptorWaitsThenFailsClosed(t *testing.T) {
+	consumer, requests, values, bus := fixtures.SecretConsumer(t)
+	cipher := consumer.Decryptor
+	consumer.Decryptor = nil
+	secret := values.Swap(nil)
+	request := fixtures.SecretSyncRequest()
+	if err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, request)); err != nil {
+		t.Fatalf("missing value must remain pending without a decryptor: %v", err)
+	}
+	values.Set(secret)
+
+	err := consumer.Reconcile(t.Context())
+
+	if err == nil || len(bus.Messages()) != 0 {
+		t.Fatal("missing decryptor published a secret")
+	}
+	reserved, err := requests.Get(t.Context(), request.ID)
+	if err != nil || reserved.Delivery == nil || !reflect.DeepEqual(reserved.Delivery.Secret, *secret) {
+		t.Fatal("missing decryptor lost the encrypted reservation")
+	}
+	consumer.Decryptor = cipher
+
+	if err := consumer.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	delivery := bus.Messages()[0]
+	payload, err := agentevents.DecodeSecretDelivery(delivery)
+	if err != nil || delivery.ID != reserved.Delivery.ID || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
+		t.Fatal("restoring the decryptor did not recover the original reserved delivery")
+	}
+}
+
+func TestSecretDeliveryAllowsEmptyManagedValue(t *testing.T) {
+	consumer, _, values, bus := fixtures.SecretConsumer(t)
+	secret := fixtures.EncryptedSecret(t, values.Snapshot().Metadata, "")
+	values.Set(&secret)
+
+	err := consumer.Consume(t.Context(), fixtures.SecretRequestMessage(t, fixtures.SecretSyncRequest()))
+
+	if err != nil || len(bus.Messages()) != 1 {
+		t.Fatalf("empty managed value was not delivered: %v", err)
+	}
+	payload, err := agentevents.DecodeSecretDelivery(bus.Messages()[0])
+	if err != nil || payload.Value == nil || len(payload.Value) != 0 {
+		t.Fatal("empty managed value was confused with a missing delivery value")
+	}
+}
+
+func TestSecretDeliveryClearsDecryptedValuesAfterFinalChecksAndPublication(t *testing.T) {
+	for _, outcome := range []string{"published", "rotated", "publish failed", "cancelled"} {
+		t.Run(outcome, func(t *testing.T) {
+			consumer, requests, values, bus := fixtures.SecretConsumer(t)
+			request := fixtures.SecretSyncRequest()
+			decryptor := fakes.NewSecretDecryptor([]byte("plaintext-secret"), nil)
+			consumer.Decryptor = decryptor
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var want error
+			switch outcome {
+			case "rotated":
+				decryptor.AfterDecrypt(func() {
+					metadata := values.Snapshot().Metadata
+					metadata.Version++
+					metadata.UpdatedAt = time.Now().UTC()
+					rotated := fixtures.EncryptedSecret(t, metadata, "rotated-secret")
+					values.Set(&rotated)
+				})
+			case "publish failed":
+				want = errors.New("bus unavailable")
+				bus.FailPublish(want)
+			case "cancelled":
+				want = context.Canceled
+				decryptor.AfterDecrypt(cancel)
+			}
+
+			err := consumer.Consume(ctx, fixtures.SecretRequestMessage(t, request))
+
+			if !errors.Is(err, want) || !decryptor.Cleared() {
+				t.Fatalf("delivery lost its error or retained decrypted bytes: %v", err)
+			}
+			record, err := requests.Get(t.Context(), request.ID)
+			if err != nil || record.Delivery == nil {
+				t.Fatal("delivery did not preserve its encrypted reservation")
+			}
+			if outcome == "published" {
+				messages := bus.Messages()
+				if len(messages) != 1 {
+					t.Fatal("successful decryption did not publish the requested value")
+				}
+				payload, err := agentevents.DecodeSecretDelivery(messages[0])
+				if err != nil || !bytes.Equal(payload.Value, []byte("plaintext-secret")) {
+					t.Fatal("clearing the decryptor buffer changed the published value")
+				}
+			} else if len(bus.Messages()) != 0 {
+				t.Fatal("failed or superseded delivery published a value")
+			}
+			if outcome == "rotated" && record.Request.Status != secrets.Cancelled {
+				t.Fatal("rotation during decryption did not cancel the reserved delivery")
+			}
+		})
 	}
 }
 

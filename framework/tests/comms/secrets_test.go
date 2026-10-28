@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,15 +13,14 @@ import (
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/crypto"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/comms"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/comms"
 )
 
-func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) {
-	request, secret := fixtures.SecretProtocol(t)
+func TestSecretProtocolCorrelatesDeliveryAndInstallation(t *testing.T) {
+	request, metadata, value := fixtures.SecretProtocol(t)
 	sync, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)
@@ -29,11 +29,11 @@ func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) 
 	if err != nil || requested.Request.ID != request.ID || sync.ID != request.ID || sync.AgentID != request.AgentID {
 		t.Fatal("synchronization did not preserve its requesting identity")
 	}
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if delivery.CorrelationID != request.ID || delivery.AgentID != request.AgentID || !delivery.ExpiresAt.Equal(secret.Metadata.ExpiresAt) {
+	if delivery.CorrelationID != request.ID || delivery.AgentID != request.AgentID || !delivery.ExpiresAt.Equal(metadata.ExpiresAt) {
 		t.Fatal("delivery did not match the recipient, request or earliest expiry")
 	}
 	installation, err := controllerevents.NewSecretInstalled(delivery)
@@ -41,16 +41,32 @@ func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) 
 		t.Fatal(err)
 	}
 	installed, err := controllerevents.DecodeSecretInstalled(installation)
-	if err != nil || installed.RequestID != request.ID || installed.SecretID != secret.Metadata.ID || installed.SecretVersion != secret.Metadata.Version || installation.CorrelationID != delivery.ID {
-		t.Fatal("installation did not identify the exact request and encrypted delivery")
+	if err != nil || installed.RequestID != request.ID || installed.SecretID != metadata.ID || installed.SecretVersion != metadata.Version || installation.CorrelationID != delivery.ID {
+		t.Fatal("installation did not identify the exact request and delivery")
+	}
+	decoded, err := agentevents.DecodeSecretDelivery(delivery)
+	if err != nil || decoded.Metadata != metadata || !bytes.Equal(decoded.Value, value) {
+		t.Fatal("delivery did not carry the selected metadata and value")
+	}
+	defer clear(decoded.Value)
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(delivery.Payload, &fields) != nil || len(fields) != 2 || fields["metadata"] == nil || fields["value"] == nil {
+		t.Fatal("delivery must use the flat metadata/value wire shape")
+	}
+	if formatted := fmt.Sprintf("%v %+v %#v", decoded, decoded, decoded); strings.Contains(formatted, fixtures.SecretValue) {
+		t.Fatal("formatting a delivery exposed its value")
+	}
+	encodedValue, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for _, message := range []messages.Message{sync, delivery, installation} {
 		data, err := json.Marshal(message)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if bytes.Contains(data, []byte(fixtures.SecretValue)) || bytes.Contains(data, []byte(fixtures.EncryptionKey)) {
-			t.Fatal("secret protocol serialized plaintext or its encryption key")
+		if message.Type != messages.SecretDelivered && bytes.Contains(data, encodedValue) {
+			t.Fatal("request or installation acknowledgement echoed the secret value")
 		}
 		if message.Work != (messages.WorkContext{}) {
 			t.Fatal("secret protocol unexpectedly acquired operation work context")
@@ -62,28 +78,28 @@ func TestSecretProtocolCorrelatesEncryptedDeliveryAndInstallation(t *testing.T) 
 	if err := controllerevents.ValidateSecretInstalledDelivery(installation, delivery); err != nil {
 		t.Fatal(err)
 	}
-	fulfilled, err := request.Fulfill(secret.Metadata, installation.CorrelationID, installation.CreatedAt)
+	fulfilled, err := request.Fulfill(metadata, installation.CorrelationID, installation.CreatedAt)
 	if err != nil || fulfilled.Fulfillment == nil || fulfilled.Fulfillment.DeliveryID != delivery.ID {
 		t.Fatal("validated acknowledgement could not be applied to its request")
 	}
 }
 
 func TestSecretDeliverySnapshotsAreIndependent(t *testing.T) {
-	request, secret := fixtures.SecretProtocol(t)
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	request, metadata, value := fixtures.SecretProtocol(t)
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := bytes.Clone(delivery.Payload)
-	secret.Value.Ciphertext[0] ^= 0xff
-	secret.Value.Nonce[0] ^= 0xff
+	value[0] ^= 0xff
+	metadata.Key.Name = "OTHER_TOKEN"
 	request.Key.Name = "DIFFERENT"
 	decoded, err := agentevents.DecodeSecretDelivery(delivery)
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded.Secret.Value.Ciphertext[0] ^= 0xff
-	decoded.Secret.Value.Nonce[0] ^= 0xff
+	defer clear(decoded.Value)
+	decoded.Value[0] ^= 0xff
 	if !bytes.Equal(delivery.Payload, before) {
 		t.Fatal("changing inputs or decoded bytes mutated the prepared delivery")
 	}
@@ -91,19 +107,51 @@ func TestSecretDeliverySnapshotsAreIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cipher, err := crypto.NewSecretCipher(fixtures.EncryptionKey)
+	defer clear(again.Value)
+	if string(again.Value) != fixtures.SecretValue || again.Metadata.Key.Name != "API_TOKEN" {
+		t.Fatal("independent decoded delivery lost its original metadata or value")
+	}
+}
+
+func TestSecretDeliveryDistinguishesEmptyValuesFromMissingWireValues(t *testing.T) {
+	request, metadata, _ := fixtures.SecretProtocol(t)
+	for _, value := range [][]byte{nil, {}} {
+
+		delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
+
+		if err != nil {
+			t.Fatal("empty secret value was rejected")
+		}
+		decoded, err := agentevents.DecodeSecretDelivery(delivery)
+		if err != nil || decoded.Value == nil || len(decoded.Value) != 0 {
+			t.Fatal("empty value did not remain an explicit wire value")
+		}
+		clear(decoded.Value)
+	}
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plaintext, err := cipher.Decrypt(again.Secret)
-	if err != nil || string(plaintext) != fixtures.SecretValue {
-		t.Fatal("independent decoded delivery no longer decrypts to its original value")
+	for _, payload := range []any{
+		map[string]any{"metadata": metadata},
+		map[string]any{"metadata": metadata, "value": nil},
+		map[string]any{"metadata": metadata, "value": map[string]any{"ciphertext": "secret-value"}},
+		map[string]any{"secret": map[string]any{"metadata": metadata, "value": map[string]any{"ciphertext": "secret-value"}}},
+	} {
+		changed := delivery
+		changed.Payload = fixtures.SecretWirePayload(t, payload)
+
+		_, err := agentevents.DecodeSecretDelivery(changed)
+
+		if err == nil || strings.Contains(err.Error(), "secret-value") {
+			t.Fatal("missing or legacy delivery value was accepted or exposed")
+		}
 	}
 }
 
 func TestSecretDeliveryRequiresMatchingPendingRequest(t *testing.T) {
-	request, secret := fixtures.SecretProtocol(t)
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	request, metadata, value := fixtures.SecretProtocol(t)
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,27 +176,27 @@ func TestSecretDeliveryRequiresMatchingPendingRequest(t *testing.T) {
 			}
 		})
 	}
-	wrongKey := secret.Clone()
-	wrongKey.Metadata.Key.Name = "OTHER_TOKEN"
-	if _, err := agentevents.NewSecretDelivery(request, wrongKey); err == nil {
+	wrongKey := metadata
+	wrongKey.Key.Name = "OTHER_TOKEN"
+	if _, err := agentevents.NewSecretDelivery(request, wrongKey, value); err == nil {
 		t.Fatal("constructor delivered a different shared name")
 	}
 	expired := request.Clone()
 	expired.ExpiresAt = expired.RequestedAt.Add(time.Second)
-	if _, err := agentevents.NewSecretDelivery(expired, secret); err == nil {
+	if _, err := agentevents.NewSecretDelivery(expired, metadata, value); err == nil {
 		t.Fatal("constructor created a new delivery after the request expired")
 	}
-	noExpiry := secret.Clone()
-	noExpiry.Metadata.ExpiresAt = time.Time{}
-	unbounded, err := agentevents.NewSecretDelivery(request, noExpiry)
+	noExpiry := metadata
+	noExpiry.ExpiresAt = time.Time{}
+	unbounded, err := agentevents.NewSecretDelivery(request, noExpiry, value)
 	if err != nil || !unbounded.ExpiresAt.Equal(request.ExpiresAt) {
 		t.Fatal("secret without expiry must still use the request deadline")
 	}
 }
 
 func TestSecretInstallationRejectsStaleOrMismatchedDelivery(t *testing.T) {
-	request, secret := fixtures.SecretProtocol(t)
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	request, metadata, value := fixtures.SecretProtocol(t)
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,9 +233,9 @@ func TestSecretInstallationRejectsStaleOrMismatchedDelivery(t *testing.T) {
 			}
 		})
 	}
-	recreated := secret.Clone()
-	recreated.Metadata.ID = id.New()
-	newDelivery, err := agentevents.NewSecretDelivery(request, recreated)
+	recreated := metadata
+	recreated.ID = id.New()
+	newDelivery, err := agentevents.NewSecretDelivery(request, recreated, value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,12 +245,12 @@ func TestSecretInstallationRejectsStaleOrMismatchedDelivery(t *testing.T) {
 }
 
 func TestSecretPublishersRejectInvalidWireDataAndContexts(t *testing.T) {
-	request, secret := fixtures.SecretProtocol(t)
+	request, metadata, value := fixtures.SecretProtocol(t)
 	sync, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,12 +305,12 @@ func TestSecretPublishersRejectInvalidWireDataAndContexts(t *testing.T) {
 }
 
 func TestSecretEventRoutingPreservesReplayAndTransportErrors(t *testing.T) {
-	request, secret := fixtures.SecretProtocol(t)
+	request, metadata, value := fixtures.SecretProtocol(t)
 	sync, err := controllerevents.NewSecretSyncRequested(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, value)
 	if err != nil {
 		t.Fatal(err)
 	}

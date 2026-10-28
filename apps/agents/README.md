@@ -56,8 +56,9 @@ Install each action's required programs and configure its settings. Check
 readiness in Admin's **Agents** page before running a mission.
 
 For managed secrets, declare names in `Action.RequiredSecrets`, configure
-`AgentConfig.Secrets`, and read values with `action.Secret(ctx, name)`. Users
-supply values through Playground or Admin. See [secret setup](../../framework/secrets/README.md).
+`AgentConfig.Secrets` to `&agent.SecretConfig{}`, and read values with
+`action.Secret(ctx, name)`. Users supply values through Playground or Admin.
+See [secret setup](../../framework/secrets/README.md).
 
 ### Return files
 

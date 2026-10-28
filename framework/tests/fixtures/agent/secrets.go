@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
@@ -63,7 +61,6 @@ type SecretAgent struct {
 	done     chan error
 	runtime  *agent.Agent
 	executor *fakes.ContextSecretAction
-	cipher   *crypto.SecretCipher
 	bus      *fakes.SecretBus
 	stopped  bool
 	logs     bytes.Buffer
@@ -82,17 +79,13 @@ func StartSecretAgent(t *testing.T, ttl, refresh time.Duration, requireOnDiscove
 func StartSecretAgentActions(t *testing.T, ttl, refresh time.Duration, executors ...action.Executor) *SecretAgent {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	cipher, err := crypto.NewSecretCipher(strings.Repeat("27", 32))
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture := &SecretAgent{ctx: ctx, cancel: cancel, cipher: cipher,
+	fixture := &SecretAgent{ctx: ctx, cancel: cancel,
 		bus: fakes.NewSecretBus(), done: make(chan error, 1)}
 	noHeartbeat := time.Duration(0)
 	runtime, err := agent.NewAgent(agent.AgentConfig{Type: "fixture", Actions: executors, ArtifactFileStore: fakes.UnusedArtifacts{},
 		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"}, HeartbeatInterval: &noHeartbeat,
 		Logger:  slog.New(slog.NewTextHandler(&fixture.logs, nil)),
-		Secrets: &agent.SecretConfig{Decryptor: cipher, RequestTTL: ttl, RefreshInterval: refresh, RetryInterval: 20 * time.Millisecond}})
+		Secrets: &agent.SecretConfig{RequestTTL: ttl, RefreshInterval: refresh, RetryInterval: 20 * time.Millisecond}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,14 +142,9 @@ func (f *SecretAgent) Request(t *testing.T, previous string) secrets.Request {
 	}
 }
 
-func (f *SecretAgent) Secret(t *testing.T, request secrets.Request, expiry time.Time, value string) secrets.Secret {
-	t.Helper()
+func (f *SecretAgent) SecretMetadata(request secrets.Request, expiry time.Time) secrets.Metadata {
 	now := time.Now().UTC()
-	secret, err := f.cipher.Encrypt(secrets.Metadata{ID: id.New(), Key: request.Key, Version: 1, CreatedAt: now, UpdatedAt: now, ExpiresAt: expiry}, []byte(value))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return secret
+	return secrets.Metadata{ID: id.New(), Key: request.Key, Version: 1, CreatedAt: now, UpdatedAt: now, ExpiresAt: expiry}
 }
 
 func (f *SecretAgent) Deliver(t *testing.T, message messages.Message) {
@@ -174,7 +162,6 @@ func (f *SecretAgent) Deliver(t *testing.T, message messages.Message) {
 
 func (f *SecretAgent) Context() context.Context       { return f.ctx }
 func (f *SecretAgent) Runtime() *agent.Agent          { return f.runtime }
-func (f *SecretAgent) Cipher() *crypto.SecretCipher   { return f.cipher }
 func (f *SecretAgent) SecretContext() context.Context { return f.executor.Context() }
 func (f *SecretAgent) PauseDiscovery(started, release chan struct{}) {
 	f.executor.PauseDiscovery(started, release)

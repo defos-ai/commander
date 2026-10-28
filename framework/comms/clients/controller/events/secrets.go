@@ -31,7 +31,7 @@ func (sync SecretSyncRequest) Validate() error {
 }
 
 // SecretInstallation reports successful installation, not broker receipt.
-// CorrelationID in its envelope is the original encrypted delivery's ID.
+// CorrelationID in its envelope is the original delivery's ID.
 type SecretInstallation struct {
 	RequestID     string `json:"request_id"`
 	SecretID      string `json:"secret_id"`
@@ -77,7 +77,7 @@ func DecodeSecretSyncRequested(message messages.Message) (SecretSyncRequest, err
 	return sync, nil
 }
 
-// NewSecretInstalled is called only after authenticating and installing a
+// NewSecretInstalled is called only after validating and installing a
 // delivery. Creating or publishing this acknowledgement does not fulfill the
 // request; the controller must verify its current saved identity/version first.
 func NewSecretInstalled(delivery messages.Message) (messages.Message, error) {
@@ -85,7 +85,8 @@ func NewSecretInstalled(delivery messages.Message) (messages.Message, error) {
 	if err != nil {
 		return messages.Message{}, err
 	}
-	metadata := payload.Secret.Metadata
+	defer clear(payload.Value)
+	metadata := payload.Metadata
 	message, err := messages.NewMessage(SecretInstalled, delivery.AgentID, SecretInstallation{
 		RequestID: delivery.CorrelationID, SecretID: metadata.ID, SecretVersion: metadata.Version,
 	})
@@ -125,7 +126,8 @@ func ValidateSecretInstalledDelivery(message, delivery messages.Message) error {
 	if err != nil {
 		return err
 	}
-	metadata := payload.Secret.Metadata
+	defer clear(payload.Value)
+	metadata := payload.Metadata
 	if message.AgentID != delivery.AgentID || message.CorrelationID != delivery.ID || installation.RequestID != delivery.CorrelationID || installation.SecretID != metadata.ID || installation.SecretVersion != metadata.Version {
 		return errors.New("secret installation must acknowledge the exact recipient, request and delivered version")
 	}

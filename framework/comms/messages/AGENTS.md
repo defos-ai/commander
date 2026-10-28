@@ -27,7 +27,9 @@
   delayed logs for completed claims. Reject failed log processing while continuing
   other events; receive and settlement failures still stop the consumer.
 - Secret synchronization uses the controller owner loop and agent event inbox.
-  Keep encrypted deliveries separate from action commands. Match requests,
+  Keep secret deliveries separate from action commands. The controller decrypts
+  encrypted reservations; wire payloads carry metadata and value bytes, never
+  the storage ciphertext or encryption key. Agents do not decrypt. Match requests,
   recipient identities/types, shared names, deadlines and exact secret IDs/versions
   through the typed validators.
   Consumers must separately verify the live registered recipient, active requests,

@@ -32,10 +32,10 @@ go run ./apps/controllers/default/cmd --task-timeout=30m
 dispatched tasks. Expiry marks an unknown outcome as interrupted while late-result
 reconciliation continues; it does not stop the agent or change saved deadlines.
 
-Set `SECRETS_ENCRYPTION_KEY` to the API's key to authenticate managed secrets
+Set `SECRETS_ENCRYPTION_KEY` to the API's key to decrypt requested managed secrets
 before delivery. Compose supplies the saved key; all-in-one shares its session
-cipher. Deliveries remain encrypted, and agents still need their existing
-decryption setup.
+cipher. Saved records remain encrypted; agents receive requested values and do
+not need the encryption key.
 
 ## Development and testing
 

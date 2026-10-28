@@ -16,7 +16,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
 	"github.com/defos-ai/commander/framework/agent"
-	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -59,7 +58,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		fmt.Fprintln(stderr, "Run a spawner agent and launch agent packages on the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
 		fmt.Fprintln(stderr, "Install agent packages through the install-agent mission in Playground or MCP.")
-		fmt.Fprintln(stderr, "Set SECRETS_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
+		fmt.Fprintln(stderr, "Provide managed credentials through Playground or Admin.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -162,16 +161,12 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		key = *options.SecretsEncryptionKey
 	}
 	if key != "" {
-		cipher, err := crypto.NewSecretCipher(key)
-		if err != nil {
-			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
-		}
 		result.secretBootstrap, err = runtimes.NewSecretBootstrap(key)
 		if err != nil {
 			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
 		}
-		result.secrets = &agent.SecretConfig{Decryptor: cipher}
 	}
+	result.secrets = &agent.SecretConfig{}
 	return result, nil
 }
 

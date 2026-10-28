@@ -69,13 +69,13 @@ Compose generates and saves `SECRETS_ENCRYPTION_KEY` automatically. To supply yo
 own, set a 64-character hex value before the first start. A conflicting value on
 later starts is rejected.
 
-The controller mounts the saved key read-only and authenticates encrypted secret
-deliveries with the same key as the API.
+The controller mounts the saved key read-only and decrypts requested secrets
+using the same key as the API. Agents receive values through the broker.
 
 **Back up the `secrets-key` volume with MongoDB and restore them together.** A new
 key cannot decrypt existing secrets. All-in-one generates a temporary session key.
-For separately deployed agents using managed secrets, configure the same key as
-the API. See [secret setup](../framework/secrets/README.md).
+For a separate controller, configure the same key as the API. Agents do not need
+that key for managed-secret delivery. See [secret setup](../framework/secrets/README.md).
 
 ### Debugging
 

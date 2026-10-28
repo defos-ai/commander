@@ -231,22 +231,30 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 
 func readSnapshot(t *testing.T, ctx context.Context, subscription comms.Subscription, kind messages.MessageType) agent.AgentSnapshot {
 	t.Helper()
-	delivery, err := subscription.Next(ctx)
-	if err != nil {
-		t.Fatal(err)
+	for {
+		delivery, err := subscription.Next(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		message := delivery.Message()
+		if message.Type == messages.SecretSyncRequested {
+			if err := delivery.Ack(ctx); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if message.Type != kind {
+			t.Fatalf("expected %s, received %s", kind, message.Type)
+		}
+		var snapshot agent.AgentSnapshot
+		if err := json.Unmarshal(message.Payload, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		if err := delivery.Ack(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return snapshot
 	}
-	message := delivery.Message()
-	if message.Type != kind {
-		t.Fatalf("expected %s, received %s", kind, message.Type)
-	}
-	var snapshot agent.AgentSnapshot
-	if err := json.Unmarshal(message.Payload, &snapshot); err != nil {
-		t.Fatal(err)
-	}
-	if err := delivery.Ack(ctx); err != nil {
-		t.Fatal(err)
-	}
-	return snapshot
 }
 
 func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
@@ -416,8 +424,8 @@ func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
 	if err := cli.RunWithOptions(t.Context(), append(args, "--help"), &logs, cli.Options{SecretCipher: &crypto.SecretCipher{}}); err != nil {
 		t.Fatalf("help validated the environment or injected cipher: %v", err)
 	}
-	if !strings.Contains(logs.String(), "Usage:") || !strings.Contains(logs.String(), "SECRETS_ENCRYPTION_KEY") || strings.Contains(logs.String(), invalidKey) {
-		t.Fatal("help must describe the encryption setting without exposing its value")
+	if !strings.Contains(logs.String(), "Usage:") || !strings.Contains(logs.String(), "managed credentials") || strings.Contains(logs.String(), invalidKey) {
+		t.Fatal("help must describe managed credentials without exposing key material")
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("help created runtime state")

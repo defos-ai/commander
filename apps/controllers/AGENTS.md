@@ -18,10 +18,10 @@
 - Construct both secret and request stores from the configured database and
   inject them into coordination. `Options.SecretCipher` overrides optional
   `SECRETS_ENCRYPTION_KEY`; validate the supplied cipher/key before opening providers.
-  Missing keys leave authentication disabled during this staged change; never
-  generate a replacement key. Inject the decryptor into coordination, which still
-  publishes ciphertext. Framework reconciliation owns delivery retries, pending
-  request recovery and installation acknowledgements.
+  Missing keys prevent secret-value delivery; never generate a replacement key.
+  Inject the decryptor into coordination, which reserves encrypted evidence then
+  publishes only the requested value and metadata. Framework reconciliation owns
+  delivery retries, pending request recovery and installation acknowledgements.
 - `ExecutionStore` owns claim, checkpoint, result and log persistence through the
   existing filesystem/Mongo selection. Keep log records in separate collections;
   the same wiring serves the embedded Playground controller. Log events verify their

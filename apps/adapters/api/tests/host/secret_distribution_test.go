@@ -57,6 +57,11 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	if config.SecretRequestStore, err = fssecrets.NewRequestFsStore(database); err != nil {
 		t.Fatal(err)
 	}
+	cipher, err := crypto.NewSecretCipher(hostfixtures.SecretTestKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.SecretDecryptor = cipher
 	controllerBus := hostfixtures.NewSecretTestBus(t, fixture.Root)
 	observedBus := fakes.NewSecretObservingBus(controllerBus)
 	deliveries := observedBus.Deliveries()
@@ -70,10 +75,6 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 		return runtime
 	}
 	coordinator := startController()
-	cipher, err := crypto.NewSecretCipher(hostfixtures.SecretTestKey)
-	if err != nil {
-		t.Fatal(err)
-	}
 	files, err := fsartifacts.NewArtifactFileFsStore(filepath.Join(fixture.Root, "storage"))
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +133,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	worker, err := agent.NewAgent(agent.AgentConfig{
 		Type: "builder-agent", Actions: []action.Executor{private, public, onDemand}, ArtifactFileStore: files,
 		HeartbeatInterval: &heartbeat,
-		Secrets: &agent.SecretConfig{Decryptor: cipher, RequestTTL: 2 * time.Second,
+		Secrets: &agent.SecretConfig{RequestTTL: 2 * time.Second,
 			RefreshInterval: 600 * time.Millisecond, RetryInterval: 100 * time.Millisecond},
 	})
 	if err != nil {
@@ -258,7 +259,7 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	run("public", 0)
 
 	// The action decides at run time that it needs a secret. It has no static
-	// requirement, and uses the same API, saved request and encrypted delivery.
+	// requirement, and uses the same API, saved request and scoped delivery.
 	pending, err := config.SecretRequestStore.ListPending(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -330,27 +331,29 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 	stopOperations()
 	hostfixtures.CloseSecretController(t, coordinator)
 	server.Stop(t)
-	assertNoDistributedPlaintext(t, fixture.Root)
+	assertNoPlaintextInSecretStores(t, fixture.Root)
 }
 
-func assertNoDistributedPlaintext(t *testing.T, root string) {
+func assertNoPlaintextInSecretStores(t *testing.T, root string) {
 	t.Helper()
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		for _, private := range []string{hostfixtures.SecretTestKey, hostfixtures.SecretTestValue, hostfixtures.SecretTestReplacement} {
-			if bytes.Contains(data, []byte(private)) {
-				t.Error("secret synchronization persisted plaintext or key material")
+	for _, directory := range []string{"database", "storage"} {
+		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
 			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, private := range []string{hostfixtures.SecretTestKey, hostfixtures.SecretTestValue, hostfixtures.SecretTestReplacement} {
+				if bytes.Contains(data, []byte(private)) {
+					t.Error("secret synchronization persisted plaintext or key material in its stores")
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 }

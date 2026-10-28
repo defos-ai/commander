@@ -17,16 +17,9 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// SecretDecryptor authenticates encrypted records. Hosts inject their configured
-// cipher; agents never receive storage access or generate encryption keys.
-type SecretDecryptor interface {
-	Decrypt(secretmodel.Secret) ([]byte, error)
-}
-
 // SecretConfig enables declared and on-demand secrets for this agent type.
 // Zero durations use a one-minute lease, thirty-second refresh and five-second retry.
 type SecretConfig struct {
-	Decryptor       SecretDecryptor
 	RequestTTL      time.Duration
 	RefreshInterval time.Duration
 	RetryInterval   time.Duration
@@ -63,9 +56,6 @@ func newSecretRuntime(config *SecretConfig, agentID, typeName string, actions []
 		return nil, nil
 	}
 	settings := *config
-	if settings.Decryptor == nil {
-		return nil, errors.New("secret synchronization requires a decryptor")
-	}
 	if settings.RequestTTL == 0 {
 		settings.RequestTTL = time.Minute
 	}
@@ -100,6 +90,7 @@ func (r *secretRuntime) clear() {
 	defer r.mu.Unlock()
 	for name, entry := range r.entries {
 		clear(entry.value)
+		clear(entry.delivery.Payload)
 		if entry.declared {
 			r.entries[name] = &secretEntry{declared: true}
 		} else {
@@ -285,6 +276,7 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 	for name, entry := range r.entries {
 		if entry.installed && !now.Before(entry.lease) {
 			clear(entry.value)
+			clear(entry.delivery.Payload)
 			entry.value, entry.installed = nil, false
 			if entry.declared {
 				r.dirty++
@@ -309,6 +301,7 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 			if err != nil {
 				return nil, err
 			}
+			clear(entry.delivery.Payload)
 			entry.request, entry.message, entry.delivery, entry.ack = request, message, messages.Message{}, messages.Message{}
 		}
 		outgoing = append(outgoing, entry.message)
@@ -324,9 +317,10 @@ func (r *secretRuntime) install(message messages.Message, now time.Time) error {
 	if err != nil {
 		return errors.New("invalid secret delivery")
 	}
+	defer clear(payload.Value)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	entry := r.entries[payload.Secret.Metadata.Key.Name]
+	entry := r.entries[payload.Metadata.Key.Name]
 	if entry == nil || message.AgentID != r.agentID ||
 		message.CorrelationID != entry.request.ID || now.Before(message.CreatedAt) || !now.Before(message.ExpiresAt) {
 		return errors.New("secret delivery does not match a current valid request")
@@ -340,21 +334,16 @@ func (r *secretRuntime) install(message messages.Message, now time.Time) error {
 		}
 		return nil
 	}
-	if entry.metadata.ID == payload.Secret.Metadata.ID && payload.Secret.Metadata.Version < entry.metadata.Version {
+	if entry.metadata.ID == payload.Metadata.ID && payload.Metadata.Version < entry.metadata.Version {
 		return errors.New("secret delivery would restore an older version")
-	}
-	value, err := r.config.Decryptor.Decrypt(payload.Secret)
-	defer clear(value)
-	if err != nil {
-		return errors.New("secret delivery authentication failed")
 	}
 	ack, err := controllerevents.NewSecretInstalled(message)
 	if err != nil {
 		return errors.New("secret delivery expired before installation")
 	}
-	changed := !entry.installed || entry.metadata.ID != payload.Secret.Metadata.ID || entry.metadata.Version != payload.Secret.Metadata.Version || !bytes.Equal(entry.value, value)
+	changed := !entry.installed || entry.metadata.ID != payload.Metadata.ID || entry.metadata.Version != payload.Metadata.Version || !bytes.Equal(entry.value, payload.Value)
 	clear(entry.value)
-	entry.value, entry.metadata, entry.installed, entry.lease = bytes.Clone(value), payload.Secret.Metadata, true, message.ExpiresAt
+	entry.value, entry.metadata, entry.installed, entry.lease = bytes.Clone(payload.Value), payload.Metadata, true, message.ExpiresAt
 	message.Payload = bytes.Clone(message.Payload)
 	entry.delivery, entry.ack = message, ack
 	if changed && entry.declared {

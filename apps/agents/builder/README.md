@@ -78,13 +78,11 @@ agent's readiness; its failure leaves your build and release available.
 
 ## Secrets
 
-The optional Compose builder mounts the API's encryption key automatically.
 Enter model and GitHub tokens in Playground's secret form or Admin's
 **Agents → Manage secrets**; never paste them into chat or action inputs.
 
-For a separately started builder, set `SECRETS_ENCRYPTION_KEY` to the API's key.
-The spawner supplies it automatically only to the official builder package.
-See [secret setup](../../../framework/secrets/README.md).
+The controller delivers requested values; builders do not need an encryption key
+for managed secrets. See [secret setup](../../../framework/secrets/README.md).
 
 ## Workspaces and execution
 

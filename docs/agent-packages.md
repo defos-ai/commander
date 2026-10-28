@@ -117,9 +117,9 @@ Generate a fresh ID when none is supplied. Use the [example agent](https://githu
 for the complete CLI and factory pattern.
 
 Pass only the child's required environment. Never inherit the parent's entire
-credential set. Managed-secret agents need a separately configured encryption key.
-Compose's optional builder shares the API's key; the spawner retains its narrow
-trusted bootstrap for the official builder package.
+credential set. Managed-secret agents receive requested values from the controller
+without an encryption key. The spawner's existing official-builder key bootstrap
+remains separate from managed-secret delivery.
 See [builder secrets](../apps/agents/builder/README.md#secrets).
 
 Registration means the process connected. Check action readiness too: the agent

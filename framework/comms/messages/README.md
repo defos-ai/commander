@@ -68,8 +68,10 @@ or MCP's [`operation_logs`](../../../apps/adapters/README.md#queries-and-artifac
 ## Secret synchronization contracts
 
 Use [secret helpers](../../secrets/README.md#agent-requirements) in actions instead
-of adding values to message payloads. The controller sends encrypted deliveries;
-agents acknowledge them after installation.
+of adding values to action inputs. The controller decrypts the saved secret and
+sends its value and metadata only to the requesting agent. Agents acknowledge
+installation without receiving the encryption key. Saved delivery history stays
+encrypted.
 
 Restrict bus access to trusted hosts. Deleting a secret does not immediately
 revoke installed copies. See [secret runtime limits](../../secrets/README.md#agent-requirements)

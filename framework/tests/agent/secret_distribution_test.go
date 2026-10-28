@@ -17,7 +17,6 @@ import (
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
@@ -40,24 +39,23 @@ func TestAgentSecretDeliveryChecksBindingAndRetriesExactAcknowledgement(t *testi
 	}
 	assertMissing(t, fixture)
 
-	secret := fixture.Secret(t, request, time.Time{}, "fixture-value")
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	metadata := fixture.SecretMetadata(request, time.Time{})
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, []byte("fixture-value"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	originalPayload := bytes.Clone(delivery.Payload)
 	for _, mutate := range []func(messages.Message) messages.Message{
 		func(m messages.Message) messages.Message { m.AgentID = "other-agent-12345678"; return m },
 		func(m messages.Message) messages.Message { m.CorrelationID = id.New(); return m },
 		func(m messages.Message) messages.Message {
-			copy := secret.Clone()
-			copy.Metadata.Key.Name = "OTHER_TOKEN"
-			m.Payload, _ = json.Marshal(agentevents.SecretDelivery{Secret: copy})
+			copy := metadata
+			copy.Key.Name = "OTHER_TOKEN"
+			m.Payload, _ = json.Marshal(agentevents.SecretDelivery{Metadata: copy, Value: []byte("fixture-value")})
 			return m
 		},
 		func(m messages.Message) messages.Message {
-			copy := secret.Clone()
-			copy.Value.Ciphertext[0] ^= 1
-			m.Payload, _ = json.Marshal(agentevents.SecretDelivery{Secret: copy})
+			m.Payload, _ = json.Marshal(agentevents.SecretDelivery{Metadata: metadata})
 			return m
 		},
 	} {
@@ -71,11 +69,20 @@ func TestAgentSecretDeliveryChecksBindingAndRetriesExactAcknowledgement(t *testi
 		t.Fatal(err)
 	}
 	assertValue(t, fixture, "fixture-value")
+	conflicting := delivery
+	conflicting.Payload, err = json.Marshal(agentevents.SecretDelivery{Metadata: metadata, Value: []byte("conflicting-value")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fixture.Deliver(t, conflicting)
+
+	assertValue(t, fixture, "fixture-value")
 	if _, err := action.Secret(fixture.SecretContext(), "UNDECLARED"); !errors.Is(err, action.ErrSecretUnavailable) {
 		t.Fatal("undeclared lookup was allowed")
 	}
 	if bytes.Contains(ack.Payload, []byte("fixture-value")) || bytes.Contains(firstMessage.Payload, []byte("fixture-value")) {
-		t.Fatal("plaintext was published")
+		t.Fatal("request or acknowledgement echoed the secret value")
 	}
 	fixture.Deliver(t, delivery)
 	if replay := fixture.Next(t, controllerevents.SecretInstalled); !reflect.DeepEqual(ack, replay) {
@@ -89,13 +96,37 @@ func TestAgentSecretDeliveryChecksBindingAndRetriesExactAcknowledgement(t *testi
 	assertValue(t, fixture, "fixture-value")
 	fixture.Stop(t)
 	assertMissing(t, fixture)
+	if !bytes.Equal(delivery.Payload, originalPayload) {
+		t.Fatal("agent installation or shutdown cleared caller-owned delivery bytes")
+	}
+}
+
+func TestAgentInstallsEmptySecretValue(t *testing.T) {
+	fixture := fixtures.StartSecretAgent(t, 2*time.Second, time.Second)
+	request := fixture.Request(t, "")
+	metadata := fixture.SecretMetadata(request, time.Time{})
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fixture.Deliver(t, delivery)
+
+	ack := fixture.Next(t, controllerevents.SecretInstalled)
+	if err := controllerevents.ValidateSecretInstalledDelivery(ack, delivery); err != nil {
+		t.Fatal(err)
+	}
+	assertValue(t, fixture, "")
+	if fixture.Runtime().Describe().Actions[0].Status != actions.Ready {
+		t.Fatal("installed empty secret did not make its action ready")
+	}
 }
 
 func TestAgentSecretRenewalRejectsStaleDeliveryAndExpiresWithoutReplacement(t *testing.T) {
 	fixture := fixtures.StartSecretAgent(t, time.Second, 120*time.Millisecond)
 	first := fixture.Request(t, "")
-	secret := fixture.Secret(t, first, time.Now().UTC().Add(450*time.Millisecond), "version-one")
-	old, err := agentevents.NewSecretDelivery(first, secret)
+	metadata := fixture.SecretMetadata(first, time.Now().UTC().Add(450*time.Millisecond))
+	old, err := agentevents.NewSecretDelivery(first, metadata, []byte("version-one"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,14 +136,9 @@ func TestAgentSecretRenewalRejectsStaleDeliveryAndExpiresWithoutReplacement(t *t
 	if !renewed.ExpiresAt.After(first.ExpiresAt) {
 		t.Fatal("renewal did not use a fresh lease")
 	}
-	metadata := secret.Metadata
 	metadata.Version++
 	metadata.UpdatedAt = time.Now().UTC()
-	rotated, err := fixture.Cipher().Encrypt(metadata, []byte("version-two"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	delivery, err := agentevents.NewSecretDelivery(renewed, rotated)
+	delivery, err := agentevents.NewSecretDelivery(renewed, metadata, []byte("version-two"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +151,7 @@ func TestAgentSecretRenewalRejectsStaleDeliveryAndExpiresWithoutReplacement(t *t
 	}
 	fixture.Deliver(t, old)
 	assertValue(t, fixture, "version-two")
-	deadline := time.NewTimer(time.Until(secret.Metadata.ExpiresAt.Add(10 * time.Millisecond)))
+	deadline := time.NewTimer(time.Until(metadata.ExpiresAt.Add(10 * time.Millisecond)))
 	defer deadline.Stop()
 	select {
 	case <-deadline.C:
@@ -150,16 +176,11 @@ func TestSecretContextAndConfigurationValidation(t *testing.T) {
 	if _, err := action.RequestSecret(canceled, "TOKEN"); !errors.Is(err, context.Canceled) {
 		t.Fatal("canceled secret request lost its cancellation")
 	}
-	cipher, err := crypto.NewSecretCipher(strings.Repeat("27", 32))
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, config := range []agent.SecretConfig{
-		{},
-		{Decryptor: cipher, RequestTTL: -time.Second},
-		{Decryptor: cipher, RefreshInterval: -time.Second},
-		{Decryptor: cipher, RetryInterval: -time.Second},
-		{Decryptor: cipher, RequestTTL: time.Second, RefreshInterval: time.Second},
+		{RequestTTL: -time.Second},
+		{RefreshInterval: -time.Second},
+		{RetryInterval: -time.Second},
+		{RequestTTL: time.Second, RefreshInterval: time.Second},
 	} {
 		if _, err := agent.NewAgent(agent.AgentConfig{Type: "fixture", Secrets: &config, ArtifactFileStore: fakes.UnusedArtifacts{}, Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "fixture"}}); err == nil {
 			t.Fatal("invalid secret runtime configuration accepted")
@@ -174,8 +195,8 @@ func TestMissingSecretInDiscoveryKeepsSynchronizationAndUnrelatedActionsAvailabl
 	if snapshot.Actions[0].Status != actions.Unavailable || snapshot.Actions[1].Status != actions.Ready {
 		t.Fatal("missing secret blocked unrelated actions or allowed the affected action")
 	}
-	secret := fixture.Secret(t, request, time.Time{}, "fixture-value")
-	delivery, err := agentevents.NewSecretDelivery(request, secret)
+	metadata := fixture.SecretMetadata(request, time.Time{})
+	delivery, err := agentevents.NewSecretDelivery(request, metadata, []byte("fixture-value"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,8 +217,8 @@ func TestAgentWaitsForSecretRediscoveryBeforeStartingQueuedWork(t *testing.T) {
 			request := fixture.Request(t, "")
 			started, release := make(chan struct{}), make(chan struct{})
 			fixture.PauseDiscovery(started, release)
-			secret := fixture.Secret(t, request, time.Time{}, "fixture-value")
-			delivery, err := agentevents.NewSecretDelivery(request, secret)
+			metadata := fixture.SecretMetadata(request, time.Time{})
+			delivery, err := agentevents.NewSecretDelivery(request, metadata, []byte("fixture-value"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -317,7 +338,7 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 			t.Fatal("action finished before receiving the requested secret")
 		}
 	}
-	delivery, err := agentevents.NewSecretDelivery(request, fixture.Secret(t, request, time.Time{}, plaintext))
+	delivery, err := agentevents.NewSecretDelivery(request, fixture.SecretMetadata(request, time.Time{}), []byte(plaintext))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +354,7 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 	var accepted actions.ActionOutput
 	var decoded output
 	if json.Unmarshal(result.Payload, &accepted) != nil || json.Unmarshal(accepted.Output, &decoded) != nil || !decoded.Matched {
-		t.Fatal("encrypted delivery did not resume the original action with its value")
+		t.Fatal("secret delivery did not resume the original action with its value")
 	}
 	// Installation acknowledgement must survive the last waiter returning.
 	acknowledged := false

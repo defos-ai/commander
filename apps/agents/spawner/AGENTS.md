@@ -48,10 +48,11 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   no local state volume. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
   unsupported runtimes explicitly. Do not reintroduce flags for these settings.
-- Optional `SECRETS_ENCRYPTION_KEY` configures this host's managed secret exchange.
+- Optional `SECRETS_ENCRYPTION_KEY` configures the existing builder bootstrap.
   Embedded hosts pass `Options.SecretsEncryptionKey`, which takes precedence over
   the environment. Validate the key before opening providers; construct the
-  host cipher and optional runtime `SecretBootstrap` from that same key.
+  runtime `SecretBootstrap` from that key. This host's managed-secret delivery
+  is enabled independently and does not use an encryption key.
   Compose mounts the existing key volume read-only; all-in-one supplies its
   session key without changing the process environment.
   Bootstrap the key only for the exact resolved module

@@ -13,14 +13,15 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/secrets"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type SecretDecryptor interface {
 	Decrypt(secrets.Secret) ([]byte, error)
 }
 
-// SecretEventConsumer transfers encrypted values only. Its caller serializes
-// Consume and Reconcile with inventory observations on the controller owner loop.
+// SecretEventConsumer decrypts reserved snapshots only for broker delivery. Its caller
+// serializes Consume and Reconcile with inventory observations on the owner loop.
 // The bus remains a trusted deployment boundary. Agents may request shared names;
 // declarations are readiness metadata, not authorization.
 type SecretEventConsumer struct {
@@ -115,7 +116,15 @@ func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.Request
 		if !available {
 			return nil
 		}
-		message, err := agentevents.NewSecretDelivery(request, secret)
+		deadline := request.ExpiresAt
+		if expires := secret.Metadata.ExpiresAt; !expires.IsZero() && expires.Before(deadline) {
+			deadline = expires
+		}
+		delivery := secrets.Delivery{
+			ID: id.MessageID(), RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
+			CreatedAt: time.Now().UTC(), ExpiresAt: deadline,
+		}
+		next, err := record.WithDelivery(delivery)
 		if err != nil {
 			now = time.Now().UTC()
 			if !now.Before(request.ExpiresAt) {
@@ -126,23 +135,20 @@ func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.Request
 			}
 			return err
 		}
-		delivery := secrets.Delivery{
-			ID: message.ID, RequestID: request.ID, AgentID: request.AgentID, Secret: secret,
-			CreatedAt: message.CreatedAt, ExpiresAt: message.ExpiresAt,
-		}
 		// An uncertain save stops processing. Recovery rereads the record before
 		// deciding whether the reserved delivery can be sent.
 		if err := c.Requests.SaveDelivery(ctx, delivery); err != nil {
 			return err
 		}
-		record.Delivery = &delivery
+		record = next
 	}
-	if c.Decryptor != nil {
-		value, err := c.Decryptor.Decrypt(record.Delivery.Secret.Clone())
-		clear(value)
-		if err != nil {
-			return errors.New("cannot authenticate secret for delivery")
-		}
+	if c.Decryptor == nil {
+		return errors.New("secret delivery requires a decryptor")
+	}
+	value, err := c.Decryptor.Decrypt(record.Delivery.Secret.Clone())
+	defer clear(value)
+	if err != nil {
+		return errors.New("cannot authenticate secret for delivery")
 	}
 	// Storage and decryption can take time. Recheck validity and the latest value
 	// before sending; this is not a cross-store transaction with rotation.
@@ -158,7 +164,7 @@ func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.Request
 	if !available || metadata.ID != secret.Metadata.ID || metadata.Version != secret.Metadata.Version || !now.Before(record.Delivery.ExpiresAt) {
 		return c.Requests.Cancel(ctx, request.ID, now)
 	}
-	message, err := deliveryMessage(*record.Delivery)
+	message, err := deliveryMessage(*record.Delivery, value)
 	if err != nil {
 		return err
 	}
@@ -239,8 +245,11 @@ func (c SecretEventConsumer) current(ctx context.Context, key secrets.Key, now t
 	return secret, !secret.Metadata.UpdatedAt.After(now) && secrets.AvailabilityAt(&secret.Metadata, now) == secrets.Available, nil
 }
 
-func deliveryMessage(delivery secrets.Delivery) (messages.Message, error) {
-	payload, err := json.Marshal(agentevents.SecretDelivery{Secret: delivery.Secret})
+func deliveryMessage(delivery secrets.Delivery, value []byte) (messages.Message, error) {
+	if value == nil {
+		value = []byte{}
+	}
+	payload, err := json.Marshal(agentevents.SecretDelivery{Metadata: delivery.Secret.Metadata, Value: value})
 	if err != nil {
 		return messages.Message{}, err
 	}

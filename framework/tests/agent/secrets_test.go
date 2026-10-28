@@ -198,7 +198,7 @@ func TestAgentReportsOverlappingSecretWaitsPerExecution(t *testing.T) {
 	if request.Key.Name != "TOKEN" {
 		t.Fatal("first request was not for the shared waiter name")
 	}
-	delivery, err := agentevents.NewSecretDelivery(request, fixture.Secret(t, request, time.Time{}, "fixture-value"))
+	delivery, err := agentevents.NewSecretDelivery(request, fixture.SecretMetadata(request, time.Time{}), []byte("fixture-value"))
 	if err != nil {
 		t.Fatal(err)
 	}

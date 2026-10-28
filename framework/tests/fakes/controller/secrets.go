@@ -18,24 +18,30 @@ type SecretRecipients struct {
 	records map[string]agents.Agent
 }
 
-type FailingSecretDecryptor struct {
+type SecretDecryptor struct {
 	value   []byte
 	failure error
+	after   func()
 }
 
-func NewFailingSecretDecryptor(value []byte, failure error) *FailingSecretDecryptor {
-	return &FailingSecretDecryptor{value: bytes.Clone(value), failure: failure}
+func NewSecretDecryptor(value []byte, failure error) *SecretDecryptor {
+	return &SecretDecryptor{value: bytes.Clone(value), failure: failure}
 }
 
-func (decryptor *FailingSecretDecryptor) Decrypt(secret secrets.Secret) ([]byte, error) {
+func (decryptor *SecretDecryptor) Decrypt(secret secrets.Secret) ([]byte, error) {
 	clear(secret.Value.Nonce)
 	clear(secret.Value.Ciphertext)
+	if decryptor.after != nil {
+		decryptor.after()
+	}
 	return decryptor.value, decryptor.failure
 }
 
-func (decryptor *FailingSecretDecryptor) Cleared() bool {
+func (decryptor *SecretDecryptor) Cleared() bool {
 	return bytes.Count(decryptor.value, []byte{0}) == len(decryptor.value)
 }
+
+func (decryptor *SecretDecryptor) AfterDecrypt(callback func()) { decryptor.after = callback }
 
 func NewSecretRecipients(records ...agents.Agent) *SecretRecipients {
 	store := &SecretRecipients{records: make(map[string]agents.Agent, len(records))}
@@ -71,6 +77,7 @@ func (bus *SecretPublishBus) Publish(_ context.Context, topic string, message me
 	if bus.failure != nil {
 		return bus.failure
 	}
+	message.Payload = bytes.Clone(message.Payload)
 	bus.messages, bus.topics = append(bus.messages, message), append(bus.topics, topic)
 	return nil
 }

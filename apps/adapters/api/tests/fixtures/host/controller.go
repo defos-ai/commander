@@ -224,7 +224,8 @@ func AwaitSecretInstallation(t *testing.T, requests secretmodel.RequestStore, de
 			select {
 			case message := <-deliveries:
 				payload, err := agentevents.DecodeSecretDelivery(message)
-				if err == nil && payload.Secret.Metadata.ID == secretID && payload.Secret.Metadata.Version == version {
+				clear(payload.Value)
+				if err == nil && payload.Metadata.ID == secretID && payload.Metadata.Version == version {
 					requestID = message.CorrelationID
 				}
 			default:

@@ -55,7 +55,7 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		fmt.Fprintf(stderr, "Usage: %s [flags]\n", serviceName)
 		fmt.Fprintln(stderr, "Run one agent independently; connect the default controller to the same bus and artifact storage.")
 		fmt.Fprintln(stderr, "A fresh agent ID is created unless an agent ID suffix is supplied.")
-		fmt.Fprintln(stderr, "Set SECRETS_ENCRYPTION_KEY to receive encrypted secrets for this agent type.")
+		fmt.Fprintln(stderr, "Provide managed credentials through Playground or Admin.")
 		fmt.Fprintln(stderr, "BUILDER_DEFAULT_REPO_VISIBILITY optionally selects public or private; otherwise publication asks the operator.")
 		flags.PrintDefaults()
 	}
@@ -107,8 +107,8 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		if err := cipher.Validate(); err != nil {
 			return config{}, fmt.Errorf("secret cipher: %w", err)
 		}
-		result.secrets = &agents.SecretConfig{Decryptor: cipher}
 	}
+	result.secrets = &agents.SecretConfig{}
 	if provided["actions"] {
 		result.actionNames, err = parseList(actionNames)
 	}

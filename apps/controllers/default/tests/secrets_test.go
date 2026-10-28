@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ import (
 	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
 )
 
-func TestCLIAuthenticatesAndTransfersSavedEncryptedSecrets(t *testing.T) {
+func TestCLITransfersRequestedValuesAndKeepsSavedSecretsEncrypted(t *testing.T) {
 	t.Setenv("SECRETS_ENCRYPTION_KEY", fixtures.SecretEncryptionKey)
 	t.Setenv("ENV", "")
 	root := t.TempDir()
@@ -53,7 +54,8 @@ func TestCLIAuthenticatesAndTransfersSavedEncryptedSecrets(t *testing.T) {
 	cipher := fixtures.SecretCipher(t)
 	now := time.Now().UTC()
 	key := secrets.Key{Name: "API_TOKEN"}
-	secret, err := cipher.Encrypt(secrets.Metadata{ID: id.New(), Key: key, Version: 1, CreatedAt: now, UpdatedAt: now}, []byte("local-only-fixture-token"))
+	const plaintext = "local-only-fixture-token"
+	secret, err := cipher.Encrypt(secrets.Metadata{ID: id.New(), Key: key, Version: 1, CreatedAt: now, UpdatedAt: now}, []byte(plaintext))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,14 +122,19 @@ func TestCLIAuthenticatesAndTransfersSavedEncryptedSecrets(t *testing.T) {
 	}
 	delivery, err := inbox.Next(ctx)
 	if err != nil {
-		t.Fatalf("controller did not deliver the saved encrypted secret: %v", err)
+		t.Fatalf("controller did not deliver the requested secret value: %v", err)
 	}
 	if err := agentevents.ValidateSecretDeliveryRequest(delivery.Message(), request); err != nil {
 		t.Fatal(err)
 	}
 	payload, err := agentevents.DecodeSecretDelivery(delivery.Message())
-	if err != nil || payload.Secret.Metadata.ID != secret.Metadata.ID || !bytes.Equal(payload.Secret.Value.Ciphertext, secret.Value.Ciphertext) {
-		t.Fatal("controller did not forward the saved ciphertext unchanged")
+	defer clear(payload.Value)
+	if err != nil || payload.Metadata != secret.Metadata || !bytes.Equal(payload.Value, []byte(plaintext)) {
+		t.Fatal("controller did not deliver the requested decrypted value with its metadata")
+	}
+	saved, err := values.Get(ctx, key)
+	if err != nil || !reflect.DeepEqual(saved, secret) {
+		t.Fatal("controller delivery changed the encrypted secret stored at rest")
 	}
 	requests, err := fssecrets.NewRequestFsStore(database)
 	if err != nil {
@@ -136,6 +143,9 @@ func TestCLIAuthenticatesAndTransfersSavedEncryptedSecrets(t *testing.T) {
 	record, err := requests.Get(ctx, request.ID)
 	if err != nil || record.Delivery == nil || record.Delivery.ID != delivery.Message().ID || record.Request.Status != secrets.Pending {
 		t.Fatal("delivery was not durably reserved before publishing")
+	}
+	if !reflect.DeepEqual(record.Delivery.Secret, secret) {
+		t.Fatal("reserved delivery did not retain the original encrypted envelope")
 	}
 	if err := delivery.Ack(ctx); err != nil {
 		t.Fatal(err)

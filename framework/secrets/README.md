@@ -24,7 +24,8 @@ installation on an agent.
 
 ## Agent requirements
 
-Configure `AgentConfig.Secrets` with the API's encryption key. Declare names in
+Set `AgentConfig.Secrets` to `&agent.SecretConfig{}`; agents do not need an
+encryption key. Declare names in
 `Action.RequiredSecrets` when they must be available before an action starts:
 
 ```go
@@ -42,7 +43,9 @@ environment variables.
 
 Updates arrive on refresh, normally within 30 seconds. Installed copies expire
 after at most one minute. Deletion does not cancel running actions or erase copies
-they retained. Restrict broker and filesystem access to trusted hosts.
+they retained. The controller decrypts requested values for delivery; database
+records and delivery history stay encrypted. Restrict broker and filesystem
+access to trusted hosts, and use AMQPS for network secret delivery.
 
 ### Request a secret during execution
 
