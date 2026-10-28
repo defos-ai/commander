@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
@@ -60,7 +59,7 @@ type dependencies struct {
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
 	TestCleaner       frameworktesting.TestCleaner
-	CatalogClient     *packages.Client
+	CatalogStore      agents.CatalogStore
 	mongo             *mongostore.MongoStore
 	s3                *s3store.S3Store
 	closers           []func() error
@@ -82,11 +81,6 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 			err = errors.Join(err, deps.Close())
 		}
 	}()
-	deps.CatalogClient = packages.NewClient(nil)
-	deps.closers = append(deps.closers, func() error {
-		deps.CatalogClient.CloseIdleConnections()
-		return nil
-	})
 	deps.Bus, err = createBus(ctx, configuration.busURL)
 	if err != nil {
 		return nil, fmt.Errorf("bus-url: %w", err)
@@ -119,6 +113,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	deps.AgentStore, err = deps.createAgentStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.CatalogStore, err = deps.createCatalogStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("database-url catalog: %w", err)
 	}
 	deps.MissionStore, err = deps.createMissionStore(ctx, configuration.databaseURL)
 	if err != nil {
@@ -221,6 +219,27 @@ func (d *dependencies) createAgentStore(ctx context.Context, rawURL string) (age
 		return mongoagents.NewAgentMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported agent store scheme %q", scheme)
+	}
+}
+
+func (d *dependencies) createCatalogStore(ctx context.Context, rawURL string) (agents.CatalogStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fsagents.NewCatalogFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoagents.NewCatalogMongoStore(d.mongo), nil
+	default:
+		return nil, fmt.Errorf("unsupported agent catalog store scheme %q", scheme)
 	}
 }
 

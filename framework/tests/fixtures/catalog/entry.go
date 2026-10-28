@@ -14,3 +14,14 @@ func Entry() agents.CatalogEntry {
 		Visibility: packages.Public, Version: 1, CreatedAt: created, UpdatedAt: created,
 	}
 }
+
+func TrustedEntry() agents.CatalogEntry {
+	entry := Entry()
+	entry.Package = "github.com/example/alpha-agent@v1.2.3"
+	entry.Version = 2
+	entry.Trusted = true
+	entry.UpdatedAt = entry.CreatedAt.Add(time.Second)
+	entry.TrustUpdatedBy = "catalog-operator"
+	entry.TrustUpdatedAt = entry.UpdatedAt
+	return entry
+}

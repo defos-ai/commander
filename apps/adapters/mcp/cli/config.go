@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	missionsmcp "github.com/defos-ai/commander/apps/adapters/mcp"
 	"github.com/defos-ai/commander/framework/host"
 )
 
@@ -19,7 +17,6 @@ type config struct {
 	busURL        string
 	storageURL    string
 	databaseURL   string
-	catalogURL    string
 	listenAddress string
 	runtime       string
 	allowedHosts  []string
@@ -46,7 +43,6 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 		fmt.Fprintln(stderr, "Send commands to the controller over the bus and query its stores; serve /mcp, /healthz and /aboutz.")
 		fmt.Fprintln(stderr, "Use the same bus-url, storage-url and database-url as commander-controller.")
 		fmt.Fprintln(stderr, "Set MCP_TOKEN for bearer authentication. Use 'commander-mcp credentials' to look it up.")
-		fmt.Fprintln(stderr, "AGENT_CATALOG_URL overrides the public agent catalog.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -65,11 +61,6 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 	result.busURL = host.Value(busURL, provided["bus-url"], "BUS_URL", filepath.Join("state", "bus"))
 	result.storageURL = host.Value(storageURL, provided["storage-url"], "STORAGE_URL", filepath.Join("state", "storage"))
 	result.databaseURL = host.Value(databaseURL, provided["database-url"], "DATABASE_URL", filepath.Join("state", "database"))
-	result.catalogURL = host.Value("", false, "AGENT_CATALOG_URL", missionsmcp.DefaultAgentCatalogURL)
-	catalogSource, err := url.Parse(result.catalogURL)
-	if err != nil || catalogSource.Scheme != "https" || catalogSource.Hostname() == "" || catalogSource.User != nil || catalogSource.Opaque != "" || catalogSource.RawQuery != "" || catalogSource.ForceQuery || catalogSource.Fragment != "" {
-		return config{}, errors.New("AGENT_CATALOG_URL must be an HTTPS URL without credentials, query or fragment")
-	}
 	result.runtime = host.Value(result.runtime, provided["runtime"], "MCP_RUNTIME", "native")
 	switch result.runtime {
 	case "native", "docker", "docker-compose":

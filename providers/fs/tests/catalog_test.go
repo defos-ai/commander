@@ -78,7 +78,10 @@ func TestCatalogFsStoreRejectsInvalidReplacementTransitions(t *testing.T) {
 		{"stale expected version", 1, func(*agents.CatalogEntry) {}},
 		{"skipped version", 2, func(entry *agents.CatalogEntry) { entry.Version++ }},
 		{"creation time changed", 2, func(entry *agents.CatalogEntry) { entry.CreatedAt = entry.CreatedAt.Add(-time.Nanosecond) }},
-		{"update time regressed", 2, func(entry *agents.CatalogEntry) { entry.UpdatedAt = current.UpdatedAt.Add(-time.Nanosecond) }},
+		{"update time regressed", 2, func(entry *agents.CatalogEntry) {
+			entry.UpdatedAt = current.UpdatedAt.Add(-time.Nanosecond)
+			entry.TrustUpdatedAt = entry.UpdatedAt
+		}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			next := fixtures.CatalogReplacement(current, true)

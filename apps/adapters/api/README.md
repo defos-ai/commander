@@ -50,6 +50,19 @@ Saving does not require installed agents or start work. Names are unique:
 an existing name returns `409 mission_exists`. After an uncertain save, read
 the mission by name before retrying. Keep secret values out of definitions.
 
+## Agent catalog
+
+Use `/api/v1/catalog-agents` to list or create package entries; API and MCP's
+`get_agent_catalog` read the same database. Creation accepts `name`, `description`,
+`package` and `visibility`, and starts untrusted. Defaults are not seeded yet.
+
+Read `/api/v1/catalog-agents/{package}` for the current version, then send
+`PATCH /api/v1/catalog-agents/{package}` with `{"version":1,"trusted":true}`
+to approve that exact release, or `false` to revoke it. Encode the full canonical
+package as one path segment. Approving `@stable` is rejected; use an exact release.
+After `409 catalog_conflict` or an uncertain write, reread before deciding again.
+Trust is saved management metadata; controller enforcement follows separately.
+
 ## Operation commands
 
 Follow the [operation workflow](../README.md#operation-workflow): start an

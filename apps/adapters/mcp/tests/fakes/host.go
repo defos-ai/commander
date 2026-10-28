@@ -21,12 +21,6 @@ func (transport BearerTransport) RoundTrip(request *http.Request) (*http.Respons
 	return transport.Next.RoundTrip(request)
 }
 
-type CatalogTransport func(*http.Request) (*http.Response, error)
-
-func (transport CatalogTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	return transport(request)
-}
-
 type EventWaitStore struct {
 	operations.OperationStore
 	reads   atomic.Int32

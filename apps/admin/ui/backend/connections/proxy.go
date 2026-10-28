@@ -8,8 +8,8 @@ import (
 )
 
 func (h *Handler) proxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
-		methodNotAllowed(w, "GET, HEAD, POST, PUT, DELETE")
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+		methodNotAllowed(w, "GET, HEAD, POST, PUT, PATCH, DELETE")
 		return
 	}
 	target, err := normalizeBase(r.URL.Query().Get("url"))

@@ -11,7 +11,6 @@ import (
 
 	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
 	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
-	"github.com/defos-ai/commander/framework/agent/packages"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
@@ -104,11 +103,11 @@ func Session(t *testing.T, config adapter.Config) (context.Context, *sdkmcp.Clie
 	check(err)
 	t.Cleanup(func() { check(operations.Close()) })
 	config.Operations = operations
-	if config.CatalogClient == nil {
-		config.CatalogClient = packages.NewClient(nil)
-		t.Cleanup(config.CatalogClient.CloseIdleConnections)
-	}
 	database, storage := filepath.Join(root, "database"), filepath.Join(root, "storage")
+	if config.CatalogStore == nil {
+		config.CatalogStore, err = fsagents.NewCatalogFsStore(database)
+		check(err)
+	}
 	config.AgentStore, err = fsagents.NewAgentFsStore(database)
 	check(err)
 	if config.MissionStore == nil {

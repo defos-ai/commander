@@ -24,17 +24,24 @@ func OpenCatalogStore(t *testing.T, root string) *agentfs.CatalogFsStore {
 
 func CatalogEntry(number int, trusted bool) agents.CatalogEntry {
 	stamp := time.Date(2026, 10, 28, 10, 0, 0, 123456789, time.UTC)
-	return agents.CatalogEntry{
+	entry := agents.CatalogEntry{
 		Name: fmt.Sprintf("fixture-%d", number), Description: "Catalog package fixture.",
 		Package: fmt.Sprintf("github.com/example/agent-%d@v0.2.0", number), Visibility: packages.Public,
 		Trusted: trusted, Version: 1, CreatedAt: stamp, UpdatedAt: stamp,
 	}
+	if trusted {
+		entry.TrustUpdatedBy = "catalog-operator"
+		entry.TrustUpdatedAt = stamp
+	}
+	return entry
 }
 
 func CatalogReplacement(entry agents.CatalogEntry, trusted bool) agents.CatalogEntry {
 	entry.Version++
 	entry.Trusted = trusted
 	entry.UpdatedAt = entry.UpdatedAt.Add(time.Nanosecond)
+	entry.TrustUpdatedBy = "catalog-operator"
+	entry.TrustUpdatedAt = entry.UpdatedAt
 	return entry
 }
 

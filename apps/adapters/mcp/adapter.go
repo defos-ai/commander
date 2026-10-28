@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/defos-ai/commander/framework/agent/packages"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -72,6 +71,7 @@ type Config struct {
 	SessionStore      sessions.Store
 	Operations        controllercommands.Operations
 	AgentStore        agentmodel.AgentStore
+	CatalogStore      agentmodel.CatalogStore
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
 	ExecutionStore    executions.ExecutionStore
@@ -80,10 +80,6 @@ type Config struct {
 	ArtifactFileStore artifacts.ArtifactFileStore
 	ActionStore       actionmodel.ActionStore
 	Logger            *slog.Logger
-	// CatalogClient is caller-owned. CatalogURL is deployment configuration,
-	// never tool input; an empty value selects the official discovery catalog.
-	CatalogClient *packages.Client
-	CatalogURL    string
 	// TestCleaner is exposed only when ENV=tests. Call between settled tests.
 	TestCleaner frameworktesting.TestCleaner
 }
@@ -94,11 +90,8 @@ func NewServer(config Config) (*mcp.Server, error) {
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil || config.ActionStore == nil {
 		return nil, errors.New("MCP requires operation commands and inventory, mission, operation, execution, report, artifact metadata, artifact file and action stores")
 	}
-	if config.CatalogClient == nil {
-		return nil, errors.New("MCP requires an agent catalog client")
-	}
-	if config.CatalogURL == "" {
-		config.CatalogURL = DefaultAgentCatalogURL
+	if config.CatalogStore == nil {
+		return nil, errors.New("MCP requires an agent catalog store")
 	}
 	server := mcp.NewServer(&mcp.Implementation{
 		Name: "commander-mcp", Version: "0.2.0",

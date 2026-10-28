@@ -7,7 +7,8 @@ Browse [`agents.yaml`](agents.yaml), or ask Playground:
 
 > Install the browser agent.
 
-For MCP clients, use `get_agent_catalog` and pass the selected package and
+API and MCP read the deployment's saved catalog. For MCP clients, use
+`get_agent_catalog` and pass the selected package and
 visibility to the [installation workflow](../apps/agents/spawner/README.md#during-a-mission).
 You can also install any compatible GitHub package directly.
 
@@ -42,6 +43,18 @@ agents:
     visibility: public
 ```
 
-Set `AGENT_CATALOG_URL` on MCP to use another public HTTPS catalog.
+Add deployment entries through `POST /api/v1/catalog-agents` with `name`,
+`description`, a full canonical `package` selector and `visibility`. New entries
+are untrusted. Read them through `GET /api/v1/catalog-agents` or MCP's
+`get_agent_catalog`. Default seeding from `agents.yaml` is deferred, so a new
+deployment's saved catalog starts empty.
+
+To approve or revoke an exact release, use
+`PATCH /api/v1/catalog-agents/{package}` with the current `version` and
+`trusted: true` or `false`. Encode the full package as one path segment. Approval
+requires an exact version; `@stable` remains a moving discovery reference.
+Read the entry before retrying an uncertain write. Saved trust does not yet
+enforce installation or secret access.
+
 See [package publishing](../docs/agent-packages.md) and [AGENTS.md](AGENTS.md)
 for validation and catalog rules.

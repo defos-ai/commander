@@ -35,6 +35,9 @@ func LogAPIConfig(t *testing.T) api.Config {
 		SwaggerEnabled: true, Operations: fakes.NewFailedStart(errors.New("controller is unavailable")),
 	}
 	var err error
+	if config.CatalogStore, err = fsagents.NewCatalogFsStore(root); err != nil {
+		t.Fatal(err)
+	}
 	if config.OperationStore, err = fsoperations.NewOperationFsStore(root); err != nil {
 		t.Fatal(err)
 	}

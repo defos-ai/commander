@@ -14,7 +14,6 @@ import (
 	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/agent/packages"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
@@ -152,8 +151,8 @@ func NewLateArtifact(t *testing.T) *LateArtifact {
 	check(err)
 	t.Cleanup(func() { cleanupError(commands.Close()) })
 	config.Operations = commands
-	config.CatalogClient = packages.NewClient(nil)
-	t.Cleanup(config.CatalogClient.CloseIdleConnections)
+	config.CatalogStore, err = fsagents.NewCatalogFsStore(filepath.Join(root, "database"))
+	check(err)
 	server, err := adapter.NewServer(config)
 	check(err)
 	serverTransport, clientTransport := sdkmcp.NewInMemoryTransports()

@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	agentendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/agents"
 	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
 	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
@@ -45,7 +46,6 @@ func openAPIDocument() ([]byte, error) {
 		{"Action", reflect.TypeFor[models.ActionResponse]()},
 		{"RuntimeSession", reflect.TypeFor[models.RuntimeSessionResponse]()},
 		{"ControlSessionRequest", reflect.TypeFor[models.ControlSessionRequest]()},
-		{"Agent", reflect.TypeFor[models.AgentResponse]()},
 		{"Controller", reflect.TypeFor[models.ControllerResponse]()},
 		{"Report", reflect.TypeFor[models.ReportResponse]()},
 		{"Artifact", reflect.TypeFor[models.ArtifactResponse]()},
@@ -96,10 +96,6 @@ func openAPIDocument() ([]byte, error) {
 			for _, field := range []string{"id", "scope_id", "request_id"} {
 				schema.Properties[field].Format = "uuid"
 			}
-		case "Agent":
-			schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
-			schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
-			schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
 		case "Controller":
 			schema.Properties["agent_selector"].Description = "Policy used to select an agent for each task."
 			schema.Properties["rule_selector"].Description = "Policy used to select mission rules when starting an operation."
@@ -142,7 +138,6 @@ func openAPIDocument() ([]byte, error) {
 	}{
 		{"missions", "Mission", "mission_name", "mission_not_found"},
 		{"actions", "Action", "action_name", "action_not_found"},
-		{"agents", "Agent", "agent_id", "agent_not_found"},
 		{"controllers", "Controller", "controller_id", "unknown_controller"},
 	} {
 		listSchema := map[string]any{
@@ -172,6 +167,9 @@ func openAPIDocument() ([]byte, error) {
 		return nil, err
 	}
 	if err := secretendpoints.RegisterOpenAPI(paths, components, options); err != nil {
+		return nil, err
+	}
+	if err := agentendpoints.RegisterOpenAPI(paths, components, options); err != nil {
 		return nil, err
 	}
 	return json.Marshal(map[string]any{

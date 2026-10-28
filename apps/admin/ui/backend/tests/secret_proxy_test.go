@@ -10,7 +10,7 @@ import (
 	"github.com/defos-ai/commander/apps/admin/ui/backend/tests/fixtures"
 )
 
-func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
+func TestSecretAndCatalogMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 	type mutation struct{ method, path, body, contentType string }
 	observed := make(chan mutation, 8)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +25,7 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Error("could not read proxied secret mutation")
+			t.Error("could not read proxied API mutation")
 		}
 		observed <- mutation{r.Method, r.RequestURI, string(body), r.Header.Get("Content-Type")}
 		if r.Method == http.MethodDelete {
@@ -49,6 +49,7 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 	}{
 		{http.MethodPut, "/api/v1/secrets/GITHUB_TOKEN", `{"id":"00000000-0000-4000-8000-000000000001","version":1,"value":"private-test-value"}`, http.StatusOK},
 		{http.MethodDelete, "/api/v1/secrets/GITHUB_TOKEN?id=00000000-0000-4000-8000-000000000001&version=2", "", http.StatusNoContent},
+		{http.MethodPatch, "/api/v1/catalog-agents/github.com%2facme%2fworker-agent@v1.2.3", `{"trusted":true,"version":1}`, http.StatusOK},
 	} {
 		t.Run(tc.method, func(t *testing.T) {
 			path := fixtures.ProxyPath(upstream.URL, tc.path)
@@ -66,16 +67,16 @@ func TestSecretMutationsUseAuthenticatedSameOriginProxy(t *testing.T) {
 				}
 				result := fixtures.ServeUI(handler, request)
 				if result.Code != status || len(observed) != 0 {
-					t.Fatalf("%s did not reject the secret mutation before forwarding", boundary)
+					t.Fatalf("%s did not reject the API mutation before forwarding", boundary)
 				}
 			}
 			result := fixtures.ServeUI(handler, fixtures.BrowserRequest(tc.method, path, tc.body, cookie))
 			if result.Code != tc.status || len(observed) != 1 || result.Header().Get("Cache-Control") != "no-store" {
-				t.Fatal("secret mutation was not forwarded exactly once with uncacheable response")
+				t.Fatal("API mutation was not forwarded exactly once with uncacheable response")
 			}
 			request := <-observed
 			if request.method != tc.method || request.path != tc.path || request.body != tc.body || request.contentType != "application/json" {
-				t.Fatal("proxy changed secret mutation method, key, identity, version or body")
+				t.Fatal("proxy changed API mutation method, escaped path, identity, version or body")
 			}
 			if tc.method == http.MethodDelete && result.Body.Len() != 0 {
 				t.Fatal("delete response must have no body")

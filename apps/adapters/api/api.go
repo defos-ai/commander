@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
+	agentendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/agents"
 	operationendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/operations"
 	secretendpoints "github.com/defos-ai/commander/apps/adapters/api/endpoints/secrets"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
@@ -36,6 +37,7 @@ type Config struct {
 	OperationStore     operations.OperationStore
 	ExecutionStore     executions.ExecutionStore
 	AgentStore         agents.AgentStore
+	CatalogStore       agents.CatalogStore
 	ControllerStore    controllers.ControllerStore
 	ActionStore        actions.ActionStore
 	ReportStore        reports.ReportStore
@@ -55,9 +57,9 @@ func NewHandler(config Config) (http.Handler, error) {
 		return nil, err
 	}
 	if config.Operations == nil || config.MissionStore == nil || config.OperationStore == nil || config.ExecutionStore == nil ||
-		config.AgentStore == nil || config.ControllerStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
+		config.AgentStore == nil || config.CatalogStore == nil || config.ControllerStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil {
-		return nil, errors.New("API requires controller commands and mission, operation, execution, agent, controller, action, report, artifact metadata and artifact file stores")
+		return nil, errors.New("API requires controller commands and mission, operation, execution, agent, catalog, controller, action, report, artifact metadata and artifact file stores")
 	}
 	mux := http.NewServeMux()
 	about := config.Deployment.response()
@@ -66,7 +68,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	})
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
-	endpoints.RegisterAgents(mux, config.AgentStore)
+	agentendpoints.Register(mux, config.AgentStore, config.CatalogStore)
 	endpoints.RegisterSessions(mux, config.SessionStore, config.AgentStore, config.Operations)
 	endpoints.RegisterControllers(mux, config.ControllerStore)
 	endpoints.RegisterReports(mux, config.ReportStore)

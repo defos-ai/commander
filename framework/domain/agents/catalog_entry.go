@@ -2,20 +2,24 @@ package agents
 
 import (
 	"errors"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/defos-ai/commander/framework/agent/packages"
 )
 
 type CatalogEntry struct {
-	Name        string              `json:"name"`
-	Description string              `json:"description"`
-	Package     string              `json:"package"`
-	Visibility  packages.Visibility `json:"visibility"`
-	Trusted     bool                `json:"trusted"`
-	Version     uint64              `json:"version"`
-	CreatedAt   time.Time           `json:"created_at"`
-	UpdatedAt   time.Time           `json:"updated_at"`
+	Name           string              `json:"name"`
+	Description    string              `json:"description"`
+	Package        string              `json:"package"`
+	Visibility     packages.Visibility `json:"visibility"`
+	Trusted        bool                `json:"trusted"`
+	TrustUpdatedBy string              `json:"trust_updated_by,omitempty"`
+	TrustUpdatedAt time.Time           `json:"trust_updated_at,omitzero"`
+	Version        uint64              `json:"version"`
+	CreatedAt      time.Time           `json:"created_at"`
+	UpdatedAt      time.Time           `json:"updated_at"`
 }
 
 func (entry CatalogEntry) Validate() error {
@@ -33,6 +37,24 @@ func (entry CatalogEntry) Validate() error {
 	}
 	if !validCatalogTime(entry.CreatedAt) || !validCatalogTime(entry.UpdatedAt) || entry.UpdatedAt.Before(entry.CreatedAt) {
 		return errors.New("catalog entry timestamps must be valid and update must not precede creation")
+	}
+	return entry.validateTrust()
+}
+
+func (entry CatalogEntry) validateTrust() error {
+	if entry.Trusted {
+		if _, err := packages.ParseReference(entry.Package); err != nil {
+			return errors.New("trusted catalog entries require an exact release package")
+		}
+	}
+	if !entry.Trusted && entry.TrustUpdatedBy == "" && entry.TrustUpdatedAt.IsZero() {
+		return nil
+	}
+	if strings.TrimSpace(entry.TrustUpdatedBy) == "" || strings.ContainsFunc(entry.TrustUpdatedBy, unicode.IsControl) {
+		return errors.New("catalog trust decisions require a nonblank actor without control characters")
+	}
+	if !validCatalogTime(entry.TrustUpdatedAt) || entry.TrustUpdatedAt.Before(entry.CreatedAt) || entry.TrustUpdatedAt.After(entry.UpdatedAt) {
+		return errors.New("catalog trust decision time must be valid and within creation and update times")
 	}
 	return nil
 }

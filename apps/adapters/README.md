@@ -44,8 +44,9 @@ You can also install a GitHub repository URL without a catalog entry:
 - For private repositories, set `visibility: private`. Supply tokens through
   managed secrets or the spawner environment; never put them in tool inputs.
 
-Set `AGENT_CATALOG_URL` on MCP to use a different public HTTPS
-[catalog](../../catalog/README.md).
+API and MCP share the deployment's saved [catalog](../../catalog/README.md).
+Add packages through `/api/v1/catalog-agents`; new deployments start with an
+empty catalog until entries are added. Default catalog seeding will follow later.
 
 ### Create missions
 

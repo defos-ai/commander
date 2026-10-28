@@ -17,9 +17,11 @@ func TestCatalogMongoStorePersistsIndependentReleaseEntries(t *testing.T) {
 	database := fixtures.OpenStore(t, "agent_catalog")
 	catalog := agentmongo.NewCatalogMongoStore(database)
 	first := fixtures.CatalogEntry("alpha", "github.com/defos-ai/alpha-agent@v0.3.0")
+	first.Trusted = true
+	first.TrustUpdatedBy = "catalog-operator"
+	first.TrustUpdatedAt = first.UpdatedAt
 	second := fixtures.CatalogEntry("alpha", "github.com/defos-ai/alpha-agent@v0.3.1")
 	stable := fixtures.CatalogEntry("alpha", "github.com/defos-ai/alpha-agent@stable")
-	stable.Trusted = true
 	for _, entry := range []agents.CatalogEntry{second, first, stable} {
 		if err := catalog.Create(t.Context(), entry); err != nil {
 			t.Fatal(err)
@@ -51,6 +53,8 @@ func TestCatalogMongoStorePreservesRevocationAndRejectsStaleUpdates(t *testing.T
 	catalog := agentmongo.NewCatalogMongoStore(database)
 	initial := fixtures.CatalogEntry("worker", "github.com/defos-ai/worker-agent@v0.3.0")
 	initial.Trusted = true
+	initial.TrustUpdatedBy = "catalog-operator"
+	initial.TrustUpdatedAt = initial.UpdatedAt
 	if err := catalog.Create(t.Context(), initial); err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +79,7 @@ func TestCatalogMongoStorePreservesRevocationAndRejectsStaleUpdates(t *testing.T
 				next.CreatedAt = next.CreatedAt.Add(-time.Nanosecond)
 			case "update time":
 				next.UpdatedAt = initial.UpdatedAt
+				next.TrustUpdatedAt = next.UpdatedAt
 			case "version":
 				next.Version++
 			case "overflow":
@@ -90,7 +95,7 @@ func TestCatalogMongoStorePreservesRevocationAndRejectsStaleUpdates(t *testing.T
 	if err != nil || !reflect.DeepEqual(got, revoked) {
 		t.Fatalf("rejected trust changes modified saved revocation: %v", err)
 	}
-	missing := fixtures.CatalogReplacement(fixtures.CatalogEntry("missing", "github.com/defos-ai/missing-agent@stable"), true)
+	missing := fixtures.CatalogReplacement(fixtures.CatalogEntry("missing", "github.com/defos-ai/missing-agent@v0.3.0"), true)
 	if err := catalog.Replace(t.Context(), missing, 1); !errors.Is(err, agents.ErrUnknownCatalogEntry) {
 		t.Fatalf("missing replacement returned %v", err)
 	}
@@ -154,7 +159,7 @@ func TestCatalogMongoStoreRejectsCorruptedIndexedState(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			database := fixtures.OpenStore(t, "agent_catalog")
 			catalog := agentmongo.NewCatalogMongoStore(database)
-			entry := fixtures.CatalogEntry("worker", "github.com/defos-ai/worker-agent@stable")
+			entry := fixtures.CatalogEntry("worker", "github.com/defos-ai/worker-agent@v0.3.0")
 			if err := catalog.Create(t.Context(), entry); err != nil {
 				t.Fatal(err)
 			}

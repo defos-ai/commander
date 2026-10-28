@@ -159,7 +159,7 @@
   Writes must not retry automatically;
   conflicts and uncertain outcomes require a fresh metadata read. Clear dialogs
   when their connection/session changes and ignore stale responses. The proxy
-  supports PUT and DELETE with the same session/origin checks as POST; public
+  supports PUT, PATCH and DELETE with the same session/origin checks as POST; public
   probes and `/aboutz` remain read-only.
 - Operation secret notices use preflight's explicit `agent_type` and
   `missing_requirements` with `kind: secret` on blocked actions, only while the

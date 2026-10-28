@@ -39,27 +39,31 @@ Read the [root guide](../AGENTS.md) and
   The spawner owns manifest and executable downloads. Shared metadata code must
   remain independent of the spawner and must not require this checkout at runtime.
 - MCP exposes `get_agent_catalog` for discovery, returning public entries first
-  and sorting aliases alphabetically within each visibility group. Each entry
-  retains its package and visibility. Version resolution belongs to the
-  spawner. `AGENT_CATALOG_URL` is deployment-owned on MCP; loading
-  is lazy and catalog failure must not prevent direct installs. Spawner action
+  and sorting aliases alphabetically within each visibility group, with package
+  selectors breaking ties. It reads the same deployment `CatalogStore` as API,
+  preserving saved trust and business versions. No remote fetch or automatic seed
+  happens during reads or startup. Version resolution belongs to the spawner;
+  catalog failure must not prevent direct installs. Spawner action
   inputs accept GitHub URLs, bare references, `@stable` or exact pins;
   aliases remain discovery names, not installation inputs.
 
-## Persisted catalog foundation
+## Persisted catalog
 
 - [`CatalogEntry`](../framework/domain/agents/catalog_entry.go) and
   [`CatalogStore`](../framework/domain/agents/catalog_store.go) describe saved
   package metadata and trust state independently of live agent inventory.
   FS uses `agent-catalog.json`; Mongo uses `agent_catalog`.
 - The full canonical package selector is the key. Aliases are display metadata;
-  `@stable` must not silently imply repository-wide authorization. Future operator
-  approvals must bind the resolved release and verified installation provenance.
+  `@stable` must not silently imply repository-wide authorization. API approvals
+  require exact releases. Runtime enforcement will bind these to verified
+  installation provenance in a later step.
 - Create-only insertion and versioned replacement preserve edited or revoked
   records. There is no unrestricted upsert or delete that could reset trust.
+  Explicit trust decisions save the authenticated API actor and decision time;
+  untouched untrusted entries omit both. API mutation bodies cannot set audit fields.
 - Seeding is postponed. Implement it later through Admin CLI and the API, like
-  mission seeding; never load defaults automatically in the controller. HTTP/MCP
-  catalog integration and trust enforcement are separate later steps.
+  mission seeding; never load defaults automatically in the controller. MCP trust
+  writes with operator confirmation and runtime enforcement remain later steps.
 
 ## Validation
 

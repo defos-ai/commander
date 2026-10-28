@@ -58,6 +58,7 @@ type dependencies struct {
 	ArtifactStore      artifacts.ArtifactStore
 	ArtifactFileStore  artifacts.ArtifactFileStore
 	AgentStore         agents.AgentStore
+	CatalogStore       agents.CatalogStore
 	ControllerStore    controllers.ControllerStore
 	MissionStore       missions.MissionStore
 	OperationStore     operations.OperationStore
@@ -120,6 +121,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	deps.AgentStore, err = deps.createAgentStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.CatalogStore, err = deps.createCatalogStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("catalog database: %w", err)
 	}
 	deps.ControllerStore, err = deps.createControllerStore(ctx, configuration.databaseURL)
 	if err != nil {
@@ -237,6 +242,27 @@ func (d *dependencies) createAgentStore(ctx context.Context, rawURL string) (age
 		return mongoagents.NewAgentMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported agent store scheme %q", scheme)
+	}
+}
+
+func (d *dependencies) createCatalogStore(ctx context.Context, rawURL string) (agents.CatalogStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fsagents.NewCatalogFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoagents.NewCatalogMongoStore(d.mongo), nil
+	default:
+		return nil, fmt.Errorf("unsupported catalog store scheme %q", scheme)
 	}
 }
 

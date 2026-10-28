@@ -265,8 +265,8 @@
   parsing, strict discovery catalogs and bounded remote catalog loading. Selectors
   accept GitHub HTTPS URLs or canonical references, with omitted versions meaning
   `@stable`; exact persisted references remain strict. The official source is
-  [`catalog/agents.yaml`](../catalog/agents.yaml); runtime readers fetch a configured
-  remote source without requiring a checkout. Catalog entries require repository
+  [`catalog/agents.yaml`](../catalog/agents.yaml); its remote loader remains separate
+  from deployment catalog queries. Catalog entries require repository
   `visibility: public | private`; this describes access, not trust or image
   visibility. The shared catalog client remains anonymous. Catalog entries
   support discovery, not an enforced installation allowlist. The spawner owns
@@ -283,8 +283,11 @@
   display aliases, not runtime identity. Stores reserve new entries at version 1
   and replace only the expected business version, preserving creation time and
   advancing the version once. Read after uncertain writes before mutating again.
-  Saved trust is metadata in this foundation; runtime authorization is not wired
-  yet. Seeding belongs in a later Admin CLI workflow through the API, following
+  Explicit trust decisions retain `TrustUpdatedBy` and `TrustUpdatedAt`; grants
+  require an exact release, and initial untrusted records may omit the audit pair.
+  Audit times stay within the record timestamps. Saved trust is metadata;
+  runtime authorization is not wired yet. Seeding belongs in a later Admin CLI
+  workflow through the API, following
   mission seeding, with existing records preserved.
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.

@@ -24,6 +24,8 @@ func CatalogReplacement(entry agents.CatalogEntry, trusted bool) agents.CatalogE
 	entry.Version++
 	entry.Trusted = trusted
 	entry.UpdatedAt = entry.UpdatedAt.Add(time.Nanosecond)
+	entry.TrustUpdatedBy = "catalog-operator"
+	entry.TrustUpdatedAt = entry.UpdatedAt
 	return entry
 }
 

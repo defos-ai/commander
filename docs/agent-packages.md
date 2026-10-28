@@ -27,9 +27,10 @@ stable version marked Latest; it does not fall back to other tags. Each new
 installation creates an instance. Check the result and action readiness before
 starting dependent work.
 
-The [catalog](../catalog/README.md) helps discovery; it is not an installation
-allowlist or a security review. To use a different catalog, set MCP's
-`AGENT_CATALOG_URL` to a public HTTPS YAML URL.
+The deployment's saved [catalog](../catalog/README.md) helps discovery through
+API and MCP. Add entries through `/api/v1/catalog-agents`; default seeding is
+deferred. Saved trust is management metadata until controller enforcement is
+implemented; it does not currently restrict installation or secret delivery.
 
 ### Private repositories
 

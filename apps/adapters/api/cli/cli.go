@@ -95,6 +95,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		Deployment: configuration.deployment,
 		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore, SessionStore: deps.SessionStore,
 		ExecutionStore: deps.ExecutionStore,
+		CatalogStore:   deps.CatalogStore,
 		AgentStore:     deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ControllerStore: deps.ControllerStore,
 		ArtifactStore:   deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
