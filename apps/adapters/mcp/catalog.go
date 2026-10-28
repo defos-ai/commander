@@ -34,7 +34,12 @@ func addCatalogTools(server *mcp.Server, config Config) {
 					Name: name, Description: entry.Description, Package: entry.Package, Visibility: entry.Visibility,
 				})
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(entries, func(i, j int) bool {
+				if entries[i].Visibility != entries[j].Visibility {
+					return entries[i].Visibility == packages.Public
+				}
+				return entries[i].Name < entries[j].Name
+			})
 			return agentCatalog{Agents: entries}, nil
 		})
 }

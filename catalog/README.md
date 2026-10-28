@@ -1,11 +1,11 @@
 # Agent catalog
 
-Find reusable agents for workflows such as building software and reviewing
-websites. The catalog pairs capability descriptions with package references,
-so operators and model clients can select specialist agents to install.
+Find reusable agents for workflows such as building software, browsing websites
+and security operations. The catalog pairs capability descriptions with package
+references, so operators and model clients can select specialist agents to install.
 Browse [`agents.yaml`](agents.yaml), or ask Playground:
 
-> Install the web agent.
+> Install the browser agent.
 
 For MCP clients, use `get_agent_catalog` and pass the selected package and
 visibility to the [installation workflow](../apps/agents/spawner/README.md#during-a-mission).

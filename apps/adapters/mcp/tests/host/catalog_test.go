@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -19,17 +20,6 @@ func TestMCPAgentCatalog(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "private-token-sentinel")
 	t.Setenv("GH_TOKEN", "private-token-sentinel")
 	const source = "https://catalog.example/agents.yaml"
-	const catalog = `schema_version: 1
-agents:
-  zeta:
-    description: Private package fixture.
-    package: github.com/private-org/private-agent@v1.2.3
-    visibility: private
-  alpha:
-    description: Public package fixture.
-    package: github.com/acme/public-agent@stable
-    visibility: public
-`
 	var requests atomic.Int32
 	var catalogUnavailable atomic.Bool
 	client := packages.NewClient(fakes.CatalogTransport(func(request *http.Request) (*http.Response, error) {
@@ -42,7 +32,7 @@ agents:
 		body, status := "", http.StatusOK
 		switch request.URL.String() {
 		case source:
-			body = catalog
+			body = hostfixtures.AgentCatalog
 			if catalogUnavailable.Load() {
 				status = http.StatusServiceUnavailable
 			}
@@ -80,10 +70,16 @@ agents:
 		} `json:"agents"`
 	}
 	call("get_agent_catalog", map[string]any{}, &listing)
-	if len(listing.Agents) != 2 || listing.Agents[0].Name != "alpha" || listing.Agents[1].Name != "zeta" ||
-		listing.Agents[0].Description != "Public package fixture." || listing.Agents[0].Package != "github.com/acme/public-agent@stable" || listing.Agents[0].Visibility != "public" ||
-		listing.Agents[1].Description != "Private package fixture." || listing.Agents[1].Package != "github.com/private-org/private-agent@v1.2.3" || listing.Agents[1].Visibility != "private" {
-		t.Fatalf("agent catalog lost sorted entries or visibility: %+v", listing)
+	want := []struct {
+		Name, Description, Package, Visibility string
+	}{
+		{"beta", "First public package fixture.", "github.com/acme/beta-agent@v1.2.3", "public"},
+		{"zeta", "Second public package fixture.", "github.com/acme/zeta-agent@stable", "public"},
+		{"alpha", "First private package fixture.", "github.com/private-org/alpha-agent@v1.2.3", "private"},
+		{"gamma", "Second private package fixture.", "github.com/private-org/gamma-agent@stable", "private"},
+	}
+	if !reflect.DeepEqual(listing.Agents, want) {
+		t.Fatalf("agent catalog lost public-first ordering, alphabetical group order or metadata: %+v", listing)
 	}
 	for _, args := range []map[string]any{
 		{"url": "https://other.example/agents.yaml"},
@@ -109,7 +105,7 @@ agents:
 	}
 	catalogUnavailable.Store(false)
 	call("get_agent_catalog", map[string]any{}, &listing)
-	if len(listing.Agents) != 2 || requests.Load() != 3 {
+	if !reflect.DeepEqual(listing.Agents, want) || requests.Load() != 3 {
 		t.Fatal("catalog discovery did not recover after the source became available")
 	}
 }

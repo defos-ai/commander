@@ -105,9 +105,9 @@
   Preserve responsibilities in both `list_agents` and `describe_agent` so any
   client can discover an agent's usage guidance.
 - MCP agent discovery lives in `mcp/catalog.go`: `get_agent_catalog` reads
-  the configured catalog and returns a sorted `agents` list with each entry's
-  package and visibility unchanged. The factory owns `CatalogClient` and closes
-  idle connections.
+  the configured catalog and returns an `agents` list with public entries first,
+  then aliases sorted within each visibility group. Preserve each entry's package
+  and visibility. The factory owns `CatalogClient` and closes idle connections.
   `AGENT_CATALOG_URL` defaults to the official HTTPS source; never accept it as
   tool input or fetch metadata during startup. Catalog fetch/parse errors stay tool-local.
   Direct GitHub URLs and references work without catalog membership; aliases are

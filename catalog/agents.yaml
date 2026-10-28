@@ -4,15 +4,39 @@ agents:
     description: Builds Commander agents with Codex, validates and exports source, and publishes reviewed source artifacts to GitHub.
     package: github.com/defos-ai/commander/apps/agents/builder@stable
     visibility: public
-  web:
-    description: Discovers web pages and checks links, SEO, and technology signals over HTTP.
-    package: github.com/defos-ai/commander-web-agent@stable
+  spawner:
+    description: Installs Commander agents from GitHub packages and launches them as native processes, Docker containers, or Kubernetes pods.
+    package: github.com/defos-ai/commander/apps/agents/spawner@stable
     visibility: public
   browser:
-    description: Inspects rendered web pages, checks accessibility, and captures screenshots.
+    description: Smart, dedicated browser agent for navigating web applications, inspecting rendered pages, and capturing screenshots.
     package: github.com/defos-ai/commander-browser-agent@stable
     visibility: public
   example:
     description: Demonstrates Commander agent actions as a template for developing custom agents.
     package: github.com/defos-ai/commander-example-agent@stable
     visibility: public
+  cybersec:
+    description: Comprehensive security agent for red and blue teaming, vulnerability discovery, exploitability validation, and remediation prioritization.
+    package: github.com/defos-ai/cybersec-agent@stable
+    visibility: private
+  fixer:
+    description: Fixes vulnerabilities in source code and prepares remediation patches.
+    package: github.com/defos-ai/fixer-agent@stable
+    visibility: private
+  log-observer:
+    description: Observes application, infrastructure, and security logs, correlates anomalies, and reports findings for investigation.
+    package: github.com/defos-ai/log-observer-agent@stable
+    visibility: private
+  exposure-monitor:
+    description: Protects internet-facing resources by identifying exposures and coordinating remediation.
+    package: github.com/defos-ai/exposure-monitor-agent@stable
+    visibility: private
+  identity-guard:
+    description: Identifies accounts with leaked credentials and revokes their access.
+    package: github.com/defos-ai/identity-guard-agent@stable
+    visibility: private
+  mail-filter:
+    description: Detects and blocks phishing and malware in inbound email.
+    package: github.com/defos-ai/mail-filter-agent@stable
+    visibility: private
