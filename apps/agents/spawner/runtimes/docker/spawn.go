@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -40,50 +41,79 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 		return runtimes.Result{}, err
 	}
 	if !exists {
-		saved, err = m.prepare(ctx, requestID, reference)
-		if err != nil {
+		if err := action.RunWithProgress(ctx, "Docker preparation", func() error {
+			var preparationErr error
+			saved, preparationErr = m.prepare(ctx, requestID, reference)
+			return preparationErr
+		}); err != nil {
 			return runtimes.Result{}, err
 		}
 	}
+	var container Container
+	var current *observation
+	if err := action.RunWithProgress(ctx, "Docker launch reconciliation", func() error {
+		var launchErr error
+		container, current, launchErr = m.launch(ctx, saved, exists)
+		return launchErr
+	}); err != nil {
+		return runtimes.Result{}, err
+	}
+	var result runtimes.Result
+	err = action.RunWithProgress(ctx, "Docker registration observation", func() error {
+		var registrationErr error
+		result, registrationErr = m.registered(ctx, saved, container, current)
+		return registrationErr
+	})
+	return result, err
+}
+
+func (m *Manager) launch(ctx context.Context, saved record, exists bool) (Container, *observation, error) {
 	if !exists {
+		if err := m.reserve(ctx, saved); err != nil {
+			return Container{}, nil, err
+		}
 		created, err := m.config.Engine.Create(ctx, Spec{Name: saved.name(), Image: saved.Image, Network: saved.Network, Environment: m.environment(saved), Labels: saved.labels()})
 		if err != nil {
-			return runtimes.Result{}, fmt.Errorf("container creation for %s is uncertain; retry inspects this request: %w", saved.AgentID, err)
+			return Container{}, nil, fmt.Errorf("container creation for %s is uncertain; retry inspects this request: %w", saved.AgentID, err)
 		}
 		if err := m.verify(saved, created); err != nil {
-			return runtimes.Result{}, err
+			return Container{}, nil, err
 		}
 	}
 	container, err := m.inspect(ctx, saved)
 	if err != nil {
-		return runtimes.Result{}, err
+		return Container{}, nil, err
 	}
 	if container.Status != "created" && container.Status != "running" {
-		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task", saved.AgentID, container.Status)
+		return Container{}, nil, fmt.Errorf("agent %s container is %s; a replacement requires a new task", saved.AgentID, container.Status)
 	}
-	if container.Status == "created" && m.ownedIntents[requestID] != saved.Owner {
+	if container.Status == "created" && m.ownedIntents[saved.RequestID] != saved.Owner {
 		// Checkpoints identify the intent, not an exclusive runtime owner. A
 		// restored manager cannot safely compete to Start this container.
-		return runtimes.Result{}, fmt.Errorf("recorded container for %s has not started; launch ownership is uncertain, refusing to start it", saved.AgentID)
+		return Container{}, nil, fmt.Errorf("recorded container for %s has not started; launch ownership is uncertain, refusing to start it", saved.AgentID)
 	}
 	current, err := m.observe(saved)
 	if err != nil {
-		return runtimes.Result{}, err
+		return Container{}, nil, err
 	}
 	if container.Status == "created" {
 		// Only a never-started container may start. An exited instance must not
 		// reuse its identity, even if the executable/image is unchanged.
 		if err := m.config.Engine.Start(ctx, container.ID); err != nil {
-			return runtimes.Result{}, fmt.Errorf("container start for %s is uncertain; retry inspects this instance: %w", saved.AgentID, err)
+			return Container{}, nil, fmt.Errorf("container start for %s is uncertain; retry inspects this instance: %w", saved.AgentID, err)
 		}
 		container, err = m.inspect(ctx, saved)
 		if err != nil {
-			return runtimes.Result{}, err
+			return Container{}, nil, err
 		}
 	}
 	if container.Status != "running" {
-		return runtimes.Result{}, fmt.Errorf("agent %s container is %s; a replacement requires a new task", saved.AgentID, container.Status)
+		return Container{}, nil, fmt.Errorf("agent %s container is %s; a replacement requires a new task", saved.AgentID, container.Status)
 	}
+	return container, current, nil
+}
+
+func (m *Manager) registered(ctx context.Context, saved record, container Container, current *observation) (runtimes.Result, error) {
 	result, err := m.awaitRegistration(ctx, current)
 	if err != nil {
 		return runtimes.Result{}, err
@@ -117,9 +147,6 @@ func (m *Manager) prepare(ctx context.Context, requestID, reference string) (rec
 	}
 	saved := record{Runtime: "docker", RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type, Image: image, Network: m.config.Network, Owner: id.New()}
 	if err := ctx.Err(); err != nil {
-		return record{}, err
-	}
-	if err := m.reserve(ctx, saved); err != nil {
 		return record{}, err
 	}
 	return saved, nil

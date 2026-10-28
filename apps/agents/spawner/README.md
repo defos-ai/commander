@@ -76,6 +76,10 @@ Review the result and the new agent's action readiness, then complete installati
 Install agents in a separate operation before starting missions that need them.
 Only run packages from authors you trust.
 
+Use MCP `operation_logs` or `task_logs` to follow package selection, preparation,
+launch reconciliation and registration waits. Long stages emit periodic liveness
+updates. Use the saved task result and agent readiness to assess the installation.
+
 ### Private GitHub packages
 
 Pass `"visibility":"private"`. The spawner uses its `GITHUB_TOKEN` environment

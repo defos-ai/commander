@@ -36,59 +36,97 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 	if err != nil {
 		return runtimes.Result{}, err
 	}
-	saved, createdUID, err := m.restoreOrCreatePod(ctx, requestID, reference)
+	var saved record
+	var create bool
+	err = action.RunWithProgress(ctx, "Kubernetes preparation", func() error {
+		var err error
+		saved, create, err = m.prepareLaunch(ctx, requestID, reference)
+		return err
+	})
 	if err != nil {
 		return runtimes.Result{}, err
+	}
+	var pod Pod
+	var current *observation
+	err = action.RunWithProgress(ctx, "Kubernetes launch reconciliation", func() error {
+		var err error
+		pod, current, err = m.reconcileLaunch(ctx, saved, create)
+		return err
+	})
+	if err != nil {
+		return runtimes.Result{}, err
+	}
+	var result runtimes.Result
+	err = action.RunWithProgress(ctx, "Kubernetes running Pod and registration observation", func() error {
+		var err error
+		result, err = m.waitReady(ctx, saved, pod.Metadata.UID, current)
+		return err
+	})
+	return result, err
+}
+
+func (m *Manager) prepareLaunch(ctx context.Context, requestID, reference string) (record, bool, error) {
+	saved, exists, err := m.readRecord(ctx, requestID, reference)
+	if err != nil || exists {
+		return saved, false, err
+	}
+	if err := requireNoReceipts(ctx); err != nil {
+		return record{}, false, err
+	}
+	saved, err = m.prepare(ctx, requestID, reference)
+	return saved, err == nil, err
+}
+
+func (m *Manager) reconcileLaunch(ctx context.Context, saved record, create bool) (Pod, *observation, error) {
+	var createdUID string
+	if create {
+		var err error
+		createdUID, err = m.createPod(ctx, saved)
+		if err != nil {
+			return Pod{}, nil, err
+		}
 	}
 	pod, state, err := m.inspect(ctx, saved, createdUID)
 	if err != nil {
-		return runtimes.Result{}, err
+		return Pod{}, nil, err
 	}
 	if err := m.confirmLaunch(ctx, saved, pod, state); err != nil {
-		return runtimes.Result{}, err
+		return Pod{}, nil, err
 	}
 	current, err := m.observe(saved)
 	if err != nil {
-		return runtimes.Result{}, err
+		return Pod{}, nil, err
 	}
 	if state.Gated {
 		if err := m.activate(ctx, saved, pod); err != nil {
-			return runtimes.Result{}, err
+			return Pod{}, nil, err
 		}
 	}
-	return m.waitReady(ctx, saved, pod.Metadata.UID, current)
+	return pod, current, nil
 }
 
-func (m *Manager) restoreOrCreatePod(ctx context.Context, requestID, reference string) (record, string, error) {
-	saved, exists, err := m.readRecord(ctx, requestID, reference)
-	if err != nil || exists {
-		return saved, "", err
-	}
-	if err := requireNoReceipts(ctx); err != nil {
-		return record{}, "", err
-	}
-	saved, err = m.prepare(ctx, requestID, reference)
-	if err != nil {
-		return record{}, "", err
+func (m *Manager) createPod(ctx context.Context, saved record) (string, error) {
+	if err := m.reserve(ctx, saved); err != nil {
+		return "", err
 	}
 	created, err := m.config.Client.Create(ctx, saved.Pod)
 	if err != nil {
-		return record{}, "", fmt.Errorf("Pod creation for %s is uncertain; retry inspects this request: %w", saved.AgentID, err)
+		return "", fmt.Errorf("Pod creation for %s is uncertain; retry inspects this request: %w", saved.AgentID, err)
 	}
 	if err := m.rememberUID(saved, created); err != nil {
-		return record{}, "", err
+		return "", err
 	}
 	state, err := InspectPod(saved.Pod, created)
 	if err != nil {
-		return record{}, "", err
+		return "", err
 	}
 	if !state.Gated {
-		return record{}, "", errors.New("created Kubernetes Pod lost its launch gate before activation")
+		return "", errors.New("created Kubernetes Pod lost its launch gate before activation")
 	}
 	if err := m.confirmReceipt(ctx, saved, created); err != nil {
-		return record{}, "", err
+		return "", err
 	}
-	return saved, created.Metadata.UID, nil
+	return created.Metadata.UID, nil
 }
 
 func (m *Manager) confirmLaunch(ctx context.Context, saved record, pod Pod, state PodState) error {
@@ -170,9 +208,6 @@ func (m *Manager) prepare(ctx context.Context, requestID, reference string) (rec
 	saved := record{Runtime: runtimes.RuntimeKubernetes, RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type, Image: image, Owner: id.New()}
 	saved.Pod, err = BuildPod(m.config.Pod, saved.spec())
 	if err != nil {
-		return record{}, err
-	}
-	if err := m.reserve(ctx, saved); err != nil {
 		return record{}, err
 	}
 	return saved, nil

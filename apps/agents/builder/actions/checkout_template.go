@@ -14,7 +14,6 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/git"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
-	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -106,7 +105,7 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	var result action.Result
-	err := progress.Run(ctx, "Template checkout", func() error {
+	err := action.RunWithProgress(ctx, "Template checkout", func() error {
 		var checkoutErr error
 		result, checkoutErr = a.checkout(ctx, *executable)
 		return checkoutErr

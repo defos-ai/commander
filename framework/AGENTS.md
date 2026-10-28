@@ -200,6 +200,13 @@
   Log-processing failures reject that delivery and allow other work to continue;
   receive and settlement failures retain their normal shutdown behavior. Logging
   never extends deadlines or changes operation state.
+- [`action.RunWithProgress`](agent/action/progress.go) wraps one stage with fixed,
+  non-sensitive labels and best-effort start/end messages plus liveness every 30
+  seconds. Each publication has a one-second budget and no retry. Preserve the
+  work's exact error, never cancel its context, and cancel/join the reporter on
+  return, panic or caller cancellation. An unavailable log capability skips the
+  reporter. Completion describes only that named stage, not acceptance of an
+  artifact, a remote side effect or the entire operation.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

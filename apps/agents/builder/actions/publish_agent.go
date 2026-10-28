@@ -16,7 +16,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/builder/internal/git"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/github"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
-	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/publish"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
@@ -163,7 +162,7 @@ func (a *PublishAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 		return action.Result{}, action.ErrSecretUnavailable
 	}
 	var result action.Result
-	err = progress.Run(ctx, "Source publication request handling", func() error {
+	err = action.RunWithProgress(ctx, "Source publication request handling", func() error {
 		var err error
 		result, err = a.publishSource(ctx, *executable, execution.CommandID, intent, found, token)
 		return err

@@ -34,6 +34,16 @@ func PinPackage(ctx context.Context, requestID, selector string, resolver *packa
 	if !id.Valid(execution.CommandID) || requestID != "command:"+execution.CommandID {
 		return "", errors.New("package checkpoint requires its execution command identity")
 	}
+	var reference string
+	err = action.RunWithProgress(ctx, "Package version selection", func() error {
+		var selectionErr error
+		reference, selectionErr = pinPackage(ctx, requestID, requested, resolver)
+		return selectionErr
+	})
+	return reference, err
+}
+
+func pinPackage(ctx context.Context, requestID string, requested agentpackages.Reference, resolver *packages.Resolver) (string, error) {
 	data, exists, err := action.LoadCheckpoint(ctx, "package-selection")
 	if err != nil {
 		return "", err

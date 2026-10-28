@@ -16,7 +16,6 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/build"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
-	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -180,7 +179,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if err != nil {
 		return action.Result{}, err
 	}
-	if err := progress.Run(ctx, "Codex generation", func() error {
+	if err := action.RunWithProgress(ctx, "Codex generation", func() error {
 		return build.RunCodex(ctx, tools.codex, source, scratch, env, key, input.Instructions, input.Actions)
 	}); err != nil {
 		return action.Result{}, err
@@ -190,7 +189,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
 		return action.Result{}, err
 	}
-	if err := progress.Run(ctx, "Go tests", func() error {
+	if err := action.RunWithProgress(ctx, "Go tests", func() error {
 		return build.RunCommand(ctx, "Go tests", tools.goTool, source, env, nil, "test", "-count=1", "-timeout=2m", "./...")
 	}); err != nil {
 		return action.Result{}, err
@@ -199,7 +198,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	if err := progress.Run(ctx, "Go build", func() error {
+	if err := action.RunWithProgress(ctx, "Go build", func() error {
 		return build.RunCommand(ctx, "Go build", tools.goTool, source, env, nil, "build", "-o", binary, "./cmd")
 	}); err != nil {
 		return action.Result{}, err
@@ -208,7 +207,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 		return action.Result{}, err
 	}
 	var metadata build.PackageMetadata
-	if err := progress.Run(ctx, "Release structure validation", func() error {
+	if err := action.RunWithProgress(ctx, "Release structure validation", func() error {
 		var validationErr error
 		metadata, validationErr = build.ValidateRelease(ctx, tools.goTool, source, scratch, env, input.Actions)
 		return validationErr
@@ -218,7 +217,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
 		return action.Result{}, err
 	}
-	if err := progress.Run(ctx, "Registered action validation", func() error {
+	if err := action.RunWithProgress(ctx, "Registered action validation", func() error {
 		return build.ValidateRegistration(ctx, tools.goTool, source, scratch, env, metadata, input.Actions)
 	}); err != nil {
 		return action.Result{}, err
@@ -228,7 +227,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}
 	var archive []byte
 	var count int
-	if err := progress.Run(ctx, "Source archive preparation", func() error {
+	if err := action.RunWithProgress(ctx, "Source archive preparation", func() error {
 		var archiveErr error
 		archive, count, archiveErr = build.ArchiveSource(ctx, source, key)
 		return archiveErr

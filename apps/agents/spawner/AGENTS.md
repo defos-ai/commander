@@ -102,6 +102,14 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   Return the exact package in results. Never save tokens in either checkpoint.
   Version resolution, manifest and executable downloads remain in this module;
   shared metadata code must not import the spawner.
+- Use [`action.RunWithProgress`](../../../framework/agent/action/progress.go) for
+  sequential package-selection, preparation, launch-reconciliation and registration
+  stages. Fixed messages report observations; never include package URLs, child
+  configuration, credentials or raw runtime diagnostics. Keep reporting outside
+  checkpoint-to-launch critical regions, preserving their existing ordering.
+  Log publication failures do not change results or authorize another launch.
+  Reporting ends with its action's wait; runtime ownership and late-registration
+  observation retain their existing lifetimes.
 - The shared [manifest package](../../../framework/agent/manifest/) validates the
   complete manifest, including unused modes. Keep release version validation in
   that package and use it when parsing package references.

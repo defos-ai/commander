@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/github"
-	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/manifest"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -102,7 +101,7 @@ func (a *ReleaseAgent) Run(ctx context.Context, raw json.RawMessage) (action.Res
 		return action.Result{}, action.ErrSecretUnavailable
 	}
 	var result action.Result
-	err = progress.Run(ctx, "Release request handling", func() error {
+	err = action.RunWithProgress(ctx, "Release request handling", func() error {
 		var err error
 		result, err = a.release(ctx, input, saved, found, token, execution.CommandID)
 		return err

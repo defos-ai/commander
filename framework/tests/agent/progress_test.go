@@ -1,4 +1,4 @@
-package builder_test
+package agent_test
 
 import (
 	"context"
@@ -8,9 +8,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/defos-ai/commander/apps/agents/builder/internal/progress"
-	"github.com/defos-ai/commander/apps/agents/builder/tests/fakes"
 	"github.com/defos-ai/commander/framework/agent/action"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
 )
 
 func TestProgressReportsPacedLivenessAndStopsWithTheStage(t *testing.T) {
@@ -20,7 +19,7 @@ func TestProgressReportsPacedLivenessAndStopsWithTheStage(t *testing.T) {
 		started := time.Now()
 		runs := 0
 
-		err := progress.Run(ctx, "Codex generation", func() error {
+		err := action.RunWithProgress(ctx, "Codex generation", func() error {
 			runs++
 			time.Sleep(65 * time.Second)
 			return nil
@@ -61,7 +60,7 @@ func TestProgressPreservesWorkErrorsWhenLoggingFails(t *testing.T) {
 				}
 				runs := 0
 
-				err := progress.Run(ctx, "Go tests", func() error {
+				err := action.RunWithProgress(ctx, "Go tests", func() error {
 					runs++
 					time.Sleep(31 * time.Second)
 					return workError
@@ -87,7 +86,7 @@ func TestProgressSkipsHeartbeatsWhenLogsAreUnavailable(t *testing.T) {
 		workError := errors.New("work failed")
 		runs := 0
 
-		err := progress.Run(ctx, "Release request handling", func() error {
+		err := action.RunWithProgress(ctx, "Release request handling", func() error {
 			runs++
 			time.Sleep(95 * time.Second)
 			return workError
@@ -108,7 +107,7 @@ func TestProgressBoundsBlockedPublicationsWithoutCancelingWork(t *testing.T) {
 		workError := errors.New("work failed")
 		runs := 0
 
-		err := progress.Run(ctx, "Go build", func() error {
+		err := action.RunWithProgress(ctx, "Go build", func() error {
 			runs++
 			if ctx.Err() != nil {
 				t.Errorf("progress canceled work: %v", ctx.Err())
@@ -135,7 +134,7 @@ func TestProgressCancelsAndJoinsAnInflightHeartbeatOnReturn(t *testing.T) {
 		ctx := action.WithLogs(t.Context(), logs)
 		started := time.Now()
 
-		err := progress.Run(ctx, "Codex generation", func() error {
+		err := action.RunWithProgress(ctx, "Codex generation", func() error {
 			time.Sleep(30*time.Second + 500*time.Millisecond)
 			return nil
 		})
@@ -160,7 +159,7 @@ func TestProgressStopsOnCallerCancellationWhileWorkFinishes(t *testing.T) {
 		started := time.Now()
 		workError := errors.New("work's own outcome")
 
-		err := progress.Run(ctx, "Codex generation", func() error {
+		err := action.RunWithProgress(ctx, "Codex generation", func() error {
 			time.Sleep(95 * time.Second)
 			return workError
 		})
@@ -183,7 +182,7 @@ func TestProgressKeepsAnEarlierCallerDeadline(t *testing.T) {
 		workError := errors.New("work's own outcome")
 		runs := 0
 
-		err := progress.Run(ctx, "Go build", func() error {
+		err := action.RunWithProgress(ctx, "Go build", func() error {
 			runs++
 			return workError
 		})
@@ -206,7 +205,7 @@ func TestProgressJoinsItsReporterWhenWorkPanics(t *testing.T) {
 
 		func() {
 			defer func() { recovered = recover() }()
-			_ = progress.Run(ctx, "Codex generation", func() error {
+			_ = action.RunWithProgress(ctx, "Codex generation", func() error {
 				time.Sleep(30*time.Second + 500*time.Millisecond)
 				panic(panicValue)
 			})

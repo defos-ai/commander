@@ -97,7 +97,11 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 			if input.Visibility == packages.Private {
 				token = []byte(os.Getenv("GITHUB_TOKEN"))
 				if len(token) == 0 {
-					token, err = action.RequestSecret(ctx, "GITHUB_TOKEN")
+					err = action.RunWithProgress(ctx, "Private package access", func() error {
+						var secretErr error
+						token, secretErr = action.RequestSecret(ctx, "GITHUB_TOKEN")
+						return secretErr
+					})
 					if err != nil {
 						return runtimes.Result{}, fmt.Errorf("private package requires GITHUB_TOKEN: %w", err)
 					}

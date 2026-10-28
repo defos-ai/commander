@@ -83,8 +83,9 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   [internal/github](internal/github/) owns fixed-origin release API calls and
   safe errors; [internal/releaseworkflow](internal/releaseworkflow/) checks the
   shared template contract. This structural check is not a workflow sandbox.
-- [Progress reporting](internal/progress/progress.go) uses `action.Log` for fixed
-  stage names and periodic liveness observations. Bound each publication, preserve
+- [Progress reporting](../../../framework/agent/action/progress.go) uses
+  `action.RunWithProgress` for fixed stage names and periodic liveness observations.
+  Bound each publication, preserve
   the original work result/error, and cancel and join the reporter when the stage
   ends. Keep messages free of inputs, paths, tool diagnostics and secret values.
   Completion describes the named stage: source archives still need runtime upload

@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	downloads "github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
+	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
@@ -66,31 +68,50 @@ func (m *Manager) Spawn(ctx context.Context, requestID, reference string) (runti
 }
 
 func (m *Manager) launch(ctx context.Context, requestID, reference string) (runtimes.Result, error) {
-	pkg, err := m.config.Resolver.Resolve(ctx, reference)
+	var pkg downloads.Package
+	var path string
+	err := action.RunWithProgress(ctx, "Native package preparation", func() error {
+		var preparationErr error
+		pkg, preparationErr = m.config.Resolver.Resolve(ctx, reference)
+		if preparationErr != nil {
+			return preparationErr
+		}
+		path, preparationErr = m.config.Resolver.DownloadNative(ctx, pkg, runtime.GOOS, runtime.GOARCH, filepath.Join(m.config.Directory, "downloads"))
+		return preparationErr
+	})
 	if err != nil {
 		return runtimes.Result{}, err
 	}
-	path, err := m.config.Resolver.DownloadNative(ctx, pkg, runtime.GOOS, runtime.GOARCH, filepath.Join(m.config.Directory, "downloads"))
+	var current *child
+	err = action.RunWithProgress(ctx, "Native launch reconciliation", func() error {
+		var launchErr error
+		current, launchErr = m.start(ctx, requestID, reference, pkg.Manifest.Type, path)
+		return launchErr
+	})
 	if err != nil {
 		return runtimes.Result{}, err
 	}
+	return m.awaitRegistration(ctx, current)
+}
+
+func (m *Manager) start(ctx context.Context, requestID, reference, agentType, path string) (*child, error) {
 	started := false
 	defer func() {
 		if !started {
 			_ = os.RemoveAll(filepath.Dir(path))
 		}
 	}()
-	agentID, err := id.AgentID(pkg.Manifest.Type)
+	agentID, err := id.AgentID(agentType)
 	if err != nil {
-		return runtimes.Result{}, err
+		return nil, err
 	}
 	directory := filepath.Join(m.config.Directory, "agents", agentID)
 	if err := os.Mkdir(directory, 0700); err != nil {
-		return runtimes.Result{}, fmt.Errorf("create child working directory: %w", err)
+		return nil, fmt.Errorf("create child working directory: %w", err)
 	}
 	subscription, err := m.subscribe(ctx)
 	if err != nil {
-		return runtimes.Result{}, err
+		return nil, err
 	}
 	defer func() {
 		if !started {
@@ -98,14 +119,14 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 		}
 	}()
 	if err := ctx.Err(); err != nil {
-		return runtimes.Result{}, err
+		return nil, err
 	}
-	saved := record{Runtime: "native", RequestID: requestID, Package: reference, AgentID: agentID, AgentType: pkg.Manifest.Type}
+	saved := record{Runtime: "native", RequestID: requestID, Package: reference, AgentID: agentID, AgentType: agentType}
 	if err := m.reserve(ctx, saved); err != nil {
-		return runtimes.Result{}, err
+		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		return runtimes.Result{}, err
+		return nil, err
 	}
 	command := exec.Command(path)
 	command.Dir = directory
@@ -113,13 +134,13 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 	// Child output can contain secrets. Do not put it in action errors or logs.
 	configureCommand(command)
 	if err := command.Start(); err != nil {
-		return runtimes.Result{}, fmt.Errorf("start agent %s: %w", agentID, err)
+		return nil, fmt.Errorf("start agent %s: %w", agentID, err)
 	}
 	started = true
 	current := &child{
 		command: command, done: make(chan struct{}), download: filepath.Dir(path), subscription: subscription,
 		registrationDone: make(chan struct{}),
-		result: runtimes.Result{AgentID: agentID, AgentType: pkg.Manifest.Type, Package: reference,
+		result: runtimes.Result{AgentID: agentID, AgentType: agentType, Package: reference,
 			Runtime: runtimes.RuntimeNative, RuntimeDetails: runtimes.NativeRuntimeDetails{PID: command.Process.Pid}},
 	}
 	m.children[requestID] = current
@@ -128,7 +149,7 @@ func (m *Manager) launch(ctx context.Context, requestID, reference string) (runt
 		current.registrationErr = m.observeRegistration(subscription, current)
 		close(current.registrationDone)
 	}()
-	return m.awaitRegistration(ctx, current)
+	return current, nil
 }
 
 func (m *Manager) subscribe(ctx context.Context) (comms.Subscription, error) {
@@ -141,6 +162,16 @@ func (m *Manager) subscribe(ctx context.Context) (comms.Subscription, error) {
 func (m *Manager) awaitRegistration(ctx context.Context, current *child) (runtimes.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, m.config.RegistrationTimeout)
 	defer cancel()
+	var result runtimes.Result
+	err := action.RunWithProgress(ctx, "Native registration observation", func() error {
+		var registrationErr error
+		result, registrationErr = m.waitRegistration(ctx, current)
+		return registrationErr
+	})
+	return result, err
+}
+
+func (m *Manager) waitRegistration(ctx context.Context, current *child) (runtimes.Result, error) {
 	select {
 	case <-ctx.Done():
 		return runtimes.Result{}, fmt.Errorf("waiting for agent %s registration (retry observes this instance): %w", current.result.AgentID, ctx.Err())
