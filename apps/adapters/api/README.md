@@ -58,6 +58,21 @@ then complete it with output matching the mission schema.
 continue; repeating an assignment creates another task. Cancellation stops queued
 work, while dispatched tasks may finish.
 
+## Execution logs
+
+Read saved progress without a running controller:
+
+```sh
+curl --user "$API_USERNAME" \
+  "http://127.0.0.1:4274/api/v1/operations/$OPERATION_ID/logs?limit=100"
+```
+
+Use `/api/v1/operations/$OPERATION_ID/tasks/$TASK_ID/logs` for one task. Optional
+`agent_id` and `action_name` filters match exactly and intersect. Pages follow
+ingestion order; pass `next_cursor` back as `cursor` with the same scope and
+filters. Keep that cursor after an empty page to observe later logs. `limit`
+defaults to 100 and accepts 1–1000. Logs can arrive after work ends.
+
 ## Secrets
 
 Compose and all-in-one configure encryption automatically. For a standalone API,

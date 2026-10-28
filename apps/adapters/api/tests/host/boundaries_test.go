@@ -39,7 +39,7 @@ func TestCommandFailuresMapToPublicErrorsWithoutRetries(t *testing.T) {
 		t.Run(tc.code, func(t *testing.T) {
 			command := fakes.NewFailedStart(tc.err)
 			mux := http.NewServeMux()
-			operationendpoints.Register(mux, nil, nil, nil, command)
+			operationendpoints.Register(mux, nil, nil, nil, nil, command)
 			request := httptest.NewRequest(http.MethodPost, "/api/v1/operations", strings.NewReader(`{"mission_name":"review-website-with-browser","input":{}}`))
 			request.Header.Set("Content-Type", "application/json")
 			recorder := httptest.NewRecorder()

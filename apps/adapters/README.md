@@ -81,6 +81,13 @@ Use `list_agents` and `list_actions` for discovery, `describe_agent` for readine
 and `get_task` for full inputs, results and artifacts. For paginated task/event
 queries, pass `next_cursor` unchanged to the next call for the same operation.
 
+Read saved progress with `operation_logs` using `operation_id`, or `task_logs`
+using both `operation_id` and `task_id`. Optional `agent_id` and `action_name`
+filters match exactly. Pages default to 100 entries, up to 1000; reuse
+`next_cursor` with the same scope and filters. Empty pages retain the cursor,
+so poll it for later entries, including delayed logs after an operation ends.
+These queries work without a live controller.
+
 Read `missions://artifacts/{id}` for metadata and
 `missions://artifacts/{id}/files/{file_id}` for file content. To view screenshots
 or download files in a browser, open the operation in [Admin](../admin/ui/README.md).

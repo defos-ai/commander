@@ -96,7 +96,8 @@ func serve(ctx context.Context, configuration config, adapterID string, logger *
 		CatalogClient: deps.CatalogClient, CatalogURL: configuration.catalogURL,
 		AgentStore:   deps.AgentStore,
 		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore, SessionStore: deps.SessionStore,
-		ActionStore: deps.ActionStore, ReportStore: deps.ReportStore, ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
+		ExecutionStore: deps.ExecutionStore,
+		ActionStore:    deps.ActionStore, ReportStore: deps.ReportStore, ArtifactStore: deps.ArtifactStore, ArtifactFileStore: deps.ArtifactFileStore,
 	}
 	server, err := missionsmcp.NewServer(serverConfig)
 	if err != nil {

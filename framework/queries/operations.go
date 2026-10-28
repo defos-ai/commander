@@ -9,17 +9,20 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 )
 
 // Operations reads persisted state without requiring a controller connection.
 // Agents is optional: inventory failures omit live observations, while caller
-// cancellation still ends the query. Reports is needed only by GetReport.
+// cancellation still ends the query. Reports and Executions are needed only by
+// GetReport and ListLogs respectively.
 type Operations struct {
-	Store   operations.OperationStore
-	Agents  agents.AgentStore
-	Reports reports.ReportStore
+	Store      operations.OperationStore
+	Agents     agents.AgentStore
+	Reports    reports.ReportStore
+	Executions executions.ExecutionStore
 }
 
 // Views keep observations separate from saved entities. Adapters own their wire

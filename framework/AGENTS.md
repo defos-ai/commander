@@ -141,6 +141,11 @@
   listings skip inventory. Report reads verify operation ownership, and event
   waits use saved-work settlement with a final event reread. Keep wire formats,
   pagination validation and wait deadlines in adapters; query views are not stored.
+  [Log queries](queries/logs.go) require a canonical operation ID, verify the saved
+  parent and optional task membership, then delegate unchanged criteria to the
+  execution store. Missing scope records retain their typed errors; logs need no
+  live inventory or controller connection. Inject `Executions` only when enabling
+  these reads; existing operation/task/report queries do not require it.
 - Task, event and execution-log store pages use
   [`domain.ValidatePageLimit`](domain/pagination.go) to enforce `1..MaxPageSize`
   before storage I/O. Adapters supply defaults and validate their wire parameters.
@@ -183,7 +188,8 @@
   use the last returned ID for the next cursor and preserve it on empty pages.
   Append positions stay private to providers; producer timestamps and UUID order
   do not determine pagination. Store filters neither authorize access nor verify
-  operation/task existence; adapters own those scope checks.
+  operation/task existence. Shared operation queries verify those saved scopes;
+  adapters own access policy.
   `Agent.Serve` binds the logging capability to the accepted agent, command, action
   and work context. Standalone `Work` clears inherited providers. Caller, action
   and serving lifetimes bound publication, including detached caller contexts.
@@ -193,8 +199,7 @@
   observation before ACK. Valid delayed logs remain acceptable after completion.
   Log-processing failures reject that delivery and allow other work to continue;
   receive and settlement failures retain their normal shutdown behavior. Logging
-  never extends deadlines or changes operation state. Public operation/task log
-  queries follow later.
+  never extends deadlines or changes operation state.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

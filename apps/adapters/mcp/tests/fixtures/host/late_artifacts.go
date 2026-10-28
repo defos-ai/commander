@@ -80,6 +80,7 @@ func NewLateArtifact(t *testing.T) *LateArtifact {
 	executions, err := fsexecutions.NewExecutionFsStore(database)
 	check(err)
 	fixture.Executions = executions
+	config.ExecutionStore = executions
 	check(config.MissionStore.Upsert(ctx, missions.Mission{Name: "late-artifact", Objectives: []string{"Retain late execution evidence"},
 		RequiredActions: []string{"late-artifact"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}))
 	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))

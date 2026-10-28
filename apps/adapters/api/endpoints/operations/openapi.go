@@ -7,6 +7,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	"github.com/defos-ai/commander/framework/domain"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -26,6 +27,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		{"Continuation", reflect.TypeFor[models.ContinuationResponse]()},
 		{"Task", reflect.TypeFor[models.TaskResponse]()},
 		{"Event", reflect.TypeFor[models.EventResponse]()},
+		{"Log", reflect.TypeFor[models.LogResponse]()},
 		{"Question", reflect.TypeFor[models.QuestionResponse]()},
 		{"OperationProgress", reflect.TypeFor[models.OperationProgressResponse]()},
 		{"Operation", reflect.TypeFor[models.OperationResponse]()},
@@ -102,6 +104,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		return err
 	}
 	openAPIOperationPaths(paths)
+	openAPILogPaths(paths)
 	openAPICommandPaths(paths)
 	return nil
 }
@@ -449,7 +452,39 @@ func openAPIPageParameters(events bool) []any {
 		},
 		map[string]any{
 			"name": "limit", "in": "query", "required": false, "description": "Maximum number of records. Must occur at most once and contain a decimal integer from 1 through 1000.",
-			"schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+			"schema": map[string]any{"type": "integer", "minimum": 1, "maximum": domain.MaxPageSize, "default": 100},
 		},
+	}
+}
+
+func openAPILogPaths(paths map[string]any) {
+	for _, route := range []struct {
+		path, id, summary string
+		task              bool
+	}{
+		{"/api/v1/operations/{operation_id}/logs", "listOperationLogs", "List operation execution logs", false},
+		{"/api/v1/operations/{operation_id}/tasks/{task_id}/logs", "listOperationTaskLogs", "List task execution logs", true},
+	} {
+		endpoint := endpoints.OpenAPIQueryOperation(route.id, route.summary, "Operations", openAPIPage("Log"))
+		endpoint["description"] = "Reads immutable execution observations without contacting the controller, including logs received after work ends. Results follow durable ingestion order, independent of created_at and UUID order. Optional exact filters intersect. cursor must identify a log matching this operation, task if supplied, and all filters. Omitted or empty cursor starts the first page; next_cursor is the last returned log ID or the request cursor unchanged when empty. Unknown, repeated, malformed or empty supplied filters are rejected."
+		parameters := openAPIPageParameters(false)
+		parameters[1].(map[string]any)["description"] = "Exclusive log ID cursor: a canonical lowercase UUID identifying a log in this operation, task if supplied, and all requested filters. Empty starts the first page."
+		missing, invalid := "operation_not_found or log_not_found (unknown or out-of-scope cursor)", "invalid_operation_id, invalid_query, invalid_cursor or invalid_limit"
+		if route.task {
+			parameters = append(parameters, openAPIUUIDParameter("task_id"))
+			missing = "operation_not_found, task_not_found or log_not_found (unknown or out-of-scope cursor)"
+			invalid += ", invalid_task_id"
+		}
+		parameters = append(parameters,
+			map[string]any{"name": "agent_id", "in": "query", "required": false, "description": "Exact agent runtime ID; must not be empty.",
+				"schema": map[string]any{"type": "string", "pattern": `^[a-z0-9]+(-[a-z0-9]+)*-agent-[0-9a-f]{8}$`, "maxLength": 63}},
+			map[string]any{"name": "action_name", "in": "query", "required": false, "description": "Exact action name, preserving whitespace and case. Must contain nonblank UTF-8 text.",
+				"schema": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
+		)
+		endpoint["parameters"] = parameters
+		responses := endpoint["responses"].(map[string]any)
+		responses["400"] = endpoints.OpenAPIResponse(invalid+" or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+		responses["404"] = endpoints.OpenAPIResponse(missing, endpoints.OpenAPIRef("Error"))
+		paths[route.path] = map[string]any{"get": endpoint}
 	}
 }

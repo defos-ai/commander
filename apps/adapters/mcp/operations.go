@@ -79,7 +79,8 @@ type OperationTasksResult struct {
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
-	query := queries.Operations{Store: config.OperationStore, Agents: config.AgentStore, Reports: config.ReportStore}
+	query := queries.Operations{Store: config.OperationStore, Agents: config.AgentStore, Reports: config.ReportStore, Executions: config.ExecutionStore}
+	addLogTools(server, query)
 	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, rules and schemas before starting it.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Missions []missionListItem `json:"missions"`

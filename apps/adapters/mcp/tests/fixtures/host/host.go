@@ -19,6 +19,7 @@ import (
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
+	fsexecutions "github.com/defos-ai/commander/providers/fs/executions"
 	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
 	fsoperations "github.com/defos-ai/commander/providers/fs/operations"
 	fsreports "github.com/defos-ai/commander/providers/fs/reports"
@@ -116,6 +117,10 @@ func Session(t *testing.T, config adapter.Config) (context.Context, *sdkmcp.Clie
 	}
 	if config.OperationStore == nil {
 		config.OperationStore, err = fsoperations.NewOperationFsStore(database)
+		check(err)
+	}
+	if config.ExecutionStore == nil {
+		config.ExecutionStore, err = fsexecutions.NewExecutionFsStore(database)
 		check(err)
 	}
 	config.ActionStore, err = fsactions.NewActionFsStore(database)

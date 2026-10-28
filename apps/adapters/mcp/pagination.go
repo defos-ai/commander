@@ -1,9 +1,13 @@
 package missionsmcp
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/defos-ai/commander/framework/domain"
+)
 
 const defaultPageLimit = 100
-const maxPageLimit = 1000
+const maxPageLimit = domain.MaxPageSize
 
 type OperationPageRequest struct {
 	OperationRequest

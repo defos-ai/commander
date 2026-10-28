@@ -19,6 +19,7 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -73,6 +74,7 @@ type Config struct {
 	AgentStore        agentmodel.AgentStore
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
+	ExecutionStore    executions.ExecutionStore
 	ReportStore       reports.ReportStore
 	ArtifactStore     artifacts.ArtifactStore
 	ArtifactFileStore artifacts.ArtifactFileStore
@@ -88,9 +90,9 @@ type Config struct {
 
 func NewServer(config Config) (*mcp.Server, error) {
 	if config.Operations == nil || config.AgentStore == nil ||
-		config.MissionStore == nil || config.OperationStore == nil || config.ReportStore == nil ||
+		config.MissionStore == nil || config.OperationStore == nil || config.ExecutionStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil || config.ActionStore == nil {
-		return nil, errors.New("MCP requires operation commands and inventory, mission, operation, report, artifact metadata, artifact file and action stores")
+		return nil, errors.New("MCP requires operation commands and inventory, mission, operation, execution, report, artifact metadata, artifact file and action stores")
 	}
 	if config.CatalogClient == nil {
 		return nil, errors.New("MCP requires an agent catalog client")

@@ -47,11 +47,19 @@
   mission and an escaped detail `Location`. Creation needs neither a controller
   nor action availability; it does not start work or change operation snapshots.
   Keep startup imports separate and reconcile uncertain writes by name before retrying.
-- Operation/task/report/event queries use the shared framework
+- Operation/task/report/event/log queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send
   typed controller commands. Preserve strict JSON decoding, unknown-field rejection,
   body limits, content-type checks and canonical record-ID validation.
+- [Log routes](endpoints/operations/logs.go) require `Config.ExecutionStore`,
+  constructed from `DATABASE_URL` alongside operation storage; reuse the cached
+  Mongo connection. Parent operation/task paths establish scope before loading
+  logs. Accept only `cursor`, `limit`, `agent_id` and `action_name`; exact optional
+  filters must be nonempty when supplied. Preserve default 100/max 1000 page
+  bounds, typed missing-parent errors and `404 log_not_found` for unknown or
+  out-of-scope cursor IDs. Map explicit flat log DTOs and keep the input cursor on
+  an empty page. These saved queries do not contact the controller.
 - Keep command timeouts and error mapping explicit. An uncertain response does
   not prove rejection; do not retry commands automatically or infer completion
   from client cancellation.

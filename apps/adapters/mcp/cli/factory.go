@@ -15,6 +15,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -25,6 +26,7 @@ import (
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
+	fsexecutions "github.com/defos-ai/commander/providers/fs/executions"
 	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
 	fsoperations "github.com/defos-ai/commander/providers/fs/operations"
 	fsreports "github.com/defos-ai/commander/providers/fs/reports"
@@ -33,6 +35,7 @@ import (
 	mongoactions "github.com/defos-ai/commander/providers/mongo/actions"
 	mongoagents "github.com/defos-ai/commander/providers/mongo/agents"
 	mongoartifacts "github.com/defos-ai/commander/providers/mongo/artifacts"
+	mongoexecutions "github.com/defos-ai/commander/providers/mongo/executions"
 	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
 	mongooperations "github.com/defos-ai/commander/providers/mongo/operations"
 	mongosessions "github.com/defos-ai/commander/providers/mongo/sessions"
@@ -53,6 +56,7 @@ type dependencies struct {
 	AgentStore        agents.AgentStore
 	MissionStore      missions.MissionStore
 	OperationStore    operations.OperationStore
+	ExecutionStore    executions.ExecutionStore
 	ActionStore       actions.ActionStore
 	ReportStore       reports.ReportStore
 	TestCleaner       frameworktesting.TestCleaner
@@ -107,6 +111,10 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 	deps.OperationStore, err = deps.createOperationStore(ctx, configuration.databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("database-url: %w", err)
+	}
+	deps.ExecutionStore, err = deps.createExecutionStore(ctx, configuration.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("execution database: %w", err)
 	}
 	deps.AgentStore, err = deps.createAgentStore(ctx, configuration.databaseURL)
 	if err != nil {
@@ -235,6 +243,27 @@ func (d *dependencies) createOperationStore(ctx context.Context, rawURL string) 
 		return mongooperations.NewOperationMongoStore(ctx, d.mongo)
 	default:
 		return nil, fmt.Errorf("unsupported operation store scheme %q", scheme)
+	}
+}
+
+func (d *dependencies) createExecutionStore(ctx context.Context, rawURL string) (executions.ExecutionStore, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch scheme := connectionScheme(rawURL); scheme {
+	case "file", "fs":
+		path, err := fs.FilesystemPath(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return fsexecutions.NewExecutionFsStore(path)
+	case "mongodb", "mongodb+srv":
+		if err := d.connectMongo(ctx, rawURL); err != nil {
+			return nil, err
+		}
+		return mongoexecutions.NewExecutionMongoStore(ctx, d.mongo)
+	default:
+		return nil, fmt.Errorf("unsupported execution store scheme %q", scheme)
 	}
 }
 

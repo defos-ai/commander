@@ -11,6 +11,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -40,6 +41,8 @@ func WriteQueryResult(w http.ResponseWriter, value any, err error) {
 		WriteError(w, http.StatusNotFound, "operation_not_found")
 	case errors.Is(err, operations.ErrUnknownTask):
 		WriteError(w, http.StatusNotFound, "task_not_found")
+	case errors.Is(err, executions.ErrUnknownLog):
+		WriteError(w, http.StatusNotFound, "log_not_found")
 	case errors.Is(err, reports.ErrUnknownReport):
 		WriteError(w, http.StatusNotFound, "report_not_found")
 	case errors.Is(err, artifacts.ErrUnknownArtifact):

@@ -15,6 +15,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/controllers"
+	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
@@ -32,6 +33,7 @@ type Config struct {
 	Operations         controllercommands.Operations
 	MissionStore       missions.MissionStore
 	OperationStore     operations.OperationStore
+	ExecutionStore     executions.ExecutionStore
 	AgentStore         agents.AgentStore
 	ControllerStore    controllers.ControllerStore
 	ActionStore        actions.ActionStore
@@ -51,10 +53,10 @@ func NewHandler(config Config) (http.Handler, error) {
 	if err := config.Deployment.Validate(); err != nil {
 		return nil, err
 	}
-	if config.Operations == nil || config.MissionStore == nil || config.OperationStore == nil ||
+	if config.Operations == nil || config.MissionStore == nil || config.OperationStore == nil || config.ExecutionStore == nil ||
 		config.AgentStore == nil || config.ControllerStore == nil || config.ActionStore == nil || config.ReportStore == nil ||
 		config.ArtifactStore == nil || config.ArtifactFileStore == nil {
-		return nil, errors.New("API requires controller commands and mission, operation, agent, controller, action, report, artifact metadata and artifact file stores")
+		return nil, errors.New("API requires controller commands and mission, operation, execution, agent, controller, action, report, artifact metadata and artifact file stores")
 	}
 	mux := http.NewServeMux()
 	about := config.Deployment.response()
@@ -68,7 +70,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterControllers(mux, config.ControllerStore)
 	endpoints.RegisterReports(mux, config.ReportStore)
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
-	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.AgentStore, config.Operations)
+	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.AgentStore, config.ExecutionStore, config.Operations)
 	endpoints.RegisterSecrets(mux, config.SecretService)
 	endpoints.RegisterSecretRequests(mux, config.SecretService, config.SecretRequestStore)
 	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
