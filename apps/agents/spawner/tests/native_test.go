@@ -16,7 +16,6 @@ import (
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -86,7 +85,7 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 		if len(report.AgentIDSuffix) != 8 || report.AgentID != "fixture-agent-"+report.AgentIDSuffix || !id.ValidAgent(report.AgentID) {
 			t.Fatalf("child did not construct its assigned identity from a hex suffix: %+v", report)
 		}
-		if report.InheritedSecret || report.SecretChallenge != nil || report.Region != "fixture-region" || report.Home == "" {
+		if report.InheritedSecret || report.Region != "fixture-region" || report.Home == "" {
 			t.Fatalf("unexpected child environment: %+v", report)
 		}
 		if report.ChromiumPath != fixture.Config.Environment["CHROMIUM_PATH"] || report.ChromiumNoSandbox != "true" {
@@ -110,52 +109,28 @@ func TestNativeSpawnUsesAssignedIdentityAndReusesOnlyItsLiveChild(t *testing.T) 
 	}
 }
 
-func TestNativeBootstrapSharesUsableKeyOnlyWithTrustedBuilder(t *testing.T) {
-	key := strings.Repeat("6a", 32)
-	bootstrap, err := runtimes.NewSecretBootstrap(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cipher, err := crypto.NewSecretCipher(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "unrelated-parent-key")
+func TestNativeBuilderNeverReceivesSecretsEncryptionKey(t *testing.T) {
+	const key = "private-parent-key-sentinel"
+	t.Setenv("SECRETS_ENCRYPTION_KEY", key)
 	t.Setenv("API_PASSWORD", "private-parent-sentinel")
-	for _, test := range []struct {
-		name, mode, reference string
-		receivesKey           bool
-	}{
-		{"trusted builder", "-builder", fixtures.BuilderReference, true},
-		{"untrusted builder type", "-builder", fixtures.Reference, false},
-		{"wrong manifest type", "", fixtures.BuilderReference, false},
-		{"ordinary agent", "", fixtures.Reference, false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			fixture := fixtures.NewNativeManager(t, test.mode, 5*time.Second, bootstrap)
-			ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
-			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			if _, err := fixture.Manager.Spawn(ctx, requestID, test.reference); err != nil {
-				t.Fatal(err)
-			}
-			report := fixtures.AwaitChildReport(t, ctx, fixture.Storage)
-			if report.InheritedSecret {
-				t.Fatal("child inherited unrelated host credentials")
-			}
-			if (report.SecretChallenge != nil) != test.receivesKey {
-				t.Fatal("secret key bootstrap did not respect the trusted package and type")
-			}
-			if report.SecretChallenge != nil {
-				plaintext, err := cipher.Decrypt(*report.SecretChallenge)
-				defer clear(plaintext)
-				if err != nil || string(plaintext) != "fixture secret bootstrap" {
-					t.Fatal("child could not encrypt with the deployment's key")
-				}
-			}
-			assertCheckpointExcludes(t, journal, key)
-		})
+	fixture := fixtures.NewNativeManager(t, "-builder", 5*time.Second)
+	ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result, err := fixture.Manager.Spawn(ctx, requestID, fixtures.BuilderReference)
+
+	if err != nil {
+		t.Fatal(err)
 	}
+	if result.AgentType != "builder-agent" {
+		t.Fatal("spawn did not exercise the official builder package and type")
+	}
+	report := fixtures.AwaitChildReport(t, ctx, fixture.Storage)
+	if report.InheritedSecret {
+		t.Fatal("builder inherited the encryption key or unrelated host credentials")
+	}
+	assertCheckpointExcludes(t, journal, key)
 }
 
 func TestNativeRejectsInvalidRegistrationsWithoutRelaunching(t *testing.T) {

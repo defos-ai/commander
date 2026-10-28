@@ -48,19 +48,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   no local state volume. Read and require
   `SPAWNER_DOCKER_NETWORK` only in Docker mode; native mode ignores it. Reject
   unsupported runtimes explicitly. Do not reintroduce flags for these settings.
-- Optional `SECRETS_ENCRYPTION_KEY` configures the existing builder bootstrap.
-  Embedded hosts pass `Options.SecretsEncryptionKey`, which takes precedence over
-  the environment. Validate the key before opening providers; construct the
-  runtime `SecretBootstrap` from that key. This host's managed-secret delivery
-  is enabled independently and does not use an encryption key.
-  Compose mounts the existing key volume read-only; all-in-one supplies its
-  session key without changing the process environment.
-  Bootstrap the key only for the exact resolved module
-  `github.com/defos-ai/commander/apps/agents/builder@<version>` with manifest type
-  `builder-agent`. This trusts published versions of that official module;
-  a self-claimed type, source entry or visibility never grants access.
-  Keep this exception out of the generic environment allowlist and never save
-  its key in launch records, output or logs.
+- Managed-secret delivery is always enabled and receives requested values from
+  the controller. Do not read or validate `SECRETS_ENCRYPTION_KEY`, mount its
+  volume, or forward it to any child, including the official builder.
 - `--agent-id-suffix` overrides `COMMANDER_AGENT_ID_SUFFIX`, including an
   explicitly empty flag. Validate nonempty values with `id.AgentIDFromSuffix`
   before opening providers; empty values generate a fresh host ID. This setting
@@ -88,8 +78,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   approval is not implemented in this step. No input confirmation boolean,
   environment override, source-list entry or claimed agent type can bypass it.
   Shared parsing/resolution remains unrestricted metadata functionality. The
-  existing official-builder encryption-key bootstrap restriction remains separate
-  and narrower than admission. Do not change registration or secret delivery here.
+  Source admission does not grant encryption-key access. Do not change
+  registration or secret delivery here.
 - The shared [package metadata](../../../framework/agent/packages/) package owns
   reference parsing and discovery source definitions. `ParseSelector` accepts GitHub HTTPS
   URLs or `github.com/owner/repository[/module/path]`, with an optional exact
@@ -177,8 +167,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - Bootstrap uses an explicit environment allowlist and private HOME/USERPROFILE.
   Native children receive `CHROMIUM_PATH` and `CHROMIUM_NO_SANDBOX` when configured
   by the deployment; keep these settings out of Docker bootstrap.
-  No inherited API/MCP/model credentials or GitHub token. Only the trusted builder
-  bootstrap may add the secrets encryption key. Do not log child output or
+  No inherited API/MCP/model credentials, GitHub token or encryption key. Do not log child output or
   persist bootstrap credentials. CLI resolves FS paths before
   children switch to their private working directories.
 
@@ -196,10 +185,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   the recorded name, ownership labels, image, network and bootstrap settings,
   plus the constrained host configuration. An image's inherited volumes must not
   bypass the no-mount policy. Never grant socket access to a child.
-  Verify encryption-key presence and value against the current trusted bootstrap
-  on retries; changing or removing the key must fail reconciliation. Keep the
-  value out of errors and records. It is present in the trusted builder's Docker
-  environment and is therefore visible to Docker administrators.
+  Reject containers containing `SECRETS_ENCRYPTION_KEY`, including on adoption.
+  Never include its value in mismatch diagnostics.
 - Durable create-only intents precede Create. Reconcile lost Create/Start
   responses by inspecting the owned container; a missing container is uncertain,
   not permission to create again. Only a never-started `created` container may
@@ -327,8 +314,7 @@ changes must not rename an existing launch.
   Do not attach children to the spawner Pod with owner references or use
   cross-namespace owner references. Namespace permissions cannot enforce labels.
 - Builder support is deferred. Reject the official Builder package before Create
-  until its workspace, namespace and encryption-key
-  bootstrap contract is implemented. Do not extend the shared agent Secret or
+  until its workspace and namespace contract is implemented. Do not extend the shared agent Secret or
   grant additional privileges as an implicit workaround.
 - Infrastructure must grant Pod `patch` before deployment can release gates.
   Do not add Secret-read or broader workload permissions. Unit checks need no

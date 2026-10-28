@@ -13,28 +13,18 @@ import (
 	builder "github.com/defos-ai/commander/apps/agents/builder"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
 
 const serviceName = "commander-" + string(builder.AgentType)
 
-type Options struct {
-	// SecretCipher overrides SECRETS_ENCRYPTION_KEY when non-nil.
-	SecretCipher *crypto.SecretCipher
-}
-
 // Run installs no signal handlers; Main adds process-level shutdown handling.
-func Run(ctx context.Context, args []string, stderr io.Writer) error {
-	return RunWithOptions(ctx, args, stderr, Options{})
-}
-
-func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, options Options) (result error) {
+func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	configuration, err := parseConfig(args, stderr, options)
+	configuration, err := parseConfig(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
 		return nil
 	}

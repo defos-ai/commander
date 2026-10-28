@@ -175,15 +175,10 @@ func (m *Manager) verify(saved record, container Container) error {
 			return errors.New("Docker container ownership does not match the launch record")
 		}
 	}
-	expected := m.environment(saved)
-	// Also check absence: a removed grant must not adopt a container that still
-	// holds the old key. Never include either value in a mismatch diagnostic.
-	expectedKey, expectsKey := expected["SECRETS_ENCRYPTION_KEY"]
-	actualKey, hasKey := container.Environment["SECRETS_ENCRYPTION_KEY"]
-	if expectsKey != hasKey || expectedKey != actualKey {
-		return errors.New("Docker container secrets bootstrap differs from spawner configuration")
+	if _, exists := container.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
+		return errors.New("Docker container contains an unsupported secrets encryption key")
 	}
-	for key, value := range expected {
+	for key, value := range m.environment(saved) {
 		if actual, ok := container.Environment[key]; !ok || actual != value {
 			return errors.New("Docker container bootstrap settings differ from spawner configuration")
 		}

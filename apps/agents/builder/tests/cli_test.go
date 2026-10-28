@@ -23,7 +23,6 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/id"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
@@ -110,10 +109,6 @@ func assertPublicationVisibilitySchema(t *testing.T, definition actionmodel.Acti
 }
 
 func TestCLIRegistrationAndCancellation(t *testing.T) {
-	cipher, err := crypto.NewSecretCipher(strings.Repeat("a1", 32))
-	if err != nil {
-		t.Fatal(err)
-	}
 	ids := map[string]bool{}
 	for _, test := range []struct {
 		name       string
@@ -123,18 +118,22 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 		visibility string
 		arguments  []string
 		wantID     string
-		options    cli.Options
 	}{
 		{name: "missing git"},
 		{name: "private publication default", visibility: "private"},
 		{name: "empty catalog with environment identity", empty: true, suffix: "a1b2c3d4", wantID: "builder-agent-a1b2c3d4"},
-		{name: "injected cipher and flag override malformed environment", empty: true, key: "malformed-private-key", options: cli.Options{SecretCipher: cipher},
+		{name: "malformed unused encryption key and flag identity", empty: true, key: "malformed-private-key",
 			suffix: "invalid", arguments: []string{"--agent-id-suffix=b2c3d4e5"}, wantID: "builder-agent-b2c3d4e5"},
-		{name: "nil cipher uses environment and empty suffix flag generates identity", empty: true, key: strings.Repeat("b2", 32),
+		{name: "missing encryption key and empty suffix flag", empty: true,
 			suffix: "invalid", arguments: []string{"--agent-id-suffix="}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
+			if test.key == "" {
+				if err := os.Unsetenv("SECRETS_ENCRYPTION_KEY"); err != nil {
+					t.Fatal(err)
+				}
+			}
 			t.Setenv("COMMANDER_AGENT_ID_SUFFIX", test.suffix)
 			t.Setenv("BUILDER_DEFAULT_REPO_VISIBILITY", test.visibility)
 			empty := test.empty
@@ -164,7 +163,8 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 			serving, stop := context.WithCancel(ctx)
 			finished := make(chan struct{})
 			var runErr error
-			go func() { defer close(finished); runErr = cli.RunWithOptions(serving, args, io.Discard, test.options) }()
+			var logs bytes.Buffer
+			go func() { defer close(finished); runErr = cli.Run(serving, args, &logs) }()
 			defer func() {
 				stop()
 				select {
@@ -225,6 +225,12 @@ func TestCLIRegistrationAndCancellation(t *testing.T) {
 			if stopped.ID != snapshot.ID || stopped.Status != agent.AgentStopped {
 				t.Fatalf("incorrect shutdown announcement: %+v", stopped)
 			}
+			if value, present := os.LookupEnv("SECRETS_ENCRYPTION_KEY"); value != test.key || present != (test.key != "") {
+				t.Fatal("builder changed the unused encryption-key environment")
+			}
+			if test.key != "" && strings.Contains(logs.String(), test.key) {
+				t.Fatal("builder exposed the unused encryption key in diagnostics")
+			}
 		})
 	}
 }
@@ -258,7 +264,6 @@ func readSnapshot(t *testing.T, ctx context.Context, subscription comms.Subscrip
 }
 
 func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	t.Setenv("BUILDER_DEFAULT_REPO_VISIBILITY", "")
 	for _, test := range []struct{ name, argument, suffix, expected string }{
 		{"empty workspace", "--workspace-dir=", "", "workspace-dir"},
@@ -311,7 +316,6 @@ func TestCLIValidatesBeforeOpeningProviders(t *testing.T) {
 }
 
 func TestCLIWorkspaceEnvironment(t *testing.T) {
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	t.Setenv("BUILDER_WORKSPACE_DIR", " ")
 	root := t.TempDir()
 	args := []string{"--bus-url=nats://127.0.0.1:4222", "--storage-url=" + filepath.Join(root, "storage")}
@@ -325,7 +329,6 @@ func TestCLIWorkspaceEnvironment(t *testing.T) {
 }
 
 func TestCLIRejectsUnavailableProviders(t *testing.T) {
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	const secret = "provider-test-secret"
 	for _, test := range []struct {
 		name, flag, url string
@@ -401,88 +404,17 @@ func TestCLIRejectsUnavailableProviders(t *testing.T) {
 	}
 }
 
-func TestCLISecretKeyValidationPrecedesProviderStartup(t *testing.T) {
-	const invalidKey = "private-invalid-encryption-key"
-	t.Setenv("SECRETS_ENCRYPTION_KEY", invalidKey)
+func TestCLIHelpDoesNotOpenProviders(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "unused")
-	var logs bytes.Buffer
-	args := []string{
-		"--bus-url=" + filepath.Join(root, "bus"),
-		"--storage-url=" + filepath.Join(root, "storage"),
-	}
-	err := cli.Run(t.Context(), args, &logs)
-	if !errors.Is(err, crypto.ErrInvalidKey) || !strings.Contains(err.Error(), "SECRETS_ENCRYPTION_KEY") {
-		t.Fatal("invalid encryption key did not fail configuration")
-	}
-	if strings.Contains(err.Error(), invalidKey) || strings.Contains(logs.String(), invalidKey) {
-		t.Fatal("invalid encryption key appeared in diagnostics")
-	}
-	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("agent opened a provider before validating the encryption key")
-	}
-	logs.Reset()
-	if err := cli.RunWithOptions(t.Context(), append(args, "--help"), &logs, cli.Options{SecretCipher: &crypto.SecretCipher{}}); err != nil {
-		t.Fatalf("help validated the environment or injected cipher: %v", err)
-	}
-	if !strings.Contains(logs.String(), "Usage:") || !strings.Contains(logs.String(), "managed credentials") || strings.Contains(logs.String(), invalidKey) {
-		t.Fatal("help must describe managed credentials without exposing key material")
+	var output bytes.Buffer
+	args := []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage"), "--help"}
+
+	err := cli.Run(t.Context(), args, &output)
+
+	if err != nil || !strings.Contains(output.String(), "Usage:") || !strings.Contains(output.String(), "managed credentials") {
+		t.Fatalf("help did not describe managed credentials: %v", err)
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("help created runtime state")
-	}
-	if os.Getenv("SECRETS_ENCRYPTION_KEY") != invalidKey {
-		t.Fatal("host modified the encryption key environment")
-	}
-}
-
-func TestCLISecretCipherOptions(t *testing.T) {
-	const invalidKey = "private-invalid-encryption-key"
-	validKey := strings.Repeat("02", 32)
-	cipher, err := crypto.NewSecretCipher(validKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		name      string
-		key       string
-		cipher    *crypto.SecretCipher
-		extraArg  string
-		wantError string
-		wantCause error
-	}{
-		{name: "zero cipher cannot fall back to valid environment", key: validKey, cipher: &crypto.SecretCipher{}, wantError: "secret cipher", wantCause: crypto.ErrMissingKey},
-		{name: "injected cipher preserves action validation", key: invalidKey, cipher: cipher, extraArg: "--actions=unknown-action", wantError: "unknown action"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			t.Setenv("SECRETS_ENCRYPTION_KEY", test.key)
-			root := filepath.Join(t.TempDir(), "runtime")
-			args := []string{
-				"--bus-url=nats://127.0.0.1:4222", "--storage-url=" + filepath.Join(root, "storage"),
-				"--log-level=info", "--log-format=json",
-				"--workspace-dir=" + filepath.Join(root, "workspaces"),
-			}
-			if test.extraArg != "" {
-				args = append(args, test.extraArg)
-			}
-			var logs bytes.Buffer
-			err := cli.RunWithOptions(t.Context(), args, &logs, cli.Options{SecretCipher: test.cipher})
-			if err == nil || !strings.Contains(err.Error(), test.wantError) {
-				t.Fatalf("expected %s, got %v", test.wantError, err)
-			}
-			if test.wantCause != nil && !errors.Is(err, test.wantCause) {
-				t.Fatalf("cipher validation did not preserve its cause: %v", err)
-			}
-			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
-				t.Fatalf("invalid configuration created runtime state: %v", err)
-			}
-			if os.Getenv("SECRETS_ENCRYPTION_KEY") != test.key {
-				t.Fatal("host modified the encryption key environment")
-			}
-			for _, key := range []string{invalidKey, validKey} {
-				if strings.Contains(err.Error(), key) || strings.Contains(logs.String(), key) {
-					t.Fatal("encryption key appeared in diagnostics")
-				}
-			}
-		})
 	}
 }

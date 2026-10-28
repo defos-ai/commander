@@ -420,15 +420,6 @@ services:
     environment:
       <<: *environment
       BUILDER_DEFAULT_REPO_VISIBILITY: ${BUILDER_DEFAULT_REPO_VISIBILITY:-}
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
-        test -n "$$SECRETS_ENCRYPTION_KEY"
-        export SECRETS_ENCRYPTION_KEY
-        exec commander-builder-agent "$$@"
-      - commander-builder-agent
     image: commander-builder-agent:local
     build:
       context: .
@@ -436,10 +427,7 @@ services:
     user: "1000:1000"
     volumes:
       - builder-workspaces:/home/commander/workspaces
-      - secrets-key:/run/commander-secrets:ro
     depends_on:
-      secrets-key:
-        condition: service_completed_successfully
       controller:
         condition: service_started
       rabbitmq:
@@ -449,15 +437,6 @@ services:
 
   spawner-agent:
     <<: *agent
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
-        test -n "$$SECRETS_ENCRYPTION_KEY"
-        export SECRETS_ENCRYPTION_KEY
-        exec commander-spawner-agent "$$@"
-      - commander-spawner-agent
     image: commander-spawner-agent:local
     build:
       context: .
@@ -472,10 +451,7 @@ services:
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - secrets-key:/run/commander-secrets:ro
     depends_on:
-      secrets-key:
-        condition: service_completed_successfully
       controller:
         condition: service_started
       rabbitmq:

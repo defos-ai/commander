@@ -38,9 +38,6 @@ func (m *Manager) environment(saved record, directory string) []string {
 	for key, value := range m.config.Environment {
 		values = append(values, key+"="+value)
 	}
-	if key := m.config.SecretBootstrap.KeyFor(saved.Package, saved.AgentType); key != "" {
-		values = append(values, "SECRETS_ENCRYPTION_KEY="+key)
-	}
 	sort.Strings(values)
 	return values
 }

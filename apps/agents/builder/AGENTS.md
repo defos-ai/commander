@@ -15,10 +15,8 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   empty flag. Validate nonempty suffixes with `id.AgentIDFromSuffix` before opening
   providers; empty/unset values generate fresh IDs. Keep the fixed `builder-agent`
   type and never accept full IDs or a caller-supplied type prefix.
-- `cli.RunWithOptions` accepts an initialized `Options.SecretCipher` for embedding.
-  A non-nil cipher takes precedence over optional `SECRETS_ENCRYPTION_KEY`;
-  validate it before opening providers. Keep `Run` as the wrapper with empty
-  options. Do not mutate process environment or generate keys in this host.
+- `cli.Run` enables managed-secret delivery without an encryption key. The host
+  must not read, validate, generate or distribute `SECRETS_ENCRYPTION_KEY`.
 - [checkout-template](actions/checkout_template.go) accepts `{}` and uses a fixed
   source URL; do not expose paths or arbitrary Git URLs through task input.
 - [build-agent](actions/build_agent.go) accepts the checkout's opaque workspace
@@ -163,20 +161,15 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   `/home/commander/workspaces`; retain it across container recreation.
   Playground all-in-one does not embed a builder host. Separately spawned builders
   keep local workspaces; package spawning does not provision persistent mounts.
-- Compose's secrets-key initializer supplies API, spawner and the optional builder
-  through read-only mounts. For explicitly spawned builders, the spawner's trusted
-  bootstrap passes the same key to the official package only, checking its exact
-  repository/module and `builder-agent` manifest type. Never add the key
-  to the shared agent environment or infer trust from type alone. Action secrets
-  still use managed-secret delivery; no GitHub or model tokens are inherited.
+- The builder receives requested values through managed-secret delivery. Only
+  API and controller hold the encryption key; builders have no key mount or
+  bootstrap exception. No GitHub or model tokens are inherited from Spawner.
   Native users supply these tools; both builder and all-in-one Docker images include them.
 - The release package uses `apps/agents/builder/<version>` in this repository
   with `agent.yaml`; its reference includes `apps/agents/builder` before
   `@<version>`. It provides six native platforms and Docker.
   The shared manifest renderer must receive the builder image digest from the
-  same release run. Package metadata cannot request keys or mounts; the spawner
-  owns the narrow trusted-builder key policy. Docker administrators can inspect
-  the key in the spawned container environment.
+  same release run. Package metadata cannot request encryption keys or mounts.
 
 ## Validation
 

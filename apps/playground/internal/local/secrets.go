@@ -8,18 +8,18 @@ import (
 	"github.com/defos-ai/commander/framework/host"
 )
 
-func secretCipher() (string, *crypto.SecretCipher, error) {
+func secretCipher() (*crypto.SecretCipher, error) {
 	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
 	if key == "" {
 		var err error
 		key, err = host.GeneratePassword()
 		if err != nil {
-			return "", nil, fmt.Errorf("generate secrets encryption key: %w", err)
+			return nil, fmt.Errorf("generate secrets encryption key: %w", err)
 		}
 	}
 	cipher, err := crypto.NewSecretCipher(key)
 	if err != nil {
-		return "", nil, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+		return nil, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
 	}
-	return key, cipher, nil
+	return cipher, nil
 }

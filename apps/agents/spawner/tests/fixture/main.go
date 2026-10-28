@@ -14,9 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms/messages"
-	"github.com/defos-ai/commander/framework/crypto"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 	fsprovider "github.com/defos-ai/commander/providers/fs"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
@@ -58,17 +56,13 @@ func run() error {
 		return err
 	}
 	privateEnvironment := false
-	for _, key := range []string{"SPAWNER_PARENT_SECRET", "API_PASSWORD", "MCP_TOKEN"} {
-		privateEnvironment = privateEnvironment || os.Getenv(key) != ""
-	}
-	challenge, err := secretChallenge()
-	if err != nil {
-		return err
+	for _, key := range []string{"SPAWNER_PARENT_SECRET", "SECRETS_ENCRYPTION_KEY", "API_PASSWORD", "MCP_TOKEN"} {
+		_, exists := os.LookupEnv(key)
+		privateEnvironment = privateEnvironment || exists
 	}
 	report, err := json.Marshal(map[string]any{
 		"agent_id": agentID, "agent_id_suffix": suffix, "pid": os.Getpid(), "inherited_secret": privateEnvironment,
-		"secret_challenge": challenge,
-		"region":           os.Getenv("AWS_REGION"), "home": os.Getenv("HOME"),
+		"region": os.Getenv("AWS_REGION"), "home": os.Getenv("HOME"),
 		"chromium_path": os.Getenv("CHROMIUM_PATH"), "chromium_no_sandbox": os.Getenv("CHROMIUM_NO_SANDBOX"),
 	})
 	if err != nil {
@@ -146,24 +140,6 @@ func run() error {
 	}
 	_ = instance.Serve(ctx, bus, nil)
 	return nil
-}
-
-// Only ciphertext crosses back to the parent; the key stays in this process.
-func secretChallenge() (*secrets.Secret, error) {
-	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
-	if key == "" {
-		return nil, nil
-	}
-	cipher, err := crypto.NewSecretCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now().UTC()
-	encrypted, err := cipher.Encrypt(secrets.Metadata{
-		ID: id.New(), Key: secrets.Key{Name: "BOOTSTRAP_CHECK"},
-		Version: 1, CreatedAt: now, UpdatedAt: now,
-	}, []byte("fixture secret bootstrap"))
-	return &encrypted, err
 }
 
 func waitForRegistrationGate(ctx context.Context) error {

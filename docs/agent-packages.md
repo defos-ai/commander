@@ -118,8 +118,7 @@ for the complete CLI and factory pattern.
 
 Pass only the child's required environment. Never inherit the parent's entire
 credential set. Managed-secret agents receive requested values from the controller
-without an encryption key. The spawner's existing official-builder key bootstrap
-remains separate from managed-secret delivery.
+without an encryption key. Spawner does not mount or forward that key.
 See [builder secrets](../apps/agents/builder/README.md#secrets).
 
 Registration means the process connected. Check action readiness too: the agent

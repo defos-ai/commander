@@ -15,7 +15,6 @@ import (
 	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/environment"
-	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -34,7 +33,7 @@ type config struct {
 	secrets           *agents.SecretConfig
 }
 
-func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
+func parseConfig(args []string, stderr io.Writer) (config, error) {
 	knownActions := builder.ActionNames()
 	availableActions := strings.Join(knownActions, ",")
 	var result config
@@ -94,20 +93,6 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 		return config{}, errors.New("heartbeat-interval must not be negative")
 	}
 	var err error
-	cipher := options.SecretCipher
-	if cipher == nil {
-		if key := os.Getenv("SECRETS_ENCRYPTION_KEY"); key != "" {
-			cipher, err = crypto.NewSecretCipher(key)
-			if err != nil {
-				return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
-			}
-		}
-	}
-	if cipher != nil {
-		if err := cipher.Validate(); err != nil {
-			return config{}, fmt.Errorf("secret cipher: %w", err)
-		}
-	}
 	result.secrets = &agents.SecretConfig{}
 	if provided["actions"] {
 		result.actionNames, err = parseList(actionNames)

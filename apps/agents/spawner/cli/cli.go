@@ -25,9 +25,6 @@ var ErrShutdown = errors.New("spawner shutdown failed")
 type Options struct {
 	Runtime  string
 	StateDir string
-	// SecretsEncryptionKey overrides SECRETS_ENCRYPTION_KEY when non-nil.
-	// An explicit empty value disables managed secrets and child key delivery.
-	SecretsEncryptionKey *string
 	// Ready reports this host's identity before serving. The caller must still
 	// wait for the controller to persist its registration before using it.
 	Ready func(agentID string)

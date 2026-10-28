@@ -128,7 +128,7 @@ func TestCIComposeSecretsRejectsInvalidState(t *testing.T) {
 }
 
 func TestCIComposeSecretsConsumer(t *testing.T) {
-	for _, service := range []string{"api", "controller", "spawner-agent", "builder-agent"} {
+	for _, service := range []string{"api", "controller"} {
 		t.Run(service, func(t *testing.T) { testComposeSecretsConsumer(t, service) })
 	}
 }
@@ -139,9 +139,6 @@ func testComposeSecretsConsumer(t *testing.T, service string) {
 		t.Fatalf("key initialization failed: %v", err)
 	}
 	var arguments []string
-	if service != "api" {
-		arguments = []string{"--heartbeat-interval=1s"}
-	}
 	if service == "controller" {
 		arguments = []string{"--task-timeout=30m"}
 	}
@@ -194,7 +191,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if api.Init == nil || *api.Init {
 		t.Fatal("API must remain PID 1")
 	}
-	for _, name := range []string{"api", "controller", "spawner-agent", "builder-agent"} {
+	for _, name := range []string{"api", "controller"} {
 		service := services[name]
 		if !slices.Contains(service.Volumes, "secrets-key:/run/commander-secrets:ro") ||
 			service.DependsOn["secrets-key"].Condition != "service_completed_successfully" {
@@ -208,17 +205,19 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 		if _, exists := service.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
 			t.Fatalf("%s must not receive the key through Compose environment configuration", name)
 		}
-		if name == "api" || name == "controller" || name == "spawner-agent" || name == "builder-agent" {
+		if name == "api" || name == "controller" {
 			continue
 		}
-		for _, volume := range service.Volumes {
-			if strings.HasPrefix(volume, "secrets-key:") {
-				t.Fatalf("%s must not mount the secrets encryption key", name)
-			}
-		}
+		assertComposeServiceHasNoEncryptionKey(t, name, service)
 	}
-	var compose struct{ Volumes map[string]any }
+	var compose struct {
+		Volumes     map[string]any
+		Environment map[string]string `yaml:"x-environment"`
+	}
 	readCIYAML(t, "../..", "compose.yaml", &compose)
+	if _, exists := compose.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
+		t.Fatal("shared Compose environment must not contain the secrets encryption key")
+	}
 	if _, exists := compose.Volumes["secrets-key"]; !exists {
 		t.Fatal("Compose must declare a persistent secrets-key volume")
 	}
@@ -230,5 +229,50 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if builder.User != "1000:1000" || !slices.Contains(builder.CapDrop, "ALL") ||
 		!slices.Contains(builder.SecurityOpt, "no-new-privileges:true") {
 		t.Fatal("Compose builder must use its unprivileged image user without extra privileges")
+	}
+}
+
+func TestCIComposeTestStacksRestrictEncryptionKeyRecipients(t *testing.T) {
+	for _, file := range []string{"compose.test.yaml", "compose.full.test.yaml"} {
+		t.Run(file, func(t *testing.T) {
+			var compose struct {
+				Services    map[string]fixtures.ComposeService
+				Environment map[string]string `yaml:"x-environment"`
+			}
+			readCIYAML(t, "../composes", file, &compose)
+			if _, exists := compose.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
+				t.Fatal("shared test environment must not contain the secrets encryption key")
+			}
+			for _, name := range []string{"api", "controller"} {
+				if compose.Services[name].Environment["SECRETS_ENCRYPTION_KEY"] == "" {
+					t.Fatalf("%s must retain its isolated fixture encryption key", name)
+				}
+			}
+			for name, service := range compose.Services {
+				if name != "api" && name != "controller" {
+					assertComposeServiceHasNoEncryptionKey(t, name, service)
+				}
+			}
+		})
+	}
+}
+
+func assertComposeServiceHasNoEncryptionKey(t *testing.T, name string, service fixtures.ComposeService) {
+	t.Helper()
+	if _, exists := service.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
+		t.Fatalf("%s must not receive the secrets encryption key", name)
+	}
+	if _, exists := service.DependsOn["secrets-key"]; exists {
+		t.Fatalf("%s must not depend directly on secrets-key initialization", name)
+	}
+	for _, volume := range service.Volumes {
+		if strings.HasPrefix(volume, "secrets-key:") || strings.Contains(volume, ":/run/commander-secrets") {
+			t.Fatalf("%s must not mount the secrets encryption key", name)
+		}
+	}
+	for _, argument := range append(slices.Clone(service.Entrypoint), service.Command...) {
+		if strings.Contains(argument, "SECRETS_ENCRYPTION_KEY") || strings.Contains(argument, "/run/commander-secrets") {
+			t.Fatalf("%s startup must not read the secrets encryption key", name)
+		}
 	}
 }

@@ -23,7 +23,6 @@ type Config struct {
 	BusURL              string
 	StorageURL          string
 	Environment         map[string]string
-	SecretBootstrap     *runtimes.SecretBootstrap
 	Resolver            *packages.Resolver
 	RegistrationTimeout time.Duration
 }

@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/cli"
-	"github.com/defos-ai/commander/framework/crypto"
 )
 
 func TestSpawnerCLIValidatesBeforeCreatingState(t *testing.T) {
@@ -91,7 +90,6 @@ func TestSpawnerCLIValidatesEnvironmentBeforeCreatingState(t *testing.T) {
 		{"unknown runtime", "SPAWNER_RUNTIME", map[string]string{"SPAWNER_RUNTIME": "containerd"}},
 		{"kubernetes without namespace", "SPAWNER_KUBERNETES_NAMESPACE", map[string]string{"SPAWNER_RUNTIME": "kubernetes", "SPAWNER_KUBERNETES_NAMESPACE": ""}},
 		{"docker without network", "SPAWNER_DOCKER_NETWORK", map[string]string{"SPAWNER_RUNTIME": "docker"}},
-		{"invalid secrets key", "SECRETS_ENCRYPTION_KEY", map[string]string{"SECRETS_ENCRYPTION_KEY": "private-invalid-key"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "unused")
@@ -102,9 +100,6 @@ func TestSpawnerCLIValidatesEnvironmentBeforeCreatingState(t *testing.T) {
 			err := cli.Run(t.Context(), []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage")}, io.Discard)
 			if err == nil || !strings.Contains(err.Error(), test.expected) {
 				t.Fatalf("invalid environment returned %v", err)
-			}
-			if strings.Contains(err.Error(), "private-invalid-key") {
-				t.Fatal("invalid encryption key was exposed in the error")
 			}
 			if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 				t.Fatal("invalid environment created state")
@@ -214,7 +209,6 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	if strings.Contains(output.String(), "sentinel") {
 		t.Fatal("help exposed environment values")
 	}
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if err := cli.Run(ctx, args, io.Discard); !errors.Is(err, context.Canceled) {
@@ -222,29 +216,5 @@ func TestSpawnerCLIHelpAndPreCanceledStartupDoNotTouchProviders(t *testing.T) {
 	}
 	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("help or pre-canceled startup created state")
-	}
-}
-
-func TestSpawnerCLIEmbeddedSecretsKeyOverridesEnvironment(t *testing.T) {
-	t.Setenv("COMMANDER_AGENT_ID_SUFFIX", "")
-	t.Setenv("SPAWNER_RUNTIME", "native")
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "private-invalid-key")
-	root := filepath.Join(t.TempDir(), "unused")
-	t.Setenv("SPAWNER_STATE_DIR", filepath.Join(root, "spawner"))
-	args := []string{"--bus-url=" + filepath.Join(root, "bus"), "--storage-url=" + filepath.Join(root, "storage")}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	for _, key := range []string{strings.Repeat("ab", 32), ""} {
-		if err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretsEncryptionKey: &key}); !errors.Is(err, context.Canceled) {
-			t.Fatalf("embedded key did not override invalid environment: %v", err)
-		}
-	}
-	key := "private-invalid-embedded-key"
-	err := cli.RunWithOptions(ctx, args, io.Discard, cli.Options{SecretsEncryptionKey: &key})
-	if !errors.Is(err, crypto.ErrInvalidKey) || strings.Contains(err.Error(), key) {
-		t.Fatalf("invalid embedded key was not safely rejected: %v", err)
-	}
-	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("pre-canceled or invalid key configuration created state")
 	}
 }

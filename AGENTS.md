@@ -69,9 +69,8 @@ The user's current instructions take precedence over repository guidance.
   Keep execution checkpoints while children exist and scope
   teardown by deployment network plus the spawn ownership label.
   Its `secrets-key` initializer persists the encryption key in a dedicated volume;
-  API, controller, spawner and the optional builder mount it read-only and export
-  it before exec. Retain saved keys across restarts and reject invalid state or conflicting
-  overrides.
+  only API and controller mount it read-only and export it before exec. Retain
+  saved keys across restarts and reject invalid state or conflicting overrides.
   Keep this volume separate from `api-credentials`, `mcp-credentials` and database
   storage; restoring encrypted data requires its original key. API and MCP login
   initializers retain their separate credentials across restarts. API,

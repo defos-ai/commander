@@ -12,7 +12,6 @@ import (
 	"time"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/docker"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/kubernetes"
 	"github.com/defos-ai/commander/framework/agent"
@@ -34,7 +33,6 @@ type config struct {
 	logFormat           string
 	heartbeatInterval   time.Duration
 	secrets             *agent.SecretConfig
-	secretBootstrap     *runtimes.SecretBootstrap
 }
 
 func parseConfig(args []string, stderr io.Writer, options Options) (config, error) {
@@ -154,16 +152,6 @@ func parseConfig(args []string, stderr io.Writer, options Options) (config, erro
 	if result.runtime == "kubernetes" {
 		if err := validateKubernetesProviders(result.busURL, result.storageURL); err != nil {
 			return config{}, err
-		}
-	}
-	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
-	if options.SecretsEncryptionKey != nil {
-		key = *options.SecretsEncryptionKey
-	}
-	if key != "" {
-		result.secretBootstrap, err = runtimes.NewSecretBootstrap(key)
-		if err != nil {
-			return config{}, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
 		}
 	}
 	result.secrets = &agent.SecretConfig{}

@@ -18,10 +18,8 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
-	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes/native"
 	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
-	"github.com/defos-ai/commander/framework/domain/secrets"
 	fscomms "github.com/defos-ai/commander/providers/fs/comms"
 )
 
@@ -96,7 +94,7 @@ type NativeManager struct {
 	requests *atomic.Int32
 }
 
-func NewNativeManager(t *testing.T, mode string, timeout time.Duration, bootstrap ...*runtimes.SecretBootstrap) NativeManager {
+func NewNativeManager(t *testing.T, mode string, timeout time.Duration) NativeManager {
 	t.Helper()
 	root := t.TempDir()
 	bus, err := fscomms.NewFsBus(filepath.Join(root, "bus"))
@@ -116,9 +114,6 @@ func NewNativeManager(t *testing.T, mode string, timeout time.Duration, bootstra
 			"AWS_REGION": "fixture-region", "CHROMIUM_PATH": filepath.Join(root, "chromium"), "CHROMIUM_NO_SANDBOX": "true",
 		},
 	}
-	if len(bootstrap) > 0 {
-		config.SecretBootstrap = bootstrap[0]
-	}
 	manager, err := native.NewManager(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -132,15 +127,14 @@ func NewNativeManager(t *testing.T, mode string, timeout time.Duration, bootstra
 }
 
 type ChildReport struct {
-	AgentID           string          `json:"agent_id"`
-	AgentIDSuffix     string          `json:"agent_id_suffix"`
-	PID               int             `json:"pid"`
-	InheritedSecret   bool            `json:"inherited_secret"`
-	SecretChallenge   *secrets.Secret `json:"secret_challenge"`
-	Region            string          `json:"region"`
-	Home              string          `json:"home"`
-	ChromiumPath      string          `json:"chromium_path"`
-	ChromiumNoSandbox string          `json:"chromium_no_sandbox"`
+	AgentID           string `json:"agent_id"`
+	AgentIDSuffix     string `json:"agent_id_suffix"`
+	PID               int    `json:"pid"`
+	InheritedSecret   bool   `json:"inherited_secret"`
+	Region            string `json:"region"`
+	Home              string `json:"home"`
+	ChromiumPath      string `json:"chromium_path"`
+	ChromiumNoSandbox string `json:"chromium_no_sandbox"`
 }
 
 func ChildReports(t *testing.T, directory string) []ChildReport {

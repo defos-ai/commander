@@ -33,7 +33,7 @@ func NewComposeSecrets(t *testing.T) *ComposeSecrets {
 		t.Fatal(err)
 	}
 	mock := fakes.ComposeSecretsConsumer
-	for _, binary := range []string{"commander-api", "commander-controller", "commander-spawner-agent", "commander-builder-agent"} {
+	for _, binary := range []string{"commander-api", "commander-controller"} {
 		if err := os.WriteFile(filepath.Join(f.dir, binary), []byte(mock), 0700); err != nil {
 			t.Fatal(err)
 		}

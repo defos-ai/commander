@@ -196,9 +196,6 @@ services:
     build:
       context: ../..
       dockerfile: apps/agents/builder/docker/Dockerfile
-    environment:
-      <<: *environment
-      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     volumes:
       - bus:/state/bus
       - storage:/state/storage
@@ -214,7 +211,6 @@ services:
       <<: *environment
       SPAWNER_RUNTIME: native
       SSL_CERT_FILE: /fixtures/ca.pem
-      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     volumes:
       - bus:/state/bus
       - storage:/state/storage

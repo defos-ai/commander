@@ -108,12 +108,10 @@ For a separate host:
 | `SPAWNER_RUNTIME` | Select `native` (default), `docker` or `kubernetes` |
 | `SPAWNER_DOCKER_NETWORK` | Select the Docker network; required in Docker mode |
 | `SPAWNER_STATE_DIR` | Change native downloads and working directories from `state/spawner` |
-| `SECRETS_ENCRYPTION_KEY` | Existing official-builder bootstrap in native/Docker mode |
 | `GITHUB_TOKEN` | Preconfigure access to private GitHub packages |
 
-Children receive provider settings, not your API, MCP or model tokens. The
-official builder package in native/Docker mode also receives the secrets encryption key; Docker
-administrators can inspect that key in its container environment.
+Children receive provider settings. Agents request managed credentials from the
+controller; Spawner never supplies the encryption key, including to builders.
 
 Spawn results put runtime-specific identity in `runtime_details`: `pid` for
 native processes, `container_id` for Docker containers, and `namespace`, `pod_name`

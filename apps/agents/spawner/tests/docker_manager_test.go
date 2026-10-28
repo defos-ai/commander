@@ -215,42 +215,28 @@ func TestDockerManagerRestartAdoptsRunningContainerAfterFreshRegistration(t *tes
 	}
 }
 
-func TestDockerManagerBootstrapsSecretsOnlyForTrustedBuilder(t *testing.T) {
+func TestDockerChildrenNeverReceiveSecretsEncryptionKey(t *testing.T) {
+	const key = "private-parent-key-sentinel"
+	t.Setenv("SECRETS_ENCRYPTION_KEY", key)
 	fixture := fixtures.NewDockerManager(t)
-	key := strings.Repeat("ab", 32)
-	var err error
-	fixture.Config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture.Manager = fixtures.RestartDockerManager(t, fixture)
 	for _, reference := range []string{fixtures.DockerBuilderReference, fixtures.DockerImpostorReference, fixtures.Reference} {
 		ctx, requestID, journal := fixtures.SpawnCheckpoints(t)
-		if _, err := fixture.Manager.Spawn(ctx, requestID, reference); err != nil {
+
+		_, err := fixture.Manager.Spawn(ctx, requestID, reference)
+
+		if err != nil {
 			t.Fatal(err)
 		}
 		assertCheckpointExcludes(t, journal, key)
 		spec := <-fixture.Engine.Created()
-		value, supplied := spec.Environment["SECRETS_ENCRYPTION_KEY"]
-		if reference == fixtures.DockerBuilderReference {
-			if !supplied || value != key {
-				t.Fatal("trusted builder did not receive the deployment key")
-			}
-		} else if supplied {
-			t.Fatal("untrusted package received the deployment key")
+		if _, supplied := spec.Environment["SECRETS_ENCRYPTION_KEY"]; supplied {
+			t.Fatal("child received the deployment encryption key")
 		}
 	}
 }
 
-func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
+func TestDockerManagerRejectsKeyBearingBuilderDuringAdoption(t *testing.T) {
 	fixture := fixtures.NewDockerManager(t)
-	key := strings.Repeat("ab", 32)
-	var err error
-	fixture.Config.SecretBootstrap, err = runtimes.NewSecretBootstrap(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture.Manager = fixtures.RestartDockerManager(t, fixture)
 	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 
 	first, err := fixture.Manager.Spawn(ctx, requestID, fixtures.DockerBuilderReference)
@@ -264,28 +250,21 @@ func TestDockerManagerReconcilesBuilderSecretsBootstrap(t *testing.T) {
 	repeated, err := fixture.Manager.Spawn(ctx, requestID, fixtures.DockerBuilderReference)
 	stop()
 	if err != nil || dockerDetails(t, repeated).ContainerID != dockerDetails(t, first).ContainerID {
-		t.Fatalf("unchanged bootstrap did not reuse the builder: %v", err)
+		t.Fatalf("keyless builder was not adopted: %v", err)
 	}
-	for _, replacement := range []string{strings.Repeat("cd", 32), ""} {
-		fixture.Config.SecretBootstrap = nil
-		if replacement != "" {
-			fixture.Config.SecretBootstrap, err = runtimes.NewSecretBootstrap(replacement)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
+	for _, key := range []string{"private-container-key-sentinel", ""} {
+		fixture.Engine.Change(func(c *docker.Container) { c.Environment["SECRETS_ENCRYPTION_KEY"] = key })
 		fixture.Manager = fixtures.RestartDockerManager(t, fixture)
+
 		_, err := fixture.Manager.Spawn(ctx, requestID, fixtures.DockerBuilderReference)
-		if err == nil || !strings.Contains(err.Error(), "secrets bootstrap") {
-			t.Fatalf("changed or removed bootstrap was accepted: %v", err)
-		}
-		if strings.Contains(err.Error(), key) || replacement != "" && strings.Contains(err.Error(), replacement) {
-			t.Fatal("bootstrap mismatch disclosed an encryption key")
+
+		if err == nil || err.Error() != "Docker container contains an unsupported secrets encryption key" {
+			t.Fatal("key-bearing builder was accepted or its error disclosed environment data")
 		}
 	}
 	creates, starts, _ := fixture.Engine.Counts()
 	if creates != 1 || starts != 1 {
-		t.Fatalf("bootstrap reconciliation relaunched builder: creates=%d starts=%d", creates, starts)
+		t.Fatalf("adoption relaunched builder: creates=%d starts=%d", creates, starts)
 	}
 }
 

@@ -264,9 +264,6 @@ services:
     build:
       context: ../..
       dockerfile: apps/agents/builder/docker/Dockerfile
-    environment:
-      <<: *environment
-      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     volumes:
       - builder-workspaces:/home/commander/workspaces
 
@@ -282,7 +279,6 @@ services:
       SPAWNER_RUNTIME: docker
       SPAWNER_DOCKER_NETWORK: commander-full-test_default
       SSL_CERT_FILE: /fixtures/ca.pem
-      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - fixture-data:/fixtures:ro
