@@ -16,16 +16,22 @@ import (
 )
 
 func TestOperationLogQueriesVerifyScopeAndPreserveCriteria(t *testing.T) {
-	for _, taskScoped := range []bool{false, true} {
-		name := "operation"
-		if taskScoped {
-			name = "task"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		taskScoped bool
+		order      executions.LogOrder
+	}{
+		{name: "operation"},
+		{name: "ascending task", taskScoped: true, order: executions.LogOrderAscending},
+		{name: "descending operation", order: executions.LogOrderDescending},
+		{name: "descending task", taskScoped: true, order: executions.LogOrderDescending},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			data := fixtures.OperationLogs()
-			if !taskScoped {
+			if !test.taskScoped {
 				data.Criteria.TaskID = ""
 			}
+			data.Criteria.Order = test.order
 			scopes := fakes.NewLogScopes(fakes.LogScopeConfig{Operation: data.Operation, Task: data.Task})
 			logs := fakes.NewLogExecutions(fakes.LogExecutionConfig{Items: []executions.Log{data.Log}})
 			q := queries.Operations{Store: scopes, Executions: logs, Agents: fakes.AgentStore{}}
@@ -36,7 +42,7 @@ func TestOperationLogQueriesVerifyScopeAndPreserveCriteria(t *testing.T) {
 				t.Fatalf("scoped log query changed its results: %+v, %v", items, err)
 			}
 			wantReads := []fakes.LogScopeRead{{Context: t.Context(), OperationID: data.Operation.ID}}
-			if taskScoped {
+			if test.taskScoped {
 				wantReads = append(wantReads, fakes.LogScopeRead{Context: t.Context(), OperationID: data.Operation.ID, TaskID: data.Task.ID})
 			}
 			if !reflect.DeepEqual(scopes.Reads(), wantReads) || !reflect.DeepEqual(logs.Reads(), []fakes.LogListRead{{Context: t.Context(), Criteria: data.Criteria}}) {
@@ -47,7 +53,7 @@ func TestOperationLogQueriesVerifyScopeAndPreserveCriteria(t *testing.T) {
 }
 
 func TestOperationLogQueriesValidateBeforeReadingStores(t *testing.T) {
-	for _, invalid := range []string{"missing operation", "operation", "task", "agent", "action", "cursor", "limit"} {
+	for _, invalid := range []string{"missing operation", "operation", "task", "agent", "action", "cursor", "limit", "order"} {
 		t.Run(invalid, func(t *testing.T) {
 			data := fixtures.OperationLogs()
 			switch invalid {
@@ -65,6 +71,8 @@ func TestOperationLogQueriesValidateBeforeReadingStores(t *testing.T) {
 				data.Criteria.AfterLogID = "../log"
 			case "limit":
 				data.Criteria.Limit = 1001
+			case "order":
+				data.Criteria.Order = "newest"
 			}
 			scopes := fakes.NewLogScopes(fakes.LogScopeConfig{Operation: data.Operation, Task: data.Task})
 			logs := fakes.NewLogExecutions(fakes.LogExecutionConfig{})

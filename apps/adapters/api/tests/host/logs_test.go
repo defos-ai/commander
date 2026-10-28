@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,18 +38,30 @@ func TestLogQueriesReadSavedOperationAndTaskPagesWithoutController(t *testing.T)
 	}
 	handler := hostfixtures.LogHandler(t, config)
 	root := "/api/v1/operations/" + op.ID
+	descending := slices.Clone(logs)
+	slices.Reverse(descending)
 	for _, test := range []struct {
-		name, path string
-		want       []executions.Log
+		name, taskID, order string
+		want                []executions.Log
 	}{
-		{"operation", root + "/logs", logs},
-		{"task", root + "/tasks/" + op.Tasks[0].ID + "/logs", []executions.Log{logs[0], logs[2], logs[3]}},
+		{"operation", "", "", logs},
+		{"task", op.Tasks[0].ID, "", []executions.Log{logs[0], logs[2], logs[3]}},
+		{"operation descending", "", "desc", descending},
+		{"task descending", op.Tasks[0].ID, "desc", []executions.Log{logs[3], logs[2], logs[0]}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var saved []models.LogResponse
 			cursor := ""
 			for {
-				result := hostfixtures.LogRequest(t.Context(), handler, test.path+"?limit=2&cursor="+cursor, true)
+				parameters := url.Values{"limit": {"2"}, "cursor": {cursor}}
+				if test.taskID != "" {
+					parameters.Set("task_id", test.taskID)
+				}
+				if test.order != "" {
+					parameters.Set("order", test.order)
+				}
+
+				result := hostfixtures.LogRequest(t.Context(), handler, root+"/logs?"+parameters.Encode(), true)
 
 				page := decodeResponse[models.PageResponse[models.LogResponse]](t, result)
 				if page.Items == nil || len(page.Items) > 2 {
@@ -102,7 +113,7 @@ func TestLogQueriesResumeAfterAnEmptyFilteredTail(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := hostfixtures.LogHandler(t, config)
-	path := "/api/v1/operations/" + op.ID + "/tasks/" + op.Tasks[0].ID + "/logs?agent_id=" + logs[0].AgentID + "&action_name=inspect&cursor=" + logs[0].ID
+	path := "/api/v1/operations/" + op.ID + "/logs?task_id=" + op.Tasks[0].ID + "&agent_id=" + logs[0].AgentID + "&action_name=inspect&cursor=" + logs[0].ID
 
 	tail := decodeResponse[models.PageResponse[models.LogResponse]](t, hostfixtures.LogRequest(t.Context(), handler, path, true))
 
@@ -123,41 +134,147 @@ func TestLogQueriesResumeAfterAnEmptyFilteredTail(t *testing.T) {
 	}
 }
 
-func TestLogQueriesRejectInvalidInputBeforeReadingLogs(t *testing.T) {
+func TestLogQueriesDescendingPagesPreserveScopeAndFollowNewerAppends(t *testing.T) {
+	for _, test := range []struct {
+		name, agent, action string
+		task, limit         int
+		want                []int
+	}{
+		{name: "operation", task: -1, limit: 2, want: []int{3, 2}},
+		{name: "task", task: 1, limit: 1, want: []int{1}},
+		{name: "operation filters", task: -1, agent: "worker-agent-00000001", action: "inspect", limit: 1, want: []int{3}},
+		{name: "task filters", task: 0, agent: "worker-agent-00000001", action: "Inspect", limit: 1, want: []int{2}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := hostfixtures.LogAPIConfig(t)
+			op, other := hostfixtures.LogOperation(), hostfixtures.LogOperation()
+			if err := config.OperationStore.Create(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			logs := hostfixtures.OperationLogs(op)
+			for _, log := range append(logs, hostfixtures.OperationLogs(other)[0]) {
+				if err := config.ExecutionStore.AppendLog(t.Context(), log); err != nil {
+					t.Fatal(err)
+				}
+			}
+			handler := hostfixtures.LogHandler(t, config)
+			path := "/api/v1/operations/" + op.ID + "/logs"
+			parameters := url.Values{"limit": {strconv.Itoa(test.limit)}, "order": {"desc"}}
+			if test.task >= 0 {
+				parameters.Set("task_id", op.Tasks[test.task].ID)
+			}
+			if test.agent != "" {
+				parameters.Set("agent_id", test.agent)
+			}
+			if test.action != "" {
+				parameters.Set("action_name", test.action)
+			}
+			want := make([]executions.Log, len(test.want))
+			for index, source := range test.want {
+				want[index] = logs[source]
+			}
+
+			newest := decodeResponse[models.PageResponse[models.LogResponse]](t,
+				hostfixtures.LogRequest(t.Context(), handler, path+"?"+parameters.Encode(), true))
+
+			assertLogResponses(t, newest.Items, want)
+			if newest.Items == nil || newest.NextCursor != want[len(want)-1].ID {
+				t.Fatalf("descending page lost its oldest matching cursor: %+v", newest)
+			}
+			late := want[0]
+			late.ID, late.CommandID = id.New(), id.New()
+			late.Message = "Later progress with an earlier source timestamp"
+			late.CreatedAt = late.CreatedAt.Add(-24 * time.Hour)
+			if err := config.ExecutionStore.AppendLog(t.Context(), late); err != nil {
+				t.Fatal(err)
+			}
+			parameters.Set("cursor", newest.Items[0].ID)
+			parameters.Set("order", "asc")
+
+			followed := decodeResponse[models.PageResponse[models.LogResponse]](t,
+				hostfixtures.LogRequest(t.Context(), handler, path+"?"+parameters.Encode(), true))
+
+			assertLogResponses(t, followed.Items, []executions.Log{late})
+			if followed.NextCursor != late.ID {
+				t.Fatal("ascending polling from the newest descending entry did not advance its cursor")
+			}
+		})
+	}
+}
+
+func TestLogQueriesEmptyDescendingPageCanObserveTheFirstMatchingLog(t *testing.T) {
 	config := hostfixtures.LogAPIConfig(t)
 	op := hostfixtures.LogOperation()
 	if err := config.OperationStore.Create(t.Context(), op); err != nil {
 		t.Fatal(err)
 	}
+	logs := hostfixtures.OperationLogs(op)
+	if err := config.ExecutionStore.AppendLog(t.Context(), logs[0]); err != nil {
+		t.Fatal(err)
+	}
+	handler := hostfixtures.LogHandler(t, config)
+	path := "/api/v1/operations/" + op.ID + "/logs"
+	filter := "?agent_id=worker-agent-deadbeef"
+
+	newest := decodeResponse[models.PageResponse[models.LogResponse]](t,
+		hostfixtures.LogRequest(t.Context(), handler, path+filter+"&order=desc", true))
+
+	if newest.Items == nil || len(newest.Items) != 0 || newest.NextCursor != "" {
+		t.Fatalf("empty descending page changed its empty cursor: %+v", newest)
+	}
+	late := logs[1]
+	late.AgentID = "worker-agent-deadbeef"
+	if err := config.ExecutionStore.AppendLog(t.Context(), late); err != nil {
+		t.Fatal(err)
+	}
+
+	followed := decodeResponse[models.PageResponse[models.LogResponse]](t,
+		hostfixtures.LogRequest(t.Context(), handler, path+filter+"&order=asc&cursor="+newest.NextCursor, true))
+
+	assertLogResponses(t, followed.Items, []executions.Log{late})
+	if followed.NextCursor != late.ID {
+		t.Fatal("following an empty descending page lost the first matching log")
+	}
+}
+
+func TestLogQueriesRejectInvalidInputBeforeReadingLogs(t *testing.T) {
+	config := hostfixtures.LogAPIConfig(t)
+	op := hostfixtures.LogOperation()
+	parents := &fakes.LogOperationReads{}
+	config.OperationStore = parents
 	store := fakes.NewLogQueries(nil)
 	config.ExecutionStore = store
 	handler := hostfixtures.LogHandler(t, config)
-	for _, path := range []string{"/api/v1/operations/" + op.ID + "/logs", "/api/v1/operations/" + op.ID + "/tasks/" + op.Tasks[0].ID + "/logs"} {
-		for _, test := range []struct{ query, code string }{
-			{"unexpected=value", "invalid_query"}, {"task_id=" + op.Tasks[0].ID, "invalid_query"},
-			{"cursor=a&cursor=b", "invalid_query"}, {"limit=1&limit=2", "invalid_query"},
-			{"agent_id=x&agent_id=y", "invalid_query"}, {"action_name=a&action_name=b", "invalid_query"},
-			{"cursor=invalid", "invalid_cursor"}, {"limit=", "invalid_limit"}, {"limit=-1", "invalid_limit"},
-			{"limit=0", "invalid_limit"}, {"limit=1001", "invalid_limit"}, {"limit=one", "invalid_limit"},
-			{"agent_id=", "invalid_query"}, {"agent_id=invalid", "invalid_query"},
-			{"action_name=", "invalid_query"}, {"action_name=%20%09", "invalid_query"},
-			{"action_name=%FF", "invalid_query"}, {"action_name=%GG", "invalid_query"},
-		} {
-			t.Run(path+"/"+test.query, func(t *testing.T) {
-				result := hostfixtures.LogRequest(t.Context(), handler, path+"?"+test.query, true)
+	path := "/api/v1/operations/" + op.ID + "/logs"
+	for _, test := range []struct{ query, code string }{
+		{"unexpected=value", "invalid_query"}, {"orderBy=created_at", "invalid_query"},
+		{"cursor=a&cursor=b", "invalid_query"}, {"cursor=invalid", "invalid_cursor"},
+		{"limit=1&limit=2", "invalid_query"}, {"task_id=a&task_id=b", "invalid_query"},
+		{"agent_id=x&agent_id=y", "invalid_query"}, {"action_name=a&action_name=b", "invalid_query"},
+		{"order=asc&order=desc", "invalid_query"}, {"order=", "invalid_query"},
+		{"order=ASC", "invalid_query"}, {"order=Desc", "invalid_query"}, {"order=ascending", "invalid_query"},
+		{"order=%20asc", "invalid_query"}, {"order=null", "invalid_query"},
+		{"limit=", "invalid_limit"}, {"limit=-1", "invalid_limit"},
+		{"limit=0", "invalid_limit"}, {"limit=1001", "invalid_limit"}, {"limit=one", "invalid_limit"},
+		{"task_id=", "invalid_query"}, {"task_id=invalid", "invalid_query"},
+		{"task_id=AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", "invalid_query"},
+		{"agent_id=", "invalid_query"}, {"agent_id=invalid", "invalid_query"},
+		{"action_name=", "invalid_query"}, {"action_name=%20%09", "invalid_query"},
+		{"action_name=%FF", "invalid_query"}, {"action_name=%GG", "invalid_query"},
+		{"latest=true", "invalid_query"}, {"latest=false", "invalid_query"},
+	} {
+		t.Run(test.query, func(t *testing.T) {
+			result := hostfixtures.LogRequest(t.Context(), handler, path+"?"+test.query, true)
 
-				assertAPIError(t, result, http.StatusBadRequest, test.code)
-			})
-		}
+			assertAPIError(t, result, http.StatusBadRequest, test.code)
+		})
 	}
 	if calls, _ := store.Snapshot(); calls.Attempts != 0 {
 		t.Fatal("invalid log query reached the execution store")
 	}
-	for _, test := range []struct{ path, code string }{
-		{"/api/v1/operations/invalid/logs", "invalid_operation_id"},
-		{"/api/v1/operations/" + op.ID + "/tasks/invalid/logs", "invalid_task_id"},
-	} {
-		assertAPIError(t, hostfixtures.LogRequest(t.Context(), handler, test.path, true), http.StatusBadRequest, test.code)
+	assertAPIError(t, hostfixtures.LogRequest(t.Context(), handler, "/api/v1/operations/invalid/logs", true), http.StatusBadRequest, "invalid_operation_id")
+	if calls := parents.Snapshot(); calls.Attempts != 0 {
+		t.Fatal("invalid log query reached parent operation storage")
 	}
 }
 
@@ -165,6 +282,9 @@ func TestLogQueriesPreserveMissingParentAndScopedCursorErrors(t *testing.T) {
 	config := hostfixtures.LogAPIConfig(t)
 	op, other := hostfixtures.LogOperation(), hostfixtures.LogOperation()
 	if err := config.OperationStore.Create(t.Context(), op); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.OperationStore.Create(t.Context(), other); err != nil {
 		t.Fatal(err)
 	}
 	logs := hostfixtures.OperationLogs(op)
@@ -177,11 +297,13 @@ func TestLogQueriesPreserveMissingParentAndScopedCursorErrors(t *testing.T) {
 	handler := hostfixtures.LogHandler(t, config)
 	root := "/api/v1/operations/" + op.ID
 	for _, test := range []struct{ path, code string }{
-		{"/api/v1/operations/" + other.ID + "/logs", "operation_not_found"},
-		{root + "/tasks/" + other.Tasks[0].ID + "/logs", "task_not_found"},
+		{"/api/v1/operations/" + id.New() + "/logs", "operation_not_found"},
+		{"/api/v1/operations/" + id.New() + "/logs?task_id=" + op.Tasks[0].ID, "operation_not_found"},
+		{root + "/logs?task_id=" + id.New(), "task_not_found"},
+		{root + "/logs?task_id=" + other.Tasks[0].ID, "task_not_found"},
 		{root + "/logs?cursor=" + id.New(), "log_not_found"},
-		{root + "/logs?cursor=" + foreign.ID, "log_not_found"},
-		{root + "/tasks/" + op.Tasks[0].ID + "/logs?cursor=" + logs[1].ID, "log_not_found"},
+		{root + "/logs?cursor=" + foreign.ID + "&order=desc", "log_not_found"},
+		{root + "/logs?task_id=" + op.Tasks[0].ID + "&cursor=" + logs[1].ID, "log_not_found"},
 		{root + "/logs?cursor=" + logs[0].ID + "&action_name=Inspect", "log_not_found"},
 	} {
 		result := hostfixtures.LogRequest(t.Context(), handler, test.path, true)
@@ -214,7 +336,8 @@ func TestLogQueriesBoundAndSanitizeBackendFailures(t *testing.T) {
 
 			assertAPIError(t, result, test.status, test.code)
 			calls, query := store.Snapshot()
-			if calls.Attempts != 1 || calls.Remaining <= 0 || calls.Remaining > 10*time.Second || query.Limit != 100 || query.ActionName != " inspect " {
+			if calls.Attempts != 1 || calls.Remaining <= 0 || calls.Remaining > 10*time.Second || query.Limit != 100 ||
+				query.Order != executions.LogOrderAscending || query.ActionName != " inspect " {
 				t.Fatalf("log query lost its bounded context or exact filter/default: calls=%+v query=%+v", calls, query)
 			}
 		})
@@ -224,7 +347,7 @@ func TestLogQueriesBoundAndSanitizeBackendFailures(t *testing.T) {
 func TestLogQueriesRequireAuthenticationAndAnExecutionStore(t *testing.T) {
 	config := hostfixtures.LogAPIConfig(t)
 	handler := hostfixtures.LogHandler(t, config)
-	path := "/api/v1/operations/" + id.New() + "/logs"
+	path := "/api/v1/operations/" + id.New() + "/logs?order=desc&task_id=" + id.New()
 
 	result := hostfixtures.LogRequest(t.Context(), handler, path, false)
 
@@ -235,16 +358,40 @@ func TestLogQueriesRequireAuthenticationAndAnExecutionStore(t *testing.T) {
 	}
 }
 
+func TestLogQueriesRemovedRoutesHaveNoAliases(t *testing.T) {
+	config := hostfixtures.LogAPIConfig(t)
+	op := hostfixtures.LogOperation()
+	if err := config.OperationStore.Create(t.Context(), op); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.ExecutionStore.AppendLog(t.Context(), hostfixtures.OperationLogs(op)[0]); err != nil {
+		t.Fatal(err)
+	}
+	handler := hostfixtures.LogHandler(t, config)
+	root := "/api/v1/operations/" + op.ID
+	for _, path := range []string{root + "/logs/latest", root + "/tasks/" + op.Tasks[0].ID + "/logs", root + "/tasks/" + op.Tasks[0].ID + "/logs/latest"} {
+		result := hostfixtures.LogRequest(t.Context(), handler, path, true)
+
+		if result.Status != http.StatusNotFound {
+			t.Fatalf("removed route %s remains available: %d", path, result.Status)
+		}
+	}
+}
+
 func TestLogQueriesOpenAPIContract(t *testing.T) {
 	handler := hostfixtures.LogHandler(t, hostfixtures.LogAPIConfig(t))
 	var document struct {
 		Paths map[string]map[string]struct {
-			Parameters []struct {
-				Name   string `json:"name"`
-				Schema struct {
+			OperationID string `json:"operationId"`
+			Parameters  []struct {
+				Name     string `json:"name"`
+				In       string `json:"in"`
+				Required bool   `json:"required"`
+				Schema   struct {
 					Maximum json.RawMessage `json:"maximum"`
 					Default json.RawMessage `json:"default"`
 					Pattern string          `json:"pattern"`
+					Enum    []string        `json:"enum"`
 				} `json:"schema"`
 			} `json:"parameters"`
 			Responses map[string]json.RawMessage `json:"responses"`
@@ -265,29 +412,37 @@ func TestLogQueriesOpenAPIContract(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Body), &document); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/api/v1/operations/{operation_id}/logs", "/api/v1/operations/{operation_id}/tasks/{task_id}/logs"} {
-		get, ok := document.Paths[path]["get"]
-		if !ok {
-			t.Fatalf("missing documented route %s", path)
+	get, ok := document.Paths["/api/v1/operations/{operation_id}/logs"]["get"]
+	if !ok || get.OperationID == "" {
+		t.Fatal("missing documented operation log route")
+	}
+	parameters := []string{}
+	for _, parameter := range get.Parameters {
+		parameters = append(parameters, parameter.Name)
+		if parameter.Name == "limit" && (string(parameter.Schema.Default) != "100" || string(parameter.Schema.Maximum) != strconv.Itoa(domain.MaxPageSize)) {
+			t.Fatal("documented log page bounds differ from the handler")
 		}
-		parameters := []string{}
-		for _, parameter := range get.Parameters {
-			parameters = append(parameters, parameter.Name)
-			if parameter.Name == "limit" && (string(parameter.Schema.Default) != "100" || string(parameter.Schema.Maximum) != strconv.Itoa(domain.MaxPageSize)) {
-				t.Fatal("documented log page bounds differ from the handler")
-			}
-			if parameter.Name == "action_name" && parameter.Schema.Pattern != `\S` {
-				t.Fatal("documented action filter accepts blank names")
-			}
+		if parameter.Name == "action_name" && parameter.Schema.Pattern != `\S` {
+			t.Fatal("documented action filter accepts blank names")
 		}
-		want := []string{"action_name", "agent_id", "cursor", "limit", "operation_id"}
-		if strings.Contains(path, "{task_id}") {
-			want = append(want, "task_id")
+		if parameter.Name == "task_id" && (parameter.In != "query" || parameter.Required || parameter.Schema.Pattern == "") {
+			t.Fatal("task filter must be an optional canonical UUID query parameter")
 		}
-		slices.Sort(parameters)
-		slices.Sort(want)
-		if !slices.Equal(parameters, want) || get.Responses["400"] == nil || get.Responses["404"] == nil {
-			t.Fatalf("log parameters/errors differ from the route: %v", parameters)
+		if parameter.Name == "order" && (!slices.Equal(parameter.Schema.Enum, []string{"asc", "desc"}) || string(parameter.Schema.Default) != `"asc"`) {
+			t.Fatal("documented log order differs from the handler")
+		}
+	}
+	slices.Sort(parameters)
+	if !slices.Equal(parameters, []string{"action_name", "agent_id", "cursor", "limit", "operation_id", "order", "task_id"}) ||
+		get.Responses["400"] == nil || get.Responses["404"] == nil {
+		t.Fatalf("log parameters/errors differ from the route: %v", parameters)
+	}
+	for _, path := range []string{
+		"/api/v1/operations/{operation_id}/logs/latest", "/api/v1/operations/{operation_id}/tasks/{task_id}/logs",
+		"/api/v1/operations/{operation_id}/tasks/{task_id}/logs/latest",
+	} {
+		if document.Paths[path] != nil {
+			t.Fatalf("removed log route remains documented: %s", path)
 		}
 	}
 	schema := document.Components.Schemas["Log"]

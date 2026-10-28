@@ -183,9 +183,13 @@
   [`ExecutionStore.ListLogs`](domain/executions/execution_store.go) follows task
   pagination: an empty log-ID cursor starts the first page; subsequent cursors
   must identify committed logs matching all operation/task/agent/action filters.
-  Unknown or mismatched cursors return `ErrUnknownLog`. Return matching logs in
-  append order, strictly after the cursor, up to the requested limit. Adapters
-  use the last returned ID for the next cursor and preserve it on empty pages.
+  Unknown or mismatched cursors return `ErrUnknownLog`. `LogQuery.Order` accepts
+  empty/default `asc` or `desc` over committed append positions. Ascending pages
+  start at the oldest matches and continue above the cursor; descending pages
+  start at the newest matches and continue below it. Return up to the requested
+  limit in that order. Adapters use the last returned ID for the next cursor and
+  preserve it on empty pages. To follow new logs after a descending read, use
+  ascending order from its first/newest returned ID.
   Append positions stay private to providers; producer timestamps and UUID order
   do not determine pagination. Store filters neither authorize access nor verify
   operation/task existence. Shared operation queries verify those saved scopes;

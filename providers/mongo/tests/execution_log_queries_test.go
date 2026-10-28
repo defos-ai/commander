@@ -25,6 +25,7 @@ func TestExecutionMongoStoreLogQueriesValidateBeforeDatabaseAccess(t *testing.T)
 		{}, {Limit: domain.MaxPageSize + 1}, {Limit: 1, OperationID: "invalid"},
 		{Limit: 1, TaskID: "invalid"}, {Limit: 1, AgentID: "invalid"}, {Limit: 1, ActionName: " "},
 		{Limit: 1, AfterLogID: "invalid"},
+		{Limit: 1, Order: "newest"}, {Limit: 1, Order: "DESC"},
 	} {
 		_, err := catalog.ListLogs(t.Context(), query)
 
@@ -87,6 +88,108 @@ func TestExecutionMongoStoreLogQueriesFollowIngestionOrderAndResumeAtTail(t *tes
 	assertLogs(t, resumed, err, logs[4:])
 }
 
+func TestExecutionMongoStoreLogQueriesPageDescendingAndFollowNewest(t *testing.T) {
+	database := fixtures.OpenLogDatabase(t)
+	catalog := fixtures.OpenExecutionStore(t, database)
+	logs := fixtures.NumberedExecutionLogs(9)
+	for index := range 4 {
+		logs[index].ID, logs[7-index].ID = logs[7-index].ID, logs[index].ID
+	}
+	logs[1].Work.TaskID = "40000000-0000-4000-8000-000000000002"
+	logs[2].AgentID = "builder-agent-89abcdef"
+	logs[3].Work.OperationID = "30000000-0000-4000-8000-000000000002"
+	logs[5].ActionName = "Build-Agent"
+	logs[7].Work = messages.WorkContext{}
+
+	empty, err := catalog.ListLogs(t.Context(), executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2})
+
+	assertLogs(t, empty, err, nil)
+	for _, log := range logs[:8] {
+		if err := catalog.AppendLog(t.Context(), log); err != nil {
+			t.Fatal(err)
+		}
+	}
+	matching := executions.LogQuery{OperationID: logs[0].Work.OperationID, TaskID: logs[0].Work.TaskID,
+		AgentID: logs[0].AgentID, ActionName: logs[0].ActionName, Order: executions.LogOrderDescending, Limit: 2}
+	descending := slices.Clone(logs[:8])
+	slices.Reverse(descending)
+	for _, test := range []struct {
+		name  string
+		query executions.LogQuery
+		want  []executions.Log
+	}{
+		{"one newest", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 1}, logs[7:8]},
+		{"newest three", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 3}, descending[:3]},
+		{"cursor at head", executions.LogQuery{Order: executions.LogOrderDescending, AfterLogID: logs[7].ID, Limit: 2}, []executions.Log{logs[6], logs[5]}},
+		{"cursor at first", executions.LogQuery{Order: executions.LogOrderDescending, AfterLogID: logs[0].ID, Limit: 2}, nil},
+		{"exact page", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 8}, descending},
+		{"undersized page", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 20}, descending},
+		{"operation", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2, OperationID: matching.OperationID}, []executions.Log{logs[6], logs[5]}},
+		{"task", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2, OperationID: matching.OperationID, TaskID: matching.TaskID}, []executions.Log{logs[6], logs[5]}},
+		{"exact action", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2, ActionName: logs[5].ActionName}, logs[5:6]},
+		{"no matches", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2, ActionName: "missing-action"}, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			page, err := catalog.ListLogs(t.Context(), test.query)
+
+			assertLogs(t, page, err, test.want)
+		})
+	}
+	recent, err := catalog.ListLogs(t.Context(), matching)
+
+	assertLogs(t, recent, err, []executions.Log{logs[6], logs[4]})
+	older := matching
+	older.AfterLogID = recent[len(recent)-1].ID
+
+	olderPage, err := catalog.ListLogs(t.Context(), older)
+
+	assertLogs(t, olderPage, err, logs[:1])
+	older.AfterLogID = olderPage[len(olderPage)-1].ID
+	oldest, err := catalog.ListLogs(t.Context(), older)
+	assertLogs(t, oldest, err, nil)
+	matching.Order = executions.LogOrderAscending
+	matching.AfterLogID = recent[0].ID
+
+	tail, err := catalog.ListLogs(t.Context(), matching)
+
+	assertLogs(t, tail, err, nil)
+	if err := catalog.AppendLog(t.Context(), logs[8]); err != nil {
+		t.Fatal(err)
+	}
+
+	resumed, err := catalog.ListLogs(t.Context(), matching)
+
+	assertLogs(t, resumed, err, logs[8:])
+	older.AfterLogID = logs[4].ID
+
+	beforeAnchor, err := catalog.ListLogs(t.Context(), older)
+
+	assertLogs(t, beforeAnchor, err, logs[:1])
+}
+
+func TestExecutionMongoStoreLogQueriesSelectDescendingPageBeforeDecoding(t *testing.T) {
+	database := fixtures.OpenLogDatabase(t)
+	catalog := fixtures.OpenExecutionStore(t, database)
+	logs := fixtures.NumberedExecutionLogs(3)
+	for _, log := range logs {
+		if err := catalog.AppendLog(t.Context(), log); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := database.Update(t.Context(), "execution_logs", bson.M{"_id": logs[0].ID},
+		bson.M{"$set": bson.M{"data": []byte("{")}}); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := catalog.ListLogs(t.Context(), executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2})
+	_, corruptErr := catalog.ListLogs(t.Context(), executions.LogQuery{Order: executions.LogOrderDescending, Limit: 3})
+
+	assertLogs(t, page, err, []executions.Log{logs[2], logs[1]})
+	if corruptErr == nil {
+		t.Fatal("descending page containing a malformed stored log was accepted")
+	}
+}
+
 func TestExecutionMongoStoreLogQueriesIntersectExactFilters(t *testing.T) {
 	database := fixtures.OpenLogDatabase(t)
 	catalog := fixtures.OpenExecutionStore(t, database)
@@ -120,10 +223,17 @@ func TestExecutionMongoStoreLogQueriesIntersectExactFilters(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			query := test.query
 			query.Limit = 10
+			for _, order := range []executions.LogOrder{executions.LogOrderAscending, executions.LogOrderDescending} {
+				query.Order = order
+				want := slices.Clone(test.want)
+				if order == executions.LogOrderDescending {
+					slices.Reverse(want)
+				}
 
-			page, err := catalog.ListLogs(t.Context(), query)
+				page, err := catalog.ListLogs(t.Context(), query)
 
-			assertLogs(t, page, err, test.want)
+				assertLogs(t, page, err, want)
+			}
 		})
 	}
 	query := executions.LogQuery{AgentID: logs[2].AgentID, Limit: 1}
@@ -150,10 +260,12 @@ func TestExecutionMongoStoreLogQueriesRejectUnknownOrOutOfScopeCursor(t *testing
 	catalog := fixtures.OpenExecutionStore(t, database)
 	logs := fixtures.NumberedExecutionLogs(2)
 
-	_, err := catalog.ListLogs(t.Context(), executions.LogQuery{Limit: 1, AfterLogID: logs[0].ID})
+	for _, order := range []executions.LogOrder{executions.LogOrderAscending, executions.LogOrderDescending} {
+		_, err := catalog.ListLogs(t.Context(), executions.LogQuery{Limit: 1, AfterLogID: logs[0].ID, Order: order})
 
-	if !errors.Is(err, executions.ErrUnknownLog) {
-		t.Fatalf("unknown cursor in empty store was accepted: %v", err)
+		if !errors.Is(err, executions.ErrUnknownLog) {
+			t.Fatalf("unknown cursor in empty store was accepted: order=%s error=%v", order, err)
+		}
 	}
 	if err := catalog.AppendLog(t.Context(), logs[0]); err != nil {
 		t.Fatal(err)
@@ -171,11 +283,14 @@ func TestExecutionMongoStoreLogQueriesRejectUnknownOrOutOfScopeCursor(t *testing
 		t.Run(test.name, func(t *testing.T) {
 			query := test.query
 			query.Limit = 1
+			for _, order := range []executions.LogOrder{executions.LogOrderAscending, executions.LogOrderDescending} {
+				query.Order = order
 
-			_, err := catalog.ListLogs(t.Context(), query)
+				_, err := catalog.ListLogs(t.Context(), query)
 
-			if !errors.Is(err, executions.ErrUnknownLog) {
-				t.Fatalf("invalid scoped cursor was accepted: %+v, %v", query, err)
+				if !errors.Is(err, executions.ErrUnknownLog) {
+					t.Fatalf("invalid scoped cursor was accepted: %+v, %v", query, err)
+				}
 			}
 		})
 	}
@@ -202,10 +317,12 @@ func TestExecutionMongoStoreLogQueriesValidateStoredCursorBeforeReturningAnEmpty
 				t.Fatal(err)
 			}
 
-			_, err := catalog.ListLogs(t.Context(), executions.LogQuery{Limit: 1, AfterLogID: log.ID})
+			for _, order := range []executions.LogOrder{executions.LogOrderAscending, executions.LogOrderDescending} {
+				_, err := catalog.ListLogs(t.Context(), executions.LogQuery{Limit: 1, AfterLogID: log.ID, Order: order})
 
-			if err == nil || (test.name == "uncommitted" && !errors.Is(err, executions.ErrUnknownLog)) {
-				t.Fatalf("invalid stored cursor was accepted: %v", err)
+				if err == nil || (test.name == "uncommitted" && !errors.Is(err, executions.ErrUnknownLog)) {
+					t.Fatalf("invalid stored cursor was accepted: order=%s error=%v", order, err)
+				}
 			}
 		})
 	}

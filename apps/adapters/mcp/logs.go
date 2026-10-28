@@ -15,8 +15,10 @@ import (
 
 type OperationLogsRequest struct {
 	OperationPageRequest
+	TaskID     logFilter `json:"task_id,omitempty"`
 	AgentID    logFilter `json:"agent_id,omitempty"`
 	ActionName logFilter `json:"action_name,omitempty"`
+	Order      logFilter `json:"order,omitempty"`
 }
 
 type logFilter string
@@ -41,23 +43,8 @@ func (r OperationLogsRequest) Validate() error {
 }
 
 func (r OperationLogsRequest) query() executions.LogQuery {
-	return executions.LogQuery{OperationID: r.OperationID, AgentID: string(r.AgentID),
-		ActionName: string(r.ActionName), AfterLogID: r.Cursor, Limit: r.pageLimit()}
-}
-
-type TaskLogsRequest struct {
-	OperationLogsRequest
-	TaskID string `json:"task_id"`
-}
-
-func (r TaskLogsRequest) Validate() error {
-	if err := r.OperationLogsRequest.Validate(); err != nil {
-		return err
-	}
-	if !id.Valid(r.TaskID) {
-		return errors.New("task_id must be a canonical UUID")
-	}
-	return nil
+	return executions.LogQuery{OperationID: r.OperationID, TaskID: string(r.TaskID), AgentID: string(r.AgentID),
+		ActionName: string(r.ActionName), AfterLogID: r.Cursor, Limit: r.pageLimit(), Order: executions.LogOrder(r.Order)}
 }
 
 type executionLog struct {
@@ -78,15 +65,9 @@ type OperationLogsResult struct {
 }
 
 func addLogTools(server *mcp.Server, query queries.Operations) {
-	addTool(server, "operation_logs", "Read saved execution progress logs for one operation in append order, optionally filtered by exact agent_id and action_name. Limit defaults to 100, maximum 1000. Pass next_cursor unchanged with the same operation and filters; an empty page keeps it unchanged. Logs are observations, not checkpoints or terminal results; delayed logs can arrive after completion. No running controller is required.", logQuerySchema(false),
+	addTool(server, "operation_logs", "Read saved execution progress logs for one operation, optionally filtered by task_id and exact agent_id/action_name. Order asc (default) reads oldest first; desc reads newest first. Limit defaults to 100, maximum 1000. Page with next_cursor using the same scope, filters and order; an empty page keeps it unchanged. Descending next_cursor points toward older entries. To follow new logs, switch to asc using the FIRST/newest descending entry ID as cursor. Logs are observations, not checkpoints or terminal results; delayed logs can arrive after completion. No running controller is required.", logQuerySchema(),
 		func(ctx context.Context, request OperationLogsRequest) (OperationLogsResult, error) {
 			return listExecutionLogs(ctx, query, request.query(), request.Cursor)
-		})
-	addTool(server, "task_logs", "Read saved execution progress logs for one task within its operation in append order, optionally filtered by exact agent_id and action_name. Limit defaults to 100, maximum 1000. Pass next_cursor unchanged with the same operation, task and filters; an empty page keeps it unchanged. Logs do not change task state and can arrive after completion. No running controller is required.", logQuerySchema(true),
-		func(ctx context.Context, request TaskLogsRequest) (OperationLogsResult, error) {
-			criteria := request.query()
-			criteria.TaskID = request.TaskID
-			return listExecutionLogs(ctx, query, criteria, request.Cursor)
 		})
 }
 
@@ -105,18 +86,16 @@ func listExecutionLogs(ctx context.Context, query queries.Operations, criteria e
 	return result, nil
 }
 
-func logQuerySchema(task bool) string {
+func logQuerySchema() string {
 	properties := map[string]any{
 		"operation_id": map[string]any{"type": "string", "format": "uuid", "minLength": 1},
+		"task_id":      map[string]any{"type": "string", "format": "uuid", "minLength": 1},
 		"agent_id":     stringProperty, "action_name": map[string]any{"type": "string", "pattern": `\S`},
-		"cursor": map[string]any{"type": []string{"string", "null"}, "description": "Copy next_cursor from the same operation, task and filters; omit or pass null or an empty string to start."},
+		"cursor": map[string]any{"type": []string{"string", "null"}, "description": "Copy next_cursor with the same scope, filters and order. Omit, pass null or an empty string to start. For live follow, use asc with the first/newest descending entry ID."},
 		"limit": map[string]any{"type": []string{"integer", "null"}, "minimum": 1, "maximum": domain.MaxPageSize,
 			"default": defaultPageLimit, "description": "Omit or pass null for the default limit of 100."},
+		"order": map[string]any{"type": "string", "enum": []string{"asc", "desc"}, "default": "asc",
+			"description": "Append order: asc is oldest first; desc is newest first. Descending cursors continue toward older entries."},
 	}
-	required := []string{"operation_id"}
-	if task {
-		properties["task_id"] = map[string]any{"type": "string", "format": "uuid", "minLength": 1}
-		required = append(required, "task_id")
-	}
-	return objectSchema(properties, required...)
+	return objectSchema(properties, "operation_id")
 }

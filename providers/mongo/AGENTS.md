@@ -45,8 +45,12 @@ artifact bytes and reports belong to the separate storage provider.
   Reject unpositioned existing records or a counter inconsistent with the saved
   tail; do not backfill, reset or delete data. [`ListLogs`](executions/log_queries.go)
   resolves `AfterLogID`, captures the head and reads matching positions in one
-  snapshot, applying exact filters, ascending sort and the requested limit before
-  decoding. The cursor must identify a committed log matching every supplied
+  snapshot, applying exact filters and the requested limit before decoding.
+  Empty/default `asc` reads positions above the cursor in ascending order;
+  `desc` reads below the cursor in descending order, starting at the saved head
+  when no cursor is supplied. Apply the requested sort and limit in MongoDB;
+  do not reverse or sort the returned page in memory.
+  The cursor must identify a committed log matching every supplied
   filter; otherwise return `ErrUnknownLog`. Keep simple collation on
   equality/position indexes and queries. Return a nonnil slice on success;
   callers continue after the last returned log ID and retain their cursor on an

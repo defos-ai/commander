@@ -172,16 +172,18 @@ func TestExecutionLogQueriesRejectUnknownOrFilterMismatchedCursors(t *testing.T)
 		{"action mismatch", executions.LogQuery{AfterLogID: log.ID, ActionName: "Build-agent"}},
 		{"standalone cursor for operation", executions.LogQuery{AfterLogID: unscoped.ID, OperationID: log.Work.OperationID}},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			query := test.query
-			query.Limit = 1
+		for _, order := range []executions.LogOrder{executions.LogOrderAscending, executions.LogOrderDescending} {
+			t.Run(string(order)+"/"+test.name, func(t *testing.T) {
+				query := test.query
+				query.Limit, query.Order = 1, order
 
-			_, err := store.ListLogs(t.Context(), query)
+				_, err := store.ListLogs(t.Context(), query)
 
-			if !errors.Is(err, executions.ErrUnknownLog) {
-				t.Fatalf("unknown or filter-mismatched cursor was accepted: %v", err)
-			}
-		})
+				if !errors.Is(err, executions.ErrUnknownLog) {
+					t.Fatalf("unknown or filter-mismatched cursor was accepted: %v", err)
+				}
+			})
+		}
 	}
 	query := executions.LogQuery{AfterLogID: log.ID, OperationID: log.Work.OperationID, TaskID: log.Work.TaskID,
 		AgentID: log.AgentID, ActionName: log.ActionName, Limit: 1}
@@ -274,11 +276,14 @@ func TestExecutionLogQueriesRejectInvalidInputWithoutCreatingState(t *testing.T)
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, ctx := range []context.Context{nil, canceled} {
-		if _, err := store.ListLogs(ctx, executions.LogQuery{Limit: 1}); err == nil || ctx != nil && !errors.Is(err, context.Canceled) {
-			t.Fatalf("invalid query context was accepted: %v", err)
+		for _, order := range []executions.LogOrder{executions.LogOrderAscending, executions.LogOrderDescending} {
+			if _, err := store.ListLogs(ctx, executions.LogQuery{Order: order, Limit: 1}); err == nil || ctx != nil && !errors.Is(err, context.Canceled) {
+				t.Fatalf("invalid query context was accepted: %v", err)
+			}
 		}
 	}
-	for _, query := range []executions.LogQuery{{}, {Limit: 1001}, {OperationID: "../outside", Limit: 1}, {AfterLogID: "../outside", Limit: 1}} {
+	for _, query := range []executions.LogQuery{{}, {Limit: 1001}, {OperationID: "../outside", Limit: 1}, {AfterLogID: "../outside", Limit: 1},
+		{Order: "newest", AfterLogID: fixtures.ExecutionLog(1).ID, Limit: 1}} {
 		if _, err := store.ListLogs(t.Context(), query); !errors.Is(err, domain.ErrInvalidInput) {
 			t.Fatalf("invalid query did not return invalid input: %v", err)
 		}

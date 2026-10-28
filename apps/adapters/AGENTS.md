@@ -21,13 +21,18 @@
   operation tools live in [mcp/operations.go](mcp/operations.go), and file resources
   in [mcp/artifacts.go](mcp/artifacts.go). HTTP-specific guidance is in
   [api/AGENTS.md](api/AGENTS.md).
-- [MCP log tools](mcp/logs.go) use `queries.Operations.ListLogs` to check operation
-  and task membership before reading the required `ExecutionStore`. Keep saved
+- [MCP `operation_logs`](mcp/logs.go) uses `queries.Operations.ListLogs` to check
+  operation and optional `task_id` membership before reading the required `ExecutionStore`. Keep saved
   progress readable without a controller and after terminal status. Entries expose
   flat operation/task/optional-step provenance; logs do not change lifecycle state.
   Use log IDs as cursors and preserve the input cursor on empty pages. Exact
-  agent/action filters intersect; reject malformed or explicitly empty/null filters
-  before store reads. CLI factories select execution storage through `DATABASE_URL`
+  task/agent/action filters intersect; reject malformed or explicitly empty/null
+  filters before store reads. `order` is `asc` by default or `desc`, both over
+  committed append order. Cursor continuation is exclusive in that direction;
+  descending `next_cursor` loads older history. Follow new entries with `asc`
+  from the first/newest descending entry ID. Reject supplied empty/null/invalid
+  order values before store reads.
+  CLI factories select execution storage through `DATABASE_URL`
   alongside the operation store and share the cached Mongo client.
 - Each host owns its `cli/config.go`, `cli/factory.go` and `cli/cli.go`. Keep concrete
   providers in those factories, propagate startup failures, and reject unsupported

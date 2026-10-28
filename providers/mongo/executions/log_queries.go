@@ -25,7 +25,7 @@ func (s *ExecutionMongoStore) ListLogs(ctx context.Context, query executions.Log
 		if err != nil {
 			return err
 		}
-		var after int64
+		var anchorPosition int64
 		if query.AfterLogID != "" {
 			var anchor logDocument
 			if err := s.database.GetByID(tx, logCollection, query.AfterLogID, &anchor); err != nil {
@@ -41,12 +41,21 @@ func (s *ExecutionMongoStore) ListLogs(ctx context.Context, query executions.Log
 			if anchor.Position > head || !query.Matches(log) {
 				return executions.ErrUnknownLog
 			}
-			after = anchor.Position
+			anchorPosition = anchor.Position
 		}
-		if after >= head {
+		if head == 0 {
 			return nil
 		}
-		filter := bson.M{"position": bson.M{"$gt": after, "$lte": head}}
+		descending := query.Order == executions.LogOrderDescending
+		position := bson.M{"$gt": int64(0), "$lte": head}
+		if query.AfterLogID != "" {
+			if descending {
+				position["$lt"] = anchorPosition
+			} else {
+				position["$gt"] = anchorPosition
+			}
+		}
+		filter := bson.M{"position": position}
 		for _, field := range []struct{ name, value string }{
 			{"operation_id", query.OperationID}, {"task_id", query.TaskID}, {"agent_id", query.AgentID}, {"action_name", query.ActionName},
 		} {
@@ -55,18 +64,26 @@ func (s *ExecutionMongoStore) ListLogs(ctx context.Context, query executions.Log
 			}
 		}
 		var documents []logDocument
+		direction := 1
+		if descending {
+			direction = -1
+		}
 		if err := s.database.Find(tx, logCollection, filter, &documents,
-			options.Find().SetSort(bson.D{{Key: "position", Value: 1}}).SetLimit(int64(query.Limit)).
+			options.Find().SetSort(bson.D{{Key: "position", Value: direction}}).SetLimit(int64(query.Limit)).
 				SetCollation(&options.Collation{Locale: "simple"})); err != nil {
 			return err
 		}
-		last := after
+		last := anchorPosition
 		for _, document := range documents {
 			log, err := document.decode()
 			if err != nil {
 				return err
 			}
-			if document.Position <= last || document.Position > head || !query.Matches(log) {
+			outOfOrder := document.Position <= last
+			if descending {
+				outOfOrder = last != 0 && document.Position >= last
+			}
+			if outOfOrder || document.Position > head || !query.Matches(log) {
 				return errors.New("stored execution log does not match its query position or filters")
 			}
 			logs = append(logs, log)

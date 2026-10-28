@@ -458,33 +458,24 @@ func openAPIPageParameters(events bool) []any {
 }
 
 func openAPILogPaths(paths map[string]any) {
-	for _, route := range []struct {
-		path, id, summary string
-		task              bool
-	}{
-		{"/api/v1/operations/{operation_id}/logs", "listOperationLogs", "List operation execution logs", false},
-		{"/api/v1/operations/{operation_id}/tasks/{task_id}/logs", "listOperationTaskLogs", "List task execution logs", true},
-	} {
-		endpoint := endpoints.OpenAPIQueryOperation(route.id, route.summary, "Operations", openAPIPage("Log"))
-		endpoint["description"] = "Reads immutable execution observations without contacting the controller, including logs received after work ends. Results follow durable ingestion order, independent of created_at and UUID order. Optional exact filters intersect. cursor must identify a log matching this operation, task if supplied, and all filters. Omitted or empty cursor starts the first page; next_cursor is the last returned log ID or the request cursor unchanged when empty. Unknown, repeated, malformed or empty supplied filters are rejected."
-		parameters := openAPIPageParameters(false)
-		parameters[1].(map[string]any)["description"] = "Exclusive log ID cursor: a canonical lowercase UUID identifying a log in this operation, task if supplied, and all requested filters. Empty starts the first page."
-		missing, invalid := "operation_not_found or log_not_found (unknown or out-of-scope cursor)", "invalid_operation_id, invalid_query, invalid_cursor or invalid_limit"
-		if route.task {
-			parameters = append(parameters, openAPIUUIDParameter("task_id"))
-			missing = "operation_not_found, task_not_found or log_not_found (unknown or out-of-scope cursor)"
-			invalid += ", invalid_task_id"
-		}
-		parameters = append(parameters,
-			map[string]any{"name": "agent_id", "in": "query", "required": false, "description": "Exact agent runtime ID; must not be empty.",
-				"schema": map[string]any{"type": "string", "pattern": `^[a-z0-9]+(-[a-z0-9]+)*-agent-[0-9a-f]{8}$`, "maxLength": 63}},
-			map[string]any{"name": "action_name", "in": "query", "required": false, "description": "Exact action name, preserving whitespace and case. Must contain nonblank UTF-8 text.",
-				"schema": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
-		)
-		endpoint["parameters"] = parameters
-		responses := endpoint["responses"].(map[string]any)
-		responses["400"] = endpoints.OpenAPIResponse(invalid+" or invalid_request_origin", endpoints.OpenAPIRef("Error"))
-		responses["404"] = endpoints.OpenAPIResponse(missing, endpoints.OpenAPIRef("Error"))
-		paths[route.path] = map[string]any{"get": endpoint}
-	}
+	endpoint := endpoints.OpenAPIQueryOperation("listOperationLogs", "List operation execution logs", "Operations", openAPIPage("Log"))
+	endpoint["description"] = "Reads immutable execution observations without contacting the controller, including logs received after work ends. Optional task_id, agent_id and action_name filters intersect. task_id must identify a task belonging to this operation. order=asc (default) follows durable ingestion order; order=desc returns newest entries first. created_at and UUID order do not control sorting. A cursor must identify a log matching the operation and every filter. Pages continue strictly after that anchor in the requested direction. An omitted or empty cursor starts at the oldest matching log for asc or newest for desc. next_cursor is the last returned log ID, or the request cursor unchanged on an empty page. In desc order next_cursor loads older logs; to follow new logs, use the first/newest entry ID as cursor with order=asc and the same filters. Unknown, repeated, malformed or empty supplied filters/order are rejected."
+	parameters := openAPIPageParameters(false)
+	parameters[1].(map[string]any)["description"] = "Exclusive log ID cursor: a canonical lowercase UUID identifying a log matching this operation and every supplied filter. asc returns later appends; desc returns earlier appends. Empty starts in the requested direction."
+	task := openAPIUUIDParameter("task_id")
+	task["in"], task["required"] = "query", false
+	task["description"] = "Exact task ID belonging to this operation; must not be empty."
+	parameters = append(parameters, task,
+		map[string]any{"name": "agent_id", "in": "query", "required": false, "description": "Exact agent runtime ID; must not be empty.",
+			"schema": map[string]any{"type": "string", "pattern": `^[a-z0-9]+(-[a-z0-9]+)*-agent-[0-9a-f]{8}$`, "maxLength": 63}},
+		map[string]any{"name": "action_name", "in": "query", "required": false, "description": "Exact action name, preserving whitespace and case. Must contain nonblank UTF-8 text.",
+			"schema": map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}},
+		map[string]any{"name": "order", "in": "query", "required": false, "description": "Durable append order. asc returns oldest first and pages toward newer logs; desc returns newest first and pages toward older logs. Accepts exactly asc or desc.",
+			"schema": map[string]any{"type": "string", "enum": []string{"asc", "desc"}, "default": "asc"}},
+	)
+	endpoint["parameters"] = parameters
+	responses := endpoint["responses"].(map[string]any)
+	responses["400"] = endpoints.OpenAPIResponse("invalid_operation_id, invalid_query, invalid_cursor, invalid_limit or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	responses["404"] = endpoints.OpenAPIResponse("operation_not_found, task_not_found or log_not_found (unknown or out-of-scope cursor)", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/operations/{operation_id}/logs"] = map[string]any{"get": endpoint}
 }

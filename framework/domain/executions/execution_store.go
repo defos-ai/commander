@@ -33,12 +33,15 @@ type ExecutionStore interface {
 	AppendLog(ctx context.Context, log Log) error
 	// GetLog returns ErrUnknownLog for a missing ID without creating a record.
 	GetLog(ctx context.Context, logID string) (Log, error)
-	// ListLogs returns observations in committed append order, independent of
-	// producer timestamps and UUID order. Nonempty filters intersect exactly.
-	// Limit must be 1..1000. An empty AfterLogID starts the first page;
+	// ListLogs returns observations in the requested append order, independent of
+	// producer timestamps and UUID order. Empty Order defaults to ascending.
+	// Nonempty filters intersect exactly. Limit must be 1..1000.
+	// An empty AfterLogID starts at the oldest or newest matching observation;
 	// otherwise it must identify a committed log matching the supplied filters,
-	// or ErrUnknownLog is returned. Results start strictly after that observation.
+	// or ErrUnknownLog is returned. Results start exclusively after that observation
+	// in the requested direction, within the captured committed head.
 	// Use the last returned ID for the next page; retain the cursor on empty pages.
+	// To follow new appends, use ascending order from the newest observed ID.
 	// Append positions stay private to storage. Without a cursor, missing filter
 	// IDs return an empty slice. These reads do not authorize scope access or verify
 	// that an operation/task exists. The returned slice is never nil on success.

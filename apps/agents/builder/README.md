@@ -38,9 +38,10 @@ code, and runs Go and package checks.
 Failed checks preserve the workspace for revision. Review the generated tests
 and behavior before deploying it.
 
-Use MCP `operation_logs` or `task_logs` to follow builder stages and periodic
-“still running” updates. Progress logging is best effort; use the saved task
-result to determine the outcome.
+Use MCP `operation_logs`, optionally filtered by `task_id`, to follow builder
+stages and periodic “still running” updates. Set `order: "desc"` to read recent
+entries. Progress logging is best effort; use the saved task result to determine
+the outcome.
 
 For direct MCP use, read `describe_mission` for `build-agent` and
 `describe_action` for each action's input schema. Checkout and build must run on

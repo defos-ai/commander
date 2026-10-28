@@ -64,14 +64,20 @@ Read saved progress without a running controller:
 
 ```sh
 curl --user "$API_USERNAME" \
-  "http://127.0.0.1:4274/api/v1/operations/$OPERATION_ID/logs?limit=100"
+  "http://127.0.0.1:4274/api/v1/operations/$OPERATION_ID/logs?order=desc&limit=100"
 ```
 
-Use `/api/v1/operations/$OPERATION_ID/tasks/$TASK_ID/logs` for one task. Optional
-`agent_id` and `action_name` filters match exactly and intersect. Pages follow
-ingestion order; pass `next_cursor` back as `cursor` with the same scope and
-filters. Keep that cursor after an empty page to observe later logs. `limit`
-defaults to 100 and accepts 1–1000. Logs can arrive after work ends.
+Optional `task_id`, `agent_id` and `action_name` filters match exactly and
+intersect; the task must belong to this operation. `order=asc` (default) reads
+oldest first; `order=desc` reads newest first. Pass `next_cursor` as `cursor`
+with the same filters and order to continue that direction. `limit` defaults
+to 100 and accepts 1–1000.
+
+To follow live progress after a descending page, save its first/newest log ID
+and request `order=asc&cursor=<that-id>` with the same filters. Ascending pages
+advance that cursor to their last returned ID. Empty pages keep the input cursor.
+Ordering follows durable appends, independently of source timestamps. Logs can
+arrive after work ends.
 
 ## Secrets
 

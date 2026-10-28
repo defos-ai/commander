@@ -60,10 +60,14 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
   retain the sequence and republish the original body bytes. Conflicting IDs never
   replace provenance or content; the controller verifies the saved execution claim.
 - [Log queries](executions/log_queries.go) capture the committed head and read
-  directly addressed positions in append order, returning matching logs up to
+  directly addressed positions in the requested append order, returning matches up to
   the requested limit or captured head. `AfterLogID` must identify a committed log
   matching every supplied filter; unknown, pending or mismatched anchors return
-  `ErrUnknownLog`. Resolve its private position and continue strictly after it.
+  `ErrUnknownLog`. Resolve its private position and continue exclusively from it:
+  empty order or `asc` moves forward; `desc` moves backward and returns newest
+  first. Empty cursors start at the oldest or newest end of the captured stream.
+  Validate order before I/O and stop descending before sequence zero. To follow
+  new appends after a descending page, use `asc` from the first/newest returned ID.
   Sparse scans honor cancellation; source timestamps do not determine pagination.
   Reads neither publish pending work nor create state, but `jsonfile.ReadDurable`
   confirms the observed head's directory publication. Missing or

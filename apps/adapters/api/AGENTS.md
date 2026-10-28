@@ -52,14 +52,22 @@
   enrichment out of handlers and mappings. Commands validate API input and send
   typed controller commands. Preserve strict JSON decoding, unknown-field rejection,
   body limits, content-type checks and canonical record-ID validation.
-- [Log routes](endpoints/operations/logs.go) require `Config.ExecutionStore`,
+- The [operation log route](endpoints/operations/logs.go) requires `Config.ExecutionStore`,
   constructed from `DATABASE_URL` alongside operation storage; reuse the cached
-  Mongo connection. Parent operation/task paths establish scope before loading
-  logs. Accept only `cursor`, `limit`, `agent_id` and `action_name`; exact optional
-  filters must be nonempty when supplied. Preserve default 100/max 1000 page
+  Mongo connection. The single `/operations/{operation_id}/logs` route accepts
+  optional exact `task_id`, `agent_id`, `action_name`, plus `order`, `cursor` and
+  `limit`. Validate nonempty canonical task IDs before storage and retain task
+  membership checks through the shared query service. Supplied order accepts
+  exactly `asc` or `desc`, defaulting to ascending durable append order. Ascending
+  pages continue at positions greater than the cursor; descending pages continue
+  at lower positions and remain newest first. Never sort by producer timestamps
+  or reverse/truncate provider results in the handler. Keep default 100/max 1000
   bounds, typed missing-parent errors and `404 log_not_found` for unknown or
-  out-of-scope cursor IDs. Map explicit flat log DTOs and keep the input cursor on
-  an empty page. These saved queries do not contact the controller.
+  out-of-scope cursor IDs. Return the last item ID as `next_cursor`, preserving
+  the request cursor on an empty page. Live following after a descending page uses
+  its first/newest ID with ascending order. Removed task-log/latest routes and
+  the `latest` query parameter have no compatibility aliases. These saved queries
+  do not contact the controller.
 - Keep command timeouts and error mapping explicit. An uncertain response does
   not prove rejection; do not retry commands automatically or infer completion
   from client cancellation.

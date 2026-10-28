@@ -9,18 +9,29 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
+type LogOrder string
+
+const (
+	LogOrderAscending  LogOrder = "asc"
+	LogOrderDescending LogOrder = "desc"
+)
+
 type LogQuery struct {
 	OperationID string
 	TaskID      string
 	AgentID     string
 	ActionName  string
 	AfterLogID  string
+	Order       LogOrder
 	Limit       int
 }
 
 func (q LogQuery) Validate() error {
 	if err := domain.ValidatePageLimit(q.Limit); err != nil {
 		return err
+	}
+	if q.Order != "" && q.Order != LogOrderAscending && q.Order != LogOrderDescending {
+		return fmt.Errorf("%w: log order must be asc or desc", domain.ErrInvalidInput)
 	}
 	if q.OperationID != "" && !id.Valid(q.OperationID) {
 		return fmt.Errorf("%w: log operation ID must be a canonical UUID", domain.ErrInvalidInput)

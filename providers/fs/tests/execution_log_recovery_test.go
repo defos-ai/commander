@@ -28,13 +28,16 @@ func TestExecutionLogsRecoverPendingAppendBeforeAdvancingTheCursor(t *testing.T)
 
 			_, pendingErr := reopened.GetLog(t.Context(), pending.ID)
 			_, cursorErr := reopened.ListLogs(t.Context(), executions.LogQuery{AfterLogID: pending.ID, Limit: 10})
+			_, descendingCursorErr := reopened.ListLogs(t.Context(), executions.LogQuery{Order: executions.LogOrderDescending, AfterLogID: pending.ID, Limit: 10})
 			page, err := reopened.ListLogs(t.Context(), executions.LogQuery{Limit: 10})
+			descending, descendingErr := reopened.ListLogs(t.Context(), executions.LogQuery{Order: executions.LogOrderDescending, Limit: 10})
 			after, readErr := os.ReadFile(fixtures.ExecutionLogIndexPath(root))
 
-			if pendingErr == nil || !errors.Is(cursorErr, executions.ErrUnknownLog) || err != nil || readErr != nil || len(page) != 1 ||
+			if pendingErr == nil || !errors.Is(cursorErr, executions.ErrUnknownLog) || !errors.Is(descendingCursorErr, executions.ErrUnknownLog) || err != nil || readErr != nil || len(page) != 1 ||
 				!page[0].Equal(first) || !bytes.Equal(before, after) {
 				t.Fatalf("read exposed or committed pending work: pending=%v cursor=%v page=%+v error=%v metadata=%v", pendingErr, cursorErr, page, err, readErr)
 			}
+			assertExecutionLogs(t, descending, descendingErr, first)
 			if phase == "intent" {
 				if _, err := os.Stat(fixtures.ExecutionLogPath(root, pending.ID)); !errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("reading an intent created its body: %v", err)

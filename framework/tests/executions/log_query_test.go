@@ -17,6 +17,9 @@ func TestExecutionLogQueryAcceptsOptionalFiltersAndPaginationBounds(t *testing.T
 		query executions.LogQuery
 	}{
 		{"all logs", executions.LogQuery{Limit: 1}},
+		{"ascending logs", executions.LogQuery{Order: executions.LogOrderAscending, Limit: 1}},
+		{"descending logs", executions.LogQuery{Order: executions.LogOrderDescending, Limit: 1}},
+		{"descending cursor", executions.LogQuery{Order: executions.LogOrderDescending, AfterLogID: log.ID, Limit: 1}},
 		{"log cursor", executions.LogQuery{AfterLogID: log.ID, Limit: 1}},
 		{"operation", executions.LogQuery{OperationID: log.Work.OperationID, Limit: 1000}},
 		{"task without operation", executions.LogQuery{TaskID: log.Work.TaskID, Limit: 1}},
@@ -26,6 +29,8 @@ func TestExecutionLogQueryAcceptsOptionalFiltersAndPaginationBounds(t *testing.T
 		{"exact action text", executions.LogQuery{ActionName: " build-agent ", Limit: 1}},
 		{"all filters", executions.LogQuery{OperationID: log.Work.OperationID, TaskID: log.Work.TaskID,
 			AgentID: log.AgentID, ActionName: log.ActionName, Limit: 1000, AfterLogID: log.ID}},
+		{"descending filtered logs", executions.LogQuery{OperationID: log.Work.OperationID, TaskID: log.Work.TaskID,
+			AgentID: log.AgentID, ActionName: log.ActionName, Order: executions.LogOrderDescending, Limit: 1000}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			original := test.query
@@ -59,6 +64,9 @@ func TestExecutionLogQueryRejectsInvalidFiltersAndLimits(t *testing.T) {
 		{"noncanonical cursor", executions.LogQuery{AfterLogID: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", Limit: 1}},
 		{"numeric cursor", executions.LogQuery{AfterLogID: "1", Limit: 1}},
 		{"blank cursor", executions.LogQuery{AfterLogID: " ", Limit: 1}},
+		{"unknown order", executions.LogQuery{Order: "newest", Limit: 1}},
+		{"uppercase order", executions.LogQuery{Order: "DESC", Limit: 1}},
+		{"order whitespace", executions.LogQuery{Order: " asc ", Limit: 1}},
 		{"missing limit", executions.LogQuery{}},
 		{"negative limit", executions.LogQuery{Limit: -1}},
 		{"excessive limit", executions.LogQuery{Limit: 1001}},
@@ -83,6 +91,7 @@ func TestExecutionLogQueryMatchesExactFilterIntersections(t *testing.T) {
 		want   bool
 	}{
 		{"all criteria", func(*executions.LogQuery) {}, true},
+		{"descending order", func(query *executions.LogQuery) { query.Order = executions.LogOrderDescending }, true},
 		{"operation differs", func(query *executions.LogQuery) { query.OperationID = log.ID }, false},
 		{"task differs", func(query *executions.LogQuery) { query.TaskID = log.ID }, false},
 		{"agent differs", func(query *executions.LogQuery) { query.AgentID = "builder-agent-00000002" }, false},

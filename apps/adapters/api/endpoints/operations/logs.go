@@ -11,8 +11,8 @@ import (
 )
 
 func registerLogs(mux *http.ServeMux, query queries.Operations) {
-	handler := requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		cursor, limit, ok := readPage(w, r, "agent_id", "action_name")
+	mux.HandleFunc("GET /api/v1/operations/{operation_id}/logs", requestHandler(func(w http.ResponseWriter, r *http.Request) {
+		cursor, limit, ok := readPage(w, r, "task_id", "agent_id", "action_name", "order")
 		if !ok {
 			return
 		}
@@ -21,13 +21,21 @@ func registerLogs(mux *http.ServeMux, query queries.Operations) {
 			return
 		}
 		values := r.URL.Query()
-		filter := executions.LogQuery{
-			OperationID: r.PathValue("operation_id"), TaskID: r.PathValue("task_id"),
-			AgentID: values.Get("agent_id"), ActionName: values.Get("action_name"),
-			AfterLogID: cursor, Limit: limit,
+		order := executions.LogOrderAscending
+		if values.Has("order") {
+			order = executions.LogOrder(values.Get("order"))
+			if order != executions.LogOrderAscending && order != executions.LogOrderDescending {
+				endpoints.WriteError(w, http.StatusBadRequest, "invalid_query")
+				return
+			}
 		}
-		if (values.Has("agent_id") && filter.AgentID == "") || (values.Has("action_name") && filter.ActionName == "") ||
-			filter.Validate() != nil {
+		filter := executions.LogQuery{
+			OperationID: r.PathValue("operation_id"), TaskID: values.Get("task_id"),
+			AgentID: values.Get("agent_id"), ActionName: values.Get("action_name"),
+			AfterLogID: cursor, Limit: limit, Order: order,
+		}
+		if (values.Has("task_id") && filter.TaskID == "") || (values.Has("agent_id") && filter.AgentID == "") ||
+			(values.Has("action_name") && filter.ActionName == "") || filter.Validate() != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_query")
 			return
 		}
@@ -36,7 +44,5 @@ func registerLogs(mux *http.ServeMux, query queries.Operations) {
 			cursor = logs[len(logs)-1].ID
 		}
 		endpoints.WriteQueryResult(w, pageResponse(mappings.ToLogResponses(logs), cursor), err)
-	})
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/logs", handler)
-	mux.HandleFunc("GET /api/v1/operations/{operation_id}/tasks/{task_id}/logs", handler)
+	}))
 }
