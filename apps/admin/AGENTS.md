@@ -84,5 +84,7 @@ the [UI guide](ui/AGENTS.md) for UI changes.
 - Keep module-wide Go checks rooted at `apps/admin`; frontend commands still run
   from `ui/frontend`. Use the UI guide for packaging and integration checks.
 - Keep CLI/client tests in `tests/`, using public packages and bounded local HTTP
-  fixtures. Follow [test guidance](../../framework/tests/AGENTS.md); do not add
-  paid-model or Docker dependencies to command tests.
+  fixtures. Keep setup/data in `tests/fixtures` and fake implementations in
+  `tests/fakes`; follow the [local layout](tests/AGENTS.md) and shared
+  [test guidance](../../framework/tests/AGENTS.md). Do not add paid-model or
+  Docker dependencies to command tests.

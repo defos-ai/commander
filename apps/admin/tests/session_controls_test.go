@@ -12,23 +12,13 @@ import (
 
 	"github.com/defos-ai/commander/apps/admin/client"
 	adminsessions "github.com/defos-ai/commander/apps/admin/sessions"
+	"github.com/defos-ai/commander/apps/admin/tests/fixtures"
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const (
-	controlSessionID = "7a193730-7bc0-4dcb-a522-1fcc050eb65a"
-	controlScopeID   = "58340060-95ce-4051-b2c1-2cb77e63ece5"
-	controlRequestID = "87e8740f-8333-432f-9944-82d1f06e56ad"
-	controlOwnerID   = "fixture-agent-00000001"
-)
-
-func controlSessionJSON() string {
-	return `{"id":"` + controlSessionID + `","scope_id":"` + controlScopeID + `","owner_agent_id":"` + controlOwnerID + `","kind":"shell","label":"Fixture session","state":"connected","disposition":"active","busy":false,"revision":1,"created_at":"2026-10-24T00:00:00Z","updated_at":"2026-10-24T00:00:00Z"}`
-}
-
 func TestSessionControlsPreserveUncertainOutcomesWithoutRetrying(t *testing.T) {
 	const marker = "private-server-value"
-	valid := controlSessionJSON()
+	valid := fixtures.ControlSessionJSON()
 	for _, tc := range []struct {
 		name      string
 		status    int
@@ -39,9 +29,9 @@ func TestSessionControlsPreserveUncertainOutcomesWithoutRetrying(t *testing.T) {
 	}{
 		{name: "unconfirmed close", status: 503, body: `{"error":"session_control_uncertain"}`, uncertain: true},
 		{name: "lost acknowledgement", lostReply: true, generated: true, uncertain: true},
-		{name: "different session", status: 200, body: strings.Replace(valid, controlSessionID, id.New(), 1), uncertain: true},
-		{name: "different scope", status: 200, body: strings.Replace(valid, controlScopeID, id.New(), 1), uncertain: true},
-		{name: "different owner", status: 200, body: strings.Replace(valid, controlOwnerID, "fixture-agent-00000002", 1), uncertain: true},
+		{name: "different session", status: 200, body: strings.Replace(valid, fixtures.ControlSessionID, id.New(), 1), uncertain: true},
+		{name: "different scope", status: 200, body: strings.Replace(valid, fixtures.ControlScopeID, id.New(), 1), uncertain: true},
+		{name: "different owner", status: 200, body: strings.Replace(valid, fixtures.ControlOwnerID, "fixture-agent-00000002", 1), uncertain: true},
 		{name: "invalid observation", status: 200, body: strings.Replace(valid, "connected", marker, 1), uncertain: true},
 		{name: "unexpected success status", status: 201, body: valid, uncertain: true},
 		{name: "rejected close may remain pending", status: 422, body: `{"error":"` + marker + `"}`},
@@ -52,7 +42,7 @@ func TestSessionControlsPreserveUncertainOutcomesWithoutRetrying(t *testing.T) {
 			submitted.Store("")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				if r.Method == http.MethodGet && r.URL.Path == "/api/v1/sessions/"+controlSessionID {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v1/sessions/"+fixtures.ControlSessionID {
 					reads.Add(1)
 					_, _ = io.WriteString(w, valid)
 					return
@@ -67,7 +57,7 @@ func TestSessionControlsPreserveUncertainOutcomesWithoutRetrying(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 					t.Error(err)
 				}
-				if request["id"] != controlSessionID || request["scope_id"] != controlScopeID || request["owner_agent_id"] != controlOwnerID || request["method"] != "close" || !id.Valid(request["request_id"]) {
+				if request["id"] != fixtures.ControlSessionID || request["scope_id"] != fixtures.ControlScopeID || request["owner_agent_id"] != fixtures.ControlOwnerID || request["method"] != "close" || !id.Valid(request["request_id"]) {
 					t.Errorf("control did not retain the resolved identity: %+v", request)
 				}
 				submitted.Store(request["request_id"])
@@ -84,11 +74,11 @@ func TestSessionControlsPreserveUncertainOutcomesWithoutRetrying(t *testing.T) {
 				_, _ = io.WriteString(w, tc.body)
 			}))
 			defer server.Close()
-			requestID := controlRequestID
+			requestID := fixtures.ControlRequestID
 			if tc.generated {
 				requestID = ""
 			}
-			_, err := adminsessions.Control(t.Context(), newAPIClient(t, server.URL), controlSessionID, "close", requestID)
+			_, err := adminsessions.Control(t.Context(), fixtures.NewClient(t, server.URL), fixtures.ControlSessionID, "close", requestID)
 			var controlError *adminsessions.ControlError
 			sentID := submitted.Load().(string)
 			if !errors.As(err, &controlError) || controlError.RequestID != sentID || !id.Valid(sentID) || reads.Load() != 1 || writes.Load() != 1 {
@@ -116,7 +106,7 @@ func TestSessionControlsPreserveUncertainOutcomesWithoutRetrying(t *testing.T) {
 }
 
 func TestSessionControlsRequireConfirmedOwnershipBeforeMutation(t *testing.T) {
-	valid := controlSessionJSON()
+	valid := fixtures.ControlSessionJSON()
 	for _, tc := range []struct {
 		name     string
 		status   int
@@ -125,8 +115,8 @@ func TestSessionControlsRequireConfirmedOwnershipBeforeMutation(t *testing.T) {
 	}{
 		{"missing session", 404, `{"error":"session_not_found"}`, true},
 		{"unrelated missing route", 404, `{"error":"route_not_found"}`, false},
-		{"wrong lookup identity", 200, strings.Replace(valid, controlSessionID, id.New(), 1), false},
-		{"unassigned session", 200, strings.Replace(valid, controlOwnerID, "", 1), false},
+		{"wrong lookup identity", 200, strings.Replace(valid, fixtures.ControlSessionID, id.New(), 1), false},
+		{"unassigned session", 200, strings.Replace(valid, fixtures.ControlOwnerID, "", 1), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var reads, writes atomic.Int32
@@ -140,7 +130,7 @@ func TestSessionControlsRequireConfirmedOwnershipBeforeMutation(t *testing.T) {
 				_, _ = io.WriteString(w, tc.body)
 			}))
 			defer server.Close()
-			_, err := adminsessions.Control(t.Context(), newAPIClient(t, server.URL), controlSessionID, "close", controlRequestID)
+			_, err := adminsessions.Control(t.Context(), fixtures.NewClient(t, server.URL), fixtures.ControlSessionID, "close", fixtures.ControlRequestID)
 			var controlError *adminsessions.ControlError
 			if err == nil || reads.Load() != 1 || writes.Load() != 0 || errors.Is(err, client.ErrWriteUncertain) || errors.As(err, &controlError) || errors.Is(err, adminsessions.ErrNotFound) != tc.notFound {
 				t.Fatalf("unconfirmed ownership reached a mutation or gained false certainty: error=%v reads=%d writes=%d", err, reads.Load(), writes.Load())

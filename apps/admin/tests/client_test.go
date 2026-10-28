@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/admin/client"
+	"github.com/defos-ai/commander/apps/admin/tests/fixtures"
 	"github.com/defos-ai/commander/framework/host"
 )
 
@@ -66,7 +67,7 @@ func TestAPIRejectsRedirectsAndPathsOutsideItsPrefix(t *testing.T) {
 		http.Redirect(w, r, destination.URL+"/private-password", http.StatusTemporaryRedirect)
 	}))
 	defer server.Close()
-	api := newAPIClient(t, server.URL)
+	api := fixtures.NewClient(t, server.URL)
 	_, err := api.Request(context.Background(), http.MethodGet, "/api/v1/missions", nil)
 	var status *client.StatusError
 	if !errors.As(err, &status) || status.StatusCode != http.StatusTemporaryRedirect || redirected.Load() != 0 || strings.Contains(err.Error(), "private-password") {
@@ -133,7 +134,7 @@ func TestAPIHandlesBoundedResponsesAndUncertainWritesWithoutRetries(t *testing.T
 				_, _ = w.Write([]byte(test.body))
 			}))
 			defer server.Close()
-			api := newAPIClient(t, server.URL)
+			api := fixtures.NewClient(t, server.URL)
 			_, err := api.Request(context.Background(), test.method, "/api/v1/missions", []byte(`{}`))
 			if err == nil || requests.Load() != 1 {
 				t.Fatalf("failed request was accepted or retried: error=%v requests=%d", err, requests.Load())
@@ -155,14 +156,4 @@ func TestAPIHandlesBoundedResponsesAndUncertainWritesWithoutRetries(t *testing.T
 			}
 		})
 	}
-}
-
-func newAPIClient(t *testing.T, endpoint string) *client.Client {
-	t.Helper()
-	api, err := client.New(client.Connection{URL: endpoint, Credentials: host.BasicCredentials{Username: "operator", Password: "private-password"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(api.Close)
-	return api
 }

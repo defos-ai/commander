@@ -4,34 +4,31 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/defos-ai/commander/apps/admin/cli"
 	"github.com/defos-ai/commander/apps/admin/client"
 	adminmissions "github.com/defos-ai/commander/apps/admin/missions"
+	"github.com/defos-ai/commander/apps/admin/tests/fakes"
+	"github.com/defos-ai/commander/apps/admin/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/host"
 )
 
 func TestMissionCommandsRoundTrip(t *testing.T) {
-	fixture := newMissionAPI(t)
+	fixture := fixtures.NewMissionAPI(t, fakes.MissionAPIConfig{})
 	name := "-review/site%new\\draft"
-	definition := missionJSON(name, "Review the requested site")
-	path := writeMissions(t, definition)
-	connection := fixture.connection()
+	definition := fixtures.MissionJSON(name, "Review the requested site")
+	path := fixtures.MissionsFile(t, definition)
+	connection := fixture.Connection()
 	connection.URL = ":invalid"
-	output, err := missionCommand(t, connection, nil, "missions", "import", path, "--api-url", fixture.server.URL, "--json")
+	output, err := missionCommand(t, connection, nil, "missions", "import", path, "--api-url", fixture.Connection().URL, "--json")
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
@@ -39,7 +36,7 @@ func TestMissionCommandsRoundTrip(t *testing.T) {
 	if result.Counts.Created != 1 || len(result.Items) != 1 || result.Items[0].Status != "created" {
 		t.Fatalf("unexpected import result: %s", output)
 	}
-	output, err = missionCommand(t, fixture.connection(), nil, "--json", "missions", "list")
+	output, err = missionCommand(t, fixture.Connection(), nil, "--json", "missions", "list")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -50,20 +47,21 @@ func TestMissionCommandsRoundTrip(t *testing.T) {
 		t.Fatalf("invalid list output: %s (%v)", output, err)
 	}
 	assertMissionJSON(t, list.Items[0], name)
-	output, err = missionCommand(t, fixture.connection(), nil, "missions", "export", "--", name)
+	output, err = missionCommand(t, fixture.Connection(), nil, "missions", "export", "--", name)
 	if err != nil {
 		t.Fatalf("export: %v", err)
 	}
 	assertMissionJSON(t, output, name)
-	fixture.mu.Lock()
-	saved := bytes.Clone(fixture.records[name])
-	fixture.mu.Unlock()
-	assertMissionJSON(t, saved, name)
 }
 
 func TestMissionInputValidationPrecedesAPIRequests(t *testing.T) {
-	fixture := newMissionAPI(t)
-	valid := missionJSON("valid", "Review the site")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("validation sent an API request")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+	connection := client.Connection{URL: server.URL, Credentials: host.BasicCredentials{Username: "operator", Password: "private-password"}}
+	valid := fixtures.MissionJSON("valid", "Review the site")
 	for _, input := range []string{valid, "[" + valid + "]", `{"items":[` + valid + `]}`} {
 		connection := client.Connection{URL: ":invalid"}
 		output, err := missionCommand(t, connection, strings.NewReader(input), "missions", "validate", "-", "--json")
@@ -79,28 +77,22 @@ func TestMissionInputValidationPrecedesAPIRequests(t *testing.T) {
 		{"invalid later definition", "[" + valid + `,{"name":"invalid","objectives":[],"input_schema":{},"output_schema":{}}]`},
 		{"duplicate name", "[" + valid + "," + valid + "]"},
 		{"oversized document", valid + strings.Repeat(" ", 4<<20)},
-		{"oversized definition", missionJSON("large", strings.Repeat("x", 1<<20))},
+		{"oversized definition", fixtures.MissionJSON("large", strings.Repeat("x", 1<<20))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := missionCommand(t, fixture.connection(), strings.NewReader(test.input), "missions", "import", "-", "--json")
+			_, err := missionCommand(t, connection, strings.NewReader(test.input), "missions", "import", "-", "--json")
 			if err == nil {
 				t.Fatal("invalid import was accepted")
 			}
 		})
 	}
-	fixture.mu.Lock()
-	defer fixture.mu.Unlock()
-	if len(fixture.requests) != 0 {
-		t.Fatalf("validation sent API requests: %v", fixture.requests)
-	}
 }
 
 func TestMissionDryRunPreservesExistingDefinitions(t *testing.T) {
-	fixture := newMissionAPI(t)
-	original := missionJSON("existing", "Keep this objective")
-	fixture.records["existing"] = json.RawMessage(original)
-	input := "[" + missionJSON("existing", "Do not replace the objective") + "," + missionJSON("new", "Create later") + "]"
-	output, err := missionCommand(t, fixture.connection(), strings.NewReader(input), "missions", "import", "-", "--dry-run", "--json")
+	original := fixtures.MissionJSON("existing", "Keep this objective")
+	fixture := fixtures.NewMissionAPI(t, fakes.MissionAPIConfig{Records: map[string]json.RawMessage{"existing": json.RawMessage(original)}})
+	input := "[" + fixtures.MissionJSON("existing", "Do not replace the objective") + "," + fixtures.MissionJSON("new", "Create later") + "]"
+	output, err := missionCommand(t, fixture.Connection(), strings.NewReader(input), "missions", "import", "-", "--dry-run", "--json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,28 +100,25 @@ func TestMissionDryRunPreservesExistingDefinitions(t *testing.T) {
 	if result.Counts.Created != 0 || result.Counts.Skipped != 1 || result.Counts.WouldCreate != 1 || len(result.Items) != 2 || result.Items[0].Status != "skipped" || result.Items[1].Status != "would_create" {
 		t.Fatalf("unexpected dry-run result: %s", output)
 	}
-	fixture.mu.Lock()
-	if len(fixture.records) != 1 || string(fixture.records["existing"]) != original || !reflect.DeepEqual(fixture.requests, []string{"GET existing", "GET new"}) {
-		t.Errorf("dry-run changed saved missions or submitted a write: %v", fixture.requests)
+	state := fixture.Snapshot()
+	if len(state.Records) != 1 || string(state.Records["existing"]) != original || !reflect.DeepEqual(state.Requests, []string{"GET existing", "GET new"}) {
+		t.Errorf("dry-run changed saved missions or submitted a write: %v", state.Requests)
 	}
-	fixture.mu.Unlock()
-	output, err = missionCommand(t, fixture.connection(), strings.NewReader(input), "missions", "import", "-", "--json")
+	output, err = missionCommand(t, fixture.Connection(), strings.NewReader(input), "missions", "import", "-", "--json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	result = importResult(t, output)
-	fixture.mu.Lock()
-	defer fixture.mu.Unlock()
-	if result.Counts.Created != 1 || result.Counts.Skipped != 1 || len(fixture.records) != 2 || string(fixture.records["existing"]) != original || !reflect.DeepEqual(fixture.requests, []string{"GET existing", "GET new", "GET existing", "GET new", "POST new"}) {
-		t.Fatalf("import replaced an existing definition or failed to create the missing one: %s; requests=%v", output, fixture.requests)
+	state = fixture.Snapshot()
+	if result.Counts.Created != 1 || result.Counts.Skipped != 1 || len(state.Records) != 2 || string(state.Records["existing"]) != original || !reflect.DeepEqual(state.Requests, []string{"GET existing", "GET new", "GET existing", "GET new", "POST new"}) {
+		t.Fatalf("import replaced an existing definition or failed to create the missing one: %s; requests=%v", output, state.Requests)
 	}
 }
 
 func TestMissionImportStopsAfterUncertainWrite(t *testing.T) {
-	fixture := newMissionAPI(t)
-	fixture.dropAcknowledgement = "uncertain"
-	input := "[" + missionJSON("created", "Create first") + "," + missionJSON("uncertain", "Lose the acknowledgement") + "," + missionJSON("remaining", "Do not attempt") + "]"
-	output, err := missionCommand(t, fixture.connection(), strings.NewReader(input), "missions", "import", "-", "--json")
+	fixture := fixtures.NewMissionAPI(t, fakes.MissionAPIConfig{DropAcknowledgement: "uncertain"})
+	input := "[" + fixtures.MissionJSON("created", "Create first") + "," + fixtures.MissionJSON("uncertain", "Lose the acknowledgement") + "," + fixtures.MissionJSON("remaining", "Do not attempt") + "]"
+	output, err := missionCommand(t, fixture.Connection(), strings.NewReader(input), "missions", "import", "-", "--json")
 	if !errors.Is(err, client.ErrWriteUncertain) {
 		t.Fatalf("lost acknowledgement did not preserve uncertain outcome: %v", err)
 	}
@@ -141,31 +130,28 @@ func TestMissionImportStopsAfterUncertainWrite(t *testing.T) {
 	if !reflect.DeepEqual(statuses, []string{"created", "uncertain", "not_attempted"}) || result.Counts.Created != 1 || result.Counts.Uncertain != 1 || result.Counts.NotAttempted != 1 {
 		t.Fatalf("unexpected partial import: %s", output)
 	}
-	fixture.mu.Lock()
-	defer fixture.mu.Unlock()
-	if len(fixture.records) != 2 || !reflect.DeepEqual(fixture.requests, []string{"GET created", "POST created", "GET uncertain", "POST uncertain"}) {
-		t.Fatalf("uncertain write was retried or remaining work submitted: %v", fixture.requests)
+	state := fixture.Snapshot()
+	if len(state.Records) != 2 || !reflect.DeepEqual(state.Requests, []string{"GET created", "POST created", "GET uncertain", "POST uncertain"}) {
+		t.Fatalf("uncertain write was retried or remaining work submitted: %v", state.Requests)
 	}
 }
 
 func TestBundledMissionSeed(t *testing.T) {
-	fixture := newMissionAPI(t)
-	other := missionJSON("operator-mission", "Keep this mission")
-	fixture.records["operator-mission"] = json.RawMessage(other)
-	output, err := missionCommand(t, fixture.connection(), nil, "missions", "seed", "--dry-run", "--json")
+	other := fixtures.MissionJSON("operator-mission", "Keep this mission")
+	fixture := fixtures.NewMissionAPI(t, fakes.MissionAPIConfig{Records: map[string]json.RawMessage{"operator-mission": json.RawMessage(other)}})
+	output, err := missionCommand(t, fixture.Connection(), nil, "missions", "seed", "--dry-run", "--json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result := importResult(t, output); result.Counts.WouldCreate != 3 || result.Counts.Created != 0 {
 		t.Fatalf("unexpected seed dry run: %s", output)
 	}
-	fixture.mu.Lock()
-	if len(fixture.records) != 1 {
+	state := fixture.Snapshot()
+	if len(state.Records) != 1 {
 		t.Error("seed dry run wrote mission definitions")
 	}
-	fixture.mu.Unlock()
 
-	api, err := client.New(fixture.connection())
+	api, err := client.New(fixture.Connection())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,24 +176,20 @@ func TestBundledMissionSeed(t *testing.T) {
 	t.Run("installation", func(t *testing.T) { checkInstallAgentMission(t, catalog) })
 	t.Run("build and optional publication", func(t *testing.T) { checkBuildAgentMission(t, catalog) })
 
-	override := missionJSON("install-agent", "Keep the operator's saved definition")
-	fixture.mu.Lock()
-	fixture.records["install-agent"] = json.RawMessage(override)
-	fixture.requests = nil
-	fixture.mu.Unlock()
-	output, err = missionCommand(t, fixture.connection(), nil, "missions", "seed", "--json")
+	override := fixtures.MissionJSON("install-agent", "Keep the operator's saved definition")
+	fixture.ReplaceMissionAndResetRequests("install-agent", json.RawMessage(override))
+	output, err = missionCommand(t, fixture.Connection(), nil, "missions", "seed", "--json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result := importResult(t, output); result.Counts.Created != 0 || result.Counts.Skipped != 3 {
 		t.Fatalf("repeated seed did not preserve saved definitions: %s", output)
 	}
-	fixture.mu.Lock()
-	defer fixture.mu.Unlock()
-	if len(fixture.records) != 4 || string(fixture.records["install-agent"]) != override || string(fixture.records["operator-mission"]) != other {
+	state = fixture.Snapshot()
+	if len(state.Records) != 4 || string(state.Records["install-agent"]) != override || string(state.Records["operator-mission"]) != other {
 		t.Fatal("seed changed a saved mission")
 	}
-	for _, request := range fixture.requests {
+	for _, request := range state.Requests {
 		if !strings.HasPrefix(request, "GET ") {
 			t.Errorf("repeated seed submitted a write: %s", request)
 		}
@@ -379,12 +361,6 @@ func missionCommand(t *testing.T, connection client.Connection, input io.Reader,
 	return output.Bytes(), err
 }
 
-func missionJSON(name, objective string) string {
-	encodedName, _ := json.Marshal(name)
-	encodedObjective, _ := json.Marshal(objective)
-	return fmt.Sprintf(`{"name":%s,"objectives":[%s],"required_actions":["review"],"starting_actions":["review"],"input_schema":{"type":"object","x-precise":9007199254740993,"x-exponent":1e+09},"output_schema":{}}`, encodedName, encodedObjective)
-}
-
 func assertMissionJSON(t *testing.T, data []byte, name string) {
 	t.Helper()
 	var definition struct {
@@ -394,98 +370,4 @@ func assertMissionJSON(t *testing.T, data []byte, name string) {
 	if json.Unmarshal(data, &definition) != nil || definition.Name != name || !bytes.Contains(definition.InputSchema, []byte("9007199254740993")) || !bytes.Contains(definition.InputSchema, []byte("1e+09")) {
 		t.Fatalf("mission name or schema number representation changed: %s", data)
 	}
-}
-
-func writeMissions(t *testing.T, data string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "missions.json")
-	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-type missionAPI struct {
-	server              *httptest.Server
-	mu                  sync.Mutex
-	records             map[string]json.RawMessage
-	requests            []string
-	dropAcknowledgement string
-}
-
-func newMissionAPI(t *testing.T) *missionAPI {
-	t.Helper()
-	fixture := &missionAPI{records: make(map[string]json.RawMessage)}
-	fixture.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		username, password, ok := r.BasicAuth()
-		if !ok || username != "operator" || password != "private-password" {
-			t.Error("mission command did not authenticate its API request")
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		fixture.mu.Lock()
-		defer fixture.mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/missions" {
-			fixture.requests = append(fixture.requests, "GET list")
-			names := make([]string, 0, len(fixture.records))
-			for name := range fixture.records {
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			items := make([]json.RawMessage, len(names))
-			for i, name := range names {
-				items[i] = fixture.records[name]
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
-			return
-		}
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/missions/") {
-			name := strings.TrimPrefix(r.URL.Path, "/api/v1/missions/")
-			fixture.requests = append(fixture.requests, "GET "+name)
-			if data, exists := fixture.records[name]; exists {
-				_, _ = w.Write(data)
-			} else {
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = io.WriteString(w, `{"error":"mission_not_found"}`)
-			}
-			return
-		}
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/missions" {
-			data, err := io.ReadAll(r.Body)
-			var definition struct{ Name string }
-			if err != nil || json.Unmarshal(data, &definition) != nil {
-				t.Error("mission command sent invalid JSON")
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			fixture.requests = append(fixture.requests, "POST "+definition.Name)
-			if _, exists := fixture.records[definition.Name]; exists {
-				w.WriteHeader(http.StatusConflict)
-				_, _ = io.WriteString(w, `{"error":"mission_exists"}`)
-				return
-			}
-			fixture.records[definition.Name] = data
-			if definition.Name == fixture.dropAcknowledgement {
-				connection, _, err := w.(http.Hijacker).Hijack()
-				if err != nil {
-					t.Error("could not simulate a lost write acknowledgement")
-					return
-				}
-				_ = connection.Close()
-				return
-			}
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write(data)
-			return
-		}
-		t.Errorf("unexpected mission API request: %s %s", r.Method, r.URL.Path)
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	t.Cleanup(fixture.server.Close)
-	return fixture
-}
-
-func (f *missionAPI) connection() client.Connection {
-	return client.Connection{URL: f.server.URL, Credentials: host.BasicCredentials{Username: "operator", Password: "private-password"}}
 }
