@@ -33,8 +33,9 @@ dispatched tasks. Expiry marks an unknown outcome as interrupted while late-resu
 reconciliation continues; it does not stop the agent or change saved deadlines.
 
 Set `SECRETS_ENCRYPTION_KEY` to the API's key to authenticate managed secrets
-before delivery. All-in-one shares its session cipher automatically. Deliveries
-remain encrypted, and agents still need their existing decryption setup.
+before delivery. Compose supplies the saved key; all-in-one shares its session
+cipher. Deliveries remain encrypted, and agents still need their existing
+decryption setup.
 
 ## Development and testing
 

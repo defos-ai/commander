@@ -227,12 +227,23 @@ services:
 
   controller:
     <<: *runtime
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        SECRETS_ENCRYPTION_KEY="$$(cat /run/commander-secrets/key)"
+        test -n "$$SECRETS_ENCRYPTION_KEY"
+        export SECRETS_ENCRYPTION_KEY
+        exec commander-controller "$$@"
+      - commander-controller
     image: commander-controller:local
     pull_policy: never
     build:
       context: .
       dockerfile: apps/controllers/default/docker/Dockerfile
     depends_on:
+      secrets-key:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       mongo:
@@ -243,6 +254,8 @@ services:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       TASK_TIMEOUT: ${TASK_TIMEOUT:-15m}
+    volumes:
+      - secrets-key:/run/commander-secrets:ro
 
   mcp:
     <<: *runtime

@@ -122,6 +122,8 @@ services:
     environment:
       <<: *environment
       DATABASE_URL: mongodb://mongo:27017/commander_full_test?replicaSet=rs0
+      # Fixed fixture key, only for the isolated test stack.
+      SECRETS_ENCRYPTION_KEY: &secrets-encryption-key 014ac583269fe047014ac583269fe047014ac583269fe047014ac583269fe047
 
   missions:
     <<: *runtime
@@ -198,8 +200,7 @@ services:
       API_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api,api-secondary
       API_ALLOWED_ORIGINS: http://localhost:14275,http://127.0.0.1:14275
       API_SWAGGER_ENABLED: "true"
-      # Fixed fixture key, only for the isolated test stack.
-      SECRETS_ENCRYPTION_KEY: &secrets-encryption-key 014ac583269fe047014ac583269fe047014ac583269fe047014ac583269fe047
+      SECRETS_ENCRYPTION_KEY: *secrets-encryption-key
     networks:
       default:
         aliases: [api-secondary]

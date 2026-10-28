@@ -128,7 +128,7 @@ func TestCIComposeSecretsRejectsInvalidState(t *testing.T) {
 }
 
 func TestCIComposeSecretsConsumer(t *testing.T) {
-	for _, service := range []string{"api", "spawner-agent", "builder-agent"} {
+	for _, service := range []string{"api", "controller", "spawner-agent", "builder-agent"} {
 		t.Run(service, func(t *testing.T) { testComposeSecretsConsumer(t, service) })
 	}
 }
@@ -142,11 +142,14 @@ func testComposeSecretsConsumer(t *testing.T, service string) {
 	if service != "api" {
 		arguments = []string{"--heartbeat-interval=1s"}
 	}
+	if service == "controller" {
+		arguments = []string{"--task-timeout=30m"}
+	}
 	if err := f.Run(t, service, strings.Repeat("cd", 32), arguments...); err != nil {
 		t.Fatalf("consumer startup failed: %v", err)
 	}
 	if service != "api" && f.Read(t, "observed-arguments") != strings.Join(arguments, "\n")+"\n" {
-		t.Fatal("agent key initialization dropped startup arguments")
+		t.Fatal("consumer key initialization dropped startup arguments")
 	}
 	if f.Read(t, "observed-key") != strings.TrimSpace(f.Read(t, "secrets/key")) {
 		t.Fatal("consumer must load the persisted key even when its environment contains an override")
@@ -191,7 +194,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if api.Init == nil || *api.Init {
 		t.Fatal("API must remain PID 1")
 	}
-	for _, name := range []string{"api", "spawner-agent", "builder-agent"} {
+	for _, name := range []string{"api", "controller", "spawner-agent", "builder-agent"} {
 		service := services[name]
 		if !slices.Contains(service.Volumes, "secrets-key:/run/commander-secrets:ro") ||
 			service.DependsOn["secrets-key"].Condition != "service_completed_successfully" {
@@ -205,7 +208,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 		if _, exists := service.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
 			t.Fatalf("%s must not receive the key through Compose environment configuration", name)
 		}
-		if name == "api" || name == "spawner-agent" || name == "builder-agent" {
+		if name == "api" || name == "controller" || name == "spawner-agent" || name == "builder-agent" {
 			continue
 		}
 		for _, volume := range service.Volumes {
