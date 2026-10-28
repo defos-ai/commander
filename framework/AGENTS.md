@@ -162,6 +162,13 @@
   The controller owner loop verifies the saved dispatch claim and acknowledges
   saves only after persistence and readback. Retry the same immutable checkpoint
   request after an uncertain publication or lost reply, never the action itself.
+- Execution logs use [`executions.Log`](domain/executions/log.go) for progress
+  observations, separate from checkpoint facts and terminal outcomes. Messages
+  preserve nonblank UTF-8 text up to 2048 bytes; keep secret values out of them.
+  [`action.Log`](agent/action/log.go) accepts only the message through an injected
+  `LogProvider`; public execution metadata does not grant that capability.
+  This first slice defines the record and helper only. `Agent.Serve` does not yet
+  inject logging; transport, persistence and operation/task queries follow later.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
