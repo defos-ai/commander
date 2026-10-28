@@ -135,6 +135,10 @@
   delete the user's configured database/storage or existing Compose state.
   Spawned agents' private working directories remain beneath session state;
   never leave their generated files behind on exit.
+- The embedded controller reads `TASK_TIMEOUT` through its existing host configuration.
+  Keep this deployment setting in that host rather than copying timeout parsing into
+  Playground or changing process environment. Remote Playground does not configure
+  its external controller. Existing dispatch deadlines remain authoritative.
 - After API readiness, all-in-one seeds bundled missions with Admin's
   `missions.Seed` and the session API connection before returning ready. Use the
   same create-only API import as Compose; do not write mission files, import

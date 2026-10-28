@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/controller"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -22,11 +23,12 @@ type config struct {
 	logLevel         string
 	logFormat        string
 	heartbeatTimeout time.Duration
+	taskTimeout      time.Duration
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
 	var result config
-	var heartbeat string
+	var heartbeat, taskTimeout string
 	flags := flag.NewFlagSet("commander-controller", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&result.busURL, "bus-url", "", "Broker URL (BUS_URL; default ./state/bus)")
@@ -35,6 +37,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&result.logLevel, "log-level", "info", "Logging level: debug, info, warn, error (LOG_LEVEL)")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Logging format: json, text (LOG_FORMAT)")
 	flags.StringVar(&heartbeat, "heartbeat-timeout", controller.DefaultHeartbeatTimeout.String(), "Agent lease duration (HEARTBEAT_TIMEOUT)")
+	flags.StringVar(&taskTimeout, "task-timeout", operations.DefaultTaskTimeout.String(), "Initial task result wait (TASK_TIMEOUT)")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: commander-controller [flags]")
 		fmt.Fprintln(stderr, "Coordinate agents and operations. Adapters send commands through the shared broker.")
@@ -58,6 +61,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		{"log-level", "LOG_LEVEL", "info", &result.logLevel},
 		{"log-format", "LOG_FORMAT", "json", &result.logFormat},
 		{"heartbeat-timeout", "HEARTBEAT_TIMEOUT", controller.DefaultHeartbeatTimeout.String(), &heartbeat},
+		{"task-timeout", "TASK_TIMEOUT", operations.DefaultTaskTimeout.String(), &taskTimeout},
 	} {
 		*field.value = host.Value(*field.value, provided[field.name], field.env, field.fallback)
 	}
@@ -69,6 +73,10 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	result.heartbeatTimeout, err = time.ParseDuration(heartbeat)
 	if err != nil || result.heartbeatTimeout <= 0 {
 		return config{}, errors.New("heartbeat-timeout must be a positive duration")
+	}
+	result.taskTimeout, err = time.ParseDuration(taskTimeout)
+	if err != nil || result.taskTimeout <= 0 {
+		return config{}, errors.New("task-timeout must be a positive duration")
 	}
 	if _, err := host.NewLogger(io.Discard, result.logLevel, result.logFormat); err != nil {
 		return config{}, err

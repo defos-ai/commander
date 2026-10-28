@@ -78,7 +78,7 @@ func (c *Coordinator) Prepare(ctx context.Context, a Assignment) (PreparedDispat
 	if task.Status == operations.TaskQueued {
 		started := time.Now().UTC()
 		if a.Timeout <= 0 {
-			a.Timeout = 5 * time.Minute
+			a.Timeout = operations.DefaultTaskTimeout
 		}
 		op, err = c.operations.DispatchTask(ctx, op.ID, operations.TaskDispatch{TaskID: task.ID, AgentID: a.Candidate, StartedAt: started, DeadlineAt: started.Add(a.Timeout)})
 		if err != nil {

@@ -242,6 +242,7 @@ services:
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
+      TASK_TIMEOUT: ${TASK_TIMEOUT:-15m}
 
   mcp:
     <<: *runtime

@@ -103,6 +103,7 @@ Set these in your shell or an untracked `.env` before running Compose:
 | `COMMANDER_ADMIN_URL` | Set the browser-facing Admin link for a remote host or proxy |
 | `BUS_URL`, `DATABASE_URL`, `STORAGE_URL` | Connect hosts to different providers |
 | `LOG_LEVEL`, `LOG_FORMAT` | Choose verbosity and `text` or `json` logs |
+| `TASK_TIMEOUT` | Set the controller's initial per-task result wait; default `15m`, for example `30m` for builds |
 
 Standalone hosts accept matching flags such as `--bus-url`; flags override
 environment values. Run `<executable> --help` for its options.

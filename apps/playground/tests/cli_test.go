@@ -44,6 +44,7 @@ func TestAllInOne(t *testing.T) {
 
 func testAllInOneWorkflow(t *testing.T) {
 	temporary := allInOneEnvironment(t)
+	t.Setenv("TASK_TIMEOUT", "17m")
 	t.Setenv("PATH", t.TempDir()) // Startup and the example fixture need no external tools.
 	const analysisText = "Hello Commander. Build useful agents."
 	operationID := id.New()
@@ -400,6 +401,9 @@ func testAllInOneWorkflow(t *testing.T) {
 	}
 	var artifactFound bool
 	for _, task := range apiOperation.Tasks {
+		if task.DeadlineAt == nil || task.DeadlineAt.Sub(task.StartedAt) != 17*time.Minute {
+			t.Fatalf("embedded controller did not apply TASK_TIMEOUT to the saved dispatch: %+v", task)
+		}
 		if task.ActionName != "write-summary" || task.Status != "succeeded" || task.Result == nil || len(task.Result.Artifacts) != 1 || len(task.Result.Artifacts[0].Files) != 1 {
 			continue
 		}
@@ -520,6 +524,7 @@ func allInOneEnvironment(t *testing.T) string {
 		t.Setenv(name, temporary)
 	}
 	t.Setenv("ENV", "")
+	t.Setenv("TASK_TIMEOUT", "")
 	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.
 	t.Setenv("COMMANDER_MCP_TOKEN", "invalid remote token") // Local credentials win too.

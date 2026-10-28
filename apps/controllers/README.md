@@ -21,6 +21,16 @@ deployment, use [Admin](../admin/README.md) `missions seed` or `missions import`
 See [mission authoring](../../docs/abstractions.md) and
 [deployment](../../docs/deployment.md).
 
+For longer tasks such as agent builds, increase the default wait of 15 minutes:
+
+```sh
+go run ./apps/controllers/default/cmd --task-timeout=30m
+```
+
+`TASK_TIMEOUT=30m` also works; the flag overrides it. The setting applies to newly
+dispatched tasks. Expiry marks an unknown outcome as interrupted while late-result
+reconciliation continues; it does not stop the agent or change saved deadlines.
+
 ## Development and testing
 
 Configure providers in [`default/cli/`](default/cli/). Use the

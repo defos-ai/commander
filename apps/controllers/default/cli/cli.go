@@ -97,6 +97,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		Sessions:    coordination.RuntimeSessions(),
 		ReportStore: deps.ReportStore, AgentCatalog: coordination,
 		AgentSelector: agentSelector, RuleSelector: ruleSelector, Logger: logger,
+		TaskTimeout: configuration.taskTimeout,
 	})
 	if err != nil {
 		return err

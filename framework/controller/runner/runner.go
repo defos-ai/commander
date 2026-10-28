@@ -56,7 +56,8 @@ type Config struct {
 	OperationStore operations.OperationStore
 	// ReportStore saves immutable reports before an operation is completed.
 	ReportStore reports.ReportStore
-	// TaskTimeout bounds the wait for a dispatched command. Default: five minutes.
+	// TaskTimeout bounds the initial wait for a dispatched command. Default: fifteen minutes.
+	// Interrupted executions remain observable after this deadline.
 	TaskTimeout time.Duration
 }
 
@@ -104,7 +105,7 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 		return nil, errors.New("task timeout must not be negative")
 	}
 	if config.TaskTimeout == 0 {
-		config.TaskTimeout = 5 * time.Minute
+		config.TaskTimeout = operations.DefaultTaskTimeout
 	}
 	if config.OperationStore == nil {
 		return nil, errors.New("runner requires an operation store")

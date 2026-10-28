@@ -44,6 +44,11 @@
   Recovery uses that saved selection; do not reselect rules or mutate the catalog.
 - Dispatched tasks remain bound to their recorded agent and command. Never silently
   reassign an execution whose outcome is unknown or retry it from host code.
+- `--task-timeout` overrides `TASK_TIMEOUT`; both require a positive Go duration
+  and default to `operations.DefaultTaskTimeout` (15 minutes). Pass the value into the runner,
+  including embedded hosts. This is the initial result wait for new dispatches;
+  retain saved deadlines during recovery. Heartbeats, questions and log activity
+  do not extend the deadline. Expiry does not cancel the remote process.
 - Lifecycle changes need coordinated persistence, consumers and restart recovery.
   Reconcile uncertain writes before dispatching more work; preserve immutable
   execution outcomes, accepted artifact ownership and reports.

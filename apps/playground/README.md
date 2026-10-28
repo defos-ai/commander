@@ -34,6 +34,15 @@ Download a [release binary](../../README.md#binary), then run:
 
 On Windows: `.\commander.exe --all-in-one`.
 
+For longer builds, increase the controller's task observation window (default `15m`):
+
+```sh
+TASK_TIMEOUT=30m ./commander --all-in-one
+```
+
+In Docker, pass `-e TASK_TIMEOUT=30m`. This affects newly dispatched tasks;
+expiry marks an unknown outcome and does not stop the agent.
+
 Type `/admin serve` to start Admin, or pass `--serve-admin-ui` at launch.
 The terminal session works without it.
 
