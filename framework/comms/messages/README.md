@@ -74,3 +74,9 @@ agents acknowledge them after installation.
 Restrict bus access to trusted hosts. Deleting a secret does not immediately
 revoke installed copies. See [secret runtime limits](../../secrets/README.md#agent-requirements)
 and [wire implementation guidance](AGENTS.md).
+
+Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+security operations, authorized security testing, compliance monitoring,
+multi-agent development, incident response, prospect research and outreach,
+competitive intelligence, data processing, ticket resolution and infrastructure
+monitoring.

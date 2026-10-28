@@ -62,3 +62,9 @@ Always stop the test stack, including after failures. See the
 
 After an uncertain write, read saved state before retrying. Follow
 [AGENTS.md](AGENTS.md) when changing transaction or recovery behavior.
+
+Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+security operations, authorized security testing, compliance monitoring,
+multi-agent development, incident response, prospect research and outreach,
+competitive intelligence, data processing, ticket resolution and infrastructure
+monitoring.

@@ -143,3 +143,9 @@ go vet ./apps/agents/spawner/...
 
 Focused tests use local fixtures. See [API/MCP tests](../../../framework/tests/README.md#mcp-api-tests)
 for service-backed scenarios and [AGENTS.md](AGENTS.md) for implementation contracts.
+
+Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+security operations, authorized security testing, compliance monitoring,
+multi-agent development, incident response, prospect research and outreach,
+competitive intelligence, data processing, ticket resolution and infrastructure
+monitoring.

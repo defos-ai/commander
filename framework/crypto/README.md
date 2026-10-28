@@ -29,3 +29,9 @@ checking access, the expected version and expiry.
 - Replace it through a planned rotation before encrypting 2^32 records with one key.
 
 See [AGENTS.md](AGENTS.md) for cryptographic implementation constraints.
+
+Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+security operations, authorized security testing, compliance monitoring,
+multi-agent development, incident response, prospect research and outreach,
+competitive intelligence, data processing, ticket resolution and infrastructure
+monitoring.

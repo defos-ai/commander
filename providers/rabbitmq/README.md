@@ -65,3 +65,9 @@ docker compose -f .github/composes/compose.providers.test.yaml down --volumes
 
 Tests skip without `COMMANDER_TEST_RABBITMQ_URL`. Stop the stack after failures too.
 See [AGENTS.md](AGENTS.md) for implementation guidance.
+
+Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+security operations, authorized security testing, compliance monitoring,
+multi-agent development, incident response, prospect research and outreach,
+competitive intelligence, data processing, ticket resolution and infrastructure
+monitoring.

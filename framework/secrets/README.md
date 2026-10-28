@@ -71,3 +71,9 @@ planning retention and backups.
 
 For exchange and persistence changes, follow [AGENTS.md](AGENTS.md) and the
 [wire guidance](../comms/messages/AGENTS.md).
+
+Explore [10 practical Commander use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md):
+security operations, authorized security testing, compliance monitoring,
+multi-agent development, incident response, prospect research and outreach,
+competitive intelligence, data processing, ticket resolution and infrastructure
+monitoring.
