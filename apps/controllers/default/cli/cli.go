@@ -15,12 +15,14 @@ import (
 	"github.com/defos-ai/commander/framework/controller"
 	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
 	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	"github.com/defos-ai/commander/framework/host"
 )
 
 type Options struct {
-	Ready func()
+	Ready        func()
+	SecretCipher *crypto.SecretCipher
 }
 
 func Run(ctx context.Context, args []string, stderr io.Writer) error {
@@ -57,6 +59,10 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 }
 
 func serve(ctx context.Context, configuration config, logger *slog.Logger, options Options) (result error) {
+	decryptor, err := secretDecryptor(options.SecretCipher)
+	if err != nil {
+		return err
+	}
 	deps, err := openDependencies(ctx, configuration)
 	if err != nil {
 		return err
@@ -83,6 +89,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		ExecutionStore: deps.ExecutionStore, Logger: logger,
 		SessionStore: deps.SessionStore, OperationStore: deps.OperationStore,
 		SecretStore: deps.SecretStore, SecretRequestStore: deps.SecretRequestStore,
+		SecretDecryptor: decryptor,
 	})
 	if err != nil {
 		return err

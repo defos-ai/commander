@@ -16,9 +16,12 @@
   Registration and provider support do not implement distributed ownership or
   capacity across controllers.
 - Construct both secret and request stores from the configured database and
-  inject them into coordination. The controller routes ciphertext and must not
-  load `SECRETS_ENCRYPTION_KEY`. Framework reconciliation owns delivery retries,
-  pending request recovery and installation acknowledgements.
+  inject them into coordination. `Options.SecretCipher` overrides optional
+  `SECRETS_ENCRYPTION_KEY`; validate the supplied cipher/key before opening providers.
+  Missing keys leave authentication disabled during this staged change; never
+  generate a replacement key. Inject the decryptor into coordination, which still
+  publishes ciphertext. Framework reconciliation owns delivery retries, pending
+  request recovery and installation acknowledgements.
 - `ExecutionStore` owns claim, checkpoint, result and log persistence through the
   existing filesystem/Mongo selection. Keep log records in separate collections;
   the same wiring serves the embedded Playground controller. Log events verify their

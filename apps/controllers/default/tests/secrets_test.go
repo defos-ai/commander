@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/defos-ai/commander/apps/controllers/default/cli"
+	"github.com/defos-ai/commander/apps/controllers/default/tests/fixtures"
 	"github.com/defos-ai/commander/framework/comms"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
@@ -24,9 +28,8 @@ import (
 	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
 )
 
-func TestCLITransfersSavedEncryptedSecretsWithoutEncryptionKey(t *testing.T) {
-	// The controller only handles ciphertext; it must not parse or require this key.
-	t.Setenv("SECRETS_ENCRYPTION_KEY", "controller-does-not-decrypt")
+func TestCLIAuthenticatesAndTransfersSavedEncryptedSecrets(t *testing.T) {
+	t.Setenv("SECRETS_ENCRYPTION_KEY", fixtures.SecretEncryptionKey)
 	t.Setenv("ENV", "")
 	root := t.TempDir()
 	database := filepath.Join(root, "database")
@@ -47,10 +50,7 @@ func TestCLITransfersSavedEncryptedSecretsWithoutEncryptionKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cipher, err := crypto.NewSecretCipher("014ac583269fe047014ac583269fe047014ac583269fe047014ac583269fe047")
-	if err != nil {
-		t.Fatal(err)
-	}
+	cipher := fixtures.SecretCipher(t)
 	now := time.Now().UTC()
 	key := secrets.Key{Name: "API_TOKEN"}
 	secret, err := cipher.Encrypt(secrets.Metadata{ID: id.New(), Key: key, Version: 1, CreatedAt: now, UpdatedAt: now}, []byte("local-only-fixture-token"))
@@ -139,5 +139,72 @@ func TestCLITransfersSavedEncryptedSecretsWithoutEncryptionKey(t *testing.T) {
 	}
 	if err := delivery.Ack(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCLIRejectsInvalidSecretCipherBeforeOpeningProviders(t *testing.T) {
+	for _, injected := range []bool{false, true} {
+		name := "environment"
+		if injected {
+			name = "injected cipher"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("ENV", "")
+			t.Setenv("SECRETS_ENCRYPTION_KEY", "private-invalid-key")
+			options, want := cli.Options{}, crypto.ErrInvalidKey
+			if injected {
+				t.Setenv("SECRETS_ENCRYPTION_KEY", fixtures.SecretEncryptionKey)
+				options.SecretCipher, want = &crypto.SecretCipher{}, crypto.ErrMissingKey
+			}
+			root := t.TempDir()
+			var logs bytes.Buffer
+
+			err := cli.RunWithOptions(t.Context(), fixtures.ControllerArgs(root), &logs, options)
+
+			if !errors.Is(err, want) || strings.Contains(err.Error(), "private-invalid-key") ||
+				strings.Contains(logs.String(), "private-invalid-key") || strings.Contains(logs.String(), fixtures.SecretEncryptionKey) {
+				t.Fatal("invalid cipher was ignored or exposed key material")
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("invalid cipher created provider or registration state")
+			}
+		})
+	}
+}
+
+func TestCLIInjectedSecretCipherOverridesEnvironment(t *testing.T) {
+	t.Setenv("ENV", "")
+	t.Setenv("SECRETS_ENCRYPTION_KEY", "private-invalid-key")
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	fixtures.PendingSecret(t, root)
+	ready := false
+
+	err := cli.RunWithOptions(ctx, fixtures.ControllerArgs(root), io.Discard, cli.Options{
+		SecretCipher: fixtures.SecretCipher(t), Ready: func() { ready = true; cancel() },
+	})
+
+	if err != nil || !ready {
+		t.Fatal("valid injected cipher did not override the environment and deliver the pending secret")
+	}
+}
+
+func TestCLIWrongSecretKeyStopsPendingDelivery(t *testing.T) {
+	t.Setenv("ENV", "")
+	t.Setenv("SECRETS_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	fixtures.PendingSecret(t, root)
+	ready := false
+
+	err := cli.RunWithOptions(ctx, fixtures.ControllerArgs(root), io.Discard, cli.Options{
+		Ready: func() { ready = true; cancel() },
+	})
+
+	if ready || err == nil || !strings.Contains(err.Error(), "cannot authenticate secret for delivery") {
+		t.Fatal("wrong encryption key did not stop pending delivery before readiness")
 	}
 }

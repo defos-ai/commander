@@ -3,12 +3,33 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
+	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/providers/fs"
 	fssecrets "github.com/defos-ai/commander/providers/fs/secrets"
 	mongosecrets "github.com/defos-ai/commander/providers/mongo/secrets"
 )
+
+func secretDecryptor(cipher *crypto.SecretCipher) (consumers.SecretDecryptor, error) {
+	if cipher != nil {
+		if err := cipher.Validate(); err != nil {
+			return nil, fmt.Errorf("secret cipher: %w", err)
+		}
+		return cipher, nil
+	}
+	key := os.Getenv("SECRETS_ENCRYPTION_KEY")
+	if key == "" {
+		return nil, nil
+	}
+	cipher, err := crypto.NewSecretCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("SECRETS_ENCRYPTION_KEY: %w", err)
+	}
+	return cipher, nil
+}
 
 func (d *dependencies) createSecretStores(ctx context.Context, rawURL string) (secrets.SecretStore, secrets.RequestStore, error) {
 	if err := ctx.Err(); err != nil {

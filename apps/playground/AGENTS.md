@@ -155,7 +155,7 @@
 - [`internal/local/secrets.go`](internal/local/secrets.go) creates the session's
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
-  Retain the key and cipher in session memory. Inject the cipher into the API
+  Retain the key and cipher in session memory. Inject the cipher into the API and controller
   through `Options.SecretCipher`. Pass the key through
   the spawner's `Options.SecretsEncryptionKey` so it constructs its own cipher and
   trusted-builder bootstrap from the same value. Do not change process environment,

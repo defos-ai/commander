@@ -32,6 +32,10 @@ go run ./apps/controllers/default/cmd --task-timeout=30m
 dispatched tasks. Expiry marks an unknown outcome as interrupted while late-result
 reconciliation continues; it does not stop the agent or change saved deadlines.
 
+Set `SECRETS_ENCRYPTION_KEY` to the API's key to authenticate managed secrets
+before delivery. All-in-one shares its session cipher automatically. Deliveries
+remain encrypted, and agents still need their existing decryption setup.
+
 ## Development and testing
 
 Configure providers in [`default/cli/`](default/cli/). Use the

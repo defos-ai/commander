@@ -95,7 +95,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	controllerReady := make(chan struct{})
 	s.start("controller", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--heartbeat-timeout=45s")
-		return controllercli.RunWithOptions(ctx, args, s.log, controllercli.Options{Ready: func() { close(controllerReady) }})
+		return controllercli.RunWithOptions(ctx, args, s.log, controllercli.Options{SecretCipher: cipher, Ready: func() { close(controllerReady) }})
 	})
 	if err = awaitReady(startup, controllerReady); err != nil {
 		return nil, err
