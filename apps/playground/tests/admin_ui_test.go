@@ -125,7 +125,7 @@ func TestAdminCommandStaysOutOfModelAndTools(t *testing.T) {
 	defer provider.Close()
 	u := fixtures.NewUIWithConfig(t, ctx, ui.Config{
 		Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: host.BearerCredentials{Token: token}},
-		Keys: map[string]string{"other": "test-only"}, NoColor: true, AdminURL: adminURL,
+		NoColor: true, AdminURL: adminURL,
 		LocalAgentCount: 4,
 		AllInOne:        true,
 		API:             ui.Connection[host.BasicCredentials]{URL: api.URL, Credentials: host.BasicCredentials{Username: "commander", Password: password}},

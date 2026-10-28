@@ -58,6 +58,9 @@ type connected struct {
 
 func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 	switch msg := message.(type) {
+	case providerSecretResult:
+		m.providerSecretResult(msg)
+		return nil, true
 	case initialProvider:
 		return m.selectProvider(string(msg)), true
 	case modelsResult:
@@ -132,7 +135,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		if !m.config.AllInOne {
 			m.add("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
 		}
-		return waitEvent(m.engine), true
+		return tea.Batch(waitEvent(m.engine), m.shareProviderSecret()), true
 	}
 	return nil, false
 }
@@ -161,6 +164,9 @@ func (m *Model) selectProvider(value string) tea.Cmd {
 func (m *Model) needKey() tea.Cmd {
 	if m.settings.APIKey == "" {
 		placeholder := "API key (hidden; held only for this session)"
+		if m.providerSecretName() != "" && m.config.API.URL != "" && m.config.API.Credentials.Password != "" {
+			placeholder = "API key (hidden; saved encrypted for agents if absent)"
+		}
 		if m.provider.ID == "other" {
 			placeholder = "API key (optional; Enter skips for a local endpoint)"
 		}

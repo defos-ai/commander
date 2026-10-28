@@ -63,7 +63,7 @@ func TestHelpLayout(t *testing.T) {
 					http.Error(w, "unexpected model request", http.StatusBadRequest)
 				}))
 				defer provider.Close()
-				u := fixtures.NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, Keys: map[string]string{"other": "test-only"}, NoColor: noColor, LocalAgentCount: 4, AllInOne: allInOne, API: local})
+				u := fixtures.NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, NoColor: noColor, LocalAgentCount: 4, AllInOne: allInOne, API: local})
 				defer u.Close()
 				u.Model.Update(tea.WindowSizeMsg{Width: 120, Height: 80})
 				u.Text("/help")
@@ -364,7 +364,7 @@ func TestLocalCredentialsStayOutOfModelRequests(t *testing.T) {
 		fakes.WriteModelDelta(w, map[string]any{"content": "Ready to chat"}, "stop")
 	}))
 	defer provider.Close()
-	u := fixtures.NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: credentials}, Keys: map[string]string{"other": "test-only"}, NoColor: true, LocalAgentCount: 4, AllInOne: true, API: local, AdminURL: adminURL})
+	u := fixtures.NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL, Credentials: credentials}, NoColor: true, LocalAgentCount: 4, AllInOne: true, API: local, AdminURL: adminURL})
 	defer u.Close()
 	if strings.Contains(u.Model.View(), local.Credentials.Password) || strings.Contains(u.Model.View(), credentials.Token) {
 		t.Fatal("local credentials were displayed before explicit lookup")

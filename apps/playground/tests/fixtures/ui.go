@@ -45,6 +45,10 @@ func NewUIWithConfig(t *testing.T, ctx context.Context, config ui.Config) *UIDri
 	u := NewUIDriver(t, ctx, ui.New(ctx, config, io.Discard))
 	u.Model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	u.Run(u.Model.Init())
+	if config.Provider == "other" && config.Keys["other"] == "" {
+		u.Wait("optional provider key", func(view string) bool { return strings.Contains(view, "Other (OpenAI-compatible) API key") })
+		u.Key(tea.KeyMsg{Type: tea.KeyEnter})
+	}
 	ready := "Commander connected"
 	if config.AllInOne {
 		ready = fmt.Sprintf("Commander ready · all-in-one · %d agents connected", config.LocalAgentCount)

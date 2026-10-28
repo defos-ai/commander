@@ -117,6 +117,11 @@ Use `/secrets` to reopen it, or **Agents → Manage secrets** in Admin.
 Values go directly to the API, outside the model. Running tasks keep their
 deadline while waiting.
 
+After connecting, Playground saves the selected provider's key through the API
+under its environment-variable name, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+Existing saved values stay unchanged. Without an API login, use
+`/admin secrets set NAME` to share a key with agents.
+
 ### Model setup
 
 Choose a provider and model with **↑/↓** and **Enter**. Key prompts link to the
@@ -148,6 +153,7 @@ Paste the MCP token when prompted, or set `COMMANDER_MCP_TOKEN` before launch.
 Flags override environment settings. Provider keys can use `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `XAI_API_KEY`,
 `DEEPSEEK_API_KEY` or `COMMANDER_LLM_API_KEY` for Other.
+Gemini keys are saved as `GEMINI_API_KEY`, including keys read from `GOOGLE_API_KEY`.
 
 The standalone Admin link defaults to `http://localhost:4275`; setting
 `--admin-url` changes the link, not the server. Set the API URL/login for Admin

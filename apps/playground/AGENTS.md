@@ -289,6 +289,15 @@
   revisions when deciding whether a review is new or stale.
 - Show readable errors by default and redacted provider details with `--debug`.
   Keep keys/history in memory and avoid repeating full schemas/results in prompts.
+- After a successful MCP connection, share the selected provider's key through the
+  retained API connection using Admin's metadata and create-only secret calls.
+  Use the preset's first `KeyEnv` name, including `GEMINI_API_KEY` for the Google
+  alias and `COMMANDER_LLM_API_KEY` for Other. Preserve existing records, including
+  expired ones; create only after confirmed absence. Keep sharing asynchronous
+  and bounded, cancel and await it on exit, and never retry a failed write.
+  Missing API login and failures stay local notices without blocking chat. Do not
+  infer an API destination from MCP or put values into model/MCP messages. Persistent
+  deployments encrypt this value through their API; all-in-one state remains temporary.
 - Model discovery authentication failures return to an empty, masked key prompt;
   preserve the provider and base URL, and retry only after explicit submission.
   Use typed provider errors, including Gemini's structured invalid-key response.

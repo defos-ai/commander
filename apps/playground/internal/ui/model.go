@@ -71,6 +71,8 @@ type Model struct {
 	controls             int
 	markdown             *glamour.TermRenderer
 	markdownWidth        int
+	providerSecretCancel context.CancelFunc
+	providerSecretDone   <-chan struct{}
 }
 
 func New(ctx context.Context, config Config, output io.Writer) *Model {
@@ -106,6 +108,10 @@ func nextTick() tea.Cmd {
 }
 
 func (m *Model) Close() {
+	if m.providerSecretCancel != nil {
+		m.providerSecretCancel()
+		<-m.providerSecretDone
+	}
 	if m.admin.cancel != nil {
 		m.admin.cancel()
 		<-m.admin.done

@@ -33,7 +33,7 @@ func SecretFormUI(t *testing.T, ctx context.Context, api ui.Connection[host.Basi
 	t.Cleanup(endpoint.Close)
 	provider := httptest.NewServer(fakes.SecretReview(t, private...))
 	t.Cleanup(provider.Close)
-	u := NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, Keys: map[string]string{"other": "test-only"}, NoColor: true, API: api})
+	u := NewUIWithConfig(t, ctx, ui.Config{Provider: "other", Model: "fixture", BaseURL: provider.URL, MCP: ui.Connection[host.BearerCredentials]{URL: endpoint.URL}, NoColor: true, API: api})
 	u.Model.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
 	return u, operations
 }
