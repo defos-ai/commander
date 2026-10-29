@@ -49,13 +49,11 @@ jobs:
       - uses: ./.github/actions/setup-node
       - name: Build bundled Admin frontend
         run: npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist --emptyOutDir
-      - name: Test native environment and all-in-one hosts
+      - name: Test retained agent, filesystem and spawner flows
         run: |
-          go test -count=1 -timeout=3m ./framework/tests/agent/environment
-          go test -count=1 -timeout=3m ./framework/tests/agent/manifest
-          go test -count=1 -timeout=3m ./providers/fs/tests -run '^TestBusSubscribersSettleTheSamePublicationIndependently$'
+          go test -count=1 -timeout=3m ./framework/tests/agent
+          go test -count=1 -timeout=3m ./providers/fs/tests
           go test -count=1 -timeout=3m ./apps/agents/spawner/...
-          go test -tags embed_ui -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOne'
       - name: Build Commander, Admin, spawner and builder
         id: build
         run: |

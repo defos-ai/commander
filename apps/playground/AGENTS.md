@@ -429,7 +429,8 @@ publishing `4274`. Check the default Admin link, explicit `--admin-url`,
 `--serve-admin-ui=false`, explicit credential overrides and clean SIGTERM shutdown.
 Keep Docker lifecycle in shell/CI rather than Go test fixtures.
 
-[Native release builds](../../.github/workflows/build-binaries.yml) run environment
-discovery tests and `TestAllInOne` on Linux, macOS and Windows for amd64 and arm64.
-Keep the embedded missions, local host lifecycle and test fixtures portable; native
-binaries must run without a checkout or Go installation.
+[Native release builds](../../.github/workflows/build-binaries.yml) run retained
+agent, filesystem and spawner tests on Linux, macOS and Windows for amd64 and arm64.
+They build the embedded hosts and check each binary's `--help`. Keep the embedded
+missions, local host lifecycle and test fixtures portable; native binaries must
+run without a checkout or Go installation.

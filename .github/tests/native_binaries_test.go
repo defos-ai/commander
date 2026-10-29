@@ -3,6 +3,7 @@ package release_test
 import (
 	"crypto/sha256"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,47 @@ import (
 
 	fixtures "github.com/defos-ai/commander/.github/tests/fixtures"
 )
+
+func TestCINativeTestTargets(t *testing.T) {
+	var workflow ciWorkflow
+	readCIYAML(t, "..", "workflows/build-binaries.yml", &workflow)
+	var targets int
+	for _, step := range workflow.Jobs["build"].Steps {
+		for _, line := range strings.Split(step.Run, "\n") {
+			words := strings.Fields(line)
+			if len(words) < 3 || words[0] != "go" || words[1] != "test" {
+				continue
+			}
+			for _, target := range words[2:] {
+				if !strings.HasPrefix(target, "./") {
+					continue
+				}
+				targets++
+				directory := filepath.Join("../..", strings.TrimSuffix(target, "/..."))
+				found := false
+				err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if entry.IsDir() && path != directory && !strings.HasSuffix(target, "/...") {
+						return filepath.SkipDir
+					}
+					if !entry.IsDir() && strings.HasSuffix(entry.Name(), "_test.go") {
+						found = true
+						return filepath.SkipAll
+					}
+					return nil
+				})
+				if err != nil || !found {
+					t.Errorf("native workflow target %s must contain retained Go tests: %v", target, err)
+				}
+			}
+		}
+	}
+	if targets == 0 {
+		t.Fatal("native workflow must run retained Go test suites")
+	}
+}
 
 func TestCINativeBinaryPublication(t *testing.T) {
 	for _, draft := range []bool{false, true} {
