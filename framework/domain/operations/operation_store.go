@@ -22,9 +22,9 @@ type OperationStore interface {
 	// against the supplied inventory. Readiness, version, status and event commit
 	// together; identical readiness returns the saved operation without writing.
 	RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (Operation, error)
-	// Recover validates the latest saved work, expires due questions, and records
-	// recovery together. Terminal operations without recoverable tasks only expire
-	// questions, with no write if none are due. It never dispatches work.
+	// Recover validates saved work and records recovery without dispatching work.
+	// Pending questions and their fallback times remain unchanged. Terminal
+	// operations without recoverable tasks return without writing.
 	Recover(ctx context.Context, operationID string, now time.Time) (Operation, error)
 	// Task queries are scoped to one operation. A missing operation returns
 	// ErrUnknownOperation; GetTask returns ErrUnknownTask when its task is absent.
@@ -59,13 +59,10 @@ type OperationStore interface {
 	// and any linked decision handoff. Linked questions require the current version;
 	// duplicate question IDs return ErrOperationConflict without writing.
 	AskQuestion(ctx context.Context, operationID string, question Question, version uint64) (Operation, error)
-	// AnswerQuestion saves the answer, its origin and linked decision together. If a pending
-	// question is overdue, it instead commits expiration and returns that snapshot
-	// without error; callers must inspect the question status before accepting the answer.
+	// AnswerQuestion saves the answer, origin and linked decision together. Model
+	// answers before FallbackAt return ErrQuestionOperatorWaiting without writing.
+	// Operator answers remain valid before and after FallbackAt.
 	AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy AnswerOrigin) (Operation, error)
-	// ExpireQuestions settles deadlines at or before now without reopening terminal
-	// operations. If nothing is due, it returns the saved snapshot without writing.
-	ExpireQuestions(ctx context.Context, operationID string, now time.Time) (Operation, error)
 	// Complete rechecks eligibility and saves output, report reference, resolved
 	// model continuations, status, and event together. The caller must persist
 	// the immutable report first. Terminal operations return ErrFinished unchanged.

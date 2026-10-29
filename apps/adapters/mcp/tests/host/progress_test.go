@@ -84,9 +84,9 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 			op.Tasks[1].Continuation = &operations.Continuation{Status: operations.ContinuationWaiting, DecisionBy: operations.DecisionCode, Version: 1, CreatedTaskIDs: []string{op.Tasks[2].ID}}
 			op.Tasks[2].ParentTaskID = op.Tasks[1].ID
 			op.Questions = []operations.Question{
-				{ID: "00000000-0000-0000-0000-000000000002", Text: "Latest question", Status: operations.QuestionPending, AskedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)},
-				{ID: "00000000-0000-0000-0000-000000000001", Text: "Other question", Status: operations.QuestionPending, AskedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)},
-				{ID: "00000000-0000-0000-0000-000000000003", Text: "Expired but not yet reconciled", Status: operations.QuestionPending, AskedAt: now.Add(-30 * time.Second), ExpiresAt: now.Add(-time.Second)},
+				{ID: "00000000-0000-0000-0000-000000000002", Text: "Latest question", Status: operations.QuestionPending, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Hour)},
+				{ID: "00000000-0000-0000-0000-000000000001", Text: "Other question", Status: operations.QuestionPending, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Hour)},
+				{ID: "00000000-0000-0000-0000-000000000003", Text: "Model fallback is available", Status: operations.QuestionPending, AskedAt: now.Add(-30 * time.Second), FallbackAt: now.Add(-time.Second)},
 			}
 			if err := store.Create(ctx, op); err != nil {
 				t.Fatal(err)
@@ -117,8 +117,8 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 				if summary.Progress.PendingDecisions != 0 || summary.Progress.PendingQuestions != 0 {
 					t.Fatal("terminal operation advertised actionable decisions or questions")
 				}
-			} else if summary.Progress.PendingDecisions != 1 || summary.Progress.PendingQuestions != 2 {
-				t.Fatalf("summary pending decisions/questions = %d/%d; want 1/2", summary.Progress.PendingDecisions, summary.Progress.PendingQuestions)
+			} else if summary.Progress.PendingDecisions != 1 || summary.Progress.PendingQuestions != 3 {
+				t.Fatalf("summary pending decisions/questions = %d/%d; want 1/3", summary.Progress.PendingDecisions, summary.Progress.PendingQuestions)
 			}
 			for _, view := range []*operationView{&detail, summary} {
 				if view.Progress.TotalTasks != 3 || view.Progress.FinishedTasks != 2 || view.Progress.Settled || !reflect.DeepEqual(view.Progress, summary.Progress) {
@@ -128,8 +128,8 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 					if view.LastQuestion != nil || view.RemainingQuestions != 0 {
 						t.Fatal("terminal operation exposed a pending question")
 					}
-				} else if view.LastQuestion == nil || view.LastQuestion.ID != op.Questions[0].ID || view.RemainingQuestions != 1 {
-					t.Fatalf("question selection lost expiry or tie-break semantics: last=%+v remaining=%d", view.LastQuestion, view.RemainingQuestions)
+				} else if view.LastQuestion == nil || view.LastQuestion.ID != op.Questions[2].ID || view.RemainingQuestions != 2 {
+					t.Fatalf("question selection dropped a pending question after its operator window: last=%+v remaining=%d", view.LastQuestion, view.RemainingQuestions)
 				}
 			}
 			if !reflect.DeepEqual(detail.Questions, before.Questions) || !reflect.DeepEqual(detail.Tasks, before.Tasks) {

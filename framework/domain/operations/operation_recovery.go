@@ -17,9 +17,8 @@ func (o *Operation) Recover(now time.Time) (bool, error) {
 	if err := o.validateRecovery(); err != nil {
 		return false, err
 	}
-	expired := o.ExpireQuestions(now)
 	if o.Status.Terminal() && !slices.ContainsFunc(o.Tasks, Task.NeedsRecovery) {
-		return expired, nil
+		return false, nil
 	}
 	o.RefreshStatus()
 	o.AppendEvent(OperationRecovered, "", "", "Operation restored; existing commands are observed without being dispatched again")

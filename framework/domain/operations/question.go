@@ -14,7 +14,6 @@ type QuestionStatus string
 const (
 	QuestionPending  QuestionStatus = "pending"
 	QuestionAnswered QuestionStatus = "answered"
-	QuestionExpired  QuestionStatus = "expired"
 )
 
 type AnswerOrigin string
@@ -44,10 +43,10 @@ type Question struct {
 	AnsweredBy AnswerOrigin   `json:"answered_by,omitempty"`
 	AskedAt    time.Time      `json:"asked_at"`
 	AnsweredAt *time.Time     `json:"answered_at,omitempty"`
-	ExpiresAt  time.Time      `json:"expires_at"`
+	FallbackAt time.Time      `json:"fallback_at"`
 }
 
-// Pending questions block new work until an answer or durable expiration.
+// Pending questions block new work until an answer is saved.
 func (q Question) Pending() bool { return q.Status == QuestionPending }
 
 func (q Question) Clone() Question {
@@ -102,8 +101,8 @@ func (q Question) validateNew() error {
 	if q.Status != QuestionPending || q.Answer != "" || q.AnsweredAt != nil || q.AnsweredBy != "" {
 		return errors.New("new question must be pending without an answer")
 	}
-	if q.AskedAt.IsZero() || !q.ExpiresAt.After(q.AskedAt) {
-		return errors.New("question requires an ask time and a later expiration")
+	if q.AskedAt.IsZero() || !q.FallbackAt.After(q.AskedAt) {
+		return errors.New("question requires an ask time and a later model fallback time")
 	}
 	if strings.TrimSpace(q.Text) == "" {
 		return errors.New("question text must not be blank")
@@ -137,18 +136,16 @@ func (o *Operation) AnswerQuestion(questionID, answer string, answeredBy AnswerO
 		switch question.Status {
 		case QuestionAnswered:
 			return ErrQuestionAnswered
-		case QuestionExpired:
-			return ErrQuestionExpired
 		case QuestionPending:
 		default:
 			return errors.New("question is not pending")
 		}
 		now := time.Now().UTC()
-		if !question.ExpiresAt.IsZero() && !now.Before(question.ExpiresAt) {
-			// Commit expiration without recording the late answer. The caller can
-			// report rejection after the expired snapshot has been saved.
-			o.ExpireQuestions(now)
-			return nil
+		if question.FallbackAt.IsZero() {
+			return errors.New("question has no model fallback time")
+		}
+		if answeredBy == AnswerModel && now.Before(question.FallbackAt) {
+			return ErrQuestionOperatorWaiting
 		}
 		if question.TaskID != "" {
 			i := taskIndex(o, question.TaskID)
@@ -169,32 +166,4 @@ func (o *Operation) AnswerQuestion(questionID, answer string, answeredBy AnswerO
 		return nil
 	}
 	return ErrUnknownQuestion
-}
-
-// Expiration never invents an answer or resumes a finished operation.
-func (o *Operation) ExpireQuestions(now time.Time) bool {
-	changed := false
-	for i := range o.Questions {
-		question := &o.Questions[i]
-		if !question.Pending() || question.ExpiresAt.IsZero() || now.Before(question.ExpiresAt) {
-			continue
-		}
-		question.Status = QuestionExpired
-		if !o.Status.Terminal() && question.TaskID != "" {
-			if j := taskIndex(o, question.TaskID); j >= 0 {
-				c := o.Tasks[j].Continuation
-				if c != nil && c.QuestionID == question.ID && c.DecisionBy == DecisionUser && c.Status == ContinuationWaiting {
-					c.DecisionBy, c.Status = DecisionModel, ContinuationPending
-					c.Version++
-				}
-			}
-		}
-		o.RefreshStatus()
-		o.AppendEvent(QuestionExpiredEvent, question.TaskID, question.ID, "Operator question expired without an answer")
-		changed = true
-	}
-	if changed {
-		o.UpdatedAt = time.Now().UTC()
-	}
-	return changed
 }

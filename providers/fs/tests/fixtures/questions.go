@@ -10,5 +10,5 @@ import (
 func Question(taskID string) operations.Question {
 	now := time.Now().UTC()
 	return operations.Question{ID: id.QuestionID(), TaskID: taskID, Status: operations.QuestionPending,
-		Text: "Continue review?", Options: []string{"yes", "no"}, AskedAt: now, ExpiresAt: now.Add(time.Hour)}
+		Text: "Continue review?", Options: []string{"yes", "no"}, AskedAt: now, FallbackAt: now.Add(time.Hour)}
 }

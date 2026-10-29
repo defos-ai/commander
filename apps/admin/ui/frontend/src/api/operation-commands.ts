@@ -6,7 +6,7 @@ import { encodeIdentifier, isIdentifier, isObject } from './validation';
 
 export type CommandErrorKind = 'authentication' | 'forbidden' | 'not_found' | 'invalid_input' | 'conflict' | 'unknown';
 const errorCodes = [
-  'operation_conflict', 'operation_finished', 'question_answered', 'question_expired',
+  'operation_conflict', 'operation_finished', 'question_answered', 'question_operator_waiting',
   'invalid_request', 'invalid_input', 'invalid_operation_id', 'invalid_question_id', 'invalid_request_origin',
   'mission_not_found', 'operation_not_found', 'question_not_found',
 ] as const;

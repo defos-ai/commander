@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -40,12 +39,9 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		delete(state, "events")
 		data, _ := json.Marshal(state)
 		text = "Operation update: review preflight and pending decisions, or summarize finished work."
-		var expired []string
 		var answers []bridge.Question
 		for _, review := range item.reviews {
-			if review.questionID != "" && review.status == string(bridge.QuestionExpired) {
-				expired = append(expired, review.questionID)
-			} else if review.questionID != "" && review.status == string(bridge.QuestionAnswered) {
+			if review.questionID != "" && review.status == string(bridge.QuestionAnswered) {
 				for _, question := range operation.Questions {
 					if question.ID == review.questionID {
 						answers = append(answers, question)
@@ -56,9 +52,6 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		if len(answers) != 0 {
 			answered, _ := json.Marshal(answers)
 			text = "These questions were answered: " + string(answered) + ". Continue using the saved answers and their recorded origins, together with current state."
-		}
-		if len(expired) != 0 {
-			text += " Questions expired without an answer: " + strings.Join(expired, ", ") + ". Continue from existing guidance; expiry is not approval."
 		}
 		text += " Current state:\n" + bridge.Bounded(data)
 	}

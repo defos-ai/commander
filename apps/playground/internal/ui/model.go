@@ -148,11 +148,11 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.setupResult(message); handled {
 		return m, cmd
 	}
-	if m.stage == stageChat && m.syncQuestion(time.Now()) {
+	if m.stage == stageChat && m.syncQuestion() {
 		m.refresh()
 		if key, ok := message.(tea.KeyMsg); ok && key.String() == "enter" && !m.secrets.open {
-			// An expired question may reveal a different one. Show that change
-			// before accepting an answer intended for the previous question.
+			// Show the newly selected question before accepting an answer
+			// intended for the previous one.
 			return m, nil
 		}
 	}
@@ -325,7 +325,7 @@ func (m *Model) receive(event chat.Event) {
 			previous, exists := m.operations[event.ID]
 			if !exists || !event.Operation.UpdatedAt.Before(previous.UpdatedAt) {
 				m.operations[event.ID] = *event.Operation
-				m.syncQuestion(time.Now())
+				m.syncQuestion()
 				m.refresh()
 			}
 		}
@@ -342,7 +342,7 @@ func (m *Model) receive(event chat.Event) {
 				m.add("user", "Operator answer: "+event.Answer)
 			}
 			m.questions.answered[key] = true
-			m.syncQuestion(time.Now())
+			m.syncQuestion()
 		} else if current := m.questions.current; current != nil && current.key == key {
 			m.questions.submitting = false
 			m.questions.error = event.Text

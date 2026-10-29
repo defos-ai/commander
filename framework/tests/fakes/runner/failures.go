@@ -23,7 +23,6 @@ type UncertainWriteStore struct {
 	AfterResolve   func(operations.Operation) error
 	AfterAsk       func(operations.Operation) error
 	AfterAnswer    func(operations.Operation) error
-	AfterExpire    func(operations.Operation) error
 	AfterPreflight func(operations.Operation) error
 	AfterRecover   func(operations.Operation) error
 	AfterCancel    func(operations.Operation) error
@@ -85,14 +84,6 @@ func (s *UncertainWriteStore) AnswerQuestion(ctx context.Context, operationID, q
 	op, err := s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer, answeredBy)
 	if err == nil && s.AfterAnswer != nil {
 		err = s.AfterAnswer(op)
-	}
-	return op, err
-}
-
-func (s *UncertainWriteStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
-	op, err := s.OperationStore.ExpireQuestions(ctx, operationID, now)
-	if err == nil && s.AfterExpire != nil {
-		err = s.AfterExpire(op)
 	}
 	return op, err
 }
@@ -232,15 +223,14 @@ func (s *DispatchFailureStore) DispatchTask(ctx context.Context, operationID str
 	return s.OperationStore.DispatchTask(ctx, operationID, dispatch)
 }
 
-// Expire the durable deadline within AnswerQuestion so the runner's periodic
-// sweep cannot handle expiration before the answer reaches the store.
 type DeadlineOnAnswerStore struct{ *OperationStore }
 
 func (s *DeadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy operations.AnswerOrigin) (operations.Operation, error) {
 	if _, err := s.OperationStore.Update(ctx, operationID, func(op *operations.Operation) error {
 		for i := range op.Questions {
-			if op.Questions[i].ID == questionID {
-				op.Questions[i].ExpiresAt = time.Now().Add(-time.Second)
+			if op.Questions[i].ID == questionID && op.Questions[i].Pending() {
+				op.Questions[i].AskedAt = time.Now().Add(-2 * time.Second)
+				op.Questions[i].FallbackAt = time.Now().Add(-time.Second)
 			}
 		}
 		return nil

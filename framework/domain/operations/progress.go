@@ -3,7 +3,7 @@ package operations
 import "time"
 
 // Progress is a read-only assessment of saved work at one point in time.
-// It is not persisted and does not expire questions or resolve continuations.
+// It is not persisted and does not resolve questions or continuations.
 type Progress struct {
 	TaskCounts         map[TaskStatus]int
 	TotalTasks         int
@@ -39,7 +39,7 @@ func (o Operation) AssessProgress(now time.Time) Progress {
 	var latest *Question
 	for i := range o.Questions {
 		question := &o.Questions[i]
-		if !question.Pending() || !question.ExpiresAt.IsZero() && !now.Before(question.ExpiresAt) {
+		if !question.Pending() {
 			continue
 		}
 		result.PendingQuestions++

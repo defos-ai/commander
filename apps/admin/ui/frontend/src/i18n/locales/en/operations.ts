@@ -37,7 +37,7 @@ export default {
   taskStatuses: {
     queued: 'Queued', running: 'Running', succeeded: 'Succeeded', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted',
   },
-  questionStatuses: { pending: 'Pending', answered: 'Answered', expired: 'Expired' },
+  questionStatuses: { pending: 'Pending', answered: 'Answered' },
   continuationStatuses: { pending: 'Pending', waiting: 'Waiting', resolved: 'Resolved' },
   decisions: { code: 'Rules', model: 'Model', user: 'Operator' },
   progress: '{{finished}}/{{total}} tasks finished',
@@ -84,7 +84,7 @@ export default {
   answer: 'Answer',
   askedAt: 'Asked at',
   answeredAt: 'Answered at',
-  expiresAt: 'Answer deadline',
+  fallbackAt: 'Model may answer after',
   artifacts: 'Artifacts',
   noArtifacts: 'No artifacts saved in task results.',
   artifactId: 'Artifact ID',

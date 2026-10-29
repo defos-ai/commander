@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -55,7 +54,7 @@ func (e *Engine) answer(text string, operations map[string]bridge.Operation) {
 	}
 	for _, operation := range operations {
 		for _, question := range operation.Questions {
-			if question.ID != id || !question.Pending(time.Now()) {
+			if question.ID != id || !question.Pending() {
 				continue
 			}
 			if number, err := strconv.Atoi(answer); err == nil && number > 0 && number <= len(question.Options) {
@@ -76,7 +75,7 @@ func (e *Engine) submitAnswer(answer answerRequest, operations map[string]bridge
 			questions = append(append([]bridge.Question(nil), questions...), *operation.LastQuestion)
 		}
 		for _, question := range questions {
-			if question.ID == answer.questionID && question.Pending(time.Now()) {
+			if question.ID == answer.questionID && question.Pending() {
 				e.emit(Event{Kind: "answer_request", OperationID: answer.operationID, QuestionID: answer.questionID, Answer: answer.answer})
 				return
 			}

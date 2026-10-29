@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +66,7 @@ func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 			}
 			question, continuation := retried.Questions[0], retried.Tasks[0].Continuation
 			if transition == "ask" {
-				if question.Status != operations.QuestionPending || question.ExpiresAt.Sub(question.AskedAt) != runner.DefaultQuestionTimeout || continuation.DecisionBy != operations.DecisionUser || continuation.Status != operations.ContinuationWaiting || continuation.QuestionID != question.ID {
+				if question.Status != operations.QuestionPending || question.FallbackAt.Sub(question.AskedAt) != runner.DefaultQuestionTimeout || continuation.DecisionBy != operations.DecisionUser || continuation.Status != operations.ContinuationWaiting || continuation.QuestionID != question.ID {
 					t.Fatalf("retry did not suspend the linked decision: question=%+v, continuation=%+v", question, continuation)
 				}
 			} else if question.Status != operations.QuestionAnswered || question.Answer != answer.Answer || question.AnsweredBy != answer.AnsweredBy || question.AnsweredAt == nil || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
@@ -78,7 +77,7 @@ func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 }
 
 func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
-	for _, transition := range []string{"ask", "answer", "expire"} {
+	for _, transition := range []string{"ask", "answer"} {
 		t.Run(transition, func(t *testing.T) {
 			config := fixtures.Config()
 			failure := errors.New("directory sync failed")
@@ -89,8 +88,6 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 				store.AfterAsk = uncertain
 			case "answer":
 				store.AfterAnswer = uncertain
-			case "expire":
-				store.AfterExpire = uncertain
 			}
 			config.OperationStore = store
 			exec, calls := fakes.ControlledExecutor()
@@ -106,30 +103,21 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 			before := operationAwaitingDecision(t, first, calls)
 			ask := commands.AskQuestionCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID,
 				Version: before.Tasks[0].Continuation.Version, Text: "Continue?", Options: []string{"yes", "no"}}
-			if transition == "expire" {
-				ask.TimeoutSeconds = 1
-			}
 			question, changeErr := first.Ask(t.Context(), ask)
 			wantStatus := operations.QuestionPending
 			if transition != "ask" {
 				if changeErr != nil {
 					t.Fatal(changeErr)
 				}
-				if transition == "answer" {
-					_, changeErr = first.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: question.ID, Answer: "yes"})
-					wantStatus = operations.QuestionAnswered
-				} else {
-					fixtures.AwaitOperation(t, first, before.ID, func(op operations.Operation) bool { return op.Questions[0].Status == operations.QuestionExpired })
-					_, changeErr = first.Events(t.Context(), before.ID, 0, false)
-					wantStatus = operations.QuestionExpired
-				}
+				_, changeErr = first.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: question.ID, Answer: "yes"})
+				wantStatus = operations.QuestionAnswered
 			}
 			stored, err := first.Get(t.Context(), before.ID)
 			if err != nil || len(stored.Questions) != 1 || len(stored.Tasks) != 1 || stored.Questions[0].Status != wantStatus {
 				t.Fatalf("uncertain %s lost its snapshot: %+v, %v", transition, stored, err)
 			}
 			savedQuestion, savedDecision := stored.Questions[0], stored.Tasks[0].Continuation
-			if savedQuestion.ID == "" || savedQuestion.TaskID != before.Tasks[0].ID || savedQuestion.ExpiresAt.IsZero() || savedDecision.QuestionID != savedQuestion.ID {
+			if savedQuestion.ID == "" || savedQuestion.TaskID != before.Tasks[0].ID || savedQuestion.FallbackAt.IsZero() || savedDecision.QuestionID != savedQuestion.ID {
 				t.Fatalf("uncertain %s lost the question identity or deadline: %+v", transition, stored)
 			}
 			if transition == "answer" {
@@ -174,30 +162,35 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 	}
 }
 
-func TestLateAnswerPersistsExpirationBeforeReturningError(t *testing.T) {
-	config := fixtures.Config()
-	config.OperationStore = &fakes.DeadlineOnAnswerStore{OperationStore: config.OperationStore.(*fakes.OperationStore)}
-	exec, calls := fakes.ControlledExecutor()
-	r := fixtures.NewRunner(t, config, exec)
-	before := operationAwaitingDecision(t, r, calls)
-	question, err := r.Ask(t.Context(), commands.AskQuestionCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID,
-		Version: before.Tasks[0].Continuation.Version, Text: "Continue?"})
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestAnswersAfterOperatorWindowResumeLinkedDecision(t *testing.T) {
+	for _, origin := range []operations.AnswerOrigin{operations.AnswerOperator, operations.AnswerModel} {
+		t.Run(string(origin), func(t *testing.T) {
+			config := fixtures.Config()
+			config.OperationStore = &fakes.DeadlineOnAnswerStore{OperationStore: config.OperationStore.(*fakes.OperationStore)}
+			exec, calls := fakes.ControlledExecutor()
+			r := fixtures.NewRunner(t, config, exec)
+			before := operationAwaitingDecision(t, r, calls)
+			question, err := r.Ask(t.Context(), commands.AskQuestionCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID,
+				Version: before.Tasks[0].Continuation.Version, Text: "Continue?"})
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	result, answerErr := r.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: question.ID, Answer: "too late"})
-	stored, err := r.Get(t.Context(), before.ID)
-	if answerErr == nil || !strings.Contains(answerErr.Error(), "question has expired") || err != nil || !reflect.DeepEqual(result, stored) {
-		t.Fatalf("late answer did not return the durable expired snapshot: operation=%+v, answer=%v, get=%v", result, answerErr, err)
-	}
-	q, continuation := stored.Questions[0], stored.Tasks[0].Continuation
-	if q.ID != question.ID || q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredBy != "" || q.AnsweredAt != nil || stored.Status != operations.Planning || continuation.Version != before.Tasks[0].Continuation.Version+2 || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
-		t.Fatalf("late answer lost expiration or changed the decision incorrectly: %+v", stored)
-	}
-	events, err := r.Events(t.Context(), before.ID, 0, false)
-	if err != nil || !reflect.DeepEqual(events, stored.Events) || len(events) != len(before.Events)+2 || events[len(events)-1].Type != operations.QuestionExpiredEvent {
-		t.Fatalf("late answer did not publish exactly one expiration: %+v, %v", events, err)
+			result, answerErr := r.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: origin, OperationID: before.ID, QuestionID: question.ID, Answer: "Continue"})
+			stored, err := r.Get(t.Context(), before.ID)
+
+			if answerErr != nil || err != nil || !reflect.DeepEqual(result, stored) {
+				t.Fatalf("answer after operator window was not saved: operation=%+v, answer=%v, get=%v", result, answerErr, err)
+			}
+			q, continuation := stored.Questions[0], stored.Tasks[0].Continuation
+			if q.ID != question.ID || q.Status != operations.QuestionAnswered || q.Answer != "Continue" || q.AnsweredBy != origin || q.AnsweredAt == nil || q.AnsweredAt.Before(q.FallbackAt) || stored.Status != operations.Planning || continuation.Version != before.Tasks[0].Continuation.Version+2 || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
+				t.Fatalf("answer after operator window lost provenance or linked decision: %+v", stored)
+			}
+			events, err := r.Events(t.Context(), before.ID, 0, false)
+			if err != nil || !reflect.DeepEqual(events, stored.Events) || len(events) != len(before.Events)+2 || events[len(events)-1].Type != operations.QuestionAnsweredEvent {
+				t.Fatalf("answer after operator window did not publish exactly one answer: %+v, %v", events, err)
+			}
+		})
 	}
 }
 

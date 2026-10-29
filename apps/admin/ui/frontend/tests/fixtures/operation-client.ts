@@ -42,7 +42,7 @@ export const operation: Operation = {
   }],
   questions: [{
     id: 'question-1', task_id: 'task-1', status: 'pending', text: 'Continue with rendering checks?',
-    options: ['Yes', 'No'], asked_at: timestamp, expires_at: timestamp,
+    options: ['Yes', 'No'], asked_at: timestamp, fallback_at: timestamp,
   }],
   events: [{ sequence: 1, operation_id: 'operation-1', type: 'task.finished', status: 'waiting', task_id: 'task-1', created_at: timestamp }],
   created_at: timestamp, updated_at: timestamp,

@@ -88,7 +88,7 @@ export interface OperationQuestion {
   answered_by?: 'operator' | 'model';
   asked_at: string;
   answered_at?: string | null;
-  expires_at: string;
+  fallback_at: string;
 }
 
 export interface OperationEvent {

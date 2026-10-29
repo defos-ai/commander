@@ -40,7 +40,7 @@ func (m *Model) initQuestions() {
 	m.questions.answered = make(map[questionKey]bool)
 }
 
-func (m *Model) pendingQuestions(operation bridge.Operation, now time.Time) []pendingQuestion {
+func (m *Model) pendingQuestions(operation bridge.Operation) []pendingQuestion {
 	if operation.Terminal() {
 		return nil
 	}
@@ -61,18 +61,18 @@ func (m *Model) pendingQuestions(operation bridge.Operation, now time.Time) []pe
 	var pending []pendingQuestion
 	for _, question := range questions {
 		key := questionKey{operation.ID, question.ID}
-		if question.Pending(now) && !m.questions.answered[key] {
+		if question.Pending() && !m.questions.answered[key] {
 			pending = append(pending, pendingQuestion{key, question})
 		}
 	}
 	return pending
 }
 
-func (m *Model) syncQuestion(now time.Time) bool {
+func (m *Model) syncQuestion() bool {
 	var latest *pendingQuestion
 	total := 0
 	for _, operation := range m.operations {
-		pending := m.pendingQuestions(operation, now)
+		pending := m.pendingQuestions(operation)
 		count := len(pending)
 		if len(operation.Questions) == 0 && count > 0 {
 			count = max(count, operation.RemainingQuestions+1)
@@ -189,7 +189,7 @@ func (m *Model) questionKey(key tea.KeyMsg) bool {
 
 func (m *Model) questionView(now time.Time) string {
 	panel := &m.questions
-	if m.stage != stageChat || panel.current == nil || !panel.current.question.Pending(now) {
+	if m.stage != stageChat || panel.current == nil || !panel.current.question.Pending() {
 		return ""
 	}
 	question := panel.current.question
@@ -198,9 +198,11 @@ func (m *Model) questionView(now time.Time) string {
 		operationID = operationID[:8]
 	}
 	header := "✷ Operator input · operation " + clean(operationID)
-	if !question.ExpiresAt.IsZero() {
-		seconds := max(0, int((question.ExpiresAt.Sub(now)+time.Second-1)/time.Second))
-		header += fmt.Sprintf(" · %d:%02d left", seconds/60, seconds%60)
+	if question.FallbackAt.After(now) {
+		seconds := max(0, int((question.FallbackAt.Sub(now)+time.Second-1)/time.Second))
+		header += fmt.Sprintf(" · %d:%02d left before model answers are allowed", seconds/60, seconds%60)
+	} else {
+		header += " · model answers are allowed"
 	}
 	lines := []string{m.color(header, ReticleGreen), ansi.Wrap(clean(question.Text), max(20, m.width-4), " ")}
 	if panel.remaining > 0 {

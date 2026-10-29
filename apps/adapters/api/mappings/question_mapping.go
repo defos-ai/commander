@@ -41,7 +41,7 @@ func ToQuestionResponse(question operations.Question) models.QuestionResponse {
 		AnsweredBy: string(question.AnsweredBy),
 		AskedAt:    question.AskedAt,
 		AnsweredAt: cloneTime(question.AnsweredAt),
-		ExpiresAt:  question.ExpiresAt,
+		FallbackAt: question.FallbackAt,
 	}
 }
 

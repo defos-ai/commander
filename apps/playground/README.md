@@ -187,6 +187,8 @@ Answer operation questions in the **Operator input** panel or Admin's operation
 **Questions** section. Playground sends panel and `/answer` submissions directly
 to the API, using the same login as `/admin`; enter that login locally if prompted.
 If submission cannot be confirmed, inspect the saved question before submitting again.
+Questions stay open after their operator waiting window (120 seconds by default).
+The model may answer after `fallback_at`; operators can answer throughout.
 
 Tool calls update their pending line when they complete or fail. The progress
 area shows up to three recently updated operations; `+N more · /operations`

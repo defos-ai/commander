@@ -123,11 +123,11 @@ describe('operation controls', () => {
     expect(screen.queryByRole('button', { name: 'Answer question' })).not.toBeInTheDocument();
   });
 
-  it('disables an open answer form when its deadline passes', async () => {
+  it('keeps an open operator answer form available after the waiting window', async () => {
     vi.useFakeTimers();
     try {
       const api = fixture();
-      api.change(state => { state.current.questions![0].expires_at = new Date(Date.now() + 2000).toISOString(); });
+      api.change(state => { state.current.questions![0].fallback_at = new Date(Date.now() + 2000).toISOString(); });
       await act(async () => { view(); });
       fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
       await act(async () => {});
@@ -138,12 +138,11 @@ describe('operation controls', () => {
 
       await act(async () => { await vi.advanceTimersByTimeAsync(2001); });
 
-      expect(within(dialog).getByRole('button', { name: 'Send answer' })).toBeDisabled();
-      expect(dialog).toHaveTextContent('This question has expired');
-      fireEvent.submit(dialog.querySelector('form')!);
-      expect(api.posts()).toHaveLength(0);
+      expect(within(dialog).getByRole('button', { name: 'Send answer' })).toBeEnabled();
+      expect(within(dialog).getByLabelText('Your answer')).toHaveValue('Use HTTP checks');
       fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
-      expect(screen.queryByRole('button', { name: 'Answer question' })).not.toBeInTheDocument();
+      expect(api.posts()).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Answer question' })).toBeEnabled();
     } finally { vi.useRealTimers(); }
   });
 

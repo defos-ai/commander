@@ -126,12 +126,12 @@ func TestOperatorAnswerUnconfirmedWritesAreNotRetried(t *testing.T) {
 	}
 }
 
-func TestOperatorAnswerExpiresDuringAPILogin(t *testing.T) {
+func TestOperatorAnswerRemainsAvailableAfterWaitDuringAPILogin(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 7*time.Second)
 	defer cancel()
 	op := fixtures.PendingQuestionOperation()
 	deadline := time.Now().Add(2 * time.Second)
-	op.Questions[0].ExpiresAt = deadline
+	op.Questions[0].FallbackAt = deadline
 	u, server, apiURL := fixtures.QuestionUIWithOptions(t, ctx, op, fixtures.QuestionID, fixtures.QuestionUIOptions{NoAPILogin: true})
 	defer u.Close()
 	u.Text("/watch " + op.ID)
@@ -146,12 +146,12 @@ func TestOperatorAnswerExpiresDuringAPILogin(t *testing.T) {
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 	u.Text(fixtures.QuestionAPIPassword)
 	u.Key(tea.KeyMsg{Type: tea.KeyEnter})
-	u.Wait("expired answer discarded", func(view string) bool {
-		return !strings.Contains(view, "Connect to API") && !strings.Contains(view, "Operator input")
+	u.Wait("operator answer after waiting window", func(view string) bool {
+		return strings.Contains(view, "Operator answer: Accept")
 	})
 	u.Close()
 
-	if len(server.APIRequests()) != 0 || server.MCPAnswerCount() != 0 || strings.Contains(u.Model.View(), "Operator answer: Accept") {
-		t.Fatal("login completion submitted an answer to a question that had expired")
+	if requests := server.APIRequests(); len(requests) != 1 || requests[0].Answer != "Accept" || server.MCPAnswerCount() != 0 {
+		t.Fatal("operator could not answer after the waiting window ended during login")
 	}
 }

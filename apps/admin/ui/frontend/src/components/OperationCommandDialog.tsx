@@ -3,7 +3,6 @@ import { LoaderCircle } from 'lucide-react';
 import { answerQuestion, cancelOperation, CommandError } from '../api/operation-commands';
 import type { Operation, OperationQuestion } from '../api/operation-types';
 import type { Connection, Session } from '../connections/types';
-import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
@@ -31,10 +30,9 @@ export function OperationCommandDialog(props: Props) {
   const pending = useRef<AbortController | null>(null);
   const sent = useRef(false);
   const question = props.command === 'answer' ? props.question : undefined;
-  const expired = useQuestionExpiry(question?.expires_at ?? '0001-01-01T00:00:00Z');
   const finished = !isActiveOperation(operation.status);
   const noLongerPending = question && question.status !== 'pending';
-  const blocked = !available || finished || Boolean(question && (expired || noLongerPending)) || Boolean(error);
+  const blocked = !available || finished || Boolean(noLongerPending) || Boolean(error);
 
   useEffect(() => () => { pending.current?.abort(); pending.current = null; }, [connection.url, credentials, operation.id, question?.id]);
 
@@ -77,8 +75,7 @@ export function OperationCommandDialog(props: Props) {
       </>}
       {finished ? <p className="notice" role="status">{t($ => $.operationCommands.finished)}</p>
         : noLongerPending ? <p className="notice" role="status">{t($ => $.operationCommands.noLongerPending)}</p>
-          : question && expired ? <p className="notice" role="status">{t($ => $.operationCommands.expired)}</p>
-            : !available && <p className="notice" role="status">{t($ => $.operationCommands.refreshRequired)}</p>}
+          : !available && <p className="notice" role="status">{t($ => $.operationCommands.refreshRequired)}</p>}
       {error && <OperationCommandError error={error} operationID={operation.id} onInspect={() => onInspect(operation.id)} />}
       {submitting && <p className="form-hint" role="status">{t($ => $.operationCommands.submittingNote)}</p>}
       <div className="dialog-actions">

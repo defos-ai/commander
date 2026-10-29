@@ -124,6 +124,11 @@
   answer and any linked continuation. Trusted adapters stamp this origin: HTTP
   API submissions use `operator`, MCP submissions use `model`. It records the
   submission channel; public answer bodies cannot choose it.
+  Questions store one `fallback_at`, derived from `timeout_seconds` (120 seconds
+  by default). Reject model answers before it inside the atomic mutation;
+  operators can answer at any time. Passing this time leaves the question and
+  its blocked continuation pending. Recovery retains the original fallback time;
+  there is no question expiry or automatic answer.
 - Storage locking, transactions and storage revisions belong in providers.
   Continuation versions are explicit business revisions that reject stale
   decisions, not storage revision numbers.
@@ -138,12 +143,12 @@
   Suspend observation and result writes for operations with uncertain state;
   retain terminal operation status and immutable reports when late evidence arrives.
 - [`Operation.AssessProgress`](domain/operations/progress.go) derives task counts,
-  pending model decisions and unexpired questions using one supplied time. Only
+  pending model decisions and unanswered questions. Only
   succeeded, failed and cancelled tasks are finished; interrupted outcomes remain
   unknown. A settled operation is terminal with every task finished. This is a
   saved-work view, not proof of agent idleness or permission to clean up state.
   Terminal operations retain history but expose no actionable decisions/questions.
-  Reads never expire questions or change saved operation status.
+  Reads never resolve questions or change saved operation status.
 - [`queries.Operations`](queries/operations.go) loads operation/task views for
   adapters, using one time per response for progress and live requirements.
   Inventory and parent-status read failures omit optional task observations;

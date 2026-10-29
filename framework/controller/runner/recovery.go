@@ -29,7 +29,7 @@ func (r *Runner) recover(ctx context.Context) error {
 				return err
 			}
 		}
-		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) || pendingQuestionDeadline(operation) {
+		if !operation.Status.Terminal() || slices.ContainsFunc(operation.Tasks, operations.Task.NeedsRecovery) {
 			r.states[operation.ID] = &operationState{operation: operation.Clone(), changed: make(chan struct{})}
 		}
 	}

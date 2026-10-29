@@ -25,7 +25,7 @@ func (m *Model) submitOperatorAnswer(request chat.Event) tea.Cmd {
 	key := questionKey{request.OperationID, request.QuestionID}
 	operation := m.operations[key.operationID]
 	pending := false
-	for _, question := range m.pendingQuestions(operation, time.Now()) {
+	for _, question := range m.pendingQuestions(operation) {
 		pending = pending || question.key == key
 	}
 	if !id.Valid(key.operationID) || !id.Valid(key.questionID) || strings.TrimSpace(request.Answer) == "" || !pending {

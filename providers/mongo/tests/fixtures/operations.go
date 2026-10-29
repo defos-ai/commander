@@ -91,5 +91,5 @@ func SuccessfulTask(task operations.Task) operations.TaskResult {
 
 func Question(taskID string) operations.Question {
 	asked := time.Now().UTC()
-	return operations.Question{ID: id.QuestionID(), TaskID: taskID, Status: operations.QuestionPending, Text: "Continue the review?", Options: []string{"Continue", "Stop"}, AskedAt: asked, ExpiresAt: asked.Add(time.Hour)}
+	return operations.Question{ID: id.QuestionID(), TaskID: taskID, Status: operations.QuestionPending, Text: "Continue the review?", Options: []string{"Continue", "Stop"}, AskedAt: asked, FallbackAt: asked.Add(time.Hour)}
 }

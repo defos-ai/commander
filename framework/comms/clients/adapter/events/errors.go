@@ -63,7 +63,7 @@ var errorCodes = []struct {
 	{"unknown_task", operations.ErrUnknownTask},
 	{"unknown_question", operations.ErrUnknownQuestion},
 	{"question_answered", operations.ErrQuestionAnswered},
-	{"question_expired", operations.ErrQuestionExpired},
+	{"question_operator_waiting", operations.ErrQuestionOperatorWaiting},
 	{"continuation_conflict", operations.ErrContinuationConflict},
 	{"task_limit_exceeded", operations.ErrTaskLimitExceeded},
 	{"operation_active_tasks", operations.ErrActiveTasks},

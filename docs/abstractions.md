@@ -152,7 +152,9 @@ For custom selection, see [controller rules](../apps/controllers/README.md#rule-
 
 Commander can ask a question when a decision needs your input. Answer in
 Playground or Admin. A question can block new work; running tasks continue.
-An expired question is not approval. Answers and question history stay with the operation.
+Operators can answer immediately. After the waiting window (120 seconds by
+default), the model may answer too. Questions stay open until answered; time
+passing alone is not approval. Answers and their origins stay with the operation.
 
 ## Results and evidence
 

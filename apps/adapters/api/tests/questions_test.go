@@ -23,7 +23,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	if len(questions.Items) != 2 || questions.LastQuestion == nil || questions.LastQuestion.ID != latest.ID || questions.RemainingQuestions != 1 {
 		t.Fatalf("latest question view: %+v", questions)
 	}
-	if first.Status != "pending" || first.AnsweredBy != "" || latest.ExpiresAt.Sub(latest.AskedAt) != 2*time.Minute {
+	if first.Status != "pending" || first.AnsweredBy != "" || latest.FallbackAt.Sub(latest.AskedAt) != 2*time.Minute {
 		t.Fatalf("default question lifecycle: %+v", latest)
 	}
 	assertSchema(t, a, "Question", created)
@@ -51,11 +51,11 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	a.Complete(op.ID, "Answered operator questions")
 }
 
-func TestLinkedQuestionsReturnDecisionsAfterAnswerOrExpiry(t *testing.T) {
-	for _, expire := range []bool{false, true} {
-		name := "answer"
-		if expire {
-			name = "expiry"
+func TestLinkedQuestionsKeepWaitingUntilOperatorAnswers(t *testing.T) {
+	for _, delayed := range []bool{false, true} {
+		name := "answer during operator window"
+		if delayed {
+			name = "answer after operator window"
 		}
 		t.Run(name, func(t *testing.T) {
 			a := fixtures.Connect(t)
@@ -67,37 +67,31 @@ func TestLinkedQuestionsReturnDecisionsAfterAnswerOrExpiry(t *testing.T) {
 				t.Fatalf("summary task failed: %+v", task)
 			}
 			base := fixtures.OperationPath(op.ID)
-			question := fixtures.Post[models.QuestionResponse](a, base+"/questions", fixtures.Object{"text": "Is this a release preview?", "options": []string{"Yes", "No"}, "task_id": task.ID, "version": task.Continuation.Version, "timeout_seconds": 3}, http.StatusCreated)
+			question := fixtures.Post[models.QuestionResponse](a, base+"/questions", fixtures.Object{"text": "Is this a release preview?", "options": []string{"Yes", "No"}, "task_id": task.ID, "version": task.Continuation.Version, "timeout_seconds": 1}, http.StatusCreated)
 			waiting := fixtures.Read[models.TaskResponse](a, base+"/tasks/"+task.ID)
 			if waiting.Continuation.DecisionBy != "user" || waiting.Continuation.Status != "waiting" || waiting.Continuation.QuestionID != question.ID {
 				t.Fatalf("linked question did not pause decision: %+v", waiting)
 			}
 			resolvePath := base + "/tasks/" + task.ID + "/continuation/resolve"
 			fixtures.AssertError(t, a.Request(http.MethodPost, resolvePath, fixtures.Object{"version": task.Continuation.Version, "actions": []fixtures.Object{}}), http.StatusConflict, "continuation_conflict")
-			wantStatus, answer := "expired", ""
-			if !expire {
-				wantStatus, answer = "answered", "Yes, this is a release preview."
-				fixtures.Post[models.OperationResponse](a, base+"/questions/"+question.ID+"/answer", fixtures.Object{"answer": answer}, http.StatusOK)
+			if delayed {
+				afterWindow := a.Wait(op.ID, func(op models.OperationResponse) bool { return !time.Now().Before(question.FallbackAt) })
+				if len(afterWindow.Questions) != 1 || afterWindow.Questions[0].Status != "pending" || afterWindow.Questions[0].Answer != "" || fixtures.ModelDecision(afterWindow) != nil || afterWindow.Tasks[0].Continuation.Version != task.Continuation.Version+1 {
+					t.Fatalf("passing the operator window changed the waiting decision: %+v", afterWindow)
+				}
 			}
+
+			answer := "Yes, this is a release preview."
+			fixtures.Post[models.OperationResponse](a, base+"/questions/"+question.ID+"/answer", fixtures.Object{"answer": answer}, http.StatusOK)
 			resumed := a.Wait(op.ID, func(op models.OperationResponse) bool {
-				return len(op.Questions) == 1 && op.Questions[0].Status == wantStatus && fixtures.ModelDecision(op) != nil
+				return len(op.Questions) == 1 && op.Questions[0].Status == "answered" && fixtures.ModelDecision(op) != nil
 			})
+
 			decision := fixtures.ModelDecision(resumed)
-			if decision.Continuation.Version != task.Continuation.Version+2 || len(resumed.Tasks) != 1 || resumed.Questions[0].Answer != answer || (resumed.Questions[0].AnsweredAt == nil) != expire {
-				t.Fatalf("decision handoff invented an answer or work: %+v", resumed)
+			if decision.Continuation.Version != task.Continuation.Version+2 || len(resumed.Tasks) != 1 || resumed.Questions[0].Answer != answer || resumed.Questions[0].AnsweredAt == nil || resumed.Questions[0].AnsweredBy != "operator" {
+				t.Fatalf("operator answer did not preserve its decision handoff: %+v", resumed)
 			}
-			wantOrigin := "operator"
-			if expire {
-				wantOrigin = ""
-			}
-			if resumed.Questions[0].AnsweredBy != wantOrigin {
-				t.Fatalf("question answer origin: got %q, want %q", resumed.Questions[0].AnsweredBy, wantOrigin)
-			}
-			code := "question_answered"
-			if expire {
-				code = "question_expired"
-			}
-			fixtures.AssertError(t, a.Request(http.MethodPost, base+"/questions/"+question.ID+"/answer", fixtures.Object{"answer": "Late replacement"}), http.StatusConflict, code)
+			fixtures.AssertError(t, a.Request(http.MethodPost, base+"/questions/"+question.ID+"/answer", fixtures.Object{"answer": "Late replacement"}), http.StatusConflict, "question_answered")
 			a.Resolve(op.ID, *decision, []fixtures.Object{})
 			a.Complete(op.ID, "Reviewed question lifecycle")
 		})

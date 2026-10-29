@@ -405,8 +405,8 @@ func TestQuestionSelector(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	op := bridge.Operation{ID: fixtures.QuestionOperationID, Status: "waiting", UpdatedAt: time.Now(), Progress: bridge.Progress{TaskCounts: map[string]int{}, PendingQuestions: 2}, Questions: []bridge.Question{
-		{ID: "37a57205-2705-4818-bf6e-4c00f1b9821d", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Minute)},
-		{ID: fixtures.QuestionID, Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), ExpiresAt: time.Now().Add(2 * time.Minute)},
+		{ID: "37a57205-2705-4818-bf6e-4c00f1b9821d", Status: bridge.QuestionPending, Text: "Older question", AskedAt: time.Now().Add(-time.Minute), FallbackAt: time.Now().Add(time.Minute)},
+		{ID: fixtures.QuestionID, Status: bridge.QuestionPending, Text: "Which release priority?", Options: []string{"Accessibility", "Broken links"}, AskedAt: time.Now(), FallbackAt: time.Now().Add(2 * time.Minute)},
 	}}
 	u, questions := fixtures.QuestionUI(t, ctx, op, fixtures.QuestionID)
 	defer u.Close()
@@ -437,13 +437,10 @@ func TestQuestionSelector(t *testing.T) {
 	default:
 		t.Fatal("answer was not submitted")
 	}
-	wait("expiry", func(view string) bool { return !strings.Contains(view, "Operator input") })
-	// The server projection can hide an expired question before the controller
-	// saves expiry. Its progress must arrive without advancing updated_at.
-	questions.ClearPendingCount()
-	wait("derived question progress", func(view string) bool { return !strings.Contains(view, "question(s)") })
+	wait("remaining question", func(view string) bool { return strings.Contains(view, "Older question") })
+	key(tea.KeyMsg{Type: tea.KeyTab})
 	if !strings.Contains(model.View(), "unsent chat draft") {
-		t.Fatal("answering or expiry lost the chat draft")
+		t.Fatal("answering lost the chat draft")
 	}
 	u.Close()
 	requests := questions.APIRequests()

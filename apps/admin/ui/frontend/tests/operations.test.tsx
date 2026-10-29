@@ -200,7 +200,7 @@ describe('operations browser', () => {
         agent_id: task.agent_id, action_name: task.action_name, created_at: now,
         files: [{ id: 'file-desktop', name: 'desktop.png', media_type: 'image/png', size: 1200, sha256: 'a'.repeat(64) }] }] } }],
       questions: [{ id: 'question-browser', task_id: task.id, status: 'pending', text: 'How should this review continue?',
-        options: ['Configure the browser', 'Review without screenshots'], asked_at: now, expires_at: '2099-01-01T00:00:00Z' }],
+        options: ['Configure the browser', 'Review without screenshots'], asked_at: now, fallback_at: '2099-01-01T00:00:00Z' }],
     };
     const fetch = mockAPI(url => Response.json(url.endsWith('/operations') ? { items: [waiting] } : waiting));
     render(<OperationsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);

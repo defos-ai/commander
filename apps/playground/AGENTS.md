@@ -275,18 +275,20 @@
   unknown outcomes from the server's interrupted-task count. Completion accepts
   a final report that may include limitations; keep watching for late evidence
   without reopening the operation or scheduling another decision before settlement.
-  Compare derived progress separately from `updated_at`, since a
-  question deadline can change counts without a saved write. Keep local question
-  and secret deadlines for input safety and continuation versions for review
-  scheduling.
+  Compare derived progress and live secret requirements separately from
+  `updated_at`. Question fallback times govern model eligibility without changing
+  pending counts. Keep secret deadlines for input safety and continuation versions
+  for review scheduling.
 - `/stop` ends model work, not the server operation. Watching an operation can
   resume model review. Distinguish an active reply from an idle stop and only
   describe paused review for watched operations whose settlement is not known.
   Keep operation updates flowing while review is paused. Do not automatically
   retry failed model or mutating MCP requests: their execution outcome may be unknown.
-- Only explicit operator input answers a question. An expired question returns
-  the decision for review; it never supplies approval. Keep task/continuation
-  revisions when deciding whether a review is new or stale.
+- Questions remain pending until an answer is saved. The controller permits
+  operator answers before and after `fallback_at`, and rejects model answers
+  before it. Keep operator forms open across this time; it never supplies
+  approval or releases a linked continuation. Keep task/continuation revisions
+  when deciding whether a review is new or stale.
   The engine validates panel and `/answer` requests, then emits `answer_request`
   for [`internal/ui/answers.go`](internal/ui/answers.go). Submit through the retained
   authenticated API connection, with local login when needed; recheck question

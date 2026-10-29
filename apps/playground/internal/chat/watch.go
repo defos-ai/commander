@@ -88,7 +88,6 @@ func (e *Engine) watch(id string) {
 	}
 }
 
-// Derived progress can change when a question expires without a saved update.
 func sameProgress(a, b bridge.Progress) bool {
 	return a.TotalTasks == b.TotalTasks && a.FinishedTasks == b.FinishedTasks &&
 		a.PendingDecisions == b.PendingDecisions && a.PendingQuestions == b.PendingQuestions &&

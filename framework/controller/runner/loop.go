@@ -38,12 +38,10 @@ func (r *Runner) run() {
 		case <-r.wake:
 			r.retryResults()
 			r.observeInterruptedTasks()
-			r.expireOperatorQuestions()
 			r.dispatchQueued()
 		case <-ticker.C:
 			r.retryResults()
 			r.observeInterruptedTasks()
-			r.expireOperatorQuestions()
 			r.dispatchQueued()
 		}
 	}

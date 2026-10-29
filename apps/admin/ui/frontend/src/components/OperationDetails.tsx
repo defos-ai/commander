@@ -4,7 +4,6 @@ import type {
 } from '../api/operation-types';
 import type { ActionRequirement } from '../api/types';
 import { useTranslation } from '../i18n';
-import { useQuestionExpiry } from '../hooks/useQuestionExpiry';
 import { Button } from './Button';
 import '../styles/catalog.css';
 import '../styles/operations.css';
@@ -170,23 +169,20 @@ function Task({ task, queuedFor, placement, onOpenSession, onOpenLogs }: {
 
 function Question({ question, onAnswer }: { question: OperationQuestion; onAnswer?: () => void }) {
   const { t } = useTranslation();
-  const expired = useQuestionExpiry(question.expires_at);
   const { status } = question;
   return <article className="operation-question">
     <div className="operation-question-heading"><h3>{question.text}</h3><span className="catalog-status" data-tone={status === 'answered' ? 'ready' : 'muted'}>
-      {status === 'pending' || status === 'answered' || status === 'expired' ? t($ => $.operations.questionStatuses[status]) : status}
+      {status === 'pending' || status === 'answered' ? t($ => $.operations.questionStatuses[status]) : status}
     </span></div>
     {Boolean(question.options?.length) && <div className="operation-nested"><h4>{t($ => $.operations.options)}</h4><ol>{question.options?.map((option, index) => <li key={index}>{option}</li>)}</ol></div>}
     {question.answer && <div className="operation-nested"><h4>{t($ => $.operations.answer)}</h4><p>{question.answer}</p></div>}
-    {status === 'pending' && (expired
-      ? <p className="operation-nested catalog-muted">{t($ => $.operationCommands.expired)}</p>
-      : onAnswer && <Button className="operation-nested" onClick={onAnswer}>{t($ => $.operationCommands.answerTitle)}</Button>)}
+    {status === 'pending' && onAnswer && <Button className="operation-nested" onClick={onAnswer}>{t($ => $.operationCommands.answerTitle)}</Button>}
     <dl className="detail-list">
       <div><dt>{t($ => $.operations.questionId)}</dt><dd><code>{question.id}</code></dd></div>
       {question.task_id && <div><dt>{t($ => $.operations.taskId)}</dt><dd><code>{question.task_id}</code></dd></div>}
       {question.step_id && <div><dt>{t($ => $.operations.stepId)}</dt><dd><code>{question.step_id}</code></dd></div>}
       <div><dt>{t($ => $.operations.askedAt)}</dt><dd><Timestamp value={question.asked_at} /></dd></div>
-      <div><dt>{t($ => $.operations.expiresAt)}</dt><dd><Timestamp value={question.expires_at} /></dd></div>
+      <div><dt>{t($ => $.operations.fallbackAt)}</dt><dd><Timestamp value={question.fallback_at} /></dd></div>
       {question.answered_at && <div><dt>{t($ => $.operations.answeredAt)}</dt><dd><Timestamp value={question.answered_at} /></dd></div>}
     </dl>
   </article>;

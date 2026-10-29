@@ -28,7 +28,7 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 		if command.TimeoutSeconds > 0 {
 			timeout = time.Duration(command.TimeoutSeconds) * time.Second
 		}
-		question := operations.Question{ID: questionID, Status: operations.QuestionPending, TaskID: command.TaskID, StepID: command.StepID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, ExpiresAt: now.Add(timeout)}
+		question := operations.Question{ID: questionID, Status: operations.QuestionPending, TaskID: command.TaskID, StepID: command.StepID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, FallbackAt: now.Add(timeout)}
 		next, err := r.store.AskQuestion(ctx, command.OperationID, question, command.Version)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Question{}, err
@@ -55,50 +55,6 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
-		for _, question := range s.operation.Questions {
-			if question.ID == command.QuestionID && question.Status == operations.QuestionExpired {
-				return s.operation.Clone(), operations.ErrQuestionExpired
-			}
-		}
 		return s.operation.Clone(), nil
 	})
-}
-
-func pendingQuestionDeadline(op operations.Operation) bool {
-	for _, question := range op.Questions {
-		if question.Pending() && !question.ExpiresAt.IsZero() {
-			return true
-		}
-	}
-	return false
-}
-
-func hasDueQuestions(op operations.Operation, now time.Time) bool {
-	for _, question := range op.Questions {
-		if question.Pending() && !question.ExpiresAt.IsZero() && !now.Before(question.ExpiresAt) {
-			return true
-		}
-	}
-	return false
-}
-
-// Sweep before inventory lookup: unavailable agents or an inventory read error
-// must not prevent deadlines from releasing operator questions.
-func (r *Runner) expireOperatorQuestions() {
-	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
-	defer cancel()
-	if r.ctx.Err() != nil {
-		return
-	}
-	for _, s := range r.states {
-		if s.err != nil {
-			continue
-		}
-		now := time.Now().UTC()
-		if hasDueQuestions(s.operation, now) {
-			// Retry rejected writes; uncertain writes pause the operation.
-			next, err := r.store.ExpireQuestions(ctx, s.operation.ID, now)
-			_ = s.acceptUpdate(next, err)
-		}
-	}
 }

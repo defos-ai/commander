@@ -72,12 +72,6 @@ func (s *QuestionServer) MCPAnswerCount() int {
 	return s.mcpAnswers
 }
 
-func (s *QuestionServer) ClearPendingCount() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.operation.Progress.PendingQuestions = 0
-}
-
 func (s *QuestionServer) Handler() http.Handler {
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.server }, nil)
 }
@@ -128,17 +122,16 @@ func (s *QuestionServer) answer(w http.ResponseWriter, r *http.Request) {
 	for i := range s.operation.Questions {
 		question := &s.operation.Questions[i]
 		if question.ID == s.questionID {
-			if !question.Pending(now) {
+			if !question.Pending() {
 				w.WriteHeader(http.StatusConflict)
-				_, _ = w.Write([]byte(`{"error":"question_expired"}`))
+				_, _ = w.Write([]byte(`{"error":"question_answered"}`))
 				return
 			}
 			question.Status, question.Answer = bridge.QuestionAnswered, input.Answer
 			question.AnsweredBy = "operator"
 			answeredAt := now.Format(time.RFC3339Nano)
 			question.AnsweredAt = &answeredAt
-		} else if question.Pending(now) {
-			question.ExpiresAt = now.Add(500 * time.Millisecond)
+		} else if question.Pending() {
 			s.operation.Progress.PendingQuestions++
 		}
 	}

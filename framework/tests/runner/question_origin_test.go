@@ -16,6 +16,9 @@ func TestQuestionAnswerRetainsFirstOrigin(t *testing.T) {
 	for _, origin := range []operations.AnswerOrigin{operations.AnswerOperator, operations.AnswerModel} {
 		t.Run(string(origin), func(t *testing.T) {
 			config := fixtures.Config()
+			if origin == operations.AnswerModel {
+				config.OperationStore = &fakes.DeadlineOnAnswerStore{OperationStore: config.OperationStore.(*fakes.OperationStore)}
+			}
 			exec, _ := fakes.ControlledExecutor()
 			r := fixtures.NewRunner(t, config, exec)
 			op := fixtures.Start(t, r)

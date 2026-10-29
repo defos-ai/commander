@@ -137,7 +137,10 @@
   stale choices. Answer submissions carry adapter-assigned origin: HTTP uses
   `operator`, MCP uses `model`. Keep `answered_by` out of public answer inputs;
   expose it on saved questions. Origin records the submission path, not a proof
-  of human identity. Expiry is not approval.
+  of human identity. timeout_seconds sets the operator-first waiting window and
+  fallback_at is the earliest model answer time. Operators may answer throughout;
+  unanswered questions remain pending and blocking after this deadline. Passing
+  the deadline does not supply an answer or approval.
 - MCP `get_operation` and `list_operations` expose read-only `affinity` through
   `Operation.AssessAffinity`. Preserve `for_actions`, the saved owner and any
   history error even without live inventory. Queued tasks remain unassigned.

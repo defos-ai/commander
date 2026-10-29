@@ -116,7 +116,7 @@ func TestOperationAffinityRejectsInvalidHistoryBeforeRecoveryChanges(t *testing.
 			now := time.Now().UTC()
 			op.Questions = []operations.Question{{
 				ID: id.QuestionID(), Status: operations.QuestionPending,
-				Text: "Continue?", AskedAt: now.Add(-2 * time.Minute), ExpiresAt: now.Add(-time.Minute),
+				Text: "Continue?", AskedAt: now.Add(-2 * time.Minute), FallbackAt: now.Add(-time.Minute),
 			}}
 			before := op.Clone()
 			agentID, err := op.AffinityAgentID()
@@ -128,7 +128,7 @@ func TestOperationAffinityRejectsInvalidHistoryBeforeRecoveryChanges(t *testing.
 				t.Fatalf("Recover() = %v, %v; want unchanged operation conflict", changed, err)
 			}
 			if !reflect.DeepEqual(op.Clone(), before) {
-				t.Fatal("invalid recovery changed tasks, expired a question or appended an event")
+				t.Fatal("invalid recovery changed tasks, changed a question or appended an event")
 			}
 		})
 	}

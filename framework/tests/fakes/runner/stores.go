@@ -171,13 +171,6 @@ func (s *OperationStore) AnswerQuestion(ctx context.Context, operationID, questi
 	})
 }
 
-func (s *OperationStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
-	return s.Update(ctx, operationID, func(op *operations.Operation) error {
-		op.ExpireQuestions(now)
-		return nil
-	})
-}
-
 func (s *OperationStore) RefreshPreflight(ctx context.Context, operationID string, records []agents.Agent) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(op *operations.Operation) error {
 		_, err := op.RefreshPreflight(records)

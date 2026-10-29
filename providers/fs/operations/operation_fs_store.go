@@ -191,15 +191,6 @@ func (s *OperationFsStore) AnswerQuestion(ctx context.Context, operationID, ques
 	})
 }
 
-func (s *OperationFsStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
-	if now.IsZero() {
-		return operations.Operation{}, errors.New("question expiration requires a cutoff time")
-	}
-	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
-		return operation.ExpireQuestions(now), nil
-	})
-}
-
 func (s *OperationFsStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
 		return operation.Complete(reportID, output)

@@ -72,7 +72,7 @@ function isQuestion(value: unknown): value is OperationQuestion {
     (value.options === undefined || isNullableStringArray(value.options)) &&
     isOptionalString(value.answer) &&
     (value.answered_by === undefined || value.answered_by === 'operator' || value.answered_by === 'model') && isDate(value.asked_at) &&
-    isOptionalDate(value.answered_at) && isDate(value.expires_at);
+    isOptionalDate(value.answered_at) && isDate(value.fallback_at);
 }
 
 function isEvent(value: unknown): value is OperationEvent {

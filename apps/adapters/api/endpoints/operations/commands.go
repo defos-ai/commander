@@ -112,8 +112,8 @@ func writeCommandResult(w http.ResponseWriter, status int, location string, valu
 		endpoints.WriteError(w, http.StatusConflict, "question_pending")
 	case errors.Is(err, operations.ErrQuestionAnswered):
 		endpoints.WriteError(w, http.StatusConflict, "question_answered")
-	case errors.Is(err, operations.ErrQuestionExpired):
-		endpoints.WriteError(w, http.StatusConflict, "question_expired")
+	case errors.Is(err, operations.ErrQuestionOperatorWaiting):
+		endpoints.WriteError(w, http.StatusConflict, "question_operator_waiting")
 	case errors.Is(err, operations.ErrContinuationConflict):
 		endpoints.WriteError(w, http.StatusConflict, "continuation_conflict")
 	case errors.Is(err, operations.ErrTaskLimitExceeded):

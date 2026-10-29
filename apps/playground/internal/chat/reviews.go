@@ -27,11 +27,10 @@ func currentReviews(operation bridge.Operation) []reviewKey {
 			keys = append(keys, reviewKey{operationID: operation.ID, taskID: task.ID, version: c.Version})
 		}
 	}
-	// An operation-wide question may have no task continuation to wake the
-	// model. Persisted expiry is itself a review trigger, never an answer.
+	// An operation-wide answer can wake review without a task continuation.
 	for _, question := range operation.Questions {
 		switch question.Status {
-		case bridge.QuestionAnswered, bridge.QuestionExpired:
+		case bridge.QuestionAnswered:
 			keys = append(keys, reviewKey{operationID: operation.ID, questionID: question.ID, status: string(question.Status)})
 		}
 	}

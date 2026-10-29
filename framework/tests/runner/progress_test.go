@@ -53,7 +53,7 @@ func TestOperationProgressSettlesLateOutcomeWithoutReopeningDecisions(t *testing
 	now := time.Date(2026, time.January, 2, 12, 0, 0, 0, time.UTC)
 	op := operations.Operation{ID: id.OperationID(), Status: operations.Running,
 		Questions: []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending,
-			Text: "Continue?", AskedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Minute)}},
+			Text: "Continue?", AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute)}},
 		Tasks: []operations.Task{
 			{Status: operations.TaskSucceeded, Continuation: &operations.Continuation{Status: operations.ContinuationPending, DecisionBy: operations.DecisionModel}},
 			{ID: id.TaskID(), AgentID: "fixture-agent-12345678", Status: operations.TaskInterrupted, FinishedAt: &now},
@@ -94,12 +94,11 @@ func TestOperationProgressSelectsQuestionsWithoutMutatingHistory(t *testing.T) {
 	future := now.Add(time.Minute)
 	op := operations.Operation{Status: operations.Waiting,
 		Questions: []operations.Question{
-			{ID: "older", Status: operations.QuestionPending, AskedAt: asked.Add(-time.Minute), ExpiresAt: future},
-			{ID: "b", Status: operations.QuestionPending, AskedAt: asked, ExpiresAt: future, Options: []string{"yes", "no"}},
-			{ID: "a", Status: operations.QuestionPending, AskedAt: asked, ExpiresAt: future},
-			{ID: "deadline", Status: operations.QuestionPending, AskedAt: now, ExpiresAt: now},
-			{ID: "answered", Status: operations.QuestionAnswered, AskedAt: now, ExpiresAt: future},
-			{ID: "expired", Status: operations.QuestionExpired, AskedAt: now, ExpiresAt: future},
+			{ID: "older", Status: operations.QuestionPending, AskedAt: asked.Add(-time.Minute), FallbackAt: future},
+			{ID: "b", Status: operations.QuestionPending, AskedAt: asked, FallbackAt: future, Options: []string{"yes", "no"}},
+			{ID: "a", Status: operations.QuestionPending, AskedAt: asked, FallbackAt: future},
+			{ID: "deadline", Status: operations.QuestionPending, AskedAt: asked.Add(-time.Minute), FallbackAt: now},
+			{ID: "answered", Status: operations.QuestionAnswered, AskedAt: now, FallbackAt: future},
 			{ID: "no-deadline", Status: operations.QuestionPending, AskedAt: asked.Add(-2 * time.Minute)},
 		},
 	}
@@ -117,7 +116,7 @@ func TestOperationProgressSelectsQuestionsWithoutMutatingHistory(t *testing.T) {
 	}
 	saved := op.Clone()
 	progress := op.AssessProgress(now)
-	if progress.PendingDecisions != 1 || progress.PendingQuestions != 4 || progress.RemainingQuestions != 3 || progress.LastQuestion == nil || progress.LastQuestion.ID != "b" {
+	if progress.PendingDecisions != 1 || progress.PendingQuestions != 5 || progress.RemainingQuestions != 4 || progress.LastQuestion == nil || progress.LastQuestion.ID != "b" {
 		t.Fatalf("question selection or model decision count is incorrect: %+v", progress)
 	}
 	if progress.TotalTasks != 8 || progress.FinishedTasks != 8 || progress.TaskCounts[operations.TaskSucceeded] != 8 || progress.Settled {
@@ -126,7 +125,7 @@ func TestOperationProgressSelectsQuestionsWithoutMutatingHistory(t *testing.T) {
 	progress.TaskCounts[operations.TaskSucceeded] = 100
 	progress.LastQuestion.ID = "changed"
 	progress.LastQuestion.Options[0] = "changed"
-	again := op.AssessProgress(now)
+	again := op.AssessProgress(now.Add(time.Hour))
 	if again.TaskCounts[operations.TaskSucceeded] != 8 || again.LastQuestion.ID != "b" || again.LastQuestion.Options[0] != "yes" || !reflect.DeepEqual(saved, op.Clone()) {
 		t.Fatal("progress snapshots alias each other or mutate saved question history")
 	}

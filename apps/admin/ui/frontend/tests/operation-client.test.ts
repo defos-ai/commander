@@ -66,7 +66,7 @@ describe('operations client', () => {
         result: { action_name: 'check-links', output: null, artifacts: null, next_actions: null },
         continuation: { version: 1, decision_by: 'future-decider', status: 'future-status', proposed_actions: null, created_task_ids: null },
       }],
-      questions: [{ id: 'question-1', status: 'expired', text: 'Continue?', options: null, asked_at: timestamp, answered_at: null, expires_at: timestamp }],
+      questions: [{ id: 'question-1', status: 'pending', text: 'Continue?', options: null, asked_at: timestamp, answered_at: null, fallback_at: timestamp }],
     };
     respond(nullable);
 

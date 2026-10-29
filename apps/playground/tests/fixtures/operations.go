@@ -59,7 +59,7 @@ func PendingQuestionOperation() bridge.Operation {
 	return bridge.Operation{ID: QuestionOperationID, Status: "waiting", UpdatedAt: now,
 		Progress: bridge.Progress{TaskCounts: map[string]int{}, PendingQuestions: 1},
 		Questions: []bridge.Question{{ID: QuestionID, Status: bridge.QuestionPending,
-			Text: "Accept this release?", Options: []string{"Accept", "Decline"}, AskedAt: now, ExpiresAt: now.Add(time.Minute)}},
+			Text: "Accept this release?", Options: []string{"Accept", "Decline"}, AskedAt: now, FallbackAt: now.Add(time.Minute)}},
 	}
 }
 

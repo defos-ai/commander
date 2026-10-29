@@ -130,7 +130,7 @@ func TestOperationPreflightReassessesLatestMissionAndTerminalStatus(t *testing.T
 	}
 }
 
-func TestOperationRecoveryPreservesLatestResultsAndExpiresDueQuestions(t *testing.T) {
+func TestOperationRecoveryPreservesLatestResultsAndQuestionWindows(t *testing.T) {
 	for _, terminal := range []bool{false, true} {
 		name := "active"
 		if terminal {
@@ -152,9 +152,9 @@ func TestOperationRecoveryPreservesLatestResultsAndExpiresDueQuestions(t *testin
 						Status: operations.ContinuationPending, ProposedActions: []actions.NextAction{{ActionName: "capture"}}},
 				}}
 				next.Questions = []operations.Question{
-					{ID: id.QuestionID(), Status: operations.QuestionPending, ExpiresAt: cutoff},
-					{ID: id.QuestionID(), Status: operations.QuestionAnswered, ExpiresAt: cutoff, Answer: "Keep this answer", AnsweredAt: &cutoff},
-					{ID: id.QuestionID(), Status: operations.QuestionPending, ExpiresAt: deadline},
+					{ID: id.QuestionID(), Status: operations.QuestionPending, FallbackAt: cutoff},
+					{ID: id.QuestionID(), Status: operations.QuestionAnswered, FallbackAt: cutoff, Answer: "Keep this answer", AnsweredAt: &cutoff},
+					{ID: id.QuestionID(), Status: operations.QuestionPending, FallbackAt: deadline},
 				}
 				next.Status = operations.Running
 				if terminal {
@@ -171,13 +171,12 @@ func TestOperationRecoveryPreservesLatestResultsAndExpiresDueQuestions(t *testin
 				t.Fatal(err)
 			}
 			expected := latest.Clone()
-			expected.Questions[0].Status = operations.QuestionExpired
-			wantEvents := []operations.EventType{operations.QuestionExpiredEvent}
 			if !terminal {
 				expected.Status = operations.Waiting
-				wantEvents = append(wantEvents, operations.OperationRecovered)
+				assertMaintenanceEvents(t, expected, published, started, operations.OperationRecovered)
+			} else {
+				assertResultJSONEqual(t, published, expected)
 			}
-			assertMaintenanceEvents(t, expected, published, started, wantEvents...)
 			saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
 			if err != nil {
 				t.Fatal(err)
@@ -192,7 +191,7 @@ func TestOperationRecoveryPreservesLatestResultsAndExpiresDueQuestions(t *testin
 			if terminal {
 				assertResultJSONEqual(t, again, published)
 				if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
-					t.Fatal("terminal recovery without due questions changed bytes or storage revision")
+					t.Fatal("terminal recovery changed bytes or storage revision")
 				}
 			} else {
 				assertMaintenanceEvents(t, published, again, started, operations.OperationRecovered)
@@ -255,7 +254,7 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 				if err := next.DispatchTask(operations.TaskDispatch{TaskID: task.ID, AgentID: "review-agent-00000001", StartedAt: op.CreatedAt, DeadlineAt: cutoff}); err != nil {
 					return err
 				}
-				next.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending, ExpiresAt: cutoff}}
+				next.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending, FallbackAt: cutoff}}
 				if tc.change != nil {
 					tc.change(next)
 				}
@@ -309,9 +308,6 @@ func assertMaintenanceEvents(t *testing.T, expected, published operations.Operat
 		event := published.Events[len(expected.Events)+i]
 		if event.Type != kind || event.OperationID != expected.ID || event.Sequence != uint64(len(expected.Events)+i+1) || event.Status != expected.Status || event.CreatedAt.Before(started) || event.CreatedAt.After(published.UpdatedAt) {
 			t.Fatalf("maintenance event lost its identity, status, or timestamp: %+v", event)
-		}
-		if kind == operations.QuestionExpiredEvent && event.QuestionID != expected.Questions[0].ID {
-			t.Fatalf("expiration event does not identify its question: %+v", event)
 		}
 	}
 	expected.UpdatedAt, expected.Events = published.UpdatedAt, published.Events

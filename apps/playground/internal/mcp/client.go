@@ -219,7 +219,6 @@ type QuestionStatus string
 const (
 	QuestionPending  QuestionStatus = "pending"
 	QuestionAnswered QuestionStatus = "answered"
-	QuestionExpired  QuestionStatus = "expired"
 )
 
 type Question struct {
@@ -230,12 +229,12 @@ type Question struct {
 	Answer     string         `json:"answer"`
 	AnsweredBy string         `json:"answered_by,omitempty"`
 	AskedAt    time.Time      `json:"asked_at"`
-	ExpiresAt  time.Time      `json:"expires_at"`
+	FallbackAt time.Time      `json:"fallback_at"`
 	AnsweredAt *string        `json:"answered_at"`
 }
 
-func (q Question) Pending(now time.Time) bool {
-	return q.Status == QuestionPending && (q.ExpiresAt.IsZero() || now.Before(q.ExpiresAt))
+func (q Question) Pending() bool {
+	return q.Status == QuestionPending
 }
 
 func (o Operation) Terminal() bool {

@@ -74,7 +74,7 @@ export class CommanderAPI {
       for (const operation of operations.items.filter(item => !terminal.has(item.status))) {
         for (const question of operation.questions?.filter(item => item.status === 'pending') ?? []) {
           await this.settleCommand(`/operations/${operation.id}/questions/${question.id}/answer`, { answer: 'End this test review' },
-            ['question_expired', 'question_answered', 'operation_finished']);
+            ['question_answered', 'operation_finished']);
         }
         await this.settleCommand(`/operations/${operation.id}/cancel`, undefined, ['operation_finished']);
       }

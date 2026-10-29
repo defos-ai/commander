@@ -26,7 +26,7 @@ type QuestionResponse struct {
 	AnsweredBy string     `json:"answered_by,omitempty"`
 	AskedAt    time.Time  `json:"asked_at"`
 	AnsweredAt *time.Time `json:"answered_at,omitempty"`
-	ExpiresAt  time.Time  `json:"expires_at"`
+	FallbackAt time.Time  `json:"fallback_at"`
 }
 
 type QuestionListResponse struct {

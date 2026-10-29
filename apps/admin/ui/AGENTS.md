@@ -132,8 +132,8 @@
   finished/total task counts without recounting task statuses. Interrupted work
   remains unfinished even when the operation is terminal; keep refreshing details
   to receive late results. Settlement is separate from active status: it does not
-  enable commands or prove agent idleness for cleanup. Preserve local question
-  expiry checks and the active-only secret/command controls.
+  enable commands or prove agent idleness for cleanup. Keep unanswered questions answerable before and after fallback_at, while preserving
+  active-only secret/command controls.
 - Operation **Logs** uses the single operation log API with route-preserved
   task/agent/action filters. Validate flat response provenance and cursors; keep
   server append order rather than sorting timestamps or UUIDs. Read recent pages
@@ -174,7 +174,8 @@
   Ignore terminal operations and interrupted/expired tasks. Deduplicate secret names
   across preflight and runtime waits; installation, not storage, clears a wait.
 - Preserve routes across reload/back/forward, stale-request cancellation and
-  per-connection state. Keep expired questions unanswerable and handle conflicts.
+  per-connection state. Keep answered questions read-only and handle conflicts; the operator waiting
+  deadline never disables operator answers.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning
   hooks; keep node details in dialogs and preserve mouse, keyboard, zoom and focus
   behavior. Mission rules use a compact table of rules, `for_actions` and settings;

@@ -63,7 +63,8 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 				schema.Properties["missing_requirements"].Description = "Current secret names reported by matching live running work before its saved deadline. Values are never included. These read-only requirements may change without updated_at changing; they neither alter mission preflight nor extend the task deadline."
 			}
 		case "Question":
-			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
+			schema.Properties["fallback_at"].Description = "Earliest time a model may answer. Operators may answer immediately, and unanswered questions remain pending after this time."
+			schema.Properties["status"].Enum = []any{"pending", "answered"}
 			schema.Properties["answered_by"].Enum = []any{"operator", "model"}
 			schema.Properties["answered_by"].Description = "Answer origin assigned by the submitting adapter: operator for the HTTP API, model for MCP. Absent until an answer is saved."
 		case "OperationProgress":
@@ -73,7 +74,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["task_counts"].Description = "Counts by saved task status. Statuses with no tasks are omitted; an empty operation returns {}."
 			schema.Properties["finished_tasks"].Description = "Tasks with known outcomes: succeeded, failed or cancelled. Interrupted tasks remain unfinished even when finished_at is set."
 			schema.Properties["pending_decisions"].Description = "Pending model continuations; zero for terminal operations."
-			schema.Properties["pending_questions"].Description = "Pending unexpired questions; zero for terminal operations."
+			schema.Properties["pending_questions"].Description = "Pending unanswered questions, including after fallback_at; zero for terminal operations."
 			schema.Properties["settled"].Description = "True only when the operation is terminal and every saved task has a known finished outcome. Keep polling while false, including after cancellation or failure."
 		case "Operation", "Event", "OperationGraph":
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
@@ -162,13 +163,13 @@ func openAPIOperationPaths(paths map[string]any) {
 		},
 		{
 			path: operation + "/questions", id: "listOperationQuestions", summary: "List operation questions",
-			description: "items contains the complete saved question history in saved order. last_question is the newest pending question that is not overdue (greatest asked_at, then greatest ID for ties), or null when none is eligible or the operation is terminal. remaining_questions counts other eligible pending questions, excluding last_question. The projection never expires questions or changes persisted state.",
+			description: "items contains the complete saved question history in saved order. last_question is the newest pending question (greatest asked_at, then greatest ID for ties), or null when no question is pending or the operation is terminal. remaining_questions counts other pending questions, excluding last_question. Passing fallback_at permits model answers without closing the question or changing persisted state.",
 			schema:      openAPIQuestions(), parameters: []any{openAPIUUIDParameter("operation_id")},
 			invalid: "invalid_operation_id", missing: "operation_not_found",
 		},
 		{
 			path: operation + "/questions/{question_id}", id: "getOperationQuestion", summary: "Get an operation question",
-			description: "Returns the full saved question with its saved status and answer, even when it is overdue or the operation is terminal.",
+			description: "Returns the full saved question with its saved status and answer, including after fallback_at or when the operation is terminal.",
 			schema:      endpoints.OpenAPIRef("Question"), parameters: []any{openAPIUUIDParameter("operation_id"), openAPIUUIDParameter("question_id")},
 			invalid: "invalid_operation_id or invalid_question_id", missing: "operation_not_found or question_not_found",
 		},
@@ -242,7 +243,7 @@ func openAPICommandSchemas(components map[string]any) error {
 				},
 				"timeout_seconds": {
 					"minimum": 0, "maximum": 86400, "default": 120,
-					"description": "Question lifetime in seconds. Omit or use 0 for the 120-second default; otherwise use 1 through 86400.",
+					"description": "Operator waiting window in seconds. Omit or use 0 for the 120-second default; otherwise use 1 through 86400. The question remains pending afterward; model answers become available at fallback_at.",
 				},
 				"step_id": stepID,
 				"task_id": {
@@ -347,14 +348,14 @@ func openAPICommandPaths(paths map[string]any) {
 		},
 		{
 			path: operation + "/questions", id: "askOperationQuestion", summary: "Ask an operation question",
-			description: "Creates a question and returns the full saved question. text and every option must be nonblank, with at most four options. Omitted or zero timeout_seconds means 120 seconds. Link a pending continuation by supplying both task_id and its current positive version. The path supplies operation_id.",
+			description: "Creates a question and returns the full saved question. text and every option must be nonblank, with at most four options. Omitted or zero timeout_seconds gives the operator a 120-second waiting window. Operators can answer immediately; models can answer at or after fallback_at. Unanswered questions remain pending and keep their continuation blocked. Link a pending continuation by supplying both task_id and its current positive version. The path supplies operation_id.",
 			request:     "AskOperationQuestionRequest", response: "Question", status: "201", missing: "operation_not_found or task_not_found (linked question)", conflict: "operation_conflict, operation_finished or continuation_conflict",
 			location: "/api/v1/operations/{operation_id}/questions/{question_id}", bodyRequired: true, validationError: "invalid_input",
 		},
 		{
 			path: operation + "/questions/{question_id}/answer", id: "answerOperationQuestion", summary: "Answer an operation question",
-			description: "Records guidance for a pending question and returns the full updated operation. answer must be nonblank; free-text answers need not match a listed option. Answering a linked question returns its continuation to model review; it does not queue selected actions. Expiry likewise returns the decision to review without inventing an answer. An answered or expired question cannot be answered again. The path supplies operation_id and question_id.",
-			request:     "AnswerOperationQuestionRequest", response: "Operation", status: "200", missing: "operation_not_found or question_not_found", conflict: "operation_conflict, operation_finished, question_answered or question_expired",
+			description: "Records an operator answer for a pending question and returns the full updated operation. Operators may answer before or after fallback_at. answer must be nonblank; free-text answers need not match a listed option. Answering a linked question returns its continuation to model review; it does not queue selected actions. Passing fallback_at never invents an answer or releases the continuation. An answered question cannot be answered again. The path supplies operation_id and question_id.",
+			request:     "AnswerOperationQuestionRequest", response: "Operation", status: "200", missing: "operation_not_found or question_not_found", conflict: "operation_conflict, operation_finished, question_answered or question_operator_waiting",
 			bodyRequired: true, resourceID: "question_id",
 		},
 		{

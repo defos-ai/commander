@@ -3,7 +3,6 @@ package operations
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -63,15 +62,6 @@ func (s *OperationMongoStore) AskQuestion(ctx context.Context, operationID strin
 func (s *OperationMongoStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy operations.AnswerOrigin) (operations.Operation, error) {
 	return s.update(ctx, operationID, func(operation *operations.Operation) error {
 		return operation.AnswerQuestion(questionID, answer, answeredBy)
-	})
-}
-
-func (s *OperationMongoStore) ExpireQuestions(ctx context.Context, operationID string, now time.Time) (operations.Operation, error) {
-	if now.IsZero() {
-		return operations.Operation{}, errors.New("question expiration requires a cutoff time")
-	}
-	return s.updateChanged(ctx, operationID, func(operation *operations.Operation) (bool, error) {
-		return operation.ExpireQuestions(now), nil
 	})
 }
 

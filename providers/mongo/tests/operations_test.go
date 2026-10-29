@@ -59,7 +59,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	got := fixtures.ReadOperation(t, catalog, expected.ID)
 	assertOperationEqual(t, got, expected)
-	if !got.CreatedAt.Equal(expected.CreatedAt) || !got.Questions[0].ExpiresAt.Equal(question.ExpiresAt) {
+	if !got.CreatedAt.Equal(expected.CreatedAt) || !got.Questions[0].FallbackAt.Equal(question.FallbackAt) {
 		t.Fatal("nanosecond timestamps changed")
 	}
 	got.Preflight.Actions[0].ReadyAgentIDs[0] = "changed"
@@ -321,7 +321,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 	assertOperationEqual(t, fixtures.ReadOperation(t, first, op.ID), final)
 }
 
-func TestOperationMongoQuestionsAndExpirationRace(t *testing.T) {
+func TestOperationMongoQuestionsAndAnswerRace(t *testing.T) {
 	first, _ := fixtures.OpenOperations(t)
 	second, _ := fixtures.OpenOperations(t)
 	op := fixtures.CreateOperation(t, first, fixtures.Operation())
@@ -334,6 +334,7 @@ func TestOperationMongoQuestionsAndExpirationRace(t *testing.T) {
 	gate, results := make(chan struct{}), make(chan error, 2)
 	for _, catalog := range []operations.OperationStore{first, second} {
 		question := fixtures.Question(task.ID)
+		question.AskedAt, question.FallbackAt = time.Now().Add(-time.Hour), time.Now().Add(-time.Minute)
 		go func() { <-gate; _, err := catalog.AskQuestion(t.Context(), op.ID, question, version); results <- err }()
 	}
 	close(gate)
@@ -353,45 +354,36 @@ func TestOperationMongoQuestionsAndExpirationRace(t *testing.T) {
 		t.Fatalf("duplicate question: %v", err)
 	}
 	gate, results = make(chan struct{}), make(chan error, 2)
-	go func() {
-		<-gate
-		_, err := first.AnswerQuestion(t.Context(), op.ID, question.ID, "Proceed", operations.AnswerOperator)
-		results <- err
-	}()
-	go func() {
-		<-gate
-		_, err := second.ExpireQuestions(t.Context(), op.ID, question.ExpiresAt)
-		results <- err
-	}()
+	for i, catalog := range []operations.OperationStore{first, second} {
+		origin := []operations.AnswerOrigin{operations.AnswerOperator, operations.AnswerModel}[i]
+		go func() {
+			<-gate
+			_, err := catalog.AnswerQuestion(t.Context(), op.ID, question.ID, string(origin)+" choice", origin)
+			results <- err
+		}()
+	}
 	close(gate)
 	a, b = <-results, <-results
-	if a != nil && b != nil {
-		t.Fatalf("neither answer nor expiration committed: %v, %v", a, b)
+	if a != nil {
+		a, b = b, a
+	}
+	if a != nil || !errors.Is(b, operations.ErrQuestionAnswered) {
+		t.Fatalf("competing answers must have one winner: %v, %v", a, b)
 	}
 	resolved := fixtures.ReadOperation(t, first, op.ID)
 	q, continuation := resolved.Questions[0], resolved.Tasks[0].Continuation
-	if q.Status != operations.QuestionAnswered && q.Status != operations.QuestionExpired {
-		t.Fatalf("question not settled: %+v", q)
+	if q.Status != operations.QuestionAnswered || q.Answer != string(q.AnsweredBy)+" choice" || q.AnsweredBy.Validate() != nil || q.AnsweredAt == nil {
+		t.Fatalf("answer and origin were not committed together: %+v", q)
 	}
-	if (q.Status == operations.QuestionAnswered) != (q.Answer == "Proceed" && q.AnsweredBy == operations.AnswerOperator && q.AnsweredAt != nil) {
-		t.Fatalf("partial answer: %+v", q)
-	}
-	if q.Status == operations.QuestionExpired && q.AnsweredBy != "" {
-		t.Fatalf("expiration supplied an answer origin: %+v", q)
-	}
-	if continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending || continuation.Version != version+2 || countOperationEvents(resolved, operations.QuestionAnsweredEvent)+countOperationEvents(resolved, operations.QuestionExpiredEvent) != 1 {
+	if continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending || continuation.Version != version+2 || countOperationEvents(resolved, operations.QuestionAnsweredEvent) != 1 {
 		t.Fatalf("question settled twice or lost continuation: %+v", resolved)
 	}
-	if _, err := first.ExpireQuestions(t.Context(), op.ID, question.ExpiresAt); err != nil {
-		t.Fatal(err)
-	}
-	assertOperationEqual(t, fixtures.ReadOperation(t, first, op.ID), resolved)
 	queued := operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "report"})
 	if _, err := first.QueueTask(t.Context(), op.ID, queued); err != nil {
 		t.Fatal(err)
 	}
 	late := fixtures.Question("")
-	late.AskedAt, late.ExpiresAt = time.Now().UTC().Add(-time.Hour), time.Now().UTC().Add(-time.Minute)
+	late.AskedAt, late.FallbackAt = time.Now().UTC().Add(-time.Hour), time.Now().UTC().Add(-time.Minute)
 	if _, err := first.AskQuestion(t.Context(), op.ID, late, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -401,9 +393,9 @@ func TestOperationMongoQuestionsAndExpirationRace(t *testing.T) {
 	if _, err := first.QueueTask(t.Context(), op.ID, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "report"})); !errors.Is(err, operations.ErrQuestionPending) {
 		t.Fatalf("assignment ignored pending question: %v", err)
 	}
-	answered, err := second.AnswerQuestion(t.Context(), op.ID, late.ID, "Too late", operations.AnswerOperator)
-	if err != nil || answered.Questions[1].Status != operations.QuestionExpired || answered.Questions[1].Answer != "" || answered.Questions[1].AnsweredBy != "" {
-		t.Fatalf("late answer did not commit expiration: %+v, %v", answered, err)
+	answered, err := second.AnswerQuestion(t.Context(), op.ID, late.ID, "Continue", operations.AnswerOperator)
+	if err != nil || answered.Questions[1].Status != operations.QuestionAnswered || answered.Questions[1].Answer != "Continue" || answered.Questions[1].AnsweredBy != operations.AnswerOperator {
+		t.Fatalf("operator answer after window was not accepted: %+v, %v", answered, err)
 	}
 	before := fixtures.ReadOperation(t, first, op.ID)
 	invalid := fixtures.Question("")
@@ -414,6 +406,7 @@ func TestOperationMongoQuestionsAndExpirationRace(t *testing.T) {
 	assertOperationEqual(t, fixtures.ReadOperation(t, second, op.ID), before)
 
 	modelQuestion := fixtures.Question("")
+	modelQuestion.AskedAt, modelQuestion.FallbackAt = time.Now().Add(-time.Hour), time.Now().Add(-time.Minute)
 	if _, err := first.AskQuestion(t.Context(), op.ID, modelQuestion, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -429,6 +422,20 @@ func TestOperationMongoQuestionsAndExpirationRace(t *testing.T) {
 		t.Fatalf("operator replaced an accepted model answer: %v", err)
 	}
 	assertOperationEqual(t, fixtures.ReadOperation(t, first, op.ID), modelAnswer)
+
+	operatorQuestion := fixtures.Question("")
+	waitingForOperator, err := first.AskQuestion(t.Context(), op.ID, operatorQuestion, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := second.AnswerQuestion(t.Context(), op.ID, operatorQuestion.ID, "Too early", operations.AnswerModel); !errors.Is(err, operations.ErrQuestionOperatorWaiting) {
+		t.Fatalf("model answered during the operator window: %v", err)
+	}
+	assertOperationEqual(t, fixtures.ReadOperation(t, first, op.ID), waitingForOperator)
+	operatorAnswer, err := second.AnswerQuestion(t.Context(), op.ID, operatorQuestion.ID, "Operator choice", operations.AnswerOperator)
+	if err != nil || operatorAnswer.Questions[len(operatorAnswer.Questions)-1].AnsweredBy != operations.AnswerOperator {
+		t.Fatalf("operator could not answer during its window: %+v, %v", operatorAnswer, err)
+	}
 }
 
 func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {

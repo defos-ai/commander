@@ -61,7 +61,7 @@ describe('operation commands', () => {
     [401, 'authentication', undefined], [403, 'forbidden', undefined],
     [404, 'not_found', 'mission_not_found'], [404, 'not_found', 'operation_not_found'],
     [409, 'conflict', 'operation_conflict'], [409, 'conflict', 'operation_finished'],
-    [409, 'conflict', 'question_answered'], [409, 'conflict', 'question_expired'],
+    [409, 'conflict', 'question_answered'], [409, 'conflict', 'question_operator_waiting'],
     [400, 'invalid_input', 'invalid_request'], [422, 'invalid_input', 'invalid_input'],
   ] as const)('recognizes HTTP %s / %s / %s without retrying', async (status, kind, code) => {
     const fetch = respond({ error: code ?? 'private server details' }, status);

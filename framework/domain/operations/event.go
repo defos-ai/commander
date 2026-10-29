@@ -16,7 +16,6 @@ const (
 	OperationRecovered        EventType = "operation.recovered"
 	QuestionAsked             EventType = "question.asked"
 	QuestionAnsweredEvent     EventType = "question.answered"
-	QuestionExpiredEvent      EventType = "question.expired"
 	OperationCompleted        EventType = "operation.completed"
 	OperationFailed           EventType = "operation.failed"
 	OperationCancelled        EventType = "operation.cancelled"
