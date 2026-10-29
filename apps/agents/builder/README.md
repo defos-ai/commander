@@ -88,7 +88,7 @@ for managed secrets. See [secret setup](../../../framework/secrets/README.md).
 
 | Deployment | Workspace storage |
 | --- | --- |
-| Compose (`builder` profile) | `builder-workspaces` volume; retained across container recreation |
+| Compose (`builder` profile) | `builder-state` volume; retained across container recreation |
 | Separate builder | `state/builder-workspaces`; override with `BUILDER_WORKSPACE_DIR` |
 
 Use a builder deployment you trust to execute generated code. Codex uses its

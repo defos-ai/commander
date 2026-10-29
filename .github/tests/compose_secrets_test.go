@@ -183,7 +183,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 		!slices.Contains(setup.SecurityOpt, "no-new-privileges:true") {
 		t.Fatal("key initialization must reuse the API image with restricted root/group access and no network")
 	}
-	if !slices.Equal(setup.Volumes, []string{"secrets-key:/run/commander-secrets"}) ||
+	if !slices.Equal(setup.Volumes, []string{"secrets:/run/commander-secrets"}) ||
 		setup.Environment["SECRETS_ENCRYPTION_KEY"] != "${SECRETS_ENCRYPTION_KEY:-}" {
 		t.Fatal("key initialization must own its writable volume and accept the optional explicit key")
 	}
@@ -193,7 +193,7 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	}
 	for _, name := range []string{"api", "controller"} {
 		service := services[name]
-		if !slices.Contains(service.Volumes, "secrets-key:/run/commander-secrets:ro") ||
+		if !slices.Contains(service.Volumes, "secrets:/run/commander-secrets:ro") ||
 			service.DependsOn["secrets-key"].Condition != "service_completed_successfully" {
 			t.Fatalf("%s must wait for key initialization and mount its key read-only", name)
 		}
@@ -218,12 +218,12 @@ func TestCIComposeSecretsWiring(t *testing.T) {
 	if _, exists := compose.Environment["SECRETS_ENCRYPTION_KEY"]; exists {
 		t.Fatal("shared Compose environment must not contain the secrets encryption key")
 	}
-	if _, exists := compose.Volumes["secrets-key"]; !exists {
-		t.Fatal("Compose must declare a persistent secrets-key volume")
+	if _, exists := compose.Volumes["secrets"]; !exists {
+		t.Fatal("Compose must declare a persistent secrets volume")
 	}
 	builder := services["builder-agent"]
-	if _, exists := compose.Volumes["builder-workspaces"]; !exists ||
-		!slices.Contains(builder.Volumes, "builder-workspaces:/home/commander/workspaces") {
+	if _, exists := compose.Volumes["builder-state"]; !exists ||
+		!slices.Contains(builder.Volumes, "builder-state:/home/commander/workspaces") {
 		t.Fatal("Compose builder must retain workspaces across container recreation")
 	}
 	if builder.User != "1000:1000" || !slices.Contains(builder.CapDrop, "ALL") ||
@@ -266,7 +266,7 @@ func assertComposeServiceHasNoEncryptionKey(t *testing.T, name string, service f
 		t.Fatalf("%s must not depend directly on secrets-key initialization", name)
 	}
 	for _, volume := range service.Volumes {
-		if strings.HasPrefix(volume, "secrets-key:") || strings.Contains(volume, ":/run/commander-secrets") {
+		if strings.HasPrefix(volume, "secrets:") || strings.Contains(volume, ":/run/commander-secrets") {
 			t.Fatalf("%s must not mount the secrets encryption key", name)
 		}
 	}

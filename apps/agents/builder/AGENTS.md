@@ -157,7 +157,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   UID/GID 1000, and creates `/home/commander/workspaces` with matching ownership.
   Keep `BUILDER_WORKSPACE_DIR` aligned with this writable directory.
 - [Compose](../../../compose.yaml) starts builder only when its `builder` profile
-  or service is selected. It mounts `builder-workspaces` at
+  or service is selected. It mounts `builder-state` at
   `/home/commander/workspaces`; retain it across container recreation.
   Playground all-in-one does not embed a builder host. Separately spawned builders
   keep local workspaces; package spawning does not provision persistent mounts.

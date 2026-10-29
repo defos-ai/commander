@@ -63,7 +63,7 @@ Start the builder when you need to build agents:
 docker compose --profile builder up --build --wait
 ```
 
-The builder keeps its source checkouts in `builder-workspaces`. See
+The builder keeps its source checkouts in `builder-state`. See
 [Builder setup](../apps/agents/builder/README.md) for native use and managed secrets.
 
 ### Secret encryption
@@ -75,7 +75,7 @@ later starts is rejected.
 The controller mounts the saved key read-only and decrypts requested secrets
 using the same key as the API. Agents receive values through the broker.
 
-**Back up the `secrets-key` volume with MongoDB and restore them together.** A new
+**Back up the `secrets` volume with MongoDB and restore them together.** A new
 key cannot decrypt existing secrets. All-in-one retains its key with its saved
 local state; back up the entire profile. `--temporary` uses a disposable key.
 For a separate controller, configure the same key as the API. Agents do not need
@@ -125,13 +125,14 @@ Compose keeps data in named Docker volumes:
 
 | Volume | Keep it for… |
 | --- | --- |
+| `api-credentials` | The shared local API password |
+| `mcp-credentials` | The shared MCP token |
+| `builder-state` | The optional builder's source checkouts |
+| `playground-state` | Client settings, chat history and locally remembered provider keys |
+| `secrets` | The key needed to decrypt saved secrets |
 | `mongo` | Missions, operations, results, encrypted secrets and execution checkpoints |
 | `minio` | Artifact files and reports |
 | `rabbitmq` | Broker data |
-| `builder-workspaces` | The optional builder's source checkouts |
-| `secrets-key` | The key needed to decrypt saved secrets |
-| `api-credentials` | The shared local API password |
-| `mcp-credentials` | The shared MCP token |
 
 Use `docker compose logs -f` for services and `docker logs <container-id>` for
 spawned agents.

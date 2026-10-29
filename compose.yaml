@@ -74,7 +74,7 @@ services:
     environment:
       SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
     volumes:
-      - secrets-key:/run/commander-secrets
+      - secrets:/run/commander-secrets
 
   api-credentials:
     image: commander-api:local
@@ -255,7 +255,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       TASK_TIMEOUT: ${TASK_TIMEOUT:-15m}
     volumes:
-      - secrets-key:/run/commander-secrets:ro
+      - secrets:/run/commander-secrets:ro
 
   mcp:
     <<: *runtime
@@ -337,7 +337,7 @@ services:
     ports:
       - "127.0.0.1:${COMMANDER_API_PORT:-4274}:4274"
     volumes:
-      - secrets-key:/run/commander-secrets:ro
+      - secrets:/run/commander-secrets:ro
       - api-credentials:/run/commander-api:ro
     depends_on:
       api-credentials:
@@ -426,7 +426,7 @@ services:
       dockerfile: apps/agents/builder/docker/Dockerfile
     user: "1000:1000"
     volumes:
-      - builder-workspaces:/home/commander/workspaces
+      - builder-state:/home/commander/workspaces
     depends_on:
       controller:
         condition: service_started
@@ -526,11 +526,11 @@ services:
         condition: service_started
 
 volumes:
-  builder-workspaces:
-  secrets-key:
   api-credentials:
   mcp-credentials:
+  builder-state:
   playground-state:
+  secrets:
   rabbitmq:
   minio:
   mongo:

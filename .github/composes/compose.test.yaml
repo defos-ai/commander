@@ -199,7 +199,7 @@ services:
     volumes:
       - bus:/state/bus
       - storage:/state/storage
-      - builder-workspaces:/home/commander/workspaces
+      - builder-state:/home/commander/workspaces
 
   spawner-agent:
     <<: *agent
@@ -240,7 +240,7 @@ services:
       retries: 30
 
 volumes:
-  builder-workspaces:
+  builder-state:
   bus:
   storage:
   database:

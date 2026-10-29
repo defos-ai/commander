@@ -68,7 +68,7 @@ The user's current instructions take precedence over repository guidance.
   Other agents launch on demand through chat/MCP as sibling containers.
   Keep execution checkpoints while children exist and scope
   teardown by deployment network plus the spawn ownership label.
-  Its `secrets-key` initializer persists the encryption key in a dedicated volume;
+  Its `secrets-key` initializer persists the encryption key in the `secrets` volume;
   only API and controller mount it read-only and export it before exec. Retain
   saved keys across restarts and reject invalid state or conflicting overrides.
   Keep this volume separate from `api-credentials`, `mcp-credentials` and database

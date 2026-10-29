@@ -265,7 +265,7 @@ services:
       context: ../..
       dockerfile: apps/agents/builder/docker/Dockerfile
     volumes:
-      - builder-workspaces:/home/commander/workspaces
+      - builder-state:/home/commander/workspaces
 
   spawner-agent:
     <<: *agent
@@ -329,7 +329,7 @@ services:
       target: agent
 
 volumes:
-  builder-workspaces:
+  builder-state:
   rabbitmq:
   minio:
   mongo:
