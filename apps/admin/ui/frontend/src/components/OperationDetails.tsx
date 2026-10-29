@@ -5,6 +5,7 @@ import type {
 import type { ActionRequirement } from '../api/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
+import { QuestionAnswerStatus } from './QuestionAnswerStatus';
 import '../styles/catalog.css';
 import '../styles/operations.css';
 
@@ -167,7 +168,7 @@ function Task({ task, queuedFor, placement, onOpenSession, onOpenLogs }: {
   </div></details>;
 }
 
-function Question({ question, onAnswer }: { question: OperationQuestion; onAnswer?: () => void }) {
+function Question({ question, onAnswer, active }: { question: OperationQuestion; onAnswer?: () => void; active: boolean }) {
   const { t } = useTranslation();
   const { status } = question;
   return <article className="operation-question">
@@ -176,6 +177,7 @@ function Question({ question, onAnswer }: { question: OperationQuestion; onAnswe
     </span></div>
     {Boolean(question.options?.length) && <div className="operation-nested"><h4>{t($ => $.operations.options)}</h4><ol>{question.options?.map((option, index) => <li key={index}>{option}</li>)}</ol></div>}
     {question.answer && <div className="operation-nested"><h4>{t($ => $.operations.answer)}</h4><p>{question.answer}</p></div>}
+    <QuestionAnswerStatus question={question} active={active} />
     {status === 'pending' && onAnswer && <Button className="operation-nested" onClick={onAnswer}>{t($ => $.operationCommands.answerTitle)}</Button>}
     <dl className="detail-list">
       <div><dt>{t($ => $.operations.questionId)}</dt><dd><code>{question.id}</code></dd></div>
@@ -296,7 +298,7 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
           ? affinity.agent_id : undefined} /></li>)}</ul> : <p className="catalog-muted">{t($ => $.operations.noTasks)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.questions)}</h2>
-      {operation.questions?.length ? <><p className="catalog-muted">{t($ => $.operations.questionStatusNote)}</p><ul className="operation-items">{operation.questions.map(question => <li key={question.id}><Question question={question}
+      {operation.questions?.length ? <><p className="catalog-muted">{t($ => $.operations.questionStatusNote)}</p><ul className="operation-items">{operation.questions.map(question => <li key={question.id}><Question question={question} active={isActiveOperation(operation.status)}
         onAnswer={onAnswer && isActiveOperation(operation.status) ? () => onAnswer(question) : undefined} /></li>)}</ul></> : <p className="catalog-muted">{t($ => $.operations.noQuestions)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.operations.artifacts)}</h2>

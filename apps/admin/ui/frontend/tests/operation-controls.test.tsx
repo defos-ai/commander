@@ -106,7 +106,7 @@ describe('operation controls', () => {
 
   it.each(['option', 'custom'])('submits a question %s answer and refreshes the saved answer', async mode => {
     const api = fixture((_url, body) => {
-      api.change(state => { state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: body.answer as string, answered_at: now }; });
+      api.change(state => { state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: body.answer as string, answered_by: 'operator', answered_at: now }; });
       return Response.json(api.snapshot().current);
     });
     view(); await detail();
@@ -123,7 +123,30 @@ describe('operation controls', () => {
     expect(screen.queryByRole('button', { name: 'Answer question' })).not.toBeInTheDocument();
   });
 
-  it('keeps an open operator answer form available after the waiting window', async () => {
+  it.each([
+    ['operator', 'Operator'],
+    ['model', 'Model'],
+    [undefined, 'Unknown'],
+  ] as const)('shows the saved question answer origin: %s', async (origin, label) => {
+    const api = fixture();
+    api.change(state => {
+      state.current.questions![0] = {
+        ...state.current.questions![0], status: 'answered', answer: 'Saved decision', answered_by: origin, answered_at: now,
+        fallback_at: now,
+      };
+      state.current.progress.pending_questions = 0;
+    });
+
+    view(); await detail();
+
+    const question = screen.getByText('How should the review continue?').closest('article')!;
+    expect(question).toHaveTextContent(new RegExp(`Answered by.*${label}`));
+    expect(within(question).getByText('Saved decision')).toBeVisible();
+    expect(within(question).queryByRole('button', { name: 'Answer question' })).not.toBeInTheDocument();
+    expect(api.posts()).toHaveLength(0);
+  });
+
+  it('updates the waiting countdown locally and keeps an open answer draft available afterward', async () => {
     vi.useFakeTimers();
     try {
       const api = fixture();
@@ -131,24 +154,70 @@ describe('operation controls', () => {
       await act(async () => { view(); });
       fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
       await act(async () => {});
+      expect(screen.getByText('Model may answer in 0:02. You can answer now.')).toBeVisible();
       fireEvent.click(screen.getByRole('button', { name: 'Answer question' }));
       const dialog = screen.getByRole('dialog');
       fireEvent.click(within(dialog).getByRole('radio', { name: 'Use HTTP checks' }));
       expect(within(dialog).getByRole('button', { name: 'Send answer' })).toBeEnabled();
+      expect(within(dialog).getByText('Model may answer in 0:02. You can answer now.')).toBeVisible();
+      const reads = api.fetch.mock.calls.length;
 
       await act(async () => { await vi.advanceTimersByTimeAsync(2001); });
 
+      expect(within(dialog).getByText('Model may answer; you can still answer.')).toBeVisible();
       expect(within(dialog).getByRole('button', { name: 'Send answer' })).toBeEnabled();
       expect(within(dialog).getByLabelText('Your answer')).toHaveValue('Use HTTP checks');
+      expect(api.fetch.mock.calls).toHaveLength(reads);
       fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
       expect(api.posts()).toHaveLength(0);
       expect(screen.getByRole('button', { name: 'Answer question' })).toBeEnabled();
     } finally { vi.useRealTimers(); }
   });
 
+  it('retains a draft read-only when polling discovers a saved model answer', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = fixture();
+      api.change(state => { state.current.questions![0].fallback_at = new Date(Date.now() - 1000).toISOString(); });
+      await act(async () => { view(); });
+      fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Answer question' }));
+      const dialog = screen.getByRole('dialog');
+      const draft = 'My unsent operator decision';
+      fireEvent.change(within(dialog).getByLabelText('Your answer'), { target: { value: draft } });
+      api.change(state => {
+        state.current.questions![0] = {
+          ...state.current.questions![0], status: 'answered', answer: 'Model chose the available checks', answered_by: 'model',
+          answered_at: new Date().toISOString(),
+        };
+        state.current.status = 'planning';
+        state.current.progress.pending_questions = 0;
+        state.current.updated_at = new Date().toISOString();
+      });
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
+
+      expect(within(dialog).getByLabelText('Your answer')).toHaveValue(draft);
+      expect(within(dialog).getByLabelText('Your answer')).toBeDisabled();
+      expect(within(dialog).getByText('Model chose the available checks')).toBeVisible();
+      expect(dialog).toHaveTextContent(/Answered by.*Model/);
+      expect(dialog).toHaveTextContent(/already.*answered/i);
+      expect(within(dialog).getByRole('button', { name: 'Send answer' })).toBeDisabled();
+      fireEvent.submit(dialog.querySelector('form')!);
+      expect(api.posts()).toHaveLength(0);
+
+      await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'View operation' })); });
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('Model chose the available checks')).toBeVisible();
+      expect(api.posts()).toHaveLength(0);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('handles another operator answering first without retrying or overwriting their answer', async () => {
     const api = fixture(() => {
-      api.change(state => { state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: 'Answer from another operator', answered_at: now }; });
+      api.change(state => { state.current.questions![0] = { ...operation.questions![0], status: 'answered', answer: 'Answer from another operator', answered_by: 'operator', answered_at: now }; });
       return Response.json({ error: 'question_answered' }, { status: 409 });
     });
     view(); await detail();

@@ -132,8 +132,17 @@
   finished/total task counts without recounting task statuses. Interrupted work
   remains unfinished even when the operation is terminal; keep refreshing details
   to receive late results. Settlement is separate from active status: it does not
-  enable commands or prove agent idleness for cleanup. Keep unanswered questions answerable before and after fallback_at, while preserving
-  active-only secret/command controls.
+  enable commands or prove agent idleness for cleanup. Keep unanswered questions
+  answerable before and after `fallback_at`, while preserving active-only
+  secret/command controls.
+  `QuestionAnswerStatus` shares countdown and answer-origin rendering between
+  question history and the open answer dialog. Countdown ticks stay local and
+  stop at the cutoff, after an answer, on terminal status or unmount; do not
+  announce every tick to screen readers. Missing origins remain unknown.
+  Polling can reveal another accepted answer while a form is open: retain the
+  draft read-only, show the saved answer/origin and offer saved-state inspection.
+  A status refresh must not abort an in-flight POST; it may reflect that request's
+  accepted result. Continue requiring readback after conflicts or uncertain writes.
 - Operation **Logs** uses the single operation log API with route-preserved
   task/agent/action filters. Validate flat response provenance and cursors; keep
   server append order rather than sorting timestamps or UUIDs. Read recent pages
@@ -174,8 +183,8 @@
   Ignore terminal operations and interrupted/expired tasks. Deduplicate secret names
   across preflight and runtime waits; installation, not storage, clears a wait.
 - Preserve routes across reload/back/forward, stale-request cancellation and
-  per-connection state. Keep answered questions read-only and handle conflicts; the operator waiting
-  deadline never disables operator answers.
+  per-connection state. Keep answered questions read-only and handle conflicts;
+  the operator waiting deadline never disables operator answers.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning
   hooks; keep node details in dialogs and preserve mouse, keyboard, zoom and focus
   behavior. Mission rules use a compact table of rules, `for_actions` and settings;

@@ -7,6 +7,7 @@ import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
 import { OperationCommandError } from './OperationCommandError';
+import { QuestionAnswerStatus } from './QuestionAnswerStatus';
 import { isActiveOperation } from './OperationDetails';
 import '../styles/operation-commands.css';
 
@@ -62,6 +63,10 @@ export function OperationCommandDialog(props: Props) {
     <form className="operation-command-form" onSubmit={submit}>
       <p className="form-hint">{t($ => $.operationCommands.operationID)}: <code>{operation.id}</code></p>
       {question && <>
+        <QuestionAnswerStatus question={question} active={!finished && available && !error} />
+        {question.status === 'answered' && question.answer && <div className="operation-nested">
+          <h4>{t($ => $.operationCommands.savedAnswer)}</h4><p>{question.answer}</p>
+        </div>}
         {Boolean(question.options?.length) && <fieldset className="operation-command-options" disabled={submitting || blocked}>
           <legend>{t($ => $.operationCommands.options)}</legend>
           {question.options?.map((option, index) => <label key={index} className="operation-command-option"><input type="radio" name={`${identity}-option`} checked={answer === option}
@@ -74,12 +79,14 @@ export function OperationCommandDialog(props: Props) {
         </div>
       </>}
       {finished ? <p className="notice" role="status">{t($ => $.operationCommands.finished)}</p>
-        : noLongerPending ? <p className="notice" role="status">{t($ => $.operationCommands.noLongerPending)}</p>
+        : noLongerPending ? <p className="notice" role="status">{question?.status === 'answered'
+          ? t($ => $.operationCommands.answerChanged) : t($ => $.operationCommands.noLongerPending)}</p>
           : !available && <p className="notice" role="status">{t($ => $.operationCommands.refreshRequired)}</p>}
       {error && <OperationCommandError error={error} operationID={operation.id} onInspect={() => onInspect(operation.id)} />}
       {submitting && <p className="form-hint" role="status">{t($ => $.operationCommands.submittingNote)}</p>}
       <div className="dialog-actions">
         <Button variant="secondary" onClick={close}>{t($ => $.operationCommands.close)}</Button>
+        {noLongerPending && !error && <Button variant="secondary" onClick={() => onInspect(operation.id)}>{t($ => $.operationCommands.viewOperation)}</Button>}
         {!error && <Button type="submit" className={question ? undefined : 'danger-button'} disabled={submitting || blocked || Boolean(question && !answer.trim())} aria-busy={submitting}>
           {submitting && <LoaderCircle className="connection-form-spinner" size={16} aria-hidden="true" />}
           {submitting ? t($ => $.operationCommands.busy) : question ? t($ => $.operationCommands.answerSubmit) : t($ => $.operationCommands.cancelSubmit)}

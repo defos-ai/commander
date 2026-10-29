@@ -51,6 +51,9 @@ The view keeps up to 1,000 logs at a time; older entries remain available throug
 Answer questions with an option or your own text. Cancelling stops queued work;
 dispatched tasks may finish. After a command timeout, refresh the operation
 before trying again.
+Questions show the model waiting countdown and who supplied a saved answer.
+You can still answer after the countdown; if another answer arrives while your
+form is open, inspect the saved answer before continuing.
 
 ## Create missions
 

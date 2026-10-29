@@ -30,6 +30,8 @@ export default {
   options: 'Choose an option',
   finished: 'This operation has finished. Refresh to see its current state.',
   noLongerPending: 'This question is no longer awaiting an answer. Refresh to see its current state.',
+  answerChanged: 'This question has already been answered. Your draft is kept here. View the operation for the saved answer.',
+  savedAnswer: 'Saved answer',
   refreshRequired: 'Refresh the operation before sending a command.',
   notices: {
     created: 'Operation created. Commander can now plan its first task.',
