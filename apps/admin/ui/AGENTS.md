@@ -241,9 +241,15 @@ From `apps/admin/ui/frontend`:
 
 ```sh
 npm ci
+npm test
 npm run typecheck
 npm run build
 ```
+
+Keep the focused unit suite limited to completion approval and uncertain-write
+recovery, command cancellation/deadlines, and mission-edit protection. Public
+browser integration tests cover the remaining user flows. Test setup/data belongs
+in `frontend/tests/fixtures/`; substitutes belong in `frontend/tests/fakes/`.
 
 For ordinary source builds, build `frontend/dist/index.html` before starting
 the server. For hot reload, run `go run ../cmd/commander-admin serve --listen-address 127.0.0.1:4276`

@@ -101,13 +101,14 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 
 ## Validation
 
-Run build/static checks from the repository root:
+Run build/static checks and focused persistence tests from the repository root:
 
 ```sh
 go build ./providers/fs/...
 go vet ./providers/fs/...
+go test -race -count=1 -timeout=3m ./providers/fs/...
 ```
 
 Use public integration scenarios for publication, locking and operation recovery changes.
 Use the [test guide](../../framework/tests/README.md) for stack checks and
-[build/static CI](../../.github/workflows/test-checks.yml) for the module gate.
+[build/static CI](../../.github/workflows/test-unit.yml) for the module gate.

@@ -39,8 +39,12 @@ add their service prerequisites and checks.
 
 ## Choosing coverage
 
-- Product coverage belongs in integration and end-to-end scenarios through public
-  HTTP/MCP hosts or real provider services. Do not add unit test suites.
+- Prefer public HTTP/MCP and real-provider integration scenarios for product
+  behavior. Retain a small unit suite for high-value failure and recovery flows:
+  uncertain writes, durable receipts, secret delivery, operator decisions and
+  execution lifetimes. Avoid constructor/DTO checks and happy paths already proved
+  end to end. Each restored or added test should protect a distinct observable
+  invariant through a meaningful sequence of actions.
 - Use deterministic local fixtures and scripted models. Tests must need no paid
   model requests or public websites. Keep waits bounded and failures diagnostic.
 - Reuse and extend nearby fixtures and fakes. Fake stores must preserve contract
@@ -90,16 +94,17 @@ add their service prerequisites and checks.
   and stack dependencies. Reuse YAML anchors; do not add a custom selector.
 - [CI checks](../../.github/tests/ci_test.go) discover first-party manifests from
   Git, including untracked, non-ignored files. New Go modules need a workspace
-  entry; every component needs a literal owner path and a selected build, vet or integration command.
+  entry; every component needs a literal owner path and a selected test command.
   Tooling under `.github/tests` is intentionally outside that release inventory.
-- Keep test commands as direct `go build`, `go vet`, `go test` or `npm run test:e2e` lines
-  with literal paths and `working-directory`. Owner gates use positive OR chains
+- Keep CI coverage commands as direct `go test` or `npm test` lines with literal
+  paths and `working-directory`. Builds, vet and typechecks do not satisfy the
+  component test-coverage guard. Owner gates use positive OR chains
   of `inputs.all` and `contains(fromJSON(inputs.changes), 'owner')`. The guard
   validates this wiring; it does not interpret arbitrary shell or GitHub expressions.
 - Path filters use `some-with-excludes` so Markdown exclusions apply to every
   included dependency. Check additions, deletions, cross-owner renames and mixed
   documentation/code changes when changing these rules.
-- Selected build/static checks gate the single Docker integration job. Reuse images, but
+- Selected build/static checks and focused tests gate the single Docker integration job. Reuse images, but
   stop each Compose project and remove its volumes before the next phase. Do not
   run shared-stack suites concurrently. Manual/release calls must select all suites.
 - Keep the final `Tests passed` check: required suites that fail or get skipped
@@ -111,6 +116,7 @@ Run from the repository root:
 ```sh
 go build ./framework/...
 go vet ./framework/...
+go test -race -count=1 -timeout=3m ./framework/...
 ```
 
 For cross-host changes, start the appropriate test stack as described in the

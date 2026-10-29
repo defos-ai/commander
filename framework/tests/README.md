@@ -13,7 +13,26 @@ go vet ./framework/...
 ```
 
 Use another explicit module path from [go.work](../../go.work) as needed.
-Product unit suites have been removed; integration and end-to-end suites remain.
+
+## Focused flow tests
+
+Run the small deterministic suite before service-backed integration tests:
+
+```sh
+go test -race -count=1 -timeout=3m ./framework/... ./providers/fs/... ./apps/agents/builder/... ./apps/agents/spawner/...
+```
+
+The selected scenarios cover runner recovery and late results, completion approval,
+agent/controller secret and checkpoint exchanges, filesystem atomicity, and safe
+agent spawning/publication. Admin UI adds focused coverage for completion approval,
+uncertain writes, raw JSON and preserving drafts across late responses:
+
+```sh
+npm --prefix apps/admin/ui/frontend test
+```
+
+Keep catalog and UI happy paths in the integration and browser suites below.
+Avoid restoring broad constructor or serialization suites.
 
 ## Provider integration tests
 

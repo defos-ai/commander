@@ -196,7 +196,7 @@ func checkCICoverage(manifest string, filters map[string]yaml.Node, workflows []
 				if workingDirectory == "" {
 					workingDirectory = workflow.Defaults.Run.Directory
 				}
-				if !ciCommandChecks(manifest, workingDirectory, step.Run) {
+				if !ciCommandTests(manifest, workingDirectory, step.Run) {
 					continue
 				}
 				jobFilters, stepFilters := ciFilterNames(job.If), ciFilterNames(step.If)
@@ -209,7 +209,7 @@ func checkCICoverage(manifest string, filters map[string]yaml.Node, workflows []
 			}
 		}
 	}
-	return fmt.Errorf("%s has no CI validation command selected by its owner filter; add a build, vet or integration-test step to the test workflow", directory)
+	return fmt.Errorf("%s has no CI test command selected by its owner filter; add a go test or npm test step to the test workflow", directory)
 }
 
 func ciSelectedFor(expression, owner string) bool {
@@ -232,7 +232,7 @@ func ciSelectedFor(expression, owner string) bool {
 	return selected
 }
 
-func ciCommandChecks(manifest, workingDirectory, script string) bool {
+func ciCommandTests(manifest, workingDirectory, script string) bool {
 	directory := path.Dir(manifest)
 	script = strings.ReplaceAll(script, "\\\n", " ")
 	for _, line := range strings.Split(script, "\n") {
@@ -248,12 +248,12 @@ func ciCommandChecks(manifest, workingDirectory, script string) bool {
 		}
 		if path.Base(manifest) == "package.json" {
 			if path.Clean(workingDirectory) == directory && words[0] == "npm" &&
-				(words[1] == "test" || len(words) >= 3 && words[1] == "run" && slices.Contains([]string{"test", "test:e2e", "typecheck", "build"}, words[2])) {
+				(words[1] == "test" || len(words) >= 3 && words[1] == "run" && words[2] == "test") {
 				return true
 			}
 			continue
 		}
-		if words[0] != "go" || !slices.Contains([]string{"test", "vet", "build"}, words[1]) {
+		if words[0] != "go" || words[1] != "test" {
 			continue
 		}
 		for _, word := range words[2:] {
