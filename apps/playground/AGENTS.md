@@ -297,6 +297,14 @@
   operation snapshots back to the engine without clearing prior review identities.
   Model guidance points operators to the question panel or Admin's Questions
   section, using configured links only. Keep API credentials outside model/MCP data.
+  Watchers compare eligible question IDs separately from saved timestamps and
+  progress, since crossing `fallback_at` emits no operation event. Schedule one
+  fallback review per question; `/stop` pauses review and `/watch` resumes it.
+  Retain `answer_question` in MCP discovery and expose it to the model only when
+  a watched question is eligible. Refresh its exact operation before submitting
+  a model answer; the controller's atomic check remains authoritative if an
+  operator answers concurrently. Keep accepted answers in the existing review
+  flow and never label a model answer as operator consent.
 - Show readable errors by default and redacted provider details with `--debug`.
   Keep keys/history in memory and avoid repeating full schemas/results in prompts.
 - After a successful MCP connection, share the selected provider's key through the

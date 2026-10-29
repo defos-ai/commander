@@ -61,8 +61,8 @@ func Connect(ctx context.Context, endpoint string, credentials host.BearerCreden
 			return nil, errors.New("could not discover Commander MCP tools")
 		}
 		for _, tool := range page.Tools {
-			// Operator answers come from the UI. The watcher owns long polling.
-			if tool.Name == "answer_question" || tool.Name == "operation_events" {
+			// The watcher owns long polling; the engine filters answer eligibility.
+			if tool.Name == "operation_events" {
 				continue
 			}
 			schema, err := json.Marshal(tool.InputSchema)

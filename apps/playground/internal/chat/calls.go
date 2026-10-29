@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -21,6 +23,13 @@ func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
 		call.Arguments = withOperationID(call.Arguments)
 	}
 	e.emit(Event{Kind: "tool", Text: call.Name, CallID: call.ID})
+	if call.Name == "answer_question" {
+		if err := e.checkQuestionAnswer(ctx, call.Arguments); err != nil {
+			result := bridge.Result{IsError: true, Text: err.Error()}
+			e.reportCall(call, result)
+			return result
+		}
+	}
 	result, err := e.commander.Call(ctx, call.Name, call.Arguments)
 	if err != nil {
 		result = bridge.Result{IsError: true, Text: "Tool failed: " + err.Error() + ". Execution may have been accepted; inspect state before retrying."}
@@ -39,6 +48,32 @@ func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
 		}
 	}
 	return result
+}
+
+func (e *Engine) checkQuestionAnswer(ctx context.Context, arguments json.RawMessage) error {
+	var request struct {
+		OperationID string `json:"operation_id"`
+		QuestionID  string `json:"question_id"`
+		Answer      string `json:"answer"`
+	}
+	if json.Unmarshal(arguments, &request) != nil || !id.Valid(request.OperationID) || !id.Valid(request.QuestionID) || strings.TrimSpace(request.Answer) == "" {
+		return errors.New("Answer requires an operation, question and nonblank text.")
+	}
+	operation, err := e.commander.Operation(ctx, request.OperationID)
+	if err != nil || operation.ID != request.OperationID {
+		return errors.New("Could not refresh the question; no answer submitted. Inspect get_operation before trying again.")
+	}
+	select {
+	case e.updates <- operation:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	for _, question := range fallbackQuestions(operation, time.Now()) {
+		if question.ID == request.QuestionID {
+			return nil
+		}
+	}
+	return errors.New("Question is no longer pending or model answering is not yet allowed. Inspect get_operation and use any saved answer; no answer was submitted.")
 }
 
 func (e *Engine) reportCall(call llm.Call, result bridge.Result) {
@@ -78,6 +113,16 @@ func (e *Engine) follow(call llm.Call, result bridge.Result) {
 		select {
 		case e.watchRequests <- id:
 		case <-e.ctx.Done():
+		}
+	}
+	if call.Name == "answer_question" {
+		var operation bridge.Operation
+		if json.Unmarshal(result.Data, &operation) == nil && operation.ID == id {
+			operation.Raw = result.Data
+			select {
+			case e.updates <- operation:
+			case <-e.ctx.Done():
+			}
 		}
 	}
 }

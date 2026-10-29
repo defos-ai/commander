@@ -14,3 +14,11 @@ reference. The CLI owns its anonymous client and closes idle connections. Never
 fetch during startup or accept source URLs/credentials as tool input. Reads are
 bounded, and remote failures stay tool-local without exposing response bodies or
 connection details. Source discovery grants no permissions and stores no state.
+
+Question fallback is available to every MCP client through the same
+`ask_question`, `get_operation` and `answer_question` tools. Clients schedule their
+own fresh read at or after saved `fallback_at`; crossing it emits no durable event.
+Recheck pending status before answering. Preserve the controller's atomic gate and
+first-answer-wins result. Early-answer errors may add the saved cutoff through a
+bounded read; failed enrichment must retain the original rejection without exposing
+backend errors or retrying the write.

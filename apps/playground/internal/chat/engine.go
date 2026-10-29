@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
@@ -33,6 +34,7 @@ type answerRequest struct{ operationID, questionID, answer string }
 type job struct {
 	text, operationID string
 	reviews           []reviewKey
+	answerQuestions   bool
 }
 type turnResult struct {
 	history []llm.Message
@@ -134,6 +136,12 @@ func (e *Engine) run() {
 				next, pending = pending[0], pending[1:]
 			} else {
 				next, automatic = automatic[0], automatic[1:]
+			}
+			for _, operation := range operations {
+				if len(fallbackQuestions(operation, time.Now())) != 0 {
+					next.answerQuestions = true
+					break
+				}
 			}
 			ctx, cancel := context.WithCancel(e.ctx)
 			cancelTurn = cancel

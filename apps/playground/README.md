@@ -189,6 +189,9 @@ to the API, using the same login as `/admin`; enter that login locally if prompt
 If submission cannot be confirmed, inspect the saved question before submitting again.
 Questions stay open after their operator waiting window (120 seconds by default).
 The model may answer after `fallback_at`; operators can answer throughout.
+Playground automatically reviews watched questions when that window ends.
+`/stop` pauses this review; `/watch <operation-id>` resumes it. Other MCP clients
+schedule their own revisit using the same saved `fallback_at`.
 
 Tool calls update their pending line when they complete or fail. The progress
 area shows up to three recently updated operations; `+N more · /operations`

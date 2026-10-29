@@ -17,6 +17,7 @@ func (e *Engine) watch(id string) {
 	var updatedAt time.Time
 	var progress bridge.Progress
 	var missing []secrets.Key
+	var fallback []string
 	first, failed := true, false
 	for e.ctx.Err() == nil {
 		ctx, cancel := context.WithTimeout(e.ctx, 40*time.Second)
@@ -44,7 +45,11 @@ func (e *Engine) watch(id string) {
 			operation, err = e.commander.Operation(ctx, id)
 			if err == nil {
 				currentMissing := operation.MissingSecrets()
-				if first || !operation.UpdatedAt.Equal(updatedAt) || !sameProgress(operation.Progress, progress) || !slices.Equal(currentMissing, missing) || failed {
+				var currentFallback []string
+				for _, question := range fallbackQuestions(operation, time.Now()) {
+					currentFallback = append(currentFallback, question.ID)
+				}
+				if first || !operation.UpdatedAt.Equal(updatedAt) || !sameProgress(operation.Progress, progress) || !slices.Equal(currentMissing, missing) || !slices.Equal(currentFallback, fallback) || failed {
 					select {
 					case e.updates <- operation:
 					case <-e.ctx.Done():
@@ -55,6 +60,7 @@ func (e *Engine) watch(id string) {
 				updatedAt = operation.UpdatedAt
 				progress = operation.Progress
 				missing = currentMissing
+				fallback = currentFallback
 				first = false
 				if failed {
 					e.emit(Event{Kind: "success", Text: "Operation updates resumed: " + id})

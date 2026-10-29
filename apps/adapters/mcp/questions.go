@@ -1,9 +1,32 @@
 package missionsmcp
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/queries"
 )
+
+func questionAnswerError(ctx context.Context, query queries.Operations, request AnswerQuestionRequest, err error) error {
+	if !errors.Is(err, operations.ErrQuestionOperatorWaiting) || errors.Is(err, operations.ErrWriteUncertain) {
+		return err
+	}
+	guidance := "Read get_operation before submitting again; the operator can answer in Admin UI's Questions section or Playground's Operator input panel."
+	readCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	operation, readErr := query.Get(readCtx, request.OperationID)
+	if readErr == nil && !operation.Status.Terminal() {
+		for _, question := range operation.Questions {
+			if question.ID == request.QuestionID && question.Pending() && !question.FallbackAt.IsZero() {
+				return fmt.Errorf("question_operator_waiting: %w; fallback_at=%s. Schedule a fresh get_operation at or after that time before answering. %s", err, question.FallbackAt.UTC().Format(time.RFC3339Nano), guidance)
+			}
+		}
+	}
+	return fmt.Errorf("question_operator_waiting: %w. %s", err, guidance)
+}
 
 type operationDetail struct {
 	operations.Operation

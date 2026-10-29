@@ -2,6 +2,7 @@ package fakes
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
@@ -11,6 +12,30 @@ import (
 type QuestionAnswers struct {
 	commands.Operations
 	submitted chan commands.AnswerQuestionCommand
+}
+
+type StoredQuestionAnswers struct {
+	commands.Operations
+	store operations.OperationStore
+}
+
+func NewStoredQuestionAnswers(store operations.OperationStore) *StoredQuestionAnswers {
+	return &StoredQuestionAnswers{store: store}
+}
+
+func (s *StoredQuestionAnswers) Answer(ctx context.Context, command commands.AnswerQuestionCommand) (operations.Operation, error) {
+	if err := command.Validate(); err != nil {
+		return operations.Operation{}, err
+	}
+	return s.store.AnswerQuestion(ctx, command.OperationID, command.QuestionID, command.Answer, command.AnsweredBy)
+}
+
+type UnreadableQuestions struct {
+	operations.OperationStore
+}
+
+func (UnreadableQuestions) Get(context.Context, string) (operations.Operation, error) {
+	return operations.Operation{}, errors.New("private-question-read-error")
 }
 
 func NewQuestionAnswers() *QuestionAnswers {
