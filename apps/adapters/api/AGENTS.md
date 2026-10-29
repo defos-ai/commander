@@ -57,6 +57,13 @@
   `404 mission_not_found`. Concurrent edits are last-write-wins. Updates affect
   future operations only, never their retained mission snapshots. Read the saved
   definition after uncertain writes; never retry an update automatically.
+- Optional mission `completion` maps through independent API request/response DTOs
+  to `missions.CompletionPolicy`. Clone its pointer at mapping boundaries; omission
+  and explicit null stay omitted, while a present object requires exact
+  `decision_by: model|operator` and rejects unknown fields. OpenAPI must describe
+  this separately from action-scoped rule parameters. Preserve the configured
+  policy in catalog and operation responses. This contract step does not enforce
+  completion authority; keep controller commands and lifecycle unchanged.
 - Operation/task/report/event/log queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send

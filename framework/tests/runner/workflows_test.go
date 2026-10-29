@@ -159,6 +159,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	config := fixtures.Config()
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
+		m.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
 		m.Rules = missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"inspect"}},
 			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -168,16 +169,25 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
+	catalog.Change(func(m *missions.Mission) { m.Completion.DecisionBy = missions.Model })
+	later := fixtures.Start(t, r)
+	if later.Mission.Completion == nil || later.Mission.Completion.DecisionBy != missions.Model {
+		t.Fatal("a new operation did not receive the updated completion policy")
+	}
 	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].ForActions[0] = "inspect" })
 	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].Params.DecisionBy = "changed" })
 	catalog.Change(func(m *missions.Mission) { delete(m.Rules, missions.AggregateResults) })
 	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot changed"
 	op.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
+	op.Mission.Completion.DecisionBy = missions.Model
 	fixtures.Assign(t, r, op.ID, "discover")
 	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
 	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	if !reflect.DeepEqual(settled.Mission.Rules, expected) || len(settled.Tasks) != 1 || settled.Tasks[0].Continuation.DecisionBy != operations.DecisionModel {
 		t.Fatalf("catalog or returned snapshot edits changed the running operation's rules: %+v", settled)
+	}
+	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != missions.Operator {
+		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
 	}
 }
 

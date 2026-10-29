@@ -24,6 +24,7 @@ import (
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
 	Rules             RuleSet                  `json:"rules,omitempty"`
+	Completion        *CompletionPolicy        `json:"completion,omitempty"`
 	Name              string                   `json:"name"`
 	Objectives        []string                 `json:"objectives"`
 	RequiredActions   []string                 `json:"required_actions"`
@@ -67,6 +68,11 @@ func (m Mission) Validate() error {
 	for _, objective := range m.Objectives {
 		if strings.TrimSpace(objective) == "" {
 			return errors.New("mission objectives must not contain blank entries")
+		}
+	}
+	if m.Completion != nil {
+		if err := m.Completion.Validate(); err != nil {
+			return err
 		}
 	}
 	for _, list := range []struct {
@@ -148,6 +154,10 @@ func validateActionNames(field string, names []string) error {
 }
 
 func (m Mission) Clone() Mission {
+	if m.Completion != nil {
+		completion := *m.Completion
+		m.Completion = &completion
+	}
 	m.Objectives = slices.Clone(m.Objectives)
 	m.ActionDefinitions = slices.Clone(m.ActionDefinitions)
 	for i := range m.ActionDefinitions {

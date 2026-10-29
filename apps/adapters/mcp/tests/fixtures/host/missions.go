@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,10 @@ import (
 	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func MissionWithCompletion(policy string) string {
+	return strings.Replace(MissionDefinition, `"objectives":`, `"completion":`+policy+`, "objectives":`, 1)
+}
 
 func MissionCatalogSession(t *testing.T, database string) (context.Context, *sdkmcp.ClientSession) {
 	t.Helper()

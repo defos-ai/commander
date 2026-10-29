@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -166,10 +167,19 @@ func TestRejectedCachedProviderKeyIsReplacedAfterConnection(t *testing.T) {
 		t.Fatal("rejected cache key was automatically loaded again")
 	}
 	requests := provider.Requests()
-	if len(requests) != 3 || requests[2].Path != "/custom/v1/chat/completions" {
-		t.Fatal("provider setup retried unexpectedly or omitted the chat request")
+	if len(requests) != 3 || requests[0].Method != http.MethodGet || requests[0].Path != "/custom/v1/models" ||
+		requests[1].Method != http.MethodGet || requests[1].Path != "/custom/v1/models" ||
+		requests[2].Method != http.MethodPost || requests[2].Path != "/custom/v1/responses" {
+		t.Fatal("provider setup retried unexpectedly or omitted the Responses request")
 	}
-	for _, request := range requests {
+	for index, request := range requests {
+		key := accepted
+		if index == 0 {
+			key = rejected
+		}
+		if request.Authorization != "Bearer "+key {
+			t.Fatal("provider request did not use the expected cached or replacement key")
+		}
 		if strings.Contains(request.Body, rejected) || strings.Contains(request.Body, accepted) {
 			t.Fatal("provider credentials appeared in model context")
 		}

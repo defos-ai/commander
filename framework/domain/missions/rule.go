@@ -18,7 +18,10 @@ const (
 
 type Decision string
 
-const Model Decision = "model"
+const (
+	Model    Decision = "model"
+	Operator Decision = "operator"
+)
 
 type RuleSet map[RuleName]Rule
 

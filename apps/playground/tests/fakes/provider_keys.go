@@ -57,7 +57,7 @@ func providerKeyCalls(source <-chan ProviderKeyCall) []ProviderKeyCall {
 }
 
 type ProviderKeyRequest struct {
-	Path, Authorization, Body string
+	Method, Path, Authorization, Body string
 }
 
 type ProviderKeyModel struct {
@@ -83,17 +83,22 @@ func (m *ProviderKeyModel) Requests() []ProviderKeyRequest {
 
 func (m *ProviderKeyModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	m.requests <- ProviderKeyRequest{Path: r.URL.Path, Authorization: r.Header.Get("Authorization"), Body: string(body)}
+	m.requests <- ProviderKeyRequest{Method: r.Method, Path: r.URL.Path, Authorization: r.Header.Get("Authorization"), Body: string(body)}
 	if r.Header.Get("Authorization") != "Bearer "+m.accepted {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, `{"error":{"message":"API key rejected"}}`)
 		return
 	}
-	switch r.URL.Path {
-	case "/custom/v1/models":
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/custom/v1/models":
 		fmt.Fprint(w, `{"data":[{"id":"fixture-model"}]}`)
-	case "/custom/v1/chat/completions":
-		WriteModelDelta(w, map[string]any{"content": "Provider key remains private"}, "stop")
+	case r.Method == http.MethodPost && r.URL.Path == "/custom/v1/responses":
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, `data: {"type":"response.output_text.delta","delta":"Provider key remains private"}
+
+data: {"type":"response.completed","response":{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Provider key remains private"}]}]}}
+
+`)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}

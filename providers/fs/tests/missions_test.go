@@ -19,10 +19,16 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 		t.Fatal(err)
 	}
 	definition := fixtures.Mission()
+	definition.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
 	invalid := definition.Clone()
 	invalid.InputSchema = json.RawMessage(`{"type":"unknown"}`)
 	if err := store.Create(t.Context(), invalid); err == nil {
 		t.Fatal("created a mission with an invalid schema")
+	}
+	invalid = definition.Clone()
+	invalid.Completion.DecisionBy = "unknown"
+	if err := store.Create(t.Context(), invalid); err == nil {
+		t.Fatal("created a mission with an invalid completion setting")
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -49,6 +55,7 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 	}
 	assertResultJSONEqual(t, stored, definition)
 	stored.Objectives[0] = "changed"
+	stored.Completion.DecisionBy = missions.Model
 	stored.RequiredActions[0] = "changed"
 	stored.ActionDefinitions[0].Name = "changed"
 	stored.ActionDefinitions[0].RequiredSecrets[0] = "CHANGED"
@@ -66,12 +73,24 @@ func TestMissionCreationRejectsInvalidCancelledAndDuplicateDefinitions(t *testin
 	}
 	assertResultJSONEqual(t, items[0], definition)
 	changed.ActionDefinitions = nil
+	changed.Completion.DecisionBy = missions.Model
 	if err := reopened.Upsert(t.Context(), changed); err != nil {
 		t.Fatalf("startup seeding can still update an existing mission: %v", err)
 	}
 	stored, err = store.Get(t.Context(), definition.Name)
 	if err != nil {
 		t.Fatalf("seeded update was not saved: %+v, %v", stored, err)
+	}
+	assertResultJSONEqual(t, stored, changed)
+	changed.Completion = nil
+
+	if err := reopened.Upsert(t.Context(), changed); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = store.Get(t.Context(), definition.Name)
+
+	if err != nil {
+		t.Fatal(err)
 	}
 	assertResultJSONEqual(t, stored, changed)
 }

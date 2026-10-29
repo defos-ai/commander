@@ -93,6 +93,10 @@
   Sanitize backend errors and direct callers to `describe_mission` before retrying
   uncertain writes. Keep the advertised schema aligned with strict decoding,
   including nullable optional collections and open JSON Schema documents.
+  Optional `completion` is a mission-wide setting with required `decision_by`
+  of `model` or `operator` when present; omitted/null stays absent. Preserve it
+  in mission reads and operation snapshots. This contract step does not change
+  completion authorization; controller enforcement is a separate change.
 - `update_mission` accepts that same complete flat definition. Read
   `describe_mission` first and keep its unique name unchanged. Require the target
   through `MissionStore.Get` before `Upsert`; unknown names must not create a

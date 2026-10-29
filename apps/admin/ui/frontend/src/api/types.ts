@@ -6,6 +6,7 @@ export interface Mission {
   action_definitions?: ActionDefinition[];
   starting_actions: string[] | null;
   rules?: Partial<Record<MissionRuleName, MissionRule>>;
+  completion?: { decision_by: 'model' | 'operator' } | null;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
 }

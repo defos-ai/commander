@@ -19,6 +19,9 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 		InputSchema:       bytes.Clone(request.InputSchema),
 		OutputSchema:      bytes.Clone(request.OutputSchema),
 	}
+	if request.Completion != nil {
+		mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Decision(request.Completion.DecisionBy)}
+	}
 	if request.Rules != nil {
 		mission.Rules = make(missions.RuleSet, len(request.Rules))
 		for name, rule := range request.Rules {
@@ -42,6 +45,9 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 		StartingActions:   slices.Clone(mission.StartingActions),
 		InputSchema:       bytes.Clone(mission.InputSchema),
 		OutputSchema:      bytes.Clone(mission.OutputSchema),
+	}
+	if mission.Completion != nil {
+		response.Completion = &models.MissionCompletionPolicyResponse{DecisionBy: string(mission.Completion.DecisionBy)}
 	}
 	if mission.Rules != nil {
 		response.Rules = make(map[string]models.MissionRuleResponse, len(mission.Rules))

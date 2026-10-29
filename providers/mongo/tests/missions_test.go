@@ -22,6 +22,7 @@ func TestMissionMongoStore(t *testing.T) {
 	ctx := t.Context()
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
+		Completion:      &missions.CompletionPolicy{DecisionBy: missions.Operator},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		ActionDefinitions: []actions.Definition{fixtures.ActionDefinition()},
 		Rules: missions.RuleSet{
@@ -62,6 +63,9 @@ func TestMissionMongoStore(t *testing.T) {
 	if !bytes.Equal(schema, original.InputSchema) || document.Lookup("name").StringValue() != original.Name {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
+	if decision, ok := document.Lookup("completion", "decision_by").StringValueOK(); !ok || decision != string(missions.Operator) {
+		t.Fatal("provider changed the completion setting or its stored field names")
+	}
 	definitions, err := document.Lookup("action_definitions").Array().Values()
 	if err != nil || len(definitions) != 1 {
 		t.Fatalf("stored action definitions: %v, %v", definitions, err)
@@ -77,6 +81,7 @@ func TestMissionMongoStore(t *testing.T) {
 		}
 	}
 	stored.Objectives[0] = "modified by reader"
+	stored.Completion.DecisionBy = missions.Model
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
 	stored.ActionDefinitions[0].Name = "modified by reader"
@@ -106,6 +111,7 @@ func TestMissionMongoStore(t *testing.T) {
 	updated.Objectives = []string{"Review before release"}
 	updated.OptionalActions, updated.Rules = nil, nil
 	updated.ActionDefinitions = nil
+	updated.Completion = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}
@@ -113,14 +119,24 @@ func TestMissionMongoStore(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(stored, updated) {
 		t.Fatalf("upsert retained old fields: %#v, error = %v", stored, err)
 	}
-	invalid := updated.Clone()
-	invalid.InputSchema = json.RawMessage(`{"type":"invalid-type"}`)
-	if err := catalog.Upsert(ctx, invalid); err == nil {
-		t.Fatal("invalid mission replaced a valid one")
+	if err := database.GetByID(ctx, "missions", original.Name, &document); err != nil {
+		t.Fatal(err)
 	}
-	invalid.Name = "invalid"
-	if err := catalog.Create(ctx, invalid); err == nil {
-		t.Fatal("invalid mission was created")
+	if _, err := document.LookupErr("completion"); err == nil {
+		t.Fatal("upsert retained a removed completion setting")
+	}
+	invalidSchema := updated.Clone()
+	invalidSchema.InputSchema = json.RawMessage(`{"type":"invalid-type"}`)
+	invalidCompletion := updated.Clone()
+	invalidCompletion.Completion = &missions.CompletionPolicy{DecisionBy: "unknown"}
+	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion} {
+		if err := catalog.Upsert(ctx, invalid); err == nil {
+			t.Fatal("invalid mission replaced a valid one")
+		}
+		invalid.Name = "invalid"
+		if err := catalog.Create(ctx, invalid); err == nil {
+			t.Fatal("invalid mission was created")
+		}
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()

@@ -33,10 +33,12 @@ func openAPIDocument() ([]byte, error) {
 		typeOf reflect.Type
 	}{
 		{"About", reflect.TypeFor[models.AboutResponse]()},
+		{"MissionCompletionPolicy", reflect.TypeFor[models.MissionCompletionPolicyResponse]()},
 		{"MissionRuleParams", reflect.TypeFor[models.MissionRuleParamsResponse]()},
 		{"MissionRule", reflect.TypeFor[models.MissionRuleResponse]()},
 		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
+		{"MissionCompletionPolicyRequest", reflect.TypeFor[models.MissionCompletionPolicyRequest]()},
 		{"MissionRuleParamsRequest", reflect.TypeFor[models.MissionRuleParamsRequest]()},
 		{"MissionRuleRequest", reflect.TypeFor[models.MissionRuleRequest]()},
 		{"ActionDefinitionRequest", reflect.TypeFor[models.ActionDefinitionRequest]()},
@@ -71,9 +73,15 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["application"].Enum = []any{"commander-api", "commander"}
 		case "MissionRuleParams":
 			schema.Properties["decision_by"].Enum = []any{"model"}
+		case "MissionCompletionPolicy", "MissionCompletionPolicyRequest":
+			schema.Required = []string{"decision_by"}
+			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+			schema.Properties["decision_by"].Enum = []any{"model", "operator"}
+			schema.Properties["decision_by"].Description = "Configured completion decision maker. This setting is retained in operation snapshots; controller enforcement is introduced separately."
 		case "MissionRule":
 			schema.Properties["for_actions"].Description = "Actions whose executions this rule applies to."
 		case "Mission":
+			schema.Properties["completion"].Description = "Optional mission-wide completion policy. Omission preserves existing completion behavior. This step stores the configuration; it does not enforce operator approval."
 			schema.Properties["action_definitions"].Description = "Desired action contracts referenced by this mission. Metadata only: defining an action does not register an executor or satisfy readiness."
 			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks."
 			schema.Properties["optional_actions"].Description = "Additional actions the mission may use. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Names are unique and must not overlap required_actions."
@@ -222,6 +230,7 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 		forActions.Description = "Nonempty, unique action names without surrounding whitespace."
 	case "CreateMissionRequest":
 		schema.Required = []string{"name", "objectives", "input_schema", "output_schema"}
+		schema.Properties["completion"].Description = "Optional mission-wide completion policy, copied into future operation snapshots. This step retains the configured policy; operator approval enforcement is introduced separately."
 		schema.Properties["name"].Pattern = `\S`
 		schema.Properties["name"].Not = &jsonschema.Schema{Enum: []any{".", ".."}}
 		schema.Properties["name"].Description = "Nonblank mission name; the dot segments '.' and '..' are invalid. Existing names return mission_exists and are never replaced."

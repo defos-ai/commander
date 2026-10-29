@@ -46,6 +46,9 @@ export function isMission(value: unknown): value is Mission {
     (value.action_definitions === undefined || (Array.isArray(value.action_definitions) && value.action_definitions.every(isActionDefinition))) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
+    (value.completion == null || (isObject(value.completion) &&
+      Object.keys(value.completion).every(key => key === 'decision_by') &&
+      (value.completion.decision_by === 'model' || value.completion.decision_by === 'operator'))) &&
     (value.rules === undefined || (isObject(value.rules) && Object.entries(value.rules).every(([name, rule]) => isRule(name, rule))));
 }
 

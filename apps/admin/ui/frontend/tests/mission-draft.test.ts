@@ -25,6 +25,7 @@ describe('mission form draft', () => {
   "input_schema": {"minimum":9007199254740993,"multipleOf":0.10000000000000001,"default":1e+100},
   "output_schema": {"description":"\u0061\/b"},
   "rules": {"same-agent":{"for_actions":["build-agent"],"future":9007199254740995}},
+  "completion": {"decision_by":"operator"},
   "action_definitions": [{"name":"build-agent","input_schema":{"maximum":9007199254740997}}],
   "future_field": {"enabled":true,"large":9007199254740999,"text":"brackets } ] , \\\""}
 }`;
@@ -43,6 +44,7 @@ describe('mission form draft', () => {
       expect(after[field]).toBe(before[field]);
     }
     expect(changed).toContain('"large":9007199254740999');
+    expect(changed).toContain('"completion": {"decision_by":"operator"}');
     expect(writeMissionDraft(source, { ...before, name: 'new', objectives: ['Build it', 'Report it'],
       required_actions: ['build-agent', 'check-result'] })).toBe(changed);
   });

@@ -56,6 +56,10 @@ the JSON `name` unchanged. Objectives, action lists/contracts, rules and schemas
 can change; existing operations keep their original mission snapshot. Read the
 saved definition after an uncertain update before retrying.
 
+Optional `completion.decision_by` accepts `model` or `operator` and records the
+mission-wide policy in future operation snapshots. This currently stores
+configuration only; it does not yet enforce operator approval.
+
 ## Operation commands
 
 Follow the [operation workflow](../README.md#operation-workflow): start an

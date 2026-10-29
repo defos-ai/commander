@@ -292,6 +292,12 @@ func missionDefinitionSchema() string {
 			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
 			"description": "Nonblank exact mission name. Creation requires an unused name; updating requires the existing unchanged name.",
 		},
+		"completion": map[string]any{
+			"type": []string{"object", "null"}, "additionalProperties": false,
+			"required":    []string{"decision_by"},
+			"properties":  map[string]any{"decision_by": map[string]any{"type": "string", "enum": []string{"model", "operator"}}},
+			"description": "Optional mission-wide completion decision setting, retained in operation snapshots.",
+		},
 		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
 			"description": "Ordered mission objectives; include at least one nonblank objective."},
 		"required_actions": map[string]any{

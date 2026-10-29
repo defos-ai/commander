@@ -57,6 +57,12 @@
 - Mission `objectives` is an ordered, nonempty array of nonblank strings. Clone
   the array at snapshot boundaries and retain each entry through storage and
   transport.
+- Optional mission `completion` stores a mission-wide `CompletionPolicy` with
+  required `decision_by: model|operator`. Omission/null retains a nil policy;
+  an empty object is invalid. Clone its pointer independently in mission and
+  operation snapshots. This contract step does not enforce completion origin or
+  add approval transitions; never advertise the setting as an authorization gate
+  until controller enforcement is implemented. Action-scoped rules remain unchanged.
 - Optional mission `action_definitions` reuses `actions.Definition` for desired
   capabilities. Keep at most 100 unique trimmed names, each referenced by required,
   optional actions. Compile both explicit object schemas with

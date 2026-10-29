@@ -100,6 +100,14 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 		valid                                 bool
 	}{
 		{name: "minimal", valid: true},
+		{name: "operator completion", fields: `,"completion":{"decision_by":"operator"}`, valid: true},
+		{name: "model completion", fields: `,"completion":{"decision_by":"model"}`, valid: true},
+		{name: "omitted completion object", fields: `,"completion":null`, valid: true},
+		{name: "missing completion decision", fields: `,"completion":{}`},
+		{name: "empty completion decision", fields: `,"completion":{"decision_by":""}`},
+		{name: "null completion decision", fields: `,"completion":{"decision_by":null}`},
+		{name: "unsupported completion decision", fields: `,"completion":{"decision_by":"human"}`},
+		{name: "action-scoped completion", fields: `,"completion":{"decision_by":"operator","for_actions":["build"]}`},
 		{name: "multiple objectives", objectives: `["Build a useful agent","Verify its action contracts"]`, valid: true},
 		{name: "string objectives", objectives: `"Build a useful agent"`},
 		{name: "null objectives", objectives: `null`},

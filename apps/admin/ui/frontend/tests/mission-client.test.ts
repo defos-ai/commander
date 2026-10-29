@@ -48,6 +48,16 @@ describe('mission API', () => {
     expect((await getMissionDocument(url, credentials, 'minimal')).mission).toEqual(nullableMission);
   });
 
+  it.each([null, { decision_by: 'model' }, { decision_by: 'operator' }])('retains completion policy %j from mission responses', async completion => {
+    const saved = { ...mission, completion };
+    vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ items: [saved] }))
+      .mockResolvedValueOnce(Response.json(saved)));
+
+    expect(await listMissions(url, credentials)).toEqual([saved]);
+    expect((await getMissionDocument(url, credentials, mission.name)).mission).toEqual(saved);
+  });
+
   it('retains the saved JSON definition without rounding schema numbers or dropping fields', async () => {
     const definition = JSON.stringify(mission).replace('"output_schema":{}',
       '"output_schema":{"minimum":9007199254740993,"multipleOf":0.10000000000000001,"default":1e+100},"future_field":{"enabled":true}');
@@ -100,7 +110,13 @@ describe('mission API', () => {
     { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], output_schema: [] }] }] },
     { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], required_secrets: { SITE_TOKEN: 'value' } }] }] },
     { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], required_secrets: [42] }] }] },
-
+    { items: [{ ...mission, completion: 'operator' }] },
+    { items: [{ ...mission, completion: [] }] },
+    { items: [{ ...mission, completion: {} }] },
+    { items: [{ ...mission, completion: { decision_by: null } }] },
+    { items: [{ ...mission, completion: { decision_by: '' } }] },
+    { items: [{ ...mission, completion: { decision_by: 'human' } }] },
+    { items: [{ ...mission, completion: { decision_by: 'operator', for_actions: ['discover-pages'] } }] },
     { items: [{ ...mission, steps: [] }] },
     { items: [{ ...mission, rules: [] }] },
     { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages'] } } }] },

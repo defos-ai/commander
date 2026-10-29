@@ -67,6 +67,9 @@ func TestMissionRulesValidation(t *testing.T) {
 		{name: "unsupported decision", rules: missions.RuleSet{
 			missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: "other"}},
 		}, want: `decision_by must be "model"`},
+		{name: "completion operator is not an action decision", rules: missions.RuleSet{
+			missions.DecideNextActions: {ForActions: []string{"scan-ports"}, Params: &missions.RuleParams{DecisionBy: missions.Operator}},
+		}, want: `decision_by must be "model"`},
 		{name: "stable first error", rules: missions.RuleSet{
 			missions.DecideNextActions: {},
 			missions.AggregateResults:  {},

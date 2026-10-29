@@ -37,6 +37,7 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and rules; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters, Runner start and rule selection. |
+| [`CompletionPolicy`](missions/completion_policy.go) | Declares the configured completion decision maker for the whole mission; retained independently in operation snapshots. | Mission validation, Adapters, mission/operation stores. Controller enforcement is a later step. |
 | [`RuleSet`, `Rule`, `RuleParams`](missions/rule.go) | Express aggregation, model review and same-agent policy declaratively. | Runner rule selection, operation rule application, mission authoring. |
 
 ## Operations
