@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { Operation, OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
-import type { Action, Agent } from '../../src/api/types';
+import type { Action, Agent, Mission } from '../../src/api/types';
 import { connect, password, publicAPIURL, startOperation, test, username } from '../fixtures/e2e';
 
 test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api }) => {
@@ -244,9 +244,12 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
 });
 
 test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api }) => {
+  const mission = await api.get<Mission>('/missions/analyze-text');
+  const missionName = `operator-completion-${randomUUID()}`;
+  await api.post('/missions', { ...mission, name: missionName, completion: { decision_by: 'operator' } }, 201);
   await connect(page);
   await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Operations', exact: true }).click();
-  const operation = await startOperation(page);
+  const operation = await startOperation(page, 'Commander integration example', missionName);
   const path = `/operations/${operation.id}`;
   const question = await api.post<OperationQuestion>(`${path}/questions`, {
     text: 'Which release should this review cover?', options: ['Current release', 'Next release'],
@@ -314,32 +317,41 @@ test('operation questions, automatic work, graph and downloads use the real stac
 
   const decision = finished.tasks!.find(task => task.id === root.id)!.continuation!;
   await api.post(`${path}/tasks/${root.id}/continuation/resolve`, { version: decision.version, actions: [] });
-  const proposed = await api.post<Operation>(`${path}/completion-proposals`, {
-    output: { summary: 'Analyzed the example text and saved its summary.' },
-  });
-  expect(proposed.status).not.toBe('completed');
-  expect(proposed.report_id).toBeUndefined();
-  expect(proposed.completion_proposal).toMatchObject({ proposed_by: 'operator',
-    output: { summary: 'Analyzed the example text and saved its summary.' } });
+  const pending = await api.completeAsModel(operation.id, '{"summary":"Analyzed the example text and saved its summary."}');
+  expect(pending.status).not.toBe('completed');
+  expect(pending.report_id).toBeUndefined();
+  expect(pending.completion_draft).toEqual({ summary: 'Analyzed the example text and saved its summary.' });
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await page.getByRole('button', { name: 'Complete operation', exact: true }).click();
   const completion = page.getByRole('dialog', { name: 'Complete operation', exact: true });
   await expect(completion.getByRole('button', { name: 'Complete operation', exact: true })).toBeDisabled();
   await expect(completion.getByLabel('Final output (JSON)', { exact: true })).toHaveValue('{"summary":"Analyzed the example text and saved its summary."}');
-  await completion.getByRole('checkbox', { name: 'I have reviewed the final output and approve completion.', exact: true }).check();
+  const approval = completion.getByRole('checkbox', { name: 'I have reviewed the final output and approve completion.', exact: true });
+  const finalOutput = completion.getByLabel('Final output (JSON)', { exact: true });
+  const reviewedOutput = '{"summary":"Reviewed the example analysis and its saved summary."}';
+  await finalOutput.fill(reviewedOutput);
+  await approval.check();
+  await api.completeAsModel(operation.id, '{"summary":"Updated model output awaiting operator review."}');
+  await expect(completion.getByText('The completion draft changed. Your current draft is kept until you load the latest output.', { exact: true })).toBeVisible();
+  await expect(finalOutput).toHaveValue(reviewedOutput);
+  await expect(approval).not.toBeChecked();
+  await completion.getByRole('button', { name: 'Load latest output', exact: true }).click();
+  await expect(finalOutput).toHaveValue('{"summary":"Updated model output awaiting operator review."}');
+  await finalOutput.fill(reviewedOutput);
+  await approval.check();
   await completion.getByRole('button', { name: 'Complete operation', exact: true }).click();
   await expect(completion).not.toBeVisible();
   expect(await api.get<Operation>(path)).toMatchObject({ status: 'completed', completed_by: 'operator' });
   await expect(page.getByText('Completed by', { exact: true }).locator('..')).toContainText('Operator');
   await page.getByRole('button', { name: 'View report', exact: true }).click();
   const reportDialog = page.getByRole('dialog', { name: 'Operation report', exact: true });
-  await expect(reportDialog.getByRole('region', { name: 'Report output' })).toContainText('Analyzed the example text and saved its summary.');
+  await expect(reportDialog.getByRole('region', { name: 'Report output' })).toContainText('Reviewed the example analysis and its saved summary.');
   const reportDownload = page.waitForEvent('download');
   await reportDialog.getByRole('button', { name: 'Download JSON' }).click();
   const download = await reportDownload;
   const report: Report = JSON.parse(await readFile((await download.path())!, 'utf8'));
-  expect(report).toMatchObject({ operation_id: operation.id, mission: 'analyze-text', output: { summary: 'Analyzed the example text and saved its summary.' } });
+  expect(report).toMatchObject({ operation_id: operation.id, mission: missionName, output: { summary: 'Reviewed the example analysis and its saved summary.' } });
   expect(download.suggestedFilename()).toBe(`${report.id}.json`);
   await reportDialog.getByRole('button', { name: 'Close', exact: true }).click();
 

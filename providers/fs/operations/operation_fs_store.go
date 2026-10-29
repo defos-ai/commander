@@ -191,9 +191,9 @@ func (s *OperationFsStore) AnswerQuestion(ctx context.Context, operationID, ques
 	})
 }
 
-func (s *OperationFsStore) ProposeCompletion(ctx context.Context, operationID string, proposal operations.CompletionProposal) (operations.Operation, error) {
+func (s *OperationFsStore) SaveCompletionDraft(ctx context.Context, operationID string, output json.RawMessage) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
-		return operation.ProposeCompletion(proposal)
+		return operation.SaveCompletionDraft(output)
 	})
 }
 

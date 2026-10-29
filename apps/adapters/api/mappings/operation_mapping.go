@@ -30,14 +30,6 @@ func ToCompleteOperationCommand(operationID string, request models.CompleteOpera
 	}
 }
 
-func ToProposeCompletionCommand(operationID string, request models.ProposeCompletionRequest) controllercommands.ProposeCompletionCommand {
-	return controllercommands.ProposeCompletionCommand{
-		OperationID: operationID,
-		Output:      bytes.Clone(request.Output),
-		ProposedBy:  operations.CompletionOperator,
-	}
-}
-
 func ToFailOperationCommand(operationID string, request models.FailOperationRequest) controllercommands.FailOperationCommand {
 	return controllercommands.FailOperationCommand{
 		OperationID: operationID,
@@ -55,29 +47,25 @@ func ToOperationViewResponse(operation queries.OperationView) models.OperationRe
 
 func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity, progress operations.Progress) models.OperationResponse {
 	response := models.OperationResponse{
-		ID:          operation.ID,
-		Mission:     ToMissionResponse(operation.Mission),
-		Input:       bytes.Clone(operation.Input),
-		Status:      string(operation.Status),
-		Progress:    toOperationProgressResponse(progress),
-		Tasks:       tasks,
-		Questions:   ToQuestionResponses(operation.Questions),
-		Output:      bytes.Clone(operation.Output),
-		ReportID:    operation.ReportID,
-		CompletedBy: string(operation.CompletedBy),
-		Error:       operation.Error,
-		Events:      ToEventResponses(operation.Events),
-		CreatedAt:   operation.CreatedAt,
-		UpdatedAt:   operation.UpdatedAt,
+		ID:              operation.ID,
+		Mission:         ToMissionResponse(operation.Mission),
+		Input:           bytes.Clone(operation.Input),
+		Status:          string(operation.Status),
+		Progress:        toOperationProgressResponse(progress),
+		Tasks:           tasks,
+		Questions:       ToQuestionResponses(operation.Questions),
+		Output:          bytes.Clone(operation.Output),
+		CompletionDraft: bytes.Clone(operation.CompletionDraft),
+		ReportID:        operation.ReportID,
+		CompletedBy:     string(operation.CompletedBy),
+		Error:           operation.Error,
+		Events:          ToEventResponses(operation.Events),
+		CreatedAt:       operation.CreatedAt,
+		UpdatedAt:       operation.UpdatedAt,
 	}
 	if operation.Preflight != nil {
 		preflight := ToPreflightResponse(*operation.Preflight)
 		response.Preflight = &preflight
-	}
-	if proposal := operation.CompletionProposal; proposal != nil {
-		response.CompletionProposal = &models.CompletionProposalResponse{
-			ID: proposal.ID, Output: bytes.Clone(proposal.Output), ProposedBy: string(proposal.ProposedBy), ProposedAt: proposal.ProposedAt,
-		}
 	}
 	if affinity != nil {
 		response.Affinity = &models.AffinityResponse{

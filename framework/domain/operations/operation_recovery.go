@@ -1,10 +1,12 @@
 package operations
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"time"
+	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -30,8 +32,11 @@ func (o Operation) validateRecovery() error {
 	if err := o.Mission.Rules.Validate(); err != nil {
 		return err
 	}
-	if o.CompletionProposal != nil {
-		if err := o.CompletionProposal.Validate(); err != nil {
+	if len(o.CompletionDraft) != 0 {
+		if !o.RequiresCompletionApproval() || !utf8.Valid(o.CompletionDraft) || !json.Valid(o.CompletionDraft) {
+			return errors.New("invalid completion draft")
+		}
+		if err := o.Mission.ValidateOutput(o.Input, o.CompletionDraft); err != nil {
 			return err
 		}
 	}

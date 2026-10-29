@@ -60,26 +60,23 @@
 - Optional mission `completion` stores a mission-wide `CompletionPolicy` with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
   an empty object is invalid. Clone its pointer independently in mission and
-  operation snapshots. An operator policy rejects model completion; omitted/model
-  policies allow either channel. Trusted adapters stamp required completion origin:
+  operation snapshots. Trusted adapters stamp required completion origin:
   HTTP API uses `operator`, MCP uses `model`; public bodies cannot choose it.
-  Runner validation rejects unauthorized completion before report publication,
-  and stores recheck authority inside the atomic transition. Save `completed_by`
-  with accepted completion, retaining it through recovery and late outcomes.
-  This records the submission channel, not proof of a human's identity. There is
-  no question timeout or model fallback for operator completion. Action-scoped
-  rules remain unchanged.
-- `Operation.CompletionProposal` retains the latest proposed final output and
-  submission origin inside the operation. `ProposeCompletion` validates readiness
-  and the saved output schema atomically without granting completion authority,
-  creating a report, changing status or resolving continuations. New IDs replace
-  the latest proposal; identical ID/content replays preserve history, while
-  conflicting ID reuse fails. Keep snapshots independent and preserve the proposal
-  across recovery and terminal transitions. Trusted adapters stamp proposer origin;
-  passing time or saving a proposal never supplies operator approval. Final
-  completion still validates the operator's explicitly submitted output. Proposals
-  do not pause coordination or freeze later work; review current outcomes again
-  before completion and reconcile uncertain writes before another mutation.
+  Model/omitted policy completes immediately through the existing command.
+  For operator policy, model completion saves one `Operation.CompletionDraft`
+  after readiness/schema checks and returns awaiting operator approval. It
+  creates no report, changes no status and resolves no continuations. Identical
+  output replays preserve events/time; changed output replaces the saved field.
+  Keep JSON bytes independent and preserve them across storage and recovery.
+  Operator completion validates explicitly submitted output, creates the report,
+  clears completion draft and saves `completed_by` atomically with final state.
+  Stores recheck authority inside completion; completion draft never grants it.
+  Saved completion draft does not freeze later work, so review current eligibility
+  before accepting it. Retain it as history on failure/cancellation. This records
+  the submission channel, not proof of a human's identity. There is no question
+  timeout or model fallback for operator completion. Action-scoped rules and
+  question behavior remain unchanged. Reconcile uncertain writes before another
+  mutation; completion draft has no separate IDs, origin metadata or command.
 - Optional mission `action_definitions` reuses `actions.Definition` for desired
   capabilities. Keep at most 100 unique trimmed names, each referenced by required,
   optional actions. Compile both explicit object schemas with

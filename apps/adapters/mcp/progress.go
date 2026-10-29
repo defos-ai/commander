@@ -30,6 +30,7 @@ func describeProgress(progress operations.Progress) operationProgress {
 type operationResult struct {
 	operations.Operation
 	Progress operationProgress `json:"progress"`
+	Message  string            `json:"message,omitempty"`
 }
 
 func commandOperation(operation operations.Operation, err error) (operationResult, error) {

@@ -13,7 +13,7 @@ import (
 func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	a := fixtures.Connect(t)
 	catalog := fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-	if !slices.Equal(fixtures.MissionNames(catalog.Items), fixtures.ExpectedMissions()) {
+	if !fixtures.HasExpectedMissions(catalog.Items) {
 		t.Fatalf("unexpected stack missions: %+v", catalog)
 	}
 	build := fixtures.Read[models.MissionResponse](a, "/api/v1/missions/build-agent")

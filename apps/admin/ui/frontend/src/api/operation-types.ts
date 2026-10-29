@@ -13,20 +13,12 @@ export interface Operation {
   output?: unknown;
   report_id?: string;
   completed_by?: 'operator' | 'model';
-  completion_proposal?: OperationCompletionProposal | null;
+  completion_draft?: unknown;
+  completionDraftText?: string;
   error?: string;
   events: OperationEvent[] | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface OperationCompletionProposal {
-  id: string;
-  output: unknown;
-  proposed_by: 'operator' | 'model';
-  proposed_at: string;
-  // Detail reads retain the output's original JSON tokens for operator review.
-  outputText?: string;
 }
 
 export interface OperationProgress {

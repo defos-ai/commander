@@ -12,14 +12,16 @@ complete definition and unchanged name. Edit objectives, actions, rules and
 schemas; existing operations keep their original mission snapshot. After an
 uncertain update, read the saved definition before retrying.
 
-When the saved mission sets `completion.decision_by` to `operator`, save final
-output with `propose_completion`, then ask the operator to review the saved
-proposal and choose **Complete operation** in
+Call `complete_operation` with output matching the saved mission schema. With
+omitted/model completion policy, it saves the final report and completes
+immediately. With `completion.decision_by: operator`, it saves `completion_draft`
+and returns **awaiting operator approval** without a final report. Ask the
+operator to review or edit the output and choose **Complete operation** in
 [Admin UI](../../admin/ui/README.md#review-operations), or submit it through the
-authenticated HTTP API. MCP cannot approve completion; question answers and
-fallback do not grant this approval. A saved proposal leaves the operation active
-and does not pause other work. Inspect `get_operation` after an uncertain write;
-do not resubmit the same proposal automatically while waiting for review.
+authenticated HTTP API. MCP cannot approve completion, and question fallback
+does not grant approval. While awaiting review, inspect `get_operation` instead
+of repeatedly submitting the same output. Read saved state after an uncertain
+write before submitting again.
 
 For an operation question, direct the operator to Admin's **Questions** section.
 Use the returned `fallback_at` to schedule a fresh `get_operation`; if the

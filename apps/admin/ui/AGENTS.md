@@ -170,13 +170,14 @@
   before reopening. Polling alone does not clear this guard. Invalid output may
   be corrected explicitly after known rejection. Display saved `completed_by`,
   leaving absent provenance unknown; policy does not establish who completed it.
-  Optional `completion_proposal` is proposed output, never acceptance or a final
-  report. Detail queries retain its exact output JSON as client-only `outputText`
-  from the response source; never seed the editor by reserializing parsed numbers.
-  Load it when the dialog opens, retaining operator edits on subsequent polls.
-  A replacement proposal revokes approval and offers explicit **Load latest
-  proposal**, without silently replacing the draft. Showing proposer/time does
-  not establish consent. Keep the manual completion path when no proposal exists.
+  Optional `completion_draft` awaits operator approval and is not a final report.
+  Detail queries retain its exact JSON as client-only `completionDraftText`; never
+  seed the editor by reserializing parsed numbers. Load it when the dialog opens,
+  retaining operator edits on subsequent polls. A changed completion draft revokes
+  approval and offers explicit **Load latest output**, without replacing the draft.
+  Completion still requires the authenticated API and operator confirmation; there
+  is no question timeout or model fallback. Keep manual completion available when
+  no completion draft exists.
 - Operation **Logs** uses the single operation log API with route-preserved
   task/agent/action filters. Validate flat response provenance and cursors; keep
   server append order rather than sorting timestamps or UUIDs. Read recent pages

@@ -38,6 +38,10 @@ applies to all domain packages below this directory.
   Use [OperationStore](operations/operation_store.go) mutation contracts rather
   than rebuilding a saved operation from a stale caller snapshot.
   Rule evaluation stays pure in [rule_applier.go](operations/rule_applier.go).
+  Completion uses the saved mission policy: model submissions either complete
+  immediately or retain completion draft for operator review. Completion draft is
+  operation state, not a question or a separate approval model; only explicit
+  operator completion can finalize an operator-policy operation.
 - [Questions](operations/question.go) support model-created operation/continuation
   decisions and action-originated execution waits. Preserve command/key
   idempotency and operator-first timing. Crossing `fallback_at` permits a model

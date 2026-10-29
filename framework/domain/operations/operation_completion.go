@@ -1,10 +1,12 @@
 package operations
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/id"
@@ -24,6 +26,35 @@ func (origin CompletionOrigin) Validate() error {
 	return nil
 }
 
+func (o Operation) RequiresCompletionApproval() bool {
+	return o.Mission.Completion != nil && o.Mission.Completion.DecisionBy == missions.Operator
+}
+
+func (o *Operation) SaveCompletionDraft(output json.RawMessage) error {
+	if err := o.ValidateCompletionCandidate(output); err != nil {
+		return err
+	}
+	if !o.RequiresCompletionApproval() {
+		return errors.New("completion draft requires operator completion policy")
+	}
+	if !utf8.Valid(output) || !json.Valid(output) {
+		return errors.New("completion draft must be valid UTF-8 JSON")
+	}
+	// Operation envelopes compact whitespace and escape HTML in RawMessage fields.
+	previous, _ := json.Marshal(o.CompletionDraft)
+	next, err := json.Marshal(output)
+	if err != nil {
+		return err
+	}
+	if len(o.CompletionDraft) != 0 && bytes.Equal(previous, next) {
+		return nil
+	}
+	o.CompletionDraft = append(json.RawMessage(nil), output...)
+	o.AppendEvent(CompletionRequested, "", "", "Awaiting operator approval")
+	o.UpdatedAt = time.Now().UTC()
+	return nil
+}
+
 func (o Operation) ValidateCompletion(output json.RawMessage, completedBy CompletionOrigin) error {
 	if o.Status.Terminal() {
 		return ErrFinished
@@ -31,10 +62,8 @@ func (o Operation) ValidateCompletion(output json.RawMessage, completedBy Comple
 	if err := completedBy.Validate(); err != nil {
 		return err
 	}
-	if policy := o.Mission.Completion; policy != nil {
-		if policy.DecisionBy == missions.Operator && completedBy != CompletionOperator {
-			return ErrCompletionOperatorRequired
-		}
+	if o.RequiresCompletionApproval() && completedBy != CompletionOperator {
+		return ErrCompletionOperatorRequired
 	}
 	return o.ValidateCompletionCandidate(output)
 }
@@ -82,6 +111,7 @@ func (o *Operation) Complete(reportID string, output json.RawMessage, completedB
 			c.Version++
 		}
 	}
+	o.CompletionDraft = nil
 	o.Output = append(json.RawMessage(nil), output...)
 	o.ReportID, o.Status, o.CompletedBy = reportID, Completed, completedBy
 	o.AppendEvent(OperationCompleted, "", "", "Operation completed")

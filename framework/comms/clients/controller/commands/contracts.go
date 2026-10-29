@@ -20,7 +20,6 @@ type Operations interface {
 	Assign(context.Context, AssignTaskCommand) (operations.Task, error)
 	Ask(context.Context, AskQuestionCommand) (operations.Question, error)
 	Answer(context.Context, AnswerQuestionCommand) (operations.Operation, error)
-	ProposeCompletion(context.Context, ProposeCompletionCommand) (operations.Operation, error)
 	Complete(context.Context, CompleteOperationCommand) (operations.Operation, error)
 	Fail(context.Context, FailOperationCommand) (operations.Operation, error)
 	Cancel(context.Context, CancelOperationCommand) (operations.Operation, error)

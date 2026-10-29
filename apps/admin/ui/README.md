@@ -60,9 +60,10 @@ final output as JSON, and confirm completion. The dialog shows the mission's
 output schema. Report limitations and unknown outcomes in that output; completion
 accepts the final report without certifying every task succeeded. After an
 uncertain submission, choose **View operation** before submitting again.
-Saved proposed output opens in the completion dialog for review and editing.
-If a newer proposal arrives while you edit, choose **Load latest proposal** to
-replace your draft explicitly, then review and approve it.
+With Operator completion policy, model submissions save completion draft for your
+approval without creating a final report. Review and edit it in this dialog. If
+the completion draft changes, choose **Load latest output** to replace your draft
+explicitly, then review and approve it.
 
 ## Create and edit missions
 

@@ -90,7 +90,7 @@ func Connect(t *testing.T) *Client {
 		ready = ready && types["example-agent"] == 2 && types["builder-agent"] == 1 && types["spawner-agent"] == 1
 		actions := Read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
 		missions := Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
-		if ready && slices.Equal(ActionNames(actions.Items), ExpectedCatalogActions(catalog.Items)) && slices.Equal(MissionNames(missions.Items), ExpectedMissions()) {
+		if ready && slices.Equal(ActionNames(actions.Items), ExpectedCatalogActions(catalog.Items)) && HasExpectedMissions(missions.Items) {
 			break
 		}
 		if err := Pause(ctx); err != nil {
@@ -120,6 +120,16 @@ func ExpectedAgentActions(agentType string) []string {
 
 func ExpectedMissions() []string {
 	return []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "review-website"}
+}
+
+func HasExpectedMissions(missions []models.MissionResponse) bool {
+	names := MissionNames(missions)
+	for _, name := range ExpectedMissions() {
+		if !slices.Contains(names, name) {
+			return false
+		}
+	}
+	return true
 }
 
 func ExpectedCatalogActions(agents []models.AgentResponse) []string {

@@ -30,7 +30,6 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		{"Log", reflect.TypeFor[models.LogResponse]()},
 		{"Question", reflect.TypeFor[models.QuestionResponse]()},
 		{"OperationProgress", reflect.TypeFor[models.OperationProgressResponse]()},
-		{"CompletionProposal", reflect.TypeFor[models.CompletionProposalResponse]()},
 		{"Operation", reflect.TypeFor[models.OperationResponse]()},
 		{"GraphTask", reflect.TypeFor[models.GraphTaskResponse]()},
 		{"GraphArtifact", reflect.TypeFor[models.GraphArtifactResponse]()},
@@ -44,12 +43,6 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			return fmt.Errorf("describe API %s: %w", model.name, err)
 		}
 		switch model.name {
-		case "CompletionProposal":
-			schema.ReadOnly = true
-			schema.Properties["id"].Format = "uuid"
-			schema.Properties["proposed_by"].Enum = []any{"operator", "model"}
-			schema.Properties["proposed_by"].Description = "Submission channel assigned by the adapter: operator for HTTP API, model for MCP."
-			schema.Properties["output"].Description = "Latest proposed final output, including null, arrays and scalars when allowed by the mission schema. It is not an accepted report."
 		case "AgentReadiness":
 			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
 			schema.Properties["missing_requirements"].Description = "Missing prerequisites assessed on a live ready/working candidate. Entries with kind=secret identify declared shared secret names; agent_type identifies the requesting candidate, not a secret scope. Sensitive host configuration is separate. Stale or offline candidates report only their unavailability reason. Values and secret lease refresh requests are never included."
@@ -88,8 +81,8 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		case "Operation", "Event", "OperationGraph":
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
 			if model.name == "Operation" {
-				schema.Properties["completion_proposal"].ReadOnly = true
-				schema.Properties["completion_proposal"].Description = "Latest saved final-output proposal. Saving it leaves operation status, output, report reference and continuations unchanged. An operator may review or edit it before explicit completion."
+				schema.Properties["completion_draft"].ReadOnly = true
+				schema.Properties["completion_draft"].Description = "Final output submitted by a model under operator completion policy, awaiting explicit operator approval. No final report exists yet. An operator may review or edit it before completing through the existing completion API."
 				schema.Properties["affinity"].Description = "Derived same-agent placement. Queued tasks remain unassigned until dispatch; affinity does not change their agent_id."
 				schema.Properties["completed_by"].Enum = []any{"operator", "model"}
 				schema.Properties["completed_by"].ReadOnly = true
@@ -243,12 +236,6 @@ func openAPICommandSchemas(components map[string]any) error {
 			},
 		},
 		{
-			name: "ProposeCompletionRequest", typeOf: reflect.TypeFor[models.ProposeCompletionRequest](),
-			constraints: map[string]map[string]any{
-				"output": {"description": "Required proposed final JSON value, including null, arrays and scalars when allowed by the operation mission's output schema."},
-			},
-		},
-		{
 			name: "FailOperationRequest", typeOf: reflect.TypeFor[models.FailOperationRequest](),
 			constraints: map[string]map[string]any{"reason": nonblank},
 		},
@@ -354,14 +341,8 @@ func openAPICommandPaths(paths map[string]any) {
 		},
 		{
 			path: operation + "/complete", id: "completeOperation", summary: "Complete an operation",
-			description: "Completes an operation and returns the full updated operation with report_id and completed_by. HTTP API completion has operator origin, assigned by the adapter, and can complete missions with completion.decision_by=operator. output must be present and match the mission's output schema; null is accepted when that schema allows it. Queued or running tasks, pending questions, and unresolved automatic or operator continuations block completion. Pending model continuations are resolved during completion. The report is saved before the operation is marked completed. The path supplies operation_id; neither operation_id nor completed_by is accepted in the body.",
+			description: "Completes an operation and returns the full updated operation with report_id and completed_by. HTTP API completion has operator origin, assigned by the adapter, and can complete missions with completion.decision_by=operator, accepting the explicitly submitted output and clearing completion_draft. output must be present and match the mission's output schema; null is accepted when that schema allows it. Queued or running tasks, pending questions, and unresolved automatic or operator continuations block completion. Pending model continuations are resolved during completion. The report is saved before the operation is marked completed. The path supplies operation_id; neither operation_id nor completed_by is accepted in the body.",
 			request:     "CompleteOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict, operation_finished, completion_operator_required, operation_active_tasks, question_pending or operation_unresolved_work",
-			bodyRequired: true, validationError: "invalid_output",
-		},
-		{
-			path: operation + "/completion-proposals", id: "proposeOperationCompletion", summary: "Propose final operation output",
-			description: "Saves the latest final-output proposal and returns the full updated operation. It does not complete the operation, resolve continuations or create a report. output must match the saved mission's output schema. Queued or running tasks, pending questions, and unresolved automatic or operator continuations block proposals. HTTP API proposals have operator origin assigned by the adapter; operation_id, proposed_by, proposal identity and timestamps are not accepted in the body. After an uncertain response, inspect the saved operation before submitting again. Approval remains an explicit completion command.",
-			request:     "ProposeCompletionRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict, operation_finished, operation_active_tasks, question_pending or operation_unresolved_work",
 			bodyRequired: true, validationError: "invalid_output",
 		},
 		{

@@ -273,8 +273,8 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
       <p className="operation-progress">{t($ => $.operations.progress, { total: progress.total_tasks, finished: progress.finished_tasks })}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
       {isActiveOperation(operation.status) && operation.mission.completion?.decision_by === 'operator' &&
         <p className="notice" role="status">{t($ => $.operations.operatorCompletionRequired)}</p>}
-      {isActiveOperation(operation.status) && operation.completion_proposal &&
-        <p className="notice" role="status">{t($ => $.operations.completionProposalReady)}</p>}
+      {isActiveOperation(operation.status) && operation.completion_draft !== undefined &&
+        <p className="notice" role="status">{t($ => $.operations.completionAwaitingApproval)}</p>}
       <dl className="detail-list">
         <div><dt>{t($ => $.operations.status)}</dt><dd><OperationStatus status={operation.status} /></dd></div>
         {operation.status === 'completed' && <div><dt>{t($ => $.operations.completedBy)}</dt><dd>{operation.completed_by

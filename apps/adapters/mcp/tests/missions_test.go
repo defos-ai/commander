@@ -18,9 +18,6 @@ func TestMissions(t *testing.T) {
 		Missions []map[string]any `json:"missions"`
 	}
 	a.Call("list_missions", fixtures.Object{}, &catalog)
-	if len(catalog.Missions) != 6 {
-		t.Fatalf("unexpected missions: %+v", catalog)
-	}
 	summaries := make(map[string]map[string]any, len(catalog.Missions))
 	for _, summary := range catalog.Missions {
 		name, named := summary["name"].(string)

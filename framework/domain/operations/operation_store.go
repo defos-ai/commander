@@ -66,11 +66,10 @@ type OperationStore interface {
 	// answers before FallbackAt return ErrQuestionOperatorWaiting without writing.
 	// Operator answers remain valid before and after FallbackAt.
 	AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy AnswerOrigin) (Operation, error)
-	// ProposeCompletion rechecks readiness and output schema, then saves the latest
-	// proposal with its event and timestamp. It grants no completion authority and
-	// leaves status, work and final output/report unchanged. An identical latest
-	// ID replay is unchanged; conflicting reuse returns ErrOperationConflict.
-	ProposeCompletion(ctx context.Context, operationID string, proposal CompletionProposal) (Operation, error)
+	// SaveCompletionDraft validates readiness, output schema and operator policy, then
+	// saves the latest output for approval without creating a report or changing
+	// work/status. Identical output is unchanged. Completion clears completion draft.
+	SaveCompletionDraft(ctx context.Context, operationID string, output json.RawMessage) (Operation, error)
 	// Complete rechecks eligibility and completion authority against the saved
 	// mission, then saves output, report reference, origin, resolved model
 	// continuations, status, and event together. The caller must persist the

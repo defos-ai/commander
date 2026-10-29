@@ -47,10 +47,8 @@ func Operation() operations.Operation {
 	return op
 }
 
-func CompletionProposal() operations.CompletionProposal {
-	return operations.CompletionProposal{ID: id.New(),
-		Output:     json.RawMessage(`{ "summary":"Review complete", "identifier":9007199254740993, "path":"\u0061\/b", "markup":"<p>" }`),
-		ProposedBy: operations.CompletionModel, ProposedAt: time.Date(2026, time.October, 5, 10, 0, 0, 123456789, time.UTC)}
+func CompletionDraft() json.RawMessage {
+	return json.RawMessage(`{ "summary":"Review complete", "identifier":9007199254740993, "path":"\u0061\/b", "markup":"<p>" }`)
 }
 
 func CreateOperation(t *testing.T, catalog operations.OperationStore, op operations.Operation) operations.Operation {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/id"
@@ -397,5 +398,65 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	a.Call("complete_operation", fixtures.Object{"operation_id": op.ID, "output": fixtures.Object{"summary": "Recovered the failed action and reviewed its evidence"}}, nil)
 	if a.Get(op.ID).Status != operations.Completed {
 		t.Fatal("operation did not complete")
+	}
+}
+
+func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
+	a := fixtures.OpenSession(t)
+	var definition missions.Mission
+	a.Call("describe_mission", fixtures.Object{"mission_name": "analyze-text"}, &definition)
+	operatorDefinition := definition.Clone()
+	operatorDefinition.Name += "-operator-" + id.New()
+	operatorDefinition.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+	operatorDefinition.OutputSchema = json.RawMessage(`{"anyOf":[{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false},{"type":"null"}]}`)
+	a.Call("create_mission", fixtures.MissionDefinition(operatorDefinition), nil)
+	var operation operations.Operation
+	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.Object{"text": "Operator reviews final output"}}, &operation)
+	defer a.CancelActiveOperation(operation.ID)
+	output := json.RawMessage(`{"summary":"Review\u0020required"}`)
+	var pending struct {
+		operations.Operation
+		Message string `json:"message"`
+	}
+
+	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": output}, &pending)
+
+	if pending.Status.Terminal() || pending.ReportID != "" || len(pending.Output) != 0 || pending.CompletedBy != "" ||
+		!bytes.Equal(pending.CompletionDraft, output) || !strings.Contains(pending.Message, "Awaiting operator approval") {
+		t.Fatalf("operator policy did not retain unapproved output without a report: %+v", pending)
+	}
+	if saved := a.Get(operation.ID); !bytes.Equal(saved.CompletionDraft, output) || saved.Status.Terminal() || saved.ReportID != "" {
+		t.Fatalf("pending completion was not retained by detail reads: %+v", saved)
+	}
+	a.Fails("get_report", fixtures.Object{"operation_id": operation.ID}, "report")
+	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": output}, &pending)
+	if pending.Status.Terminal() || pending.ReportID != "" || !bytes.Equal(pending.CompletionDraft, output) {
+		t.Fatalf("repeated model completion approved operator output: %+v", pending)
+	}
+	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": json.RawMessage("null")}, &pending)
+	if pending.Status.Terminal() || pending.ReportID != "" || string(pending.CompletionDraft) != "null" || !strings.Contains(pending.Message, "Awaiting operator approval") {
+		t.Fatalf("explicit null was treated as missing completion draft: %+v", pending)
+	}
+	if saved := a.Get(operation.ID); string(saved.CompletionDraft) != "null" {
+		t.Fatalf("null completion draft was lost on readback: %+v", saved)
+	}
+	a.Call("cancel_operation", fixtures.Object{"operation_id": operation.ID}, nil)
+
+	modelDefinition := definition.Clone()
+	modelDefinition.Name += "-model-" + id.New()
+	modelDefinition.Completion = &missions.CompletionPolicy{DecisionBy: missions.Model}
+	a.Call("create_mission", fixtures.MissionDefinition(modelDefinition), nil)
+	var modelOperation operations.Operation
+	a.Call("start_operation", fixtures.Object{"mission_name": modelDefinition.Name, "input": fixtures.Object{"text": "Model completes final output"}}, &modelOperation)
+	defer a.CancelActiveOperation(modelOperation.ID)
+	var completed operations.Operation
+	a.Call("complete_operation", fixtures.Object{"operation_id": modelOperation.ID, "output": output}, &completed)
+	if completed.Status != operations.Completed || completed.ReportID == "" || completed.CompletedBy != operations.CompletionModel || len(completed.CompletionDraft) != 0 {
+		t.Fatalf("model policy did not complete immediately: %+v", completed)
+	}
+	var report reports.Report
+	a.Call("get_report", fixtures.Object{"operation_id": modelOperation.ID}, &report)
+	if !bytes.Equal(report.Output, output) {
+		t.Fatalf("final report changed raw output: %s", report.Output)
 	}
 }

@@ -17,39 +17,28 @@ type CompleteOperationRequest struct {
 	Output json.RawMessage `json:"output"`
 }
 
-type ProposeCompletionRequest struct {
-	Output json.RawMessage `json:"output"`
-}
-
-type CompletionProposalResponse struct {
-	ID         string          `json:"id"`
-	Output     json.RawMessage `json:"output"`
-	ProposedBy string          `json:"proposed_by"`
-	ProposedAt time.Time       `json:"proposed_at"`
-}
-
 type FailOperationRequest struct {
 	Reason string `json:"reason"`
 }
 
 type OperationResponse struct {
-	ID                 string                      `json:"id"`
-	Mission            MissionResponse             `json:"mission"`
-	Input              json.RawMessage             `json:"input"`
-	Status             string                      `json:"status"`
-	Progress           OperationProgressResponse   `json:"progress"`
-	Preflight          *PreflightResponse          `json:"preflight,omitempty"`
-	Affinity           *AffinityResponse           `json:"affinity,omitempty"`
-	Tasks              []TaskResponse              `json:"tasks"`
-	Questions          []QuestionResponse          `json:"questions"`
-	Output             json.RawMessage             `json:"output,omitempty"`
-	ReportID           string                      `json:"report_id,omitempty"`
-	CompletedBy        string                      `json:"completed_by,omitempty"`
-	CompletionProposal *CompletionProposalResponse `json:"completion_proposal,omitempty"`
-	Error              string                      `json:"error,omitempty"`
-	Events             []EventResponse             `json:"events"`
-	CreatedAt          time.Time                   `json:"created_at"`
-	UpdatedAt          time.Time                   `json:"updated_at"`
+	ID              string                    `json:"id"`
+	Mission         MissionResponse           `json:"mission"`
+	Input           json.RawMessage           `json:"input"`
+	Status          string                    `json:"status"`
+	Progress        OperationProgressResponse `json:"progress"`
+	Preflight       *PreflightResponse        `json:"preflight,omitempty"`
+	Affinity        *AffinityResponse         `json:"affinity,omitempty"`
+	Tasks           []TaskResponse            `json:"tasks"`
+	Questions       []QuestionResponse        `json:"questions"`
+	Output          json.RawMessage           `json:"output,omitempty"`
+	ReportID        string                    `json:"report_id,omitempty"`
+	CompletedBy     string                    `json:"completed_by,omitempty"`
+	CompletionDraft json.RawMessage           `json:"completion_draft,omitempty"`
+	Error           string                    `json:"error,omitempty"`
+	Events          []EventResponse           `json:"events"`
+	CreatedAt       time.Time                 `json:"created_at"`
+	UpdatedAt       time.Time                 `json:"updated_at"`
 }
 
 type OperationProgressResponse struct {

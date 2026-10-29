@@ -63,20 +63,21 @@
   `decision_by: model|operator` and rejects unknown fields. OpenAPI must describe
   this separately from action-scoped rule parameters. Preserve the configured
   policy in catalog and operation responses. The controller enforces the saved
-  operation policy: `operator` rejects model-origin completion without a timed
-  fallback; omitted/model policies permit either origin.
+  operation policy: `operator` retains model output for review and permits final
+  completion only with operator origin, without a timed fallback; omitted/model
+  policies permit either origin to complete immediately.
 - Completion requests remain output-only. Stamp `CompletedBy=CompletionOperator`
   in the trusted HTTP mapping; reject client-supplied `completed_by`. Expose the
   saved origin as optional, read-only `Operation.completed_by` and preserve it on
   queries and command responses. This records the submission channel, not human
   identity. Map `ErrCompletionOperatorRequired` to `409 completion_operator_required`
   after uncertain-write and transport errors so ambiguity cannot look like rejection.
-- `POST /operations/{operation_id}/completion-proposals` accepts output only and
-  stamps operator origin. Map the saved `completion_proposal` through independent
-  response DTOs with cloned raw output; expose identity, origin and timestamp as
-  read-only. The controller checks completion readiness and the output schema,
-  but saving a proposal never grants completion authority, resolves continuations
-  or creates a report. Preserve uncertain outcomes and require saved-state readback.
+- Operation responses expose read-only `completion_draft` as cloned raw JSON. A
+  model completion request under operator policy saves it without a report; an
+  authenticated HTTP completion explicitly accepts the supplied output and clears
+  completion draft. Admin may review or edit the pending value before submitting
+  through the same completion route. There is no separate proposal endpoint,
+  identity or metadata. Preserve uncertain outcomes and require saved-state readback.
 - Operation/task/report/event/log queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send

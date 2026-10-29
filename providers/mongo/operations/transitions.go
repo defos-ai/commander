@@ -65,9 +65,9 @@ func (s *OperationMongoStore) AnswerQuestion(ctx context.Context, operationID, q
 	})
 }
 
-func (s *OperationMongoStore) ProposeCompletion(ctx context.Context, operationID string, proposal operations.CompletionProposal) (operations.Operation, error) {
+func (s *OperationMongoStore) SaveCompletionDraft(ctx context.Context, operationID string, output json.RawMessage) (operations.Operation, error) {
 	return s.update(ctx, operationID, func(operation *operations.Operation) error {
-		return operation.ProposeCompletion(proposal)
+		return operation.SaveCompletionDraft(output)
 	})
 }
 

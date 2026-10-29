@@ -36,11 +36,10 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
 }) {
   const { t } = useTranslation();
   const identity = useId();
-  const proposal = operation.completion_proposal;
-  const [output, setOutput] = useState(proposal?.outputText ?? '');
-  const [loadedProposal, setLoadedProposal] = useState(() => proposal?.outputText === undefined ? undefined
-    : { id: proposal.id, text: proposal.outputText });
-  const [reviewed, setReviewed] = useState<{ updatedAt: string; proposalID?: string; proposalOutput?: string }>();
+  const completionDraft = operation.completionDraftText;
+  const [output, setOutput] = useState(completionDraft ?? '');
+  const [loadedCompletionDraft, setLoadedCompletionDraft] = useState(completionDraft);
+  const [reviewed, setReviewed] = useState<{ updatedAt: string; completionDraft?: string }>();
   const [validation, setValidation] = useState(false);
   const [error, setError] = useState<CommandError>();
   const [submitting, setSubmitting] = useState(false);
@@ -49,20 +48,19 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
   const finished = !isActiveOperation(operation.status);
   const blocker = completionBlock(operation);
   const locked = Boolean(error && error.kind !== 'invalid_input');
-  const approved = reviewed?.updatedAt === operation.updated_at && reviewed.proposalID === proposal?.id &&
-    reviewed.proposalOutput === proposal?.outputText;
-  const proposalChanged = proposal?.outputText !== undefined &&
-    (proposal.id !== loadedProposal?.id || proposal.outputText !== loadedProposal?.text);
+  const approved = reviewed?.updatedAt === operation.updated_at && reviewed.completionDraft === completionDraft;
+  const completionDraftChanged = completionDraft !== loadedCompletionDraft;
   const disabled = !available || finished || locked || submitting || inspecting;
 
+  useEffect(() => { setReviewed(undefined); }, [completionDraft]);
   useEffect(() => () => { pending.current?.abort(); pending.current = null; }, [connection.id, connection.url, credentials, operation.id]);
 
   function close() { pending.current?.abort(); pending.current = null; onClose(); }
 
-  function loadProposal() {
-    if (disabled || proposal?.outputText === undefined) return;
-    setOutput(proposal.outputText);
-    setLoadedProposal({ id: proposal.id, text: proposal.outputText });
+  function loadCompletionDraft() {
+    if (disabled || completionDraft === undefined) return;
+    setOutput(completionDraft);
+    setLoadedCompletionDraft(completionDraft);
     setReviewed(undefined);
     setValidation(false);
     setError(undefined);
@@ -114,15 +112,13 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
           </li>)}</ul>
         </details> : <p className="form-hint">{t($ => $.operations.noTasks)}</p>}
       </section>
-      {proposal && <section className="operation-completion-review">
-        <h3>{t($ => $.operationCommands.savedProposal)}</h3>
-        <p>{t($ => $.operationCommands.proposedBy)}: {t($ => $.operations.completionOrigins[proposal.proposed_by])}
-          {' · '}<time dateTime={proposal.proposed_at}>{new Date(proposal.proposed_at).toLocaleString()}</time></p>
-        <p className="form-hint">{t($ => $.operationCommands.proposalReviewHint)}</p>
-        {proposalChanged && <p className="notice" role="status">{t($ => $.operationCommands.proposalChanged)}</p>}
-        {proposal.outputText === undefined ? <p className="form-hint">{t($ => $.operationCommands.proposalNeedsRefresh)}</p>
-          : (proposalChanged || output !== proposal.outputText) && <Button variant="secondary" disabled={disabled} onClick={loadProposal}>
-            {t($ => $.operationCommands.loadProposal)}
+      {operation.completion_draft !== undefined && <section className="operation-completion-review">
+        <h3>{t($ => $.operationCommands.completionDraft)}</h3>
+        <p className="form-hint">{t($ => $.operationCommands.completionDraftReviewHint)}</p>
+        {completionDraftChanged && <p className="notice" role="status">{t($ => $.operationCommands.completionDraftChanged)}</p>}
+        {completionDraft === undefined ? <p className="form-hint">{t($ => $.operationCommands.completionDraftNeedsRefresh)}</p>
+          : (completionDraftChanged || output !== completionDraft) && <Button variant="secondary" disabled={disabled} onClick={loadCompletionDraft}>
+            {t($ => $.operationCommands.loadCompletionDraft)}
           </Button>}
       </section>}
       <details className="operation-command-schema"><summary>{t($ => $.operationCommands.outputSchema)}</summary>
@@ -139,8 +135,7 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
         : !available ? <p className="notice" role="status">{t($ => $.operationCommands.refreshRequired)}</p>
           : blocker && <p className="notice" role="status">{t($ => $.operationCommands[blocker])}</p>}
       <label className="operation-completion-confirm"><input type="checkbox" checked={approved} disabled={disabled || Boolean(blocker)}
-        onChange={event => setReviewed(event.target.checked ? { updatedAt: operation.updated_at, proposalID: proposal?.id,
-          proposalOutput: proposal?.outputText } : undefined)} />{t($ => $.operationCommands.completeConfirm)}</label>
+        onChange={event => setReviewed(event.target.checked ? { updatedAt: operation.updated_at, completionDraft } : undefined)} />{t($ => $.operationCommands.completeConfirm)}</label>
       {error && <OperationCommandError error={error} operationID={operation.id} onInspect={() => onInspect(operation.id)} />}
       {readbackFailed && <p className="notice" role="alert">{t($ => $.operationCommands.completionReadbackFailed)}</p>}
       {submitting && <p className="form-hint" role="status">{t($ => $.operationCommands.submittingNote)}</p>}

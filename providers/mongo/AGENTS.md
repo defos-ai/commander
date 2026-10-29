@@ -29,6 +29,10 @@ artifact bytes and reports belong to the separate storage provider.
 - In operation mutations, reconstruct state from the latest transaction snapshot
   on every attempt, including generated child IDs and event sequences. Check the
   stored revision when replacing metadata; update related collections together.
+- Store `completion_draft` in the operation JSON body, preserving raw JSON number
+  tokens and escapes. `SaveCompletionDraft` validates the latest transactional state;
+  identical submissions skip writes, while accepted completion clears the field
+  atomically with output, report reference and completion origin.
 - Execution checkpoints are immutable named JSON values, stored as BSON binary
   to preserve number precision. Read and update their map inside one transaction;
   concurrent checkpoint writes or completion must retry against current state.

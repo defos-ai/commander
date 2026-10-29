@@ -58,10 +58,6 @@ type CompleteOperationRequest struct {
 	OperationID string          `json:"operation_id"`
 	Output      json.RawMessage `json:"output"`
 }
-type ProposeCompletionRequest struct {
-	OperationID string          `json:"operation_id"`
-	Output      json.RawMessage `json:"output"`
-}
 type FailOperationRequest commands.FailOperationCommand
 type OperationEventsRequest struct {
 	OperationPageRequest
@@ -249,21 +245,16 @@ func addOperationTools(server *mcp.Server, config Config) {
 			})
 			return commandOperation(operation, questionAnswerError(ctx, query, request, err))
 		})
-	addTool(server, "propose_completion", "Save proposed final output for operator review after active tasks and questions are resolved. Output must match the saved mission's output_schema; describe limitations and unknown outcomes. Returns the full operation with completion_proposal. This leaves status, continuations, final output and report unchanged. MCP assigns model origin; callers cannot choose provenance. For operator-controlled missions, save the proposal, then direct the operator to Complete operation in Admin UI or the authenticated HTTP API. Saving is not approval, does not pause work and has no timed model fallback. After an uncertain response, read get_operation before submitting again.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
-		func(ctx context.Context, request ProposeCompletionRequest) (operationResult, error) {
-			return commandOperation(execution.ProposeCompletion(ctx, commands.ProposeCompletionCommand{
-				OperationID: request.OperationID, Output: request.Output, ProposedBy: operations.CompletionModel,
-			}))
-		})
-	addTool(server, "complete_operation", "Save a final report and complete an operation, after active tasks and questions are resolved. MCP completion has model origin. If the saved mission sets completion.decision_by to operator, save the final output with propose_completion, then ask the operator to review it and choose Complete operation in Admin UI or use the authenticated HTTP API; this tool cannot approve it, and question fallback never grants completion approval. Output must match output_schema. Returns report_id; read the saved report with get_report. Describe remaining limitations in the report.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
+	addTool(server, "complete_operation", "Submit final output after active tasks and questions are resolved. Output must match output_schema; describe remaining limitations and unknown outcomes. With omitted/model completion policy, saves a final report and completes immediately, returning report_id for get_report. With operator policy, saves completion_draft and returns awaiting operator approval without creating a report. Direct the operator to review or edit it and choose Complete operation in Admin UI or use the authenticated HTTP API; never invent an Admin URL. MCP has model origin and cannot approve operator completion; question fallback never grants that approval. While awaiting review, read get_operation instead of repeatedly submitting the same output. After an uncertain response, inspect saved state before another mutation.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
 		func(ctx context.Context, request CompleteOperationRequest) (operationResult, error) {
 			operation, err := execution.Complete(ctx, commands.CompleteOperationCommand{
 				OperationID: request.OperationID, Output: request.Output, CompletedBy: operations.CompletionModel,
 			})
-			if errors.Is(err, operations.ErrCompletionOperatorRequired) && !errors.Is(err, operations.ErrWriteUncertain) {
-				err = fmt.Errorf("completion_operator_required: %w; save the final output with propose_completion, then ask the operator to review it and choose Complete operation in Admin UI or use the authenticated HTTP API. MCP cannot approve completion; question fallback does not change this policy", err)
+			result, err := commandOperation(operation, err)
+			if err == nil && !operation.Status.Terminal() && len(operation.CompletionDraft) > 0 {
+				result.Message = "Awaiting operator approval. Review completion_draft and choose Complete operation in Admin UI or use the authenticated HTTP API."
 			}
-			return commandOperation(operation, err)
+			return result, err
 		})
 	addTool(server, "fail_operation", "End unrecoverable work, retaining results and the reason. Consider recovery or an operator decision first.", objectSchema(map[string]any{"operation_id": stringProperty, "reason": stringProperty}, "operation_id", "reason"),
 		func(ctx context.Context, request FailOperationRequest) (operationResult, error) {

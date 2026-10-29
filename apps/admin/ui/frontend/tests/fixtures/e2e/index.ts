@@ -24,6 +24,26 @@ export class CommanderAPI {
     return response.json();
   }
 
+  async completeAsModel(operationID: string, output: string): Promise<Operation> {
+    JSON.parse(output);
+    const response = await this.request.post(process.env.COMMANDER_TEST_MCP_URL ?? 'http://127.0.0.1:14273/mcp', {
+      headers: {
+        Authorization: `Bearer ${process.env.COMMANDER_TEST_MCP_TOKEN ?? 'mcp-fixture-token'}`,
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': '2025-06-18',
+      },
+      data: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"complete_operation","arguments":{"operation_id":${JSON.stringify(operationID)},"output":${output}}}}`,
+    });
+    expect(response.status(), await response.text()).toBe(200);
+    const reply = await response.json();
+    expect(reply.error).toBeUndefined();
+    expect(reply.result.isError).not.toBe(true);
+    expect(reply.result.content).toHaveLength(1);
+    expect(reply.result.content[0].type).toBe('text');
+    return JSON.parse(reply.result.content[0].text);
+  }
+
   async reset() {
     const response = await this.request.post('/api/v1/testing/cleanup');
     if (response.status() === 204) return;
@@ -134,10 +154,10 @@ export async function connect(page: Page, connection = { name: 'Compose test', u
   await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
 }
 
-export async function startOperation(page: Page, text = 'Commander integration example'): Promise<Operation> {
+export async function startOperation(page: Page, text = 'Commander integration example', missionName = 'analyze-text'): Promise<Operation> {
   await page.getByRole('button', { name: 'Start operation', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Start operation', exact: true });
-  await dialog.getByLabel('Mission', { exact: true }).selectOption('analyze-text');
+  await dialog.getByLabel('Mission', { exact: true }).selectOption(missionName);
   await dialog.getByLabel('Mission input (JSON)').fill(JSON.stringify({ text }));
   const response = page.waitForResponse(reply => new URL(reply.url()).searchParams.get('path') === '/api/v1/operations' && reply.request().method() === 'POST');
   await dialog.getByRole('button', { name: 'Start operation', exact: true }).click();

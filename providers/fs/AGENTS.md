@@ -16,6 +16,10 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - An operation's manifest and sibling `.json.records` directory are one saved
   snapshot. Use [`Records`](internal/jsonfile/records.go) to publish immutable,
   digest-checked record bodies through one manifest; never edit committed blobs.
+- Persist `completion_draft` with operation metadata. `SaveCompletionDraft` rechecks
+  readiness, schema and operator completion policy inside the snapshot mutation;
+  it creates no report or final output. Retain completion draft on failure/cancellation,
+  clear it atomically with accepted completion, and keep identical submissions inert.
 - Keep file and directory sync ordering intact. Failures before manifest publication
   leave the old snapshot authoritative; a published manifest whose directory sync
   failed returns `ErrWriteUncertain`. An identical retry still confirms durability.

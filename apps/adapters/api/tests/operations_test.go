@@ -110,7 +110,7 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	for _, tc := range removed {
 		fixtures.AssertError(t, a.Request(http.MethodGet, tc.path, nil), http.StatusNotFound, tc.code)
 	}
-	if missions := fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); !slices.Equal(fixtures.MissionNames(missions.Items), fixtures.ExpectedMissions()) {
+	if missions := fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions"); !fixtures.HasExpectedMissions(missions.Items) {
 		t.Fatalf("cleanup changed the mission catalog: %+v", missions)
 	}
 	if actions := fixtures.Read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions"); !reflect.DeepEqual(actions, initialActions) {

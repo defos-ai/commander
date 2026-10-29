@@ -66,19 +66,6 @@ func registerCommands(mux *http.ServeMux, commands controllercommands.Operations
 		operation, err := commands.Complete(r.Context(), command)
 		writeCommandResult(w, http.StatusOK, "", mappings.ToOperationResponse(operation), err)
 	}))
-	mux.HandleFunc("POST /api/v1/operations/{operation_id}/completion-proposals", requestHandler(func(w http.ResponseWriter, r *http.Request) {
-		var request models.ProposeCompletionRequest
-		if !endpoints.ReadJSON(w, r, &request, false) {
-			return
-		}
-		command := mappings.ToProposeCompletionCommand(r.PathValue("operation_id"), request)
-		if err := command.Validate(); err != nil {
-			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
-			return
-		}
-		operation, err := commands.ProposeCompletion(r.Context(), command)
-		writeCommandResult(w, http.StatusOK, "", mappings.ToOperationResponse(operation), err)
-	}))
 	mux.HandleFunc("POST /api/v1/operations/{operation_id}/fail", requestHandler(func(w http.ResponseWriter, r *http.Request) {
 		var request models.FailOperationRequest
 		if !endpoints.ReadJSON(w, r, &request, false) {

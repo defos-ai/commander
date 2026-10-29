@@ -17,7 +17,7 @@ const (
 	QuestionAsked             EventType = "question.asked"
 	QuestionAnsweredEvent     EventType = "question.answered"
 	OperationCompleted        EventType = "operation.completed"
-	CompletionProposed        EventType = "operation.completion_proposed"
+	CompletionRequested       EventType = "operation.completion_requested"
 	OperationFailed           EventType = "operation.failed"
 	OperationCancelled        EventType = "operation.cancelled"
 )
