@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/defos-ai/commander/apps/playground/internal/chat"
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
@@ -41,6 +42,9 @@ func (m *Model) restoreHistory() []llm.Message {
 		}
 		var entries []entry
 		for _, item := range saved.Entries {
+			if m.startupHistoryEntry(item) {
+				continue
+			}
 			switch item.Kind {
 			case "user", "assistant", "success", "error", "notice", "admin":
 			case "tool":
@@ -56,8 +60,8 @@ func (m *Model) restoreHistory() []llm.Message {
 		if saved.Provider != m.provider.ID || saved.Model != m.settings.Model || saved.BaseURL != m.settings.BaseURL {
 			m.history.messages = chat.PortableHistory(m.history.messages)
 		}
-		if len(saved.Entries) != 0 {
-			m.add("notice", "Saved conversation restored. Use /watch <id> to resume operation review.")
+		if len(entries) != 0 || len(m.history.messages) != 0 {
+			m.addPrivate("notice", "Saved conversation restored. Use /watch <id> to resume operation review.")
 		}
 		m.refresh()
 	}
@@ -78,6 +82,42 @@ func (m *Model) restoreHistory() []llm.Message {
 		}()
 	}
 	return m.history.messages
+}
+
+func (m *Model) startupHistoryEntry(item HistoryEntry) bool {
+	if item.CallID != "" {
+		return false
+	}
+	if item.Kind == "success" {
+		if strings.HasPrefix(item.Text, "Commander connected · ") || strings.HasPrefix(item.Text, "Commander ready · all-in-one · ") {
+			return true
+		}
+		for _, provider := range llm.Presets() {
+			if strings.HasPrefix(item.Text, provider.Name+" · ") {
+				return true
+			}
+		}
+	}
+	if item.Kind != "notice" {
+		return false
+	}
+	if strings.HasPrefix(strings.TrimSpace(item.Text), "Try: Install the web agent, then review defos.ai") ||
+		item.Text == "Saved conversation restored. Use /watch <id> to resume operation review." {
+		return true
+	}
+	for _, notice := range m.config.Notices {
+		if item.Text == clean(notice) {
+			return true
+		}
+	}
+	for _, provider := range llm.Presets() {
+		for _, name := range provider.KeyEnv {
+			if item.Text == name+" saved for agents." || item.Text == name+" is already saved; existing value kept." {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Model) queueHistory() {

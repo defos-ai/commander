@@ -333,7 +333,9 @@
 - Show readable errors by default and redacted provider details with `--debug`.
   Keep credentials and secret forms outside model context and saved transcripts.
   Persist full chat/model history per logical backend (`local` or exact remote MCP
-  URL), excluding private `/credentials` output. Restore context without replaying
+  URL), excluding private `/credentials` output and transient startup banners,
+  setup hints and restoration announcements. Restore saved conversations alongside
+  one fresh startup banner. Restore context without replaying
   tool calls, watchers or model decisions; explicit `/watch` resumes review. Complete
   interrupted tool envelopes with unknown-outcome context, never a fabricated result.
   Normalize historical tool exchanges when switching models/providers. Serialize
@@ -355,6 +357,8 @@
   alias and `COMMANDER_LLM_API_KEY` for Other. Preserve existing records, including
   expired ones; create only after confirmed absence. Keep sharing asynchronous
   and bounded, cancel and await it on exit, and never retry a failed write.
+  Successful sharing and preservation of an existing value are silent. Keep
+  encryption/sharing implementation text out of the provider-key setup form.
   Missing API login and failures stay local notices without blocking chat. Do not
   infer an API destination from MCP or put values into model/MCP messages. Persistent
   deployments encrypt this value through their API. Local caching does not change

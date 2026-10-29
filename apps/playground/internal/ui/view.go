@@ -133,12 +133,6 @@ func (m *Model) View() string {
 			if m.config.SaveProviderKey != nil {
 				usage = "Remembered encrypted on this machine."
 			}
-			if name := m.providerSecretName(); name != "" && m.config.API.URL != "" && m.config.API.Credentials.Password != "" {
-				usage = "Saved encrypted as " + name + " for agents if absent."
-				if m.config.SaveProviderKey != nil {
-					usage = "Remembered encrypted on this machine. " + usage
-				}
-			}
 			lines = append(lines, m.provider.Name+" API key · "+usage)
 			if name := m.providerSecretName(); name != "" {
 				lines = append(lines, "You can also set "+name+" before launch.")

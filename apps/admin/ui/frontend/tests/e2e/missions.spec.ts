@@ -17,7 +17,8 @@ test('create and edit a reusable mission through Admin without installing action
     input_schema: JSON.parse(missionInputSchema),
     output_schema: {},
   };
-  const expectedMission = { ...mission, objectives: [mission.objectives[0], 'Keep evidence for a later review.'], optional_actions: ['analyze-text'] };
+  const expectedMission = { ...mission, objectives: [mission.objectives[0], 'Keep evidence for a later review.'], optional_actions: ['analyze-text'],
+    completion: { decision_by: 'operator' } };
   const operationIDs = async () => (await api.get<{ items: { id: string }[] }>('/operations')).items.map(item => item.id).sort();
   const actionNames = async () => (await api.get<{ items: { name: string }[] }>('/actions')).items.map(item => item.name).sort();
   const before = await operationIDs();
@@ -46,6 +47,8 @@ test('create and edit a reusable mission through Admin without installing action
   await create.getByRole('textbox', { name: 'Objective 1', exact: true }).fill(mission.objectives[0]);
   await create.getByRole('button', { name: 'Add objective', exact: true }).click();
   await create.getByRole('textbox', { name: 'Objective 2', exact: true }).fill(expectedMission.objectives[1]);
+  await expect(create.getByRole('combobox', { name: 'Completion decision', exact: true })).toHaveValue('model');
+  await create.getByRole('combobox', { name: 'Completion decision', exact: true }).selectOption('operator');
   const define = create.getByRole('button', { name: 'Define action', exact: true });
   await define.click();
   const definitionDialog = page.getByRole('dialog', { name: 'Define action', exact: true });
@@ -94,6 +97,8 @@ test('create and edit a reusable mission through Admin without installing action
   const objectives = page.getByRole('heading', { name: 'Objectives', exact: true }).locator('..').getByRole('list');
   await expect(objectives).toHaveClass('catalog-tags');
   await expect(objectives.getByRole('listitem')).toHaveText(expectedMission.objectives);
+  const completion = page.getByRole('heading', { name: 'Completion decision', exact: true }).locator('..');
+  await expect(completion.getByText('Operator', { exact: true })).toBeVisible();
   const missionURL = page.url();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
@@ -134,6 +139,8 @@ test('create and edit a reusable mission through Admin without installing action
   await expect(page).toHaveURL(`${missionURL}/edit`);
   await expect(create.getByRole('textbox', { name: 'Mission name', exact: true })).toHaveValue(mission.name);
   await expect(create.getByRole('textbox', { name: 'Mission name', exact: true })).toHaveAttribute('readonly');
+  await expect(create.getByRole('combobox', { name: 'Completion decision', exact: true })).toHaveValue('operator');
+  await create.getByRole('combobox', { name: 'Completion decision', exact: true }).selectOption('model');
   await create.getByRole('textbox', { name: 'Objective 2', exact: true }).fill('Report release findings.');
   await create.getByRole('combobox', { name: 'Role for analyze-text', exact: true }).selectOption('required');
   await create.locator('summary').filter({ hasText: /^Advanced settings$/ }).click();
@@ -143,6 +150,7 @@ test('create and edit a reusable mission through Admin without installing action
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
   const updated = await api.get<Mission>(`/missions/${mission.name}`);
   expect(updated).toMatchObject({ ...mission, objectives: [expectedMission.objectives[0], 'Report release findings.'],
+    completion: { decision_by: 'model' },
     required_actions: ['future-mission-action', 'analyze-text'], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
   expect(updated.optional_actions ?? []).toEqual([]);
   await page.getByRole('group', { name: 'Mission view', exact: true }).getByRole('button', { name: 'JSON', exact: true }).click();

@@ -10,6 +10,7 @@ export const initialMissionDefinition = JSON.stringify({
 export type MissionDraft = {
   name: string;
   objectives: string[];
+  completion_decision: 'model' | 'operator';
   required_actions: string[];
   optional_actions: string[];
   starting_actions: string[];
@@ -100,6 +101,11 @@ export function readMissionDraft(source: string): MissionDraft {
   if (value.action_definitions != null && !Array.isArray(value.action_definitions)) {
     throw new TypeError('Mission action definitions must be a list');
   }
+  const completion = value.completion;
+  if (completion != null && (!object(completion) || Object.keys(completion).some(key => key !== 'decision_by') ||
+    (completion.decision_by !== 'model' && completion.decision_by !== 'operator'))) {
+    throw new TypeError('Mission completion policy must specify model or operator');
+  }
   function raw(field: string, fallback: string): string {
     const span = fields.get(field);
     return span ? source.slice(span.start, span.end) : fallback;
@@ -107,6 +113,7 @@ export function readMissionDraft(source: string): MissionDraft {
   return {
     name: value.name,
     objectives: value.objectives,
+    completion_decision: completion?.decision_by === 'operator' ? 'operator' : 'model',
     required_actions: value.required_actions ?? [],
     optional_actions: value.optional_actions ?? [],
     starting_actions: value.starting_actions ?? [],
@@ -136,6 +143,9 @@ export function writeMissionDraft(source: string, draft: MissionDraft): string {
   }
   for (const field of ['input_schema', 'output_schema', 'rules', 'action_definitions'] as const) {
     if (previous[field] !== draft[field]) result = updateMissionDefinition(result, field, draft[field]);
+  }
+  if (previous.completion_decision !== draft.completion_decision) {
+    result = updateMissionDefinition(result, 'completion', JSON.stringify({ decision_by: draft.completion_decision }));
   }
   readMissionDraft(result);
   return result;

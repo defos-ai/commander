@@ -155,6 +155,12 @@ export default {
     timeout: 'The mission request timed out. Try again.',
   },
   objectives: 'Objectives',
+  completionDecision: 'Completion decision',
+  completionDecisions: { model: 'Model', operator: 'Operator' },
+  completionHints: {
+    model: 'The model may complete this mission. An operator can also complete it.',
+    operator: 'An operator must approve completion in Admin UI or through the API. Model fallback does not apply.',
+  },
   startingActions: 'Starting actions',
   requiredActions: 'Required actions',
   optionalActions: 'Optional actions',

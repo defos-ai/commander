@@ -56,6 +56,17 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
         {t($ => $.missions.builder.addObjective)}
       </Button>
     </section>
+    <div className="form-field">
+      <label htmlFor={`${identity}-completion`}>{t($ => $.missions.completionDecision)}</label>
+      <select id={`${identity}-completion`} value={draft.completion_decision} disabled={disabled}
+        aria-describedby={`${identity}-completion-hint`} onChange={event => onChange({
+          ...draft, completion_decision: event.target.value as MissionDraft['completion_decision'],
+        })}>
+        <option value="model">{t($ => $.missions.completionDecisions.model)}</option>
+        <option value="operator">{t($ => $.missions.completionDecisions.operator)}</option>
+      </select>
+      <p className="form-hint" id={`${identity}-completion-hint`}>{t($ => $.missions.completionHints[draft.completion_decision])}</p>
+    </div>
     <MissionActionPicker connection={connection} credentials={credentials} disabled={disabled} onSignIn={onSignIn}
       definitions={definitions} invalidDefinitions={invalidDefinitions}
       onSaveDefinition={(definition, originalName) => {

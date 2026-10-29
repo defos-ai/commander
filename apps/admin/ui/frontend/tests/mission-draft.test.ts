@@ -5,6 +5,7 @@ describe('mission form draft', () => {
   it('opens a blank draft and nullable lists without adding properties to its JSON', () => {
     expect(readMissionDraft(initialMissionDefinition)).toMatchObject({
       name: '', objectives: [''], required_actions: [], optional_actions: [], starting_actions: [],
+      completion_decision: 'model',
       input_schema: '{}', output_schema: '{}', rules: '{}', action_definitions: '[]',
     });
     const source = '{"name":"draft","objectives":["First", ""], "required_actions":null,"starting_actions":null,"rules":null}';
@@ -13,6 +14,32 @@ describe('mission form draft', () => {
     });
     expect(updateMissionDefinition(source, 'name', '"edited"')).toBe(source.replace('"draft"', '"edited"'));
     expect(writeMissionDraft(source, readMissionDraft(source))).toBe(source);
+  });
+
+  it.each(['', ',"completion":null', ',"completion": { "decision_by" : "model" }', String.raw`,"completion": { "decision_by" : "\u006fperator" }`])(
+    'preserves existing completion configuration during unrelated edits: %s', completion => {
+      const source = `{"name":"draft","objectives":["Review"]${completion},"input_schema":{"minimum":9007199254740993}}`;
+      const draft = readMissionDraft(source);
+
+      const changed = writeMissionDraft(source, { ...draft, objectives: ['Review again'] });
+
+      expect(draft.completion_decision).toBe(completion.includes('perator') ? 'operator' : 'model');
+      expect(changed).toBe(source.replace('["Review"]', '["Review again"]'));
+    },
+  );
+
+  it('patches only completion when the decision changes and preserves unrelated raw tokens', () => {
+    const source = String.raw`{"name":"draft","objectives":["Review"],"completion":null,"input_schema":{"const":9007199254740993,"description":"\u0061\/b"}}`;
+    const draft = readMissionDraft(source);
+
+    const operator = writeMissionDraft(source, { ...draft, completion_decision: 'operator' });
+    const model = writeMissionDraft(operator, { ...readMissionDraft(operator), completion_decision: 'model' });
+
+    expect(operator).toBe(source.replace('"completion":null', '"completion":{"decision_by":"operator"}'));
+    expect(model).toBe(operator.replace('"decision_by":"operator"', '"decision_by":"model"'));
+    expect(JSON.parse(writeMissionDraft(initialMissionDefinition, {
+      ...readMissionDraft(initialMissionDefinition), completion_decision: 'operator',
+    })).completion).toEqual({ decision_by: 'operator' });
   });
 
   it('retains exact advanced fields, unknown properties, string escapes and numeric tokens through form edits', () => {
@@ -72,6 +99,12 @@ describe('mission form draft', () => {
     '{"name":"draft","objectives":["Build"],"rules":false}',
     '{"name":"draft","objectives":["Build"],"steps":[]}',
     '{"name":"draft","objectives":["Build"],"action_definitions":{}}',
+    '{"name":"draft","objectives":["Build"],"completion":{}}',
+    '{"name":"draft","objectives":["Build"],"completion":[]}',
+    '{"name":"draft","objectives":["Build"],"completion":"operator"}',
+    '{"name":"draft","objectives":["Build"],"completion":{"decision_by":"human"}}',
+    '{"name":"draft","objectives":["Build"],"completion":{"decision_by":null}}',
+    '{"name":"draft","objectives":["Build"],"completion":{"decision_by":"operator","timeout_seconds":120}}',
     String.raw`{"name":"first","n\u0061me":"last","objectives":["Build"]}`,
   ])('rejects JSON that cannot be represented by the form without losing fields: %s', source => {
     expect(() => readMissionDraft(source)).toThrow();

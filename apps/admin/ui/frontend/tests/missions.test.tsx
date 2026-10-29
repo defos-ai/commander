@@ -28,6 +28,8 @@ describe('missions browser', () => {
     const objectives = screen.getByRole('heading', { name: 'Objectives' }).closest('section')!;
     expect(within(objectives).getByRole('list')).toHaveClass('catalog-tags');
     expect(within(objectives).getAllByRole('listitem').map(item => item.textContent)).toEqual(mission.objectives);
+    const completion = screen.getByRole('heading', { name: 'Completion decision' }).closest('section')!;
+    expect(within(completion).getByText('Model', { exact: true })).toBeVisible();
     expect(screen.getByText('Website to review')).toBeVisible();
     const optionalActions = screen.getByRole('heading', { name: 'Optional actions' }).closest('section')!;
     expect(within(optionalActions).getByText('capture-page')).toBeVisible();
@@ -266,6 +268,13 @@ describe('missions browser', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Objective 2' }), { target: { value: 'Capture release evidence.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add objective' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove objective 3' }));
+    const completion = screen.getByRole('combobox', { name: 'Completion decision' });
+    expect(completion).toHaveValue('model');
+    fireEvent.change(completion, { target: { value: 'operator' } });
+    const definition = creationJSONEditor();
+    expect(JSON.parse((definition as HTMLTextAreaElement).value).completion).toEqual({ decision_by: 'operator' });
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    expect(screen.getByRole('combobox', { name: 'Completion decision' })).toHaveValue('operator');
 
     const discover = await screen.findByRole('combobox', { name: 'Role for discover-pages' });
     const starting = screen.getByRole('checkbox', { name: 'Start with discover-pages' });
@@ -291,6 +300,7 @@ describe('missions browser', () => {
     expect(posts).toHaveLength(1);
     expect(JSON.parse(posts[0][1]!.body as string)).toMatchObject({
       name: 'guided-review', objectives: ['Find public pages.', 'Capture release evidence.'],
+      completion: { decision_by: 'operator' },
       required_actions: ['discover-pages'], optional_actions: ['capture-page'], starting_actions: ['discover-pages'],
     });
   });
@@ -329,6 +339,12 @@ describe('missions browser', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('This definition cannot be shown in the form. Check its field types or continue editing JSON.');
     expect(editor).toHaveValue('{invalid');
     expect(screen.getByRole('button', { name: 'JSON' })).toHaveAttribute('aria-pressed', 'true');
+    const unsupportedPolicy = JSON.stringify({ ...mission, completion: { decision_by: 'automatic' } });
+    fireEvent.change(editor, { target: { value: unsupportedPolicy } });
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('This definition cannot be shown in the form.');
+    expect(editor).toHaveValue(unsupportedPolicy);
+    expect(screen.queryByRole('combobox', { name: 'Completion decision' })).not.toBeInTheDocument();
     expect(fetch.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   });
 

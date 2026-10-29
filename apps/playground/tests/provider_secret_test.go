@@ -16,7 +16,7 @@ import (
 	"github.com/defos-ai/commander/framework/host"
 )
 
-func TestProviderSetupShowsSharedSecretName(t *testing.T) {
+func TestProviderSetupKeepsEnvironmentHintWithoutSecretSavingCopy(t *testing.T) {
 	for _, provider := range llm.Presets() {
 		t.Run(provider.ID, func(t *testing.T) {
 			u := fixtures.NewProviderSetup(t, ui.Config{
@@ -29,8 +29,8 @@ func TestProviderSetupShowsSharedSecretName(t *testing.T) {
 			u.Wait("provider key input", func(view string) bool { return strings.Contains(view, provider.Name+" API key") })
 
 			view := u.Model.View()
-			if !strings.Contains(view, "Saved encrypted as "+provider.KeyEnv[0]+" for agents if absent.") || strings.Contains(view, "Kept in memory for this session.") {
-				t.Fatal("provider setup did not disclose the selected key's shared secret name")
+			if strings.Contains(view, "Saved encrypted as ") || !strings.Contains(view, "You can also set "+provider.KeyEnv[0]+" before launch.") {
+				t.Fatal("provider setup omitted its environment hint or retained routine secret-saving copy")
 			}
 		})
 	}
@@ -60,12 +60,14 @@ func TestProviderKeysSavedForAgents(t *testing.T) {
 				u.Key(tea.KeyMsg{Type: tea.KeyEnter})
 			}
 
-			u.Wait("shared provider key", func(view string) bool {
-				return strings.Contains(view, test.secret+" saved for agents.")
+			var requests []fakes.ProviderSecretRequest
+			u.Wait("shared provider key requests", func(string) bool {
+				requests = append(requests, api.Requests()...)
+				return len(requests) >= 2
 			})
 			u.Close()
 
-			requests := api.Requests()
+			requests = append(requests, api.Requests()...)
 			if len(requests) != 2 || requests[0].Method != http.MethodGet || requests[1].Method != http.MethodPost {
 				t.Fatal("provider setup did not check metadata and create the missing key exactly once")
 			}
@@ -77,6 +79,9 @@ func TestProviderKeysSavedForAgents(t *testing.T) {
 					t.Fatal("provider setup did not use the retained authenticated API connection")
 				}
 			}
+			if strings.Contains(u.Model.View(), test.secret+" saved for agents.") {
+				t.Fatal("successful provider-key sharing added a routine notice")
+			}
 			assertProviderSecretHidden(t, u.Model.View())
 		})
 	}
@@ -87,14 +92,19 @@ func TestProviderKeyPreservesSavedValue(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			u, api := fixtures.ProviderSecretSetup(t, fixtures.ProviderSecretSetupOptions{API: fakes.ProviderSecretOptions{ExistingStatus: status}})
 
-			u.Wait("existing shared key", func(view string) bool {
-				return strings.Contains(view, "OPENAI_API_KEY is already saved; existing value kept.")
+			var requests []fakes.ProviderSecretRequest
+			u.Wait("existing shared key request", func(string) bool {
+				requests = append(requests, api.Requests()...)
+				return len(requests) >= 1
 			})
 			u.Close()
 
-			requests := api.Requests()
+			requests = append(requests, api.Requests()...)
 			if len(requests) != 1 || requests[0].Method != http.MethodGet {
 				t.Fatal("provider setup replaced an existing shared key")
+			}
+			if strings.Contains(u.Model.View(), "is already saved; existing value kept.") {
+				t.Fatal("preserving an existing provider key added a routine notice")
 			}
 			assertProviderSecretHidden(t, u.Model.View())
 		})

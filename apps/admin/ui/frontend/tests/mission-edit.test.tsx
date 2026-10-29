@@ -9,13 +9,15 @@ import { connection, credentials, mission, mockAPI, mockEditableMission } from '
 describe('mission editing', () => {
   it('edits objectives, action roles and details while preserving the name and untouched schema tokens', async () => {
     const name = 'Review / #1?';
-    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
+    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
     const fetch = mockEditableMission(definition);
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={name} onSelect={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit mission' }));
     expect(await screen.findByRole('textbox', { name: 'Mission name' })).toHaveValue(name);
     expect(screen.getByRole('textbox', { name: 'Mission name' })).toHaveAttribute('readonly');
+    expect(screen.getByRole('combobox', { name: 'Completion decision' })).toHaveValue('operator');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Completion decision' }), { target: { value: 'model' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Objective 1' }), { target: { value: 'Check release health.' } });
     fireEvent.change(await screen.findByRole('combobox', { name: 'Role for capture-page' }), { target: { value: 'required' } });
     fireEvent.click(screen.getByText('Advanced settings'));
@@ -31,6 +33,7 @@ describe('mission editing', () => {
     expect(body).toContain('9007199254740993');
     expect(body).toContain(String.raw`"\u0061\\path"`);
     expect(JSON.parse(body)).toMatchObject({ name, objectives: ['Check release health.'], required_actions: ['discover-pages', 'capture-page'],
+      completion: { decision_by: 'model' },
       optional_actions: [], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });

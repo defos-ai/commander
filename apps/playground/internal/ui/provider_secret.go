@@ -11,9 +11,8 @@ import (
 )
 
 type providerSecretResult struct {
-	name     string
-	existing bool
-	err      error
+	name string
+	err  error
 }
 
 func (m *Model) providerSecretName() string {
@@ -56,18 +55,13 @@ func (m *Model) shareProviderSecret() tea.Cmd {
 		if err == nil && metadata == nil {
 			_, err = adminsecrets.Save(ctx, api, key, value, nil)
 		}
-		results <- providerSecretResult{name: name, existing: metadata != nil, err: err}
+		results <- providerSecretResult{name: name, err: err}
 	}()
 	return func() tea.Msg { return <-results }
 }
 
 func (m *Model) providerSecretResult(result providerSecretResult) {
-	switch {
-	case result.err != nil:
+	if result.err != nil {
 		m.add("notice", result.name+" was not confirmed saved for agents: "+result.err.Error()+". Check Admin Secrets before trying again.")
-	case result.existing:
-		m.add("notice", result.name+" is already saved; existing value kept.")
-	default:
-		m.add("notice", result.name+" saved for agents.")
 	}
 }

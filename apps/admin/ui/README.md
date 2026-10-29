@@ -64,11 +64,13 @@ uncertain submission, choose **View operation** before submitting again.
 ## Create and edit missions
 
 1. Open **Missions → Create mission** and enter a name and objectives.
-2. Search actions and mark them **Required** or **Optional**. Choose starting
+2. Set **Completion decision** to **Model** or **Operator**. Operator requires
+   explicit completion approval; Model also allows an operator to complete it.
+3. Search actions and mark them **Required** or **Optional**. Choose starting
    actions to guide the first assignments.
-3. Choose **Define action** for a capability to build later. Add its input/output
+4. Choose **Define action** for a capability to build later. Add its input/output
    object schemas and required secret names.
-4. Use **Advanced settings** for rules and schemas, or **JSON** for
+5. Use **Advanced settings** for rules and schemas, or **JSON** for
    the full definition. Save to open the new mission.
 
 Actions can be installed later; saving does not start work. Keep secret values
@@ -79,7 +81,7 @@ Open **JSON** on a saved mission to view or copy its definition. See
 [mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
 
 To change a saved mission, open it and choose **Edit mission**. Update objectives,
-actions or advanced settings in Form or JSON, then save. The name stays fixed.
+actions, completion decision or advanced settings in Form or JSON, then save. The name stays fixed.
 Changes apply to future operations; existing operations retain their saved
 definition. After an uncertain update, inspect the saved mission before trying again.
 

@@ -11,6 +11,47 @@ import (
 	"github.com/defos-ai/commander/apps/playground/tests/fixtures"
 )
 
+func TestUIRestoresConversationWithoutRepeatingStartup(t *testing.T) {
+	u, store := fixtures.RemoteHistoryUI(t, fixtures.StartupHistory())
+
+	view := u.Model.View()
+
+	for _, current := range []string{"Other (OpenAI-compatible) · fixture", "Commander connected · http://commander.history.test/mcp",
+		"Try: Install the web agent, then review defos.ai.", "Saved conversation restored."} {
+		if strings.Count(view, current) != 1 {
+			t.Fatalf("startup entry %q was absent or repeated: %s", current, view)
+		}
+	}
+	for _, previous := range []string{"OpenAI · chat-latest", "http://mcp:4273/mcp", "saved for agents.", "existing value kept.", "all-in-one"} {
+		if strings.Contains(view, previous) {
+			t.Fatalf("restored previous startup entry %q: %s", previous, view)
+		}
+	}
+	for _, retained := range []string{"Earlier request", "Earlier reply", "inspect completed", "Saved operation available", "Admin state retained", "Commander connected · operator note"} {
+		if !strings.Contains(view, retained) {
+			t.Fatalf("conversation entry %q was lost: %s", retained, view)
+		}
+	}
+	u.Close()
+	saved := store.Snapshot()
+	for _, item := range saved.Entries {
+		if item.Text == "Other (OpenAI-compatible) · fixture" || strings.HasPrefix(item.Text, "Saved conversation restored.") ||
+			strings.HasPrefix(item.Text, "Try: Install the web agent") || item.Text == "Commander connected · http://commander.history.test/mcp" {
+			t.Fatalf("current startup entry was persisted: %+v", item)
+		}
+	}
+	if len(saved.Messages) != 2 || saved.Messages[0].Text != "Earlier request" || saved.Messages[1].Text != "Earlier reply" {
+		t.Fatal("removing repeated startup changed the model conversation")
+	}
+
+	restarted, _ := fixtures.RemoteHistoryUI(t, saved)
+
+	if strings.Count(restarted.Model.View(), "Commander connected · http://commander.history.test/mcp") != 1 ||
+		strings.Count(restarted.Model.View(), "Saved conversation restored.") != 1 {
+		t.Fatalf("a subsequent restart repeated startup: %s", restarted.Model.View())
+	}
+}
+
 func TestUIRestoresTranscriptAndSavesWithoutCredentials(t *testing.T) {
 	u, store := fixtures.HistoryUI(t, ui.History{Version: 1,
 		Messages: []llm.Message{{Role: "user", Text: "Earlier request"}, {Role: "assistant", Text: "Earlier reply"}},

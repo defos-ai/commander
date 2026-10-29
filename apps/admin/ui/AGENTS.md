@@ -129,6 +129,12 @@
   confirmed save or explicit uncertain-write readback reloads the saved detail.
   Keep edits scoped to the connection/session/name and discard them on leaving
   the route. Do not overwrite an uncertain update with an automatic retry.
+- Mission forms and details expose **Completion decision** as Model/Operator.
+  Omitted/null policy displays Model; untouched form edits retain its exact
+  representation. Only a changed decision writes `completion.decision_by`.
+  Reject malformed or unsupported completion policy when switching JSON to Form,
+  retaining the raw source for repair. Mission edits affect future operations;
+  the controller still enforces each operation's saved policy.
 - Mission details offer **Details / JSON** views. The `/missions/<name>/json`
   route survives reload and browser history. Retain validated response text from
   the same detail request; never reconstruct exported JSON from parsed JavaScript

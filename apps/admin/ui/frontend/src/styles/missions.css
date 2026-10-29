@@ -2,10 +2,11 @@
 .missions-page .page-heading { flex-wrap: wrap; }
 .mission-create-form { display: grid; gap: 16px; }
 .mission-create-form .form-field { min-width: 0; }
+.mission-create-form select { width: 100%; min-height: 40px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font-size: 13px; }
 .mission-create-form textarea { width: 100%; padding: 13px; border: 1px solid #bcbcb4; border-radius: 4px; background: var(--panel); color: var(--ink); font: 400 12px/1.6 var(--font-mono); resize: vertical; tab-size: 2; }
 .mission-create-form .mission-definition-editor { min-height: 320px; }
 .mission-create-form textarea[aria-invalid='true'] { border-color: var(--red); }
-.mission-create-form textarea:disabled { opacity: .65; }
+.mission-create-form textarea:disabled, .mission-create-form select:disabled { opacity: .65; }
 .mission-create-form > .mission-view-switch { justify-self: start; margin: 0; }
 .mission-view-switch button:disabled { opacity: .65; cursor: default; }
 .mission-objectives, .mission-action-picker { display: grid; gap: 14px; min-width: 0; margin-top: 8px; }

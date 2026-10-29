@@ -3,6 +3,9 @@ package fakes
 import (
 	"bytes"
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 
 	"github.com/defos-ai/commander/apps/playground/internal/llm"
 	"github.com/defos-ai/commander/apps/playground/internal/ui"
@@ -59,3 +62,20 @@ func (s *HistoryStore) Save(endpoint string, history ui.History) error {
 
 // Snapshot is read after the UI has closed and joined its history writer.
 func (s *HistoryStore) Snapshot() ui.History { return s.saved }
+
+type HistoryTransport map[string]http.Handler
+
+func (t HistoryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	handler := t[request.URL.Host]
+	if handler == nil {
+		return nil, errors.New("unexpected history fixture endpoint")
+	}
+	if request.Body != nil {
+		defer request.Body.Close()
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	response.Request = request
+	return response, nil
+}

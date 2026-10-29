@@ -144,7 +144,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		previous := m.restoreHistory()
 		m.engine = chat.NewWithHistory(m.ctx, m.modelClient, m.commander, previous)
 		m.setStage(stageChat, "Ask about missions, agents, or an objective…", "")
-		m.add("success", m.provider.Name+" · "+m.settings.Model)
+		m.addPrivate("success", m.provider.Name+" · "+m.settings.Model)
 		connection := "Commander connected · " + m.config.MCP.URL
 		if m.config.AllInOne {
 			agents := "agents"
@@ -153,12 +153,12 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			}
 			connection = fmt.Sprintf("Commander ready · all-in-one · %d %s connected", m.config.LocalAgentCount, agents)
 		}
-		m.add("success", connection)
+		m.addPrivate("success", connection)
 		for _, notice := range m.config.Notices {
-			m.add("notice", notice)
+			m.addPrivate("notice", notice)
 		}
 		if !m.config.AllInOne {
-			m.add("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
+			m.addPrivate("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
 		}
 		return tea.Batch(waitEvent(m.engine), m.shareProviderSecret(), m.saveProviderKey(), m.saveSettings()), true
 	}
@@ -196,9 +196,6 @@ func (m *Model) needKey() tea.Cmd {
 		placeholder := "API key (hidden; held only for this session)"
 		if m.config.SaveProviderKey != nil {
 			placeholder = "API key (hidden; remembered on this machine)"
-		}
-		if m.providerSecretName() != "" && m.config.API.URL != "" && m.config.API.Credentials.Password != "" {
-			placeholder = "API key (hidden; saved encrypted for agents if absent)"
 		}
 		if m.provider.ID == "other" {
 			placeholder = "API key (optional; Enter skips for a local endpoint)"
