@@ -157,13 +157,22 @@ func TestBrowserProxyReopensEncodedMissionNames(t *testing.T) {
 	type missionResponse struct {
 		Name       string `json:"name"`
 		RequestURI string `json:"request_uri"`
+		Method     string `json:"method"`
+		Definition string `json:"definition"`
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /commander/api/v1/missions", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"items":[]}`)
 	})
-	mux.HandleFunc("GET /commander/api/v1/missions/{mission_name}", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(missionResponse{Name: r.PathValue("mission_name"), RequestURI: r.RequestURI})
+	mux.HandleFunc("/commander/api/v1/missions/{mission_name}", func(w http.ResponseWriter, r *http.Request) {
+		definition, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(missionResponse{Name: r.PathValue("mission_name"), RequestURI: r.RequestURI,
+			Method: r.Method, Definition: string(definition)})
 	})
 	upstream := httptest.NewServer(mux)
 	defer upstream.Close()
@@ -174,21 +183,29 @@ func TestBrowserProxyReopensEncodedMissionNames(t *testing.T) {
 	defer handler.Close()
 	target := upstream.URL + "/commander"
 	cookie := fixtures.Login(t, handler, target, nil)
-	for _, name := range []string{
-		"100% review", "a//b", "team/../review", "/leading", "trailing/",
-		"%2e%2e", "encoded%2Fslash", `review\draft`, "review?#", "review é",
-	} {
-		t.Run(name, func(t *testing.T) {
-			path := "/api/v1/missions/" + url.PathEscape(name)
-			response := fixtures.ServeUI(handler, fixtures.BrowserRequest(http.MethodGet, fixtures.ProxyPath(target, path), "", cookie))
-			var mission missionResponse
-			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &mission) != nil {
-				t.Fatalf("mission readback failed: status=%d body=%s", response.Code, response.Body.String())
-			}
-			if mission.Name != name || mission.RequestURI != "/commander"+path {
-				t.Fatalf("mission name or escaped path changed: %+v", mission)
-			}
-		})
+	for _, method := range []string{http.MethodGet, http.MethodPut} {
+		for _, name := range []string{
+			"100% review", "a//b", "team/../review", "/leading", "trailing/",
+			"%2e%2e", "encoded%2Fslash", `review\draft`, "review?#", "review é",
+		} {
+			t.Run(method+"/"+name, func(t *testing.T) {
+				path := "/api/v1/missions/" + url.PathEscape(name)
+				definition := ""
+				if method == http.MethodPut {
+					definition = `{"objectives":["Updated mission"],"input_schema":{"maximum":9007199254740993}}`
+				}
+
+				response := fixtures.ServeUI(handler, fixtures.BrowserRequest(method, fixtures.ProxyPath(target, path), definition, cookie))
+
+				var mission missionResponse
+				if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &mission) != nil {
+					t.Fatalf("mission proxy failed: status=%d body=%s", response.Code, response.Body.String())
+				}
+				if mission.Name != name || mission.RequestURI != "/commander"+path || mission.Method != method || mission.Definition != definition {
+					t.Fatalf("mission name, escaped path or update changed: %+v", mission)
+				}
+			})
+		}
 	}
 }
 

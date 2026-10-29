@@ -4,7 +4,7 @@ Connect AI clients and internal applications to Commander to automate multi-step
 operational workflows. Submit work and review saved results through either interface:
 
 - **MCP:** let a model choose missions, assign work and review results.
-- **[HTTP API](api/README.md):** create missions and manage operations from your app.
+- **[HTTP API](api/README.md):** create or update missions and manage operations from your app.
 
 ## Quick start
 
@@ -47,7 +47,7 @@ You can also install a GitHub repository URL that is not in the source list:
 MCP reads the official [agent source list](../../sources/README.md) on demand.
 The list is discovery metadata; it has no saved trust or approval state.
 
-### Create missions
+### Create and update missions
 
 Call `create_mission` with a flat mission definition containing `name`,
 `objectives`, `input_schema` and `output_schema`.
@@ -55,7 +55,11 @@ Add actions and rules as needed; see
 [mission definitions](../../docs/abstractions.md#mission-operation-and-task).
 Actions may be installed later. Saving a mission does not start work.
 
-Names are unique. After an uncertain save, read `describe_mission` before retrying.
+Names are unique and remain fixed. To change objectives, actions, rules or schemas,
+read `describe_mission`, then call `update_mission` with the complete replacement
+definition under the same name. Updates affect future operations; existing
+operations retain their saved mission definition.
+After an uncertain save, read `describe_mission` before retrying.
 Keep secret values out of definitions and chat.
 
 ### Operation workflow

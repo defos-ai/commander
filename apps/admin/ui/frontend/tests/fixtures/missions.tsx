@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import type { Action, Mission } from '../../src/api/types';
-import { mockAPI as fakeAPI } from '../fakes/missions';
+import { mockAPI as fakeAPI, mockEditableMission as editableAPI } from '../fakes/missions';
 
 export const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
 
@@ -40,4 +40,8 @@ export function creationJSONEditor() {
 
 export function mockAPI(respond?: Parameters<typeof fakeAPI>[1]) {
   return fakeAPI({ registeredActions, mission, otherMission }, respond);
+}
+
+export function mockEditableMission(definition = JSON.stringify(mission), failUpdate = false) {
+  return editableAPI({ registeredActions, mission, otherMission }, definition, failUpdate);
 }

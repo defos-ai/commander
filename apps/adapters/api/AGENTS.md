@@ -51,6 +51,12 @@
   mission and an escaped detail `Location`. Creation needs neither a controller
   nor action availability; it does not start work or change operation snapshots.
   Keep startup imports separate and reconcile uncertain writes by name before retrying.
+- `PUT /api/v1/missions/{mission_name}` replaces an existing definition using the
+  same request model and validator. Names are immutable: the body name must exactly
+  match the path. Read the target before `Upsert`; absent missions return
+  `404 mission_not_found`. Concurrent edits are last-write-wins. Updates affect
+  future operations only, never their retained mission snapshots. Read the saved
+  definition after uncertain writes; never retry an update automatically.
 - Operation/task/report/event/log queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send

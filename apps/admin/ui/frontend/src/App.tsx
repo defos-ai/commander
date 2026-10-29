@@ -17,6 +17,7 @@ import { ConnectionSettingsPage } from './pages/ConnectionSettingsPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { CreateMissionPage } from './pages/CreateMissionPage';
+import { EditMissionPage } from './pages/EditMissionPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { ControllersPage } from './pages/ControllersPage';
 import { ActionsPage } from './pages/ActionsPage';
@@ -66,7 +67,7 @@ export function App() {
 
   useEffect(() => {
     if (modal || !focusAfterTransition.current) return;
-    const editor = active && section === 'create-mission'
+    const editor = active && (section === 'create-mission' || section === 'missions' && route.connectionID && route.view === 'edit')
       ? document.querySelector<HTMLElement>('.mission-create-form [data-initial-focus]:not(:disabled)') : null;
     (editor ?? document.querySelector<HTMLElement>(active ? '.workspace-main' : '#connections-heading'))?.focus();
     focusAfterTransition.current = false;
@@ -108,6 +109,10 @@ export function App() {
         : section === 'create-mission' ? <CreateMissionPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           onBack={() => navigate({ connectionID: active.id, section: 'missions' })}
           onSelect={name => navigate({ connectionID: active.id, section: 'missions', itemID: name })} />
+        : section === 'missions' && route.connectionID && route.view === 'edit' && selectedID !== undefined
+          ? <EditMissionPage key={`${active.id}:${active.url}:${selectedID}`} connection={active} credentials={state.credentials[active.id]} name={selectedID} onSignIn={() => edit(active.id)}
+            onBack={() => navigate({ connectionID: active.id, section: 'missions', itemID: selectedID })}
+            onSelect={name => navigate({ connectionID: active.id, section: 'missions', itemID: name })} />
         : section === 'missions' ? <MissionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select}
           view={route.connectionID && route.view === 'json' ? 'json' : 'details'}
           onViewChange={view => navigate({ connectionID: active.id, section: 'missions', itemID: selectedID, view })}

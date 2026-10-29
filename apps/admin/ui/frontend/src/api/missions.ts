@@ -73,25 +73,44 @@ export class MissionCreateError extends Error {
   }
 }
 
-export async function createMission(url: string, credentials: Session, definition: string, signal?: AbortSignal): Promise<Mission> {
+export class MissionUpdateError extends Error {
+  constructor(readonly kind: MissionCreateErrorKind | 'not_found' | 'name_changed') {
+    super(kind);
+    this.name = 'MissionUpdateError';
+  }
+}
+
+export function createMission(url: string, credentials: Session, definition: string, signal?: AbortSignal): Promise<Mission> {
+  return writeMission(url, credentials, definition, undefined, signal);
+}
+
+export function updateMission(url: string, credentials: Session, name: string, definition: string, signal?: AbortSignal): Promise<Mission> {
+  return writeMission(url, credentials, definition, name, signal);
+}
+
+async function writeMission(url: string, credentials: Session, definition: string, existingName?: string, signal?: AbortSignal): Promise<Mission> {
+  const failure = (kind: MissionCreateErrorKind | 'not_found' | 'name_changed') => existingName === undefined
+    ? new MissionCreateError(kind === 'not_found' || kind === 'name_changed' ? 'invalid_input' : kind)
+    : new MissionUpdateError(kind);
   if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
   let input: unknown;
   try { input = JSON.parse(definition); }
-  catch { throw new MissionCreateError('invalid_json'); }
+  catch { throw failure('invalid_json'); }
   if (!isObject(input) || !isMissionName(input.name) || !isObjectives(input.objectives) ||
     !isObject(input.input_schema) || !isObject(input.output_schema)) {
-    throw new MissionCreateError('invalid_input');
+    throw failure('invalid_input');
   }
   const name = input.name;
+  if (existingName !== undefined && name !== existingName) throw failure('name_changed');
   let endpoint: string;
-  try { endpoint = proxyURL(url, '/api/v1/missions', credentials); }
-  catch { throw new MissionCreateError('invalid_input'); }
+  try { endpoint = proxyURL(url, `/api/v1/missions${existingName === undefined ? '' : `/${encodeURIComponent(existingName)}`}`, credentials); }
+  catch { throw failure('invalid_input'); }
 
   const controller = new AbortController();
   const abort = () => controller.abort();
   let rejectAborted = () => {};
   const aborted = new Promise<never>((_, reject) => {
-    rejectAborted = () => reject(new MissionCreateError('unknown'));
+    rejectAborted = () => reject(failure('unknown'));
     controller.signal.addEventListener('abort', rejectAborted, { once: true });
   });
   signal?.addEventListener('abort', abort, { once: true });
@@ -100,30 +119,31 @@ export async function createMission(url: string, credentials: Session, definitio
   async function send(): Promise<Mission> {
     // Preserve schema numbers and JSON text exactly; parsing above only checks the form's required fields.
     const response = await fetch(endpoint, {
-      method: 'POST', body: definition,
+      method: existingName === undefined ? 'POST' : 'PUT', body: definition,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Commander-UI': '1' },
       credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: controller.signal,
     });
     controller.signal.throwIfAborted();
     if (response.status === 401) expireSession(url);
-    if (response.status !== 201) {
-      const kind: MissionCreateErrorKind = response.status === 401 ? 'authentication'
+    if (response.status !== (existingName === undefined ? 201 : 200)) {
+      const kind = response.status === 401 ? 'authentication'
         : response.status === 403 ? 'forbidden'
           : response.status === 409 ? 'conflict'
-            : [400, 413, 415, 422].includes(response.status) ? 'invalid_input' : 'unknown';
-      throw new MissionCreateError(kind);
+            : response.status === 404 && existingName !== undefined ? 'not_found'
+              : [400, 413, 415, 422].includes(response.status) ? 'invalid_input' : 'unknown';
+      throw failure(kind);
     }
     const body: unknown = await response.json();
     controller.signal.throwIfAborted();
-    if (!isMission(body) || body.name !== name) throw new MissionCreateError('unknown');
+    if (!isMission(body) || body.name !== name) throw failure('unknown');
     return body;
   }
 
   try {
     return await Promise.race([send(), aborted]);
   } catch (error) {
-    if (error instanceof MissionCreateError) throw error;
-    throw new MissionCreateError('unknown');
+    if (error instanceof MissionCreateError || error instanceof MissionUpdateError) throw error;
+    throw failure('unknown');
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', abort);

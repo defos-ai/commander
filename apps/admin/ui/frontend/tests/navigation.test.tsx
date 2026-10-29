@@ -37,7 +37,8 @@ describe('location navigation', () => {
       { connectionID: 'local', section: 'operations', itemID: logOperation.id, view: 'logs' },
       { connectionID: 'local', section: 'operations', itemID: logOperation.id, view: 'logs', logFilters: {
         task_id: logOperation.tasks![0].id, agent_id: 'worker-agent-12345678', action_name: 'Inspect / page?mode=full#latest ' } },
-      { connectionID: 'private/team', section: 'missions', itemID: 'Résumé / a?#b', view: 'json' }];
+      { connectionID: 'private/team', section: 'missions', itemID: 'Résumé / a?#b', view: 'json' },
+      { connectionID: 'private/team', section: 'missions', itemID: 'Résumé / a?#b', view: 'edit' }];
 
     for (const route of routes) expect(parseRoute(routeHash(route))).toEqual(route);
     expect(routeHash({ connectionID: 'local', section: 'operations', itemID: operation.id, view: 'details' }))
@@ -294,6 +295,37 @@ describe('location navigation', () => {
     expect(fetch.mock.calls.some(([url, init]) => init?.method === 'GET' && upstreamURL(url).endsWith(`/api/v1/missions/${created.name}`))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All missions' }));
     expect(await screen.findByRole('button', { name: `View mission ${created.name}` })).toBeVisible();
+  });
+
+  it('keeps the mission edit route through sign-in and reload, discards cancelled drafts and opens fresh details after save', async () => {
+    const fetch = mockAPI();
+    visit({ connectionID: connection.id, section: 'missions', itemID: mission.name, view: 'edit' });
+    const first = render(<App />);
+    await screen.findByRole('button', { name: 'Sign in' });
+    await signIn();
+    expect(await screen.findByRole('heading', { name: 'Edit mission', level: 1 })).toBeVisible();
+    const editHash = window.location.hash;
+    expect(editHash).toBe(`#/connections/${connection.id}/missions/${mission.name}/edit`);
+    expect(await screen.findByRole('textbox', { name: 'Mission name' })).toHaveAttribute('readonly');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Objective 1' }), { target: { value: 'Unsaved changes.' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByRole('heading', { name: mission.name, level: 1 })).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${connection.id}/missions/${mission.name}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit mission' }));
+    expect(await screen.findByRole('textbox', { name: 'Objective 1' })).toHaveValue(mission.objectives[0]);
+    first.unmount();
+    render(<App />);
+    expect(await screen.findByRole('textbox', { name: 'Objective 1' })).toHaveValue(mission.objectives[0]);
+    expect(window.location.hash).toBe(editHash);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Objective 1' }), { target: { value: 'Updated objectives.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('heading', { name: mission.name, level: 1 })).toBeVisible();
+    expect(await screen.findByText('Updated objectives.')).toBeVisible();
+    expect(window.location.hash).toBe(`#/connections/${connection.id}/missions/${mission.name}`);
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
+    expect(JSON.stringify({ ...localStorage })).not.toContain('Unsaved changes.');
   });
 
   it('restores the saved mission JSON view through sign-in, browser history and reload', async () => {

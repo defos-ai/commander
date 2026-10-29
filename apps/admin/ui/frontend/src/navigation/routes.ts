@@ -4,7 +4,7 @@ import type { OperationLogFilters } from '../api/operation-logs';
 
 export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'create-mission' | 'controllers' | 'agents' | 'actions' | 'sessions' | 'secrets' | 'settings';
 export type OperationView = 'details' | 'graph' | 'logs';
-export type MissionView = 'details' | 'json';
+export type MissionView = 'details' | 'json' | 'edit';
 
 export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | null; operation?: string } | {
   connectionID: string;
@@ -31,7 +31,7 @@ export function parseRoute(hash: string): Route {
       && section === undefined && !/[?#]/u.test(hash.slice(1))) return { operation: connectionID };
     if (prefix !== '' || collection !== 'connections' || !connectionID || !sections.includes(section ?? '') || extra.length) return {};
     if (itemID !== undefined && (!itemID || section === 'overview' || section === 'settings' || section === 'secrets' || section === 'create-mission')) return {};
-    if (view !== undefined && (!itemID || !(section === 'operations' && (view === 'graph' || view === 'logs') || section === 'missions' && view === 'json'))) return {};
+    if (view !== undefined && (!itemID || !(section === 'operations' && (view === 'graph' || view === 'logs') || section === 'missions' && (view === 'json' || view === 'edit')))) return {};
     const sessionFilters: SessionFilters = {};
     const logFilters: OperationLogFilters = {};
     if (queryStart >= 0) {
@@ -50,7 +50,7 @@ export function parseRoute(hash: string): Route {
         }
       }
     }
-    return { connectionID, section: section as WorkspaceSection, ...(itemID ? { itemID } : {}), ...(view ? { view: view as 'graph' | 'logs' | 'json' } : {}),
+    return { connectionID, section: section as WorkspaceSection, ...(itemID ? { itemID } : {}), ...(view ? { view: view as 'graph' | 'logs' | 'json' | 'edit' } : {}),
       ...(Object.keys(sessionFilters).length ? { sessionFilters } : {}), ...(Object.keys(logFilters).length ? { logFilters } : {}) };
   } catch {
     return {};
@@ -67,7 +67,7 @@ export function routeHash(route: Route): string {
   const parts = ['connections', route.connectionID, route.section];
   if (route.itemID) {
     parts.push(route.itemID);
-    if (route.section === 'operations' && (route.view === 'graph' || route.view === 'logs') || route.section === 'missions' && route.view === 'json') parts.push(route.view);
+    if (route.section === 'operations' && (route.view === 'graph' || route.view === 'logs') || route.section === 'missions' && (route.view === 'json' || route.view === 'edit')) parts.push(route.view);
   }
   const query = new URLSearchParams();
   if (route.section === 'sessions') {

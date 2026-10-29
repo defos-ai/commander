@@ -52,6 +52,23 @@ func (s *FailedMissionCreate) Create(ctx context.Context, _ missions.Mission) er
 
 func (s *FailedMissionCreate) Snapshot() Calls { return s.calls }
 
+type FailedMissionUpdate struct {
+	missions.MissionStore
+	err   error
+	calls Calls
+}
+
+func NewFailedMissionUpdate(store missions.MissionStore, err error) *FailedMissionUpdate {
+	return &FailedMissionUpdate{MissionStore: store, err: err}
+}
+
+func (s *FailedMissionUpdate) Upsert(ctx context.Context, _ missions.Mission) error {
+	s.calls.record(ctx)
+	return s.err
+}
+
+func (s *FailedMissionUpdate) Snapshot() Calls { return s.calls }
+
 type FailedSecretCreate struct {
 	secrets.SecretStore
 	err   error

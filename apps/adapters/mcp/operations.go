@@ -102,7 +102,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
-	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions and rules. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
+	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions and rules. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -118,6 +118,27 @@ func addOperationTools(server *mcp.Server, config Config) {
 				return missions.Mission{}, errors.New("mission creation canceled; read describe_mission before retrying")
 			default:
 				return missions.Mission{}, errors.New("mission creation failed; read describe_mission before retrying")
+			}
+		})
+	addTool(server, "update_mission", "Update an existing reusable mission using its complete definition. First read describe_mission; preserve its exact name and all fields that should remain. The name identifies the existing mission and cannot be renamed; unknown names return a tool error without creating anything. Objectives, required/optional/starting actions, action_definitions, rules and schemas can change. Uses the same shared validation as creation. Returns the updated definition. Existing operations retain their original mission snapshot; future operations use the update. Concurrent edits are last-write-wins. Requires no running controller, does not start work or install agents, has a 10-second deadline and is never retried automatically. After an uncertain failure, read describe_mission before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
+		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			_, err := config.MissionStore.Get(ctx, request.Name)
+			if err == nil {
+				err = config.MissionStore.Upsert(ctx, request)
+			}
+			switch {
+			case err == nil:
+				return request.Clone(), nil
+			case errors.Is(err, missions.ErrUnknownMission):
+				return missions.Mission{}, missions.ErrUnknownMission
+			case errors.Is(err, context.DeadlineExceeded):
+				return missions.Mission{}, errors.New("mission update timed out; read describe_mission before retrying")
+			case errors.Is(err, context.Canceled):
+				return missions.Mission{}, errors.New("mission update canceled; read describe_mission before retrying")
+			default:
+				return missions.Mission{}, errors.New("mission update failed; read describe_mission before retrying")
 			}
 		})
 	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until the mission's required_actions and queued optional actions are ready. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
@@ -238,7 +259,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 var stringProperty = map[string]any{"type": "string", "minLength": 1}
 var operationSchema = objectSchema(map[string]any{"operation_id": stringProperty}, "operation_id")
 
-func createMissionSchema() string {
+func missionDefinitionSchema() string {
 	nonblank := map[string]any{"type": "string", "pattern": `\S`}
 	actionName := map[string]any{"type": "string", "pattern": `^\S(?:[\s\S]*\S)?$`}
 	actionNames := map[string]any{"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true}
@@ -269,7 +290,7 @@ func createMissionSchema() string {
 	return objectSchema(map[string]any{
 		"name": map[string]any{
 			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
-			"description": "Nonblank exact name. Existing names cannot be replaced.",
+			"description": "Nonblank exact mission name. Creation requires an unused name; updating requires the existing unchanged name.",
 		},
 		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
 			"description": "Ordered mission objectives; include at least one nonblank objective."},
@@ -284,7 +305,7 @@ func createMissionSchema() string {
 		},
 		"starting_actions": map[string]any{
 			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
-			"description": "Initial action guidance. Each name must appear in required_actions; creation does not queue tasks.",
+			"description": "Initial action guidance. Each name must appear in required_actions; saving a definition does not queue tasks.",
 		},
 		"rules": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": json.RawMessage(rule),

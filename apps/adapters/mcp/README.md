@@ -7,6 +7,11 @@ and artifacts.
 Follow the [MCP setup and workflow guide](https://github.com/defos-ai/commander/blob/main/apps/adapters/README.md#quick-start)
 for authentication, client configuration and tool usage.
 
+To edit a mission, read `describe_mission`, then call `update_mission` with its
+complete definition and unchanged name. Edit objectives, actions, rules and
+schemas; existing operations keep their original mission snapshot. After an
+uncertain update, read the saved definition before retrying.
+
 For an operation question, direct the operator to Admin's **Questions** section.
 Use the returned `fallback_at` to schedule a fresh `get_operation`; if the
 question is still pending at that time, the model may call `answer_question`.

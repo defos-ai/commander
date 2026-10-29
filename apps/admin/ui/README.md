@@ -55,7 +55,7 @@ Questions show the model waiting countdown and who supplied a saved answer.
 You can still answer after the countdown; if another answer arrives while your
 form is open, inspect the saved answer before continuing.
 
-## Create missions
+## Create and edit missions
 
 1. Open **Missions → Create mission** and enter a name and objectives.
 2. Search actions and mark them **Required** or **Optional**. Choose starting
@@ -71,6 +71,11 @@ uncertain save. Unsaved drafts disappear when you leave or reload the page.
 
 Open **JSON** on a saved mission to view or copy its definition. See
 [mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
+
+To change a saved mission, open it and choose **Edit mission**. Update objectives,
+actions or advanced settings in Form or JSON, then save. The name stays fixed.
+Changes apply to future operations; existing operations retain their saved
+definition. After an uncertain update, inspect the saved mission before trying again.
 
 ## Secrets
 

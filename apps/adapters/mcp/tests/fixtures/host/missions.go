@@ -6,11 +6,28 @@ import (
 	"testing"
 	"time"
 
+	adapter "github.com/defos-ai/commander/apps/adapters/mcp"
 	"github.com/defos-ai/commander/apps/adapters/mcp/cli"
 	fakes "github.com/defos-ai/commander/apps/adapters/mcp/tests/fakes"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/host"
+	fsmissions "github.com/defos-ai/commander/providers/fs/missions"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func MissionCatalogSession(t *testing.T, database string) (context.Context, *sdkmcp.ClientSession) {
+	t.Helper()
+	return Session(t, adapter.Config{MissionStore: MissionCatalogStore(t, database)})
+}
+
+func MissionCatalogStore(t *testing.T, database string) missions.MissionStore {
+	t.Helper()
+	store, err := fsmissions.NewMissionFsStore(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
 
 func MissionSession(t *testing.T, database string) (context.Context, *sdkmcp.ClientSession, func()) {
 	t.Helper()

@@ -103,7 +103,7 @@ Administer Commander without starting Playground or configuring a model.
 
 Commands:
   help                  Show this help
-  missions              List, export, validate, import or seed missions
+  missions              List, export, validate, import, update or seed missions
   secrets               List requests and manage agent secrets
   sessions              Inspect and manage agent-owned sessions
   serve                 Serve the Admin UI

@@ -24,7 +24,7 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   `SecretInputRequired` lets an embedded caller open a masked form after metadata
   is read. Keep these distinguishable from failed or uncertain API writes.
 - `missions/` validates mission files with the shared framework loader and sends
-  create-only writes through the API. Retain raw definitions when importing or
+  explicit create or update writes through the API. Retain raw definitions when importing or
   exporting so schema numbers, escapes and extension keywords survive. Validate
   the complete batch and reject duplicate names before API access. Files are
   bounded to 4 MiB and each imported definition to the API's 1 MiB request limit;
@@ -36,6 +36,12 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   preserve completed results and report remaining items as not attempted. An
   uncertain acknowledgement requires inspection, never an automatic write retry.
   Import does not start operations, require installed actions or replace missions.
+- `missions update FILE` validates exactly one definition before API setup and
+  calls `missions.Update` with a single PUT to that definition's escaped name.
+  The name identifies the existing mission; it is not a rename operation. Require
+  an exact 200 response and matching validated definition; malformed or unexpected
+  success responses are uncertain writes. Keep update separate from create-only
+  imports/seeding, never retry writes, and preserve existing operation snapshots.
 - `missions.Seed` embeds [bundled missions](missions/default-missions.json), validates
   the full batch and delegates to the same create-only API import. Keep `missions
   seed [--dry-run]` and launcher calls on this path; the controller does not own

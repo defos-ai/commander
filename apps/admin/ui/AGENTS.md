@@ -119,6 +119,16 @@
   retrying writes. Discard drafts on page exit, reload or connection/session changes,
   abort pending requests and ignore stale responses. Never persist drafts in
   browser storage or include secret values in definitions.
+- Mission **Edit** opens `/missions/<name>/edit` through its separate
+  `EditMissionPage.tsx`, loading the saved raw definition. Keep creation in
+  `CreateMissionPage.tsx`; the flows may diverge, so do not merge them into a
+  generic editor page. Reuse form fields and draft helpers. Names identify catalog records: keep the Form
+  name read-only and reject JSON renames before `PUT /api/v1/missions/<name>`.
+  Objectives, action roles/definitions, schemas and rules may change; saved
+  operation snapshots remain unchanged. Cancel returns to details, while a
+  confirmed save or explicit uncertain-write readback reloads the saved detail.
+  Keep edits scoped to the connection/session/name and discard them on leaving
+  the route. Do not overwrite an uncertain update with an automatic retry.
 - Mission details offer **Details / JSON** views. The `/missions/<name>/json`
   route survives reload and browser history. Retain validated response text from
   the same detail request; never reconstruct exported JSON from parsed JavaScript

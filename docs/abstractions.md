@@ -2,7 +2,7 @@
 
 Use a mission to describe a repeatable goal, the actions it needs and how to
 handle follow-up work. Start in **Admin → Missions → Create mission**, or use
-the [HTTP API](../apps/adapters/api/README.md#create-missions) or MCP.
+the [HTTP API](../apps/adapters/api/README.md#create-and-update-missions) or MCP.
 
 ## Mission, operation, and task
 

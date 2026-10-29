@@ -14,3 +14,15 @@ export function mockAPI(defaults: { registeredActions: Action[]; mission: Missio
   vi.stubGlobal('fetch', fetch);
   return fetch;
 }
+
+export function mockEditableMission(defaults: { registeredActions: Action[]; mission: Mission; otherMission: Mission }, definition: string, failUpdate = false) {
+  let saved = definition;
+  return mockAPI(defaults, (url, init) => {
+    if (url.endsWith('/api/v1/agents')) return Response.json({ items: [] });
+    if (init.method === 'PUT') {
+      saved = init.body as string;
+      if (failUpdate) throw new TypeError('private-update-response-failed');
+    }
+    return new Response(saved, { headers: { 'Content-Type': 'application/json' } });
+  });
+}

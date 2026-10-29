@@ -51,4 +51,28 @@ func RegisterMissions(mux *http.ServeMux, store missions.MissionStore) {
 		item, err := store.Get(r.Context(), r.PathValue("mission_name"))
 		WriteQueryResult(w, mappings.ToMissionResponse(item), err)
 	}))
+	mux.HandleFunc("PUT /api/v1/missions/{mission_name}", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			WriteError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		var request models.CreateMissionRequest
+		if !ReadJSON(w, r, &request, false) {
+			return
+		}
+		mission := mappings.ToMission(request)
+		if mission.Name != r.PathValue("mission_name") || mission.Validate() != nil {
+			WriteError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		_, err := store.Get(r.Context(), mission.Name)
+		if err == nil {
+			err = store.Upsert(r.Context(), mission)
+		}
+		if errors.Is(err, context.Canceled) {
+			WriteError(w, http.StatusServiceUnavailable, "request_canceled")
+			return
+		}
+		WriteQueryResult(w, mappings.ToMissionResponse(mission), err)
+	}))
 }

@@ -30,7 +30,7 @@ Set `API_SWAGGER_ENABLED=true` or pass `--swagger` to enable authenticated
 Swagger at `/docs/` and OpenAPI at `/openapi.json`. Use that reference for
 routes, schemas, pagination and errors.
 
-## Create missions
+## Create and update missions
 
 Save a mission from a JSON file:
 
@@ -49,6 +49,12 @@ see [mission definitions](../../../docs/abstractions.md#mission-operation-and-ta
 Saving does not require installed agents or start work. Names are unique:
 an existing name returns `409 mission_exists`. After an uncertain save, read
 the mission by name before retrying. Keep secret values out of definitions.
+
+To edit an existing mission, send its complete definition with
+`PUT /api/v1/missions/{mission_name}`. Encode the name as one path segment and keep
+the JSON `name` unchanged. Objectives, action lists/contracts, rules and schemas
+can change; existing operations keep their original mission snapshot. Read the
+saved definition after an uncertain update before retrying.
 
 ## Operation commands
 

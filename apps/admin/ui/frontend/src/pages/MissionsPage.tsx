@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, Plus, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, Pencil, Plus, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../components/Button';
 import { MissionDetails } from '../components/MissionDetails';
 import { MissionJSON } from '../components/MissionJSON';
@@ -7,6 +7,7 @@ import type { Connection, Session } from '../connections/types';
 import { useMissionQuery } from '../hooks/useMissionQuery';
 import { useTranslation } from '../i18n';
 import type { MissionView } from '../navigation/routes';
+import { EditMissionPage } from './EditMissionPage';
 import '../styles/missions.css';
 
 export function MissionsPage({ connection, credentials, onSignIn, selectedID: routeID, onSelect, onCreate, view: routeView, onViewChange }: {
@@ -46,6 +47,11 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
   }
   function changeView(value: MissionView) { if (onViewChange) onViewChange(value); else setLocalView(value); }
 
+  if (view === 'edit' && name !== undefined) return <EditMissionPage
+    key={`${connection.id}:${connection.url}:${name}`} connection={connection} credentials={credentials} onSignIn={onSignIn}
+    name={name} onBack={() => changeView('details')}
+    onSelect={() => { query.refresh(); changeView('details'); }} />;
+
   return <section className="missions-page">
     {name !== undefined && <button className="missions-back" type="button" onClick={() => select()}>
       <ArrowLeft size={16} aria-hidden="true" />{t($ => $.missions.back)}
@@ -60,6 +66,9 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
         </Button>
         {name === undefined && onCreate && <Button onClick={onCreate}>
           <Plus size={15} aria-hidden="true" />{t($ => $.missions.createTitle)}
+        </Button>}
+        {mission && <Button onClick={() => changeView('edit')}>
+          <Pencil size={15} aria-hidden="true" />{t($ => $.missions.editTitle)}
         </Button>}
       </div>}
     </div>

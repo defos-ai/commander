@@ -21,7 +21,7 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 	}
 	command := args[0]
 	wantArguments := 1
-	if command == "export" || command == "validate" || command == "import" {
+	if command == "export" || command == "validate" || command == "import" || command == "update" {
 		wantArguments = 2
 	} else if command != "list" && command != "seed" {
 		return missionUsage()
@@ -30,7 +30,7 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 		return missionUsage()
 	}
 	var definitions []missions.Definition
-	if command == "validate" || command == "import" {
+	if command == "validate" || command == "import" || command == "update" {
 		var err error
 		definitions, err = readMissions(args[1], stdin)
 		if err != nil {
@@ -38,6 +38,9 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 		}
 		if command == "validate" {
 			return showValidation(stdout, definitions, configuration.json)
+		}
+		if command == "update" && len(definitions) != 1 {
+			return &UsageError{cause: errors.New("mission update requires exactly one definition")}
 		}
 	}
 	api, err := client.New(configuration.connection)
@@ -64,6 +67,16 @@ func runMissions(ctx context.Context, configuration config, stdin io.Reader, std
 			return errors.Join(importError, err)
 		}
 		return importError
+	case "update":
+		definition, err := missions.Update(ctx, api, definitions[0])
+		if err != nil {
+			return err
+		}
+		if configuration.json {
+			return writeJSON(stdout, definition.JSON)
+		}
+		_, err = fmt.Fprintf(stdout, "Updated mission %q.\n", definition.Name)
+		return err
 	case "seed":
 		result, seedError := missions.Seed(ctx, api, configuration.dryRun)
 		if err := showImport(stdout, result, configuration.json); err != nil {
@@ -182,9 +195,12 @@ Commands:
   export NAME             Write one mission definition as JSON
   validate FILE           Validate every definition locally, without API access
   import FILE [--dry-run]  Create missing missions and preserve existing names
+  update FILE             Replace one saved mission under its existing name
   seed [--dry-run]         Add bundled missions, preserving existing names
 
 FILE accepts one mission, an array, or a list result with items. Use - for stdin.
+Update requires exactly one definition; its name identifies the saved mission.
+Updates affect future operations; running operations retain their saved definition.
 Imports stop on the first failure and report completed and unattempted items.
 After an uncertain write, inspect the saved mission before submitting again.
 Options: --json, --api-url URL, --api-username NAME, -h, --help.

@@ -13,10 +13,11 @@ type Props = {
   credentials: Session;
   disabled: boolean;
   nameInput: RefObject<HTMLInputElement | null>;
+  nameReadOnly?: boolean;
   onSignIn: () => void;
 };
 
-export function MissionFormFields({ draft, onChange, connection, credentials, disabled, nameInput, onSignIn }: Props) {
+export function MissionFormFields({ draft, onChange, connection, credentials, disabled, nameInput, nameReadOnly, onSignIn }: Props) {
   const { t } = useTranslation();
   const identity = useId();
   let definitions: ActionDefinitionDraft[] = [];
@@ -33,7 +34,7 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
   return <>
     <div className="form-field">
       <label htmlFor={`${identity}-name`}>{t($ => $.missions.builder.name)}</label>
-      <input ref={nameInput} id={`${identity}-name`} data-initial-focus value={draft.name} required disabled={disabled}
+      <input ref={nameInput} id={`${identity}-name`} data-initial-focus value={draft.name} required disabled={disabled} readOnly={nameReadOnly}
         placeholder={t($ => $.missions.builder.namePlaceholder)} autoCapitalize="none" spellCheck={false}
         onChange={event => onChange({ ...draft, name: event.target.value })} />
     </div>

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/api/client';
-import { createMission, getMissionDocument, listMissions, MissionCreateError } from '../src/api/missions';
+import { createMission, getMissionDocument, listMissions, updateMission, MissionCreateError, MissionUpdateError } from '../src/api/missions';
 import { credentials, mission, url } from './fixtures/mission-client';
 
 function requestedPath(input: RequestInfo | URL): string {
@@ -297,5 +297,46 @@ describe('mission creation', () => {
     expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
     await expect(createMission(url, credentials, definition, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mission updates', () => {
+  it('puts the original definition under its encoded immutable name and requires an updated mission response', async () => {
+    const name = 'Review / #1?';
+    const raw = JSON.stringify({ ...mission, name });
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ ...mission, name }));
+    vi.stubGlobal('fetch', fetch);
+
+    expect(await updateMission(url, credentials, name, raw)).toEqual({ ...mission, name });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(requestedPath(fetch.mock.calls[0][0])).toBe(`/api/v1/missions/${encodeURIComponent(name)}`);
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'PUT', body: raw, credentials: 'same-origin', redirect: 'error', cache: 'no-store' });
+  });
+
+  it('rejects renaming before sending the update', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(updateMission(url, credentials, mission.name, JSON.stringify({ ...mission, name: 'another' })))
+      .rejects.toEqual(new MissionUpdateError('name_changed'));
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes a missing mission and keeps unconfirmed updates uncertain', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(new Response('private-error', { status: 404 }))
+      .mockResolvedValueOnce(Response.json(mission, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ ...mission, name: 'another' }));
+    vi.stubGlobal('fetch', fetch);
+    const raw = JSON.stringify(mission);
+
+    await expect(updateMission(url, credentials, mission.name, raw)).rejects.toEqual(new MissionUpdateError('not_found'));
+    for (let count = 0; count < 2; count++) {
+      await expect(updateMission(url, credentials, mission.name, raw)).rejects.toEqual(new MissionUpdateError('unknown'));
+    }
+
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 });

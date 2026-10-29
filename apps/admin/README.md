@@ -22,6 +22,7 @@ bin/commander-admin missions export build-agent > mission.json
 bin/commander-admin missions validate mission.json
 bin/commander-admin missions import mission.json --dry-run
 bin/commander-admin missions import mission.json
+bin/commander-admin missions update mission.json
 bin/commander-admin missions seed
 ```
 
@@ -35,6 +36,11 @@ to preview it. All-in-one and Compose run it automatically after the API is read
 Imports preserve existing names and stop on the first failure, reporting completed,
 uncertain and unattempted items. After an uncertain write, export that mission to
 inspect saved state before submitting again. Use `missions --help` for options.
+
+To edit a mission, export it, change its objectives, actions, rules or schemas,
+then run `missions update mission.json`. Update requires exactly one definition
+under its existing name and affects future operations; existing operations keep
+their saved definition. Names cannot be changed by an update.
 
 ## Secrets
 

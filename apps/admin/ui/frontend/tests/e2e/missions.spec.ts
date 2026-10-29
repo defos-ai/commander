@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Mission } from '../../src/api/types';
 import { connect, test } from '../fixtures/e2e';
 
-test('create a reusable mission through Admin without installed actions or starting work', async ({ page, api }) => {
+test('create and edit a reusable mission through Admin without installing actions or starting work', async ({ page, api }) => {
   const actionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const missionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const mission = {
@@ -130,6 +130,25 @@ test('create a reusable mission through Admin without installed actions or start
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
   expect(await api.get<Mission>(`/missions/${mission.name}`)).toMatchObject(expectedMission);
+  await page.getByRole('button', { name: 'Edit mission', exact: true }).click();
+  await expect(page).toHaveURL(`${missionURL}/edit`);
+  await expect(create.getByRole('textbox', { name: 'Mission name', exact: true })).toHaveValue(mission.name);
+  await expect(create.getByRole('textbox', { name: 'Mission name', exact: true })).toHaveAttribute('readonly');
+  await create.getByRole('textbox', { name: 'Objective 2', exact: true }).fill('Report release findings.');
+  await create.getByRole('combobox', { name: 'Role for analyze-text', exact: true }).selectOption('required');
+  await create.locator('summary').filter({ hasText: /^Advanced settings$/ }).click();
+  await create.getByRole('textbox', { name: 'Output schema (JSON)', exact: true }).fill('{"type":"object","properties":{"summary":{"type":"string"}}}');
+  await create.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page).toHaveURL(missionURL);
+  await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
+  const updated = await api.get<Mission>(`/missions/${mission.name}`);
+  expect(updated).toMatchObject({ ...mission, objectives: [expectedMission.objectives[0], 'Report release findings.'],
+    required_actions: ['future-mission-action', 'analyze-text'], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
+  expect(updated.optional_actions ?? []).toEqual([]);
+  await page.getByRole('group', { name: 'Mission view', exact: true }).getByRole('button', { name: 'JSON', exact: true }).click();
+  const updatedJSON = await page.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true }).inputValue();
+  expect(updatedJSON.match(/9007199254740993/g)).toHaveLength(2);
+  expect(updatedJSON).toContain(String.raw`"\u0061\\path"`);
   expect(await operationIDs()).toEqual(before);
   expect(await actionNames()).toEqual(actionsBefore);
 });

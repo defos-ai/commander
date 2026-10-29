@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"encoding/json"
-	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,8 +11,7 @@ import (
 )
 
 func TestMissionCreationOpenAPIContract(t *testing.T) {
-	fixture := hostfixtures.New(t)
-	server := hostfixtures.Start(t, append(fixture.LocalArgs(), "--swagger"))
+	handler := hostfixtures.LogHandler(t, hostfixtures.LogAPIConfig(t))
 	document := decodeResponse[struct {
 		Security []map[string][]string `json:"security"`
 		Paths    map[string]map[string]struct {
@@ -42,7 +40,7 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 		Components struct {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
-	}](t, server.Request(t, http.MethodGet, "/openapi.json", hostfixtures.Authenticate))
+	}](t, hostfixtures.LogRequest(t.Context(), handler, "/openapi.json", true))
 	create := document.Paths["/api/v1/missions"]["post"]
 	if create.OperationID != "createMission" || !create.RequestBody.Required || create.RequestBody.Content["application/json"].Schema.Ref != "#/components/schemas/CreateMissionRequest" {
 		t.Fatal("mission creation must document its required JSON request")
@@ -68,6 +66,22 @@ func TestMissionCreationOpenAPIContract(t *testing.T) {
 	for _, status := range []string{"503", "504"} {
 		if !strings.Contains(create.Responses[status].Description, "before retrying") {
 			t.Errorf("%s must explain how to reconcile uncertain creation", status)
+		}
+	}
+	update := document.Paths["/api/v1/missions/{mission_name}"]["put"]
+	if update.OperationID != "updateMission" || !update.RequestBody.Required || update.RequestBody.Content["application/json"].Schema.Ref != "#/components/schemas/CreateMissionRequest" || len(update.Security) != 0 {
+		t.Fatal("mission editing must document its full definition and inherit Basic authentication")
+	}
+	if update.Responses["200"].Content["application/json"].Schema.Ref != "#/components/schemas/Mission" {
+		t.Fatal("mission editing must return the updated mission")
+	}
+	for status, code := range map[string]string{
+		"400": "invalid_request", "401": "authentication_required", "403": "host_not_allowed",
+		"404": "mission_not_found", "413": "request_too_large", "415": "unsupported_media_type",
+		"500": "internal_error", "503": "request_canceled", "504": "request_timeout",
+	} {
+		if !strings.Contains(update.Responses[status].Description, code) {
+			t.Errorf("mission editing does not document %s %s", status, code)
 		}
 	}
 	var schema jsonschema.Schema

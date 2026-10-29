@@ -30,7 +30,10 @@ export function mockAPI(defaults: Defaults, snapshot: Omit<Operation, 'preflight
       if (init.method === 'POST') { savedMission = JSON.parse(init.body as string); return Response.json(savedMission, { status: 201 }); }
       return Response.json({ items: [savedMission] });
     }
-    if (url.endsWith(`/missions/${encodeURIComponent(savedMission.name)}`)) return Response.json(savedMission);
+    if (url.endsWith(`/missions/${encodeURIComponent(savedMission.name)}`)) {
+      if (init.method === 'PUT') savedMission = JSON.parse(init.body as string);
+      return Response.json(savedMission);
+    }
     if (url.endsWith('/operations')) return Response.json({ items: [observedSnapshot] });
     if (url.endsWith(`/operations/${observedSnapshot.id}`)) return Response.json(observedSnapshot);
     if (url.startsWith(`${connection.url}/api/v1/operations/${observedSnapshot.id}/logs?`)) {

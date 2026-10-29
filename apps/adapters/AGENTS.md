@@ -93,6 +93,12 @@
   Sanitize backend errors and direct callers to `describe_mission` before retrying
   uncertain writes. Keep the advertised schema aligned with strict decoding,
   including nullable optional collections and open JSON Schema documents.
+- `update_mission` accepts that same complete flat definition. Read
+  `describe_mission` first and keep its unique name unchanged. Require the target
+  through `MissionStore.Get` before `Upsert`; unknown names must not create a
+  mission. Updates apply to future operations only. Bound the read/write to one
+  10-second context, return a cloned definition and sanitize failures with
+  read-back guidance. Never retry uncertain updates or dispatch work from editing.
 - Preserve `missions://artifacts/{id}` and its `/files/{file_id}` resource shape.
   Validate record IDs and artifact membership before retrieving bytes. IDs are
   never filesystem paths. Empty files need explicit blob content.
