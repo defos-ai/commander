@@ -1,9 +1,11 @@
 # Commander framework
 
-Build workflows that coordinate specialist agents across tools and services.
-Typed action contracts, mission rules and operator decisions guide execution;
-saved outcomes and artifacts support review. Apps provide host configuration;
-[providers](../providers/README.md) supply messaging and storage.
+Build and extend Commander's agent control plane for complex business workflows.
+Connect existing tools and agents through typed actions, or implement new agents
+with the same contracts. Mission rules and model or operator decisions guide
+long-running work; saved outcomes and artifacts support operational review.
+Apps provide host configuration; [providers](../providers/README.md) supply
+messaging and storage.
 
 ## Quick start
 

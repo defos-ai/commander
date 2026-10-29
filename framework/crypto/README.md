@@ -1,8 +1,9 @@
 # Cryptography
 
-Use `crypto.SecretCipher` to encrypt stored agent secrets, such as integration
-credentials, with AES-256-GCM. Values and their metadata are authenticated
-together so modified records fail authentication.
+Protect shared integration credentials used by distributed agent workflows.
+Use `crypto.SecretCipher` to encrypt stored deployment secrets with AES-256-GCM.
+Values and their metadata are authenticated together so modified records fail
+authentication.
 For versioned create/update/delete operations, use the
 [secret management service](../secrets/README.md).
 

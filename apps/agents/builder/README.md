@@ -1,8 +1,8 @@
 # Builder Agent
 
 Build custom agents for internal workflows from explicit action contracts using
-Codex. Review the generated source and validation results, then choose whether to
-publish and release the agent on GitHub.
+Codex. Review generated source, test/build results and recorded artifacts before
+choosing whether to publish and release the agent on GitHub for deployment.
 
 After starting a builder, ask Playground:
 

@@ -1,7 +1,8 @@
 # Commander Admin
 
-Manage mission definitions, agent secrets and runtime sessions from the CLI for
-operational setup and maintenance. Use the same tool to serve the browser Admin UI.
+Manage mission definitions, shared secrets and runtime sessions for operational
+setup and maintenance. Use the CLI for repeatable administration, and serve the
+browser Admin UI for operator review of distributed agent work.
 
 Build the CLI from the repository root:
 

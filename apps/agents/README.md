@@ -1,8 +1,9 @@
 # Agents
 
-Build or install agents to connect Commander missions to your services, business
-systems and specialist tools. Each agent advertises typed actions and readiness,
-then returns results or artifacts for review.
+Connect existing agents, business systems and specialist tools to Commander
+missions through typed actions, or build agents for new capabilities. Each agent
+advertises readiness and returns results or artifacts so distributed work can be
+orchestrated and reviewed through the same control plane.
 
 | You want to… | Use |
 | --- | --- |

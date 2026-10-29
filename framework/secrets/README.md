@@ -1,8 +1,9 @@
 # Secret management
 
-Manage service credentials across agent workflows with encrypted storage,
-action requirements and tracked delivery. One name identifies one shared value
-across the Commander deployment, independently of agents and operations. Users manage it
+Manage integration credentials centrally for agents working across business
+systems, with encrypted storage, action requirements and tracked delivery.
+One name identifies one shared value across the Commander deployment,
+independently of agents and operations. Users manage it
 through [Admin UI](../../apps/admin/ui/README.md) or the authenticated
 [HTTP API](../../apps/adapters/api/README.md#secrets); values stay out of chat.
 

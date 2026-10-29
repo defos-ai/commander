@@ -1,7 +1,8 @@
 # Adapters
 
-Connect AI clients and internal applications to Commander to automate multi-step
-operational workflows. Submit work and review saved results through either interface:
+Connect AI clients and internal applications to Commander's agent control plane.
+Coordinate complex workflows across existing systems, with mission rules, AI or
+operator decisions, and saved execution evidence. Choose an interface:
 
 - **MCP:** let a model choose missions, assign work and review results.
 - **[HTTP API](api/README.md):** create or update missions and manage operations from your app.

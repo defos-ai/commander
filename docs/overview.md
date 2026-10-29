@@ -1,7 +1,12 @@
 # Architecture overview
 
-**Commander decides what; the controller decides who; agents execute.**
-Commander is usually the model in Playground or another MCP client.
+DEFOS Commander is the enterprise control plane for AI agents. Build or connect
+agents across tools and infrastructure, coordinate complex missions, and retain
+execution history, results and artifacts for operational review.
+
+**A decision maker decides what; the controller decides who; agents execute.**
+The decision maker can be a model in Playground or another MCP client, or an
+operator using the API and Admin UI.
 
 See [11 practical use cases](use-cases.md) for missions across security,
 software delivery, business operations and long-running research at universities
@@ -11,8 +16,8 @@ and R&D centers.
 
 ```mermaid
 flowchart LR
-    User[You] <-->|Chat| Commander[Commander]
-    Commander <-->|MCP| Adapter[MCP adapter]
+    User[You] <-->|Chat| DecisionMaker[Decision maker]
+    DecisionMaker <-->|MCP| Adapter[MCP adapter]
     Adapter -->|Commands| Controller[Controller]
     Controller -->|Tasks| Agents[Agents]
     Agents -->|Results| Controller

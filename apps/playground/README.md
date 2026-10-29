@@ -1,8 +1,8 @@
 # Playground
 
-Run complex operational workflows through a terminal conversation with a model,
-reviewing evidence and answering operator questions as work proceeds. Start a
-local all-in-one session or connect to existing hosts.
+Use a terminal conversation to start complex missions, review execution evidence
+and provide operator input as agents work. Connect to an existing Commander
+deployment for operational work, or run a local all-in-one session.
 
 ## Quick start
 

@@ -1,8 +1,9 @@
 # Messaging
 
-Connect adapters, the controller and agents through a shared messaging contract.
-Commands and events carry work between services; inbox modes and explicit
-delivery settlement give hosts control over failures and duplicate deliveries.
+Connect independently hosted adapters, the controller and agents through a shared
+messaging contract. Commands and events carry work across services; inbox modes
+and explicit delivery settlement give hosts control over failures and duplicate
+deliveries as operational workflows cross deployment boundaries.
 Use `comms.Bus` with the
 [FS or RabbitMQ provider](../../providers/README.md) in your host factory.
 

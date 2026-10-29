@@ -1,8 +1,9 @@
 # Commander Admin UI
 
-Operate multi-step missions in a browser: review execution graphs and live logs,
-answer questions, and inspect reports, screenshots and files. Connect to separate
-Commander APIs to manage operational work from one interface.
+Oversee distributed agent work in a browser: review execution graphs and live
+logs, answer questions, approve completion and inspect reports, screenshots and
+files. Connect to separate Commander APIs to manage complex operational missions
+from one interface.
 
 ## Quick start
 

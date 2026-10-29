@@ -1,8 +1,9 @@
 # Providers
 
-Configure the infrastructure behind multi-agent operations: messaging connects
-Commander hosts, database stores retain workflow state and execution history, and
-file storage holds artifact bytes and reports. Choose each backend independently:
+Connect Commander's control plane to your organization's messaging, database and
+object-storage services. Messaging coordinates distributed agent hosts, database
+stores retain mission history for review and recovery, and file storage holds
+artifact bytes and reports. Choose each backend independently:
 
 | Host setting | Provider | Connection |
 | --- | --- | --- |

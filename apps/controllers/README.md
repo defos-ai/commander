@@ -1,8 +1,8 @@
 # Controllers
 
-The controller coordinates multi-step missions across agents, applies rules for
-follow-up work, and saves progress and results for operational review.
-Use Admin's **Controllers** page to check its health.
+The controller coordinates long-running missions across distributed agents,
+applies saved rules to follow-up work, and retains progress and results for
+operational review. Use Admin's **Controllers** page to check its health.
 
 ## Quick start
 

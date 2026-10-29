@@ -1,8 +1,9 @@
 # Commander MCP adapter
 
-Connect AI clients to Commander missions through the Model Context Protocol.
-Submit operation commands to the controller and inspect saved progress, results
-and artifacts.
+Connect AI clients and continuously running agent hosts to Commander's control
+plane through the Model Context Protocol. Coordinate complex missions under saved
+rules, hand decisions to operators when needed, and inspect progress, results and
+artifacts across distributed agent work.
 
 Follow the [MCP setup and workflow guide](https://github.com/defos-ai/commander/blob/main/apps/adapters/README.md#quick-start)
 for authentication, client configuration and tool usage.

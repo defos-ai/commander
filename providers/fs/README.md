@@ -1,8 +1,9 @@
 # Filesystem provider
 
-Run multi-agent workflows with filesystem-backed operation state, execution
-checkpoints, progress logs and artifact storage, without a separate database or
-broker. All-in-one uses this provider automatically.
+Run local agent integrations and self-contained missions with filesystem-backed
+operation state, execution checkpoints, progress logs and artifacts. Review and
+recover saved work without a separate database or broker. All-in-one uses this
+provider automatically.
 
 ## Quick start
 

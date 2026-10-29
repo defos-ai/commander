@@ -1,7 +1,8 @@
 # Commander default controller
 
-Coordinate mission tasks across agents, apply follow-up rules and save progress
-and results for review. Run one active controller per database.
+Coordinate long-running mission tasks across distributed agents, apply saved
+follow-up rules and retain progress and results for operational review. Run one
+active controller per database.
 
 Follow the [controller setup guide](https://github.com/defos-ai/commander/blob/main/apps/controllers/README.md#quick-start)
 to start the host, connect providers and configure task deadlines.

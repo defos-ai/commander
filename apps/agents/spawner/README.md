@@ -1,8 +1,9 @@
 # Spawner
 
-Add capabilities to operational workflows by installing published Commander agents
-as native processes, Docker containers or Kubernetes Pods. Review the launch result
-and registered action readiness before assigning work.
+Deploy published Commander agents into existing infrastructure as native
+processes, Docker containers or Kubernetes Pods. Add capabilities to complex
+missions, follow source-approval decisions and inspect the launch result and
+registered action readiness before assigning work.
 
 In Playground, ask:
 

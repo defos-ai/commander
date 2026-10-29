@@ -1,9 +1,9 @@
 # Commander use cases
 
-Commander (`defos-ai/commander`) coordinates agents to automate complex processes
-across engineering, security, business systems and research. A mission defines
-the goal and rules; agents connect it to the tools and data needed to carry out
-the work.
+Commander (`defos-ai/commander`) gives teams a control plane for coordinating AI
+agents across engineering, security, business systems and research. A mission
+defines objectives, execution rules and completion authority; agents connect
+existing tools and systems, while saved results and artifacts support review.
 
 Use these examples to design missions with suitable agents and integrations.
 Install or implement the required actions for your systems before running them.

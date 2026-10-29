@@ -1,9 +1,9 @@
 # MongoDB provider
 
-Retain the state and execution history of long-running multi-agent operations in
-MongoDB. Operations, checkpoints, progress logs and encrypted secrets live
-independently of running hosts; artifact files remain in the separate
-`STORAGE_URL` backend.
+Retain the state and execution history of complex, long-running missions across
+distributed agent hosts. MongoDB keeps operations, checkpoints, progress logs and
+encrypted secrets available for operational review and restart recovery;
+artifact files remain in the separate `STORAGE_URL` backend.
 
 ## Quick start
 

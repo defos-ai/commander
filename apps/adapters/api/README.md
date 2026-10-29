@@ -1,8 +1,8 @@
 # HTTP API adapter
 
-Integrate Commander with internal applications and services to run mission workflows.
-Submit work, handle operator questions and review saved results, execution logs and
-artifacts through authenticated HTTP endpoints.
+Integrate Commander's control plane with internal applications and operational
+tooling. Use authenticated HTTP endpoints to manage missions, submit work, record
+operator decisions and review saved results, execution logs and artifacts.
 
 ## Quick start
 

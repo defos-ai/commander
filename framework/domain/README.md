@@ -1,8 +1,10 @@
 # Domain models
 
-Use this reference to choose a model and find its consumers before changing a
-contract. Links lead to the definitions and store interfaces; field lists and
-allowed status values stay in source. For workflow examples, read
+Use shared models to keep mission policy, execution evidence and operational
+review consistent across agent integrations. This reference helps you choose a
+model and find its consumers before changing a contract. Links lead to definitions
+and store interfaces; field lists and allowed status values stay in source.
+For workflow examples, read
 [missions and rules](../../docs/abstractions.md).
 
 A mission describes reusable work. An operation runs that mission, tasks assign

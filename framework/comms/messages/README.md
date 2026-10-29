@@ -1,8 +1,8 @@
 # Message contracts
 
-Keep clients, controllers and agents aligned as operations cross process
-boundaries. Typed commands and events preserve correlation IDs and work context
-so execution messages can be associated with their operations and tasks.
+Keep clients, controllers and agent integrations aligned as operations cross
+service boundaries. Typed commands and events preserve correlation IDs and work
+context so teams can trace execution messages to their operations and tasks.
 Use the typed [`comms/clients`](../clients/) publishers and
 [`routing.go`](routing.go) when constructing destinations.
 
