@@ -22,6 +22,12 @@ Run all-in-one (AIO):
 docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
+With persistent state:
+
+```sh
+docker run --rm -it --name commander -v commander-state:/home/commander/.commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
+```
+
 Open [Admin UI](http://localhost:4275). Get the login with `/credentials` in Playground.
 
 ### Binary
@@ -46,7 +52,7 @@ powershell -c "iwr -UseBasicParsing https://github.com/defos-ai/commander/releas
 
 Other architectures: [Releases](https://github.com/defos-ai/commander/releases/latest).
 
-Type `/admin serve` to start Admin UI, or add `--serve-admin-ui` when launching.
+Type `/admin serve` to start Admin UI, or add `--serve-admin-ui` when launching. Playground saves settings and chat history in `~/.commander` by default. Use `--temporary` for a disposable session.
 
 ### Source
 

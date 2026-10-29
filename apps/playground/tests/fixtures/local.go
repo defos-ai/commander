@@ -83,6 +83,8 @@ func AllInOneEnvironment(t *testing.T) string {
 		t.Setenv(name, temporary)
 	}
 	t.Setenv("ENV", "")
+	t.Setenv("COMMANDER_TEMPORARY", "true")
+	t.Setenv("COMMANDER_STATE_DIR", filepath.Join(t.TempDir(), "profile"))
 	t.Setenv("TASK_TIMEOUT", "")
 	t.Setenv("COMMANDER_LLM_API_KEY", "fixture-only")
 	t.Setenv("COMMANDER_MCP_URL", "http://127.0.0.1:1/mcp") // The local host wins.

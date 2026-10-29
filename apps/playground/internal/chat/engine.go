@@ -29,6 +29,7 @@ type Event struct {
 	OperationID, QuestionID string
 	Answer                  string
 	Operation               *bridge.Operation
+	History                 []llm.Message
 }
 type answerRequest struct{ operationID, questionID, answer string }
 type job struct {
@@ -53,16 +54,27 @@ type Engine struct {
 	updates       chan bridge.Operation
 	answers       chan answerRequest
 	wg            sync.WaitGroup
+	history       []llm.Message
 }
 
 func New(ctx context.Context, model Model, commander Commander) *Engine {
+	return NewWithHistory(ctx, model, commander, nil)
+}
+
+func NewWithHistory(ctx context.Context, model Model, commander Commander, history []llm.Message) *Engine {
 	ctx, cancel := context.WithCancel(ctx)
-	e := &Engine{ctx: ctx, cancel: cancel, model: model, commander: commander, input: make(chan string, 64), events: make(chan Event, 256), done: make(chan struct{}), watchRequests: make(chan string, 32), updates: make(chan bridge.Operation, 32), answers: make(chan answerRequest, 16)}
+	e := &Engine{ctx: ctx, cancel: cancel, model: model, commander: commander, input: make(chan string, 64), events: make(chan Event, 256), done: make(chan struct{}), watchRequests: make(chan string, 32), updates: make(chan bridge.Operation, 32), answers: make(chan answerRequest, 16), history: restoreHistory(history)}
 	go e.run()
 	return e
 }
 func (e *Engine) Events() <-chan Event { return e.events }
-func (e *Engine) Close()               { e.cancel(); <-e.done }
+func (e *Engine) Close()               { e.CloseWithHistory() }
+
+func (e *Engine) CloseWithHistory() []llm.Message {
+	e.cancel()
+	<-e.done
+	return copyHistory(e.history)
+}
 func (e *Engine) Send(text string) error {
 	select {
 	case <-e.ctx.Done():
@@ -108,15 +120,27 @@ func (e *Engine) emit(event Event) {
 }
 
 func (e *Engine) run() {
-	defer close(e.done)
-	defer close(e.events)
-	defer e.wg.Wait()
-	defer e.cancel()
-	var history []llm.Message
+	history := e.history
+	e.history = nil
 	var pending []job
 	var automatic []job
 	var cancelTurn context.CancelFunc
 	completed := make(chan turnResult, 1)
+	defer func() {
+		e.cancel()
+		if cancelTurn != nil {
+			cancelTurn()
+		}
+		e.wg.Wait()
+		select {
+		case result := <-completed:
+			history = result.history
+		default:
+		}
+		e.history = copyHistory(history)
+		close(e.events)
+		close(e.done)
+	}()
 	watched := map[string]bool{}
 	operations := map[string]bridge.Operation{}
 	seen := map[reviewKey]bool{}
@@ -206,6 +230,7 @@ func (e *Engine) run() {
 					continue
 				}
 				history = nil
+				e.checkpoint(history)
 				e.emit(Event{Kind: "notice", Text: "Model conversation cleared. Saved operations are unchanged."})
 			case text == "/status":
 				e.emit(Event{Kind: "notice", Text: fmt.Sprintf("MCP connected · watching %d operations · %d queued messages", len(operations), len(pending))})

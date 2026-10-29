@@ -156,7 +156,7 @@ func lookupAdmin(t *testing.T, args []string, want string, commands ...string) s
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- cli.Run(ctx, append(args, "--provider=", "--model=", "--base-url=", "--no-color"), input, &output, &output)
+		done <- cli.Run(ctx, append(args, "--temporary", "--provider=", "--model=", "--base-url=", "--no-color"), input, &output, &output)
 	}()
 	t.Cleanup(func() {
 		cancel()

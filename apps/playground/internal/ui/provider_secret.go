@@ -29,7 +29,11 @@ func (m *Model) shareProviderSecret() tea.Cmd {
 		return nil
 	}
 	if m.config.API.URL == "" || m.config.API.Credentials.Password == "" {
-		m.add("notice", name+" is session-only. Use /admin secrets set "+name+" to share it with agents.")
+		where := " is session-only."
+		if m.config.SaveProviderKey != nil {
+			where = " is available to this Playground."
+		}
+		m.add("notice", name+where+" Use /admin secrets set "+name+" to share it with agents.")
 		return nil
 	}
 	connection := client.Connection{URL: m.config.API.URL, Credentials: m.config.API.Credentials}

@@ -75,6 +75,7 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		text += " Current state:\n" + bridge.Bounded(data)
 	}
 	history = append(history, llm.Message{Role: "user", Text: text})
+	e.checkpoint(history)
 	var tools []llm.Tool
 	for _, tool := range e.commander.Tools() {
 		if tool.Name != "answer_question" || item.answerQuestions {
@@ -103,6 +104,7 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 			return history, err
 		}
 		history = append(history, reply)
+		e.checkpoint(history)
 		if len(reply.Calls) == 0 {
 			return history, nil
 		}
@@ -118,6 +120,7 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 				result = e.call(ctx, call)
 			}
 			history = append(history, llm.Message{Role: "tool", CallID: call.ID, Name: call.Name, Text: result.Text})
+			e.checkpoint(history)
 		}
 	}
 	return history, errors.New("paused after 12 model/tool rounds; review progress and send a message to continue")

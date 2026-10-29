@@ -19,7 +19,10 @@ import (
 type config struct {
 	ui.Config
 	ServeAdminUI  bool
+	Temporary     bool
+	StateDir      string
 	adminOverride string
+	provided      map[string]bool
 }
 
 func (c *config) configureLocalSession(session *local.Session) {
@@ -34,7 +37,11 @@ func (c *config) configureLocalSession(session *local.Session) {
 	c.LocalAgentCount = session.AgentCount
 	c.Notices = session.Notices
 	if c.Debug {
-		c.Notices = append(c.Notices, "Local host logs: "+session.Directory+"/hosts.log (removed on exit)")
+		note := "Local host logs: " + session.Directory + "/hosts.log"
+		if c.Temporary {
+			note += " (removed on exit)"
+		}
+		c.Notices = append(c.Notices, note)
 	}
 	c.configureLocalAdmin(session)
 }
@@ -45,7 +52,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.SetOutput(stderr)
 	flags.StringVar(&c.MCP.URL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
 	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for Admin commands and agent secrets; omitted asks when needed (COMMANDER_API_URL)")
-	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller and spawner; credentials are generated when unset; temporary state is removed on exit")
+	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller and spawner with saved state")
+	flags.BoolVar(&c.Temporary, "temporary", false, "Keep Playground state in memory; remove all-in-one state on exit (COMMANDER_TEMPORARY)")
+	flags.StringVar(&c.StateDir, "state-dir", env("COMMANDER_STATE_DIR", ""), "Playground state directory; defaults to ~/.commander (COMMANDER_STATE_DIR)")
 	flags.BoolVar(&c.ServeAdminUI, "serve-admin-ui", false, "Start Admin UI now; otherwise use /admin serve later")
 	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Admin UI browser address; defaults to http://localhost:4275 or the native all-in-one address (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
@@ -67,7 +76,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	debugProvided := false
 	mcpProvided := false
 	apiProvided := false
+	c.provided = make(map[string]bool)
 	flags.Visit(func(f *flag.Flag) {
+		c.provided[f.Name] = true
 		if f.Name == "debug" {
 			debugProvided = true
 		}
@@ -83,6 +94,13 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	}
 	if c.AllInOne && apiProvided {
 		return c, errors.New("--all-in-one starts its own API; omit --api-url to use it")
+	}
+	if value := env("COMMANDER_TEMPORARY", ""); !c.provided["temporary"] && value != "" {
+		var err error
+		c.Temporary, err = strconv.ParseBool(value)
+		if err != nil {
+			return c, errors.New("COMMANDER_TEMPORARY must be a boolean (true or false)")
+		}
 	}
 	c.adminOverride = c.AdminURL
 	if !c.AllInOne && c.AdminURL == "" {

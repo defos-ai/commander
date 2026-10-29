@@ -32,6 +32,7 @@ type runningHost struct {
 
 type Options struct {
 	ServeAdmin bool
+	Directory  string
 }
 
 type Session struct {
@@ -50,6 +51,7 @@ type Session struct {
 	once           sync.Once
 	closeErr       error
 	admin          *adminhost.Manager
+	persistent     bool
 }
 
 func Start(ctx context.Context) (session *Session, err error) {
@@ -64,23 +66,11 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 			err = errors.Join(err, s.Close())
 		}
 	}()
-	s.APICredentials, err = apiCredentials()
+	cipher, err := s.prepareState(options.Directory)
 	if err != nil {
 		return nil, err
 	}
-	s.MCPCredentials, err = mcpCredentials()
-	if err != nil {
-		return nil, err
-	}
-	cipher, err := secretCipher()
-	if err != nil {
-		return nil, err
-	}
-	s.Directory, err = os.MkdirTemp("", "commander-playground-*")
-	if err != nil {
-		return nil, err
-	}
-	s.log, err = os.OpenFile(filepath.Join(s.Directory, "hosts.log"), os.O_CREATE|os.O_WRONLY, 0600)
+	s.log, err = os.OpenFile(filepath.Join(s.Directory, "hosts.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -163,9 +153,11 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = s.Context.Err(); err != nil {
 		return nil, context.Cause(s.Context)
 	}
-	s.Notices = append(s.Notices,
-		"\nTry: Install the web agent, then review defos.ai\n\nTemporary session · results deleted on exit",
-	)
+	stateNotice := "Temporary session · results deleted on exit"
+	if s.persistent {
+		stateNotice = "Persistent session · results retained between runs"
+	}
+	s.Notices = append(s.Notices, "\nTry: Install the web agent, then review defos.ai\n\n"+stateNotice)
 	return s, nil
 }
 
@@ -287,7 +279,7 @@ func (s *Session) Close() error {
 		if s.log != nil {
 			s.closeErr = errors.Join(s.closeErr, s.log.Close())
 		}
-		if s.Directory != "" {
+		if s.Directory != "" && !s.persistent {
 			if retainState {
 				s.closeErr = errors.Join(s.closeErr, fmt.Errorf("local state retained at %s because spawner shutdown failed", s.Directory))
 			} else {

@@ -2,14 +2,14 @@
 
 Run complex operational workflows through a terminal conversation with a model,
 reviewing evidence and answering operator questions as work proceeds. Start a
-temporary all-in-one session or connect to existing hosts.
+local all-in-one session or connect to existing hosts.
 
 ## Quick start
 
 ### Docker (recommended)
 
 ```sh
-docker run --name commander --rm -it -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
+docker run --name commander --rm -it -v commander-state:/home/commander/.commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
 Choose a provider, enter its API key and ask:
@@ -23,8 +23,8 @@ Type `/admin` to open [Admin](http://localhost:4275) and `/credentials` for the
 API login. Completed operation rows link to their Admin details once all task
 outcomes are known.
 
-**All-in-one deletes results, artifacts, downloaded agents and their working files
-on exit.** Use Compose to retain work.
+The named volume retains state when the container exits. Keep it when upgrading
+or restarting Commander.
 
 ### Native: one executable
 
@@ -48,7 +48,42 @@ expiry marks an unknown outcome and does not stop the agent.
 Type `/admin serve` to start Admin, or pass `--serve-admin-ui` at launch.
 The terminal session works without it.
 
-To build from source with Go 1.26.7+ and Node 24+, run from the repository root:
+### Saved state
+
+Both modes save settings, full chat history and keys entered in Playground under
+`~/.commander`. All-in-one additionally keeps its database, artifacts and agent
+workspaces. Reopening restores conversation context; use `/watch <id>`
+to resume operation review. Exiting still stops local hosts and spawned agents;
+saved state does not keep their processes running. Install agents again when
+needed after restart.
+
+Use `--state-dir PATH` for another profile, or `--temporary` to skip local saves:
+
+```sh
+./commander --all-in-one --temporary
+```
+
+Temporary mode removes all-in-one results on exit; remote server data remains
+managed by that server. An unwritable or unfamiliar state directory stops startup
+with instructions to choose another directory or use `--temporary`. Existing
+recognized profiles are reused. One Playground process may use a profile at a time.
+
+Provider keys entered here are remembered encrypted on this machine, bound to
+their provider and API base URL. Alternatively, set the provider's environment
+variable, such as `OPENAI_API_KEY`, before launch; it takes precedence over the
+remembered key. Playground does not retrieve key values from Commander's API.
+Remote API passwords and MCP tokens must be supplied again or through environment
+variables. Private `/credentials` output is excluded from saved chat history.
+Saved conversations contain your messages and tool results: protect the profile
+and its backups. Keep the entire profile, including encryption keys, when restoring.
+
+Explicit flags override nonempty environment values, then saved settings.
+Selecting a different provider does not reuse the previous provider's model or
+custom base URL. `/clear` clears model context while keeping the visible transcript.
+
+### Build from source
+
+With Go 1.26.7+ and Node 24+, run from the repository root:
 
 ```sh
 npm --prefix apps/admin/ui/frontend ci
@@ -107,9 +142,12 @@ docker exec commander commander credentials api
 docker exec commander commander credentials mcp
 ```
 
-Add `--raw` for only the password or token. Generated credentials change each
-session. Export `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` before native
-launch to override them; Docker also needs the matching `-e VARIABLE` argument.
+Add `--raw` for only the password or token. Generated credentials are reused from
+saved all-in-one state. `commander credentials api|mcp --state-dir PATH` reads an
+alternate profile; temporary generated credentials are available only through
+`/credentials`. Set `API_USERNAME`, `API_PASSWORD` or `MCP_TOKEN` before the first
+start to supply your own; conflicting overrides on later starts are rejected.
+Docker also needs the matching `-e VARIABLE` argument.
 
 For agent secrets, enter values in the masked form that opens when needed.
 **Tab** moves between fields, **Enter** advances or saves, and **Esc** postpones.
@@ -140,6 +178,8 @@ Paste the MCP token when prompted, or set `COMMANDER_MCP_TOKEN` before launch.
 | Setting | Environment | Flag |
 | --- | --- | --- |
 | MCP endpoint | `COMMANDER_MCP_URL` | `--mcp-url` |
+| Local state directory | `COMMANDER_STATE_DIR` | `--state-dir` |
+| Disposable client state | `COMMANDER_TEMPORARY=true` | `--temporary` |
 | MCP token | `COMMANDER_MCP_TOKEN` | Masked prompt |
 | API for Admin commands and agent secrets | `COMMANDER_API_URL` | `--api-url` |
 | API login | `COMMANDER_API_USERNAME`, `COMMANDER_API_PASSWORD` | Local form |
@@ -177,7 +217,7 @@ its own API connection. Compose supplies the default internal API login; a custo
 | `/cancel <operation-id>` | Cancel queued operation work. Dispatched tasks may finish. |
 | `/answer <question-id> <answer>` | Answer a pending question with text or an option number. |
 | `/stop` or **Ctrl+C** | Stop the reply, clear queued messages and pause model review. |
-| `/clear` | Clear the conversation. |
+| `/clear` | Clear model context; keep the transcript and saved operations. |
 | `/exit` or **Ctrl+D** | Exit; all-in-one hosts stop too. |
 | `/back` | Restart setup, before connecting to Commander. |
 

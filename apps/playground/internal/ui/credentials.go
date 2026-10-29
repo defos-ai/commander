@@ -45,6 +45,6 @@ func (m *Model) localCommand(value string) bool {
 		return true
 	}
 	api, mcp := m.config.API, m.config.MCP
-	m.add("notice", fmt.Sprintf("API: %s\nUsername: %s\nPassword: %s\n\nMCP: %s\nToken: %s", api.URL, api.Credentials.Username, api.Credentials.Password, mcp.URL, mcp.Credentials.Token))
+	m.addPrivate("notice", fmt.Sprintf("API: %s\nUsername: %s\nPassword: %s\n\nMCP: %s\nToken: %s", api.URL, api.Credentials.Username, api.Credentials.Password, mcp.URL, mcp.Credentials.Token))
 	return true
 }

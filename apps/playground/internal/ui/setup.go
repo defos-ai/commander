@@ -58,6 +58,28 @@ type connected struct {
 
 func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 	switch msg := message.(type) {
+	case providerKeyResult:
+		if msg.generation != m.generation {
+			return nil, true
+		}
+		m.busy = false
+		if msg.err != nil {
+			m.add("notice", "Saved provider key could not be loaded. Enter a key or set "+m.providerSecretName()+" before launch.")
+			msg.value = ""
+		}
+		m.settings.APIKey = msg.value
+		m.providerKey.loaded = msg.value != ""
+		return m.needKey(), true
+	case providerKeySaved:
+		if msg.err != nil {
+			m.add("notice", "Provider key could not be saved locally. Set "+m.providerSecretName()+" before your next launch.")
+		}
+		return nil, true
+	case settingsSaved:
+		if msg.err != nil {
+			m.add("notice", "Playground settings could not be saved. Check the state directory before restarting.")
+		}
+		return nil, true
 	case providerSecretResult:
 		m.providerSecretResult(msg)
 		return nil, true
@@ -77,6 +99,8 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			}
 			m.add("error", text)
 			m.settings.APIKey = ""
+			m.providerKey.entered = false
+			m.providerKey.loaded = false
 			m.modelClient = nil
 			return m.needKey(), true
 		}
@@ -117,7 +141,8 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.commander = msg.client
-		m.engine = chat.New(m.ctx, m.modelClient, m.commander)
+		previous := m.restoreHistory()
+		m.engine = chat.NewWithHistory(m.ctx, m.modelClient, m.commander, previous)
 		m.setStage(stageChat, "Ask about missions, agents, or an objective…", "")
 		m.add("success", m.provider.Name+" · "+m.settings.Model)
 		connection := "Commander connected · " + m.config.MCP.URL
@@ -135,7 +160,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		if !m.config.AllInOne {
 			m.add("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
 		}
-		return tea.Batch(waitEvent(m.engine), m.shareProviderSecret()), true
+		return tea.Batch(waitEvent(m.engine), m.shareProviderSecret(), m.saveProviderKey(), m.saveSettings()), true
 	}
 	return nil, false
 }
@@ -147,6 +172,8 @@ func (m *Model) selectProvider(value string) tea.Cmd {
 			continue
 		}
 		m.provider = preset
+		m.providerKey.entered = false
+		m.providerKey.loaded = false
 		m.settings = llm.Config{Provider: preset.ID, BaseURL: preset.URL, Model: m.config.Model, APIKey: m.config.Keys[preset.ID], Debug: m.config.Debug}
 		if m.config.BaseURL != "" {
 			m.settings.BaseURL = m.config.BaseURL
@@ -163,7 +190,13 @@ func (m *Model) selectProvider(value string) tea.Cmd {
 }
 func (m *Model) needKey() tea.Cmd {
 	if m.settings.APIKey == "" {
+		if cmd := m.loadProviderKey(); cmd != nil {
+			return cmd
+		}
 		placeholder := "API key (hidden; held only for this session)"
+		if m.config.SaveProviderKey != nil {
+			placeholder = "API key (hidden; remembered on this machine)"
+		}
 		if m.providerSecretName() != "" && m.config.API.URL != "" && m.config.API.Credentials.Password != "" {
 			placeholder = "API key (hidden; saved encrypted for agents if absent)"
 		}
@@ -253,6 +286,10 @@ func (m *Model) submit(value string) tea.Cmd {
 			m.add("error", err.Error())
 			return nil
 		}
+		if value != m.settings.BaseURL && (m.providerKey.loaded || m.providerKey.entered) {
+			m.settings.APIKey = ""
+			m.providerKey.loaded, m.providerKey.entered = false, false
+		}
 		m.settings.BaseURL = value
 		return m.needKey()
 	case stageKey:
@@ -261,6 +298,8 @@ func (m *Model) submit(value string) tea.Cmd {
 			return nil
 		}
 		m.settings.APIKey = value
+		m.providerKey.entered = value != ""
+		m.providerKey.loaded = false
 		m.input.EchoMode = textinput.EchoNormal
 		return m.chooseModel()
 	case stageManualModel:

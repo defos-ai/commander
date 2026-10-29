@@ -27,15 +27,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation git openssl tini \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1000 commander \
-    && useradd --uid 1000 --gid 1000 --create-home commander
+    && useradd --uid 1000 --gid 1000 --create-home commander \
+    && install -d -m 700 -o commander -g commander /home/commander/.commander
 COPY --from=build /out/commander /usr/local/bin/commander
 COPY --from=build /usr/local/go /usr/local/go
 COPY --from=codex /opt/codex /opt/codex
-COPY --chmod=755 apps/playground/docker/entrypoint.aio.sh /usr/local/bin/commander-entrypoint
 ENV PATH=/opt/codex/codex:/opt/codex/path:/usr/local/go/bin:${PATH} \
     GOTOOLCHAIN=local \
     API_LISTEN_ADDRESS=0.0.0.0:4274 UI_LISTEN_ADDRESS=0.0.0.0:4275 API_RUNTIME=docker MCP_RUNTIME=docker CHROMIUM_NO_SANDBOX=true
 EXPOSE 4274 4275
 USER 1000:1000
 WORKDIR /home/commander
-ENTRYPOINT ["/usr/local/bin/commander-entrypoint"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/commander", "--all-in-one", "--serve-admin-ui"]

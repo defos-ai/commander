@@ -78,6 +78,8 @@ The user's current instructions take precedence over repository guidance.
   a read-only mount; do not reuse it for a custom API destination or automatically
   sign in browser Admin. Admin seeds bundled missions through the API, preserving
   saved definitions; controllers do not load mission files.
+  Playground's separate `playground-state` volume retains client history/settings
+  and locally encrypted provider keys; never mix it with the bootstrap volumes.
   Do not distribute the key through the shared agent environment.
   Test stacks in [.github/composes](.github/composes/)
   have separate projects and state.

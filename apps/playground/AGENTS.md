@@ -22,6 +22,13 @@
   Its API and MCP configuration use the same typed `Connection` shape: URL and
   credentials. Keep one connection per service; `AllInOne` identifies session
   ownership without duplicating a local API connection.
+- [`internal/state/`](internal/state/) owns the versioned private profile, its
+  process lock, settings, scoped histories and encrypted local provider-key cache.
+  CLI defaults to `~/.commander` in both modes. `--state-dir` / `COMMANDER_STATE_DIR`
+  selects another profile; `--temporary` / `COMMANDER_TEMPORARY` bypasses it entirely.
+  Never write the real home in tests. Explicit flags override nonempty environment
+  values, then saved settings. Do not reuse a saved model/base URL for a different
+  provider or all-in-one's changing listener addresses as remote defaults.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts
   `--all-in-one --serve-admin-ui`, embeds Admin, includes Chromium/fonts, Git,
@@ -130,12 +137,15 @@
   Embedded MCP uses the same application and reads `MCP_RUNTIME` (default native).
   Keep this public metadata limited to deployment enums; it retains API Host,
   Origin and proxy validation and must never expose credentials or paths.
-- All-in-one starts temporary state and loopback services, waits for readiness,
-  then shuts down hosts and awaits native children before deleting that session's
-  files, including downloads and child working directories. It must not use or
-  delete the user's configured database/storage or existing Compose state.
-  Spawned agents' private working directories remain beneath session state;
-  never leave their generated files behind on exit.
+- All-in-one starts loopback services beneath the selected profile's `local/`.
+  Stop hosts and await native children before releasing the profile lock. Retain
+  persistent files on success and failure; only temporary sessions delete their
+  own runtime files. Library `local.Options.Directory == ""` keeps temporary
+  behavior. Never use or delete externally configured database/storage or Compose
+  state. Saved records do not resurrect child processes or exact-owner sessions.
+  Reject unknown nonempty profiles, invalid markers, corrupt bootstrap and concurrent
+  profile owners without overwriting retained data. Keep the OS lockfile inode
+  stable across shutdown; do not use a stale PID file as ownership.
 - The embedded controller reads `TASK_TIMEOUT` through its existing host configuration.
   Keep this deployment setting in that host rather than copying timeout parsing into
   Playground or changing process environment. Remote Playground does not configure
@@ -156,22 +166,27 @@
   secret cipher before opening providers or creating runtime state. Preserve a
   nonempty `SECRETS_ENCRYPTION_KEY`; otherwise generate one random 32-byte hex key.
   Retain the cipher in session memory and inject it only into the API and controller
-  through `Options.SecretCipher`. Do not change process environment, write the key
-  to files, or expose it in logs, credentials output or model messages. Spawner
+  through `Options.SecretCipher`. Persistent startup uses
+  [`internal/local/state.go`](internal/local/state.go) to save `secrets.key` separately
+  from `credentials.json`, before opening providers. Preserve private directory/file
+  permissions and validate retained bootstrap before hosts start. Do not change
+  process environment or expose the key in logs, credentials output or model messages. Spawner
   and its children never receive the key; agents request values from the controller.
   Docker AIO uses this same Go startup path, with no second generator in its
-  entrypoint. The generated key and encrypted state are temporary; persistent
-  deployments must retain their key separately and must not silently replace it.
+  entrypoint. Temporary startup retains no key files. Missing/corrupt bootstrap or
+  conflicting nonempty overrides must fail without generating replacement keys.
 - All-in-one defaults an unset or empty `API_USERNAME` to `commander` and
   generates a cryptographically random password when `API_PASSWORD` is unset or
   empty. Preserve explicit nonempty overrides and pass session credentials to
   the embedded API through its run options, without modifying process environment.
-  Reuse `host.BasicCredentials` and `host.GeneratePassword`; never write credentials
-  to files or logs, include them in model messages, or expose them through `/status`.
+  Reuse `host.BasicCredentials` and `host.GeneratePassword`; only persistent private
+  local bootstrap may store credentials. Never log them, include them in model
+  messages, or expose them through `/status`.
   Local `/credentials` displays both credentials during setup or chat; it accepts
   no arguments. Handle the command and invalid arguments before forwarding input
   to the model. List it inside help, without a separate pre-help notice.
-  Keep generated credentials scoped to the session. Standalone API startup still
+  Reuse persistent credentials on restart; temporary credentials are session-only.
+  Standalone API startup still
   requires environment credentials.
   The default API listen address is `127.0.0.1:4274`; `API_LISTEN_ADDRESS` overrides
   it, including port `0` for fixtures. Set the API listen flag explicitly so
@@ -181,15 +196,19 @@
   `MCP_TOKEN`, preserving explicit nonempty overrides. Validate it before starting
   hosts and pass the same credentials to MCP and Playground without changing the
   environment. Local `/credentials` displays the token only on request.
-- Native `commander credentials api|mcp` reads only its own environment; generated
-  native credentials remain in the running Playground and use `/credentials`.
+- Native `commander credentials api|mcp` reads explicit environment credentials or
+  the saved profile, with optional `--state-dir`; lookup never creates state or
+  requires its running owner's lock. Temporary generated credentials use `/credentials`.
   `--raw` prints only the selected password or token on explicit CLI lookup.
-  In the all-in-one image, [`docker/entrypoint.aio.sh`](docker/entrypoint.aio.sh) exports credentials
-  before starting Tini, then Commander. Preserve explicit nonempty overrides;
-  generated values change on restart. Docker lookup reads PID 1's startup
+  In the all-in-one image, [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts
+  Tini and Commander directly; Go bootstrap owns generation and persistence. Preserve
+  explicit nonempty overrides. Docker lookup reads PID 1's startup
   environment only after identifying Commander or its exact Tini invocation.
   Once identified, lookup failures must not fall back to another environment.
-  Do not add credential files, sockets or session-discovery directories.
+  Honor that process's effective state directory and temporary flag; never reveal
+  an unrelated persistent profile for a temporary container. Keep the private
+  startup flag parser in `internal/credentials` aligned with CLI flags; keep its
+  scenarios in `tests/credential_settings_test.go`. Do not add discovery sockets.
 - Remote MCP uses `COMMANDER_MCP_TOKEN` or a masked setup input; all-in-one ignores
   this remote credential. Validate entered tokens with `host.BearerCredentials`;
   keep them in session memory, outside the environment, files and model history.
@@ -210,7 +229,7 @@
   export credentials to process environments before exec. Reuse the saved token
   across restarts, replacing it when an explicit nonempty `MCP_TOKEN` is configured.
   Preserve `COMMANDER_MCP_TOKEN` as a client override. Compose bootstrap mounts
-  are exceptions to native/all-in-one credential-file rules. Fail before
+  are independent of native/all-in-one bootstrap files. Fail before
   starting the client if its required token cannot be read. Use `run --no-deps`
   after stack readiness so launch cannot recreate MCP. Do not add Docker socket
   mounts or an unauthenticated token endpoint.
@@ -235,8 +254,10 @@
   `--admin-url` after the image name for another published port or host.
   Container browser runs use `CHROMIUM_NO_SANDBOX=true`; keep the process
   non-root and pass this setting through native bootstrap. Retain Chromium,
-  fonts, Git, Go and Codex for installed agents and build capabilities. State
-  remains temporary; adding image dependencies must not change session persistence.
+  fonts, Git, Go and Codex for installed agents and build capabilities. Both images
+  provide a real user's writable private profile directory; mount a named volume
+  there to retain client state beyond container removal. Compose owns its separate
+  `playground-state` volume. Adding dependencies must not change persistence.
   Container ports cannot be published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
@@ -310,7 +331,24 @@
   operator answers concurrently. Keep accepted answers in the existing review
   flow and never label a model answer as operator consent.
 - Show readable errors by default and redacted provider details with `--debug`.
-  Keep keys/history in memory and avoid repeating full schemas/results in prompts.
+  Keep credentials and secret forms outside model context and saved transcripts.
+  Persist full chat/model history per logical backend (`local` or exact remote MCP
+  URL), excluding private `/credentials` output. Restore context without replaying
+  tool calls, watchers or model decisions; explicit `/watch` resumes review. Complete
+  interrupted tool envelopes with unknown-outcome context, never a fabricated result.
+  Normalize historical tool exchanges when switching models/providers. Serialize
+  immutable owner snapshots through one coalescing history writer and join it after
+  draining the engine on Close. Preserve corrupt/incompatible history without
+  overwriting it. Saved files are bounded to 32 MiB; report failed writes locally
+  and on final shutdown. `/clear` clears model context, retaining the visible transcript.
+  Avoid repeating full schemas/results in prompts.
+- Load local provider keys only when explicit environment/input keys are absent.
+  Bind cache entries to provider and exact model API base URL. Remember only keys
+  entered through Playground after connection, using a separate local encryption
+  key and private ciphertext file; never retrieve API secret values. Missing or
+  rejected saved credentials return to masked entry without a restore loop and
+  suggest the preset's canonical environment variable. Cache errors stay local;
+  never silently replace a missing encryption key over retained ciphertext.
 - After a successful MCP connection, share the selected provider's key through the
   retained API connection using Admin's metadata and create-only secret calls.
   Use the preset's first `KeyEnv` name, including `GEMINI_API_KEY` for the Google
@@ -319,7 +357,8 @@
   and bounded, cancel and await it on exit, and never retry a failed write.
   Missing API login and failures stay local notices without blocking chat. Do not
   infer an API destination from MCP or put values into model/MCP messages. Persistent
-  deployments encrypt this value through their API; all-in-one state remains temporary.
+  deployments encrypt this value through their API. Local caching does not change
+  these create-only API writes or grant secret-value reads.
 - Model discovery authentication failures return to an empty, masked key prompt;
   preserve the provider and base URL, and retry only after explicit submission.
   Use typed provider errors, including Gemini's structured invalid-key response.
@@ -351,7 +390,7 @@
   shortcut only while a reply is active.
   All-in-one startup shows the provider/model, readiness with the actual connected
   agent count (one by default), one agent-installation prompt and the
-  temporary-state note. Keep URLs, host inventories and
+  state-retention note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 
 ## Checks

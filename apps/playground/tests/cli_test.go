@@ -625,6 +625,7 @@ func testAllInOneGeneratedCredentials(t *testing.T) {
 }
 
 func TestCredentialCommand(t *testing.T) {
+	t.Setenv("COMMANDER_STATE_DIR", fixtures.LocalStateDirectory(t))
 	t.Setenv("COMMANDER_MCP_URL", "invalid-url")
 	t.Setenv("COMMANDER_DEBUG", "invalid-boolean")
 	for _, tc := range []struct {

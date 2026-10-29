@@ -17,7 +17,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/muesli/termenv v0.16.0
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.48.0
 )
 
 require (

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,9 +37,20 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	profile, err := config.openState()
+	if err != nil {
+		return err
+	}
+	if profile != nil {
+		defer func() { result = errors.Join(result, profile.Close()) }()
+	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
-		session, err := local.StartWithOptions(ctx, local.Options{ServeAdmin: config.ServeAdminUI})
+		options := local.Options{ServeAdmin: config.ServeAdminUI}
+		if profile != nil {
+			options.Directory = filepath.Join(profile.Directory, "local")
+		}
+		session, err := local.StartWithOptions(ctx, options)
 		if err != nil {
 			return err
 		}
@@ -82,7 +94,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	model := ui.New(ctx, config.Config, stdout)
-	defer model.Close()
+	defer func() { result = errors.Join(result, model.Close()) }()
 	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout), tea.WithAltScreen())
 	_, err = program.Run()
 	if config.AllInOne && ctx.Err() != nil && caller.Err() == nil {

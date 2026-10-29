@@ -6,11 +6,12 @@ Use Compose to develop against persistent local services.
 ## All-in-one Docker
 
 ```sh
-docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
+docker run --rm -it --name commander -v commander-state:/home/commander/.commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
 ```
 
 Open [Admin](http://localhost:4275), or use `/admin` in Playground.
-Use `/credentials` for the API login. Exiting deletes the session's results.
+Use `/credentials` for the API login. The named volume keeps results, credentials
+and chat history after exit. Use `--temporary` for a disposable all-in-one session.
 
 For another host or published port, pass `--admin-url=<browser-facing URL>` after
 the image name. Publish API port `4274` only if another tool needs it.
@@ -35,6 +36,8 @@ Admin adds bundled missions through the API at startup, preserving existing name
 
 Playground receives the MCP token and local API login automatically, including
 for `/admin` commands and secret forms. Sign in to browser Admin separately.
+Its `playground-state` volume retains client settings, chat history and locally
+remembered provider keys between `docker compose run --rm` sessions.
 To connect another MCP client, follow [the MCP guide](../apps/adapters/README.md#quick-start).
 
 Compose saves the API password and MCP token in separate volumes and reuses them
@@ -73,7 +76,8 @@ The controller mounts the saved key read-only and decrypts requested secrets
 using the same key as the API. Agents receive values through the broker.
 
 **Back up the `secrets-key` volume with MongoDB and restore them together.** A new
-key cannot decrypt existing secrets. All-in-one generates a temporary session key.
+key cannot decrypt existing secrets. All-in-one retains its key with its saved
+local state; back up the entire profile. `--temporary` uses a disposable key.
 For a separate controller, configure the same key as the API. Agents do not need
 that key for managed-secret delivery. See [secret setup](../framework/secrets/README.md).
 

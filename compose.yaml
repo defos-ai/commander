@@ -510,6 +510,7 @@ services:
     volumes:
       - mcp-credentials:/run/commander:ro
       - api-credentials:/run/commander-api:ro
+      - playground-state:/home/commander/.commander
     depends_on:
       api-credentials:
         condition: service_completed_successfully
@@ -529,6 +530,7 @@ volumes:
   secrets-key:
   api-credentials:
   mcp-credentials:
+  playground-state:
   rabbitmq:
   minio:
   mongo:

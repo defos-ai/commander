@@ -130,10 +130,19 @@ func (m *Model) View() string {
 			lines = append(lines, "API base URL")
 		case stageKey:
 			usage := "Kept in memory for this session."
+			if m.config.SaveProviderKey != nil {
+				usage = "Remembered encrypted on this machine."
+			}
 			if name := m.providerSecretName(); name != "" && m.config.API.URL != "" && m.config.API.Credentials.Password != "" {
 				usage = "Saved encrypted as " + name + " for agents if absent."
+				if m.config.SaveProviderKey != nil {
+					usage = "Remembered encrypted on this machine. " + usage
+				}
 			}
 			lines = append(lines, m.provider.Name+" API key · "+usage)
+			if name := m.providerSecretName(); name != "" {
+				lines = append(lines, "You can also set "+name+" before launch.")
+			}
 			if m.provider.KeyURL != "" {
 				lines = append(lines, "Get an API key: "+m.color(m.provider.KeyURL, ReticleGreen))
 			} else {

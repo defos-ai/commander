@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/defos-ai/commander/apps/playground/internal/chat"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
+	"github.com/defos-ai/commander/apps/playground/internal/state"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/muesli/termenv"
 )
@@ -30,6 +31,11 @@ type Config struct {
 	AllInOne                 bool
 	LocalAgentCount          int
 	ServeAdmin               func(context.Context, []string) (string, error)
+	SaveSettings             func(state.Settings) error
+	LoadProviderKey          func(provider, baseURL string) (string, error)
+	SaveProviderKey          func(provider, baseURL, value string) error
+	LoadHistory              func(string) (History, error)
+	SaveHistory              func(string, History) error
 }
 
 type Connection[C host.Credentials] struct {
@@ -42,6 +48,7 @@ type entry struct {
 	rendered      string
 	renderedWidth int
 	dirty         bool
+	private       bool
 }
 type tick time.Time
 type eventMessage struct {
@@ -73,6 +80,9 @@ type Model struct {
 	markdownWidth        int
 	providerSecretCancel context.CancelFunc
 	providerSecretDone   <-chan struct{}
+	providerKey          providerKeyState
+	settingsSaveDone     <-chan struct{}
+	history              historyState
 }
 
 func New(ctx context.Context, config Config, output io.Writer) *Model {
@@ -107,7 +117,13 @@ func nextTick() tea.Cmd {
 	return tea.Tick(140*time.Millisecond, func(t time.Time) tea.Msg { return tick(t) })
 }
 
-func (m *Model) Close() {
+func (m *Model) Close() error {
+	for _, done := range m.providerKey.done {
+		<-done
+	}
+	if m.settingsSaveDone != nil {
+		<-m.settingsSaveDone
+	}
 	if m.questions.cancel != nil {
 		m.questions.cancel()
 		<-m.questions.done
@@ -128,11 +144,17 @@ func (m *Model) Close() {
 		m.setupCancel()
 	}
 	if m.engine != nil {
-		m.engine.Close()
+		final := m.engine.CloseWithHistory()
+		for event := range m.engine.Events() {
+			m.receive(event)
+		}
+		m.history.messages = final
 	}
+	err := m.closeHistory()
 	if m.commander != nil {
 		_ = m.commander.Close()
 	}
+	return err
 }
 
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -158,6 +180,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	switch msg := message.(type) {
 	case tick:
+		m.checkHistoryError()
 		m.frame++
 		return m, tea.Batch(nextTick(), m.syncSecrets())
 	case tea.WindowSizeMsg:
@@ -283,6 +306,12 @@ func waitEvent(engine *chat.Engine) tea.Cmd {
 }
 
 func (m *Model) receive(event chat.Event) {
+	if event.Kind == "history" {
+		m.history.messages = event.History
+		m.queueHistory()
+		return
+	}
+	defer m.queueHistory()
 	switch event.Kind {
 	case "control_start":
 		m.controls++
@@ -375,17 +404,22 @@ func (m *Model) add(kind, text string) {
 }
 
 func (m *Model) addEntry(kind, text, callID string) {
+	m.appendEntry(kind, text, callID, false)
+}
+
+func (m *Model) appendEntry(kind, text, callID string, private bool) {
 	if kind == "error" && m.stage != stageChat {
 		m.setupError = clean(text)
 		return
 	}
-	m.entries = append(m.entries, entry{kind: kind, text: clean(text), callID: callID, dirty: true})
-	if len(m.entries) > 500 {
+	m.entries = append(m.entries, entry{kind: kind, text: clean(text), callID: callID, dirty: true, private: private})
+	if len(m.entries) > 500 && m.config.SaveHistory == nil {
 		m.entries = m.entries[len(m.entries)-500:]
 		m.streamIndex = -1
 	}
 	m.forceBottom = true
 	m.refresh()
+	m.queueHistory()
 }
 func clean(text string) string {
 	text = ansi.Strip(text)
