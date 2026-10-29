@@ -8,6 +8,11 @@ artifacts across distributed agent work.
 Follow the [MCP setup and workflow guide](https://github.com/defos-ai/commander/blob/main/apps/adapters/README.md#quick-start)
 for authentication, client configuration and tool usage.
 
+The server listens on `127.0.0.1:4273` locally. On a platform that supplies `PORT`,
+it binds to `0.0.0.0:$PORT`. Override this with `MCP_LISTEN_ADDRESS` or
+`--listen-address` (highest priority). The Docker image defaults `PORT` to `4273`.
+Include your public hostname in `--allowed-hosts` when deploying behind a proxy.
+
 To edit a mission, read `describe_mission`, then call `update_mission` with its
 complete definition and unchanged name. Edit objectives, actions, rules and
 schemas; existing operations keep their original mission snapshot. After an

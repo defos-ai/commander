@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -144,22 +143,13 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 		previous := m.restoreHistory()
 		m.engine = chat.NewWithHistory(m.ctx, m.modelClient, m.commander, previous)
 		m.setStage(stageChat, "Ask about missions, agents, or an objective…", "")
-		m.addPrivate("success", m.provider.Name+" · "+m.settings.Model)
-		connection := "Commander connected · " + m.config.MCP.URL
-		if m.config.AllInOne {
-			agents := "agents"
-			if m.config.LocalAgentCount == 1 {
-				agents = "agent"
-			}
-			connection = fmt.Sprintf("Commander ready · all-in-one · %d %s connected", m.config.LocalAgentCount, agents)
-		}
-		m.addPrivate("success", connection)
 		for _, notice := range m.config.Notices {
 			m.addPrivate("notice", notice)
 		}
 		if !m.config.AllInOne {
-			m.addPrivate("notice", "Try: Install the web agent, then review defos.ai. Type /help for commands.")
+			m.addPrivate("notice", "Try: Build an agent for a task you want to automate.")
 		}
+		m.refresh()
 		return tea.Batch(waitEvent(m.engine), m.shareProviderSecret(), m.saveProviderKey(), m.saveSettings()), true
 	}
 	return nil, false

@@ -12,6 +12,10 @@ agents:
     description: Smart, dedicated browser agent for navigating web applications, inspecting rendered pages, and capturing screenshots.
     source: github.com/defos-ai/commander-browser-agent@stable
     visibility: public
+  codex:
+    description: Performs coding and repository tasks with Codex, reports progress, and returns results and artifacts.
+    source: github.com/defos-ai/commander-codex-agent@stable
+    visibility: public
   example:
     description: Demonstrates Commander agent actions as a template for developing custom agents.
     source: github.com/defos-ai/commander-example-agent@stable

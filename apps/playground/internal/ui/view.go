@@ -53,8 +53,8 @@ func (m *Model) refresh() {
 	bottom := m.forceBottom || m.viewport.AtBottom()
 	m.forceBottom = false
 	m.viewport.Width = max(20, m.width-4)
-	// Reserve the header and spacer; the footer's trailing newline leaves one empty row.
-	m.viewport.Height = max(1, m.height-2-strings.Count(m.bottomView(m.operationProgress()), "\n"))
+	// Measure fixed panels so the footer retains one empty row below it.
+	m.viewport.Height = max(1, m.height-strings.Count(m.topView(), "\n")-strings.Count(m.bottomView(m.operationProgress()), "\n"))
 	var lines []string
 	for i := range m.entries {
 		item := &m.entries[i]
@@ -104,7 +104,7 @@ func (m *Model) refresh() {
 	}
 }
 
-func (m *Model) View() string {
+func (m *Model) topView() string {
 	header := "✸ DEFOS | Commander Playground"
 	if m.stage == stageChat {
 		header += "  ·  " + clean(m.settings.Model)
@@ -115,8 +115,28 @@ func (m *Model) View() string {
 	} else {
 		header = ansi.Truncate(header, m.width, "…")
 	}
+	if m.stage != stageChat || m.secrets.open {
+		return header + "\n\n"
+	}
+	connection := "Commander connected · " + m.config.MCP.URL
+	if m.config.AllInOne {
+		agents := "agents"
+		if m.config.LocalAgentCount == 1 {
+			agents = "agent"
+		}
+		connection = fmt.Sprintf("Commander ready · all-in-one · %d %s connected", m.config.LocalAgentCount, agents)
+	}
+	marker := m.color("✓", ReticleGreen) + "  "
+	width := max(20, m.width-4)
+	status := ansi.Truncate(marker+clean(m.provider.Name+" · "+m.settings.Model), width, "…") + "\n" +
+		ansi.Truncate(marker+clean(connection), width, "…")
+	return header + "\n\n" + m.renderer.NewStyle().PaddingLeft(2).Render(status) + "\n\n"
+}
+
+func (m *Model) View() string {
+	top := m.topView()
 	if m.secrets.open {
-		return header + "\n\n" + m.secretView() + "\n"
+		return top + m.secretView() + "\n"
 	}
 	var content string
 	if m.stage == stageChat {
@@ -178,7 +198,7 @@ func (m *Model) View() string {
 		}
 		content = strings.Join(lines, "\n")
 	}
-	return header + "\n\n" + content + m.bottomView(m.operationProgress())
+	return top + content + m.bottomView(m.operationProgress())
 }
 
 func (m *Model) bottomView(progress []string) string {
@@ -235,8 +255,8 @@ func (m *Model) operationProgress() []string {
 		}
 		return a.UpdatedAt.After(b.UpdatedAt)
 	})
-	// Reserve the header, three chat rows and the actual controls before adding whole rows.
-	available := max(0, m.height-5-strings.Count(m.bottomView(nil), "\n"))
+	// Reserve fixed panels and three chat rows before adding whole operation rows.
+	available := max(0, m.height-strings.Count(m.topView(), "\n")-3-strings.Count(m.bottomView(nil), "\n"))
 	more := func(count int) string {
 		return ansi.Wrap(fmt.Sprintf("  +%d more · /operations", count), max(20, m.width-4), "")
 	}

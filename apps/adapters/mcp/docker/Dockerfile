@@ -13,8 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl openssl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/commander-mcp /usr/local/bin/commander-mcp
-ENV MCP_RUNTIME=docker
+ENV MCP_RUNTIME=docker PORT=4273
 USER 1000:1000
 EXPOSE 4273
 ENTRYPOINT ["/usr/local/bin/commander-mcp"]
-CMD ["-listen-address", ":4273"]

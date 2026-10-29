@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,7 +34,7 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 	flags.StringVar(&busURL, "bus-url", "", "Message broker URL: filesystem path or file:///path (fallback: BUS_URL, then ./state/bus)")
 	flags.StringVar(&storageURL, "storage-url", "", "Artifact and report storage URL (fallback: STORAGE_URL, then ./state/storage)")
 	flags.StringVar(&databaseURL, "database-url", "", "Database URL for querying saved state (fallback: DATABASE_URL, then ./state/database)")
-	flags.StringVar(&result.listenAddress, "listen-address", "127.0.0.1:4273", "HTTP host:port serving /mcp, /healthz and /aboutz; use :4273 in containers")
+	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port serving /mcp, /healthz and /aboutz (MCP_LISTEN_ADDRESS, then 0.0.0.0:$PORT, then 127.0.0.1:4273)")
 	flags.StringVar(&result.runtime, "runtime", "", "Deployment runtime: native, docker or docker-compose (MCP_RUNTIME; default native)")
 	flags.StringVar(&allowedHosts, "allowed-hosts", "localhost,127.0.0.1,::1", "Comma-separated HTTP hostnames/IPs without ports; include the public hostname when deploying behind an ingress")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Logging level: debug, info, warn, error (fallback: LOG_LEVEL, then info)")
@@ -67,6 +68,18 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 	default:
 		return config{}, errors.New("runtime must be native, docker or docker-compose (MCP_RUNTIME)")
 	}
+	result.listenAddress = host.Value(result.listenAddress, provided["listen-address"], "MCP_LISTEN_ADDRESS", "")
+	if result.listenAddress == "" && !provided["listen-address"] {
+		result.listenAddress = "127.0.0.1:4273"
+		if port, present := os.LookupEnv("PORT"); present {
+			portNumber, err := strconv.Atoi(port)
+			if err != nil || portNumber < 1 || portNumber > 65535 || strings.ContainsFunc(port, func(r rune) bool { return r < '0' || r > '9' }) {
+				return config{}, errors.New("PORT must be an integer between 1 and 65535")
+			}
+			result.listenAddress = net.JoinHostPort("0.0.0.0", port)
+		}
+	}
+
 	hostname, port, err := net.SplitHostPort(result.listenAddress)
 	if err != nil || strings.TrimSpace(hostname) != hostname {
 		return config{}, errors.New("listen-address must be a host:port address")

@@ -261,20 +261,17 @@
   Container ports cannot be published after creation.
 - Keep agent dependency discovery in the agent. The Playground renders readiness
   and questions; it does not install dependencies or invent fallback work.
-  Embed `build-agent`, `install-agent` and `review-website`. Within the build
+  Embed `build-agent` and `install-agent`. Within the build
   mission, offer optional `publish-agent` after successful build review and wait
   for operator agreement. Declining publication completes with its source artifact;
   missing `GITHUB_TOKEN` must not block checkout/build. Read the publication action
   schema for a visibility default; absent an explicit choice or default, ask
   Public (recommended) or Private and await the operator's answer.
   Never put managed GitHub/model keys in chat or question answers.
-  The native quick start installs
-  the web agent before using `review-website`; browser actions are optional and
-  require discovered browser coverage before use. Do not create
+  Install other agents through the spawner and create missions for their workflows.
+  Browser actions require discovered browser coverage before use. Do not create
   partial completion or browser fallback policy in the client.
-  Wait for spawner to register. The web agent
-  owns HTTP work and remains ready without Chromium; the browser advertises rendering
-  requirements. Any separately started builder discovers Git, Go and Codex itself;
+  Wait for spawner to register. Any separately started builder discovers Git, Go and Codex itself;
   its tools and managed `OPENAI_API_KEY` affect action readiness. Keep readiness in
   the agent rather than adding builder startup or installation to the client.
 - Preserve the chat engine's single-owner state and responsive queued input,
@@ -289,6 +286,11 @@
   whole rows; hidden work remains watched. Measure rendered status, question,
   input and footer lines when sizing the chat viewport, keeping one empty line
   below the footer rather than reserving an unused fixed block.
+  Keep provider/model and Commander connection status fixed beneath the header,
+  outside the scrolling transcript and saved history. Truncate each status row
+  on narrow terminals; full details remain in `/status`. Include this panel in
+  viewport and operation-summary height budgets. Secret forms retain their own
+  header and field budget.
 - Render the server's `progress` counts and use its `settled` flag for watcher
   completion, final model review and Admin review links. Do not recalculate task
   completion locally: interrupted outcomes remain unknown even on terminal
@@ -393,7 +395,7 @@
   promise a frozen screen or add a mouse mode command. Show the footer's stop
   shortcut only while a reply is active.
   All-in-one startup shows the provider/model, readiness with the actual connected
-  agent count (one by default), one agent-installation prompt and the
+  agent count (one by default), one agent-building prompt and the
   state-retention note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 

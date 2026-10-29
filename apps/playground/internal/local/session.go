@@ -157,7 +157,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if s.persistent {
 		stateNotice = "Persistent session · results retained between runs"
 	}
-	s.Notices = append(s.Notices, "\nTry: Install the web agent, then review defos.ai\n\n"+stateNotice)
+	s.Notices = append(s.Notices, "\nTry: Build an agent for a task you want to automate.\n\n"+stateNotice)
 	return s, nil
 }
 

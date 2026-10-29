@@ -153,11 +153,14 @@ deployment metadata (`/aboutz`), health probes and approved CORS preflights.
 
 | Configure… | Environment variable |
 | --- | --- |
-| Listener (default `127.0.0.1:4274`) | `API_LISTEN_ADDRESS` |
+| Listener (default `127.0.0.1:4274`) | `API_LISTEN_ADDRESS`, then `PORT` |
 | Accepted hostnames; add your public and internal upstream names | `API_ALLOWED_HOSTS` |
 | Other browser clients; use exact origins such as `https://app.example.com` | `API_ALLOWED_ORIGINS` |
 | Reverse proxy IPs or CIDRs | `API_TRUSTED_PROXIES` |
 | Trusted headers: `forwarded`, `x-forwarded` or `x-forwarded-proto` | `API_PROXY_HEADERS` |
+
+When `PORT` is supplied, the API listens on `0.0.0.0:$PORT`. An explicit
+`API_LISTEN_ADDRESS` overrides it; `--listen-address` takes highest priority.
 
 Configure proxies to overwrite the selected forwarding headers. Admin sends
 credentials from its backend, so it needs no API CORS permission; its upstream

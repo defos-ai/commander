@@ -14,7 +14,7 @@ docker run --name commander --rm -it -v commander-state:/home/commander/.command
 
 Choose a provider, enter its API key and ask:
 
-> Install the web agent, then review defos.ai.
+> Build an agent that analyzes text and saves a summary.
 
 The image includes Admin and spawner, plus Git, Go, Codex and browser tools for
 installed agents. Only spawner starts automatically; other agents install on demand.

@@ -7,7 +7,7 @@ export const publicAPIURL = 'http://localhost:14274';
 export const username = process.env.COMMANDER_TEST_API_USERNAME ?? 'api-fixture-user';
 export const password = process.env.COMMANDER_TEST_API_PASSWORD ?? 'api-fixture-password';
 const terminal = new Set(['completed', 'cancelled', 'failed']);
-const fixtureMissions = ['analyze-text', 'build-agent', 'fixture-affinity', 'fixture-use-agent', 'install-agent', 'review-website'];
+const fixtureMissions = ['analyze-text', 'build-agent', 'fixture-affinity', 'fixture-use-agent', 'install-agent'];
 
 export class CommanderAPI {
   constructor(private readonly request: APIRequestContext) {}

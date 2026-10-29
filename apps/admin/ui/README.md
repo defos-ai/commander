@@ -140,6 +140,10 @@ an API on your laptop through `localhost`; use a server-reachable address.
 For hosting, use HTTPS and set `UI_PUBLIC_ORIGIN=https://admin.example.com`,
 including behind a reverse proxy.
 
+When the platform supplies `PORT`, Admin listens on `:$PORT` instead of `:4275`.
+`UI_LISTEN_ADDRESS` overrides it; `--listen-address` takes highest priority.
+The Docker image uses the same settings.
+
 ## Native server
 
 With Node 24+ and Go 1.26.7+, run from the repository root:

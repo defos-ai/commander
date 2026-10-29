@@ -102,6 +102,7 @@ func (m *Model) startupHistoryEntry(item HistoryEntry) bool {
 		return false
 	}
 	if strings.HasPrefix(strings.TrimSpace(item.Text), "Try: Install the web agent, then review defos.ai") ||
+		strings.HasPrefix(strings.TrimSpace(item.Text), "Try: Build an agent for a task you want to automate.") ||
 		item.Text == "Saved conversation restored. Use /watch <id> to resume operation review." {
 		return true
 	}

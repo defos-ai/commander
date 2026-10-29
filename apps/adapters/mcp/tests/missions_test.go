@@ -27,7 +27,7 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[name] = summary
 	}
-	for _, name := range []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent", "review-website"} {
+	for _, name := range []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
 			t.Fatalf("missing agent mission: %s", name)
 		}

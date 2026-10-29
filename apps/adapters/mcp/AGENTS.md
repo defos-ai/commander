@@ -7,6 +7,12 @@ Start in [adapter.go](adapter.go) for tool registration and input decoding.
 [cli/factory.go](cli/factory.go) selects providers;
 [cli/http.go](cli/http.go) configures the HTTP host.
 
+Resolve listen configuration after flag parsing: explicit `--listen-address`,
+nonempty `MCP_LISTEN_ADDRESS`, `0.0.0.0:$PORT`, then `127.0.0.1:4273`. Validate
+`PORT` only when selected, requiring decimal digits in the range 1–65535.
+Explicit addresses retain port zero for embedded hosts. The Docker image sets
+`PORT=4273` rather than a fixed command argument, so platform ports can override it.
+
 `get_agent_sources` uses the caller-owned `SourceClient` to load the fixed public
 `DefaultAgentSourcesURL` on demand. Return only name, description, source and
 visibility in a `sources` list, sorted public first, then by name and full source
