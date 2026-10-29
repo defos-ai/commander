@@ -51,7 +51,7 @@ The list is discovery metadata; it has no saved trust or approval state.
 
 Call `create_mission` with a flat mission definition containing `name`,
 `objectives`, `input_schema` and `output_schema`.
-Add actions, planning steps and rules as needed; see
+Add actions and rules as needed; see
 [mission definitions](../../docs/abstractions.md#mission-operation-and-task).
 Actions may be installed later. Saving a mission does not start work.
 

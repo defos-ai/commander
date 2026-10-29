@@ -28,9 +28,6 @@ func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]se
 		}
 	}
 	names := slices.Clone(o.Mission.RequiredActions)
-	for _, step := range o.Mission.Steps {
-		names = append(names, step.RequiredActions...)
-	}
 	// Include selected optional work so missing requirements are visible while
 	// it waits for dispatch.
 	for _, task := range o.Tasks {

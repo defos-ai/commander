@@ -18,7 +18,7 @@ func CreateContinuationOperation(t *testing.T, store *operationfs.OperationFsSto
 	op := operations.Operation{
 		ID: operationID, Status: operations.Waiting, CreatedAt: created, UpdatedAt: created,
 		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,
-			ParentTaskID: id.TaskID(), StepID: "review", ActionName: "discover", Status: operations.TaskSucceeded,
+			ParentTaskID: id.TaskID(), ActionName: "discover", Status: operations.TaskSucceeded,
 			Continuation: &operations.Continuation{Version: 7, DecisionBy: operations.DecisionModel,
 				Status: operations.ContinuationPending, CreatedTaskIDs: []string{},
 				ProposedActions: []actions.NextAction{{ActionName: "inspect", Input: json.RawMessage(`{"page":0}`)}},

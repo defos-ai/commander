@@ -29,6 +29,6 @@ func QuestionWireAnswer(t *testing.T, request messages.Message, answer string) o
 	}
 	now := time.Now().UTC()
 	return operations.Question{ID: id.QuestionID(), Key: payload.Key, CommandID: payload.CommandID, TaskID: request.Work.TaskID,
-		StepID: request.Work.StepID, Text: payload.Text, Options: payload.Options, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute),
+		Text: payload.Text, Options: payload.Options, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute),
 		Status: operations.QuestionAnswered, Answer: answer, AnsweredAt: &now, AnsweredBy: operations.AnswerOperator}
 }

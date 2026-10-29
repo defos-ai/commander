@@ -24,13 +24,6 @@ export function MissionDetails({ mission }: { mission: Mission }) {
     <section className="mission-section"><h2>{t($ => $.missions.rules)}</h2>
       <MissionRules rules={mission.rules} />
     </section>
-    {Boolean(mission.steps?.length) && <section className="mission-section"><h2>{t($ => $.missions.steps)}</h2><p className="mission-muted">{t($ => $.missions.stepsDescription)}</p>
-      <ol className="mission-steps">{mission.steps?.map(step => <li key={step.id}>
-        <h3>{step.id}</h3><p>{step.objective}</p>
-        {Boolean(step.agent_types?.length) && <div><h4>{t($ => $.missions.agentTypes)}</h4><ActionNames names={step.agent_types} /></div>}
-        {Boolean(step.required_actions?.length) && <div><h4>{t($ => $.missions.requiredActions)}</h4><ActionNames names={step.required_actions} /></div>}
-      </li>)}</ol>
-    </section>}
     <SchemaDetails schema={mission.input_schema} direction="input" />
     <SchemaDetails schema={mission.output_schema} direction="output" />
   </div>;

@@ -64,7 +64,7 @@ func executionLogData(t *testing.T) (executions.Log, messages.Message) {
 		ActionName: "build-agent", Message: "Compiling packages ✓",
 		Work: messages.WorkContext{
 			OperationID: "22222222-2222-4222-8222-222222222222",
-			TaskID:      "33333333-3333-4333-8333-333333333333", StepID: "build",
+			TaskID:      "33333333-3333-4333-8333-333333333333",
 		},
 		CreatedAt: time.Date(2026, 10, 27, 20, 21, 22, 123456789, time.UTC),
 	}

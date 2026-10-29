@@ -5,17 +5,9 @@ export interface Mission {
   optional_actions?: string[];
   action_definitions?: ActionDefinition[];
   starting_actions: string[] | null;
-  steps?: MissionStep[];
   rules?: Partial<Record<MissionRuleName, MissionRule>>;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
-}
-
-export interface MissionStep {
-  id: string;
-  objective: string;
-  agent_types: string[] | null;
-  required_actions: string[] | null;
 }
 
 export type MissionRuleName = 'aggregate-results' | 'decide-next-actions' | 'same-agent';
@@ -68,7 +60,6 @@ export interface Agent {
 export interface AgentWork {
   operation_id?: string;
   task_id?: string;
-  step_id?: string;
   action_name: string;
   command_id?: string;
   missing_requirements?: ActionRequirement[] | null;

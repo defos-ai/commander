@@ -16,7 +16,7 @@ export function operationLog(index: number, change: Partial<OperationLog> = {}):
   return {
     id: `30000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
     agent_id: 'builder-agent-12345678', command_id: '40000000-0000-4000-8000-000000000001',
-    action_name: 'build-agent', operation_id: logOperationID, task_id: logTaskID, step_id: 'build',
+    action_name: 'build-agent', operation_id: logOperationID, task_id: logTaskID,
     message: `Progress ${index}`, created_at: new Date(Date.UTC(2026, 9, 29, 12, 0, 0) - index * 1000).toISOString(),
     ...change,
   };

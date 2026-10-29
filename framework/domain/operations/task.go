@@ -27,7 +27,6 @@ type Task struct {
 	ID            string                    `json:"id"`
 	OperationID   string                    `json:"operation_id"`
 	ParentTaskID  string                    `json:"parent_task_id,omitempty"`
-	StepID        string                    `json:"step_id,omitempty"`
 	AgentID       string                    `json:"agent_id"`
 	ActionName    string                    `json:"action_name"`
 	CommandID     string                    `json:"command_id,omitempty"`
@@ -41,15 +40,14 @@ type Task struct {
 	FinishedAt    *time.Time                `json:"finished_at,omitempty"`
 }
 
-func NewTask(operationID, stepID, parentID string, action actionmodel.NextAction) Task {
+func NewTask(operationID, parentID string, action actionmodel.NextAction) Task {
 	taskID := id.TaskID()
 	intent := action.SessionIntent.Clone()
 	if intent != nil && intent.Mode == sessions.Create && intent.ID == "" {
 		intent.ID = taskID
 	}
-	return Task{SessionIntent: intent, ID: taskID, CommandID: taskID, OperationID: operationID, StepID: stepID,
-		ParentTaskID: parentID,
-		ActionName:   action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}
+	return Task{SessionIntent: intent, ID: taskID, CommandID: taskID, OperationID: operationID, ParentTaskID: parentID,
+		ActionName: action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}
 }
 
 func (t Task) Clone() Task {

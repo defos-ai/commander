@@ -91,7 +91,7 @@ func TestRecoveryWriteFailurePreventsStartupExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			config := fixtures.Config()
 			op := fixtures.SeedMaintenanceTask(t, config, true)
-			queued := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
+			queued := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
 			if _, err := config.OperationStore.QueueTask(t.Context(), op.ID, queued); err != nil {
 				t.Fatal(err)
 			}

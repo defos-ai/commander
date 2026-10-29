@@ -12,8 +12,8 @@ import (
 	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
-func queuedTask(operationID, stepID, parentID string, action actionmodel.NextAction) operations.Task {
-	return operations.NewTask(operationID, stepID, parentID, action)
+func queuedTask(operationID, parentID string, action actionmodel.NextAction) operations.Task {
+	return operations.NewTask(operationID, parentID, action)
 }
 
 func taskIndex(op *operations.Operation, taskID string) int {
@@ -56,7 +56,7 @@ func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuati
 		}
 		scopes := map[string]bool{}
 		for _, a := range command.Actions {
-			task := operations.NewTask(command.OperationID, "", "", a)
+			task := operations.NewTask(command.OperationID, "", a)
 			if task.SessionIntent == nil {
 				continue
 			}

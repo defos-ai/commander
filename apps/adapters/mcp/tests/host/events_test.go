@@ -23,7 +23,7 @@ func TestMCPEventWaitRetainsInterruptedWorkAndTimeoutCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	task := operations.NewTask(id.OperationID(), "", "", actions.NextAction{ActionName: "review"})
+	task := operations.NewTask(id.OperationID(), "", actions.NextAction{ActionName: "review"})
 	task.AgentID, task.Status, task.StartedAt = "fixture-agent-12345678", operations.TaskInterrupted, now
 	op := operations.Operation{ID: task.OperationID, Status: operations.Cancelled, Tasks: []operations.Task{task}, CreatedAt: now, UpdatedAt: now}
 	op.AppendEvent(operations.OperationCancelled, "", "", "cancelled while execution outcome is unknown")

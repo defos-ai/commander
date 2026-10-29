@@ -32,12 +32,11 @@ func (origin AnswerOrigin) Validate() error {
 	return nil
 }
 
-// A pending question blocks its StepID. An empty StepID blocks all new tasks.
-// Work already assigned continues and its results remain available.
+// An operation question blocks new assignments. Task questions pause their
+// continuation or waiting execution; unrelated work continues.
 type Question struct {
 	ID         string         `json:"id"`
 	Status     QuestionStatus `json:"status"`
-	StepID     string         `json:"step_id,omitempty"`
 	TaskID     string         `json:"task_id,omitempty"`
 	CommandID  string         `json:"command_id,omitempty"`
 	Key        string         `json:"key,omitempty"`
@@ -69,15 +68,12 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 	if err := question.validateNew(); err != nil {
 		return err
 	}
-	if err := o.ValidateStep(question.StepID); err != nil {
-		return err
-	}
 	if question.CommandID != "" && version != 0 {
 		return ErrOperationConflict
 	}
 	for _, existing := range o.Questions {
 		if question.CommandID != "" && existing.CommandID == question.CommandID && existing.Key == question.Key {
-			if existing.TaskID != question.TaskID || existing.StepID != question.StepID || existing.Text != question.Text || !slices.Equal(existing.Options, question.Options) {
+			if existing.TaskID != question.TaskID || existing.Text != question.Text || !slices.Equal(existing.Options, question.Options) {
 				return ErrOperationConflict
 			}
 			return nil
@@ -93,7 +89,7 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 		}
 		task := &o.Tasks[i]
 		if question.CommandID != "" {
-			if task.Status != TaskRunning || task.CommandID != question.CommandID || task.StepID != question.StepID {
+			if task.Status != TaskRunning || task.CommandID != question.CommandID {
 				return ErrOperationConflict
 			}
 		} else {
@@ -101,7 +97,6 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 			if version == 0 || c == nil || c.Version != version || c.Status != ContinuationPending || c.DecisionBy != DecisionModel {
 				return fmt.Errorf("only a pending model decision can request operator intervention: %w", ErrContinuationConflict)
 			}
-			question.StepID = task.StepID
 			c.DecisionBy, c.Status, c.QuestionID = DecisionUser, ContinuationWaiting, question.ID
 			c.Version++
 		}

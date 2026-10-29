@@ -29,7 +29,6 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
 		t.Fatalf("new operation progress: %+v", op.Progress)
 	}
-	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "analyze-text", "step_id": "unknown", "input": fixtures.Object{"text": fixtures.FixtureText}}), http.StatusUnprocessableEntity, "invalid_input")
 	assigned := a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "analyze-text", "input": fixtures.Object{"text": fixtures.FixtureText}})
 	root := fixtures.Decode[models.TaskResponse](t, assigned, http.StatusCreated)
 	if assigned.Header.Get("Location") != base+"/tasks/"+root.ID || root.OperationID != op.ID || root.CommandID == "" {

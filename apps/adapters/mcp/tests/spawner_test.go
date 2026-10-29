@@ -146,7 +146,6 @@ type spawnLog struct {
 	ActionName  string    `json:"action_name"`
 	OperationID string    `json:"operation_id"`
 	TaskID      string    `json:"task_id"`
-	StepID      string    `json:"step_id"`
 	Message     string    `json:"message"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -176,7 +175,7 @@ func assertSavedSpawnProgress(t *testing.T, client *fixtures.Client, task operat
 		for _, log := range page.Logs {
 			if !id.Valid(log.ID) || seen[log.ID] || log.AgentID != task.AgentID || log.CommandID != task.CommandID ||
 				log.ActionName != task.ActionName || log.OperationID != task.OperationID || log.TaskID != task.ID ||
-				log.StepID != task.StepID || log.CreatedAt.IsZero() || strings.TrimSpace(log.Message) == "" {
+				log.CreatedAt.IsZero() || strings.TrimSpace(log.Message) == "" {
 				t.Fatalf("saved progress lost its execution identity or repeated an observation: %+v", log)
 			}
 			seen[log.ID] = true

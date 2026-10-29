@@ -49,7 +49,6 @@ export default {
   action: 'Action',
   operation: 'Operation ID',
   task: 'Task ID',
-  step: 'Step ID',
   command: 'Command ID',
   snapshot: 'Agent snapshot',
   type: 'Type',

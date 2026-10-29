@@ -52,7 +52,7 @@ func TestControllerExecutionLogsPreserveExecutionAndAcceptLateReplays(t *testing
 }
 
 func TestControllerExecutionLogsRequireSavedOwnership(t *testing.T) {
-	for _, mismatch := range []string{"agent", "command", "operation", "task", "step", "action", "unknown claim"} {
+	for _, mismatch := range []string{"agent", "command", "operation", "task", "action", "unknown claim"} {
 		t.Run(mismatch, func(t *testing.T) {
 			fixture := fixtures.NewLogConsumer(t)
 			log := fixture.Log
@@ -67,8 +67,6 @@ func TestControllerExecutionLogsRequireSavedOwnership(t *testing.T) {
 				log.Work.OperationID = id.New()
 			case "task":
 				log.Work.TaskID = id.New()
-			case "step":
-				log.Work.StepID = "other-step"
 			case "action":
 				log.ActionName = "other-action"
 			case "unknown claim":

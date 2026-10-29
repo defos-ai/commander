@@ -101,7 +101,7 @@ describe('mission API', () => {
     { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], required_secrets: { SITE_TOKEN: 'value' } }] }] },
     { items: [{ ...mission, action_definitions: [{ ...mission.action_definitions![0], required_secrets: [42] }] }] },
 
-    { items: [{ ...mission, steps: [{ id: 'discover' }] }] },
+    { items: [{ ...mission, steps: [] }] },
     { items: [{ ...mission, rules: [] }] },
     { items: [{ ...mission, rules: { 'aggregate-results': { actions: ['discover-pages'] } } }] },
     { items: [{ ...mission, rules: { 'aggregate-results': { for_actions: ['discover-pages'], actions: ['check-links'] } } }] },

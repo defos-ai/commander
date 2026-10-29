@@ -58,7 +58,7 @@ func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAc
 	// Each decision owns its group; earlier children remain in the task graph.
 	c.CreatedTaskIDs = make([]string, 0, len(actions))
 	for _, action := range actions {
-		task := NewTask(op.ID, parent.StepID, parent.ID, action)
+		task := NewTask(op.ID, parent.ID, action)
 		c.CreatedTaskIDs = append(c.CreatedTaskIDs, task.ID)
 		op.Tasks = append(op.Tasks, task)
 		op.AppendEvent(TaskAssigned, task.ID, "", "Follow-up task queued")
@@ -157,7 +157,7 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 		return ErrContinuationConflict
 	}
 	for _, q := range op.Questions {
-		if q.Pending() && (q.TaskID == taskID || q.TaskID == "" && (q.StepID == "" || q.StepID == op.Tasks[i].StepID)) {
+		if q.Pending() && (q.TaskID == taskID || q.TaskID == "") {
 			return ErrQuestionPending
 		}
 	}

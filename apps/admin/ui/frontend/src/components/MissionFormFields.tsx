@@ -23,17 +23,10 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
   let invalidDefinitions = false;
   try { definitions = readActionDefinitions(draft.action_definitions); }
   catch { invalidDefinitions = true; }
-  let stepActions: string[] = [];
-  try {
-    const steps: unknown = JSON.parse(draft.steps);
-    if (Array.isArray(steps)) stepActions = steps.flatMap(step => Array.isArray(step?.required_actions)
-      ? step.required_actions.filter((name: unknown): name is string => typeof name === 'string') : []);
-  } catch { /* Advanced JSON stays editable while incomplete. */ }
   const advanced = [
     { field: 'input_schema', label: t($ => $.missions.builder.inputSchema) },
     { field: 'output_schema', label: t($ => $.missions.builder.outputSchema) },
     { field: 'rules', label: t($ => $.missions.builder.rules) },
-    { field: 'steps', label: t($ => $.missions.builder.steps) },
     { field: 'action_definitions', label: t($ => $.missions.builder.actionDefinitions) },
   ] as const;
 
@@ -63,11 +56,11 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
       </Button>
     </section>
     <MissionActionPicker connection={connection} credentials={credentials} disabled={disabled} onSignIn={onSignIn}
-      definitions={definitions} invalidDefinitions={invalidDefinitions} stepActions={stepActions}
+      definitions={definitions} invalidDefinitions={invalidDefinitions}
       onSaveDefinition={(definition, originalName) => {
         const actionDefinitions = writeActionDefinition(draft.action_definitions, definition, originalName);
         const selected = originalName !== undefined || draft.required_actions.includes(definition.name)
-          || draft.optional_actions.includes(definition.name) || stepActions.includes(definition.name);
+          || draft.optional_actions.includes(definition.name);
         onChange({ ...draft, action_definitions: actionDefinitions,
           required_actions: selected ? draft.required_actions : [...draft.required_actions, definition.name] });
       }}

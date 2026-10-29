@@ -33,7 +33,7 @@ func TestCheckpointResponsesMatchActiveExecution(t *testing.T) {
 		return err
 	})
 	fixture := fixtures.StartCheckpointAgent(t, executor)
-	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "launch"}
+	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New()}
 	commandID := fixture.Command(t, "checkpoint", `{}`, work)
 	request := fixture.Next(t, controllerevents.CheckpointRequested)
 	payload, err := controllerevents.DecodeCheckpointRequest(request)

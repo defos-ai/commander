@@ -94,8 +94,8 @@ func TestLogQueriesReadSavedOperationAndTaskPagesWithoutController(t *testing.T)
 	if err := json.Unmarshal([]byte(filtered.Body), &raw); err != nil {
 		t.Fatal(err)
 	}
-	if len(raw.Items[0]) != 9 || len(raw.Items[1]) != 8 || raw.Items[0]["work"] != nil || raw.Items[1]["step_id"] != nil {
-		t.Fatal("execution logs must use flat DTO fields and omit an empty step")
+	if len(raw.Items[0]) != 8 || len(raw.Items[1]) != 8 || raw.Items[0]["work"] != nil || raw.Items[0]["step_id"] != nil || raw.Items[1]["step_id"] != nil {
+		t.Fatal("execution logs must use flat DTO fields without mission steps")
 	}
 	if calls := config.Operations.(*fakes.FailedStart).Snapshot(); calls.Attempts != 0 {
 		t.Fatal("saved log query contacted the controller")
@@ -451,7 +451,7 @@ func TestLogQueriesOpenAPIContract(t *testing.T) {
 		fields = append(fields, name)
 	}
 	slices.Sort(fields)
-	if !slices.Equal(fields, []string{"action_name", "agent_id", "command_id", "created_at", "id", "message", "operation_id", "step_id", "task_id"}) || slices.Contains(schema.Required, "step_id") || len(schema.Required) != 8 {
+	if !slices.Equal(fields, []string{"action_name", "agent_id", "command_id", "created_at", "id", "message", "operation_id", "task_id"}) || len(schema.Required) != 8 {
 		t.Fatalf("log DTO schema does not match its flat wire fields: %v required=%v", fields, schema.Required)
 	}
 }
@@ -464,7 +464,7 @@ func assertLogResponses(t *testing.T, got []models.LogResponse, want []execution
 	for index, log := range want {
 		item := got[index]
 		if item.ID != log.ID || item.AgentID != log.AgentID || item.CommandID != log.CommandID || item.ActionName != log.ActionName ||
-			item.OperationID != log.Work.OperationID || item.TaskID != log.Work.TaskID || item.StepID != log.Work.StepID ||
+			item.OperationID != log.Work.OperationID || item.TaskID != log.Work.TaskID ||
 			item.Message != log.Message || !item.CreatedAt.Equal(log.CreatedAt) {
 			t.Fatalf("log %d lost provenance, exact message or timestamp: %+v", index, item)
 		}

@@ -38,7 +38,6 @@ export interface OperationTask {
   id: string;
   operation_id: string;
   parent_task_id?: string;
-  step_id?: string;
   agent_id: string;
   agent_type?: string;
   missing_requirements?: ActionRequirement[] | null;
@@ -80,7 +79,6 @@ export interface OperationNextAction {
 export interface OperationQuestion {
   id: string;
   status: string;
-  step_id?: string;
   task_id?: string;
   text: string;
   options?: string[] | null;

@@ -45,7 +45,7 @@ func ExecutionLog() executions.Log {
 		CommandID: "20000000-0000-4000-8000-000000000001", ActionName: "build-agent",
 		Work: messages.WorkContext{
 			OperationID: "30000000-0000-4000-8000-000000000001",
-			TaskID:      "40000000-0000-4000-8000-000000000001", StepID: "build",
+			TaskID:      "40000000-0000-4000-8000-000000000001",
 		},
 		Message:   "  Compiling <module>\nChecking UTF-8: готово 👋\t",
 		CreatedAt: time.Date(2026, 10, 29, 12, 0, 0, 123456789, time.UTC),

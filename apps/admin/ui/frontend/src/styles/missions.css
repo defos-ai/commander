@@ -89,10 +89,6 @@
 .mission-action-names li { padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; font: 400 10px/1.6 var(--font-mono); overflow-wrap: anywhere; min-width: 0; }
 .mission-empty-rules { padding-top: 14px; }
 .mission-rules { margin-top: 14px; }
-.mission-steps { padding-left: 22px; margin: 16px 0 0; }
-.mission-steps > li { padding: 0 0 20px 7px; }
-.mission-steps h3 { font: 400 12px/1.7 var(--font-mono); margin-bottom: 7px; }
-.mission-steps h4 { font-size: 12px; font-weight: 600; margin: 14px 0 7px; }
 .mission-fields-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
 .mission-fields { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
 .mission-fields th, .mission-fields td { padding: 13px 14px; vertical-align: top; overflow-wrap: anywhere; }

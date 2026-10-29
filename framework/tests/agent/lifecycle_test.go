@@ -143,7 +143,7 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 	working, stop := context.WithCancel(ctx)
 	defer stop()
 	finished := make(chan error, 1)
-	call := agent.ActionCall{ActionName: "inspect", Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-page"}}
+	call := agent.ActionCall{ActionName: "inspect", Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New()}}
 	go func() { _, err := a.Work(working, call); finished <- err }()
 	select {
 	case <-started:
@@ -153,7 +153,7 @@ func TestAgentRejectsCompetingWorkAndDiscovery(t *testing.T) {
 
 	snapshot := readAgentState(t, ctx, a, agent.AgentWorking)
 	if snapshot.Work == nil || snapshot.Work.OperationID != call.Work.OperationID || snapshot.Work.TaskID != call.Work.TaskID ||
-		snapshot.Work.StepID != call.Work.StepID || snapshot.Work.ActionName != call.ActionName || snapshot.Work.CommandID != "" {
+		snapshot.Work.ActionName != call.ActionName || snapshot.Work.CommandID != "" {
 		t.Fatalf("current work did not identify the direct action: %+v", snapshot.Work)
 	}
 	if _, err := a.Work(ctx, call); err == nil {

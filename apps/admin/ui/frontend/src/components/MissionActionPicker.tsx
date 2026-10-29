@@ -24,7 +24,6 @@ type Props = MissionActionSelection & {
   credentials?: Session;
   disabled?: boolean;
   definitions?: ActionDefinitionDraft[];
-  stepActions?: string[];
   invalidDefinitions?: boolean;
   onSaveDefinition?: (definition: ActionDefinitionDraft, originalName?: string) => void;
   onRemoveDefinition?: (name: string) => void;
@@ -33,7 +32,7 @@ type Props = MissionActionSelection & {
 };
 
 export function MissionActionPicker({ connection, credentials, requiredActions, optionalActions,
-  startingActions, disabled, definitions = [], stepActions = [], invalidDefinitions, onSaveDefinition, onRemoveDefinition, onChange, onSignIn }: Props) {
+  startingActions, disabled, definitions = [], invalidDefinitions, onSaveDefinition, onRemoveDefinition, onChange, onSignIn }: Props) {
   const { t } = useTranslation();
   const identity = useId();
   const [search, setSearch] = useState('');
@@ -43,7 +42,7 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
   const actions = new Map((query.items ?? []).map(action => [action.name, action]));
   const desired = new Map(definitions.map(definition => [definition.name, definition]));
   // Retain the draft when agents disappear or the catalog cannot be loaded.
-  const names = [...new Set([...requiredActions, ...optionalActions, ...startingActions, ...stepActions, ...actions.keys(), ...desired.keys()])];
+  const names = [...new Set([...requiredActions, ...optionalActions, ...startingActions, ...actions.keys(), ...desired.keys()])];
   const filter = search.trim().toLocaleLowerCase();
   const visible = names.filter(name => `${name} ${desired.get(name)?.description ?? actions.get(name)?.description ?? ''}`.toLocaleLowerCase().includes(filter))
     .sort((left, right) => left.localeCompare(right));
@@ -104,8 +103,7 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
         const definition = desired.get(name);
         const contract: Action | undefined = definition ? { ...definition, status: 'unknown',
           input_schema: JSON.parse(definition.input_schema), output_schema: JSON.parse(definition.output_schema) } : action;
-        const stepAction = stepActions.includes(name);
-        const role = requiredActions.includes(name) ? 'required' : optionalActions.includes(name) ? 'optional' : stepAction ? 'steps' : 'none';
+        const role = requiredActions.includes(name) ? 'required' : optionalActions.includes(name) ? 'optional' : 'none';
         const reports = (agentQuery.items ?? []).flatMap(agent => {
           const reportedAction = agent.actions?.find(candidate => candidate.name === name);
           return reportedAction ? [{ agent, action: reportedAction }] : [];
@@ -122,8 +120,7 @@ export function MissionActionPicker({ connection, credentials, requiredActions, 
           <div className="mission-action-controls">
             <select className="mission-action-role" aria-label={t($ => $.missions.builder.actionRole, { name })}
               value={role} disabled={disabled} onChange={event => setRole(name, event.target.value)}>
-              {stepAction ? <option value="steps">{t($ => $.missions.actionDefinition.stepRole)}</option>
-                : <option value="none" disabled={Boolean(definition)}>{t($ => $.missions.builder.roleNone)}</option>}
+              <option value="none" disabled={Boolean(definition)}>{t($ => $.missions.builder.roleNone)}</option>
               <option value="required">{t($ => $.missions.builder.roleRequired)}</option>
               <option value="optional">{t($ => $.missions.builder.roleOptional)}</option>
             </select>

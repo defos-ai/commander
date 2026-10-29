@@ -87,7 +87,7 @@
   reads fail, and allow saving without installed actions. Inspect uses independent
   `/agents` snapshots for per-agent readiness, labels stale reports, and never infers
   operation preflight or reserved capacity. Report failures must not block authoring.
-  **Advanced settings** exposes schemas, rules, steps and action definitions as raw
+  **Advanced settings** exposes schemas, rules and action definitions as raw
   JSON; **JSON** edits the full document. Patch only changed top-level values when
   moving from Form to JSON or submitting. Preserve untouched fields, numeric tokens
   and string escapes; reject unrepresentable JSON-to-Form transitions without
@@ -96,11 +96,10 @@
   a portal and stop submit propagation so adding a definition cannot submit the
   mission form. Add/edit/remove never calls the API or installs actions. New
   definitions become required unless already referenced; edits preserve roles.
-  Keep names read-only when
-  editing so steps and rules retain their references. Definitions stay referenced
-  by required/optional actions or planning steps in the picker. Step-only contracts
-  must not be promoted to root required actions when edited. Removing a definition keeps the action selections,
-  rules and steps intact; remove its selection separately if no longer needed.
+  Keep names read-only when editing so rules retain their references. Definitions
+  stay referenced by required/optional actions in the picker; editing preserves
+  their role. Removing a definition keeps action selections and rules intact;
+  remove its selection separately if no longer needed.
   Preserve raw schema tokens, untouched definitions and unknown properties when
   editing the array. Reject duplicates and invalid structure without overwriting
   it; malformed advanced JSON remains repairable there. Discard unsaved dialogs
@@ -110,8 +109,7 @@
   required fields locally; the shared API validator owns mission semantics.
   Mission `objectives` is a nonempty array of nonblank text. Preserve its order,
   search every entry and display entries with the same `catalog-tags` list as
-  agent responsibilities. Mission steps
-  retain their singular `objective`; do not accept the old root field as an alias.
+  agent responsibilities. Do not accept the old root `objective` field as an alias.
   Optional `action_definitions` contains static contracts with object schemas and
   secret names, separate from live action status. Preserve definitions through
   response validation and JSON readback; the shared API owns schema compilation,

@@ -19,7 +19,7 @@ func CreateQueuedDispatchOperation(t *testing.T, store *operationfs.OperationFsS
 		ID: operationID, Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Tasks: []operations.Task{{
-			ID: taskID, OperationID: operationID, ParentTaskID: id.TaskID(), StepID: "review",
+			ID: taskID, OperationID: operationID, ParentTaskID: id.TaskID(),
 			ActionName: "inspect", CommandID: taskID, Input: json.RawMessage(`{"page":1}`), Status: operations.TaskQueued,
 		}},
 		Events: []operations.Event{{Sequence: 1, OperationID: operationID, Type: operations.TaskAssigned,

@@ -100,7 +100,7 @@ func (b *FsBus) Publish(ctx context.Context, topic string, message messages.Mess
 	if err := message.Validate(); err != nil {
 		return err
 	}
-	if !utf8.ValidString(string(message.Type)) || !utf8.ValidString(message.Work.StepID) || !utf8.Valid(message.Payload) {
+	if !utf8.ValidString(string(message.Type)) || !utf8.Valid(message.Payload) {
 		return errors.New("message text must contain valid UTF-8")
 	}
 	// Encoding before filesystem access catches invalid timestamps and payloads

@@ -18,7 +18,7 @@ func OperationLogs() OperationLogData {
 	log.CommandID = log.Work.TaskID
 	task := operations.Task{
 		ID: log.Work.TaskID, OperationID: log.Work.OperationID, CommandID: log.CommandID,
-		StepID: log.Work.StepID, ActionName: log.ActionName, AgentID: log.AgentID,
+		ActionName: log.ActionName, AgentID: log.AgentID,
 		Status: operations.TaskRunning, StartedAt: log.CreatedAt,
 	}
 	return OperationLogData{

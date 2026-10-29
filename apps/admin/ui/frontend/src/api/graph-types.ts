@@ -20,7 +20,6 @@ export interface GraphEdge {
 export interface GraphTask {
   id: string;
   parent_task_id?: string;
-  step_id?: string;
   action_name: string;
   agent_id?: string;
   command_id?: string;

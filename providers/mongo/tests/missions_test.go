@@ -24,7 +24,6 @@ func TestMissionMongoStore(t *testing.T) {
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		ActionDefinitions: []actions.Definition{fixtures.ActionDefinition()},
-		Steps:             []missions.Step{{ID: "review", Objective: "Review findings"}},
 		Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
 			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -105,7 +104,7 @@ func TestMissionMongoStore(t *testing.T) {
 
 	updated := original.Clone()
 	updated.Objectives = []string{"Review before release"}
-	updated.OptionalActions, updated.Steps, updated.Rules = nil, nil, nil
+	updated.OptionalActions, updated.Rules = nil, nil
 	updated.ActionDefinitions = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)

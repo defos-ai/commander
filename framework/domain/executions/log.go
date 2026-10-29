@@ -41,9 +41,6 @@ func (l Log) Validate() error {
 	if err := l.Work.Validate(); err != nil {
 		return fmt.Errorf("execution log work: %w", err)
 	}
-	if !utf8.ValidString(l.Work.StepID) {
-		return errors.New("execution log step ID must be valid UTF-8")
-	}
 	if l.CreatedAt.IsZero() {
 		return errors.New("execution log timestamp must be set")
 	}

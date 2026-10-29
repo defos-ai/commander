@@ -9,7 +9,6 @@ type LogResponse struct {
 	ActionName  string    `json:"action_name"`
 	OperationID string    `json:"operation_id"`
 	TaskID      string    `json:"task_id"`
-	StepID      string    `json:"step_id,omitempty"`
 	Message     string    `json:"message"`
 	CreatedAt   time.Time `json:"created_at"`
 }

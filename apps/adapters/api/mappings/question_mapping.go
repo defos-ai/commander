@@ -13,7 +13,6 @@ func ToAskQuestionCommand(operationID string, request models.AskQuestionRequest)
 		OperationID:    operationID,
 		TaskID:         request.TaskID,
 		Version:        request.Version,
-		StepID:         request.StepID,
 		Text:           request.Text,
 		Options:        slices.Clone(request.Options),
 		TimeoutSeconds: request.TimeoutSeconds,
@@ -33,7 +32,6 @@ func ToQuestionResponse(question operations.Question) models.QuestionResponse {
 	return models.QuestionResponse{
 		ID:         question.ID,
 		Status:     string(question.Status),
-		StepID:     question.StepID,
 		TaskID:     question.TaskID,
 		CommandID:  question.CommandID,
 		Key:        question.Key,

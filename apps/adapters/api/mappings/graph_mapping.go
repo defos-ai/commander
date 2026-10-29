@@ -64,7 +64,7 @@ func ToOperationGraphResponse(operation operations.Operation) models.OperationGr
 
 func toGraphTaskResponse(task operations.Task) models.GraphTaskResponse {
 	response := models.GraphTaskResponse{
-		ID: task.ID, ParentTaskID: task.ParentTaskID, StepID: task.StepID, ActionName: task.ActionName,
+		ID: task.ID, ParentTaskID: task.ParentTaskID, ActionName: task.ActionName,
 		AgentID: task.AgentID, CommandID: task.CommandID, Status: string(task.Status), Error: task.Error,
 		FinishedAt: cloneTime(task.FinishedAt),
 	}

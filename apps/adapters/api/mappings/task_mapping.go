@@ -13,7 +13,6 @@ import (
 func ToAssignTaskCommand(operationID string, request models.AssignTaskRequest) controllercommands.AssignTaskCommand {
 	return controllercommands.AssignTaskCommand{
 		OperationID: operationID,
-		StepID:      request.StepID,
 		ActionName:  request.ActionName,
 		Input:       bytes.Clone(request.Input),
 	}
@@ -24,7 +23,6 @@ func ToTaskResponse(task operations.Task) models.TaskResponse {
 		ID:           task.ID,
 		OperationID:  task.OperationID,
 		ParentTaskID: task.ParentTaskID,
-		StepID:       task.StepID,
 		AgentID:      task.AgentID,
 		ActionName:   task.ActionName,
 		CommandID:    task.CommandID,

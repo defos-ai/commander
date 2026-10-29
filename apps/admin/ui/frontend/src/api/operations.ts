@@ -56,7 +56,7 @@ function isContinuation(value: unknown): value is OperationContinuation {
 
 function isTask(value: unknown): value is OperationTask {
   return isObject(value) && isIdentifier(value.id) && typeof value.operation_id === 'string' &&
-    isOptionalString(value.parent_task_id) && isOptionalString(value.step_id) &&
+    isOptionalString(value.parent_task_id) &&
     typeof value.agent_id === 'string' && typeof value.action_name === 'string' && hasScopedRequirements(value) &&
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
@@ -68,7 +68,7 @@ function isTask(value: unknown): value is OperationTask {
 
 function isQuestion(value: unknown): value is OperationQuestion {
   return isObject(value) && isIdentifier(value.id) && typeof value.status === 'string' &&
-    isOptionalString(value.step_id) && isOptionalString(value.task_id) && typeof value.text === 'string' &&
+    isOptionalString(value.task_id) && typeof value.text === 'string' &&
     (value.options === undefined || isNullableStringArray(value.options)) &&
     isOptionalString(value.answer) &&
     (value.answered_by === undefined || value.answered_by === 'operator' || value.answered_by === 'model') && isDate(value.asked_at) &&

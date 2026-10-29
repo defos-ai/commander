@@ -80,7 +80,7 @@ func (c QuestionConsumer) question(ctx context.Context, message messages.Message
 	// save confirms persistence without changing its answer or waiting window.
 	now := time.Now().UTC()
 	question := operations.Question{ID: id.QuestionID(), Status: operations.QuestionPending,
-		TaskID: message.Work.TaskID, StepID: message.Work.StepID, CommandID: request.CommandID, Key: request.Key,
+		TaskID: message.Work.TaskID, CommandID: request.CommandID, Key: request.Key,
 		Text: request.Text, Options: slices.Clone(request.Options), AskedAt: now, FallbackAt: now.Add(operations.DefaultQuestionTimeout)}
 	op, err = c.Operations.AskQuestion(ctx, op.ID, question, 0)
 	if errors.Is(err, operations.ErrFinished) || errors.Is(err, operations.ErrUnknownTask) {
@@ -108,7 +108,7 @@ func questionExecutionActive(op operations.Operation, message messages.Message, 
 	for _, task := range op.Tasks {
 		if task.ID == message.Work.TaskID {
 			return task.Status == operations.TaskRunning && task.AgentID == message.AgentID && task.CommandID == message.CorrelationID &&
-				task.StepID == message.Work.StepID && task.DeadlineAt != nil && now.Before(*task.DeadlineAt)
+				task.DeadlineAt != nil && now.Before(*task.DeadlineAt)
 		}
 	}
 	return false
@@ -124,5 +124,5 @@ func findExecutionQuestion(op operations.Operation, request controllerevents.Que
 }
 
 func questionMatches(question operations.Question, message messages.Message, request controllerevents.QuestionRequest) bool {
-	return question.TaskID == message.Work.TaskID && question.StepID == message.Work.StepID && question.Text == request.Text && slices.Equal(question.Options, request.Options)
+	return question.TaskID == message.Work.TaskID && question.Text == request.Text && slices.Equal(question.Options, request.Options)
 }

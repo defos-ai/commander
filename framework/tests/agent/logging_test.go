@@ -18,16 +18,20 @@ import (
 
 func TestAgentLogsBindTheDispatchedExecution(t *testing.T) {
 	for _, work := range []messages.WorkContext{
-		{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "build"},
+		{OperationID: id.OperationID(), TaskID: id.TaskID()},
 		{},
 	} {
-		t.Run(work.StepID, func(t *testing.T) {
+		name := "standalone"
+		if work.OperationID != "" {
+			name = "operation"
+		}
+		t.Run(name, func(t *testing.T) {
 			const text = "  Compiling <module>…\nTests are next  "
 			inherited := fakes.NewLogProvider(errors.New("inherited provider must not run"))
 			parent := action.WithLogs(t.Context(), inherited)
 			executor := fixtures.LoggingAction(t, func(ctx context.Context) error {
 				ctx = action.WithExecution(context.WithoutCancel(ctx), action.Execution{CommandID: id.MessageID(),
-					Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "spoofed"}})
+					Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}})
 				if err := action.Log(ctx, text); err != nil {
 					return err
 				}

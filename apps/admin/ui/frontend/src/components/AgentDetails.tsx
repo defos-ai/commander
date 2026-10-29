@@ -46,7 +46,6 @@ export function AgentDetails({ agent }: { agent: Agent }) {
         <div><dt>{t($ => $.agents.action)}</dt><dd><code>{work.action_name}</code></dd></div>
         {work.operation_id && <div><dt>{t($ => $.agents.operation)}</dt><dd><code>{work.operation_id}</code></dd></div>}
         {work.task_id && <div><dt>{t($ => $.agents.task)}</dt><dd><code>{work.task_id}</code></dd></div>}
-        {work.step_id && <div><dt>{t($ => $.agents.step)}</dt><dd><code>{work.step_id}</code></dd></div>}
         {work.command_id && <div><dt>{t($ => $.agents.command)}</dt><dd><code>{work.command_id}</code></dd></div>}
       </dl> : <p className="catalog-muted">{t($ => $.agents.noWork)}</p>}
     </section>

@@ -52,7 +52,7 @@ describe('agents browser', () => {
     render(<AgentsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: `View agent ${agent.id}` }));
     expect(await screen.findByRole('heading', { name: 'Current work' })).toBeVisible();
-    for (const value of ['operation-123', 'task-456', 'step-789', 'command-012', '10.0.0.12', 'worker-west-1', 'Website quality']) {
+    for (const value of ['operation-123', 'task-456', 'command-012', '10.0.0.12', 'worker-west-1', 'Website quality']) {
       expect(screen.getByText(value)).toBeVisible();
     }
     expect(screen.getByText('Last heartbeat')).toBeVisible();

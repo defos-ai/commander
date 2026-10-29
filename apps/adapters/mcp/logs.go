@@ -54,7 +54,6 @@ type executionLog struct {
 	ActionName  string    `json:"action_name"`
 	OperationID string    `json:"operation_id"`
 	TaskID      string    `json:"task_id"`
-	StepID      string    `json:"step_id,omitempty"`
 	Message     string    `json:"message"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -80,7 +79,7 @@ func listExecutionLogs(ctx context.Context, query queries.Operations, criteria e
 	for _, log := range logs {
 		result.Logs = append(result.Logs, executionLog{ID: log.ID, AgentID: log.AgentID,
 			CommandID: log.CommandID, ActionName: log.ActionName, OperationID: log.Work.OperationID,
-			TaskID: log.Work.TaskID, StepID: log.Work.StepID, Message: log.Message, CreatedAt: log.CreatedAt})
+			TaskID: log.Work.TaskID, Message: log.Message, CreatedAt: log.CreatedAt})
 		result.NextCursor = log.ID
 	}
 	return result, nil

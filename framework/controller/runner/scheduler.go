@@ -95,7 +95,7 @@ func (r *Runner) dispatchQueued() {
 			agentID = task.AgentID
 			used[agentID]++
 			r.lastAgent = agentID
-			call := actionmodel.ActionCall{Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
+			call := actionmodel.ActionCall{Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
 			r.workers++
 			go r.runTask(task, call)
 		}

@@ -29,11 +29,8 @@ func (o *Operation) QueueTask(task Task) (bool, error) {
 	if o.Status.Terminal() {
 		return false, ErrFinished
 	}
-	if err := o.ValidateStep(task.StepID); err != nil {
-		return false, err
-	}
 	for _, question := range o.Questions {
-		if question.TaskID == "" && question.Pending() && (question.StepID == "" || question.StepID == task.StepID) {
+		if question.TaskID == "" && question.Pending() {
 			return false, ErrQuestionPending
 		}
 	}
@@ -53,7 +50,7 @@ func sameAssignment(saved, incoming Task) bool {
 	if !sameJSON(saved.SessionIntent, incoming.SessionIntent) {
 		return false
 	}
-	if saved.OperationID != incoming.OperationID || saved.CommandID != incoming.CommandID || saved.StepID != incoming.StepID || saved.ParentTaskID != incoming.ParentTaskID || saved.ActionName != incoming.ActionName {
+	if saved.OperationID != incoming.OperationID || saved.CommandID != incoming.CommandID || saved.ParentTaskID != incoming.ParentTaskID || saved.ActionName != incoming.ActionName {
 		return false
 	}
 	return len(saved.Input) == 0 && len(incoming.Input) == 0 || sameJSON(saved.Input, incoming.Input)

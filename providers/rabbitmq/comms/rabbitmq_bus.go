@@ -98,7 +98,7 @@ func (b *RabbitMQBus) Publish(ctx context.Context, topic string, message message
 	if len(message.Type) > 255 {
 		return errors.New("RabbitMQ message type must be at most 255 bytes")
 	}
-	if !utf8.Valid(message.Payload) || !utf8.ValidString(string(message.Type)) || !utf8.ValidString(message.Work.StepID) {
+	if !utf8.Valid(message.Payload) || !utf8.ValidString(string(message.Type)) {
 		return errors.New("message text must be UTF-8")
 	}
 	data, err := json.Marshal(message)

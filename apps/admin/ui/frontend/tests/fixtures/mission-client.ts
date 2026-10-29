@@ -13,7 +13,6 @@ export const mission: Mission = {
     input_schema: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } },
     output_schema: { type: 'object' }, required_secrets: ['SITE_TOKEN'] }],
   starting_actions: ['discover-pages'],
-  steps: [{ id: 'discover', objective: 'Find pages', agent_types: null, required_actions: ['discover-pages'] }],
   rules: {
     'aggregate-results': { for_actions: ['discover-pages'] },
     'decide-next-actions': { for_actions: ['check-links'], params: { decision_by: 'model' } },

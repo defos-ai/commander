@@ -84,9 +84,8 @@ describe('operation log client', () => {
     expect(query.task_id).toBe(otherTaskID);
   });
 
-  it('accepts an empty first page, absent step metadata, and the exact UTF-8 byte limit', async () => {
+  it('accepts an empty first page and the exact UTF-8 byte limit', async () => {
     const log = makeLog({ message: '🛠'.repeat(512), created_at: '2024-02-29T12:00:00.000000001+02:00' });
-    delete log.step_id;
     respondSequence(makePage(), makePage(log));
 
     const empty = await listOperationLogs(url, credentials, operationID);
@@ -94,7 +93,6 @@ describe('operation log client', () => {
 
     expect(empty).toEqual({ items: [], next_cursor: '' });
     expect(full.items).toEqual([log]);
-    expect(full.items[0]).not.toHaveProperty('step_id');
   });
 
   it('accepts Go year-zero timestamps and preserves their nanoseconds', async () => {

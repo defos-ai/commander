@@ -52,7 +52,7 @@ func NewLogStores(t *testing.T) *LogStores {
 func ExecutionLog(operationID, taskID string, index int) executions.Log {
 	return executions.Log{ID: fmt.Sprintf("30000000-0000-4000-8000-%012d", index), AgentID: "builder-agent-12345678",
 		CommandID: "40000000-0000-4000-8000-000000000001", ActionName: "build-agent",
-		Work:      messages.WorkContext{OperationID: operationID, TaskID: taskID, StepID: "build"},
+		Work:      messages.WorkContext{OperationID: operationID, TaskID: taskID},
 		Message:   "  Compiling <module>…\nChecking packages ✓  ",
 		CreatedAt: time.Date(2026, 10, 29, 12, 0, 0, 123456789-index, time.UTC)}
 }
@@ -64,7 +64,6 @@ type LogEntry struct {
 	ActionName  string    `json:"action_name"`
 	OperationID string    `json:"operation_id"`
 	TaskID      string    `json:"task_id"`
-	StepID      string    `json:"step_id,omitempty"`
 	Message     string    `json:"message"`
 	CreatedAt   time.Time `json:"created_at"`
 }

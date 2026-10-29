@@ -6,7 +6,6 @@ import (
 )
 
 type AssignTaskRequest struct {
-	StepID     string          `json:"step_id,omitempty"`
 	ActionName string          `json:"action_name"`
 	Input      json.RawMessage `json:"input,omitempty"`
 }
@@ -22,7 +21,6 @@ type TaskResponse struct {
 	ID                  string                      `json:"id"`
 	OperationID         string                      `json:"operation_id"`
 	ParentTaskID        string                      `json:"parent_task_id,omitempty"`
-	StepID              string                      `json:"step_id,omitempty"`
 	AgentID             string                      `json:"agent_id"`
 	AgentType           string                      `json:"agent_type,omitempty"`
 	MissingRequirements []ActionRequirementResponse `json:"missing_requirements,omitempty"`

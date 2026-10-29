@@ -11,7 +11,6 @@ the [HTTP API](../apps/adapters/api/README.md#create-missions) or MCP.
 | **Mission**: reusable objectives, action requirements and rules | Review a website |
 | **Operation**: one run of a mission | Review `https://defos.ai` |
 | **Task**: one action assignment | Check links on one page |
-| **Step**: optional planning guidance within a mission | Review accessibility |
 | **Report**: the final saved output | Findings and recommended fixes |
 
 ### Create a mission

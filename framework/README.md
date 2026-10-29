@@ -34,6 +34,7 @@ image digest; see the [package guide](../docs/agent-packages.md#source-template)
 
 | You want to… | Read |
 | --- | --- |
+| Find a domain model's purpose and consumers | [Domain models](domain/README.md) |
 | Understand missions and rules | [Core concepts](../docs/abstractions.md) |
 | Connect a message consumer | [Messaging](comms/README.md) |
 | Extend a message contract | [Wire messages](comms/messages/README.md) |

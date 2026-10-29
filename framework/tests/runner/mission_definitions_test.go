@@ -14,8 +14,7 @@ import (
 func TestMissionActionDefinitionsRemainIndependentPlanningContracts(t *testing.T) {
 	mission := missions.Mission{
 		Name: "future-review", Objectives: []string{"Review with capabilities implemented later."},
-		RequiredActions: []string{"inspect"}, OptionalActions: []string{"report"},
-		Steps:       []missions.Step{{ID: "review", Objective: "Check results", RequiredActions: []string{"verify"}}},
+		RequiredActions: []string{"inspect", "verify"}, OptionalActions: []string{"report"},
 		InputSchema: json.RawMessage("{}"), OutputSchema: json.RawMessage("{}"),
 	}
 	for _, name := range []string{"inspect", "report", "verify"} {

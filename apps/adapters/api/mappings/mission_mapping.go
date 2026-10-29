@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
@@ -30,23 +29,6 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 			mission.Rules[missions.RuleName(name)] = mapped
 		}
 	}
-	if request.Steps != nil {
-		mission.Steps = make([]missions.Step, len(request.Steps))
-		for i, step := range request.Steps {
-			mapped := missions.Step{
-				ID:              step.ID,
-				Objective:       step.Objective,
-				RequiredActions: slices.Clone(step.RequiredActions),
-			}
-			if step.AgentTypes != nil {
-				mapped.AgentTypes = make([]agents.AgentType, len(step.AgentTypes))
-				for j, agentType := range step.AgentTypes {
-					mapped.AgentTypes[j] = agents.AgentType(agentType)
-				}
-			}
-			mission.Steps[i] = mapped
-		}
-	}
 	return mission
 }
 
@@ -69,23 +51,6 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 				mapped.Params = &models.MissionRuleParamsResponse{DecisionBy: string(rule.Params.DecisionBy)}
 			}
 			response.Rules[string(name)] = mapped
-		}
-	}
-	if mission.Steps != nil {
-		response.Steps = make([]models.MissionStepResponse, len(mission.Steps))
-		for i, step := range mission.Steps {
-			mapped := models.MissionStepResponse{
-				ID:              step.ID,
-				Objective:       step.Objective,
-				RequiredActions: slices.Clone(step.RequiredActions),
-			}
-			if step.AgentTypes != nil {
-				mapped.AgentTypes = make([]string, len(step.AgentTypes))
-				for j, agentType := range step.AgentTypes {
-					mapped.AgentTypes[j] = string(agentType)
-				}
-			}
-			response.Steps[i] = mapped
 		}
 	}
 	return response

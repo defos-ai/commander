@@ -22,8 +22,6 @@ func TestExecutionLogRequiresExecutionIdentity(t *testing.T) {
 		{"invalid action encoding", func(log *executions.Log) { log.ActionName = "build\xff" }},
 		{"incomplete work", func(log *executions.Log) { log.Work.TaskID = "" }},
 		{"invalid work", func(log *executions.Log) { log.Work.OperationID = "not-a-uuid" }},
-		{"blank step", func(log *executions.Log) { log.Work.StepID = " " }},
-		{"invalid step encoding", func(log *executions.Log) { log.Work.StepID = "build\xff" }},
 		{"missing timestamp", func(log *executions.Log) { log.CreatedAt = time.Time{} }},
 		{"invalid message", func(log *executions.Log) { log.Message = "" }},
 	} {

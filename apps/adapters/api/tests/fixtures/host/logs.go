@@ -89,12 +89,12 @@ func LogOperation() operations.Operation {
 	op := operations.Operation{
 		ID: id.New(), Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
 		Mission: missions.Mission{Name: "observe", Objectives: []string{"Observe saved execution progress"},
-			RequiredActions: []string{"inspect"}, Steps: []missions.Step{{ID: "review"}},
-			InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)},
+			RequiredActions: []string{"inspect"},
+			InputSchema:     json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)},
 		Input: json.RawMessage(`{}`),
 	}
 	for range 2 {
-		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect"}))
+		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"}))
 	}
 	return op
 }
@@ -104,12 +104,11 @@ func OperationLogs(operation operations.Operation) []executions.Log {
 	for index := range logs {
 		logs[index] = executions.Log{
 			ID: id.New(), AgentID: "worker-agent-00000001", CommandID: id.New(), ActionName: "inspect",
-			Work:    messages.WorkContext{OperationID: operation.ID, TaskID: operation.Tasks[0].ID, StepID: "review"},
+			Work:    messages.WorkContext{OperationID: operation.ID, TaskID: operation.Tasks[0].ID},
 			Message: "  Compiling <module>\nготово 👋\t", CreatedAt: operation.CreatedAt.Add(-time.Duration(index) * time.Hour),
 		}
 	}
 	logs[1].Work.TaskID, logs[1].AgentID = operation.Tasks[1].ID, "worker-agent-00000002"
 	logs[2].ActionName = "Inspect"
-	logs[3].Work.StepID = ""
 	return logs
 }

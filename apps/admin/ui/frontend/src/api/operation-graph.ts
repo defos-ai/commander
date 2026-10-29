@@ -13,7 +13,7 @@ function isOptionalTimestamp(value: unknown): value is string | null | undefined
 
 function isTask(value: unknown): value is GraphTask {
   return isObject(value) && isIdentifier(value.id) && typeof value.action_name === 'string' &&
-    typeof value.status === 'string' && isOptionalString(value.parent_task_id) && isOptionalString(value.step_id) &&
+    typeof value.status === 'string' && isOptionalString(value.parent_task_id) &&
     isOptionalString(value.agent_id) && isOptionalString(value.command_id) && isOptionalString(value.error) &&
     isOptionalTimestamp(value.started_at) && isOptionalTimestamp(value.finished_at);
 }

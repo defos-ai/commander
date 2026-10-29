@@ -5,7 +5,6 @@ import "time"
 type AskQuestionRequest struct {
 	TaskID         string   `json:"task_id,omitempty"`
 	Version        uint64   `json:"version,omitempty"`
-	StepID         string   `json:"step_id,omitempty"`
 	Text           string   `json:"text"`
 	Options        []string `json:"options,omitempty"`
 	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
@@ -18,7 +17,6 @@ type AnswerQuestionRequest struct {
 type QuestionResponse struct {
 	ID         string     `json:"id"`
 	Status     string     `json:"status"`
-	StepID     string     `json:"step_id,omitempty"`
 	TaskID     string     `json:"task_id,omitempty"`
 	CommandID  string     `json:"command_id,omitempty"`
 	Key        string     `json:"key,omitempty"`

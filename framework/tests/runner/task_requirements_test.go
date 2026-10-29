@@ -14,13 +14,12 @@ import (
 func TestTaskRequirementsRequireCurrentExactExecution(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	deadline := now.Add(time.Minute)
-	task := operations.NewTask(id.OperationID(), "build", "", actions.NextAction{ActionName: "build-agent"})
+	task := operations.NewTask(id.OperationID(), "", actions.NextAction{ActionName: "build-agent"})
 	task.AgentID, task.Status, task.DeadlineAt = "builder-agent-12345678", operations.TaskRunning, &deadline
 	want := []actions.Requirement{{Kind: actions.SecretRequirement, Name: "GITHUB_TOKEN"}}
 	record := agents.Agent{AgentSnapshot: agents.AgentSnapshot{
 		ID: task.AgentID, Type: "builder-agent", Status: agents.AgentWorking,
-		Work: &agents.Work{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID,
-			CommandID: task.CommandID, ActionName: task.ActionName, MissingRequirements: want},
+		Work: &agents.Work{OperationID: task.OperationID, TaskID: task.ID, CommandID: task.CommandID, ActionName: task.ActionName, MissingRequirements: want},
 	}, LastHeartbeat: now, LeaseExpiresAt: deadline}
 	if got := operations.AssessTaskRequirements(task, record, now); !reflect.DeepEqual(got, want) {
 		t.Fatalf("exact execution did not expose its undeclared runtime requirement: %+v", got)
@@ -45,7 +44,6 @@ func TestTaskRequirementsRequireCurrentExactExecution(t *testing.T) {
 		{"no work", func(_ *operations.Task, a *agents.Agent) { a.Work = nil }},
 		{"different operation", func(_ *operations.Task, a *agents.Agent) { a.Work.OperationID = id.OperationID() }},
 		{"different task", func(_ *operations.Task, a *agents.Agent) { a.Work.TaskID = id.TaskID() }},
-		{"different step", func(_ *operations.Task, a *agents.Agent) { a.Work.StepID = "other" }},
 		{"different command", func(_ *operations.Task, a *agents.Agent) { a.Work.CommandID = id.TaskID() }},
 		{"different action", func(_ *operations.Task, a *agents.Agent) { a.Work.ActionName = "other" }},
 		{"missing identity", func(t *operations.Task, a *agents.Agent) { t.CommandID, a.Work.CommandID = "", "" }},

@@ -39,7 +39,7 @@ func TestOperationQueriesExposeSavedAffinityWithoutAssigningQueuedTasks(t *testi
 					Rules: missions.RuleSet{missions.SameAgent: {ForActions: slices.Clone(group)}},
 				}, CreatedAt: now, UpdatedAt: now}
 			for _, name := range group {
-				op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: name, Input: json.RawMessage(`{}`)}))
+				op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", actions.NextAction{ActionName: name, Input: json.RawMessage(`{}`)}))
 			}
 			if scenario == "no rule" {
 				op.Mission.Rules = nil

@@ -24,7 +24,7 @@ func CreateResultOperation(t *testing.T, store *operationfs.OperationFsStore) (o
 		}},
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,
-			AgentID: "review-agent-00000001", ActionName: "discover", StepID: "review",
+			AgentID: "review-agent-00000001", ActionName: "discover",
 			Status: operations.TaskRunning, StartedAt: created}},
 		Events: []operations.Event{{Sequence: 1, OperationID: operationID, TaskID: taskID,
 			Type: operations.TaskDispatched, Status: operations.Running, CreatedAt: created}},

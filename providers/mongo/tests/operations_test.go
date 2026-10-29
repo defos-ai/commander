@@ -32,12 +32,12 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original := fixtures.Operation()
 	original.Mission.OptionalActions = []string{"publish"}
 	original.Mission.ActionDefinitions = []actions.Definition{fixtures.ActionDefinition()}
-	original.Mission.Steps[0].RequiredActions = []string{"discover"}
+	original.Mission.RequiredActions = append(original.Mission.RequiredActions, "discover")
 	original.Mission.Rules = missions.RuleSet{
 		missions.AggregateResults:  {ForActions: []string{"discover"}},
 		missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
-	task := operations.NewTask(original.ID, "review", "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
+	task := operations.NewTask(original.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
 	original.Tasks = []operations.Task{task}
 	question := fixtures.Question("")
 	original.Questions = []operations.Question{question}
@@ -137,7 +137,7 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 	tasks := make([]operations.Task, count)
 	gate, results := make(chan struct{}), make(chan error, count)
 	for i := range count {
-		tasks[i] = operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(fmt.Sprintf(`{"page":%d,"number":9007199254740993}`, i))})
+		tasks[i] = operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(fmt.Sprintf(`{"page":%d,"number":9007199254740993}`, i))})
 		catalog := []operations.OperationStore{first, second}[i%2]
 		go func() {
 			<-gate
@@ -378,7 +378,7 @@ func TestOperationMongoQuestionsAndAnswerRace(t *testing.T) {
 	if continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending || continuation.Version != version+2 || countOperationEvents(resolved, operations.QuestionAnsweredEvent) != 1 {
 		t.Fatalf("question settled twice or lost continuation: %+v", resolved)
 	}
-	queued := operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "report"})
+	queued := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "report"})
 	if _, err := first.QueueTask(t.Context(), op.ID, queued); err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +390,7 @@ func TestOperationMongoQuestionsAndAnswerRace(t *testing.T) {
 	if _, err := second.DispatchTask(t.Context(), op.ID, fixtures.Dispatch(queued.ID)); !errors.Is(err, operations.ErrOperationConflict) {
 		t.Fatalf("dispatch ignored pending question: %v", err)
 	}
-	if _, err := first.QueueTask(t.Context(), op.ID, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "report"})); !errors.Is(err, operations.ErrQuestionPending) {
+	if _, err := first.QueueTask(t.Context(), op.ID, operations.NewTask(op.ID, "", actions.NextAction{ActionName: "report"})); !errors.Is(err, operations.ErrQuestionPending) {
 		t.Fatalf("assignment ignored pending question: %v", err)
 	}
 	answered, err := second.AnswerQuestion(t.Context(), op.ID, late.ID, "Continue", operations.AnswerOperator)
@@ -445,7 +445,7 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 			second, _ := fixtures.OpenOperations(t)
 			op := fixtures.CreateOperation(t, first, fixtures.Operation())
 			running := fixtures.QueueAndDispatch(t, first, op.ID, "inspect")
-			queued := operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "report"})
+			queued := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "report"})
 			var err error
 			if terminal == operations.Completed {
 				if _, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`)); err == nil {
@@ -537,7 +537,7 @@ func TestOperationMongoPreflightRecoveryAndNoopWrites(t *testing.T) {
 	if _, err := first.RefreshPreflight(t.Context(), op.ID, []agents.Agent{agent}); err != nil {
 		t.Fatal(err)
 	}
-	task := operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect"})
+	task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
 	if _, err := first.QueueTask(t.Context(), op.ID, task); err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +663,7 @@ func TestOperationMongoQueriesUseOrderedCursors(t *testing.T) {
 	op := fixtures.Operation()
 	op.Preflight = &operations.Preflight{Version: math.MaxUint64}
 	for range 2 {
-		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect"}))
+		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"}))
 	}
 	op.Events = nil
 	for _, sequence := range []uint64{math.MaxUint64, 2, 10} {

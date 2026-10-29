@@ -414,7 +414,7 @@ func TestExecutionMongoStoreLogQueriesDoNotSkipConcurrentAppends(t *testing.T) {
 }
 
 func TestExecutionMongoStoreLogsRejectInconsistentIndexedMetadata(t *testing.T) {
-	for _, field := range []string{"agent_id", "action_name", "operation_id", "task_id", "step_id"} {
+	for _, field := range []string{"agent_id", "action_name", "operation_id", "task_id"} {
 		t.Run(field, func(t *testing.T) {
 			database := fixtures.OpenLogDatabase(t)
 			catalog := fixtures.OpenExecutionStore(t, database)

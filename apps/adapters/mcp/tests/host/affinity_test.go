@@ -83,8 +83,8 @@ func TestMCPOperationQueriesExposeSavedAffinity(t *testing.T) {
 				op.Mission.Rules = nil
 			}
 			op.Tasks = []operations.Task{
-				operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "checkout-template"}),
-				operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "build-agent"}),
+				operations.NewTask(op.ID, "", actions.NextAction{ActionName: "checkout-template"}),
+				operations.NewTask(op.ID, "", actions.NextAction{ActionName: "build-agent"}),
 			}
 			if test.bound {
 				op.Status = operations.Waiting

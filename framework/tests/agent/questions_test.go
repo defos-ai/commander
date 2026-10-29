@@ -31,7 +31,7 @@ func TestActionQuestionWaitsForItsSavedAnswerAndKeepsRequestIdentity(t *testing.
 		}
 		return err
 	})
-	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "install"}
+	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}
 	commandID := fixture.Command(t, "question", `{}`, work)
 	request := fixture.Next(t, controllerevents.QuestionRequested)
 	payload, err := controllerevents.DecodeQuestionRequest(request)

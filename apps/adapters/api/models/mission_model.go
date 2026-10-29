@@ -10,16 +10,8 @@ type CreateMissionRequest struct {
 	RequiredActions   []string                      `json:"required_actions,omitempty"`
 	OptionalActions   []string                      `json:"optional_actions,omitempty"`
 	StartingActions   []string                      `json:"starting_actions,omitempty"`
-	Steps             []MissionStepRequest          `json:"steps,omitempty"`
 	InputSchema       json.RawMessage               `json:"input_schema"`
 	OutputSchema      json.RawMessage               `json:"output_schema"`
-}
-
-type MissionStepRequest struct {
-	ID              string   `json:"id"`
-	Objective       string   `json:"objective"`
-	AgentTypes      []string `json:"agent_types,omitempty"`
-	RequiredActions []string `json:"required_actions,omitempty"`
 }
 
 type MissionRuleRequest struct {
@@ -39,16 +31,8 @@ type MissionResponse struct {
 	RequiredActions   []string                       `json:"required_actions"`
 	OptionalActions   []string                       `json:"optional_actions,omitempty"`
 	StartingActions   []string                       `json:"starting_actions"`
-	Steps             []MissionStepResponse          `json:"steps,omitempty"`
 	InputSchema       json.RawMessage                `json:"input_schema"`
 	OutputSchema      json.RawMessage                `json:"output_schema"`
-}
-
-type MissionStepResponse struct {
-	ID              string   `json:"id"`
-	Objective       string   `json:"objective"`
-	AgentTypes      []string `json:"agent_types"`
-	RequiredActions []string `json:"required_actions"`
 }
 
 type MissionRuleResponse struct {

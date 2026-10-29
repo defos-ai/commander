@@ -24,7 +24,7 @@ func ExecutionLog(index int) executions.Log {
 	return executions.Log{
 		ID: fmt.Sprintf("11111111-1111-4111-8111-%012x", index), AgentID: "builder-agent-12345678",
 		CommandID: "22222222-2222-4222-8222-222222222222", ActionName: "build-agent",
-		Work:    messages.WorkContext{OperationID: "33333333-3333-4333-8333-333333333333", TaskID: "44444444-4444-4444-8444-444444444444", StepID: "build"},
+		Work:    messages.WorkContext{OperationID: "33333333-3333-4333-8333-333333333333", TaskID: "44444444-4444-4444-8444-444444444444"},
 		Message: "  Compiling packages\nTests are next ✓  ", CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.FixedZone("fixture", 3*60*60)),
 	}
 }

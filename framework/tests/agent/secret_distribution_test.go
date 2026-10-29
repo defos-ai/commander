@@ -317,7 +317,7 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 			t.Fatal("startup or public work requested a dynamic secret")
 		}
 	}
-	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-private"}
+	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New()}
 	command := fixture.Command(t, "inspect", `{"private":true}`, work)
 	request := fixture.Request(t, "")
 	if request.AgentType != "fixture" || request.Key.Name != "TOKEN" || request.AgentID != fixture.Runtime().ID() {
@@ -328,7 +328,7 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 	}
 	assertSecretWorkRequirements(t, fixture, command, "TOKEN")
 	snapshot := fixture.Runtime().Describe()
-	if snapshot.Work.OperationID != work.OperationID || snapshot.Work.TaskID != work.TaskID || snapshot.Work.StepID != work.StepID {
+	if snapshot.Work.OperationID != work.OperationID || snapshot.Work.TaskID != work.TaskID {
 		t.Fatal("secret wait lost the active operation work identity")
 	}
 	snapshot.Work.MissingRequirements[0].Name = "CHANGED"

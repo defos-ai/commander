@@ -145,7 +145,7 @@ func assertTaskQueries(t *testing.T, a *fixtures.Client, op fixtures.OperationDe
 			t.Fatal(err)
 		}
 		want := op.Tasks[i]
-		if summary.ID != want.ID || summary.ParentTaskID != want.ParentTaskID || summary.StepID != want.StepID || summary.AgentID != want.AgentID ||
+		if summary.ID != want.ID || summary.ParentTaskID != want.ParentTaskID || summary.AgentID != want.AgentID ||
 			summary.ActionName != want.ActionName || summary.Status != want.Status || summary.Error != want.Error ||
 			!summary.StartedAt.Equal(want.StartedAt) || !reflect.DeepEqual(summary.FinishedAt, want.FinishedAt) {
 			t.Fatalf("task summary lost order or progress: got %+v, want %+v", summary, want)
@@ -201,11 +201,6 @@ func TestOperationTextWorkflow(t *testing.T) {
 	assertMissionPreflight(t, a, op, 2)
 	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
 		t.Fatalf("new operation progress: %+v", op.Progress)
-	}
-	a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "step_id": "analyze-text", "action_name": "analyze-text", "input": fixtures.Object{"text": text}},
-		`mission "analyze-text" declares no steps; omit step_id and use action_name`)
-	if rejected := a.Get(op.ID); len(rejected.Tasks) != 0 {
-		t.Fatalf("invalid step queued work: %+v", rejected.Tasks)
 	}
 	root := a.Task(op.ID, "analyze-text", fixtures.Object{"text": text})
 	settled := a.Wait(op.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })

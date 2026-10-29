@@ -28,7 +28,7 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 		if command.TimeoutSeconds > 0 {
 			timeout = time.Duration(command.TimeoutSeconds) * time.Second
 		}
-		question := operations.Question{ID: questionID, Status: operations.QuestionPending, TaskID: command.TaskID, StepID: command.StepID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, FallbackAt: now.Add(timeout)}
+		question := operations.Question{ID: questionID, Status: operations.QuestionPending, TaskID: command.TaskID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, FallbackAt: now.Add(timeout)}
 		next, err := r.store.AskQuestion(ctx, command.OperationID, question, command.Version)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Question{}, err

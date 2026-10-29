@@ -11,18 +11,9 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
-	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
-
-// Step is ordered planning guidance. Required actions also participate in preflight.
-type Step struct {
-	ID              string                 `json:"id"`
-	Objective       string                 `json:"objective"`
-	AgentTypes      []agentmodel.AgentType `json:"agent_types"`
-	RequiredActions []string               `json:"required_actions"`
-}
 
 // Mission describes ordered objectives independently of its operations.
 // RequiredActions define preflight coverage. OptionalActions describe capabilities
@@ -39,7 +30,6 @@ type Mission struct {
 	OptionalActions   []string                 `json:"optional_actions,omitempty"`
 	ActionDefinitions []actionmodel.Definition `json:"action_definitions,omitempty"`
 	StartingActions   []string                 `json:"starting_actions"`
-	Steps             []Step                   `json:"steps,omitempty"`
 	InputSchema       json.RawMessage          `json:"input_schema"`
 	OutputSchema      json.RawMessage          `json:"output_schema"`
 }
@@ -97,23 +87,6 @@ func (m Mission) Validate() error {
 			return fmt.Errorf("starting action %q is not a required action", action)
 		}
 	}
-	seenSteps := make(map[string]bool, len(m.Steps))
-	for _, step := range m.Steps {
-		if strings.TrimSpace(step.ID) == "" || seenSteps[step.ID] || strings.TrimSpace(step.Objective) == "" {
-			return errors.New("mission steps require unique nonblank IDs and objectives")
-		}
-		seenSteps[step.ID] = true
-		for _, kind := range step.AgentTypes {
-			if strings.TrimSpace(string(kind)) == "" {
-				return errors.New("step agent types must not be blank")
-			}
-		}
-		for _, action := range step.RequiredActions {
-			if strings.TrimSpace(action) == "" {
-				return errors.New("step actions must not be blank")
-			}
-		}
-	}
 	if err := m.validateActionDefinitions(); err != nil {
 		return err
 	}
@@ -144,11 +117,8 @@ func (m Mission) validateActionDefinitions() error {
 	}
 	for i, definition := range m.ActionDefinitions {
 		referenced := slices.Contains(m.RequiredActions, definition.Name) || slices.Contains(m.OptionalActions, definition.Name)
-		for _, step := range m.Steps {
-			referenced = referenced || slices.Contains(step.RequiredActions, definition.Name)
-		}
 		if !referenced {
-			return fmt.Errorf("action_definitions[%d] must reference a required, optional or step action", i)
+			return fmt.Errorf("action_definitions[%d] must reference a required or optional action", i)
 		}
 		if err := definition.Validate(); err != nil {
 			return fmt.Errorf("action_definitions[%d]: %w", i, err)
@@ -192,13 +162,6 @@ func (m Mission) Clone() Mission {
 	}
 	if m.StartingActions != nil {
 		m.StartingActions = append([]string{}, m.StartingActions...)
-	}
-	if m.Steps != nil {
-		m.Steps = append([]Step{}, m.Steps...)
-		for i := range m.Steps {
-			m.Steps[i].AgentTypes = append([]agentmodel.AgentType(nil), m.Steps[i].AgentTypes...)
-			m.Steps[i].RequiredActions = append([]string(nil), m.Steps[i].RequiredActions...)
-		}
 	}
 	m.InputSchema = append(json.RawMessage(nil), m.InputSchema...)
 	m.OutputSchema = append(json.RawMessage(nil), m.OutputSchema...)

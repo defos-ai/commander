@@ -26,7 +26,6 @@ type AgentResponse struct {
 type AgentWorkResponse struct {
 	OperationID         string                      `json:"operation_id,omitempty"`
 	TaskID              string                      `json:"task_id,omitempty"`
-	StepID              string                      `json:"step_id,omitempty"`
 	ActionName          string                      `json:"action_name"`
 	CommandID           string                      `json:"command_id,omitempty"`
 	MissingRequirements []ActionRequirementResponse `json:"missing_requirements,omitempty"`

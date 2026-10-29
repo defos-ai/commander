@@ -42,7 +42,7 @@ curl --user "$API_USERNAME" \
 ```
 
 Include `name`, an `objectives` array, `input_schema` and `output_schema`.
-Add required/optional actions, starting actions, steps and rules as needed.
+Add required/optional actions, starting actions and rules as needed.
 Use `action_definitions` for capabilities an agent should implement later;
 see [mission definitions](../../../docs/abstractions.md#mission-operation-and-task).
 

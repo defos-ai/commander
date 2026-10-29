@@ -17,7 +17,7 @@ func CreateQueueOperation(t *testing.T, store *operationfs.OperationFsStore) (op
 	operationID := id.OperationID()
 	op := operations.Operation{
 		ID: operationID, Status: operations.Planning, CreatedAt: created, UpdatedAt: created,
-		Mission:   missions.Mission{Steps: []missions.Step{{ID: "review"}, {ID: "report"}}},
+		Mission:   missions.Mission{Name: "review"},
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Events: []operations.Event{{Sequence: 1, OperationID: operationID,
 			Type: operations.OperationStarted, Status: operations.Planning, CreatedAt: created}},
@@ -29,5 +29,5 @@ func CreateQueueOperation(t *testing.T, store *operationfs.OperationFsStore) (op
 	if err != nil {
 		t.Fatal(err)
 	}
-	return saved, operations.NewTask(op.ID, "review", "", actions.NextAction{ActionName: "inspect"})
+	return saved, operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
 }

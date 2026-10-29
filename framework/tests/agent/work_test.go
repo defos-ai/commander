@@ -69,7 +69,7 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 			}
 			next(controllerevents.AgentStarted)
 			call := agent.ActionCall{ActionName: "inspect", Input: []byte(`{"secret":"private-input"}`),
-				Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New(), StepID: "inspect-page"}}
+				Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New()}}
 			command, err := agentcommands.NewRunAction(a.ID(), call)
 			if err != nil {
 				t.Fatal(err)
@@ -82,8 +82,7 @@ func TestAgentAnnouncesWorkWithoutHeartbeat(t *testing.T) {
 			if err := agent.Decode(working.Payload, &snapshot); err != nil {
 				t.Fatal(err)
 			}
-			want := agent.Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID, StepID: call.Work.StepID,
-				ActionName: call.ActionName, CommandID: command.ID}
+			want := agent.Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID, ActionName: call.ActionName, CommandID: command.ID}
 			if snapshot.Status != agent.AgentWorking || !reflect.DeepEqual(snapshot.Work, &want) ||
 				working.CorrelationID != "" || bytes.Contains(working.Payload, []byte("private-input")) {
 				t.Fatalf("working announcement lost work identity or exposed input: %+v", snapshot)

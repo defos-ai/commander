@@ -187,7 +187,7 @@ func TestMCPLogToolsPreserveProvenancePagingAndExactFilters(t *testing.T) {
 		logs = append(logs, fixtures.ExecutionLog(op, task, index))
 	}
 	otherTask := fixtures.ExecutionLog(op, stores.Operation.Tasks[1].ID, 102)
-	otherTask.AgentID, otherTask.ActionName, otherTask.Work.StepID = "builder-agent-87654321", "publish-agent", ""
+	otherTask.AgentID, otherTask.ActionName = "builder-agent-87654321", "publish-agent"
 	logs = append(logs, otherTask)
 	for _, log := range append(logs, fixtures.ExecutionLog(stores.Other.ID, stores.Other.Tasks[0].ID, 103)) {
 		if err := stores.Executions.AppendLog(t.Context(), log); err != nil {
@@ -414,8 +414,8 @@ func callLogTool(t *testing.T, ctx context.Context, session *sdkmcp.ClientSessio
 	if strings.Contains(content.Text, `"work":`) || strings.Contains(content.Text, `"sequence":`) {
 		t.Fatal("log entry exposed nested storage/wire metadata")
 	}
-	if strings.Contains(content.Text, `"step_id":""`) {
-		t.Fatal("log entry did not omit its empty optional step")
+	if strings.Contains(content.Text, `"step_id"`) {
+		t.Fatal("log entry exposed removed mission-step provenance")
 	}
 	return page
 }
@@ -429,7 +429,7 @@ func assertLogEntries(t *testing.T, page fixtures.LogPage, logs ...executions.Lo
 		actual := page.Logs[index]
 		if actual.ID != expected.ID || actual.AgentID != expected.AgentID || actual.CommandID != expected.CommandID ||
 			actual.ActionName != expected.ActionName || actual.OperationID != expected.Work.OperationID || actual.TaskID != expected.Work.TaskID ||
-			actual.StepID != expected.Work.StepID || actual.Message != expected.Message || !actual.CreatedAt.Equal(expected.CreatedAt) {
+			actual.Message != expected.Message || !actual.CreatedAt.Equal(expected.CreatedAt) {
 			t.Fatalf("log provenance changed at index %d: %+v, want %+v", index, actual, expected)
 		}
 	}

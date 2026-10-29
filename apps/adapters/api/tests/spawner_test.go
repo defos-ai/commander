@@ -236,7 +236,7 @@ func assertSpawnLogIdentity(t *testing.T, log models.LogResponse, operationID st
 	t.Helper()
 	if !id.Valid(log.ID) || !id.Valid(log.CommandID) || !id.Valid(log.OperationID) || !id.Valid(log.TaskID) ||
 		log.OperationID != operationID || log.TaskID != spawn.ID || log.AgentID != spawn.AgentID ||
-		log.CommandID != spawn.CommandID || log.ActionName != spawn.ActionName || log.StepID != spawn.StepID || log.CreatedAt.IsZero() {
+		log.CommandID != spawn.CommandID || log.ActionName != spawn.ActionName || log.CreatedAt.IsZero() {
 		t.Fatalf("saved log lost its execution provenance: log=%+v task=%+v", log, spawn)
 	}
 }

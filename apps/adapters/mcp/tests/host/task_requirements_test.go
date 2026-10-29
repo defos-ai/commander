@@ -33,7 +33,7 @@ func TestMCPTaskQueriesProjectLiveExecutionRequirements(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	deadline := now.Add(time.Minute)
-	task := operations.NewTask(id.OperationID(), "", "", actions.NextAction{ActionName: "runtime-secret"})
+	task := operations.NewTask(id.OperationID(), "", actions.NextAction{ActionName: "runtime-secret"})
 	task.AgentID, task.Status, task.StartedAt, task.DeadlineAt = "builder-agent-12345678", operations.TaskRunning, now, &deadline
 	op := operations.Operation{ID: task.OperationID, Status: operations.Running,
 		Preflight: &operations.Preflight{Ready: true, Version: 1}, Tasks: []operations.Task{task}, CreatedAt: now, UpdatedAt: now}

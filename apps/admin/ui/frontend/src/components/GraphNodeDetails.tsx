@@ -44,7 +44,6 @@ export function GraphNodeDetails({ graph, node, taskData, placement, onSelect, o
           <div><dt>{t($ => $.operations.status)}</dt><dd><TaskStatus status={node.task.status} /></dd></div>
           <div><dt>{t($ => $.operations.agentId)}</dt><dd>{node.task.agent_id ? <code>{node.task.agent_id}</code> : t($ => $.operations.unassigned)}</dd></div>
           {node.task.parent_task_id && <div><dt>{t($ => $.operations.parentTaskId)}</dt><dd><code>{node.task.parent_task_id}</code></dd></div>}
-          {node.task.step_id && <div><dt>{t($ => $.operations.stepId)}</dt><dd><code>{node.task.step_id}</code></dd></div>}
           {node.task.command_id && <div><dt>{t($ => $.operations.commandId)}</dt><dd><code>{node.task.command_id}</code></dd></div>}
           <div><dt>{t($ => $.operations.startedAt)}</dt><dd><Timestamp value={node.task.started_at} /></dd></div>
           {node.task.finished_at && <div><dt>{t($ => $.operations.finishedAt)}</dt><dd><Timestamp value={node.task.finished_at} /></dd></div>}

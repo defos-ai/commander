@@ -62,7 +62,6 @@ export default {
   noTasks: 'No tasks assigned yet.',
   taskId: 'Task ID',
   parentTaskId: 'Parent task ID',
-  stepId: 'Mission step ID',
   agentId: 'Agent ID',
   commandId: 'Command ID',
   action: 'Action',

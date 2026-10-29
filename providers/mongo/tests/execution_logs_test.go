@@ -102,7 +102,6 @@ func TestExecutionMongoStoreLogsRejectsConflictingContent(t *testing.T) {
 		{"action", func(log *executions.Log) { log.ActionName = "other-action" }},
 		{"operation", func(log *executions.Log) { log.Work.OperationID = id.New() }},
 		{"task", func(log *executions.Log) { log.Work.TaskID = id.New() }},
-		{"step", func(log *executions.Log) { log.Work.StepID = "other-step" }},
 		{"message", func(log *executions.Log) { log.Message += "changed" }},
 		{"timestamp", func(log *executions.Log) { log.CreatedAt = log.CreatedAt.Add(time.Nanosecond) }},
 	} {

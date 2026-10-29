@@ -16,7 +16,6 @@ func Log() executions.Log {
 		Work: messages.WorkContext{
 			OperationID: "33333333-3333-4333-8333-333333333333",
 			TaskID:      "44444444-4444-4444-8444-444444444444",
-			StepID:      "build",
 		},
 		Message:   "Compiling agent packages",
 		CreatedAt: time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC),

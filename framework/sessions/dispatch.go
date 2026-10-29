@@ -122,7 +122,7 @@ func (c *Coordinator) Prepare(ctx context.Context, a Assignment) (PreparedDispat
 		b := record.Binding(intent.Mode)
 		binding = &b
 	}
-	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input, Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}, Session: binding}
+	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input, Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}, Session: binding}
 	command, err := commands.NewRunAction(task.AgentID, call)
 	if err != nil {
 		return uncertain(err)

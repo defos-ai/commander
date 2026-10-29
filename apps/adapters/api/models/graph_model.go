@@ -27,7 +27,6 @@ type GraphEdgeResponse struct {
 type GraphTaskResponse struct {
 	ID           string     `json:"id"`
 	ParentTaskID string     `json:"parent_task_id,omitempty"`
-	StepID       string     `json:"step_id,omitempty"`
 	ActionName   string     `json:"action_name"`
 	AgentID      string     `json:"agent_id,omitempty"`
 	CommandID    string     `json:"command_id,omitempty"`

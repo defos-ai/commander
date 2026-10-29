@@ -26,7 +26,7 @@ func AssessTaskRequirements(task Task, record agents.Agent, now time.Time) []act
 	work := record.Work
 	if record.Stale || record.Status != agents.AgentWorking || work == nil ||
 		work.OperationID != task.OperationID || work.TaskID != task.ID ||
-		work.StepID != task.StepID || work.CommandID != task.CommandID || work.ActionName != task.ActionName {
+		work.CommandID != task.CommandID || work.ActionName != task.ActionName {
 		return nil
 	}
 	var missing []actions.Requirement

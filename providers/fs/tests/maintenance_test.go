@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
@@ -98,8 +97,7 @@ func TestOperationPreflightReassessesLatestMissionAndTerminalStatus(t *testing.T
 		t.Fatal(err)
 	}
 	if _, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-		next.Mission.RequiredActions = []string{"capture"}
-		next.Mission.Steps = []missions.Step{{ID: "review", RequiredActions: []string{"inspect", "capture"}}}
+		next.Mission.RequiredActions = []string{"inspect", "capture"}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -208,7 +206,7 @@ func TestOperationRecoveryRetainsTerminalInFlightTasks(t *testing.T) {
 			op := fixtures.CreateMaintenanceOperation(t, store)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			latest, err := store.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
+				task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
 				next.Tasks = []operations.Task{task}
 				if err := next.DispatchTask(operations.TaskDispatch{TaskID: task.ID, AgentID: "review-agent-00000001", StartedAt: op.CreatedAt, DeadlineAt: cutoff}); err != nil {
 					return err
@@ -249,7 +247,7 @@ func TestOperationRecoveryValidatesLatestStateBeforeExpiringQuestions(t *testing
 			op := fixtures.CreateMaintenanceOperation(t, first)
 			cutoff := op.CreatedAt.Add(time.Hour)
 			if _, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect"})
+				task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
 				next.Tasks = []operations.Task{task}
 				if err := next.DispatchTask(operations.TaskDispatch{TaskID: task.ID, AgentID: "review-agent-00000001", StartedAt: op.CreatedAt, DeadlineAt: cutoff}); err != nil {
 					return err

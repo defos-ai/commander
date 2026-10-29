@@ -17,7 +17,7 @@ func SeedMaintenanceTask(t *testing.T, config runner.Config, running bool) opera
 	now := time.Now().UTC()
 	op := operations.Operation{ID: id.OperationID(), Mission: config.MissionStore.(*fakes.MissionStore).Snapshot(),
 		Input: json.RawMessage(`{}`), Status: operations.Planning, CreatedAt: now, UpdatedAt: now}
-	task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{}`)})
+	task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{}`)})
 	if _, err := op.QueueTask(task); err != nil {
 		t.Fatal(err)
 	}

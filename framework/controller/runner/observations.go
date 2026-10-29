@@ -66,7 +66,7 @@ func (r *Runner) observeTask(task operations.Task) {
 	ctx, cancel := context.WithTimeout(r.ctx, taskObservationTimeout)
 	defer cancel()
 	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input,
-		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
+		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
 	output, err := r.executor.RecoverAction(ctx, task.AgentID, call)
 	r.results <- taskResult{task: task, output: output, err: err, observation: true}
 }

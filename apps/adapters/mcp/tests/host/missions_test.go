@@ -65,6 +65,7 @@ func TestMCPCreateMissionDiscoveryAndPersistence(t *testing.T) {
 		}
 	}
 	for _, body := range []string{
+		strings.Replace(hostfixtures.MissionDefinition, `"objectives":`, `"steps": [], "objectives":`, 1),
 		strings.Replace(hostfixtures.MissionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1),
 		strings.Replace(hostfixtures.MissionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {}`, 1),
 		strings.Replace(hostfixtures.MissionDefinition, `["PUBLISH_TOKEN"]`, `["PUBLISH_TOKEN","PUBLISH_TOKEN"]`, 1),
@@ -163,7 +164,6 @@ func TestMCPCreateMissionRejectsInvalidDefinitions(t *testing.T) {
 		{"action readiness field", strings.Replace(hostfixtures.MissionDefinition, `"name": "inspect-domain"`, `"name": "inspect-domain", "status": "ready"`, 1)},
 		{"unreferenced action definition", strings.Replace(hostfixtures.MissionDefinition, `"name": "publish-review"`, `"name": "unreferenced-action"`, 1)},
 		{"remote action definition reference", strings.Replace(hostfixtures.MissionDefinition, `"output_schema": {"type":"object","x-note":"\u0061"}`, `"output_schema": {"$ref":"https://private.example/schema"}`, 1)},
-		{"unknown step field", strings.Replace(hostfixtures.MissionDefinition, `"id": "inspect"`, `"id": "inspect", "unexpected": true`, 1)},
 		{"unknown rule field", strings.Replace(hostfixtures.MissionDefinition, `"aggregate-results": {`, `"aggregate-results": {"unexpected": true,`, 1)},
 		{"unknown rule parameter", strings.Replace(hostfixtures.MissionDefinition, `"decision_by": "model"`, `"decision_by": "model", "unexpected": true`, 1)},
 		{"missing objectives", strings.Replace(hostfixtures.MissionDefinition, `"objectives": ["Review actions that have not been implemented yet.", "Preserve ordered guidance for later execution."],`, "", 1)},

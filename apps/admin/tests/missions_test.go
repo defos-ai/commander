@@ -220,7 +220,7 @@ func checkWebsiteMission(t *testing.T, websites map[string]missions.Mission) {
 
 func checkInstallAgentMission(t *testing.T, catalog map[string]missions.Mission) {
 	mission := catalog["install-agent"]
-	if !slices.Equal(mission.RequiredActions, []string{"spawn-agent"}) || !slices.Equal(mission.StartingActions, []string{"spawn-agent"}) || len(mission.Steps) != 0 {
+	if !slices.Equal(mission.RequiredActions, []string{"spawn-agent"}) || !slices.Equal(mission.StartingActions, []string{"spawn-agent"}) {
 		t.Fatalf("agent installation must work before business agents register: %+v", mission)
 	}
 	decision := mission.Rules[missions.DecideNextActions]

@@ -248,7 +248,7 @@ func (s *AdditionalQueuedTaskStore) QueueTask(ctx context.Context, operationID s
 	if err != nil {
 		return op, err
 	}
-	later := operations.NewTask(operationID, "", "", actions.NextAction{ActionName: "follow-up"})
+	later := operations.NewTask(operationID, "", actions.NextAction{ActionName: "follow-up"})
 	return s.OperationStore.QueueTask(ctx, operationID, later)
 }
 

@@ -56,20 +56,20 @@
   catalog before retrying; saved operations retain their mission snapshots.
 - Mission `objectives` is an ordered, nonempty array of nonblank strings. Clone
   the array at snapshot boundaries and retain each entry through storage and
-  transport. Planning steps keep their own singular `objective` field.
+  transport.
 - Optional mission `action_definitions` reuses `actions.Definition` for desired
   capabilities. Keep at most 100 unique trimmed names, each referenced by required,
-  optional or step-required actions. Compile both explicit object schemas with
+  optional actions. Compile both explicit object schemas with
   the shared action resolver. Deep-clone definitions, schema bytes and secret names
   in mission/operation snapshots. Definitions do not register executors, grant
   secrets, alter live inventory or satisfy preflight readiness.
-- Mission `required_actions` and step requirements participate in preflight;
+- Mission `required_actions` participate in preflight;
   `optional_actions` describes expected capabilities and adds coverage only while
   its tasks are queued. Remove that extra coverage after dispatch/completion;
   normal execution checks still apply. Neither list restricts which actions may
   execute. Validate unique nonblank names and reject required/optional overlap;
   clone both lists at snapshot boundaries. Normal rules and readiness apply to optional work.
-  Step requirements and `same-agent` groups still participate in preflight even
+  `same-agent` groups still participate in preflight even
   if an action is optional; optionality does not override a placement constraint.
 - [`missions.RuleSet`](domain/missions/rule.go) is saved in each operation's
   mission snapshot. [`operations.RuleApplier`](domain/operations/rule_applier.go)

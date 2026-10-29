@@ -70,7 +70,7 @@ func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
 	ctx, cancel := context.WithDeadline(r.ctx, deadline)
 	defer cancel()
 	call := actionmodel.ActionCall{ActionName: task.ActionName, Input: task.Input,
-		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID, StepID: task.StepID}}
+		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
 	if allowDispatch && r.sessions != nil {
 		prepared, err := r.sessions.Prepare(ctx, runtimeSessions.Assignment{OperationID: task.OperationID, TaskID: task.ID, Candidate: task.AgentID, Timeout: r.taskTimeout})
 		if err != nil {

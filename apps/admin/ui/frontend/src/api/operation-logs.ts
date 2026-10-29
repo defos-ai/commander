@@ -9,7 +9,6 @@ export interface OperationLog {
   action_name: string;
   operation_id: string;
   task_id: string;
-  step_id?: string;
   message: string;
   created_at: string;
 }
@@ -78,7 +77,7 @@ function validateQuery(operationID: string, query: OperationLogQuery) {
 function readLog(value: unknown, operationID: string, query: OperationLogQuery): OperationLog {
   if (!isObject(value) || !isUUID(value.id) || !isAgentID(value.agent_id) || !isUUID(value.command_id) ||
     !isText(value.action_name) || !isUUID(value.operation_id) || value.operation_id !== operationID ||
-    !isUUID(value.task_id) || value.step_id !== undefined && (typeof value.step_id !== 'string' || !unicodePattern.test(value.step_id)) ||
+    !isUUID(value.task_id) ||
     !isText(value.message) || new TextEncoder().encode(value.message).length > 2048 || !isTimestamp(value.created_at) ||
     query.task_id !== undefined && value.task_id !== query.task_id ||
     query.agent_id !== undefined && value.agent_id !== query.agent_id ||
@@ -90,7 +89,6 @@ function readLog(value: unknown, operationID: string, query: OperationLogQuery):
     action_name: value.action_name, operation_id: value.operation_id, task_id: value.task_id,
     message: value.message, created_at: value.created_at,
   };
-  if (value.step_id !== undefined) item.step_id = value.step_id as string;
   return item;
 }
 

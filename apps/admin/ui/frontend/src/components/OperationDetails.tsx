@@ -148,7 +148,6 @@ function Task({ task, queuedFor, placement, onOpenSession, onOpenLogs }: {
     <dl className="detail-list">
       <div><dt>{t($ => $.operations.agentId)}</dt><dd>{task.agent_id ? <code>{task.agent_id}</code> : t($ => $.operations.unassigned)}</dd></div>
       {task.parent_task_id && <div><dt>{t($ => $.operations.parentTaskId)}</dt><dd><code>{task.parent_task_id}</code></dd></div>}
-      {task.step_id && <div><dt>{t($ => $.operations.stepId)}</dt><dd><code>{task.step_id}</code></dd></div>}
       {task.command_id && <div><dt>{t($ => $.operations.commandId)}</dt><dd><code>{task.command_id}</code></dd></div>}
       <div><dt>{t($ => $.operations.startedAt)}</dt><dd><Timestamp value={task.started_at} /></dd></div>
       {task.finished_at && <div><dt>{t($ => $.operations.finishedAt)}</dt><dd><Timestamp value={task.finished_at} /></dd></div>}
@@ -182,7 +181,6 @@ function Question({ question, onAnswer, active }: { question: OperationQuestion;
     <dl className="detail-list">
       <div><dt>{t($ => $.operations.questionId)}</dt><dd><code>{question.id}</code></dd></div>
       {question.task_id && <div><dt>{t($ => $.operations.taskId)}</dt><dd><code>{question.task_id}</code></dd></div>}
-      {question.step_id && <div><dt>{t($ => $.operations.stepId)}</dt><dd><code>{question.step_id}</code></dd></div>}
       <div><dt>{t($ => $.operations.askedAt)}</dt><dd><Timestamp value={question.asked_at} /></dd></div>
       <div><dt>{t($ => $.operations.fallbackAt)}</dt><dd><Timestamp value={question.fallback_at} /></dd></div>
       {question.answered_at && <div><dt>{t($ => $.operations.answeredAt)}</dt><dd><Timestamp value={question.answered_at} /></dd></div>}

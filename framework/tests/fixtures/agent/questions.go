@@ -37,7 +37,7 @@ func PendingExecutionQuestion(t *testing.T, message messages.Message) operations
 	now := time.Now().UTC()
 	return operations.Question{ID: id.QuestionID(), Status: operations.QuestionPending,
 		CommandID: request.CommandID, Key: request.Key, Text: request.Text, Options: request.Options,
-		TaskID: message.Work.TaskID, StepID: message.Work.StepID, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute)}
+		TaskID: message.Work.TaskID, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute)}
 }
 
 func QuestionCommand(t *testing.T, agentID string, deadline time.Time) messages.Message {

@@ -28,7 +28,6 @@ func ToAgentResponse(agent agents.Agent) models.AgentResponse {
 		response.Work = &models.AgentWorkResponse{
 			OperationID:         agent.Work.OperationID,
 			TaskID:              agent.Work.TaskID,
-			StepID:              agent.Work.StepID,
 			ActionName:          agent.Work.ActionName,
 			CommandID:           agent.Work.CommandID,
 			MissingRequirements: ToActionRequirementResponses(agent.Work.MissingRequirements),

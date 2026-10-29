@@ -30,7 +30,7 @@ func TestAgentWorkSuppliesCurrentExecutionIdentity(t *testing.T) {
 	outer := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID(),
 		Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}})
 	for _, work := range []messages.WorkContext{
-		{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"},
+		{OperationID: id.OperationID(), TaskID: id.TaskID()},
 		{},
 	} {
 		_, err := runtime.Work(outer, agent.ActionCall{ActionName: "inspect-execution", Work: work})
@@ -72,7 +72,7 @@ func TestAgentServeSuppliesCommandAndWorkIdentity(t *testing.T) {
 		t.Fatal("agent did not register")
 	}
 	call := agent.ActionCall{ActionName: "inspect-execution", Work: messages.WorkContext{
-		OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}}
+		OperationID: id.OperationID(), TaskID: id.TaskID()}}
 	command, err := agentcommands.NewRunAction(runtime.ID(), call)
 	if err != nil {
 		t.Fatal(err)

@@ -71,7 +71,7 @@ func TestOperationContinuationRejectsChangedStoredState(t *testing.T) {
 			op.Questions = []operations.Question{{ID: id.QuestionID(), TaskID: op.Tasks[0].ID, Status: operations.QuestionPending}}
 		}, operations.ErrQuestionPending},
 		{"step question", func(op *operations.Operation) {
-			op.Questions = []operations.Question{{ID: id.QuestionID(), StepID: op.Tasks[0].StepID, Status: operations.QuestionPending}}
+			op.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending}}
 		}, operations.ErrQuestionPending},
 		{"global question", func(op *operations.Operation) {
 			op.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending}}
@@ -201,7 +201,7 @@ func assertContinuationResolution(t *testing.T, before, published operations.Ope
 	seen := map[string]bool{before.Tasks[0].ID: true}
 	for i, child := range published.Tasks[len(before.Tasks):] {
 		if child.ID == "" || seen[child.ID] || child.ID != c.CreatedTaskIDs[i] || child.CommandID != child.ID ||
-			child.OperationID != before.ID || child.ParentTaskID != before.Tasks[0].ID || child.StepID != before.Tasks[0].StepID ||
+			child.OperationID != before.ID || child.ParentTaskID != before.Tasks[0].ID ||
 			child.ActionName != selected[i].ActionName || child.AgentID != "" || child.Status != operations.TaskQueued {
 			t.Fatalf("decision child lost its identity or assignment: %+v", child)
 		}

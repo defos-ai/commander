@@ -175,6 +175,7 @@ func TestMissionLoadingRejectsInvalidConfiguration(t *testing.T) {
 		want   string
 	}{
 		{"legacy automations", `"automations": {"batch-ports": {"run": ["scan-ports"], "continue": "when_all"}}`, `unknown field "automations"`},
+		{"removed mission steps", `"steps": []`, `unknown field "steps"`},
 		{"unknown rule", `"rules": {"invented": {"for_actions": ["batch-ports"]}}`, `rule "invented": unsupported rule`},
 		{"old selector", `"rules": {"aggregate-results": {"actions": ["batch-ports"]}}`, `unknown field "actions"`},
 		{"unknown parameters", `"rules": {"decide-next-actions": {"for_actions": ["scan-ports"], "params": {"decision_by": "model", "extra": true}}}`, `unknown field "extra"`},

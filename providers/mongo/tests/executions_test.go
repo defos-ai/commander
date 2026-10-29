@@ -44,7 +44,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 		t.Fatalf("semantic replay changed the reservation: %#v, claimed=%t, error=%v", restored, claimed, err)
 	}
 	for _, change := range []func(*messages.Message){
-		func(m *messages.Message) { m.Work.StepID = "different" },
+		func(m *messages.Message) { m.Work.OperationID = "30000000-0000-4000-8000-000000000099" },
 		func(m *messages.Message) {
 			m.Payload = json.RawMessage(strings.ReplaceAll(string(m.Payload), "9007199254740993", "9007199254740992"))
 		},
@@ -57,7 +57,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 	}
 	result := fixtures.ExecutionResult(command)
 	wrongWork := result
-	wrongWork.Work.StepID = "different"
+	wrongWork.Work.OperationID = "30000000-0000-4000-8000-000000000099"
 	if err := catalog.Complete(t.Context(), wrongWork); err == nil {
 		t.Fatal("result for different work was accepted")
 	}
@@ -77,7 +77,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 	for _, change := range []func(*messages.Message){
 		func(m *messages.Message) { m.ID = fixtures.ExecutionResult(fixtures.ExecutionCommand(2)).ID },
 		func(m *messages.Message) { m.Type = messages.CommandFailed },
-		func(m *messages.Message) { m.Work.StepID = "different" },
+		func(m *messages.Message) { m.Work.OperationID = "30000000-0000-4000-8000-000000000099" },
 		func(m *messages.Message) {
 			m.Payload = json.RawMessage(strings.ReplaceAll(string(m.Payload), "9007199254740993", "9007199254740992"))
 		},

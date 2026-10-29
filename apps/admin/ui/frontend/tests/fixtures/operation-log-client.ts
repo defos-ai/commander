@@ -16,7 +16,7 @@ export function makeLog(patch: Partial<OperationLog> = {}): OperationLog {
   return {
     id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', agent_id: agentID,
     command_id: '55555555-5555-4555-8555-555555555555', action_name: 'build-agent',
-    operation_id: operationID, task_id: taskID, step_id: 'build',
+    operation_id: operationID, task_id: taskID,
     message: 'Go tests started', created_at: '2026-10-28T12:00:00.123456789Z',
     ...patch,
   };
@@ -34,7 +34,6 @@ export const invalidLogPatches: Record<string, unknown>[] = [
   { action_name: '\t\n\u0085\u2000' }, { action_name: '\ud800' },
   { operation_id: otherOperationID }, { operation_id: '' }, { operation_id: null },
   { task_id: '' }, { task_id: null }, { task_id: 'task-1' },
-  { step_id: 42 }, { step_id: null }, { step_id: '\udc00' },
   { message: '' }, { message: '\t\n\u0085\u2000' }, { message: null },
   { message: '\ud800' }, { message: '🛠'.repeat(512) + 'a' },
   { created_at: 'not-a-date' }, { created_at: '2026-10-28' },

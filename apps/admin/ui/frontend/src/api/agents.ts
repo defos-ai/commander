@@ -7,7 +7,7 @@ import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOpti
 function isWork(value: unknown): value is AgentWork {
   return isObject(value) && typeof value.action_name === 'string' &&
     isOptionalString(value.operation_id) && isOptionalString(value.task_id) &&
-    isOptionalString(value.step_id) && isOptionalString(value.command_id) &&
+    isOptionalString(value.command_id) &&
     (value.missing_requirements === undefined || value.missing_requirements === null ||
       (Array.isArray(value.missing_requirements) && value.missing_requirements.every(isActionRequirement)));
 }

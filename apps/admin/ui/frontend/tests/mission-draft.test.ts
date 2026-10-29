@@ -5,7 +5,7 @@ describe('mission form draft', () => {
   it('opens a blank draft and nullable lists without adding properties to its JSON', () => {
     expect(readMissionDraft(initialMissionDefinition)).toMatchObject({
       name: '', objectives: [''], required_actions: [], optional_actions: [], starting_actions: [],
-      input_schema: '{}', output_schema: '{}', rules: '{}', steps: '[]', action_definitions: '[]',
+      input_schema: '{}', output_schema: '{}', rules: '{}', action_definitions: '[]',
     });
     const source = '{"name":"draft","objectives":["First", ""], "required_actions":null,"starting_actions":null,"rules":null}';
     expect(readMissionDraft(source)).toMatchObject({
@@ -25,9 +25,8 @@ describe('mission form draft', () => {
   "input_schema": {"minimum":9007199254740993,"multipleOf":0.10000000000000001,"default":1e+100},
   "output_schema": {"description":"\u0061\/b"},
   "rules": {"same-agent":{"for_actions":["build-agent"],"future":9007199254740995}},
-  "steps": [{"id":"build","objective":"Build it","future":{"text":"brackets } ] , \\\""}}],
   "action_definitions": [{"name":"build-agent","input_schema":{"maximum":9007199254740997}}],
-  "future_field": {"enabled":true,"large":9007199254740999}
+  "future_field": {"enabled":true,"large":9007199254740999,"text":"brackets } ] , \\\""}
 }`;
     const before = readMissionDraft(source);
     expect(writeMissionDraft(source, before)).toBe(source);
@@ -40,7 +39,7 @@ describe('mission form draft', () => {
       .replace(String.raw`["Build \\ agents", "Explain \"results\""]`, '["Build it","Report it"]')
       .replace('"required_actions": ["build-agent"]', '"required_actions": ["build-agent","check-result"]'));
     const after = readMissionDraft(changed);
-    for (const field of ['input_schema', 'output_schema', 'rules', 'steps', 'action_definitions'] as const) {
+    for (const field of ['input_schema', 'output_schema', 'rules', 'action_definitions'] as const) {
       expect(after[field]).toBe(before[field]);
     }
     expect(changed).toContain('"large":9007199254740999');
@@ -69,7 +68,7 @@ describe('mission form draft', () => {
     '{"name":"draft","objectives":["Build"],"starting_actions":{}}',
     '{"name":"draft","objectives":["Build"],"input_schema":[]}',
     '{"name":"draft","objectives":["Build"],"rules":false}',
-    '{"name":"draft","objectives":["Build"],"steps":{}}',
+    '{"name":"draft","objectives":["Build"],"steps":[]}',
     '{"name":"draft","objectives":["Build"],"action_definitions":{}}',
     String.raw`{"name":"first","n\u0061me":"last","objectives":["Build"]}`,
   ])('rejects JSON that cannot be represented by the form without losing fields: %s', source => {

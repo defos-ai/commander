@@ -71,7 +71,6 @@ func TestExecutionLogsRejectConflictingIdentityAndContent(t *testing.T) {
 		{"action", func(log *executions.Log) { log.ActionName = "publish-agent" }},
 		{"operation", func(log *executions.Log) { log.Work.OperationID = fixtures.ExecutionLog(2).ID }},
 		{"task", func(log *executions.Log) { log.Work.TaskID = fixtures.ExecutionLog(2).ID }},
-		{"step", func(log *executions.Log) { log.Work.StepID = "publish" }},
 		{"standalone scope", func(log *executions.Log) { log.Work = messages.WorkContext{} }},
 		{"message", func(log *executions.Log) { log.Message += " changed" }},
 		{"nanosecond", func(log *executions.Log) { log.CreatedAt = log.CreatedAt.Add(time.Nanosecond) }},

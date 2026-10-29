@@ -74,9 +74,7 @@ func (o Operation) BlockedByQuestion(task Task) bool {
 			}
 			continue
 		}
-		if question.StepID == "" || question.StepID == task.StepID {
-			return true
-		}
+		return true
 	}
 	return false
 }

@@ -163,7 +163,7 @@ func consumerMessageLogger(logger *slog.Logger, message messages.Message) *slog.
 	}
 	if message.Work != (messages.WorkContext{}) {
 		logger = logger.With("operation_id", message.Work.OperationID,
-			"task_id", message.Work.TaskID, "step_id", message.Work.StepID)
+			"task_id", message.Work.TaskID)
 	}
 	return logger
 }

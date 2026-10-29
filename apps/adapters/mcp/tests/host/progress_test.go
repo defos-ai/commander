@@ -74,7 +74,7 @@ func TestMCPOperationQueriesShareProgressAndRetainHistory(t *testing.T) {
 			op := operations.Operation{ID: id.OperationID(), Status: status,
 				Mission: missions.Mission{Name: "progress"}, CreatedAt: now, UpdatedAt: now}
 			for _, status := range []operations.TaskStatus{operations.TaskSucceeded, operations.TaskSucceeded, operations.TaskInterrupted} {
-				task := operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: "review"})
+				task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "review"})
 				task.Status = status
 				task.AgentID = "review-agent-12345678"
 				task.FinishedAt = &now

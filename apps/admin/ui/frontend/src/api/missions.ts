@@ -1,7 +1,7 @@
 import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
-import type { ActionDefinition, Mission, MissionRule, MissionStep } from './types';
+import type { ActionDefinition, Mission, MissionRule } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -17,11 +17,6 @@ function isNullableStringArray(value: unknown): value is string[] | null {
 
 function isObjectives(value: unknown): value is string[] {
   return isStringArray(value) && value.length > 0 && value.every(item => item.trim() !== '');
-}
-
-function isStep(value: unknown): value is MissionStep {
-  return isObject(value) && typeof value.id === 'string' && typeof value.objective === 'string' &&
-    isNullableStringArray(value.agent_types) && isNullableStringArray(value.required_actions);
 }
 
 function isRule(name: string, value: unknown): value is MissionRule {
@@ -45,13 +40,12 @@ function isMissionName(value: unknown): value is string {
 }
 
 export function isMission(value: unknown): value is Mission {
-  return isObject(value) && isMissionName(value.name) && isObjectives(value.objectives) &&
+  return isObject(value) && !('steps' in value) && isMissionName(value.name) && isObjectives(value.objectives) &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.optional_actions === undefined || isStringArray(value.optional_actions)) &&
     (value.action_definitions === undefined || (Array.isArray(value.action_definitions) && value.action_definitions.every(isActionDefinition))) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
-    (value.steps === undefined || (Array.isArray(value.steps) && value.steps.every(isStep))) &&
     (value.rules === undefined || (isObject(value.rules) && Object.entries(value.rules).every(([name, rule]) => isRule(name, rule))));
 }
 

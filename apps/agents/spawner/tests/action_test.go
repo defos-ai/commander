@@ -84,7 +84,7 @@ func TestSpawnAgentUsesExecutionIdentityAndReturnsReadiness(t *testing.T) {
 			InputSchema:         json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}},
 	}})
 	executor := fixtures.SpawnAction(t, launcher)
-	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
+	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}
 	for _, execution := range []action.Execution{{CommandID: id.MessageID(), Work: work}, {CommandID: id.MessageID()}} {
 		for _, reference := range []string{
 			fixtures.ActionPackage,
@@ -385,7 +385,7 @@ func TestSpawnerAgentWorkRequiresControllerDispatch(t *testing.T) {
 	if err := runtime.DiscoverActions(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "provision"}
+	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}
 	ctx := action.WithExecution(t.Context(), action.Execution{CommandID: id.MessageID(), Work: work})
 	_, err = runtime.Work(ctx, agent.ActionCall{ActionName: spawneractions.SpawnAgentName, Work: work,
 		Input: json.RawMessage(`{"package":"` + fixtures.ActionPackage + `"}`)})

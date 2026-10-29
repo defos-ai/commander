@@ -82,7 +82,7 @@ func TestSpawnAgentWaitsForManagedSecretInTheSameExecution(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
-			work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID(), StepID: "install"}
+			work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}
 			commandID := id.MessageID()
 			ctx = action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: work})
 			requested := make(chan string, 1)

@@ -18,12 +18,6 @@ const MissionDefinition = `{
     "input_schema": {"type":"object"},
     "output_schema": {"type":"object"}
   }],
-  "steps": [{
-    "id": "inspect",
-    "objective": "Inspect the requested domain.",
-    "agent_types": ["future-agent"],
-    "required_actions": ["inspect-domain"]
-  }],
   "rules": {
     "aggregate-results": {"for_actions": ["inspect-domain"]},
     "decide-next-actions": {

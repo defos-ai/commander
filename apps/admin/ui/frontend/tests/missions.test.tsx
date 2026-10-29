@@ -296,10 +296,9 @@ describe('missions browser', () => {
   });
 
   it('preserves advanced JSON through form edits and rejects invalid mode transitions without losing text', async () => {
-    const steps = [{ id: 'check', objective: 'Review the page.', agent_types: ['web-agent'], required_actions: ['check-links'] }];
     const definitions = [{ name: 'capture-page', description: 'Capture requested evidence.',
       input_schema: { type: 'object' }, output_schema: { type: 'object' }, required_secrets: ['SITE_TOKEN'] }];
-    const source = JSON.stringify({ ...mission, steps, action_definitions: definitions })
+    const source = JSON.stringify({ ...mission, action_definitions: definitions })
       .replace('"default":3', String.raw`"const":9007199254740993,"description":"\u0061\\path"`);
     const fetch = mockAPI();
     render(<CreateMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()} onBack={vi.fn()} onSelect={vi.fn()} />);
@@ -324,7 +323,7 @@ describe('missions browser', () => {
     expect(edited).toContain('9007199254740993');
     expect(edited).toContain(String.raw`"\u0061\\path"`);
     expect(JSON.parse(edited)).toMatchObject({ name: 'edited-review', objectives: [mission.objectives[0], 'Keep ordered evidence.'],
-      rules: mission.rules, steps, action_definitions: definitions });
+      rules: mission.rules, action_definitions: definitions });
     fireEvent.change(editor, { target: { value: '{invalid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Form' }));
     expect(screen.getByRole('alert')).toHaveTextContent('This definition cannot be shown in the form. Check its field types or continue editing JSON.');
@@ -336,7 +335,7 @@ describe('missions browser', () => {
   it('authors action contracts without registering actions or saving the mission until requested', async () => {
     const existing = String.raw`{"name":"existing-action","input_schema":{"type":"object","properties":{"id":{"const":9007199254740995},"path":{"const":"\u0062\\existing"}}},"output_schema":{"type":"object"}}`;
     const inputSchema = String.raw`{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}}`;
-    const source = `{"name":"defined-review","objectives":["Review a future capability."],"required_actions":[],"starting_actions":[],"input_schema":{},"output_schema":{},"rules":{"same-agent":{"for_actions":["existing-action"]}},"steps":[{"id":"review","objective":"Review evidence.","agent_types":[],"required_actions":["existing-action"]}],"action_definitions":[${existing}]}`;
+    const source = `{"name":"defined-review","objectives":["Review a future capability."],"required_actions":[],"optional_actions":["existing-action"],"starting_actions":[],"input_schema":{},"output_schema":{},"rules":{"same-agent":{"for_actions":["existing-action"]}},"action_definitions":[${existing}]}`;
     const onSelect = vi.fn();
     const fetch = mockAPI((_url, init) => init.method === 'POST'
       ? Response.json(JSON.parse(init.body as string), { status: 201 }) : Response.json({ items: [] }));
@@ -344,10 +343,10 @@ describe('missions browser', () => {
     const view = render(<CreateMissionPage connection={connection} credentials={credentials} {...callbacks} />);
     fireEvent.change(creationJSONEditor(), { target: { value: source } });
     fireEvent.click(screen.getByRole('button', { name: 'Form' }));
-    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('steps');
+    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('optional');
     fireEvent.click(screen.getByRole('button', { name: 'Edit definition existing-action' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save definition' }));
-    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('steps');
+    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('optional');
 
     const define = screen.getByRole('button', { name: 'Define action' });
     define.focus();
@@ -399,7 +398,7 @@ describe('missions browser', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Form' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove definition existing-action' }));
     expect(screen.queryByRole('button', { name: 'Edit definition existing-action' })).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('steps');
+    expect(screen.getByRole('combobox', { name: 'Role for existing-action' })).toHaveValue('optional');
     fireEvent.change(screen.getByRole('combobox', { name: 'Role for future-action' }), { target: { value: 'optional' } });
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Create mission' }));
@@ -410,9 +409,8 @@ describe('missions browser', () => {
     const saved = posts[0][1]!.body as string;
     expect(saved).toContain(inputSchema);
     expect(JSON.parse(saved)).toMatchObject({
-      required_actions: [], optional_actions: ['future-action'], starting_actions: [],
+      required_actions: [], optional_actions: ['existing-action', 'future-action'], starting_actions: [],
       rules: { 'same-agent': { for_actions: ['existing-action'] } },
-      steps: [{ id: 'review', objective: 'Review evidence.', agent_types: [], required_actions: ['existing-action'] }],
       action_definitions: [{ name: 'future-action', description: 'Keep precise review evidence.', required_secrets: ['REVIEW_TOKEN', 'SITE_TOKEN'] }],
     });
 

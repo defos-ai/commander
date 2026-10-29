@@ -108,7 +108,7 @@ func DecodeQuestionResponse(message messages.Message) (QuestionResponse, error) 
 	if err := domain.Decode(message.Payload, &response); err != nil {
 		return QuestionResponse{}, errors.New("invalid question response")
 	}
-	if response.Question != nil && (response.Question.TaskID != message.Work.TaskID || response.Question.StepID != message.Work.StepID) {
+	if response.Question != nil && response.Question.TaskID != message.Work.TaskID {
 		return QuestionResponse{}, errors.New("question response must match its execution work")
 	}
 	return response, nil

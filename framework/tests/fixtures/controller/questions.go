@@ -20,7 +20,7 @@ func ExecutionQuestionConsumer(t *testing.T) (consumers.EventConsumer, *controll
 	store := runnerfakes.NewOperationStore()
 	operation := operations.Operation{ID: command.Work.OperationID, Status: operations.Running,
 		Tasks: []operations.Task{{ID: command.Work.TaskID, CommandID: command.ID, OperationID: command.Work.OperationID,
-			AgentID: command.AgentID, StepID: command.Work.StepID, ActionName: "capture", Status: operations.TaskRunning, DeadlineAt: &deadline}}}
+			AgentID: command.AgentID, ActionName: "capture", Status: operations.TaskRunning, DeadlineAt: &deadline}}}
 	if err := store.Create(t.Context(), operation); err != nil {
 		t.Fatal(err)
 	}

@@ -22,7 +22,7 @@ export const browserAction: Action = {
 
 export const agent: Agent = {
   id: 'browser-agent-a1234567', type: 'browser-agent', status: 'working',
-  work: { action_name: 'check-accessibility', operation_id: 'operation-123', task_id: 'task-456', step_id: 'step-789', command_id: 'command-012' },
+  work: { action_name: 'check-accessibility', operation_id: 'operation-123', task_id: 'task-456', command_id: 'command-012' },
   server: { hostname: 'worker-west-1', ip_address: '10.0.0.12' },
   responsibilities: ['Website quality'], actions: [action, browserAction],
   discovery_scope: null, config: { secret: 'DO-NOT-DISPLAY-CONFIG' },

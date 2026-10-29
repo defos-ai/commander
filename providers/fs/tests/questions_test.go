@@ -25,7 +25,6 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := question
-	expected.StepID = op.Tasks[0].StepID
 	if len(asked.Questions) != 1 || asked.Status != operations.Waiting {
 		t.Fatalf("ask did not publish the pending question and waiting status: %+v", asked)
 	}

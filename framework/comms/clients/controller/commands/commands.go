@@ -56,7 +56,6 @@ func (r StartOperationCommand) Validate() error {
 
 type AssignTaskCommand struct {
 	OperationID string          `json:"operation_id"`
-	StepID      string          `json:"step_id,omitempty"`
 	ActionName  string          `json:"action_name"`
 	Input       json.RawMessage `json:"input,omitempty"`
 }
@@ -91,7 +90,6 @@ type AskQuestionCommand struct {
 	TaskID         string   `json:"task_id,omitempty"`
 	Version        uint64   `json:"version,omitempty"`
 	OperationID    string   `json:"operation_id"`
-	StepID         string   `json:"step_id,omitempty"`
 	Text           string   `json:"text"`
 	Options        []string `json:"options,omitempty"`
 	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`

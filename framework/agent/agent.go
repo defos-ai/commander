@@ -262,7 +262,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 		}
 		next.status = AgentWorking
 		next.work = &Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID,
-			StepID: call.Work.StepID, ActionName: call.ActionName, CommandID: commandID}
+			ActionName: call.ActionName, CommandID: commandID}
 		started = true
 		return nil
 	}, announce)

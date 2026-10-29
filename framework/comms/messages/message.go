@@ -81,7 +81,6 @@ func (m Message) Validate() error {
 type WorkContext struct {
 	OperationID string `json:"operation_id"`
 	TaskID      string `json:"task_id"`
-	StepID      string `json:"step_id,omitempty"`
 }
 
 func (w WorkContext) Validate() error {
@@ -90,9 +89,6 @@ func (w WorkContext) Validate() error {
 	}
 	if !id.Valid(w.OperationID) || !id.Valid(w.TaskID) {
 		return fmt.Errorf("work requires operation and task UUIDs")
-	}
-	if w.StepID != "" && strings.TrimSpace(w.StepID) == "" {
-		return fmt.Errorf("step ID must not be blank")
 	}
 	return nil
 }

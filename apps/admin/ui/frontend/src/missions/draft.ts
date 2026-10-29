@@ -16,7 +16,6 @@ export type MissionDraft = {
   input_schema: string;
   output_schema: string;
   rules: string;
-  steps: string;
   action_definitions: string;
 };
 
@@ -91,15 +90,15 @@ function strings(value: unknown, nullable = false): value is string[] | undefine
 
 export function readMissionDraft(source: string): MissionDraft {
   const { value, fields } = document(source);
-  if (typeof value.name !== 'string' || !strings(value.objectives) || !value.objectives?.length
+  if ('steps' in value || typeof value.name !== 'string' || !strings(value.objectives) || !value.objectives?.length
     || !strings(value.required_actions, true) || !strings(value.optional_actions, true) || !strings(value.starting_actions, true)) {
     throw new TypeError('Mission form fields have invalid types');
   }
   for (const field of ['input_schema', 'output_schema', 'rules']) {
     if (value[field] != null && !object(value[field])) throw new TypeError('Mission object field has an invalid type');
   }
-  for (const field of ['steps', 'action_definitions']) {
-    if (value[field] != null && !Array.isArray(value[field])) throw new TypeError('Mission list field has an invalid type');
+  if (value.action_definitions != null && !Array.isArray(value.action_definitions)) {
+    throw new TypeError('Mission action definitions must be a list');
   }
   function raw(field: string, fallback: string): string {
     const span = fields.get(field);
@@ -114,7 +113,6 @@ export function readMissionDraft(source: string): MissionDraft {
     input_schema: raw('input_schema', '{}'),
     output_schema: raw('output_schema', '{}'),
     rules: raw('rules', '{}'),
-    steps: raw('steps', '[]'),
     action_definitions: raw('action_definitions', '[]'),
   };
 }
@@ -136,7 +134,7 @@ export function writeMissionDraft(source: string, draft: MissionDraft): string {
     const jsonValue = JSON.stringify(draft[field]);
     if (JSON.stringify(previous[field]) !== jsonValue) result = updateMissionDefinition(result, field, jsonValue);
   }
-  for (const field of ['input_schema', 'output_schema', 'rules', 'steps', 'action_definitions'] as const) {
+  for (const field of ['input_schema', 'output_schema', 'rules', 'action_definitions'] as const) {
     if (previous[field] !== draft[field]) result = updateMissionDefinition(result, field, draft[field]);
   }
   readMissionDraft(result);

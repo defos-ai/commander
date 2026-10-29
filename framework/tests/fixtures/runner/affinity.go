@@ -20,7 +20,7 @@ func AffinityOperation() operations.Operation {
 		}},
 	}
 	for _, name := range []string{"checkout-template", "build-agent", "other-action", "another-action"} {
-		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", "", actions.NextAction{ActionName: name}))
+		op.Tasks = append(op.Tasks, operations.NewTask(op.ID, "", actions.NextAction{ActionName: name}))
 	}
 	return op
 }

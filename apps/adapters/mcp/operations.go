@@ -98,11 +98,11 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, rules, steps and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; rules group results, request model review or constrain placement. same-agent keeps its for_actions on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, rules and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; rules group results, request model review or constrain placement. same-agent keeps its for_actions on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
-	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions, steps and rules. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
+	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions and rules. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", createMissionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -120,7 +120,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				return missions.Mission{}, errors.New("mission creation failed; read describe_mission before retrying")
 			}
 		})
-	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until the mission's required_actions, step requirements and queued optional actions are ready. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
+	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until the mission's required_actions and queued optional actions are ready. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
 		func(ctx context.Context, request StartOperationRequest) (operationResult, error) {
 			return commandOperation(execution.Start(ctx, commands.StartOperationCommand(request)))
 		})
@@ -162,10 +162,9 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return query.GetReport(ctx, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and enforces same-agent placement. Clients do not select or rebind agents. Omit step_id unless using a step explicitly declared in the mission. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and enforces same-agent placement. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
 		"operation_id": stringProperty,
-		"step_id":      missionStepProperty,
-		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages. An action name is not a mission step ID."},
+		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages."},
 		"input":        map[string]any{"type": "object"},
 	}, "operation_id", "action_name"),
 		func(ctx context.Context, request AssignTaskRequest) (operations.Task, error) {
@@ -206,7 +205,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 			}
 			return OperationEventsResult{Events: events, NextCursor: nextCursor}, err
 		})
-	addTool(server, "ask_question", "Ask an operator decision for an active operation (up to 4 options or free text). General clarifications belong in chat. If a running action already asked a question, answer that saved question instead of asking another. After asking, direct the operator to the operation's Questions section in Admin UI or Playground's Operator input panel; never invent an Admin URL. Supply task_id/version to pause a continuation; otherwise step_id blocks that step, or omit it to block new assignments. timeout_seconds defaults to a 120-second operator waiting window. Operators can answer immediately; model answers are allowed at or after fallback_at. The question stays pending until answered. The MCP client must schedule a fresh get_operation at or after fallback_at, then answer only if still pending; no deadline event or automatic model invocation is sent. Time passing alone never grants approval.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "step_id": missionStepProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
+	addTool(server, "ask_question", "Ask an operator decision for an active operation (up to 4 options or free text). General clarifications belong in chat. If a running action already asked a question, answer that saved question instead of asking another. After asking, direct the operator to the operation's Questions section in Admin UI or Playground's Operator input panel; never invent an Admin URL. Supply task_id/version to pause a continuation; otherwise it blocks new assignments. timeout_seconds defaults to a 120-second operator waiting window. Operators can answer immediately; model answers are allowed at or after fallback_at. The question stays pending until answered. The MCP client must schedule a fresh get_operation at or after fallback_at, then answer only if still pending; no deadline event or automatic model invocation is sent. Time passing alone never grants approval.", objectSchema(map[string]any{"task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1}, "operation_id": stringProperty, "text": stringProperty, "options": map[string]any{"type": "array", "maxItems": 4, "items": stringProperty}, "timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}}, "operation_id", "text"),
 		func(ctx context.Context, request AskQuestionRequest) (operations.Question, error) {
 			question, err := execution.Ask(ctx, commands.AskQuestionCommand(request))
 			if errors.Is(err, operations.ErrFinished) {
@@ -236,12 +235,6 @@ func addOperationTools(server *mcp.Server, config Config) {
 		})
 }
 
-var missionStepProperty = map[string]any{
-	"type":        "string",
-	"minLength":   1,
-	"description": "Optional ID from the mission's explicitly declared steps. Omit when the mission has no steps. Do not substitute an action name.",
-}
-
 var stringProperty = map[string]any{"type": "string", "minLength": 1}
 var operationSchema = objectSchema(map[string]any{"operation_id": stringProperty}, "operation_id")
 
@@ -266,11 +259,6 @@ func createMissionSchema() string {
 		"input_schema":  actionSchema,
 		"output_schema": actionSchema,
 	}, "name", "input_schema", "output_schema")
-	step := objectSchema(map[string]any{
-		"id": nonblank, "objective": nonblank,
-		"agent_types":      map[string]any{"type": []string{"array", "null"}, "items": nonblank},
-		"required_actions": map[string]any{"type": []string{"array", "null"}, "items": nonblank},
-	}, "id", "objective")
 	rule := objectSchema(map[string]any{
 		"for_actions": map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
 		"params": map[string]any{
@@ -287,18 +275,17 @@ func createMissionSchema() string {
 			"description": "Ordered mission objectives; include at least one nonblank objective."},
 		"required_actions": map[string]any{
 			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
-			"description": "Actions required for execution, including capabilities not installed yet. Step requirements also participate in preflight.",
+			"description": "Actions required for execution, including capabilities not installed yet.",
 		},
 		"optional_actions": actionNames,
 		"action_definitions": map[string]any{
 			"type": []string{"array", "null"}, "items": json.RawMessage(definition), "maxItems": 100,
-			"description": "Desired contracts, unique by name and referenced by required_actions, optional_actions or a step's required_actions. Definitions do not install actions, grant secrets or satisfy readiness.",
+			"description": "Desired contracts, unique by name and referenced by required_actions or optional_actions. Definitions do not install actions, grant secrets or satisfy readiness.",
 		},
 		"starting_actions": map[string]any{
 			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
 			"description": "Initial action guidance. Each name must appear in required_actions; creation does not queue tasks.",
 		},
-		"steps": map[string]any{"type": []string{"array", "null"}, "items": json.RawMessage(step)},
 		"rules": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": json.RawMessage(rule),
 			"propertyNames": map[string]any{"enum": []string{"aggregate-results", "decide-next-actions", "same-agent"}},

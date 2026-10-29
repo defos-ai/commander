@@ -23,7 +23,7 @@ func TestOperationQueuePreservesConcurrentAssignmentsAcrossStores(t *testing.T) 
 	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
 	op, firstTask := fixtures.CreateQueueOperation(t, first)
 	firstTask.Input = json.RawMessage(`{"page":1}`)
-	secondTask := operations.NewTask(op.ID, "review", "", actions.NextAction{
+	secondTask := operations.NewTask(op.ID, "", actions.NextAction{
 		ActionName: "inspect", Input: json.RawMessage(`{"page":2}`),
 	})
 	requests := []operations.Task{firstTask, secondTask}
@@ -108,7 +108,6 @@ func TestOperationQueueReplayPreservesDispatchedAndTerminalState(t *testing.T) {
 					next.Status = operations.Cancelled
 					next.Tasks[0].Status = operations.TaskCancelled
 					next.Tasks[0].FinishedAt = &dispatch.DeadlineAt
-					next.Mission.Steps = nil
 					next.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending}}
 					return nil
 				}); err != nil {
@@ -162,19 +161,12 @@ func TestOperationQueueChecksLatestStateAndAllowsPreflightWaiting(t *testing.T) 
 		wantErr error
 		status  operations.Status
 	}{
-		{"mission step removed", func(op *operations.Operation) { op.Mission.Steps = nil }, true, nil, ""},
 		{"operation cancelled", func(op *operations.Operation) { op.Status = operations.Cancelled }, true, operations.ErrFinished, ""},
 		{"global question", func(op *operations.Operation) {
 			op.Questions = []operations.Question{{ID: id.QuestionID(), Status: operations.QuestionPending}}
 		}, true, operations.ErrQuestionPending, ""},
-		{"matching step question", func(op *operations.Operation) {
-			op.Questions = []operations.Question{{ID: id.QuestionID(), StepID: "review", Status: operations.QuestionPending}}
-		}, true, operations.ErrQuestionPending, ""},
-		{"unrelated step question", func(op *operations.Operation) {
-			op.Questions = []operations.Question{{ID: id.QuestionID(), StepID: "report", Status: operations.QuestionPending}}
-		}, false, nil, operations.Waiting},
 		{"task linked question", func(op *operations.Operation) {
-			op.Questions = []operations.Question{{ID: id.QuestionID(), TaskID: id.TaskID(), StepID: "review", Status: operations.QuestionPending}}
+			op.Questions = []operations.Question{{ID: id.QuestionID(), TaskID: id.TaskID(), Status: operations.QuestionPending}}
 		}, false, nil, operations.Waiting},
 		{"preflight not ready", func(op *operations.Operation) { op.Preflight.Ready = false }, false, nil, operations.Waiting},
 	} {

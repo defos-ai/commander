@@ -47,7 +47,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
 			schema.Properties["missing_requirements"].Description = "Missing prerequisites assessed on a live ready/working candidate. Entries with kind=secret identify declared shared secret names; agent_type identifies the requesting candidate, not a secret scope. Sensitive host configuration is separate. Stale or offline candidates report only their unavailability reason. Values and secret lease refresh requests are never included."
 		case "Preflight":
-			schema.Description = "Saved readiness for mission, step and same-agent actions. Before affinity binds, grouped candidates must advertise every grouped action; afterward only the bound agent satisfies grouped coverage. Capacity is assessed separately by the scheduler. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
+			schema.Description = "Saved readiness for mission and same-agent actions. Before affinity binds, grouped candidates must advertise every grouped action; afterward only the bound agent satisfies grouped coverage. Capacity is assessed separately by the scheduler. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
 		case "Affinity":
 			schema.Description = "Read-only same-agent binding derived from the saved mission and task assignments, including terminal tasks. Absent without the rule. This is a placement constraint, not execution ordering or proof of agent availability."
 			schema.Properties["for_actions"].Description = "Actions bound to one agent instance within this operation."
@@ -201,7 +201,6 @@ func openAPICommandSchemas(components map[string]any) error {
 	nonblank := map[string]any{"minLength": 1, "pattern": `\S`}
 	version := map[string]any{"minimum": 1, "maximum": ^uint64(0)}
 	taskInput := map[string]any{"type": "object", "description": "Optional task input object. Explicit null is invalid."}
-	stepID := map[string]any{"description": "Optional mission step ID. An unknown step returns invalid_input."}
 	for _, model := range []struct {
 		name        string
 		typeOf      reflect.Type
@@ -221,7 +220,7 @@ func openAPICommandSchemas(components map[string]any) error {
 		{
 			name: "AssignOperationTaskRequest", typeOf: reflect.TypeFor[models.AssignTaskRequest](),
 			constraints: map[string]map[string]any{
-				"action_name": nonblank, "input": taskInput, "step_id": stepID,
+				"action_name": nonblank, "input": taskInput,
 			},
 		},
 		{name: "CancelOperationRequest", typeOf: reflect.TypeFor[models.CancelOperationRequest]()},
@@ -247,7 +246,6 @@ func openAPICommandSchemas(components map[string]any) error {
 					"minimum": 0, "maximum": 86400, "default": 120,
 					"description": "Operator waiting window in seconds. Omit or use 0 for the 120-second default; otherwise use 1 through 86400. The question remains pending afterward; model answers become available at fallback_at.",
 				},
-				"step_id": stepID,
 				"task_id": {
 					"format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
 					"description": "Optional task whose pending continuation requires this question. Must be supplied together with version.",

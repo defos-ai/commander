@@ -24,7 +24,7 @@
 - [MCP `operation_logs`](mcp/logs.go) uses `queries.Operations.ListLogs` to check
   operation and optional `task_id` membership before reading the required `ExecutionStore`. Keep saved
   progress readable without a controller and after terminal status. Entries expose
-  flat operation/task/optional-step provenance; logs do not change lifecycle state.
+  flat operation/task provenance; logs do not change lifecycle state.
   Use log IDs as cursors and preserve the input cursor on empty pages. Exact
   task/agent/action filters intersect; reject malformed or explicitly empty/null
   filters before store reads. `order` is `asc` by default or `desc`, both over
@@ -80,9 +80,9 @@
   resource-link blocks; do not duplicate result payloads in `structuredContent`.
 - `create_mission` accepts a flat `missions.Mission` and shares its validation
   with the API and stores. Root `objectives` is a required ordered array of one
-  or more nonblank strings; step guidance keeps singular `objective`.
+  or more nonblank strings.
   Optional `action_definitions` contains up to 100 desired contracts, unique by
-  name and referenced by required/optional actions or step requirements. Advertise
+  name and referenced by required/optional actions. Advertise
   strict contract fields and explicit root object-schema types; shared mission
   validation resolves schemas locally. Definitions are metadata only, never
   installed actions, secret values or readiness evidence.
