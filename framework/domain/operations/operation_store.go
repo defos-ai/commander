@@ -59,10 +59,10 @@ type OperationStore interface {
 	// and any linked decision handoff. Linked questions require the current version;
 	// duplicate question IDs return ErrOperationConflict without writing.
 	AskQuestion(ctx context.Context, operationID string, question Question, version uint64) (Operation, error)
-	// AnswerQuestion saves the answer and linked decision together. If a pending
+	// AnswerQuestion saves the answer, its origin and linked decision together. If a pending
 	// question is overdue, it instead commits expiration and returns that snapshot
 	// without error; callers must inspect the question status before accepting the answer.
-	AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (Operation, error)
+	AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy AnswerOrigin) (Operation, error)
 	// ExpireQuestions settles deadlines at or before now without reopening terminal
 	// operations. If nothing is due, it returns the saved snapshot without writing.
 	ExpireQuestions(ctx context.Context, operationID string, now time.Time) (Operation, error)

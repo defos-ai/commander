@@ -44,12 +44,12 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 	assertResultJSONEqual(t, unchanged, asked)
 	question.Options[0] = "changed by caller"
 	asked.Questions[0].Options[1] = "changed by reader"
-	answered, err := fixtures.NewDispatchStore(t, dir).AnswerQuestion(t.Context(), op.ID, question.ID, "Proceed with review")
+	answered, err := fixtures.NewDispatchStore(t, dir).AnswerQuestion(t.Context(), op.ID, question.ID, "Proceed with review", operations.AnswerModel)
 	if err != nil {
 		t.Fatal(err)
 	}
 	q := answered.Questions[0]
-	if q.Status != operations.QuestionAnswered || q.Answer != "Proceed with review" || q.AnsweredAt == nil || q.AnsweredAt.Before(started) || !q.AnsweredAt.Before(q.ExpiresAt) || answered.Status != operations.Planning {
+	if q.Status != operations.QuestionAnswered || q.Answer != "Proceed with review" || q.AnsweredBy != operations.AnswerModel || q.AnsweredAt == nil || q.AnsweredAt.Before(started) || !q.AnsweredAt.Before(q.ExpiresAt) || answered.Status != operations.Planning {
 		t.Fatalf("answer did not publish the answer, time, and resumed status: %+v", answered)
 	}
 	if q.Options[0] != "yes" || q.Options[1] != "no" || !q.AskedAt.Equal(expected.AskedAt) || !q.ExpiresAt.Equal(expected.ExpiresAt) {
@@ -63,7 +63,7 @@ func TestOperationQuestionAskAndAnswerAreDurable(t *testing.T) {
 	}
 	assertResultJSONEqual(t, saved, answered)
 	assertQuestionRejected(t, dir, op.ID, func() (operations.Operation, error) {
-		return store.AnswerQuestion(t.Context(), op.ID, question.ID, "replacement")
+		return store.AnswerQuestion(t.Context(), op.ID, question.ID, "replacement", operations.AnswerOperator)
 	}, nil)
 }
 
@@ -119,6 +119,7 @@ func TestOperationQuestionRejectsInvalidEnvelope(t *testing.T) {
 		{"missing deadline", func(q *operations.Question) { q.ExpiresAt = time.Time{} }},
 		{"invalid deadline", func(q *operations.Question) { q.ExpiresAt = q.AskedAt }},
 		{"answer", func(q *operations.Question) { q.Answer = "yes" }},
+		{"answer origin", func(q *operations.Question) { q.AnsweredBy = operations.AnswerOperator }},
 		{"answer time", func(q *operations.Question) { q.AnsweredAt = &q.AskedAt }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -168,7 +169,7 @@ func TestOperationQuestionUsesLatestStoredEligibility(t *testing.T) {
 			}
 			assertQuestionRejected(t, dir, op.ID, func() (operations.Operation, error) {
 				if tc.answer {
-					return first.AnswerQuestion(t.Context(), op.ID, question.ID, "yes")
+					return first.AnswerQuestion(t.Context(), op.ID, question.ID, "yes", operations.AnswerOperator)
 				}
 				return first.AskQuestion(t.Context(), op.ID, question, op.Tasks[0].Continuation.Version)
 			}, nil)
@@ -187,12 +188,12 @@ func TestOperationQuestionLateAnswerCommitsExpiration(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := time.Now().UTC()
-	expired, err := store.AnswerQuestion(t.Context(), op.ID, question.ID, "too late")
+	expired, err := store.AnswerQuestion(t.Context(), op.ID, question.ID, "too late", operations.AnswerOperator)
 	if err != nil {
 		t.Fatalf("late answer must return its committed expiration snapshot: %v", err)
 	}
 	q := expired.Questions[0]
-	if q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredAt != nil || expired.Status != operations.Planning || countResultEvents(expired, operations.QuestionAnsweredEvent) != 0 {
+	if q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredBy != "" || q.AnsweredAt != nil || expired.Status != operations.Planning || countResultEvents(expired, operations.QuestionAnsweredEvent) != 0 {
 		t.Fatalf("late answer was accepted or expiration was lost: %+v", expired)
 	}
 	assertQuestionContinuation(t, expired, operations.DecisionModel, operations.ContinuationPending, question.ID, asked.Tasks[0].Continuation.Version+1)
@@ -203,7 +204,7 @@ func TestOperationQuestionLateAnswerCommitsExpiration(t *testing.T) {
 	}
 	assertResultJSONEqual(t, saved, expired)
 	assertQuestionRejected(t, dir, op.ID, func() (operations.Operation, error) {
-		return store.AnswerQuestion(t.Context(), op.ID, question.ID, "still too late")
+		return store.AnswerQuestion(t.Context(), op.ID, question.ID, "still too late", operations.AnswerOperator)
 	}, nil)
 }
 
@@ -219,7 +220,7 @@ func TestOperationQuestionAnswerAndSweepHaveOneWinner(t *testing.T) {
 	gate, answers, sweeps := make(chan struct{}), make(chan error, 1), make(chan error, 1)
 	go func() {
 		<-gate
-		_, err := first.AnswerQuestion(t.Context(), op.ID, question.ID, "yes")
+		_, err := first.AnswerQuestion(t.Context(), op.ID, question.ID, "yes", operations.AnswerOperator)
 		answers <- err
 	}()
 	go func() {
@@ -238,10 +239,10 @@ func TestOperationQuestionAnswerAndSweepHaveOneWinner(t *testing.T) {
 	}
 	q := saved.Questions[0]
 	if q.Status == operations.QuestionAnswered {
-		if answerErr != nil || q.Answer != "yes" || q.AnsweredAt == nil {
+		if answerErr != nil || q.Answer != "yes" || q.AnsweredBy != operations.AnswerOperator || q.AnsweredAt == nil {
 			t.Fatalf("winning answer was lost: %+v, %v", q, answerErr)
 		}
-	} else if q.Status != operations.QuestionExpired || answerErr == nil || q.Answer != "" || q.AnsweredAt != nil {
+	} else if q.Status != operations.QuestionExpired || answerErr == nil || q.Answer != "" || q.AnsweredBy != "" || q.AnsweredAt != nil {
 		t.Fatalf("winning expiration was lost: %+v, %v", q, answerErr)
 	}
 	if len(saved.Events) != len(asked.Events)+1 || countResultEvents(saved, operations.QuestionAnsweredEvent)+countResultEvents(saved, operations.QuestionExpiredEvent) != 1 {
@@ -275,7 +276,7 @@ func TestOperationQuestionExpirationPreservesTerminalState(t *testing.T) {
 				t.Fatal(err)
 			}
 			expired, err := fixtures.NewDispatchStore(t, dir).ExpireQuestions(t.Context(), op.ID, question.ExpiresAt)
-			if err != nil || expired.Status != status || expired.Questions[0].Status != operations.QuestionExpired || expired.Questions[0].Answer != "" || expired.Questions[0].AnsweredAt != nil || countResultEvents(expired, operations.QuestionExpiredEvent) != 1 {
+			if err != nil || expired.Status != status || expired.Questions[0].Status != operations.QuestionExpired || expired.Questions[0].Answer != "" || expired.Questions[0].AnsweredBy != "" || expired.Questions[0].AnsweredAt != nil || countResultEvents(expired, operations.QuestionExpiredEvent) != 1 {
 				t.Fatalf("terminal expiration revived the operation or supplied an answer: %+v, %v", expired, err)
 			}
 			assertResultJSONEqual(t, expired.Tasks, terminal.Tasks)

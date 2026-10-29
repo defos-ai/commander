@@ -81,8 +81,8 @@ func (s *UncertainWriteStore) AskQuestion(ctx context.Context, operationID strin
 	return op, err
 }
 
-func (s *UncertainWriteStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
-	op, err := s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer)
+func (s *UncertainWriteStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy operations.AnswerOrigin) (operations.Operation, error) {
+	op, err := s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer, answeredBy)
 	if err == nil && s.AfterAnswer != nil {
 		err = s.AfterAnswer(op)
 	}
@@ -236,7 +236,7 @@ func (s *DispatchFailureStore) DispatchTask(ctx context.Context, operationID str
 // sweep cannot handle expiration before the answer reaches the store.
 type DeadlineOnAnswerStore struct{ *OperationStore }
 
-func (s *DeadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
+func (s *DeadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy operations.AnswerOrigin) (operations.Operation, error) {
 	if _, err := s.OperationStore.Update(ctx, operationID, func(op *operations.Operation) error {
 		for i := range op.Questions {
 			if op.Questions[i].ID == questionID {
@@ -247,7 +247,7 @@ func (s *DeadlineOnAnswerStore) AnswerQuestion(ctx context.Context, operationID,
 	}); err != nil {
 		return operations.Operation{}, err
 	}
-	return s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer)
+	return s.OperationStore.AnswerQuestion(ctx, operationID, questionID, answer, answeredBy)
 }
 
 // A store snapshot may contain another assignment committed after the requested task.

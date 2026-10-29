@@ -112,7 +112,7 @@ func postOperatorAnswer(ctx context.Context, api *client.Client, request chat.Ev
 		return bridge.Operation{}, client.ErrWriteUncertain
 	}
 	for _, question := range operation.Questions {
-		if question.ID == request.QuestionID && question.Status == bridge.QuestionAnswered && question.Answer == request.Answer {
+		if question.ID == request.QuestionID && question.Status == bridge.QuestionAnswered && question.Answer == request.Answer && question.AnsweredBy == "operator" {
 			operation.Raw = response.Data
 			return operation, nil
 		}

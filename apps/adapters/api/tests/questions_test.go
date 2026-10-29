@@ -23,7 +23,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	if len(questions.Items) != 2 || questions.LastQuestion == nil || questions.LastQuestion.ID != latest.ID || questions.RemainingQuestions != 1 {
 		t.Fatalf("latest question view: %+v", questions)
 	}
-	if first.Status != "pending" || latest.ExpiresAt.Sub(latest.AskedAt) != 2*time.Minute {
+	if first.Status != "pending" || first.AnsweredBy != "" || latest.ExpiresAt.Sub(latest.AskedAt) != 2*time.Minute {
 		t.Fatalf("default question lifecycle: %+v", latest)
 	}
 	assertSchema(t, a, "Question", created)
@@ -32,7 +32,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	answer := "Prioritize the summary.\nKeep the original input."
 	fixtures.Post[models.OperationResponse](a, base+"/questions/"+latest.ID+"/answer", fixtures.Object{"answer": answer}, http.StatusOK)
 	saved := fixtures.Read[models.QuestionResponse](a, base+"/questions/"+latest.ID)
-	if saved.Answer != answer || saved.Status != "answered" || saved.AnsweredAt == nil {
+	if saved.Answer != answer || saved.Status != "answered" || saved.AnsweredAt == nil || saved.AnsweredBy != "operator" {
 		t.Fatalf("answer lost operator text: %+v", saved)
 	}
 	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/questions/"+latest.ID+"/answer", fixtures.Object{"answer": "Replace"}), http.StatusConflict, "question_answered")
@@ -85,6 +85,13 @@ func TestLinkedQuestionsReturnDecisionsAfterAnswerOrExpiry(t *testing.T) {
 			decision := fixtures.ModelDecision(resumed)
 			if decision.Continuation.Version != task.Continuation.Version+2 || len(resumed.Tasks) != 1 || resumed.Questions[0].Answer != answer || (resumed.Questions[0].AnsweredAt == nil) != expire {
 				t.Fatalf("decision handoff invented an answer or work: %+v", resumed)
+			}
+			wantOrigin := "operator"
+			if expire {
+				wantOrigin = ""
+			}
+			if resumed.Questions[0].AnsweredBy != wantOrigin {
+				t.Fatalf("question answer origin: got %q, want %q", resumed.Questions[0].AnsweredBy, wantOrigin)
 			}
 			code := "question_answered"
 			if expire {

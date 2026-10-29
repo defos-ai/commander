@@ -120,6 +120,10 @@
 - Apply operation mutations atomically to the latest saved record through
   [`OperationStore`](domain/operations/operation_store.go). Persist tasks and
   events separately; preserve independent copies at store boundaries.
+  Question answers save `answered_by` (`operator` or `model`) atomically with the
+  answer and any linked continuation. Trusted adapters stamp this origin: HTTP
+  API submissions use `operator`, MCP submissions use `model`. It records the
+  submission channel; public answer bodies cannot choose it.
 - Storage locking, transactions and storage revisions belong in providers.
   Continuation versions are explicit business revisions that reject stale
   decisions, not storage revision numbers.

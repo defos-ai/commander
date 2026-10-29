@@ -103,7 +103,9 @@ func Session(t *testing.T, config adapter.Config) (context.Context, *sdkmcp.Clie
 	operations, err := controllercommands.NewClient(ctx, bus, adapterID, nil)
 	check(err)
 	t.Cleanup(func() { check(operations.Close()) })
-	config.Operations = operations
+	if config.Operations == nil {
+		config.Operations = operations
+	}
 	database, storage := filepath.Join(root, "database"), filepath.Join(root, "storage")
 	if config.SourceClient == nil {
 		config.SourceClient = packages.NewClient(nil)

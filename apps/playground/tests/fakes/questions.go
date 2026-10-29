@@ -134,6 +134,7 @@ func (s *QuestionServer) answer(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			question.Status, question.Answer = bridge.QuestionAnswered, input.Answer
+			question.AnsweredBy = "operator"
 			answeredAt := now.Format(time.RFC3339Nano)
 			question.AnsweredAt = &answeredAt
 		} else if question.Pending(now) {

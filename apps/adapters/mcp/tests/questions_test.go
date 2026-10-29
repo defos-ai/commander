@@ -26,7 +26,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 		t.Fatalf("pending question view: %+v", saved)
 	}
 	for _, question := range []operations.Question{first, latest} {
-		if question.Status != operations.QuestionPending || question.ExpiresAt.Sub(question.AskedAt) != 2*time.Minute {
+		if question.Status != operations.QuestionPending || question.AnsweredBy != "" || question.ExpiresAt.Sub(question.AskedAt) != 2*time.Minute {
 			t.Fatalf("question default lifecycle: %+v", question)
 		}
 	}
@@ -52,8 +52,8 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 		t.Fatalf("remaining question view: %+v", saved)
 	}
 	answered := saved.Questions[1]
-	if answered.Status != operations.QuestionAnswered || answered.Answer != answer || answered.AnsweredAt == nil {
-		t.Fatalf("operator answer changed: %+v", answered)
+	if answered.Status != operations.QuestionAnswered || answered.Answer != answer || answered.AnsweredAt == nil || answered.AnsweredBy != operations.AnswerModel {
+		t.Fatalf("model answer changed: %+v", answered)
 	}
 	a.Call("answer_question", fixtures.Object{"operation_id": op.ID, "question_id": first.ID, "answer": "The current release"}, nil)
 	saved = a.Get(op.ID)
@@ -66,9 +66,9 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 
 func TestLinkedQuestionReturnsDecisionToModel(t *testing.T) {
 	for _, expired := range []bool{false, true} {
-		name := "operator answers"
+		name := "model submits answer"
 		if expired {
-			name = "operator does not answer before timeout"
+			name = "no answer before timeout"
 		}
 		t.Run(name, func(t *testing.T) {
 			a := fixtures.Connect(t)
@@ -111,6 +111,13 @@ func TestLinkedQuestionReturnsDecisionToModel(t *testing.T) {
 			decision := fixtures.ModelDecision(resumed)
 			if resumed.LastQuestion != nil || resumed.RemainingQuestions != 0 || len(resumed.Tasks) != 1 || decision.Continuation.Version != originalVersion+2 || recorded.Answer != answer || (recorded.AnsweredAt == nil) != expired {
 				t.Fatalf("incorrect decision handoff: %+v", resumed)
+			}
+			wantOrigin := operations.AnswerModel
+			if expired {
+				wantOrigin = ""
+			}
+			if recorded.AnsweredBy != wantOrigin {
+				t.Fatalf("question answer origin: got %q, want %q", recorded.AnsweredBy, wantOrigin)
 			}
 			a.Fails("answer_question", fixtures.Object{"operation_id": op.ID, "question_id": question.ID, "answer": "Late replacement"}, map[bool]string{false: "already answered", true: "expired"}[expired])
 			a.Fails("resolve_continuation", fixtures.Object{"operation_id": op.ID, "task_id": task.ID, "version": originalVersion + 1, "actions": []fixtures.Object{}}, "pending")

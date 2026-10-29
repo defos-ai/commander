@@ -134,7 +134,10 @@
   Task summaries include `deadline_at` only alongside live missing requirements;
   detail queries retain the saved deadline even after that observation clears.
 - Continuation decisions must retain the task and business version used to reject
-  stale choices. Questions record actual operator answers; expiry is not approval.
+  stale choices. Answer submissions carry adapter-assigned origin: HTTP uses
+  `operator`, MCP uses `model`. Keep `answered_by` out of public answer inputs;
+  expose it on saved questions. Origin records the submission path, not a proof
+  of human identity. Expiry is not approval.
 - MCP `get_operation` and `list_operations` expose read-only `affinity` through
   `Operation.AssessAffinity`. Preserve `for_actions`, the saved owner and any
   history error even without live inventory. Queued tasks remain unassigned.

@@ -185,9 +185,9 @@ func (s *OperationFsStore) AskQuestion(ctx context.Context, operationID string, 
 	})
 }
 
-func (s *OperationFsStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
+func (s *OperationFsStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy operations.AnswerOrigin) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
-		return operation.AnswerQuestion(questionID, answer)
+		return operation.AnswerQuestion(questionID, answer, answeredBy)
 	})
 }
 

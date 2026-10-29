@@ -12,6 +12,15 @@ function proxyTarget(input: RequestInfo | URL) {
 }
 
 describe('operations client', () => {
+  it.each(['operator', 'model'] as const)('retains %s question answer provenance', async answeredBy => {
+    const answered = { ...operation, questions: [{ ...operation.questions![0], status: 'answered', answer: 'Proceed', answered_by: answeredBy }] };
+    respond(answered);
+
+    const detail = await getOperation(url, credentials, operation.id);
+
+    expect(detail.questions![0].answered_by).toBe(answeredBy);
+  });
+
   it('requires a valid recipient type for runtime secret requirements', async () => {
     const task = { ...operation.tasks![0], status: 'running', agent_type: 'web-agent', missing_requirements: [{ kind: 'secret', name: 'TOKEN' }] };
     const waiting = { ...operation, tasks: [task] };
@@ -99,6 +108,8 @@ describe('operations client', () => {
     { progress: { ...operation.progress, pending_questions: Number.MAX_SAFE_INTEGER + 1 } },
     { progress: { ...operation.progress, settled: 'true' } },
     { questions: [{ ...operation.questions![0], options: [42] }] },
+    { questions: [{ ...operation.questions![0], answered_by: 'admin' }] },
+    { questions: [{ ...operation.questions![0], answered_by: null }] },
     { preflight: { ready: false, version: 1, actions: [{ action_name: 'capture-page', unavailable_agents: [{ agent_id: 'agent-1', reason: 'Missing', missing_requirements: [{ kind: 'configuration', name: 'KEY', sensitive: 'yes' }] }] }] } },
     { events: [{ ...operation.events![0], sequence: -1 }] },
     { updated_at: 42 },

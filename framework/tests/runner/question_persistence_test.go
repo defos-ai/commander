@@ -25,7 +25,7 @@ func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 			before := operationAwaitingDecision(t, r, calls)
 			ask := commands.AskQuestionCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID,
 				Version: before.Tasks[0].Continuation.Version, Text: "Continue?", Options: []string{"yes", "no"}}
-			answer := commands.AnswerQuestionCommand{OperationID: before.ID, Answer: "yes"}
+			answer := commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, Answer: "yes"}
 			if transition == "answer" {
 				question, err := r.Ask(t.Context(), ask)
 				if err != nil {
@@ -70,7 +70,7 @@ func TestQuestionWriteFailurePreservesLinkedDecision(t *testing.T) {
 				if question.Status != operations.QuestionPending || question.ExpiresAt.Sub(question.AskedAt) != runner.DefaultQuestionTimeout || continuation.DecisionBy != operations.DecisionUser || continuation.Status != operations.ContinuationWaiting || continuation.QuestionID != question.ID {
 					t.Fatalf("retry did not suspend the linked decision: question=%+v, continuation=%+v", question, continuation)
 				}
-			} else if question.Status != operations.QuestionAnswered || question.Answer != answer.Answer || question.AnsweredAt == nil || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
+			} else if question.Status != operations.QuestionAnswered || question.Answer != answer.Answer || question.AnsweredBy != answer.AnsweredBy || question.AnsweredAt == nil || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
 				t.Fatalf("retry did not return the answered decision to the model: question=%+v, continuation=%+v", question, continuation)
 			}
 		})
@@ -116,7 +116,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 					t.Fatal(changeErr)
 				}
 				if transition == "answer" {
-					_, changeErr = first.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: before.ID, QuestionID: question.ID, Answer: "yes"})
+					_, changeErr = first.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: question.ID, Answer: "yes"})
 					wantStatus = operations.QuestionAnswered
 				} else {
 					fixtures.AwaitOperation(t, first, before.ID, func(op operations.Operation) bool { return op.Questions[0].Status == operations.QuestionExpired })
@@ -133,15 +133,15 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 				t.Fatalf("uncertain %s lost the question identity or deadline: %+v", transition, stored)
 			}
 			if transition == "answer" {
-				if savedQuestion.Answer != "yes" || savedQuestion.AnsweredAt == nil {
+				if savedQuestion.Answer != "yes" || savedQuestion.AnsweredBy != operations.AnswerOperator || savedQuestion.AnsweredAt == nil {
 					t.Fatalf("uncertain answer lost the operator response: %+v", savedQuestion)
 				}
-			} else if savedQuestion.Answer != "" || savedQuestion.AnsweredAt != nil {
+			} else if savedQuestion.Answer != "" || savedQuestion.AnsweredBy != "" || savedQuestion.AnsweredAt != nil {
 				t.Fatalf("uncertain %s invented an answer: %+v", transition, savedQuestion)
 			}
 			_, eventErr := first.Events(t.Context(), before.ID, 0, false)
 			_, resolveErr := first.Resolve(t.Context(), commands.ResolveContinuationCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID, Version: savedDecision.Version, Actions: []actions.NextAction{}})
-			_, retryErr := first.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: before.ID, QuestionID: savedQuestion.ID, Answer: "retry"})
+			_, retryErr := first.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: savedQuestion.ID, Answer: "retry"})
 			closeErr := first.Close(t.Context())
 			for _, err := range []error{changeErr, eventErr, resolveErr, retryErr, closeErr} {
 				if !errors.Is(err, operations.ErrWriteUncertain) || !errors.Is(err, failure) {
@@ -158,7 +158,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 				t.Fatalf("recovery lost or repeated a question event: %+v", recovered.Events)
 			}
 			if transition == "ask" {
-				_, err = restarted.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: before.ID, QuestionID: savedQuestion.ID, Answer: "yes"})
+				_, err = restarted.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: savedQuestion.ID, Answer: "yes"})
 			} else {
 				_, err = restarted.Resolve(t.Context(), commands.ResolveContinuationCommand{OperationID: before.ID, TaskID: before.Tasks[0].ID, Version: savedDecision.Version, Actions: []actions.NextAction{}})
 			}
@@ -186,13 +186,13 @@ func TestLateAnswerPersistsExpirationBeforeReturningError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, answerErr := r.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: before.ID, QuestionID: question.ID, Answer: "too late"})
+	result, answerErr := r.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: before.ID, QuestionID: question.ID, Answer: "too late"})
 	stored, err := r.Get(t.Context(), before.ID)
 	if answerErr == nil || !strings.Contains(answerErr.Error(), "question has expired") || err != nil || !reflect.DeepEqual(result, stored) {
 		t.Fatalf("late answer did not return the durable expired snapshot: operation=%+v, answer=%v, get=%v", result, answerErr, err)
 	}
 	q, continuation := stored.Questions[0], stored.Tasks[0].Continuation
-	if q.ID != question.ID || q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredAt != nil || stored.Status != operations.Planning || continuation.Version != before.Tasks[0].Continuation.Version+2 || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
+	if q.ID != question.ID || q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredBy != "" || q.AnsweredAt != nil || stored.Status != operations.Planning || continuation.Version != before.Tasks[0].Continuation.Version+2 || continuation.DecisionBy != operations.DecisionModel || continuation.Status != operations.ContinuationPending {
 		t.Fatalf("late answer lost expiration or changed the decision incorrectly: %+v", stored)
 	}
 	events, err := r.Events(t.Context(), before.ID, 0, false)

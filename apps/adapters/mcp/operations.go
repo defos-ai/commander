@@ -49,7 +49,11 @@ type StartOperationRequest commands.StartOperationCommand
 type AssignTaskRequest commands.AssignTaskCommand
 type ResolveContinuationRequest commands.ResolveContinuationCommand
 type AskQuestionRequest commands.AskQuestionCommand
-type AnswerQuestionRequest commands.AnswerQuestionCommand
+type AnswerQuestionRequest struct {
+	OperationID string `json:"operation_id"`
+	QuestionID  string `json:"question_id"`
+	Answer      string `json:"answer"`
+}
 type CompleteOperationRequest commands.CompleteOperationCommand
 type FailOperationRequest commands.FailOperationCommand
 type OperationEventsRequest struct {
@@ -210,9 +214,12 @@ func addOperationTools(server *mcp.Server, config Config) {
 			}
 			return question, err
 		})
-	addTool(server, "answer_question", "Record the operator's actual answer. A linked continuation returns to the model for a decision; this does not execute or approve any action automatically.", objectSchema(map[string]any{"operation_id": stringProperty, "question_id": stringProperty, "answer": stringProperty}, "operation_id", "question_id", "answer"),
+	addTool(server, "answer_question", "Record an answer submitted by the model through MCP. Operator answers use Playground's question panel or the authenticated API in Admin UI. A linked continuation returns to the model for a decision; this does not execute or approve any action automatically.", objectSchema(map[string]any{"operation_id": stringProperty, "question_id": stringProperty, "answer": stringProperty}, "operation_id", "question_id", "answer"),
 		func(ctx context.Context, request AnswerQuestionRequest) (operationResult, error) {
-			return commandOperation(execution.Answer(ctx, commands.AnswerQuestionCommand(request)))
+			return commandOperation(execution.Answer(ctx, commands.AnswerQuestionCommand{
+				OperationID: request.OperationID, QuestionID: request.QuestionID, Answer: request.Answer,
+				AnsweredBy: operations.AnswerModel,
+			}))
 		})
 	addTool(server, "complete_operation", "Save a final report and complete an operation, after active tasks and questions are resolved. Output must match output_schema. Returns report_id; read the saved report with get_report. Describe remaining limitations in the report.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
 		func(ctx context.Context, request CompleteOperationRequest) (operationResult, error) {

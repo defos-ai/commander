@@ -124,7 +124,7 @@ func testAllInOneWorkflow(t *testing.T) {
 				delta = fakes.ToolDelta("ask_question", map[string]any{"operation_id": operationID, "task_id": task.ID, "version": task.Continuation.Version,
 					"text": "Accept this text summary?", "options": []string{"Revise", "Accept"}})
 			} else {
-				if len(op.Questions) != 1 || op.Questions[0].Status != operations.QuestionAnswered || op.Questions[0].Answer != "Accept" {
+				if len(op.Questions) != 1 || op.Questions[0].Status != operations.QuestionAnswered || op.Questions[0].Answer != "Accept" || op.Questions[0].AnsweredBy != operations.AnswerOperator {
 					t.Errorf("model did not receive operator guidance: %+v", op.Questions)
 				}
 				delta = fakes.ToolDelta("complete_operation", map[string]any{"operation_id": operationID, "output": map[string]any{

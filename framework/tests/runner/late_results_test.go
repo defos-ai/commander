@@ -144,7 +144,7 @@ func TestLateExecutionOutcomePreservesAnsweredWaitQuestion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	answered, err := r.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: interrupted.ID, QuestionID: question.ID, Answer: "Wait"})
+	answered, err := r.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: interrupted.ID, QuestionID: question.ID, Answer: "Wait"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -121,9 +122,10 @@ func (r AskQuestionCommand) Validate() error {
 }
 
 type AnswerQuestionCommand struct {
-	OperationID string `json:"operation_id"`
-	QuestionID  string `json:"question_id"`
-	Answer      string `json:"answer"`
+	OperationID string                  `json:"operation_id"`
+	QuestionID  string                  `json:"question_id"`
+	Answer      string                  `json:"answer"`
+	AnsweredBy  operations.AnswerOrigin `json:"answered_by"`
 }
 
 func (r AnswerQuestionCommand) Validate() error {
@@ -136,7 +138,7 @@ func (r AnswerQuestionCommand) Validate() error {
 	if strings.TrimSpace(r.Answer) == "" {
 		return errors.New("answer must not be blank")
 	}
-	return nil
+	return r.AnsweredBy.Validate()
 }
 
 type CompleteOperationCommand struct {

@@ -194,7 +194,7 @@ func TestOperationRecordsQuestionTransitionsAreAtomicForReaders(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		for round := range 16 {
-			answered, err := writer.AnswerQuestion(ctx, op.ID, question.ID, "yes")
+			answered, err := writer.AnswerQuestion(ctx, op.ID, question.ID, "yes", operations.AnswerOperator)
 			if err != nil {
 				done <- err
 				return
@@ -244,10 +244,10 @@ func assertAtomicQuestionRecords(t *testing.T, snapshot, original operations.Ope
 	if q.Status == operations.QuestionAnswered {
 		decision, continuationStatus, operationStatus = operations.DecisionModel, operations.ContinuationPending, operations.Planning
 		kind, transitions = operations.QuestionAnsweredEvent, transitions+1
-		if q.Answer != "yes" || q.AnsweredAt == nil {
+		if q.Answer != "yes" || q.AnsweredBy != operations.AnswerOperator || q.AnsweredAt == nil {
 			t.Fatalf("answer body is incomplete: %+v", q)
 		}
-	} else if q.Status != operations.QuestionPending || q.Answer != "" || q.AnsweredAt != nil {
+	} else if q.Status != operations.QuestionPending || q.Answer != "" || q.AnsweredBy != "" || q.AnsweredAt != nil {
 		t.Fatalf("unexpected question body: %+v", q)
 	}
 	assertQuestionContinuation(t, snapshot, decision, continuationStatus, q.ID, original.Tasks[0].Continuation.Version+uint64(transitions))

@@ -55,7 +55,7 @@ func (e *Engine) turn(ctx context.Context, history []llm.Message, item job) ([]l
 		}
 		if len(answers) != 0 {
 			answered, _ := json.Marshal(answers)
-			text = "The operator answered these questions: " + string(answered) + ". Continue using their answers and current state."
+			text = "These questions were answered: " + string(answered) + ". Continue using the saved answers and their recorded origins, together with current state."
 		}
 		if len(expired) != 0 {
 			text += " Questions expired without an answer: " + strings.Join(expired, ", ") + ". Continue from existing guidance; expiry is not approval."

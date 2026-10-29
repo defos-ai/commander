@@ -25,6 +25,7 @@ func ToAnswerQuestionCommand(operationID, questionID string, request models.Answ
 		OperationID: operationID,
 		QuestionID:  questionID,
 		Answer:      request.Answer,
+		AnsweredBy:  operations.AnswerOperator,
 	}
 }
 
@@ -37,6 +38,7 @@ func ToQuestionResponse(question operations.Question) models.QuestionResponse {
 		Text:       question.Text,
 		Options:    slices.Clone(question.Options),
 		Answer:     question.Answer,
+		AnsweredBy: string(question.AnsweredBy),
 		AskedAt:    question.AskedAt,
 		AnsweredAt: cloneTime(question.AnsweredAt),
 		ExpiresAt:  question.ExpiresAt,

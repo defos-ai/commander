@@ -228,6 +228,7 @@ type Question struct {
 	Text       string         `json:"text"`
 	Options    []string       `json:"options"`
 	Answer     string         `json:"answer"`
+	AnsweredBy string         `json:"answered_by,omitempty"`
 	AskedAt    time.Time      `json:"asked_at"`
 	ExpiresAt  time.Time      `json:"expires_at"`
 	AnsweredAt *string        `json:"answered_at"`

@@ -64,6 +64,8 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			}
 		case "Question":
 			schema.Properties["status"].Enum = []any{"pending", "answered", "expired"}
+			schema.Properties["answered_by"].Enum = []any{"operator", "model"}
+			schema.Properties["answered_by"].Description = "Answer origin assigned by the submitting adapter: operator for the HTTP API, model for MCP. Absent until an answer is saved."
 		case "OperationProgress":
 			schema.Description = "Read-only progress derived from this saved operation snapshot at one assessment time. Never persisted or used to infer agent idleness."
 			schema.Properties["task_counts"].Type = "object"

@@ -85,6 +85,7 @@ export interface OperationQuestion {
   text: string;
   options?: string[] | null;
   answer?: string;
+  answered_by?: 'operator' | 'model';
   asked_at: string;
   answered_at?: string | null;
   expires_at: string;

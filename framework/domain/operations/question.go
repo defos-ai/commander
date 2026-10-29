@@ -17,6 +17,20 @@ const (
 	QuestionExpired  QuestionStatus = "expired"
 )
 
+type AnswerOrigin string
+
+const (
+	AnswerOperator AnswerOrigin = "operator"
+	AnswerModel    AnswerOrigin = "model"
+)
+
+func (origin AnswerOrigin) Validate() error {
+	if origin != AnswerOperator && origin != AnswerModel {
+		return errors.New("answer origin must be operator or model")
+	}
+	return nil
+}
+
 // A pending question blocks its StepID. An empty StepID blocks all new tasks.
 // Work already assigned continues and its results remain available.
 type Question struct {
@@ -27,6 +41,7 @@ type Question struct {
 	Text       string         `json:"text"`
 	Options    []string       `json:"options,omitempty"`
 	Answer     string         `json:"answer,omitempty"`
+	AnsweredBy AnswerOrigin   `json:"answered_by,omitempty"`
 	AskedAt    time.Time      `json:"asked_at"`
 	AnsweredAt *time.Time     `json:"answered_at,omitempty"`
 	ExpiresAt  time.Time      `json:"expires_at"`
@@ -84,7 +99,7 @@ func (q Question) validateNew() error {
 	if !id.Valid(q.ID) || q.TaskID != "" && !id.Valid(q.TaskID) {
 		return errors.New("question and task IDs must be canonical UUIDs")
 	}
-	if q.Status != QuestionPending || q.Answer != "" || q.AnsweredAt != nil {
+	if q.Status != QuestionPending || q.Answer != "" || q.AnsweredAt != nil || q.AnsweredBy != "" {
 		return errors.New("new question must be pending without an answer")
 	}
 	if q.AskedAt.IsZero() || !q.ExpiresAt.After(q.AskedAt) {
@@ -104,12 +119,15 @@ func (q Question) validateNew() error {
 	return nil
 }
 
-func (o *Operation) AnswerQuestion(questionID, answer string) error {
+func (o *Operation) AnswerQuestion(questionID, answer string, answeredBy AnswerOrigin) error {
 	if o.Status.Terminal() {
 		return ErrFinished
 	}
 	if !id.Valid(questionID) || strings.TrimSpace(answer) == "" {
 		return errors.New("answer requires a valid question ID and nonblank text")
+	}
+	if err := answeredBy.Validate(); err != nil {
+		return err
 	}
 	for i := range o.Questions {
 		question := &o.Questions[i]
@@ -144,7 +162,7 @@ func (o *Operation) AnswerQuestion(questionID, answer string) error {
 			c.DecisionBy, c.Status = DecisionModel, ContinuationPending
 			c.Version++
 		}
-		question.Status, question.Answer, question.AnsweredAt = QuestionAnswered, answer, &now
+		question.Status, question.Answer, question.AnsweredAt, question.AnsweredBy = QuestionAnswered, answer, &now, answeredBy
 		o.RefreshStatus()
 		o.AppendEvent(QuestionAnsweredEvent, "", question.ID, "Answer received; planning can continue")
 		o.UpdatedAt = time.Now().UTC()

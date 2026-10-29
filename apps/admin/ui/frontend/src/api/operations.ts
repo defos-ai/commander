@@ -70,7 +70,8 @@ function isQuestion(value: unknown): value is OperationQuestion {
   return isObject(value) && isIdentifier(value.id) && typeof value.status === 'string' &&
     isOptionalString(value.step_id) && isOptionalString(value.task_id) && typeof value.text === 'string' &&
     (value.options === undefined || isNullableStringArray(value.options)) &&
-    isOptionalString(value.answer) && isDate(value.asked_at) &&
+    isOptionalString(value.answer) &&
+    (value.answered_by === undefined || value.answered_by === 'operator' || value.answered_by === 'model') && isDate(value.asked_at) &&
     isOptionalDate(value.answered_at) && isDate(value.expires_at);
 }
 

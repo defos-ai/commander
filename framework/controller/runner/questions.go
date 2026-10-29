@@ -51,7 +51,7 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 		if err != nil {
 			return operations.Operation{}, err
 		}
-		next, err := r.store.AnswerQuestion(ctx, command.OperationID, command.QuestionID, command.Answer)
+		next, err := r.store.AnswerQuestion(ctx, command.OperationID, command.QuestionID, command.Answer, command.AnsweredBy)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}

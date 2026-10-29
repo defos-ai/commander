@@ -45,10 +45,10 @@ func TestRecoveryExpiresOverdueQuestionWithoutInventingAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, late := r.Answer(t.Context(), commands.AnswerQuestionCommand{OperationID: op.ID, QuestionID: question.ID, Answer: "Continue"})
+	_, late := r.Answer(t.Context(), commands.AnswerQuestionCommand{AnsweredBy: operations.AnswerOperator, OperationID: op.ID, QuestionID: question.ID, Answer: "Continue"})
 
 	q, c := expired.Questions[0], expired.Tasks[0].Continuation
-	if late == nil || q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredAt != nil || len(expired.Tasks) != 1 || expired.Status != operations.Planning {
+	if late == nil || q.Status != operations.QuestionExpired || q.Answer != "" || q.AnsweredBy != "" || q.AnsweredAt != nil || len(expired.Tasks) != 1 || expired.Status != operations.Planning {
 		t.Fatalf("expiry invented an answer or left work waiting: %+v, late=%v", expired, late)
 	}
 	if c.Status != operations.ContinuationPending || c.DecisionBy != operations.DecisionModel || c.Version <= waiting.Tasks[0].Continuation.Version {

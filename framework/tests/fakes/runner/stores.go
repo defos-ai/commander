@@ -165,9 +165,9 @@ func (s *OperationStore) AskQuestion(ctx context.Context, operationID string, qu
 	})
 }
 
-func (s *OperationStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string) (operations.Operation, error) {
+func (s *OperationStore) AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy operations.AnswerOrigin) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(op *operations.Operation) error {
-		return op.AnswerQuestion(questionID, answer)
+		return op.AnswerQuestion(questionID, answer, answeredBy)
 	})
 }
 
