@@ -55,10 +55,10 @@ Read the [root guide](../AGENTS.md) and
 
 ## Validation
 
-The framework package tests validate these sources through the public parser:
+Build the shared public parser before running installation integration checks:
 
 ```sh
-go test -race -count=1 -timeout=3m ./framework/tests/agent/packages/...
+go build ./framework/agent/packages/...
 ```
 
 Keep `sources/**` selected by the framework filter in

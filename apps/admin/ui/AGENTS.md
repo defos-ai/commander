@@ -241,7 +241,6 @@ From `apps/admin/ui/frontend`:
 ```sh
 npm ci
 npm run typecheck
-npm test
 npm run build
 ```
 
@@ -253,15 +252,14 @@ proxies `/ui` to `4276`; start a Commander API separately.
 From the repository root, check the backend:
 
 ```sh
-go test -race -count=1 -timeout=1m ./apps/admin/...
+go build ./apps/admin/...
 go vet ./apps/admin/...
 ```
 
 For packaging, build assets using the [portable binary instructions](README.md#native-server),
-then run `go test -tags embed_ui -race -count=1 -timeout=1m ./apps/admin/...`
+then run `go build -tags embed_ui ./apps/admin/...`
 and `go vet -tags embed_ui ./apps/admin/...` from the repository root.
-The tagged tests start the real server from an unrelated working directory and
-verify bundled assets, override precedence, proxy routing and shutdown. Keep the
+Use the browser integration suite to verify the built host. Keep the
 frontend/package CI job selected for backend changes as well as frontend changes.
 
 For browser changes, after installing frontend dependencies, use the isolated stack:

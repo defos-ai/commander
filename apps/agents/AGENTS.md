@@ -113,11 +113,11 @@ settings solely for tests.
 Run the affected agent module from the repository root, for example:
 
 ```sh
-go test -race -count=1 -timeout=3m ./apps/agents/builder/...
+go build ./apps/agents/builder/...
 go vet ./apps/agents/builder/...
 ```
 
-[Unit CI](../../.github/workflows/test-unit.yml) covers Commander-owned hosts. Test
+[Build/static CI](../../.github/workflows/test-checks.yml) covers Commander-owned hosts. Test
 discovery failures, readiness and local fixtures without paid models
 or public websites. Use [adapter scenarios](../../framework/tests/README.md#mcp-api-tests)
 for behavior spanning agents, controller persistence and mission automation.

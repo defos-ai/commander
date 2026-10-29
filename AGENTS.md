@@ -45,8 +45,8 @@ The user's current instructions take precedence over repository guidance.
 - Release publishing runs through `make-release.yml` after all suites in
   `test-release.yml` and native build checks succeed for the same commit.
   Keep `build-binaries.yml` and `push-*.yml` reusable-only; native assets must come
-  from that run. `test.yml` calls reusable `test-unit.yml` before
-  `test-integration.yml`; integration jobs must depend on passing basic checks.
+  from that run. `test.yml` calls reusable `test-checks.yml` before
+  `test-integration.yml`; integration jobs must depend on passing build/static checks.
   Maintain declarative dependency filters in `.github/test-paths.yml`; manual and
   release runs always select every suite. Docker suites share one runner and
   reuse images, with separate test state for each phase.
@@ -107,9 +107,9 @@ The user's current instructions take precedence over repository guidance.
 
 - Run relevant checks from the scoped guide and [.github/workflows](.github/workflows).
   Shared-contract changes need affected downstream checks. Report anything unverified.
-- Prefer public API/MCP scenarios for cross-host behavior and unit tests for
-  complex invariants, recovery and failures. Use deterministic fixtures and bounded
-  waits; avoid implementation-mirroring tests or paid model calls.
+- Keep product coverage in integration and end-to-end suites; do not add unit
+  tests. Use public API/MCP scenarios, deterministic fixtures and bounded waits,
+  without paid model calls. Build and vet affected modules before integration runs.
 - Follow the shared [test rules](framework/tests/AGENTS.md) throughout the repo:
   `tests/fixtures` owns setup/data, `tests/fakes` owns substitutes, and test files
   own Arrange/Act/Assert scenarios. Keep synchronization private and remove

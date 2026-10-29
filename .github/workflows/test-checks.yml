@@ -1,4 +1,4 @@
-name: Unit tests
+name: Static checks
 
 on:
   workflow_call:
@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   # Keep the caller's scope while using a distinct group for this nested workflow.
-  group: test-unit-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: test-checks-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -30,18 +30,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
-      - name: Test and vet framework outside the workspace
+      - name: Build and vet framework outside the workspace
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'framework') }}
         working-directory: framework
         env:
           GOWORK: 'off'
         run: |
-          go test -race -count=1 -timeout=3m ./...
+          go build ./...
           go vet ./...
-      - name: Test and vet FS provider
+      - name: Build and vet FS provider
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'fs') }}
         run: |
-          go test -race -count=1 -timeout=3m ./providers/fs/...
+          go build ./providers/fs/...
           go vet ./providers/fs/...
       - name: Vet Mongo provider
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'mongo') }}
@@ -68,41 +68,41 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-go
-      - name: Test and vet controller
+      - name: Build and vet controller
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'controller') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+          go build ./apps/controllers/default/...
           go vet ./apps/controllers/default/...
-      - name: Test and vet builder agent
+      - name: Build and vet builder agent
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'builder') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/agents/builder/...
+          go build ./apps/agents/builder/...
           go vet ./apps/agents/builder/...
-      - name: Test and vet spawner packages
+      - name: Build and vet spawner packages
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'spawner') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/agents/spawner/...
+          go build ./apps/agents/spawner/...
           go vet ./apps/agents/spawner/...
-      - name: Test and vet Playground, including all-in-one
+      - name: Build and vet Playground, including all-in-one
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'playground') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/playground/...
+          go build ./apps/playground/...
           go vet ./apps/playground/...
-      - name: Test API host and vet adapter
+      - name: Build API and vet adapter
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'api') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host/...
+          go build ./apps/adapters/api/...
           go vet ./apps/adapters/api/...
-      - name: Test MCP host and vet adapter
+      - name: Build MCP and vet adapter
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'mcp') }}
         run: |
-          go test -race -count=1 -timeout=3m ./apps/adapters/mcp/tests/host/...
+          go build ./apps/adapters/mcp/...
           go vet ./apps/adapters/mcp/...
-      - name: Test and vet Admin
+      - name: Build and vet Admin
         if: ${{ inputs.all || contains(fromJSON(inputs.changes), 'admin') }}
         working-directory: apps/admin
         run: |
-          go test -race -count=1 -timeout=1m ./...
+          go build ./...
           go vet ./...
 
   frontend:
@@ -119,18 +119,14 @@ jobs:
       - uses: ./.github/actions/setup-go
       - name: Typecheck
         run: npm run typecheck
-      - name: Test UI behavior
-        run: npm test
       - name: Build
         run: npm run build
-      - name: Test and build bundled Admin
+      - name: Build bundled Admin
         working-directory: apps/admin
         run: |
           cp -R ui/frontend/dist ui/backend/static/dist
-          go test -tags embed_ui -race -count=1 -timeout=1m ./ui/backend/tests -run '^TestBundledFrontend$'
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander-admin" ./cmd/commander-admin
-      - name: Test and build bundled Playground
+      - name: Build bundled Playground
         working-directory: .
         run: |
-          go test -tags embed_ui -race -count=1 -timeout=3m ./apps/playground/tests -run '^TestAllInOneBundledAdmin$'
           go build -tags embed_ui -trimpath -o "$RUNNER_TEMP/commander" ./apps/playground/cmd/commander

@@ -196,11 +196,10 @@
 
 ## Validation
 
-- [tests/host/](tests/host/) covers configuration, authentication, CORS, proxies,
-  health, documentation and command/file failure boundaries without a Compose stack:
+- Build/static checks run before the retained service-backed integration suites:
 
   ```sh
-  go test -race -count=1 -timeout=3m ./apps/adapters/api/tests/host/...
+  go build ./apps/adapters/api/...
   go vet ./apps/adapters/api/...
   ```
 

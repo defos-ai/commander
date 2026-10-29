@@ -173,7 +173,7 @@
 
 ## Validation
 
-- Host tests live under each adapter's `tests/host/`; public HTTP/MCP scenarios
+- Retained service-backed API host tests live in `api/tests/host/`; public HTTP/MCP scenarios
   live in `tests/` and use the running test stack. Group behavior by feature and
   exercise commands, saved queries and resulting evidence through public routes.
 - [Integration CI](../../.github/workflows/test-integration.yml) runs API and MCP

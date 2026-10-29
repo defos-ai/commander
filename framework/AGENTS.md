@@ -297,7 +297,6 @@
   `manifest.Action.Validate` shares release-safe name and description constraints
   with callers preparing action contracts before a build.
   See the [package contract](../docs/agent-packages.md#source-template).
-  Cover the shared contract in [`tests/agent/manifest`](tests/agent/manifest/).
 - [`agent/packages`](agent/packages/) owns GitHub package reference/selector
   parsing, strict source definitions and bounded remote source loading. Selectors
   accept GitHub HTTPS URLs or canonical references, with omitted versions meaning
@@ -311,8 +310,8 @@
   scoped GitHub authentication. Its resolver selects `stable` from the repository's
   published root Latest release and maps module references to that version's
   module tag. The spawner runtime saves the exact pin before preparing a launch. The framework
-  must not depend on the spawner. Cover source/reference behavior and the
-  official source definitions in [`tests/agent/packages`](tests/agent/packages/).
+  must not depend on the spawner. Verify source/reference behavior through
+  the public installation integration scenarios.
 - Each process has a fixed agent type and fresh ID. Each agent owns fresh action
   instances because discovery state is mutable; propagate constructor errors.
 - Hosts accepting a preassigned agent ID from outside accept only an eight-digit

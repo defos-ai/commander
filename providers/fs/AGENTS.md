@@ -97,15 +97,13 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 
 ## Validation
 
-Run from the repository root; tests use local temporary directories and need no
-external service:
+Run build/static checks from the repository root:
 
 ```sh
-go test -race -count=1 -timeout=3m ./providers/fs/...
+go build ./providers/fs/...
 go vet ./providers/fs/...
 ```
 
-Changes to publication or locks need failure, cancellation and concurrent-access
-coverage in `tests/`; operation changes also need snapshot/recovery scenarios.
+Use public integration scenarios for publication, locking and operation recovery changes.
 Use the [test guide](../../framework/tests/README.md) for stack checks and
-[unit CI](../../.github/workflows/test-unit.yml) for the module gate.
+[build/static CI](../../.github/workflows/test-checks.yml) for the module gate.

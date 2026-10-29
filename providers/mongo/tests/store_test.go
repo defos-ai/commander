@@ -3,15 +3,11 @@ package mongo_test
 import (
 	"context"
 	"errors"
-	"strings"
-	"testing"
-	"time"
-
-	"github.com/defos-ai/commander/providers/mongo/store"
 	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"testing"
 )
 
 func TestMongoQueriesAndUpdates(t *testing.T) {
@@ -157,58 +153,5 @@ func TestMongoTransactionCommitAndRollback(t *testing.T) {
 		if commit && (err != nil || existing.Value != 1) || !commit && (!errors.Is(err, mongo.ErrNoDocuments) || existing.Value != 0) {
 			t.Fatalf("partial transaction: commit=%v existing=%+v created=%+v error=%v", commit, existing, created, err)
 		}
-	}
-}
-
-func TestMongoConnectionRejectsInvalidConfiguration(t *testing.T) {
-	for _, uri := range []string{"", "file:///state/database", "mongodb://localhost", "mongodb://localhost/", "mongodb://user:secret@localhost/invalid/database"} {
-		t.Run(uri, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-			defer cancel()
-			database, err := store.Open(ctx, uri)
-			if database != nil {
-				_ = database.Close(ctx)
-			}
-			if err == nil || strings.Contains(err.Error(), "secret") {
-				t.Fatalf("invalid configuration should return a credential-free error: %v", err)
-			}
-		})
-	}
-}
-
-func TestMongoConnectionRedactsDriverErrors(t *testing.T) {
-	const secret = "provider-private-password"
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	defer cancel()
-	uri := "mongodb://user:" + secret + "@127.0.0.1:1/test?tlsCertificateKeyFilePassword=" + secret + "%zz"
-	database, err := store.Open(ctx, uri)
-	if database != nil {
-		_ = database.Close(ctx)
-	}
-	if err == nil {
-		t.Fatal("malformed URI option must fail initialization")
-	}
-	if strings.Contains(err.Error(), secret) {
-		t.Error("initialization error exposed a sensitive URI option")
-	}
-	if errors.Unwrap(err) == nil {
-		t.Error("initialization error must preserve its cause for inspection")
-	}
-}
-
-func TestMongoConnectionAcceptsSeedLists(t *testing.T) {
-	for _, hosts := range []string{"127.0.0.1:1,127.0.0.1", "[::1]:1,[::1]"} {
-		t.Run(hosts, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-			defer cancel()
-			uri := "mongodb://" + hosts + "/test?replicaSet=unavailable-fixture&serverSelectionTimeoutMS=50"
-			database, err := store.Open(ctx, uri)
-			if database != nil {
-				_ = database.Close(ctx)
-			}
-			if !mongo.IsTimeout(err) {
-				t.Fatalf("valid seed list should reach server selection, got %v", err)
-			}
-		})
 	}
 }

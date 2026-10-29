@@ -3,23 +3,19 @@
 Run commands from the repository root. Tests use local fixtures and scripted
 models; no paid model calls or public website is needed.
 
-## Unit tests
+## Build and static checks
 
 Choose the affected module, for example:
 
 ```sh
-go test -race -count=1 -timeout=3m ./framework/...
-go test -race -count=1 -timeout=3m ./apps/agents/builder/...
+go build ./framework/...
 go vet ./framework/...
 ```
 
-Use the same commands with another module path from [go.work](../../go.work).
+Use another explicit module path from [go.work](../../go.work) as needed.
+Product unit suites have been removed; integration and end-to-end suites remain.
 
-## Provider tests
-
-```sh
-go test -race -count=1 -timeout=3m ./providers/fs/...
-```
+## Provider integration tests
 
 For service-backed tests, follow the setup commands in
 [MongoDB](../../providers/mongo/README.md#development-and-testing),

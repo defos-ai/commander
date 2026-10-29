@@ -78,17 +78,16 @@
 From the repository root:
 
 ```sh
-go test -race -count=1 -timeout=3m ./apps/controllers/default/...
+go build ./apps/controllers/default/...
 go vet ./apps/controllers/default/...
 ```
 
-- [Host tests](default/tests/) cover registration, startup and secret delivery.
-  Mongo startup coverage requires `COMMANDER_TEST_MONGO_URL` and a replica set;
+- [Host integration](default/tests/) covers startup with MongoDB. It requires `COMMANDER_TEST_MONGO_URL` and a replica set;
   report that coverage as skipped if the variable is absent.
 - [Integration CI](../../.github/workflows/test-integration.yml) supplies MongoDB;
-  [unit CI](../../.github/workflows/test-unit.yml) covers the host without it.
+  [build/static CI](../../.github/workflows/test-checks.yml) covers the host without it.
   Follow [Mongo setup](../../providers/mongo/README.md#development-and-testing) for
   service-backed checks, and stop only the test services/state you started.
-- Scheduler or recovery changes need affected framework tests plus public
+- Scheduler or recovery changes need build/static checks plus public
   [MCP/API scenarios](../../framework/tests/README.md#mcp-api-tests), including
   restart, uncertain writes and settled results where relevant.

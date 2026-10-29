@@ -402,16 +402,15 @@
 From the repository root:
 
 ```sh
-go test -race -count=1 -timeout=3m ./apps/playground/...
+go build ./apps/playground/...
 go vet ./apps/playground/...
 go build -o commander ./apps/playground/cmd/commander
 ```
 
 For native packaging, build the frontend as shown in [README.md](README.md#native-one-executable),
-then run `go test -tags embed_ui -race -count=1 -timeout=1m -run '^TestAllInOneBundledAdmin$' ./apps/playground/tests`
-and `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
+then run `go build -tags embed_ui -o commander ./apps/playground/cmd/commander`.
 
-Use the scripted-model and local HTTP/MCP fixtures in [`tests/`](tests/) for
+Use the public [integration scenarios](../../framework/tests/README.md) for
 behavior changes. The all-in-one workflow uses the pinned lightweight
 `commander-example-agent` module and creates its fixture mission through the API.
 Keep coverage of controller dispatch, automatic proposals, operator answers,
