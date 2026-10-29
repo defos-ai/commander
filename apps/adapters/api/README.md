@@ -71,6 +71,12 @@ then complete it with output matching the mission schema.
 records `completed_by: operator`. The adapter assigns this origin; do not send it
 in the body. It identifies the submission channel, not a verified human identity.
 
+Save output for review with
+`POST /api/v1/operations/{operation_id}/completion-proposals` and `{"output": ...}`.
+The operation returns its latest `completion_proposal` and stays active. The
+operator can review or edit that output in Admin before explicitly completing it.
+Saving a proposal neither approves completion nor creates a final report.
+
 **Read saved state before retrying a timed-out command.** Accepted work may
 continue; repeating an assignment creates another task. Cancellation stops queued
 work, while dispatched tasks may finish.

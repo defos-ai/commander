@@ -6,6 +6,11 @@ export const credentials = { url, username: 'operator' };
 
 export const timestamp = '2026-10-05T12:00:00.123456789Z';
 
+export const completionProposal = {
+  id: '11111111-1111-4111-8111-111111111111', output: { summary: 'Prepared for review' },
+  proposed_by: 'model' as const, proposed_at: timestamp,
+};
+
 export const operation: Operation = {
   id: 'operation-1',
   mission: {

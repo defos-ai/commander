@@ -30,6 +30,11 @@ func (o Operation) validateRecovery() error {
 	if err := o.Mission.Rules.Validate(); err != nil {
 		return err
 	}
+	if o.CompletionProposal != nil {
+		if err := o.CompletionProposal.Validate(); err != nil {
+			return err
+		}
+	}
 	switch o.Status {
 	case Planning, Running, Waiting, Completed, Failed, Cancelled:
 	default:

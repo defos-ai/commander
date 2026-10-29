@@ -35,6 +35,7 @@ const (
 	MethodAssignTask          = "operations.assign"
 	MethodAskQuestion         = "operations.ask"
 	MethodAnswerQuestion      = "operations.answer"
+	MethodProposeCompletion   = "operations.propose_completion"
 	MethodCompleteOperation   = "operations.complete"
 	MethodFailOperation       = "operations.fail"
 	MethodCancelOperation     = "operations.cancel"

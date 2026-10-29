@@ -2,11 +2,79 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi } from 'vitest';
 import { OperationsPage } from '../src/pages/OperationsPage';
 import { upstreamURL } from './fakes/proxy';
-import { completed, connection, credentials, detail, fixture, operation, task, view } from './fixtures/operation-completion';
+import { completed, connection, credentials, detail, fixture, operation, proposalDocument, proposedOperation, task, view } from './fixtures/operation-completion';
 
 const confirmation = 'I have reviewed the final output and approve completion.';
 
 describe('operation completion', () => {
+  it('loads a saved proposal losslessly and requires explicit approval before completion', async () => {
+    const api = fixture((_url, body) => {
+      api.change(state => { state.current = completed(state.current, body.output); });
+      return Response.json(api.snapshot().current);
+    });
+    view();
+    await screen.findByRole('button', { name: `View operation ${operation.id}` });
+    const output = String.raw`{"summary":"Prepared","evidence_id":9007199254740993,"path":"\u0061\/b"}`;
+    api.fetch.mockResolvedValueOnce(new Response(proposalDocument(output)));
+
+    await detail();
+    fireEvent.click(screen.getByRole('button', { name: 'Complete operation' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Final output (JSON)')).toHaveValue(output);
+    const metadata = within(dialog).getByRole('heading', { name: 'Proposed final output' }).closest('section')!;
+    expect(metadata).toHaveTextContent(/Proposed by.*Model/);
+    expect(within(metadata).getByText(/Saving a proposal does not complete/)).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Complete operation' })).toBeDisabled();
+    expect(api.posts()).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: confirmation }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete operation' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(api.posts()).toHaveLength(1);
+    expect(api.posts()[0][1]!.body).toBe(`{"output":${output}}`);
+  });
+
+  it('keeps an edited draft while polling and loads a newer proposal only by operator choice', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = fixture();
+      api.change(state => { state.current = proposedOperation({ summary: 'First proposal' }); });
+      await act(async () => { view(); });
+      fireEvent.click(screen.getByRole('button', { name: `View operation ${operation.id}` }));
+      await act(async () => {});
+      fireEvent.click(screen.getByRole('button', { name: 'Complete operation' }));
+      const dialog = screen.getByRole('dialog');
+      const input = within(dialog).getByLabelText('Final output (JSON)');
+      expect(input).toHaveValue('{"summary":"First proposal"}');
+      fireEvent.change(input, { target: { value: '{"summary":"My edited final report"}' } });
+      fireEvent.click(within(dialog).getByRole('checkbox', { name: confirmation }));
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
+
+      expect(input).toHaveValue('{"summary":"My edited final report"}');
+      expect(within(dialog).getByRole('checkbox', { name: confirmation })).toBeChecked();
+      api.change(state => {
+        state.current.completion_proposal = { ...state.current.completion_proposal!,
+          id: '22222222-2222-4222-8222-222222222222', output: { summary: 'New evidence reviewed' } };
+        state.current.updated_at = '2026-10-05T12:01:00Z';
+      });
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_001); });
+
+      expect(input).toHaveValue('{"summary":"My edited final report"}');
+      expect(within(dialog).getByRole('checkbox', { name: confirmation })).not.toBeChecked();
+      expect(within(dialog).getByText('A newer proposal is available. Your current draft is kept until you load it.')).toBeVisible();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Load latest proposal' }));
+
+      expect(input).toHaveValue('{"summary":"New evidence reviewed"}');
+      expect(within(dialog).getByRole('checkbox', { name: confirmation })).not.toBeChecked();
+      expect(within(dialog).getByRole('button', { name: 'Complete operation' })).toBeDisabled();
+      expect(api.posts()).toHaveLength(0);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('reviews the saved mission, requires explicit approval and submits the final output unchanged', async () => {
     const api = fixture((_url, body) => {
       api.change(state => { state.current = completed(state.current, body.output); });

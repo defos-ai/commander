@@ -53,6 +53,12 @@ func (c *Client) Answer(ctx context.Context, command AnswerQuestionCommand) (ope
 	return result, err
 }
 
+func (c *Client) ProposeCompletion(ctx context.Context, command ProposeCompletionCommand) (operations.Operation, error) {
+	var result operations.Operation
+	err := c.call(ctx, MethodProposeCompletion, command, &result)
+	return result, err
+}
+
 func (c *Client) Complete(ctx context.Context, command CompleteOperationCommand) (operations.Operation, error) {
 	var result operations.Operation
 	err := c.call(ctx, MethodCompleteOperation, command, &result)

@@ -191,6 +191,12 @@ func (s *OperationStore) Cancel(ctx context.Context, operationID string) (operat
 	})
 }
 
+func (s *OperationStore) ProposeCompletion(ctx context.Context, operationID string, proposal operations.CompletionProposal) (operations.Operation, error) {
+	return s.Update(ctx, operationID, func(op *operations.Operation) error {
+		return op.ProposeCompletion(proposal)
+	})
+}
+
 func (s *OperationStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage, completedBy operations.CompletionOrigin) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(op *operations.Operation) error {
 		return op.Complete(reportID, output, completedBy)

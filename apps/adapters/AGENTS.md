@@ -100,8 +100,15 @@
   `operator`, MCP stamps `model`; keep `completed_by` out of public inputs and
   expose its saved value in operation reads. It identifies the submission path,
   not proof of human identity. Rejections leave the operation/report unchanged;
-  direct operators to the authenticated HTTP completion API without inventing
-  Admin controls or URLs. Question answers and fallback do not approve completion.
+  direct operators to Admin's **Complete operation** or the authenticated HTTP
+  completion API without inventing URLs. Question answers and fallback do not approve completion.
+- `propose_completion` accepts final output for review and stamps model origin;
+  the HTTP proposal route stamps operator origin. Public bodies cannot choose
+  proposal identity, timestamp or origin. Retain the saved proposal in command and
+  detail responses without creating a report, resolving decisions or completing
+  the operation. For operator-controlled missions, guide clients to save once,
+  then ask for operator review in Admin. Proposals do not pause work or approve it;
+  re-read after ambiguous writes rather than retrying automatically.
 - `update_mission` accepts that same complete flat definition. Read
   `describe_mission` first and keep its unique name unchanged. Require the target
   through `MissionStore.Get` before `Upsert`; unknown names must not create a

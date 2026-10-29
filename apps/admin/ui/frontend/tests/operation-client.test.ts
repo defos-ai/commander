@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Operation } from '../src/api/operation-types';
 import { getOperation, listOperations } from '../src/api/operations';
 import { respondSequence as respond } from './fakes/fetch';
-import { credentials, operation, timestamp, url } from './fixtures/operation-client';
+import { completionProposal, credentials, operation, timestamp, url } from './fixtures/operation-client';
 
 function proxyTarget(input: RequestInfo | URL) {
   const endpoint = new URL(String(input), window.location.origin);
@@ -12,6 +12,35 @@ function proxyTarget(input: RequestInfo | URL) {
 }
 
 describe('operations client', () => {
+  it('retains exact proposed output JSON from the authenticated detail response', async () => {
+    const output = String.raw`{"summary":"Prepared","identifier":9007199254740993,"ratio":0.10000000000000001,"path":"\u0061\/b"}`;
+    const body = JSON.stringify({ ...operation, completion_proposal: { ...completionProposal, output: 'raw-output', outputText: 'untrusted replacement' } })
+      .replace('"output":"raw-output"', `"output":${output}`);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+
+    const detail = await getOperation(url, credentials, operation.id);
+
+    expect(detail.completion_proposal).toMatchObject({ id: completionProposal.id, proposed_by: completionProposal.proposed_by,
+      proposed_at: completionProposal.proposed_at });
+    expect(detail.completion_proposal!.outputText).toBe(output);
+  });
+
+  it('keeps proposal summaries on list reads without accepting client-only output text from the wire', async () => {
+    respond({ items: [{ ...operation, completion_proposal: { ...completionProposal, outputText: 'untrusted replacement' } }] });
+
+    const [saved] = await listOperations(url, credentials);
+
+    expect(saved.completion_proposal).toEqual(completionProposal);
+  });
+
+  it.each([null, { ...completionProposal, output: null }, { ...completionProposal, output: ['Prepared', 42] }])('accepts optional proposals and arbitrary JSON output: %j', async proposal => {
+    respond({ ...operation, completion_proposal: proposal });
+
+    const detail = await getOperation(url, credentials, operation.id);
+
+    expect(detail.completion_proposal?.output).toEqual(proposal?.output);
+  });
+
   it.each(['operator', 'model'] as const)('retains %s completion provenance', async completedBy => {
     respond({ ...operation, status: 'completed', completed_by: completedBy });
 
@@ -104,6 +133,12 @@ describe('operations client', () => {
     { mission: { ...operation.mission, starting_actions: 'discover-pages' } },
     { completed_by: 'admin' },
     { completed_by: null },
+    { completion_proposal: [] },
+    { completion_proposal: {} },
+    { completion_proposal: { ...completionProposal, id: 'proposal-1' } },
+    { completion_proposal: { ...completionProposal, proposed_by: 'user' } },
+    { completion_proposal: { ...completionProposal, proposed_at: 'not a date' } },
+    { completion_proposal: { ...completionProposal, output: undefined } },
     { tasks: [{ ...operation.tasks![0], result: { action_name: 'check-links', output: null, artifacts: [{ id: 'artifact-1', files: 'unexpected' }] } }] },
     { tasks: [{ ...operation.tasks![0], continuation: { ...operation.tasks![0].continuation, created_task_ids: [42] } }] },
     { tasks: [{ ...operation.tasks![0], finished_at: 'not a date' }] },

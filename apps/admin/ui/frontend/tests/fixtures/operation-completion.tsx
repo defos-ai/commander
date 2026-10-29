@@ -1,6 +1,7 @@
 import type { Operation, OperationTask } from '../../src/api/operation-types';
 import { fixture as fakeAPI } from '../fakes/operation-controls';
 import { now, operation as initialOperation } from './operation-controls';
+import { completionProposal } from './operation-client';
 
 export { connection, credentials, detail, view } from './operation-controls';
 
@@ -25,4 +26,12 @@ export function completed(current: Operation, output: unknown): Operation {
 
 export function fixture(post?: Parameters<typeof fakeAPI>[1]) {
   return fakeAPI({ operation, mission: operation.mission }, post);
+}
+
+export function proposedOperation(output: unknown, id = completionProposal.id): Operation {
+  return { ...structuredClone(operation), completion_proposal: { ...completionProposal, id, output } };
+}
+
+export function proposalDocument(output: string): string {
+  return JSON.stringify(proposedOperation('raw-output')).replace('"output":"raw-output"', `"output":${output}`);
 }

@@ -32,11 +32,20 @@ func (o Operation) ValidateCompletion(output json.RawMessage, completedBy Comple
 		return err
 	}
 	if policy := o.Mission.Completion; policy != nil {
-		if err := policy.Validate(); err != nil {
-			return err
-		}
 		if policy.DecisionBy == missions.Operator && completedBy != CompletionOperator {
 			return ErrCompletionOperatorRequired
+		}
+	}
+	return o.ValidateCompletionCandidate(output)
+}
+
+func (o Operation) ValidateCompletionCandidate(output json.RawMessage) error {
+	if o.Status.Terminal() {
+		return ErrFinished
+	}
+	if policy := o.Mission.Completion; policy != nil {
+		if err := policy.Validate(); err != nil {
+			return err
 		}
 	}
 	for _, task := range o.Tasks {

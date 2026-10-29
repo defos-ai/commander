@@ -45,6 +45,7 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Operation`](operations/operation.go), [`CompletionOrigin`](operations/operation_completion.go) | Own one mission run: its input, tasks, questions, event history, final output/report reference and accepted completion channel. | Runner scheduling/recovery, Controller question consumer, Queries, Adapters. |
+| [`CompletionProposal`](operations/completion_proposal.go) | Retains proposed final output for review without completing an operation or granting approval. | Runner proposal command, operation stores, Adapters and Admin completion review. |
 | [`Task`](operations/task.go) | Retains one action assignment, parentage, selected process, deadline, outcome and continuation. | Runner dispatch/results, Session coordinator, operation queries and Adapters. |
 | [`TaskDispatch`](operations/task_dispatch.go) | Supplies the process and timestamps for atomically claiming a queued task. | Runner, Session coordinator, OperationStore implementations. |
 | [`TaskResult`](operations/task_result.go) | Supplies an execution outcome for the atomic task/continuation/event transition. | Runner result reconciliation, OperationStore implementations. |

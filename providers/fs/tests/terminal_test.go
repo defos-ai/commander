@@ -63,6 +63,79 @@ func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {
 	assertResultJSONEqual(t, again, saved)
 }
 
+func TestOperationCompletionProposalPersistsWithoutCompleting(t *testing.T) {
+	dir := t.TempDir()
+	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
+	op := fixtures.CreateCompletionOperation(t, first)
+	op, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
+		next.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal := fixtures.CompletionProposal()
+
+	published, err := first.ProposeCompletion(t.Context(), op.ID, proposal)
+
+	if err != nil || published.Status != op.Status || published.ReportID != "" || published.Output != nil || published.CompletedBy != "" {
+		t.Fatalf("proposal completed the operation or wrote final report fields: %+v, %v", published, err)
+	}
+	assertResultJSONEqual(t, published.Tasks, op.Tasks)
+	assertResultJSONEqual(t, published.Questions, op.Questions)
+	if published.CompletionProposal == nil || len(published.Events) != len(op.Events)+1 ||
+		published.Events[len(published.Events)-1].Type != operations.CompletionProposed {
+		t.Fatal("proposal and review event did not commit together")
+	}
+	expected := proposal.Clone()
+	proposal.Output[0], published.CompletionProposal.Output[0] = '[', '['
+	published.CompletionProposal.ProposedBy = operations.CompletionOperator
+
+	saved, err := fixtures.NewDispatchStore(t, dir).Get(t.Context(), op.ID)
+
+	if err != nil || saved.CompletionProposal == nil {
+		t.Fatal("proposal was lost across reopening the provider")
+	}
+	assertResultJSONEqual(t, saved.CompletionProposal, expected)
+	if !bytes.Contains(saved.CompletionProposal.Output, []byte("9007199254740993")) ||
+		!bytes.Contains(saved.CompletionProposal.Output, []byte(`\u0061\/b`)) {
+		t.Fatal("proposal persistence changed number precision or string escapes")
+	}
+	path := filepath.Join(dir, "operations", op.ID+".json")
+	before := fixtures.ReadDispatchFile(t, path)
+
+	replayed, err := second.ProposeCompletion(t.Context(), op.ID, expected)
+
+	if err != nil || !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
+		t.Fatal("identical proposal replay rewrote the saved operation")
+	}
+	assertResultJSONEqual(t, replayed, saved)
+	conflicting := expected.Clone()
+	conflicting.Output = json.RawMessage(`{"summary":"Changed under the same ID"}`)
+	assertTerminalRejected(t, dir, op.ID, func() (operations.Operation, error) {
+		return first.ProposeCompletion(t.Context(), op.ID, conflicting)
+	}, operations.ErrOperationConflict)
+	replacement := expected.Clone()
+	replacement.ID, replacement.Output = id.New(), json.RawMessage(`{"summary":"Updated proposal"}`)
+
+	revised, err := second.ProposeCompletion(t.Context(), op.ID, replacement)
+
+	if err != nil || revised.CompletionProposal == nil || revised.CompletionProposal.ID != replacement.ID ||
+		len(revised.Events) != len(saved.Events)+1 {
+		t.Fatalf("a new proposal did not replace the review copy: %+v, %v", revised, err)
+	}
+
+	finished, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"Operator edited and accepted"}`), operations.CompletionOperator)
+
+	if err != nil || finished.Status != operations.Completed {
+		t.Fatalf("proposal prevented explicit operator completion: %+v, %v", finished, err)
+	}
+	assertResultJSONEqual(t, finished.CompletionProposal, replacement)
+	assertTerminalRejected(t, dir, op.ID, func() (operations.Operation, error) {
+		return second.ProposeCompletion(t.Context(), op.ID, fixtures.CompletionProposal())
+	}, operations.ErrFinished)
+}
+
 func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -114,6 +187,13 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 				t.Fatal("rejected completion changed the latest snapshot or storage revision")
 			}
+			if tc.name != "operator completion policy" {
+				published, err := first.ProposeCompletion(t.Context(), op.ID, fixtures.CompletionProposal())
+
+				if err == nil || published.ID != "" || !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
+					t.Fatal("proposal bypassed the latest saved completion eligibility")
+				}
+			}
 		})
 	}
 }
@@ -131,6 +211,13 @@ func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T
 		return func() (operations.Operation, error) { return store.Fail(t.Context(), op.ID, reason) }
 	}
 	validReportID, validOutput := id.ReportID(), json.RawMessage(`{"summary":"done"}`)
+	propose := func(change func(*operations.CompletionProposal)) func() (operations.Operation, error) {
+		return func() (operations.Operation, error) {
+			proposal := fixtures.CompletionProposal()
+			change(&proposal)
+			return store.ProposeCompletion(t.Context(), op.ID, proposal)
+		}
+	}
 	for _, tc := range []struct {
 		name string
 		call func() (operations.Operation, error)
@@ -145,6 +232,11 @@ func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T
 		{"unknown completion origin", func() (operations.Operation, error) {
 			return store.Complete(t.Context(), op.ID, validReportID, validOutput, "service")
 		}},
+		{"invalid proposal ID", propose(func(p *operations.CompletionProposal) { p.ID = "" })},
+		{"invalid proposal JSON", propose(func(p *operations.CompletionProposal) { p.Output = json.RawMessage(`{`) })},
+		{"invalid proposal output", propose(func(p *operations.CompletionProposal) { p.Output = json.RawMessage(`{}`) })},
+		{"missing proposal origin", propose(func(p *operations.CompletionProposal) { p.ProposedBy = "" })},
+		{"missing proposal time", propose(func(p *operations.CompletionProposal) { p.ProposedAt = time.Time{} })},
 		{"empty failure", fail("")},
 		{"blank failure", fail(" \t\n")},
 	} {
@@ -162,6 +254,7 @@ func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T
 			}
 			assertTerminalRejected(t, dir, op.ID, complete(validReportID, validOutput), operations.ErrFinished)
 			assertTerminalRejected(t, dir, op.ID, fail("Cannot continue"), operations.ErrFinished)
+			assertTerminalRejected(t, dir, op.ID, propose(func(*operations.CompletionProposal) {}), operations.ErrFinished)
 		})
 	}
 }

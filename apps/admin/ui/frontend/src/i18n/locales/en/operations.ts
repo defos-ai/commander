@@ -58,6 +58,7 @@ export default {
   completionOrigins: { operator: 'Operator', model: 'Model' },
   completionOriginUnknown: 'Unknown',
   operatorCompletionRequired: 'Operator approval is required to complete this operation.',
+  completionProposalReady: 'Proposed final output is available. Choose Complete operation to review and approve it.',
   input: 'Input',
   output: 'Output',
   error: 'Error',

@@ -15,25 +15,26 @@ import (
 )
 
 type operationMetadata struct {
-	ID             string                      `json:"id"`
-	Mission        missions.Mission            `json:"mission"`
-	Input          json.RawMessage             `json:"input"`
-	Status         operations.Status           `json:"status"`
-	Preflight      *operations.Preflight       `json:"preflight,omitempty"`
-	TaskIDs        []string                    `json:"task_ids"`
-	QuestionIDs    []string                    `json:"question_ids"`
-	Output         json.RawMessage             `json:"output,omitempty"`
-	ReportID       string                      `json:"report_id,omitempty"`
-	CompletedBy    operations.CompletionOrigin `json:"completed_by,omitempty"`
-	Error          string                      `json:"error,omitempty"`
-	EventSequences []uint64                    `json:"event_sequences"`
-	CreatedAt      time.Time                   `json:"created_at"`
-	UpdatedAt      time.Time                   `json:"updated_at"`
+	ID                 string                         `json:"id"`
+	Mission            missions.Mission               `json:"mission"`
+	Input              json.RawMessage                `json:"input"`
+	Status             operations.Status              `json:"status"`
+	Preflight          *operations.Preflight          `json:"preflight,omitempty"`
+	TaskIDs            []string                       `json:"task_ids"`
+	QuestionIDs        []string                       `json:"question_ids"`
+	Output             json.RawMessage                `json:"output,omitempty"`
+	ReportID           string                         `json:"report_id,omitempty"`
+	CompletedBy        operations.CompletionOrigin    `json:"completed_by,omitempty"`
+	CompletionProposal *operations.CompletionProposal `json:"completion_proposal,omitempty"`
+	Error              string                         `json:"error,omitempty"`
+	EventSequences     []uint64                       `json:"event_sequences"`
+	CreatedAt          time.Time                      `json:"created_at"`
+	UpdatedAt          time.Time                      `json:"updated_at"`
 }
 
 func encodeOperation(op operations.Operation) (map[string]json.RawMessage, error) {
 	metadata := operationMetadata{ID: op.ID, Mission: op.Mission, Input: op.Input,
-		Status: op.Status, Preflight: op.Preflight, Output: op.Output, ReportID: op.ReportID, CompletedBy: op.CompletedBy,
+		Status: op.Status, Preflight: op.Preflight, Output: op.Output, ReportID: op.ReportID, CompletedBy: op.CompletedBy, CompletionProposal: op.CompletionProposal,
 		Error: op.Error, CreatedAt: op.CreatedAt, UpdatedAt: op.UpdatedAt,
 		TaskIDs: make([]string, 0, len(op.Tasks)), QuestionIDs: make([]string, 0, len(op.Questions)),
 		EventSequences: make([]uint64, 0, len(op.Events))}
@@ -149,7 +150,7 @@ func decodeOperation(data map[string]json.RawMessage, operationID string) (opera
 		return operations.Operation{}, err
 	}
 	op := operations.Operation{ID: metadata.ID, Mission: metadata.Mission, Input: metadata.Input,
-		Status: metadata.Status, Preflight: metadata.Preflight, Output: metadata.Output, ReportID: metadata.ReportID, CompletedBy: metadata.CompletedBy,
+		Status: metadata.Status, Preflight: metadata.Preflight, Output: metadata.Output, ReportID: metadata.ReportID, CompletedBy: metadata.CompletedBy, CompletionProposal: metadata.CompletionProposal,
 		Error: metadata.Error, CreatedAt: metadata.CreatedAt, UpdatedAt: metadata.UpdatedAt,
 		Tasks: make([]operations.Task, 0, len(metadata.TaskIDs)), Questions: make([]operations.Question, 0, len(metadata.QuestionIDs))}
 	for _, taskID := range metadata.TaskIDs {

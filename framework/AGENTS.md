@@ -68,7 +68,18 @@
   with accepted completion, retaining it through recovery and late outcomes.
   This records the submission channel, not proof of a human's identity. There is
   no question timeout or model fallback for operator completion. Action-scoped
-  rules remain unchanged; no approval request/draft workflow is introduced here.
+  rules remain unchanged.
+- `Operation.CompletionProposal` retains the latest proposed final output and
+  submission origin inside the operation. `ProposeCompletion` validates readiness
+  and the saved output schema atomically without granting completion authority,
+  creating a report, changing status or resolving continuations. New IDs replace
+  the latest proposal; identical ID/content replays preserve history, while
+  conflicting ID reuse fails. Keep snapshots independent and preserve the proposal
+  across recovery and terminal transitions. Trusted adapters stamp proposer origin;
+  passing time or saving a proposal never supplies operator approval. Final
+  completion still validates the operator's explicitly submitted output. Proposals
+  do not pause coordination or freeze later work; review current outcomes again
+  before completion and reconcile uncertain writes before another mutation.
 - Optional mission `action_definitions` reuses `actions.Definition` for desired
   capabilities. Keep at most 100 unique trimmed names, each referenced by required,
   optional actions. Compile both explicit object schemas with

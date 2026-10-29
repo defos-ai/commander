@@ -113,6 +113,25 @@ func (r *Runner) GetReport(ctx context.Context, operationID string) (reports.Rep
 	return report, nil
 }
 
+func (r *Runner) ProposeCompletion(ctx context.Context, command commands.ProposeCompletionCommand) (operations.Operation, error) {
+	if err := command.Validate(); err != nil {
+		return operations.Operation{}, err
+	}
+	proposal := operations.CompletionProposal{ID: id.New(), Output: append(json.RawMessage(nil), command.Output...),
+		ProposedBy: command.ProposedBy, ProposedAt: time.Now().UTC()}
+	return submit(ctx, r, func(ctx context.Context) (operations.Operation, error) {
+		s, err := r.activeState(ctx, command.OperationID)
+		if err != nil {
+			return operations.Operation{}, err
+		}
+		next, err := r.store.ProposeCompletion(ctx, command.OperationID, proposal)
+		if err := s.acceptUpdate(next, err); err != nil {
+			return operations.Operation{}, err
+		}
+		return s.operation.Clone(), nil
+	})
+}
+
 func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperationCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err

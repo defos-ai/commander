@@ -71,6 +71,12 @@
   queries and command responses. This records the submission channel, not human
   identity. Map `ErrCompletionOperatorRequired` to `409 completion_operator_required`
   after uncertain-write and transport errors so ambiguity cannot look like rejection.
+- `POST /operations/{operation_id}/completion-proposals` accepts output only and
+  stamps operator origin. Map the saved `completion_proposal` through independent
+  response DTOs with cloned raw output; expose identity, origin and timestamp as
+  read-only. The controller checks completion readiness and the output schema,
+  but saving a proposal never grants completion authority, resolves continuations
+  or creates a report. Preserve uncertain outcomes and require saved-state readback.
 - Operation/task/report/event/log queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send

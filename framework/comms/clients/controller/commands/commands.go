@@ -139,6 +139,22 @@ func (r AnswerQuestionCommand) Validate() error {
 	return r.AnsweredBy.Validate()
 }
 
+type ProposeCompletionCommand struct {
+	OperationID string                      `json:"operation_id"`
+	Output      json.RawMessage             `json:"output"`
+	ProposedBy  operations.CompletionOrigin `json:"proposed_by"`
+}
+
+func (r ProposeCompletionCommand) Validate() error {
+	if err := validateOperationID(r.OperationID); err != nil {
+		return err
+	}
+	if !json.Valid(r.Output) {
+		return errors.New("output must be valid JSON")
+	}
+	return r.ProposedBy.Validate()
+}
+
 type CompleteOperationCommand struct {
 	OperationID string                      `json:"operation_id"`
 	Output      json.RawMessage             `json:"output"`

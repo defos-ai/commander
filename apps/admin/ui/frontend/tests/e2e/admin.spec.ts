@@ -314,12 +314,19 @@ test('operation questions, automatic work, graph and downloads use the real stac
 
   const decision = finished.tasks!.find(task => task.id === root.id)!.continuation!;
   await api.post(`${path}/tasks/${root.id}/continuation/resolve`, { version: decision.version, actions: [] });
+  const proposed = await api.post<Operation>(`${path}/completion-proposals`, {
+    output: { summary: 'Analyzed the example text and saved its summary.' },
+  });
+  expect(proposed.status).not.toBe('completed');
+  expect(proposed.report_id).toBeUndefined();
+  expect(proposed.completion_proposal).toMatchObject({ proposed_by: 'operator',
+    output: { summary: 'Analyzed the example text and saved its summary.' } });
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await page.getByRole('button', { name: 'Complete operation', exact: true }).click();
   const completion = page.getByRole('dialog', { name: 'Complete operation', exact: true });
   await expect(completion.getByRole('button', { name: 'Complete operation', exact: true })).toBeDisabled();
-  await completion.getByLabel('Final output (JSON)', { exact: true }).fill('{"summary":"Analyzed the example text and saved its summary."}');
+  await expect(completion.getByLabel('Final output (JSON)', { exact: true })).toHaveValue('{"summary":"Analyzed the example text and saved its summary."}');
   await completion.getByRole('checkbox', { name: 'I have reviewed the final output and approve completion.', exact: true }).check();
   await completion.getByRole('button', { name: 'Complete operation', exact: true }).click();
   await expect(completion).not.toBeVisible();

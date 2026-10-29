@@ -15,19 +15,20 @@ import (
 
 type UncertainWriteStore struct {
 	operations.OperationStore
-	CreateError    error
-	Dispatch       func(context.Context, string, operations.TaskDispatch) (operations.Operation, error)
-	AfterQueue     func(operations.Operation) error
-	AfterDispatch  func(operations.Operation) error
-	AfterFinish    func(operations.Operation) error
-	AfterResolve   func(operations.Operation) error
-	AfterAsk       func(operations.Operation) error
-	AfterAnswer    func(operations.Operation) error
-	AfterPreflight func(operations.Operation) error
-	AfterRecover   func(operations.Operation) error
-	AfterCancel    func(operations.Operation) error
-	AfterComplete  func(operations.Operation) error
-	AfterFail      func(operations.Operation) error
+	CreateError            error
+	Dispatch               func(context.Context, string, operations.TaskDispatch) (operations.Operation, error)
+	AfterQueue             func(operations.Operation) error
+	AfterDispatch          func(operations.Operation) error
+	AfterFinish            func(operations.Operation) error
+	AfterResolve           func(operations.Operation) error
+	AfterAsk               func(operations.Operation) error
+	AfterAnswer            func(operations.Operation) error
+	AfterPreflight         func(operations.Operation) error
+	AfterRecover           func(operations.Operation) error
+	AfterCancel            func(operations.Operation) error
+	AfterComplete          func(operations.Operation) error
+	AfterProposeCompletion func(operations.Operation) error
+	AfterFail              func(operations.Operation) error
 }
 
 func (s *UncertainWriteStore) Create(ctx context.Context, op operations.Operation) error {
@@ -108,6 +109,14 @@ func (s *UncertainWriteStore) Cancel(ctx context.Context, operationID string) (o
 	op, err := s.OperationStore.Cancel(ctx, operationID)
 	if err == nil && s.AfterCancel != nil {
 		err = s.AfterCancel(op)
+	}
+	return op, err
+}
+
+func (s *UncertainWriteStore) ProposeCompletion(ctx context.Context, operationID string, proposal operations.CompletionProposal) (operations.Operation, error) {
+	op, err := s.OperationStore.ProposeCompletion(ctx, operationID, proposal)
+	if err == nil && s.AfterProposeCompletion != nil {
+		err = s.AfterProposeCompletion(op)
 	}
 	return op, err
 }

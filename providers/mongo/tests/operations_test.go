@@ -448,6 +448,10 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 				definition.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
 			}
 			op := fixtures.CreateOperation(t, first, definition)
+			proposal := fixtures.CompletionProposal()
+			if _, err := first.ProposeCompletion(t.Context(), op.ID, proposal); err != nil {
+				t.Fatal(err)
+			}
 			running := fixtures.QueueAndDispatch(t, first, op.ID, "inspect")
 			queued := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "report"})
 			var err error
@@ -508,11 +512,15 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 			if len(op.Tasks) != wantTasks {
 				t.Fatal("late evidence scheduled new work")
 			}
+			assertOperationEqual(t, op.CompletionProposal, proposal)
 			for _, mutate := range []func() (operations.Operation, error){
 				func() (operations.Operation, error) { return first.Cancel(t.Context(), op.ID) },
 				func() (operations.Operation, error) { return first.Fail(t.Context(), op.ID, "replace") },
 				func() (operations.Operation, error) {
 					return first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`), operations.CompletionModel)
+				},
+				func() (operations.Operation, error) {
+					return first.ProposeCompletion(t.Context(), op.ID, fixtures.CompletionProposal())
 				},
 			} {
 				if _, err := mutate(); !errors.Is(err, operations.ErrFinished) {
@@ -521,6 +529,76 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 			}
 			assertOperationEqual(t, fixtures.ReadOperation(t, second, op.ID), op)
 		})
+	}
+}
+
+func TestOperationMongoCompletionProposalIsAnAtomicReviewCopy(t *testing.T) {
+	first, database := fixtures.OpenOperations(t)
+	second, _ := fixtures.OpenOperations(t)
+	definition := fixtures.Operation()
+	definition.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+	op := fixtures.CreateOperation(t, first, definition)
+	proposal := fixtures.CompletionProposal()
+
+	published, err := first.ProposeCompletion(t.Context(), op.ID, proposal)
+
+	if err != nil || published.Status != op.Status || published.ReportID != "" || published.Output != nil || published.CompletedBy != "" ||
+		len(published.Events) != len(op.Events)+1 || published.Events[len(published.Events)-1].Type != operations.CompletionProposed {
+		t.Fatalf("proposal completed the operation or failed to commit its review event: %+v, %v", published, err)
+	}
+	assertOperationEqual(t, published.Tasks, op.Tasks)
+	assertOperationEqual(t, published.Questions, op.Questions)
+	expected := proposal.Clone()
+	proposal.Output[0], published.CompletionProposal.Output[0] = '[', '['
+
+	saved := fixtures.ReadOperation(t, second, op.ID)
+
+	assertOperationEqual(t, saved.CompletionProposal, expected)
+	if saved.CompletionProposal == nil || !bytes.Contains(saved.CompletionProposal.Output, []byte("9007199254740993")) ||
+		!bytes.Contains(saved.CompletionProposal.Output, []byte(`\u0061\/b`)) {
+		t.Fatal("proposal persistence changed number precision or string escapes")
+	}
+	before := fixtures.AllOperationDocuments(t, database)
+
+	replayed, err := second.ProposeCompletion(t.Context(), op.ID, expected)
+
+	if err != nil || !reflect.DeepEqual(before, fixtures.AllOperationDocuments(t, database)) {
+		t.Fatal("identical proposal replay rewrote stored operation documents")
+	}
+	assertOperationEqual(t, replayed, saved)
+	for _, invalid := range []operations.CompletionProposal{
+		{ID: expected.ID, Output: json.RawMessage(`{"summary":"Conflicting content"}`), ProposedBy: expected.ProposedBy, ProposedAt: expected.ProposedAt},
+		{ID: id.New(), Output: json.RawMessage(`{`), ProposedBy: expected.ProposedBy, ProposedAt: expected.ProposedAt},
+		{ID: id.New(), Output: json.RawMessage(`[]`), ProposedBy: expected.ProposedBy, ProposedAt: expected.ProposedAt},
+	} {
+		published, err := first.ProposeCompletion(t.Context(), op.ID, invalid)
+
+		if err == nil || published.ID != "" || !reflect.DeepEqual(before, fixtures.AllOperationDocuments(t, database)) {
+			t.Fatal("invalid or conflicting proposal changed stored operation documents")
+		}
+		if invalid.ID == expected.ID && !errors.Is(err, operations.ErrOperationConflict) {
+			t.Fatalf("conflicting proposal lost its error identity: %v", err)
+		}
+	}
+	replacement := expected.Clone()
+	replacement.ID, replacement.Output = id.New(), json.RawMessage(`{"summary":"New review copy"}`)
+
+	revised, err := second.ProposeCompletion(t.Context(), op.ID, replacement)
+
+	if err != nil || revised.CompletionProposal == nil || revised.CompletionProposal.ID != replacement.ID ||
+		len(revised.Events) != len(saved.Events)+1 {
+		t.Fatalf("new proposal did not replace the latest review copy: %+v, %v", revised, err)
+	}
+	queued := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
+	if _, err := first.QueueTask(t.Context(), op.ID, queued); err != nil {
+		t.Fatal(err)
+	}
+	before = fixtures.AllOperationDocuments(t, database)
+
+	_, proposeErr := second.ProposeCompletion(t.Context(), op.ID, fixtures.CompletionProposal())
+
+	if !errors.Is(proposeErr, operations.ErrActiveTasks) || !reflect.DeepEqual(before, fixtures.AllOperationDocuments(t, database)) {
+		t.Fatal("proposal ignored newly queued work or changed its saved state")
 	}
 }
 

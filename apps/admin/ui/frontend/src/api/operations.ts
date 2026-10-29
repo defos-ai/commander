@@ -1,5 +1,5 @@
 import type { Session } from '../connections/types';
-import { ApiError, getJSON } from './client';
+import { ApiError, getJSON, getJSONDocument } from './client';
 import { isActionRequirement } from './actions';
 import { isMission } from './missions';
 import type {
@@ -9,6 +9,7 @@ import type {
   OperationSessionIntent, OperationSessionReference, OperationTaskPlacement,
 } from './operation-types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
+import { readJSONObject } from '../missions/draft';
 
 function isNullableArray<T>(value: unknown, isItem: (item: unknown) => item is T): value is T[] | null {
   return value === null || (Array.isArray(value) && value.every(isItem));
@@ -153,6 +154,10 @@ export function isOperation(value: unknown): value is Operation {
   return isObject(value) && isIdentifier(value.id) && isMission(value.mission) && 'input' in value &&
     typeof value.status === 'string' && isOptionalString(value.report_id) && isOptionalString(value.error) &&
     (value.completed_by === undefined || value.completed_by === 'operator' || value.completed_by === 'model') &&
+    (value.completion_proposal == null || (isObject(value.completion_proposal) && isUUID(value.completion_proposal.id) &&
+      'output' in value.completion_proposal &&
+      (value.completion_proposal.proposed_by === 'operator' || value.completion_proposal.proposed_by === 'model') &&
+      isDate(value.completion_proposal.proposed_at))) &&
     isDate(value.created_at) && isDate(value.updated_at) && isProgress(value.progress) &&
     (value.affinity === undefined || isAffinity(value.affinity)) &&
     (value.preflight === undefined || value.preflight === null || isPreflight(value.preflight)) &&
@@ -165,11 +170,23 @@ export async function listOperations(url: string, credentials: Session, signal?:
   if (!isObject(body) || !Array.isArray(body.items) || !body.items.every(isOperation)) {
     throw new ApiError('invalid_response');
   }
+  for (const operation of body.items) {
+    if (operation.completion_proposal) delete operation.completion_proposal.outputText;
+  }
   return body.items;
 }
 
 export async function getOperation(url: string, credentials: Session, id: string, signal?: AbortSignal): Promise<Operation> {
-  const body = await getJSON(url, `/api/v1/operations/${encodeIdentifier(id)}`, credentials, signal);
+  const document = await getJSONDocument(url, `/api/v1/operations/${encodeIdentifier(id)}`, credentials, signal);
+  const body = document.value;
   if (!isOperation(body) || body.id !== id) throw new ApiError('invalid_response');
+  if (body.completion_proposal) {
+    try {
+      const proposalSpan = readJSONObject(document.text).fields.get('completion_proposal')!;
+      const proposalText = document.text.slice(proposalSpan.start, proposalSpan.end);
+      const outputSpan = readJSONObject(proposalText).fields.get('output')!;
+      body.completion_proposal.outputText = proposalText.slice(outputSpan.start, outputSpan.end);
+    } catch { throw new ApiError('invalid_response'); }
+  }
   return body;
 }

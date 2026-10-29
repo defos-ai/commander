@@ -239,6 +239,12 @@ func (c *Consumer) dispatch(ctx context.Context, method string, params json.RawM
 			return nil, err
 		}
 		return c.operations.Answer(ctx, p)
+	case controllercommands.MethodProposeCompletion:
+		var p controllercommands.ProposeCompletionCommand
+		if err := domain.Decode(params, &p); err != nil {
+			return nil, err
+		}
+		return c.operations.ProposeCompletion(ctx, p)
 	case controllercommands.MethodCompleteOperation:
 		var p controllercommands.CompleteOperationCommand
 		if err := domain.Decode(params, &p); err != nil {

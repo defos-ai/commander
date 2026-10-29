@@ -36,8 +36,11 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
 }) {
   const { t } = useTranslation();
   const identity = useId();
-  const [output, setOutput] = useState('');
-  const [reviewedAt, setReviewedAt] = useState<string>();
+  const proposal = operation.completion_proposal;
+  const [output, setOutput] = useState(proposal?.outputText ?? '');
+  const [loadedProposal, setLoadedProposal] = useState(() => proposal?.outputText === undefined ? undefined
+    : { id: proposal.id, text: proposal.outputText });
+  const [reviewed, setReviewed] = useState<{ updatedAt: string; proposalID?: string; proposalOutput?: string }>();
   const [validation, setValidation] = useState(false);
   const [error, setError] = useState<CommandError>();
   const [submitting, setSubmitting] = useState(false);
@@ -46,12 +49,24 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
   const finished = !isActiveOperation(operation.status);
   const blocker = completionBlock(operation);
   const locked = Boolean(error && error.kind !== 'invalid_input');
-  const approved = reviewedAt === operation.updated_at;
+  const approved = reviewed?.updatedAt === operation.updated_at && reviewed.proposalID === proposal?.id &&
+    reviewed.proposalOutput === proposal?.outputText;
+  const proposalChanged = proposal?.outputText !== undefined &&
+    (proposal.id !== loadedProposal?.id || proposal.outputText !== loadedProposal?.text);
   const disabled = !available || finished || locked || submitting || inspecting;
 
   useEffect(() => () => { pending.current?.abort(); pending.current = null; }, [connection.id, connection.url, credentials, operation.id]);
 
   function close() { pending.current?.abort(); pending.current = null; onClose(); }
+
+  function loadProposal() {
+    if (disabled || proposal?.outputText === undefined) return;
+    setOutput(proposal.outputText);
+    setLoadedProposal({ id: proposal.id, text: proposal.outputText });
+    setReviewed(undefined);
+    setValidation(false);
+    setError(undefined);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -99,6 +114,17 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
           </li>)}</ul>
         </details> : <p className="form-hint">{t($ => $.operations.noTasks)}</p>}
       </section>
+      {proposal && <section className="operation-completion-review">
+        <h3>{t($ => $.operationCommands.savedProposal)}</h3>
+        <p>{t($ => $.operationCommands.proposedBy)}: {t($ => $.operations.completionOrigins[proposal.proposed_by])}
+          {' · '}<time dateTime={proposal.proposed_at}>{new Date(proposal.proposed_at).toLocaleString()}</time></p>
+        <p className="form-hint">{t($ => $.operationCommands.proposalReviewHint)}</p>
+        {proposalChanged && <p className="notice" role="status">{t($ => $.operationCommands.proposalChanged)}</p>}
+        {proposal.outputText === undefined ? <p className="form-hint">{t($ => $.operationCommands.proposalNeedsRefresh)}</p>
+          : (proposalChanged || output !== proposal.outputText) && <Button variant="secondary" disabled={disabled} onClick={loadProposal}>
+            {t($ => $.operationCommands.loadProposal)}
+          </Button>}
+      </section>}
       <details className="operation-command-schema"><summary>{t($ => $.operationCommands.outputSchema)}</summary>
         <SchemaDetails schema={operation.mission.output_schema} direction="output" />
       </details>
@@ -106,14 +132,15 @@ export function CompleteOperationDialog({ connection, credentials, operation, av
         <textarea id={`${identity}-output`} rows={8} value={output} spellCheck={false} autoFocus disabled={disabled}
           aria-invalid={validation || error?.code === 'invalid_output' || undefined}
           aria-describedby={validation ? `${identity}-validation` : undefined}
-          onChange={event => { setOutput(event.target.value); setValidation(false); setReviewedAt(undefined); if (!locked) setError(undefined); }} />
+          onChange={event => { setOutput(event.target.value); setValidation(false); setReviewed(undefined); if (!locked) setError(undefined); }} />
       </div>
       {validation && <p className="form-error" id={`${identity}-validation`} role="alert">{t($ => $.operationCommands.invalidOutputJSON)}</p>}
       {finished ? <p className="notice" role="status">{t($ => $.operationCommands.finished)}</p>
         : !available ? <p className="notice" role="status">{t($ => $.operationCommands.refreshRequired)}</p>
           : blocker && <p className="notice" role="status">{t($ => $.operationCommands[blocker])}</p>}
       <label className="operation-completion-confirm"><input type="checkbox" checked={approved} disabled={disabled || Boolean(blocker)}
-        onChange={event => setReviewedAt(event.target.checked ? operation.updated_at : undefined)} />{t($ => $.operationCommands.completeConfirm)}</label>
+        onChange={event => setReviewed(event.target.checked ? { updatedAt: operation.updated_at, proposalID: proposal?.id,
+          proposalOutput: proposal?.outputText } : undefined)} />{t($ => $.operationCommands.completeConfirm)}</label>
       {error && <OperationCommandError error={error} operationID={operation.id} onInspect={() => onInspect(operation.id)} />}
       {readbackFailed && <p className="notice" role="alert">{t($ => $.operationCommands.completionReadbackFailed)}</p>}
       {submitting && <p className="form-hint" role="status">{t($ => $.operationCommands.submittingNote)}</p>}

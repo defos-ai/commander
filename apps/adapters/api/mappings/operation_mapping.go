@@ -30,6 +30,14 @@ func ToCompleteOperationCommand(operationID string, request models.CompleteOpera
 	}
 }
 
+func ToProposeCompletionCommand(operationID string, request models.ProposeCompletionRequest) controllercommands.ProposeCompletionCommand {
+	return controllercommands.ProposeCompletionCommand{
+		OperationID: operationID,
+		Output:      bytes.Clone(request.Output),
+		ProposedBy:  operations.CompletionOperator,
+	}
+}
+
 func ToFailOperationCommand(operationID string, request models.FailOperationRequest) controllercommands.FailOperationCommand {
 	return controllercommands.FailOperationCommand{
 		OperationID: operationID,
@@ -65,6 +73,11 @@ func toOperationResponse(operation operations.Operation, tasks []models.TaskResp
 	if operation.Preflight != nil {
 		preflight := ToPreflightResponse(*operation.Preflight)
 		response.Preflight = &preflight
+	}
+	if proposal := operation.CompletionProposal; proposal != nil {
+		response.CompletionProposal = &models.CompletionProposalResponse{
+			ID: proposal.ID, Output: bytes.Clone(proposal.Output), ProposedBy: string(proposal.ProposedBy), ProposedAt: proposal.ProposedAt,
+		}
 	}
 	if affinity != nil {
 		response.Affinity = &models.AffinityResponse{
