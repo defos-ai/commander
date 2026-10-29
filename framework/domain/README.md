@@ -37,14 +37,14 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and rules; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters, Runner start and rule selection. |
-| [`CompletionPolicy`](missions/completion_policy.go) | Declares the configured completion decision maker for the whole mission; retained independently in operation snapshots. | Mission validation, Adapters, mission/operation stores. Controller enforcement is a later step. |
+| [`CompletionPolicy`](missions/completion_policy.go) | Declares who may complete the whole mission; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
 | [`RuleSet`, `Rule`, `RuleParams`](missions/rule.go) | Express aggregation, model review and same-agent policy declaratively. | Runner rule selection, operation rule application, mission authoring. |
 
 ## Operations
 
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
-| [`Operation`](operations/operation.go) | Owns one mission run: its input, tasks, questions, event history and final output/report reference. | Runner scheduling/recovery, Controller question consumer, Queries, Adapters. |
+| [`Operation`](operations/operation.go), [`CompletionOrigin`](operations/operation_completion.go) | Own one mission run: its input, tasks, questions, event history, final output/report reference and accepted completion channel. | Runner scheduling/recovery, Controller question consumer, Queries, Adapters. |
 | [`Task`](operations/task.go) | Retains one action assignment, parentage, selected process, deadline, outcome and continuation. | Runner dispatch/results, Session coordinator, operation queries and Adapters. |
 | [`TaskDispatch`](operations/task_dispatch.go) | Supplies the process and timestamps for atomically claiming a queued task. | Runner, Session coordinator, OperationStore implementations. |
 | [`TaskResult`](operations/task_result.go) | Supplies an execution outcome for the atomic task/continuation/event transition. | Runner result reconciliation, OperationStore implementations. |

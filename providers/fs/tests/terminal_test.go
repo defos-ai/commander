@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
@@ -19,6 +20,7 @@ func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {
 	first, second := fixtures.NewDispatchStore(t, dir), fixtures.NewDispatchStore(t, dir)
 	op := fixtures.CreateCompletionOperation(t, first)
 	latest, err := second.Update(t.Context(), op.ID, func(next *operations.Operation) error {
+		next.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
 		// A decision already resolved by another writer must retain its version.
 		task := next.Clone().Tasks[0]
 		task.ID = id.TaskID()
@@ -35,13 +37,14 @@ func TestOperationCompletionPublishesReportAndDecisionsTogether(t *testing.T) {
 	output := json.RawMessage(`{"summary":"done"}`)
 	started := time.Now().UTC()
 
-	published, err := first.Complete(t.Context(), op.ID, reportID, output)
+	published, err := first.Complete(t.Context(), op.ID, reportID, output, operations.CompletionOperator)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 	expected := latest.Clone()
 	expected.Status, expected.ReportID, expected.Output = operations.Completed, reportID, bytes.Clone(output)
+	expected.CompletedBy = operations.CompletionOperator
 	expected.Tasks[0].Continuation.Status = operations.ContinuationResolved
 	expected.Tasks[0].Continuation.Version++
 	assertTerminalSnapshot(t, expected, published, operations.OperationCompleted, started)
@@ -80,6 +83,9 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 		{"output schema", func(op *operations.Operation) {
 			op.Mission.OutputSchema = json.RawMessage(`{"type":"object","required":["evidence"]}`)
 		}},
+		{"operator completion policy", func(op *operations.Operation) {
+			op.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -94,13 +100,16 @@ func TestOperationCompletionRejectsChangedStoredEligibility(t *testing.T) {
 			path := filepath.Join(dir, "operations", op.ID+".json")
 			before := fixtures.ReadDispatchFile(t, path)
 
-			published, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"done"}`))
+			published, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"done"}`), operations.CompletionModel)
 
 			if err == nil || published.ID != "" {
 				t.Fatalf("completion accepted stale eligibility: %+v, %v", published, err)
 			}
 			if tc.name == "pending question" && !errors.Is(err, operations.ErrQuestionPending) {
 				t.Fatalf("pending question lost its error identity: %v", err)
+			}
+			if tc.name == "operator completion policy" && !errors.Is(err, operations.ErrCompletionOperatorRequired) {
+				t.Fatalf("operator completion policy lost its error identity: %v", err)
 			}
 			if !bytes.Equal(before, fixtures.ReadDispatchFile(t, path)) {
 				t.Fatal("rejected completion changed the latest snapshot or storage revision")
@@ -114,7 +123,9 @@ func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T
 	store := fixtures.NewDispatchStore(t, dir)
 	op := fixtures.CreateCompletionOperation(t, store)
 	complete := func(reportID string, output json.RawMessage) func() (operations.Operation, error) {
-		return func() (operations.Operation, error) { return store.Complete(t.Context(), op.ID, reportID, output) }
+		return func() (operations.Operation, error) {
+			return store.Complete(t.Context(), op.ID, reportID, output, operations.CompletionModel)
+		}
 	}
 	fail := func(reason string) func() (operations.Operation, error) {
 		return func() (operations.Operation, error) { return store.Fail(t.Context(), op.ID, reason) }
@@ -128,6 +139,12 @@ func TestOperationTerminalWritesRejectInvalidInputsAndTerminalState(t *testing.T
 		{"noncanonical report ID", complete(strings.ToUpper("123e4567-e89b-12d3-a456-426614174000"), validOutput)},
 		{"malformed output", complete(validReportID, json.RawMessage(`{"summary":`))},
 		{"invalid output", complete(validReportID, json.RawMessage(`{}`))},
+		{"missing completion origin", func() (operations.Operation, error) {
+			return store.Complete(t.Context(), op.ID, validReportID, validOutput, "")
+		}},
+		{"unknown completion origin", func() (operations.Operation, error) {
+			return store.Complete(t.Context(), op.ID, validReportID, validOutput, "service")
+		}},
 		{"empty failure", fail("")},
 		{"blank failure", fail(" \t\n")},
 	} {
@@ -158,7 +175,7 @@ func TestOperationCompetingTerminalWritesPublishOneWinner(t *testing.T) {
 			compete := func() (operations.Operation, error) {
 				switch competingStatus {
 				case operations.Completed:
-					return second.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"second"}`))
+					return second.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"second"}`), operations.CompletionModel)
 				case operations.Failed:
 					return second.Fail(t.Context(), op.ID, "Cannot continue")
 				default:
@@ -172,7 +189,7 @@ func TestOperationCompetingTerminalWritesPublishOneWinner(t *testing.T) {
 			gate, results := make(chan struct{}), make(chan result, 2)
 			for _, call := range []func() (operations.Operation, error){
 				func() (operations.Operation, error) {
-					return first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"first"}`))
+					return first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"summary":"first"}`), operations.CompletionModel)
 				}, compete,
 			} {
 				go func() {

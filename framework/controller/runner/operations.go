@@ -127,7 +127,7 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 		if err != nil {
 			return operations.Operation{}, err
 		}
-		if err := next.ValidateCompletion(output); err != nil {
+		if err := next.ValidateCompletion(output, command.CompletedBy); err != nil {
 			return operations.Operation{}, err
 		}
 		report := reports.Report{ID: id.ReportID(), OperationID: next.ID, Mission: next.Mission.Name,
@@ -137,7 +137,7 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 		if err := r.reports.Put(ctx, report); err != nil {
 			return operations.Operation{}, fmt.Errorf("save operation report: %w", err)
 		}
-		next, err = r.store.Complete(ctx, command.OperationID, report.ID, output)
+		next, err = r.store.Complete(ctx, command.OperationID, report.ID, output, command.CompletedBy)
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}

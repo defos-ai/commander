@@ -442,19 +442,37 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 	for _, terminal := range []operations.Status{operations.Cancelled, operations.Failed, operations.Completed} {
 		t.Run(string(terminal), func(t *testing.T) {
 			first, _ := fixtures.OpenOperations(t)
-			second, _ := fixtures.OpenOperations(t)
-			op := fixtures.CreateOperation(t, first, fixtures.Operation())
+			second, database := fixtures.OpenOperations(t)
+			definition := fixtures.Operation()
+			if terminal == operations.Completed {
+				definition.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+			}
+			op := fixtures.CreateOperation(t, first, definition)
 			running := fixtures.QueueAndDispatch(t, first, op.ID, "inspect")
 			queued := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "report"})
 			var err error
 			if terminal == operations.Completed {
-				if _, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`)); err == nil {
+				if _, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`), operations.CompletionOperator); err == nil {
 					t.Fatal("completed an active task")
 				}
 				if _, err := first.FinishTask(t.Context(), op.ID, fixtures.SuccessfulTask(running)); err != nil {
 					t.Fatal(err)
 				}
-				op, err = second.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"score":9007199254740993}`))
+				before := fixtures.AllOperationDocuments(t, database)
+				for _, origin := range []operations.CompletionOrigin{"", "service", operations.CompletionModel} {
+					published, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`), origin)
+
+					if err == nil || published.ID != "" {
+						t.Fatalf("completion accepted a missing or ineligible origin %q: %+v, %v", origin, published, err)
+					}
+					if origin == operations.CompletionModel && !errors.Is(err, operations.ErrCompletionOperatorRequired) {
+						t.Fatalf("model rejection lost operator policy error: %v", err)
+					}
+					if !reflect.DeepEqual(before, fixtures.AllOperationDocuments(t, database)) {
+						t.Fatal("rejected completion changed operation collections")
+					}
+				}
+				op, err = second.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{"score":9007199254740993}`), operations.CompletionOperator)
 			} else {
 				if _, err := first.QueueTask(t.Context(), op.ID, queued); err != nil {
 					t.Fatal(err)
@@ -467,6 +485,9 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 			}
 			if err != nil || op.Status != terminal {
 				t.Fatalf("terminal transition: %+v, %v", op, err)
+			}
+			if terminal == operations.Completed && op.CompletedBy != operations.CompletionOperator {
+				t.Fatal("completion origin was not saved with terminal status")
 			}
 			if terminal != operations.Completed && op.Tasks[1].Status != operations.TaskCancelled {
 				t.Fatal("queued work remained runnable")
@@ -491,7 +512,7 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 				func() (operations.Operation, error) { return first.Cancel(t.Context(), op.ID) },
 				func() (operations.Operation, error) { return first.Fail(t.Context(), op.ID, "replace") },
 				func() (operations.Operation, error) {
-					return first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`))
+					return first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`), operations.CompletionModel)
 				},
 			} {
 				if _, err := mutate(); !errors.Is(err, operations.ErrFinished) {
@@ -567,7 +588,7 @@ func TestOperationMongoPreflightRecoveryAndNoopWrites(t *testing.T) {
 	if _, err := first.FinishTask(t.Context(), op.ID, fixtures.SuccessfulTask(running.Tasks[0])); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`)); err != nil {
+	if _, err := first.Complete(t.Context(), op.ID, id.ReportID(), json.RawMessage(`{}`), operations.CompletionModel); err != nil {
 		t.Fatal(err)
 	}
 	before = fixtures.AllOperationDocuments(t, database)

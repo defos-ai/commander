@@ -66,10 +66,11 @@ type OperationStore interface {
 	// answers before FallbackAt return ErrQuestionOperatorWaiting without writing.
 	// Operator answers remain valid before and after FallbackAt.
 	AnswerQuestion(ctx context.Context, operationID, questionID, answer string, answeredBy AnswerOrigin) (Operation, error)
-	// Complete rechecks eligibility and saves output, report reference, resolved
-	// model continuations, status, and event together. The caller must persist
-	// the immutable report first. Terminal operations return ErrFinished unchanged.
-	Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (Operation, error)
+	// Complete rechecks eligibility and completion authority against the saved
+	// mission, then saves output, report reference, origin, resolved model
+	// continuations, status, and event together. The caller must persist the
+	// immutable report first. Terminal operations return ErrFinished unchanged.
+	Complete(ctx context.Context, operationID, reportID string, output json.RawMessage, completedBy CompletionOrigin) (Operation, error)
 	// Fail saves the reason, terminal status, queued task cancellations, and event
 	// together. Running tasks can still finish; terminal operations return ErrFinished.
 	Fail(ctx context.Context, operationID, reason string) (Operation, error)

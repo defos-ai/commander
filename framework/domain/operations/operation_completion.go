@@ -6,12 +6,38 @@ import (
 	"strings"
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
-func (o Operation) ValidateCompletion(output json.RawMessage) error {
+type CompletionOrigin string
+
+const (
+	CompletionOperator CompletionOrigin = "operator"
+	CompletionModel    CompletionOrigin = "model"
+)
+
+func (origin CompletionOrigin) Validate() error {
+	if origin != CompletionOperator && origin != CompletionModel {
+		return errors.New("completion origin must be operator or model")
+	}
+	return nil
+}
+
+func (o Operation) ValidateCompletion(output json.RawMessage, completedBy CompletionOrigin) error {
 	if o.Status.Terminal() {
 		return ErrFinished
+	}
+	if err := completedBy.Validate(); err != nil {
+		return err
+	}
+	if policy := o.Mission.Completion; policy != nil {
+		if err := policy.Validate(); err != nil {
+			return err
+		}
+		if policy.DecisionBy == missions.Operator && completedBy != CompletionOperator {
+			return ErrCompletionOperatorRequired
+		}
 	}
 	for _, task := range o.Tasks {
 		if task.Status == TaskQueued || task.Status == TaskRunning {
@@ -34,8 +60,8 @@ func (o Operation) ValidateCompletion(output json.RawMessage) error {
 	return nil
 }
 
-func (o *Operation) Complete(reportID string, output json.RawMessage) error {
-	if err := o.ValidateCompletion(output); err != nil {
+func (o *Operation) Complete(reportID string, output json.RawMessage, completedBy CompletionOrigin) error {
+	if err := o.ValidateCompletion(output, completedBy); err != nil {
 		return err
 	}
 	if !id.Valid(reportID) {
@@ -48,7 +74,7 @@ func (o *Operation) Complete(reportID string, output json.RawMessage) error {
 		}
 	}
 	o.Output = append(json.RawMessage(nil), output...)
-	o.ReportID, o.Status = reportID, Completed
+	o.ReportID, o.Status, o.CompletedBy = reportID, Completed, completedBy
 	o.AppendEvent(OperationCompleted, "", "", "Operation completed")
 	o.UpdatedAt = time.Now().UTC()
 	return nil

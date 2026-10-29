@@ -57,14 +57,19 @@ can change; existing operations keep their original mission snapshot. Read the
 saved definition after an uncertain update before retrying.
 
 Optional `completion.decision_by` accepts `model` or `operator` and records the
-mission-wide policy in future operation snapshots. This currently stores
-configuration only; it does not yet enforce operator approval.
+mission-wide policy in future operation snapshots. `operator` requires completion
+through an operator channel, such as the authenticated HTTP API, with no model
+fallback. Omission or `model` also allows MCP completion.
 
 ## Operation commands
 
 Follow the [operation workflow](../README.md#operation-workflow): start an
 operation, inspect preflight, assign actions, resolve questions and decisions,
 then complete it with output matching the mission schema.
+
+`POST /api/v1/operations/{operation_id}/complete` accepts `{"output": ...}` and
+records `completed_by: operator`. The adapter assigns this origin; do not send it
+in the body. It identifies the submission channel, not a verified human identity.
 
 **Read saved state before retrying a timed-out command.** Accepted work may
 continue; repeating an assignment creates another task. Cancellation stops queued

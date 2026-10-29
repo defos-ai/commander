@@ -140,8 +140,9 @@ func (r AnswerQuestionCommand) Validate() error {
 }
 
 type CompleteOperationCommand struct {
-	OperationID string          `json:"operation_id"`
-	Output      json.RawMessage `json:"output"`
+	OperationID string                      `json:"operation_id"`
+	Output      json.RawMessage             `json:"output"`
+	CompletedBy operations.CompletionOrigin `json:"completed_by"`
 }
 
 func (r CompleteOperationCommand) Validate() error {
@@ -151,7 +152,7 @@ func (r CompleteOperationCommand) Validate() error {
 	if !json.Valid(r.Output) {
 		return errors.New("output must be valid JSON")
 	}
-	return nil
+	return r.CompletedBy.Validate()
 }
 
 type FailOperationCommand struct {

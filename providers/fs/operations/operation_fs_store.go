@@ -191,9 +191,9 @@ func (s *OperationFsStore) AnswerQuestion(ctx context.Context, operationID, ques
 	})
 }
 
-func (s *OperationFsStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
+func (s *OperationFsStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage, completedBy operations.CompletionOrigin) (operations.Operation, error) {
 	return s.Update(ctx, operationID, func(operation *operations.Operation) error {
-		return operation.Complete(reportID, output)
+		return operation.Complete(reportID, output, completedBy)
 	})
 }
 

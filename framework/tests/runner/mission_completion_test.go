@@ -2,9 +2,13 @@ package runner_test
 
 import (
 	"encoding/json"
+	"errors"
+	"reflect"
 	"testing"
 
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
@@ -77,6 +81,87 @@ func TestMissionCompletionPolicyValidation(t *testing.T) {
 			}
 			if _, exists := saved["completion"]; exists {
 				t.Fatal("an absent completion policy was written to JSON")
+			}
+		})
+	}
+}
+
+func TestOperatorCompletionRejectsModelBeforeSavingReport(t *testing.T) {
+	config := fixtures.Config()
+	catalog := config.MissionStore.(*fakes.MissionStore)
+	catalog.Change(func(m *missions.Mission) {
+		m.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+	})
+	reports := fakes.NewTerminalReportStore()
+	config.ReportStore = reports
+	r := fixtures.NewRunner(t, config, fakes.Executor{})
+	op := fixtures.Start(t, r)
+	catalog.Change(func(m *missions.Mission) { m.Completion.DecisionBy = missions.Model })
+	command := commands.CompleteOperationCommand{
+		OperationID: op.ID, Output: json.RawMessage(`{"review":"done"}`), CompletedBy: operations.CompletionModel,
+	}
+
+	_, completeErr := r.Complete(t.Context(), command)
+	retained, err := r.Get(t.Context(), op.ID)
+
+	if !errors.Is(completeErr, operations.ErrCompletionOperatorRequired) || err != nil ||
+		!reflect.DeepEqual(retained, op) || reports.Count() != 0 {
+		t.Fatalf("model completion changed an operator-controlled operation or saved a report: %v, %v", completeErr, err)
+	}
+	command.CompletedBy = operations.CompletionOperator
+
+	completed, err := r.Complete(t.Context(), command)
+	report, reportErr := r.GetReport(t.Context(), op.ID)
+
+	if err != nil || completed.Status != operations.Completed || completed.CompletedBy != operations.CompletionOperator ||
+		reportErr != nil || report.ID != completed.ReportID || reports.Count() != 1 {
+		t.Fatalf("operator could not complete the retained policy: %+v, %v, %v", completed, err, reportErr)
+	}
+}
+
+func TestCompletionAllowsModelAndOperatorWithoutOperatorPolicy(t *testing.T) {
+	for _, policy := range []missions.Decision{"", missions.Model} {
+		for _, origin := range []operations.CompletionOrigin{operations.CompletionModel, operations.CompletionOperator} {
+			t.Run("policy="+string(policy)+"/origin="+string(origin), func(t *testing.T) {
+				config := fixtures.Config()
+				if policy != "" {
+					config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
+						m.Completion = &missions.CompletionPolicy{DecisionBy: policy}
+					})
+				}
+				r := fixtures.NewRunner(t, config, fakes.Executor{})
+				op := fixtures.Start(t, r)
+
+				completed, err := r.Complete(t.Context(), commands.CompleteOperationCommand{
+					OperationID: op.ID, Output: json.RawMessage(`{}`), CompletedBy: origin,
+				})
+
+				if err != nil || completed.Status != operations.Completed || completed.CompletedBy != origin {
+					t.Fatalf("completion rejected a valid origin or lost it: %+v, %v", completed, err)
+				}
+			})
+		}
+	}
+}
+
+func TestCompletionRequiresValidOrigin(t *testing.T) {
+	config := fixtures.Config()
+	reports := fakes.NewTerminalReportStore()
+	config.ReportStore = reports
+	r := fixtures.NewRunner(t, config, fakes.Executor{})
+	op := fixtures.Start(t, r)
+	for _, origin := range []operations.CompletionOrigin{"", "human", "Model", "operator "} {
+		t.Run(string(origin), func(t *testing.T) {
+			command := commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{}`), CompletedBy: origin}
+			next := op.Clone()
+
+			_, completeErr := r.Complete(t.Context(), command)
+			domainErr := next.ValidateCompletion(command.Output, origin)
+			retained, err := r.Get(t.Context(), op.ID)
+
+			if completeErr == nil || domainErr == nil || err != nil ||
+				!reflect.DeepEqual(next, op) || !reflect.DeepEqual(retained, op) || reports.Count() != 0 {
+				t.Fatal("missing or unknown completion origin was accepted or changed state")
 			}
 		})
 	}

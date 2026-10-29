@@ -104,6 +104,8 @@ func writeCommandResult(w http.ResponseWriter, status int, location string, valu
 		endpoints.WriteError(w, http.StatusConflict, "operation_conflict")
 	case errors.Is(err, operations.ErrFinished):
 		endpoints.WriteError(w, http.StatusConflict, "operation_finished")
+	case errors.Is(err, operations.ErrCompletionOperatorRequired):
+		endpoints.WriteError(w, http.StatusConflict, "completion_operator_required")
 	case errors.Is(err, operations.ErrActiveTasks):
 		endpoints.WriteError(w, http.StatusConflict, "operation_active_tasks")
 	case errors.Is(err, operations.ErrUnresolvedWork):

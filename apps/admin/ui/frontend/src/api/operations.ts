@@ -152,6 +152,7 @@ function isProgress(value: unknown): value is OperationProgress {
 export function isOperation(value: unknown): value is Operation {
   return isObject(value) && isIdentifier(value.id) && isMission(value.mission) && 'input' in value &&
     typeof value.status === 'string' && isOptionalString(value.report_id) && isOptionalString(value.error) &&
+    (value.completed_by === undefined || value.completed_by === 'operator' || value.completed_by === 'model') &&
     isDate(value.created_at) && isDate(value.updated_at) && isProgress(value.progress) &&
     (value.affinity === undefined || isAffinity(value.affinity)) &&
     (value.preflight === undefined || value.preflight === null || isPreflight(value.preflight)) &&

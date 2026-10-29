@@ -21,19 +21,20 @@ const (
 func (s Status) Terminal() bool { return s == Completed || s == Failed || s == Cancelled }
 
 type Operation struct {
-	ID        string           `json:"id"`
-	Mission   missions.Mission `json:"mission"`
-	Input     json.RawMessage  `json:"input"`
-	Status    Status           `json:"status"`
-	Preflight *Preflight       `json:"preflight,omitempty"`
-	Tasks     []Task           `json:"tasks"`
-	Questions []Question       `json:"questions"`
-	Output    json.RawMessage  `json:"output,omitempty"`
-	ReportID  string           `json:"report_id,omitempty"`
-	Error     string           `json:"error,omitempty"`
-	Events    []Event          `json:"events"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	ID          string           `json:"id"`
+	Mission     missions.Mission `json:"mission"`
+	Input       json.RawMessage  `json:"input"`
+	Status      Status           `json:"status"`
+	Preflight   *Preflight       `json:"preflight,omitempty"`
+	Tasks       []Task           `json:"tasks"`
+	Questions   []Question       `json:"questions"`
+	Output      json.RawMessage  `json:"output,omitempty"`
+	ReportID    string           `json:"report_id,omitempty"`
+	CompletedBy CompletionOrigin `json:"completed_by,omitempty"`
+	Error       string           `json:"error,omitempty"`
+	Events      []Event          `json:"events"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
 }
 
 func (o Operation) Clone() Operation {

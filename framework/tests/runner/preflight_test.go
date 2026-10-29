@@ -203,7 +203,7 @@ func TestPreflightPersistsAcrossRestartAndRediscoveryResumesQueuedWork(t *testin
 	if !finished.Preflight.Ready || finished.Preflight.Version != 3 || len(finished.Tasks) != 1 || finished.Tasks[0].ID != task.ID || job.Call.Work.TaskID != task.ID {
 		t.Fatalf("rediscovery duplicated or failed to resume work: %+v", finished)
 	}
-	_, err = r.Complete(t.Context(), commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{}`)})
+	_, err = r.Complete(t.Context(), commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{}`), CompletedBy: operations.CompletionModel})
 	if err != nil {
 		t.Fatal(err)
 	}

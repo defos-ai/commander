@@ -12,6 +12,7 @@ export interface Operation {
   questions: OperationQuestion[] | null;
   output?: unknown;
   report_id?: string;
+  completed_by?: 'operator' | 'model';
   error?: string;
   events: OperationEvent[] | null;
   created_at: string;

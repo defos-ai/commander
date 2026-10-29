@@ -112,8 +112,8 @@ func (s *UncertainWriteStore) Cancel(ctx context.Context, operationID string) (o
 	return op, err
 }
 
-func (s *UncertainWriteStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
-	op, err := s.OperationStore.Complete(ctx, operationID, reportID, output)
+func (s *UncertainWriteStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage, completedBy operations.CompletionOrigin) (operations.Operation, error) {
+	op, err := s.OperationStore.Complete(ctx, operationID, reportID, output, completedBy)
 	if err == nil && s.AfterComplete != nil {
 		err = s.AfterComplete(op)
 	}

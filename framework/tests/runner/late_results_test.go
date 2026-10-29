@@ -92,7 +92,7 @@ func TestLateExecutionOutcomeSettlesTerminalOperation(t *testing.T) {
 			var err error
 			switch status {
 			case operations.Completed:
-				terminal, err = r.Complete(t.Context(), commands.CompleteOperationCommand{OperationID: interrupted.ID,
+				terminal, err = r.Complete(t.Context(), commands.CompleteOperationCommand{OperationID: interrupted.ID, CompletedBy: operations.CompletionModel,
 					Output: json.RawMessage(`{"limitations":["The execution outcome is still unknown"]}`)})
 			case operations.Cancelled:
 				terminal, err = r.Cancel(t.Context(), commands.CancelOperationCommand{OperationID: interrupted.ID})

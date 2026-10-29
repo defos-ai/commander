@@ -82,6 +82,9 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
 			if model.name == "Operation" {
 				schema.Properties["affinity"].Description = "Derived same-agent placement. Queued tasks remain unassigned until dispatch; affinity does not change their agent_id."
+				schema.Properties["completed_by"].Enum = []any{"operator", "model"}
+				schema.Properties["completed_by"].ReadOnly = true
+				schema.Properties["completed_by"].Description = "Origin of the accepted completion, assigned by the submitting adapter: operator for the HTTP API, model for MCP. Absent until completion is saved."
 			}
 		case "GraphNode":
 			schema.Properties["kind"].Enum = []any{"task", "artifact", "file"}
@@ -336,8 +339,8 @@ func openAPICommandPaths(paths map[string]any) {
 		},
 		{
 			path: operation + "/complete", id: "completeOperation", summary: "Complete an operation",
-			description: "Completes an operation and returns the full updated operation with report_id. output must be present and match the mission's output schema; null is accepted when that schema allows it. Queued or running tasks, pending questions, and unresolved automatic or operator continuations block completion. Pending model continuations are resolved during completion. The report is saved before the operation is marked completed. The path supplies operation_id; it is not accepted in the body.",
-			request:     "CompleteOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict, operation_finished, operation_active_tasks, question_pending or operation_unresolved_work",
+			description: "Completes an operation and returns the full updated operation with report_id and completed_by. HTTP API completion has operator origin, assigned by the adapter, and can complete missions with completion.decision_by=operator. output must be present and match the mission's output schema; null is accepted when that schema allows it. Queued or running tasks, pending questions, and unresolved automatic or operator continuations block completion. Pending model continuations are resolved during completion. The report is saved before the operation is marked completed. The path supplies operation_id; neither operation_id nor completed_by is accepted in the body.",
+			request:     "CompleteOperationRequest", response: "Operation", status: "200", missing: "operation_not_found", conflict: "operation_conflict, operation_finished, completion_operator_required, operation_active_tasks, question_pending or operation_unresolved_work",
 			bodyRequired: true, validationError: "invalid_output",
 		},
 		{

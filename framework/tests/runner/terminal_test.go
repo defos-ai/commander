@@ -36,7 +36,7 @@ func TestCompletionWriteFailurePreservesReportOrderingAndRetry(t *testing.T) {
 			} else {
 				config.OperationStore.(*fakes.OperationStore).FailNextUpdate(failure)
 			}
-			command := commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{"review":"done"}`)}
+			command := commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{"review":"done"}`), CompletedBy: operations.CompletionModel}
 
 			_, completeErr := r.Complete(t.Context(), command)
 			stored, err := r.Get(t.Context(), op.ID)
@@ -90,7 +90,7 @@ func TestCompletionRechecksStateAfterPublishingReport(t *testing.T) {
 		return err
 	})
 
-	_, completeErr := r.Complete(t.Context(), commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{}`)})
+	_, completeErr := r.Complete(t.Context(), commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{}`), CompletedBy: operations.CompletionModel})
 	stored, err := r.Get(t.Context(), op.ID)
 	if !errors.Is(completeErr, operations.ErrFinished) || err != nil || failed.Status != operations.Failed || !reflect.DeepEqual(stored, failed) || reportStore.Count() != 1 {
 		t.Fatalf("completion overwrote a terminal state committed during report publication: %+v, complete=%v, get=%v", stored, completeErr, err)
@@ -115,7 +115,7 @@ func TestUncertainCompletionRetainsReportThroughRecovery(t *testing.T) {
 		_ = first.Close(ctx)
 	})
 	op := fixtures.Start(t, first)
-	command := commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{"review":"done"}`)}
+	command := commands.CompleteOperationCommand{OperationID: op.ID, Output: json.RawMessage(`{"review":"done"}`), CompletedBy: operations.CompletionOperator}
 	_, completeErr := first.Complete(t.Context(), command)
 	_, eventErr := first.Events(t.Context(), op.ID, 0, false)
 	_, retryErr := first.Complete(t.Context(), command)
@@ -126,7 +126,7 @@ func TestUncertainCompletionRetainsReportThroughRecovery(t *testing.T) {
 		}
 	}
 	stored, err := first.Get(t.Context(), op.ID)
-	if err != nil || stored.Status != operations.Completed || stored.ReportID == "" || !reflect.DeepEqual(stored.Output, command.Output) || len(stored.Events) != len(op.Events)+1 {
+	if err != nil || stored.Status != operations.Completed || stored.CompletedBy != command.CompletedBy || stored.ReportID == "" || !reflect.DeepEqual(stored.Output, command.Output) || len(stored.Events) != len(op.Events)+1 {
 		t.Fatalf("uncertain completion lost its visible snapshot: %+v, %v", stored, err)
 	}
 	savedReport, err := first.GetReport(t.Context(), op.ID)

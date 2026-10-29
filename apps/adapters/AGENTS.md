@@ -95,8 +95,13 @@
   including nullable optional collections and open JSON Schema documents.
   Optional `completion` is a mission-wide setting with required `decision_by`
   of `model` or `operator` when present; omitted/null stays absent. Preserve it
-  in mission reads and operation snapshots. This contract step does not change
-  completion authorization; controller enforcement is a separate change.
+  in mission reads and operation snapshots. Operator policy rejects MCP completion;
+  omitted/model policy retains ordinary model completion. HTTP completion stamps
+  `operator`, MCP stamps `model`; keep `completed_by` out of public inputs and
+  expose its saved value in operation reads. It identifies the submission path,
+  not proof of human identity. Rejections leave the operation/report unchanged;
+  direct operators to the authenticated HTTP completion API without inventing
+  Admin controls or URLs. Question answers and fallback do not approve completion.
 - `update_mission` accepts that same complete flat definition. Read
   `describe_mission` first and keep its unique name unchanged. Require the target
   through `MissionStore.Get` before `Upsert`; unknown names must not create a

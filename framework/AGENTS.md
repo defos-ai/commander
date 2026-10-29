@@ -60,9 +60,15 @@
 - Optional mission `completion` stores a mission-wide `CompletionPolicy` with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
   an empty object is invalid. Clone its pointer independently in mission and
-  operation snapshots. This contract step does not enforce completion origin or
-  add approval transitions; never advertise the setting as an authorization gate
-  until controller enforcement is implemented. Action-scoped rules remain unchanged.
+  operation snapshots. An operator policy rejects model completion; omitted/model
+  policies allow either channel. Trusted adapters stamp required completion origin:
+  HTTP API uses `operator`, MCP uses `model`; public bodies cannot choose it.
+  Runner validation rejects unauthorized completion before report publication,
+  and stores recheck authority inside the atomic transition. Save `completed_by`
+  with accepted completion, retaining it through recovery and late outcomes.
+  This records the submission channel, not proof of a human's identity. There is
+  no question timeout or model fallback for operator completion. Action-scoped
+  rules remain unchanged; no approval request/draft workflow is introduced here.
 - Optional mission `action_definitions` reuses `actions.Definition` for desired
   capabilities. Keep at most 100 unique trimmed names, each referenced by required,
   optional actions. Compile both explicit object schemas with

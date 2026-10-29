@@ -57,6 +57,7 @@ var errorCodes = []struct {
 	{"unknown_report", reports.ErrUnknownReport},
 	{"runner_closed", operations.ErrClosed},
 	{"operation_finished", operations.ErrFinished},
+	{"completion_operator_required", operations.ErrCompletionOperatorRequired},
 	{"question_pending", operations.ErrQuestionPending},
 	{"task_not_running", operations.ErrNotRunning},
 	{"invalid_input", domain.ErrInvalidInput},

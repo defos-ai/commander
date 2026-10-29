@@ -54,7 +54,10 @@ type AnswerQuestionRequest struct {
 	QuestionID  string `json:"question_id"`
 	Answer      string `json:"answer"`
 }
-type CompleteOperationRequest commands.CompleteOperationCommand
+type CompleteOperationRequest struct {
+	OperationID string          `json:"operation_id"`
+	Output      json.RawMessage `json:"output"`
+}
 type FailOperationRequest commands.FailOperationCommand
 type OperationEventsRequest struct {
 	OperationPageRequest
@@ -242,9 +245,15 @@ func addOperationTools(server *mcp.Server, config Config) {
 			})
 			return commandOperation(operation, questionAnswerError(ctx, query, request, err))
 		})
-	addTool(server, "complete_operation", "Save a final report and complete an operation, after active tasks and questions are resolved. Output must match output_schema. Returns report_id; read the saved report with get_report. Describe remaining limitations in the report.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
+	addTool(server, "complete_operation", "Save a final report and complete an operation, after active tasks and questions are resolved. MCP completion has model origin. If the saved mission sets completion.decision_by to operator, ask the operator to review the final output and complete through the authenticated HTTP API; this tool cannot approve it, and question fallback never grants completion approval. Output must match output_schema. Returns report_id; read the saved report with get_report. Describe remaining limitations in the report.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
 		func(ctx context.Context, request CompleteOperationRequest) (operationResult, error) {
-			return commandOperation(execution.Complete(ctx, commands.CompleteOperationCommand(request)))
+			operation, err := execution.Complete(ctx, commands.CompleteOperationCommand{
+				OperationID: request.OperationID, Output: request.Output, CompletedBy: operations.CompletionModel,
+			})
+			if errors.Is(err, operations.ErrCompletionOperatorRequired) && !errors.Is(err, operations.ErrWriteUncertain) {
+				err = fmt.Errorf("completion_operator_required: %w; ask the operator to review the final output and complete through the authenticated HTTP API. MCP cannot approve completion; question fallback does not change this policy", err)
+			}
+			return commandOperation(operation, err)
 		})
 	addTool(server, "fail_operation", "End unrecoverable work, retaining results and the reason. Consider recovery or an operator decision first.", objectSchema(map[string]any{"operation_id": stringProperty, "reason": stringProperty}, "operation_id", "reason"),
 		func(ctx context.Context, request FailOperationRequest) (operationResult, error) {
@@ -296,7 +305,7 @@ func missionDefinitionSchema() string {
 			"type": []string{"object", "null"}, "additionalProperties": false,
 			"required":    []string{"decision_by"},
 			"properties":  map[string]any{"decision_by": map[string]any{"type": "string", "enum": []string{"model", "operator"}}},
-			"description": "Optional mission-wide completion decision setting, retained in operation snapshots.",
+			"description": "Optional mission-wide completion decision setting, retained in operation snapshots. Operator policy requires completion through the authenticated HTTP API; MCP completion has model origin and cannot approve it.",
 		},
 		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
 			"description": "Ordered mission objectives; include at least one nonblank objective."},

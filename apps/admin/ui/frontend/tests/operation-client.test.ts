@@ -12,6 +12,14 @@ function proxyTarget(input: RequestInfo | URL) {
 }
 
 describe('operations client', () => {
+  it.each(['operator', 'model'] as const)('retains %s completion provenance', async completedBy => {
+    respond({ ...operation, status: 'completed', completed_by: completedBy });
+
+    const detail = await getOperation(url, credentials, operation.id);
+
+    expect(detail.completed_by).toBe(completedBy);
+  });
+
   it.each(['operator', 'model'] as const)('retains %s question answer provenance', async answeredBy => {
     const answered = { ...operation, questions: [{ ...operation.questions![0], status: 'answered', answer: 'Proceed', answered_by: answeredBy }] };
     respond(answered);
@@ -94,6 +102,8 @@ describe('operations client', () => {
 
   it.each([
     { mission: { ...operation.mission, starting_actions: 'discover-pages' } },
+    { completed_by: 'admin' },
+    { completed_by: null },
     { tasks: [{ ...operation.tasks![0], result: { action_name: 'check-links', output: null, artifacts: [{ id: 'artifact-1', files: 'unexpected' }] } }] },
     { tasks: [{ ...operation.tasks![0], continuation: { ...operation.tasks![0].continuation, created_task_ids: [42] } }] },
     { tasks: [{ ...operation.tasks![0], finished_at: 'not a date' }] },

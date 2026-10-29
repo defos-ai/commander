@@ -65,9 +65,9 @@ func (s *OperationMongoStore) AnswerQuestion(ctx context.Context, operationID, q
 	})
 }
 
-func (s *OperationMongoStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage) (operations.Operation, error) {
+func (s *OperationMongoStore) Complete(ctx context.Context, operationID, reportID string, output json.RawMessage, completedBy operations.CompletionOrigin) (operations.Operation, error) {
 	return s.update(ctx, operationID, func(operation *operations.Operation) error {
-		return operation.Complete(reportID, output)
+		return operation.Complete(reportID, output, completedBy)
 	})
 }
 

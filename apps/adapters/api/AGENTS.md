@@ -62,8 +62,15 @@
   and explicit null stay omitted, while a present object requires exact
   `decision_by: model|operator` and rejects unknown fields. OpenAPI must describe
   this separately from action-scoped rule parameters. Preserve the configured
-  policy in catalog and operation responses. This contract step does not enforce
-  completion authority; keep controller commands and lifecycle unchanged.
+  policy in catalog and operation responses. The controller enforces the saved
+  operation policy: `operator` rejects model-origin completion without a timed
+  fallback; omitted/model policies permit either origin.
+- Completion requests remain output-only. Stamp `CompletedBy=CompletionOperator`
+  in the trusted HTTP mapping; reject client-supplied `completed_by`. Expose the
+  saved origin as optional, read-only `Operation.completed_by` and preserve it on
+  queries and command responses. This records the submission channel, not human
+  identity. Map `ErrCompletionOperatorRequired` to `409 completion_operator_required`
+  after uncertain-write and transport errors so ambiguity cannot look like rejection.
 - Operation/task/report/event/log queries use the shared framework
   [`queries.Operations`](../../../framework/queries/) service; keep live requirement
   enrichment out of handlers and mappings. Commands validate API input and send
