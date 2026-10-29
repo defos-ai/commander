@@ -311,7 +311,7 @@ func TestAdminReviewLinksFollowCompletedOperations(t *testing.T) {
 	}
 	command("/clear")
 	u.Wait("cleared model history", func(view string) bool { return strings.Contains(view, "Model conversation cleared") })
-	operations.Publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now, Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
+	operations.Publish(bridge.Operation{ID: "second", Status: "completed", UpdatedAt: now.Add(5 * time.Second), Progress: bridge.Progress{TaskCounts: map[string]int{}, Settled: true}})
 	command("/watch second")
 	u.Wait("second completed operation", func(view string) bool { return strings.Contains(view, "second · completed") })
 	countLinks(2)
