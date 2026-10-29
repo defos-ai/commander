@@ -13,9 +13,10 @@ schemas; existing operations keep their original mission snapshot. After an
 uncertain update, read the saved definition before retrying.
 
 When the saved mission sets `completion.decision_by` to `operator`, ask the
-operator to review the final output and submit it through the authenticated HTTP
-completion API. MCP cannot approve completion; question answers and fallback do
-not grant this approval.
+operator to review the final output and choose **Complete operation** in
+[Admin UI](../../admin/ui/README.md#review-operations), or submit it through the
+authenticated HTTP API. MCP cannot approve completion; question answers and
+fallback do not grant this approval.
 
 For an operation question, direct the operator to Admin's **Questions** section.
 Use the returned `fallback_at` to schedule a fresh `get_operation`; if the

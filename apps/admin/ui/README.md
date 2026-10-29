@@ -55,6 +55,12 @@ Questions show the model waiting countdown and who supplied a saved answer.
 You can still answer after the countdown; if another answer arrives while your
 form is open, inspect the saved answer before continuing.
 
+Choose **Complete operation** to review objectives and task outcomes, enter the
+final output as JSON, and confirm completion. The dialog shows the mission's
+output schema. Report limitations and unknown outcomes in that output; completion
+accepts the final report without certifying every task succeeded. After an
+uncertain submission, choose **View operation** before submitting again.
+
 ## Create and edit missions
 
 1. Open **Missions → Create mission** and enter a name and objectives.

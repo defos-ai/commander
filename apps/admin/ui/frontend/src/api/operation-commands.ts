@@ -7,7 +7,9 @@ import { encodeIdentifier, isIdentifier, isObject } from './validation';
 export type CommandErrorKind = 'authentication' | 'forbidden' | 'not_found' | 'invalid_input' | 'conflict' | 'unknown';
 const errorCodes = [
   'operation_conflict', 'operation_finished', 'question_answered', 'question_operator_waiting',
+  'operation_active_tasks', 'operation_unresolved_work', 'question_pending', 'completion_operator_required',
   'invalid_request', 'invalid_input', 'invalid_operation_id', 'invalid_question_id', 'invalid_request_origin',
+  'invalid_output',
   'mission_not_found', 'operation_not_found', 'question_not_found',
 ] as const;
 export type CommandErrorCode = typeof errorCodes[number];
@@ -41,13 +43,16 @@ function responseError(status: number, body: unknown): CommandError {
   return new CommandError(kind, kind === 'unknown' ? undefined : code);
 }
 
-async function postOperation(url: string, path: string, credentials: Session, operationID: string, body: unknown, signal?: AbortSignal): Promise<Operation> {
+function commandBody(value: unknown): string {
+  try { return JSON.stringify(value); }
+  catch { throw new CommandError('invalid_input'); }
+}
+
+async function postOperation(url: string, path: string, credentials: Session, operationID: string, body: string, signal?: AbortSignal, successStatus?: number): Promise<Operation> {
   if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
   let endpoint: string;
-  let encodedBody: string;
   try {
     endpoint = proxyURL(url, path, credentials);
-    encodedBody = JSON.stringify(body);
   } catch {
     throw new CommandError('invalid_input');
   }
@@ -65,13 +70,14 @@ async function postOperation(url: string, path: string, credentials: Session, op
   async function send() {
     const response = await fetch(endpoint, {
       method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Commander-UI': '1' },
-      credentials: 'same-origin', redirect: 'error', cache: 'no-store', body: encodedBody, signal: controller.signal,
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', body, signal: controller.signal,
     });
     if (response.status === 401 && !controller.signal.aborted) expireSession(url);
     let result: unknown;
     try { result = await response.json(); }
     catch { if (response.ok) throw new CommandError('unknown'); }
     if (!response.ok) throw responseError(response.status, result);
+    if (successStatus !== undefined && response.status !== successStatus) throw new CommandError('unknown');
     if (!isOperation(result) || result.id !== operationID) throw new CommandError('unknown');
     return result;
   }
@@ -90,14 +96,25 @@ async function postOperation(url: string, path: string, credentials: Session, op
 
 export async function startOperation(url: string, credentials: Session, input: StartOperationInput, signal?: AbortSignal): Promise<Operation> {
   if (!isIdentifier(input.operation_id) || !input.mission_name.trim() || input.input === undefined) throw new CommandError('invalid_input');
-  return postOperation(url, '/api/v1/operations', credentials, input.operation_id, input, signal);
+  return postOperation(url, '/api/v1/operations', credentials, input.operation_id, commandBody(input), signal);
 }
 
 export async function cancelOperation(url: string, credentials: Session, id: string, signal?: AbortSignal): Promise<Operation> {
-  return postOperation(url, `/api/v1/operations/${commandIdentifier(id)}/cancel`, credentials, id, {}, signal);
+  return postOperation(url, `/api/v1/operations/${commandIdentifier(id)}/cancel`, credentials, id, '{}', signal);
+}
+
+export async function completeOperation(url: string, credentials: Session, id: string, output: string, signal?: AbortSignal): Promise<Operation> {
+  if (typeof output !== 'string') throw new CommandError('invalid_input');
+  try { JSON.parse(output); }
+  catch { throw new CommandError('invalid_input'); }
+  const operation = await postOperation(url, `/api/v1/operations/${commandIdentifier(id)}/complete`, credentials, id, `{"output":${output}}`, signal, 200);
+  if (operation.status !== 'completed' || operation.completed_by !== 'operator' || !operation.report_id?.trim()) {
+    throw new CommandError('unknown');
+  }
+  return operation;
 }
 
 export async function answerQuestion(url: string, credentials: Session, operationID: string, questionID: string, answer: string, signal?: AbortSignal): Promise<Operation> {
   if (!answer.trim()) throw new CommandError('invalid_input');
-  return postOperation(url, `/api/v1/operations/${commandIdentifier(operationID)}/questions/${commandIdentifier(questionID)}/answer`, credentials, operationID, { answer }, signal);
+  return postOperation(url, `/api/v1/operations/${commandIdentifier(operationID)}/questions/${commandIdentifier(questionID)}/answer`, credentials, operationID, commandBody({ answer }), signal);
 }

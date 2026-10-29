@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import type { OperationQuestion, OperationTask } from '../../src/api/operation-types';
+import type { Operation, OperationQuestion, OperationTask } from '../../src/api/operation-types';
 import type { Report } from '../../src/api/reports';
 import type { Action, Agent } from '../../src/api/types';
 import { connect, password, publicAPIURL, startOperation, test, username } from '../fixtures/e2e';
@@ -314,9 +314,17 @@ test('operation questions, automatic work, graph and downloads use the real stac
 
   const decision = finished.tasks!.find(task => task.id === root.id)!.continuation!;
   await api.post(`${path}/tasks/${root.id}/continuation/resolve`, { version: decision.version, actions: [] });
-  await api.post(`${path}/complete`, { output: { summary: 'Analyzed the example text and saved its summary.' } });
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.getByRole('button', { name: 'Complete operation', exact: true }).click();
+  const completion = page.getByRole('dialog', { name: 'Complete operation', exact: true });
+  await expect(completion.getByRole('button', { name: 'Complete operation', exact: true })).toBeDisabled();
+  await completion.getByLabel('Final output (JSON)', { exact: true }).fill('{"summary":"Analyzed the example text and saved its summary."}');
+  await completion.getByRole('checkbox', { name: 'I have reviewed the final output and approve completion.', exact: true }).check();
+  await completion.getByRole('button', { name: 'Complete operation', exact: true }).click();
+  await expect(completion).not.toBeVisible();
+  expect(await api.get<Operation>(path)).toMatchObject({ status: 'completed', completed_by: 'operator' });
+  await expect(page.getByText('Completed by', { exact: true }).locator('..')).toContainText('Operator');
   await page.getByRole('button', { name: 'View report', exact: true }).click();
   const reportDialog = page.getByRole('dialog', { name: 'Operation report', exact: true });
   await expect(reportDialog.getByRole('region', { name: 'Report output' })).toContainText('Analyzed the example text and saved its summary.');

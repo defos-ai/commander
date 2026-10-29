@@ -20,6 +20,13 @@
 .operation-command-option:has(input:checked) { border-color: var(--green); }
 .operation-command-option input { flex-shrink: 0; margin-top: 4px; accent-color: var(--green); }
 .operation-command-question { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.operation-completion-review { display: grid; gap: 11px; min-width: 0; }
+.operation-completion-review h3, .operation-completion-review summary { font-size: 13px; }
+.operation-completion-review summary { cursor: pointer; }
+.operation-completion-tasks { display: grid; gap: 12px; padding: 12px 0 0; list-style: none; }
+.operation-completion-tasks > li { display: grid; gap: 7px; min-width: 0; }
+.operation-completion-confirm { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.6; }
+.operation-completion-confirm input { flex-shrink: 0; margin-top: 4px; accent-color: var(--green); }
 @media (max-width: 760px) {
   .operation-command-form .dialog-actions .button { flex: 1 1 auto; white-space: nowrap; }
 }

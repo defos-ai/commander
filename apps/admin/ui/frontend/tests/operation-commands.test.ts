@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { answerQuestion, cancelOperation, CommandError, startOperation } from '../src/api/operation-commands';
+import { answerQuestion, cancelOperation, completeOperation, CommandError, startOperation } from '../src/api/operation-commands';
 import { respondJSON as respond } from './fakes/fetch';
-import { credentials, id, input, operation, url } from './fixtures/operation-commands';
+import { completedOperation, credentials, id, input, operation, url } from './fixtures/operation-commands';
 
 function requestedPath(input: RequestInfo | URL): string {
   const request = new URL(String(input), 'http://localhost');
@@ -14,23 +14,26 @@ function requestedPath(input: RequestInfo | URL): string {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('operation commands', () => {
-  it('posts start, cancel and answer as JSON through the session proxy without API credentials or redirects', async () => {
+  it('posts start, cancel, answer and completion through the session proxy without API credentials or redirects', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(Response.json(operation, { status: 201 }))
       .mockResolvedValueOnce(Response.json({ ...operation, status: 'cancelled' }))
-      .mockResolvedValueOnce(Response.json(operation));
+      .mockResolvedValueOnce(Response.json(operation))
+      .mockResolvedValueOnce(Response.json(completedOperation));
     vi.stubGlobal('fetch', fetch);
 
     expect(await startOperation(`${url}/`, credentials, input)).toEqual(operation);
     expect(await cancelOperation(url, credentials, id)).toEqual({ ...operation, status: 'cancelled' });
     expect(await answerQuestion(url, credentials, id, 'question-1', 'Continue with HTTP checks')).toEqual(operation);
+    expect(await completeOperation(url, credentials, id, JSON.stringify(completedOperation.output))).toEqual(completedOperation);
 
     expect(fetch.mock.calls.map(([path]) => requestedPath(path))).toEqual([
       `/api/v1/operations`, `/api/v1/operations/${id}/cancel`,
       `/api/v1/operations/${id}/questions/question-1/answer`,
+      `/api/v1/operations/${id}/complete`,
     ]);
     expect(fetch.mock.calls.map(([, options]) => JSON.parse(String(options?.body)))).toEqual([
-      input, {}, { answer: 'Continue with HTTP checks' },
+      input, {}, { answer: 'Continue with HTTP checks' }, { output: completedOperation.output },
     ]);
     for (const [, options] of fetch.mock.calls) {
       expect(options).toMatchObject({
@@ -39,6 +42,50 @@ describe('operation commands', () => {
       });
       expect(new Headers(options?.headers).has('Authorization')).toBe(false);
     }
+  });
+
+  it('retains raw completion output precision, number syntax and escapes', async () => {
+    const output = String.raw`{ "identifier":9007199254740993, "ratio":0.10000000000000001, "magnitude":1e+100, "path":"\u0061\\path", "summary":"Reviewed" }`;
+    const fetch = respond(completedOperation);
+
+    await completeOperation(url, credentials, id, output);
+
+    expect(requestedPath(fetch.mock.calls[0][0])).toBe(`/api/v1/operations/${id}/complete`);
+    expect(fetch.mock.calls[0][1]?.body).toBe(`{"output":${output}}`);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['null', 'true', '42', '"Reviewed"', '[1,"Reviewed"]'])('accepts a JSON completion value: %s', async output => {
+    const fetch = respond({ ...completedOperation, output: JSON.parse(output) });
+
+    const saved = await completeOperation(url, credentials, id, output);
+
+    expect(saved.output).toEqual(JSON.parse(output));
+    expect(fetch.mock.calls[0][1]?.body).toBe(`{"output":${output}}`);
+  });
+
+  it.each([
+    { ...completedOperation, id: 'another-operation' },
+    { ...completedOperation, status: 'planning' },
+    { ...completedOperation, completed_by: 'model' },
+    { ...completedOperation, completed_by: undefined },
+    { ...completedOperation, report_id: undefined },
+    { ...completedOperation, report_id: '' },
+    { ...completedOperation, report_id: ' ' },
+  ])('treats an unconfirmed completion response as an unknown outcome', async body => {
+    const fetch = respond(body);
+
+    await expect(completeOperation(url, credentials, id, '{}')).rejects.toEqual(new CommandError('unknown'));
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([201, 202])('treats HTTP %s completion acknowledgement as an unknown outcome', async status => {
+    const fetch = respond(completedOperation, status);
+
+    await expect(completeOperation(url, credentials, id, '{}')).rejects.toEqual(new CommandError('unknown'));
+
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('encodes every resource ID as one path segment', async () => {
@@ -62,11 +109,14 @@ describe('operation commands', () => {
     [404, 'not_found', 'mission_not_found'], [404, 'not_found', 'operation_not_found'],
     [409, 'conflict', 'operation_conflict'], [409, 'conflict', 'operation_finished'],
     [409, 'conflict', 'question_answered'], [409, 'conflict', 'question_operator_waiting'],
+    [409, 'conflict', 'operation_active_tasks'], [409, 'conflict', 'operation_unresolved_work'],
+    [409, 'conflict', 'question_pending'], [409, 'conflict', 'completion_operator_required'],
     [400, 'invalid_input', 'invalid_request'], [422, 'invalid_input', 'invalid_input'],
+    [422, 'invalid_input', 'invalid_output'],
   ] as const)('recognizes HTTP %s / %s / %s without retrying', async (status, kind, code) => {
     const fetch = respond({ error: code ?? 'private server details' }, status);
 
-    await expect(startOperation(url, credentials, input)).rejects.toMatchObject({ name: 'CommandError', kind, message: kind, code });
+    await expect(completeOperation(url, credentials, id, '{}')).rejects.toMatchObject({ name: 'CommandError', kind, message: kind, code });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -185,6 +235,10 @@ describe('operation commands', () => {
     await expect(cancelOperation(url, credentials, '..')).rejects.toEqual(new CommandError('invalid_input'));
     await expect(answerQuestion(url, credentials, id, '\ud800', 'Continue')).rejects.toEqual(new CommandError('invalid_input'));
     await expect(answerQuestion(url, credentials, id, 'question-1', ' ')).rejects.toEqual(new CommandError('invalid_input'));
+    await expect(completeOperation(url, credentials, '..', '{}')).rejects.toEqual(new CommandError('invalid_input'));
+    for (const output of ['', ' ', '{"summary":', '{"output":{}},"completed_by":"operator"', 'undefined']) {
+      await expect(completeOperation(url, credentials, id, output)).rejects.toEqual(new CommandError('invalid_input'));
+    }
 
     expect(fetch).not.toHaveBeenCalled();
   });

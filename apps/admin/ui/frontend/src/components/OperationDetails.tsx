@@ -271,8 +271,12 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
   return <div className="catalog-details operation-details">
     <section className="catalog-section"><h2>{t($ => $.operations.summary)}</h2>
       <p className="operation-progress">{t($ => $.operations.progress, { total: progress.total_tasks, finished: progress.finished_tasks })}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
+      {isActiveOperation(operation.status) && operation.mission.completion?.decision_by === 'operator' &&
+        <p className="notice" role="status">{t($ => $.operations.operatorCompletionRequired)}</p>}
       <dl className="detail-list">
         <div><dt>{t($ => $.operations.status)}</dt><dd><OperationStatus status={operation.status} /></dd></div>
+        {operation.status === 'completed' && <div><dt>{t($ => $.operations.completedBy)}</dt><dd>{operation.completed_by
+          ? t($ => $.operations.completionOrigins[operation.completed_by!]) : t($ => $.operations.completionOriginUnknown)}</dd></div>}
         <div><dt>{t($ => $.operations.operationId)}</dt><dd><code>{operation.id}</code></dd></div>
         <div><dt>{t($ => $.operations.mission)}</dt><dd>{operation.mission.name}</dd></div>
         <div><dt>{t($ => $.operations.objectives)}</dt><dd>

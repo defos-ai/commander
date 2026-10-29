@@ -14,3 +14,8 @@ export const operation: Operation = {
   progress: { task_counts: {}, total_tasks: 0, finished_tasks: 0, pending_decisions: 0, pending_questions: 0, settled: false },
   created_at: '2026-10-05T12:00:00Z', updated_at: '2026-10-05T12:00:00Z',
 };
+
+export const completedOperation: Operation = {
+  ...operation, status: 'completed', completed_by: 'operator', report_id: '6fb2d28f-2bf0-4f17-bf6e-b11279704acd',
+  output: { summary: 'Reviewed the saved evidence.' },
+};

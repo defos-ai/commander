@@ -151,6 +151,19 @@
   draft read-only, show the saved answer/origin and offer saved-state inspection.
   A status refresh must not abort an in-flight POST; it may reflect that request's
   accepted result. Continue requiring readback after conflicts or uncertain writes.
+- `CompleteOperationDialog` submits final output through the existing authenticated
+  completion API. Review the operation's retained objectives, server progress and
+  output schema; require explicit operator confirmation. Preserve raw output JSON
+  on the wire, including number tokens and escapes. Active tasks, pending questions
+  and unresolved non-model continuations block submission; interrupted outcomes
+  may be accepted with documented limitations. The server owns final eligibility.
+  Keep drafts in memory, isolated by connection, credentials and operation; polling
+  may disable submission but must not discard a draft or abort an in-flight POST.
+  Guard one submission at a time and require explicit successful saved-state
+  readback after conflict, unknown outcome or dismissal while submitting, including
+  before reopening. Polling alone does not clear this guard. Invalid output may
+  be corrected explicitly after known rejection. Display saved `completed_by`,
+  leaving absent provenance unknown; policy does not establish who completed it.
 - Operation **Logs** uses the single operation log API with route-preserved
   task/agent/action filters. Validate flat response provenance and cursors; keep
   server append order rather than sorting timestamps or UUIDs. Read recent pages
