@@ -7,7 +7,7 @@ on:
         description: Shared stable v0 or v1 version to validate
         type: string
         required: true
-        default: v0.2.0
+        default: v0.3.0
   workflow_call:
     inputs:
       version:

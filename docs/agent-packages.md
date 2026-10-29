@@ -9,15 +9,17 @@ to build one.
 
 In Playground, ask:
 
-> Install the web agent.
+> Install the builder agent.
 
-Commander can look it up with MCP's `get_agent_sources`. You can also provide any
-trusted GitHub repository directly:
+Commander can look it up with MCP's `get_agent_sources`. You can also provide a
+GitHub package directly:
 
-> Install https://github.com/defos-ai/commander-web-agent
+> Install github.com/defos-ai/commander/apps/agents/builder@stable
 
-Spawner currently allows repositories owned by `github.com/defos-ai` only.
-Other owners require operator-only installation approval, which is not available yet.
+Packages owned by `github.com/defos-ai` proceed automatically. For other owners,
+the running action asks an installation question: the operator answers first,
+then the model may answer after `fallback_at`. Installation waits for a saved
+Yes; approval applies only to that execution.
 
 | Reference | Version |
 | --- | --- |
@@ -92,7 +94,7 @@ use a module-prefixed tag. Both publish an asset named `agent.yaml`:
 | Package reference | GitHub release tag |
 | --- | --- |
 | `github.com/defos-ai/commander-web-agent@v0.2.0` | `v0.2.0` |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.3.0` | `apps/agents/builder/v0.3.0` |
 
 Module `@stable` references use the repository's root Latest version to choose the
 corresponding module release. Publication is required; a version in `go.mod` or

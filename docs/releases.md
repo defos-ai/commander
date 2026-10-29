@@ -1,7 +1,7 @@
 # Release Commander
 
 Use one stable `v0.X.Y` or `v1.X.Y` version for Commander and every module in
-[go.work](../go.work). The examples below use `v0.2.0`; replace it with your target.
+[go.work](../go.work). The prepared version is `v0.3.0`; the examples below use it.
 
 See [release notes](release-notes.md) for Commander and standalone agent changes.
 
@@ -14,7 +14,7 @@ See [release notes](release-notes.md) for Commander and standalone agent changes
    publication. For the local module readiness check, run:
 
 ```sh
-RELEASE_VERSION=v0.2.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
+RELEASE_VERSION=v0.3.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
 ```
 
 The local check does not replace the full CI pipeline. Review the
@@ -61,12 +61,13 @@ The publication workflow also creates separate builder and spawner package relea
 
 | Package reference | Release tag |
 | --- | --- |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.2.0` | `apps/agents/builder/v0.2.0` |
-| `github.com/defos-ai/commander/apps/agents/spawner@v0.2.0` | `apps/agents/spawner/v0.2.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.3.0` | `apps/agents/builder/v0.3.0` |
+| `github.com/defos-ai/commander/apps/agents/spawner@v0.3.0` | `apps/agents/spawner/v0.3.0` |
 
 Each contains its six native binaries, `agent.yaml`, `LICENSE` and `checksums.txt`.
-Both support Docker on `linux/amd64`. Verify these assets before announcing a
-package as installable; existing releases are not updated.
+Both support Docker on `linux/amd64`. These references become installable after
+publication completes. Verify the assets before announcing a package as
+installable; existing releases are not updated.
 See [packaging your own agent](agent-packages.md#release-manifest).
 
 ## Docker images

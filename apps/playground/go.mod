@@ -9,11 +9,11 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.10.1
 	github.com/defos-ai/commander-example-agent v0.2.0
-	github.com/defos-ai/commander/apps/adapters/api v0.2.0
-	github.com/defos-ai/commander/apps/adapters/mcp v0.2.0
-	github.com/defos-ai/commander/apps/admin v0.2.0
-	github.com/defos-ai/commander/apps/agents/spawner v0.2.0
-	github.com/defos-ai/commander/apps/controllers/default v0.2.0
+	github.com/defos-ai/commander/apps/adapters/api v0.3.0
+	github.com/defos-ai/commander/apps/adapters/mcp v0.3.0
+	github.com/defos-ai/commander/apps/admin v0.3.0
+	github.com/defos-ai/commander/apps/agents/spawner v0.3.0
+	github.com/defos-ai/commander/apps/controllers/default v0.3.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/muesli/termenv v0.16.0
@@ -29,11 +29,11 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/defos-ai/commander/framework v0.2.0
-	github.com/defos-ai/commander/providers/fs v0.2.0
-	github.com/defos-ai/commander/providers/mongo v0.2.0 // indirect
-	github.com/defos-ai/commander/providers/rabbitmq v0.2.0 // indirect
-	github.com/defos-ai/commander/providers/s3 v0.2.0 // indirect
+	github.com/defos-ai/commander/framework v0.3.0
+	github.com/defos-ai/commander/providers/fs v0.3.0
+	github.com/defos-ai/commander/providers/mongo v0.3.0 // indirect
+	github.com/defos-ai/commander/providers/rabbitmq v0.3.0 // indirect
+	github.com/defos-ai/commander/providers/s3 v0.3.0 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect

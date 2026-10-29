@@ -3,11 +3,11 @@ module github.com/defos-ai/commander/apps/controllers/default
 go 1.26.7
 
 require (
-	github.com/defos-ai/commander/framework v0.2.0
-	github.com/defos-ai/commander/providers/fs v0.2.0
-	github.com/defos-ai/commander/providers/mongo v0.2.0
-	github.com/defos-ai/commander/providers/rabbitmq v0.2.0
-	github.com/defos-ai/commander/providers/s3 v0.2.0
+	github.com/defos-ai/commander/framework v0.3.0
+	github.com/defos-ai/commander/providers/fs v0.3.0
+	github.com/defos-ai/commander/providers/mongo v0.3.0
+	github.com/defos-ai/commander/providers/rabbitmq v0.3.0
+	github.com/defos-ai/commander/providers/s3 v0.3.0
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 )
 

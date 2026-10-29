@@ -183,7 +183,7 @@ func openAPIDocument() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{
-			"title": "Commander API", "version": "0.2.0",
+			"title": "Commander API", "version": "0.3.0",
 			"description": "Create or update reusable missions, read Commander catalogs, saved operation state, reports and artifacts, manage encrypted secrets when enabled, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},

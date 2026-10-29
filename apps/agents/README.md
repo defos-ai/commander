@@ -79,9 +79,9 @@ The template uses published Commander dependencies. To use an unreleased local
 checkout, add replacements in your own project's `go.mod`:
 
 ```sh
-go mod edit -require=github.com/defos-ai/commander/framework@v0.1.0
+go mod edit -require=github.com/defos-ai/commander/framework@v0.3.0
 go mod edit -replace=github.com/defos-ai/commander/framework=/absolute/path/to/commander/framework
-go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.1.0
+go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.3.0
 go mod edit -replace=github.com/defos-ai/commander/providers/fs=/absolute/path/to/commander/providers/fs
 ```
 

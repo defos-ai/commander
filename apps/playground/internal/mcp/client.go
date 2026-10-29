@@ -40,7 +40,7 @@ func Connect(ctx context.Context, endpoint string, credentials host.BearerCreden
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	client := protocol.NewClient(&protocol.Implementation{Name: "commander-playground", Version: "0.2.0"}, &protocol.ClientOptions{Logger: logger})
+	client := protocol.NewClient(&protocol.Implementation{Name: "commander-playground", Version: "0.3.0"}, &protocol.ClientOptions{Logger: logger})
 	httpClient := &http.Client{Transport: &bearerTransport{credentials: credentials}, Timeout: 2 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	session, err := client.Connect(ctx, &protocol.StreamableClientTransport{Endpoint: endpoint, HTTPClient: httpClient, DisableStandaloneSSE: true}, nil)
 	if err != nil {

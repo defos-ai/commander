@@ -17,15 +17,15 @@ use (
 
 // Resolve workspace requirements locally while Go loads the dependency graph.
 replace (
-	github.com/defos-ai/commander/apps/adapters/api v0.2.0 => ./apps/adapters/api
-	github.com/defos-ai/commander/apps/adapters/mcp v0.2.0 => ./apps/adapters/mcp
-	github.com/defos-ai/commander/apps/admin v0.2.0 => ./apps/admin
-	github.com/defos-ai/commander/apps/agents/builder v0.2.0 => ./apps/agents/builder
-	github.com/defos-ai/commander/apps/agents/spawner v0.2.0 => ./apps/agents/spawner
-	github.com/defos-ai/commander/apps/controllers/default v0.2.0 => ./apps/controllers/default
-	github.com/defos-ai/commander/framework v0.2.0 => ./framework
-	github.com/defos-ai/commander/providers/fs v0.2.0 => ./providers/fs
-	github.com/defos-ai/commander/providers/mongo v0.2.0 => ./providers/mongo
-	github.com/defos-ai/commander/providers/rabbitmq v0.2.0 => ./providers/rabbitmq
-	github.com/defos-ai/commander/providers/s3 v0.2.0 => ./providers/s3
+	github.com/defos-ai/commander/apps/adapters/api v0.3.0 => ./apps/adapters/api
+	github.com/defos-ai/commander/apps/adapters/mcp v0.3.0 => ./apps/adapters/mcp
+	github.com/defos-ai/commander/apps/admin v0.3.0 => ./apps/admin
+	github.com/defos-ai/commander/apps/agents/builder v0.3.0 => ./apps/agents/builder
+	github.com/defos-ai/commander/apps/agents/spawner v0.3.0 => ./apps/agents/spawner
+	github.com/defos-ai/commander/apps/controllers/default v0.3.0 => ./apps/controllers/default
+	github.com/defos-ai/commander/framework v0.3.0 => ./framework
+	github.com/defos-ai/commander/providers/fs v0.3.0 => ./providers/fs
+	github.com/defos-ai/commander/providers/mongo v0.3.0 => ./providers/mongo
+	github.com/defos-ai/commander/providers/rabbitmq v0.3.0 => ./providers/rabbitmq
+	github.com/defos-ai/commander/providers/s3 v0.3.0 => ./providers/s3
 )

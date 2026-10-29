@@ -3,7 +3,7 @@ module github.com/defos-ai/commander/apps/admin
 go 1.26.7
 
 require (
-	github.com/defos-ai/commander/framework v0.2.0
+	github.com/defos-ai/commander/framework v0.3.0
 	github.com/muesli/cancelreader v0.2.2
 	golang.org/x/term v0.46.0
 )

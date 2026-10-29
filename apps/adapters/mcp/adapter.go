@@ -95,7 +95,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 		return nil, errors.New("MCP requires an agent source client")
 	}
 	server := mcp.NewServer(&mcp.Implementation{
-		Name: "commander-mcp", Version: "0.2.0",
+		Name: "commander-mcp", Version: "0.3.0",
 		Icons: []mcp.Icon{{
 			Source:   "data:image/png;base64," + base64.StdEncoding.EncodeToString(serverLogo),
 			MIMEType: "image/png",
