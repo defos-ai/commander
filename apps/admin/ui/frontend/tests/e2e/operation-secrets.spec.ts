@@ -39,12 +39,13 @@ test('operation secret guidance stays visible in graph and opens the matching co
   });
 
   await page.goto(operationURL);
-  await expect(page.getByText('Secrets needed', { exact: true })).toBeVisible();
-  await expect(page.getByText('SOURCE_TOKEN', { exact: true })).toBeVisible();
+  const secretNotice = page.getByRole('status').filter({ has: page.getByText('Secrets needed', { exact: true }) });
+  await expect(secretNotice).toBeVisible();
+  await expect(secretNotice.getByText('SOURCE_TOKEN', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Execution graph', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Execution graph', exact: true })).toBeVisible();
-  await expect(page.getByText('Secrets needed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Manage secrets', exact: true }).click();
+  await expect(secretNotice.getByText('SOURCE_TOKEN', { exact: true })).toBeVisible();
+  await secretNotice.getByRole('button', { name: 'Manage secrets', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Secrets', exact: true })).toBeVisible();
   expect(new URL(page.url()).hash).toBe(`#/connections/${connectionID}/secrets`);
@@ -54,11 +55,11 @@ test('operation secret guidance stays visible in graph and opens the matching co
   expect(secretRequests.every(request => request.method === 'GET' && request.url.searchParams.get('url') === publicAPIURL)).toBe(true);
 
   await page.goBack();
-  await expect(page.getByRole('button', { name: 'Manage secrets', exact: true })).toBeVisible();
+  await expect(secretNotice.getByRole('button', { name: 'Manage secrets', exact: true })).toBeVisible();
   blocked = false;
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByText('All required actions have a ready agent in this snapshot.', { exact: true })).toBeVisible();
-  await expect(page.getByText('Secrets needed', { exact: true })).toHaveCount(0);
+  await expect(secretNotice).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Manage secrets', exact: true })).toHaveCount(0);
 });

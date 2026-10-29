@@ -187,7 +187,7 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   const optionalActions = page.locator('.mission-section').filter({ has: page.getByRole('heading', { name: 'Optional actions', exact: true }) });
   await expect(optionalActions.getByRole('listitem')).toHaveText(['publish-agent', 'release-agent']);
   await page.getByRole('button', { name: 'All missions', exact: true }).click();
-  await page.getByRole('button', { name: 'View mission analyze-text' }).click();
+  await page.getByRole('button', { name: 'View mission analyze-text', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'analyze-text', exact: true })).toBeVisible();
   const missionURL = page.url();
   await expect(page).toHaveURL(/\/missions\/analyze-text$/);
@@ -252,7 +252,7 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await signIn.getByLabel('Username', { exact: true }).fill(username);
   await signIn.getByLabel('Password', { exact: true }).fill(password);
   await signIn.getByRole('button', { name: 'Save connection' }).click();
-  await page.getByRole('button', { name: 'View mission analyze-text' }).click();
+  await page.getByRole('button', { name: 'View mission analyze-text', exact: true }).click();
   await expect(page).toHaveURL(missionURL);
 
   await page.setViewportSize({ width: 390, height: 844 });
