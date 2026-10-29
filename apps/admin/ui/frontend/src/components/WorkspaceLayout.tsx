@@ -1,35 +1,40 @@
 import { useId } from 'react';
 import type { ReactNode } from 'react';
-import { ArrowLeft, Bot, ClipboardList, Compass, LayoutDashboard, Menu, PanelsTopLeft, Server, Settings2, Workflow, X } from 'lucide-react';
+import { ArrowLeft, Bot, ClipboardList, Compass, KeyRound, Menu, PanelsTopLeft, Server, Settings2, Workflow, X } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { useSidebar } from '../hooks/useSidebar';
 import { Brand } from './Brand';
 import type { WorkspaceSection } from '../navigation/routes';
+import type { ConnectionCheck } from '../connections/types';
 
 type WorkspaceLayoutProps = {
   connection: { id: string; name: string; url: string };
   section: WorkspaceSection;
+  check?: ConnectionCheck;
   sections?: WorkspaceSection[];
   onNavigate: (section: WorkspaceSection) => void;
   onBack: () => void;
   children: ReactNode;
 };
 
-export function WorkspaceLayout({ connection, section, sections, onNavigate, onBack, children }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ connection, check, section, sections, onNavigate, onBack, children }: WorkspaceLayoutProps) {
   const { t } = useTranslation();
   const sidebar = useSidebar();
   const identity = useId();
   const sidebarId = `${identity}-sidebar`;
   const contentId = `${identity}-content`;
-  const activeSection = section === 'secrets' ? 'agents' : section === 'create-mission' ? 'missions' : section;
+  const activeSection = section === 'create-mission' ? 'missions' : section;
+  const health = check?.api === 'unavailable' || check?.database === 'unavailable' ||
+    check && ['authentication', 'degraded', 'unreachable'].includes(check.status) ? 'unavailable'
+    : check?.status === 'ready' && check.api === 'ok' && check.database === 'ok' ? 'ok' : 'unknown';
   const navigation = [
-    { section: 'overview' as const, label: t($ => $.shell.nav.overview), Icon: LayoutDashboard },
     { section: 'operations' as const, label: t($ => $.shell.nav.operations), Icon: Workflow },
     { section: 'missions' as const, label: t($ => $.shell.nav.missions), Icon: Compass },
     { section: 'controllers' as const, label: t($ => $.shell.nav.controllers), Icon: Server },
     { section: 'agents' as const, label: t($ => $.shell.nav.agents), Icon: Bot },
     { section: 'sessions' as const, label: t($ => $.shell.nav.sessions), Icon: PanelsTopLeft },
     { section: 'actions' as const, label: t($ => $.shell.nav.actions), Icon: ClipboardList },
+    { section: 'secrets' as const, label: t($ => $.shell.nav.secrets), Icon: KeyRound },
   ];
 
   return <div className="platform-layout">
@@ -59,21 +64,23 @@ export function WorkspaceLayout({ connection, section, sections, onNavigate, onB
             aria-current={activeSection === destination ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate(destination); }}>
             <Icon size={15} strokeWidth={1.4} aria-hidden="true" />
             <span>{label}</span>
-            {activeSection === destination && <span className="nav-marker" aria-hidden="true" />}
           </button>)}
         </div>
         <div className="sidebar-footer">
-          <div className="sidebar-connection">
-            <span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
+          <button type="button" className="sidebar-connection" data-health={health}
+            aria-current={section === 'status' ? 'page' : undefined}
+            aria-label={t($ => $.shell.openStatus, { name: connection.name, health: t($ => $.shell.connectionHealth[health]) })}
+            onClick={() => { sidebar.close(); onNavigate('status'); }}>
+            <span className="sidebar-connection-label"><span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
+              <span className="status-dot" aria-hidden="true" /></span>
             <span className="sidebar-connection-name">{connection.name}</span>
             <span className="sidebar-connection-url">{connection.url}</span>
-          </div>
+          </button>
           <div className="sidebar-settings">
             {(!sections || sections.includes('settings')) && <button type="button" className="sidebar-command"
               aria-current={section === 'settings' ? 'page' : undefined} onClick={() => { sidebar.close(); onNavigate('settings'); }}>
               <Settings2 size={15} strokeWidth={1.4} aria-hidden="true" />
               <span>{t($ => $.shell.nav.settings)}</span>
-              {section === 'settings' && <span className="nav-marker" aria-hidden="true" />}
             </button>}
             <button type="button" className="sidebar-command" onClick={() => { sidebar.close(); onBack(); }}>
               <ArrowLeft size={15} strokeWidth={1.4} aria-hidden="true" /><span>{t($ => $.shell.allConnections)}</span>

@@ -7,6 +7,7 @@ import { useMissionQuery } from '../hooks/useMissionQuery';
 import { Button } from '../components/Button';
 import { MissionFormFields } from '../components/MissionFormFields';
 import { readMissionDraft, writeMissionDraft, type MissionDraft } from '../missions/draft';
+import { formatJSON } from '../missions/format';
 import '../styles/missions.css';
 
 type Props = {
@@ -50,8 +51,8 @@ function EditMissionForm({ connection, credentials, name, initialDefinition, onS
   const nameInput = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const pending = useRef<AbortController | null>(null);
-  const [definition, setDefinition] = useState(initialDefinition);
-  const [draft, setDraft] = useState<MissionDraft>(() => readMissionDraft(initialDefinition));
+  const [definition, setDefinition] = useState(() => formatJSON(initialDefinition));
+  const [draft, setDraft] = useState<MissionDraft>(() => formattedDraft(initialDefinition));
   const [mode, setMode] = useState<'form' | 'json'>('form');
   const [draftError, setDraftError] = useState<'unsupportedJSON' | 'invalidFields'>();
   const [submitting, setSubmitting] = useState(false);
@@ -81,14 +82,14 @@ function EditMissionForm({ connection, credentials, name, initialDefinition, onS
     if (next === mode || submitting || locked) return;
     if (next === 'form') {
       try {
-        const nextDraft = readMissionDraft(definition);
+        const nextDraft = formattedDraft(definition);
         if (nextDraft.name !== name) { setError(new MissionUpdateError('name_changed')); return; }
         setDraft(nextDraft);
       } catch { setDraftError('unsupportedJSON'); return; }
     } else {
       const source = formDefinition();
       if (source === undefined) return;
-      setDefinition(source);
+      setDefinition(formatJSON(source));
     }
     setDraftError(undefined);
     setError(undefined);
@@ -162,4 +163,15 @@ function EditMissionForm({ connection, credentials, name, initialDefinition, onS
       </Button>
     </div>
   </form>;
+}
+
+function formattedDraft(source: string): MissionDraft {
+  const draft = readMissionDraft(source);
+  return {
+    ...draft,
+    input_schema: formatJSON(draft.input_schema),
+    output_schema: formatJSON(draft.output_schema),
+    rules: formatJSON(draft.rules),
+    action_definitions: formatJSON(draft.action_definitions),
+  };
 }

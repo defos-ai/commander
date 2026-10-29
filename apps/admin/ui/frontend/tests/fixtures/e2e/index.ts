@@ -151,7 +151,7 @@ export async function connect(page: Page, connection = { name: 'Compose test', u
   await dialog.getByLabel('Username', { exact: true }).fill(username);
   await dialog.getByLabel('Password', { exact: true }).fill(password);
   await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
 }
 
 export async function startOperation(page: Page, text = 'Commander integration example', missionName = 'analyze-text'): Promise<Operation> {

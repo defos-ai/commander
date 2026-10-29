@@ -2,7 +2,7 @@ import { parseConnectionPrefill, validOperationID, type ConnectionPrefill } from
 import type { SessionFilters } from '../api/runtime-sessions';
 import type { OperationLogFilters } from '../api/operation-logs';
 
-export type WorkspaceSection = 'overview' | 'operations' | 'missions' | 'create-mission' | 'controllers' | 'agents' | 'actions' | 'sessions' | 'secrets' | 'settings';
+export type WorkspaceSection = 'status' | 'operations' | 'missions' | 'create-mission' | 'controllers' | 'agents' | 'actions' | 'sessions' | 'secrets' | 'settings';
 export type OperationView = 'details' | 'graph' | 'logs';
 export type MissionView = 'details' | 'json' | 'edit';
 
@@ -17,7 +17,7 @@ export type Route = { connectionID?: undefined; connect?: ConnectionPrefill | nu
   logFilters?: OperationLogFilters;
 };
 
-const sections: readonly string[] = ['overview', 'operations', 'missions', 'create-mission', 'controllers', 'agents', 'actions', 'sessions', 'secrets', 'settings'];
+const sections: readonly string[] = ['status', 'operations', 'missions', 'create-mission', 'controllers', 'agents', 'actions', 'sessions', 'secrets', 'settings'];
 
 export function parseRoute(hash: string): Route {
   if (hash === '#/connect' || hash.startsWith('#/connect?')) {
@@ -30,7 +30,7 @@ export function parseRoute(hash: string): Route {
     if (prefix === '' && collection === 'operations' && connectionID && validOperationID(connectionID)
       && section === undefined && !/[?#]/u.test(hash.slice(1))) return { operation: connectionID };
     if (prefix !== '' || collection !== 'connections' || !connectionID || !sections.includes(section ?? '') || extra.length) return {};
-    if (itemID !== undefined && (!itemID || section === 'overview' || section === 'settings' || section === 'secrets' || section === 'create-mission')) return {};
+    if (itemID !== undefined && (!itemID || section === 'status' || section === 'settings' || section === 'secrets' || section === 'create-mission')) return {};
     if (view !== undefined && (!itemID || !(section === 'operations' && (view === 'graph' || view === 'logs') || section === 'missions' && (view === 'json' || view === 'edit')))) return {};
     const sessionFilters: SessionFilters = {};
     const logFilters: OperationLogFilters = {};

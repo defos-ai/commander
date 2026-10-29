@@ -38,6 +38,52 @@ describe('mission editing', () => {
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
+  it('formats edit JSON without changing raw tokens, adding optional fields or rewriting a draft while typing', async () => {
+    const definition = String.raw`{"name":"review-service","objectives":["Review the service."],"required_actions":[],"starting_actions":[],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{"type":"object"},"extension":{"exact":1.2300e+42}}`;
+    const fetch = mockEditableMission(definition);
+    render(<EditMissionPage connection={connection} credentials={credentials} onSignIn={vi.fn()}
+      name="review-service" onBack={vi.fn()} onSelect={vi.fn()} />);
+    await screen.findByRole('textbox', { name: 'Mission name' });
+    fireEvent.click(screen.getByText('Advanced settings'));
+
+    const schema = screen.getByRole('textbox', { name: 'Input schema (JSON)' }) as HTMLTextAreaElement;
+    expect(schema.value).toMatch(/^\{\n  "type": "object",/);
+    expect(schema.value).toContain('9007199254740993');
+    expect(schema.value).toContain(String.raw`"\u0061\\path"`);
+    expect(screen.getByRole('textbox', { name: 'Output schema (JSON)' })).toHaveValue('{\n  "type": "object"\n}\n');
+    expect(screen.getByRole('textbox', { name: 'Rules (JSON)' })).toHaveValue('{}\n');
+    expect(screen.getByRole('textbox', { name: 'Action definitions (JSON)' })).toHaveValue('[]\n');
+
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    const editor = screen.getByRole('textbox', { name: 'Mission definition (JSON)' }) as HTMLTextAreaElement;
+    expect(editor.value).toMatch(/^\{\n  "name": "review-service",/);
+    expect(editor.value).toContain('9007199254740993');
+    expect(editor.value).toContain(String.raw`"\u0061\\path"`);
+    expect(editor.value).toContain('1.2300e+42');
+    expect(editor.value).not.toContain('"rules"');
+    expect(editor.value).not.toContain('"action_definitions"');
+    const edited = definition.replace('Review the service.', 'Review the release.');
+
+    fireEvent.change(editor, { target: { value: edited } });
+
+    expect(editor).toHaveValue(edited);
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
+    expect(screen.getByRole('textbox', { name: 'Objective 1' })).toHaveValue('Review the release.');
+    fireEvent.click(screen.getByText('Advanced settings'));
+    expect(screen.getByRole('textbox', { name: 'Input schema (JSON)' })).toHaveValue(schema.value);
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    expect((screen.getByRole('textbox', { name: 'Mission definition (JSON)' }) as HTMLTextAreaElement).value).toContain('\n  "objectives": [\n    "Review the release."');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(fetch.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1));
+    const body = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')![1]!.body as string;
+    expect(body).toContain('9007199254740993');
+    expect(body).toContain(String.raw`"\u0061\\path"`);
+    expect(body).toContain('1.2300e+42');
+    expect(body).not.toContain('"rules"');
+    expect(body).not.toContain('"action_definitions"');
+  });
+
   it('rejects a changed name in JSON before writing or showing the renamed value in the form', async () => {
     const fetch = mockEditableMission();
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={mission.name} onSelect={vi.fn()} />);

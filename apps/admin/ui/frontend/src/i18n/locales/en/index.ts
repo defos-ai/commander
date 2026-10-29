@@ -65,8 +65,8 @@ export default {
     },
     footer: 'Defos @ 2026',
   },
-  overview: {
-    title: 'Overview',
+  status: {
+    title: 'Status',
     description: 'Connection status and service health.',
     refresh: 'Refresh',
     refreshing: 'Checking…',
@@ -102,14 +102,16 @@ export default {
     allConnections: 'All connections',
     skipToContent: 'Skip to content',
     currentConnection: 'Current connection',
+    openStatus: 'Connection status for {{name}}: {{health}}',
+    connectionHealth: { ok: 'All checks healthy', unavailable: 'Needs attention', unknown: 'Not checked' },
     nav: {
-      overview: 'Overview',
       operations: 'Operations',
       missions: 'Missions',
       controllers: 'Controllers',
       agents: 'Agents',
       sessions: 'Sessions',
       actions: 'Actions',
+      secrets: 'Secrets',
       settings: 'Connection settings',
     },
   },

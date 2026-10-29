@@ -73,13 +73,35 @@ test('Playground links prefill a connection and reuse its saved session', async 
   await dialog.getByLabel('Connection name').fill('My saved API');
   await dialog.getByLabel('Password', { exact: true }).fill(password);
   await dialog.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
-  const overviewURL = page.url();
+  await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
+  const operationsURL = page.url();
 
   await page.goto(link);
-  await expect(page).toHaveURL(overviewURL);
+  await expect(page).toHaveURL(operationsURL);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  const currentConnection = page.getByRole('button', { name: /^Connection status for My saved API:/ });
+  await expect(currentConnection).toHaveAttribute('data-health', 'ok');
+  await currentConnection.click();
+  await expect(page.getByRole('heading', { name: 'Status', exact: true })).toBeVisible();
+  await expect(currentConnection).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  const unavailableDatabase = async (route: import('@playwright/test').Route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('path') === '/readyz') {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{"status":"unavailable"}' });
+    } else await route.continue();
+  };
+  await page.route('**/ui/proxy?**', unavailableDatabase);
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(currentConnection).toHaveAttribute('data-health', 'unavailable');
+  await expect(page.getByText('Unavailable', { exact: true })).toBeVisible();
+  await page.unroute('**/ui/proxy?**', unavailableDatabase);
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(currentConnection).toHaveAttribute('data-health', 'ok');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Status', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Connection settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByText('Not signed in', { exact: true })).toBeVisible();
@@ -90,7 +112,7 @@ test('Playground links prefill a connection and reuse its saved session', async 
   await expect(signIn.getByLabel('Password', { exact: true })).toHaveValue('');
   await signIn.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.reload();
-  await expect(page).toHaveURL(overviewURL);
+  await expect(page).toHaveURL(operationsURL);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('commander.connections.v1') ?? '[]'));
   expect(saved).toHaveLength(1);
@@ -143,7 +165,7 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await connection.getByLabel('Username', { exact: true }).fill(username);
   await connection.getByLabel('Password', { exact: true }).fill(password);
   await connection.getByRole('button', { name: 'Connect', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
   await navigation.getByRole('button', { name: 'Controllers', exact: true }).click();
   const controller = page.getByRole('button', { name: /^View controller default-controller-/ }).first();
@@ -215,7 +237,8 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await navigation.getByRole('button', { name: 'All connections', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open Second API', exact: true })).toHaveAccessibleDescription(`${secondURL} Connected`);
   await page.getByRole('button', { name: 'Open Second API', exact: true }).click();
-  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Connection status for Second API:/ })).toHaveAttribute('data-health', 'ok');
   await navigation.getByRole('button', { name: 'All connections', exact: true }).click();
   await page.getByRole('button', { name: 'Open Compose test', exact: true }).click();
   await navigation.getByRole('button', { name: 'Missions', exact: true }).click();

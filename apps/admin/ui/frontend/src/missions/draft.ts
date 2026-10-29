@@ -1,3 +1,5 @@
+import { formatJSON } from './format';
+
 export const initialMissionDefinition = JSON.stringify({
   name: '',
   objectives: [''],
@@ -142,7 +144,8 @@ export function writeMissionDraft(source: string, draft: MissionDraft): string {
     if (JSON.stringify(previous[field]) !== jsonValue) result = updateMissionDefinition(result, field, jsonValue);
   }
   for (const field of ['input_schema', 'output_schema', 'rules', 'action_definitions'] as const) {
-    if (previous[field] !== draft[field]) result = updateMissionDefinition(result, field, draft[field]);
+    JSON.parse(draft[field]);
+    if (formatJSON(previous[field]) !== formatJSON(draft[field])) result = updateMissionDefinition(result, field, draft[field]);
   }
   if (previous.completion_decision !== draft.completion_decision) {
     result = updateMissionDefinition(result, 'completion', JSON.stringify({ decision_by: draft.completion_decision }));

@@ -60,7 +60,13 @@ p.local-discovery { justify-content: flex-start; }
 .workspace-sidebar { position: sticky; top: 0; height: 100svh; overflow-y: auto; display: flex; flex-direction: column; background: #e3e2dd; border-right: 1px solid #d4d3cd; padding: 32px 16px 22px; }
 .sidebar-brand { display: flex; align-items: center; justify-content: space-between; padding: 0 11px; margin-bottom: 29px; }
 .sidebar-brand .brand { font-size: 25px; }
-.sidebar-connection { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0 12px; }
+.sidebar-connection { display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; padding: 12px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; }
+.sidebar-connection:hover { background: #ffffff40; }
+.sidebar-connection[aria-current='page'] { background: var(--smoke); border-color: #d4d3cd; }
+.sidebar-connection-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+.sidebar-connection .status-dot { background: var(--muted); flex-shrink: 0; }
+.sidebar-connection[data-health='ok'] .status-dot { background: var(--green); }
+.sidebar-connection[data-health='unavailable'] .status-dot { background: var(--red); }
 .sidebar-connection-name { font-size: 14px; font-weight: 600; letter-spacing: -.025em; overflow-wrap: anywhere; }
 .sidebar-connection-url { color: var(--muted); font: 400 10px/1.6 var(--font-mono); overflow-wrap: anywhere; }
 .workspace-sidebar nav { display: flex; flex: 1; flex-direction: column; gap: 29px; }
@@ -70,7 +76,6 @@ p.local-discovery { justify-content: flex-start; }
 .sidebar-command { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #585850; text-align: left; font-size: 13px; }
 .sidebar-command:hover { background: #ffffff40; color: var(--ink); }
 .sidebar-command[aria-current='page'] { background: var(--smoke); color: var(--ink); border-color: #d4d3cd; }
-.nav-marker { margin-left: auto; width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
 .workspace-main { min-width: 0; }
 .workspace-content { max-width: 1296px; margin: 0 auto; padding: 31px 36px 54px; }
 .skip-link { position: fixed; top: 11px; left: 11px; z-index: 60; padding: 11px 14px; color: var(--smoke); background: var(--stealth); transform: translateY(calc(-100% - 18px)); }

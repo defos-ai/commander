@@ -37,6 +37,10 @@ Docker must publish `127.0.0.1:4275:4275`. For another port or host, pass
 
 ## Review operations
 
+Opening a connection takes you to **Operations**. Click **Current connection**
+for **Status** and its health checks. The dot is green when all checks pass, red
+when any fails, and neutral before a result is available.
+
 Choose a mission and enter its JSON input to start an operation. Open the
 execution graph to inspect tasks, results and artifacts; download the final
 report as JSON. Use **Manage secrets** when an agent needs a value.
@@ -84,16 +88,18 @@ uncertain save. Unsaved drafts disappear when you leave or reload the page.
 Open **JSON** on a saved mission to view or copy its definition. See
 [mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
 
-To change a saved mission, open it and choose **Edit mission**. Update objectives,
-actions, completion decision or advanced settings in Form or JSON, then save. The name stays fixed.
+To change a saved mission, open it and choose **Edit mission**. JSON fields are
+formatted for reading while preserving numeric precision and string escapes.
+Update objectives, actions, completion decision or advanced settings in Form or
+JSON, then save. The name stays fixed.
 Changes apply to future operations; existing operations retain their saved
 definition. After an uncertain update, inspect the saved mission before trying again.
 
 ## Secrets
 
-Open **Agents → Manage secrets** to provide, replace or delete shared
-secrets. Each name identifies one value for all requesting agents. You can also
-set an expiration. Values are write-only.
+Open **Secrets** in the sidebar to provide, replace or delete shared secrets.
+Each name identifies one value for all requesting agents. You can also set an
+expiration. Values are write-only.
 
 Compose and all-in-one configure encryption automatically. Standalone hosts need
 an [encryption key](../../adapters/api/README.md#secrets). After saving, wait for

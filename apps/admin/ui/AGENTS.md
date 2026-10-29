@@ -129,6 +129,10 @@
   confirmed save or explicit uncertain-write readback reloads the saved detail.
   Keep edits scoped to the connection/session/name and discard them on leaving
   the route. Do not overwrite an uncertain update with an automatic retry.
+  Format the saved document and advanced JSON on load and view switches using
+  the whitespace-only formatter. Preserve numbers, escapes, unknown fields and
+  omitted optional fields; never reformat during typing or parse/stringify raw
+  JSON for display. Formatting alone must not turn an untouched field into a write.
 - Mission forms and details expose **Completion decision** as Model/Operator.
   Omitted/null policy displays Model; untouched form edits retain its exact
   representation. Only a changed decision writes `completion.decision_by`.
@@ -157,6 +161,8 @@
   draft read-only, show the saved answer/origin and offer saved-state inspection.
   A status refresh must not abort an in-flight POST; it may reflect that request's
   accepted result. Continue requiring readback after conflicts or uncertain writes.
+- `StartOperationDialog` uses a wider, viewport-bounded dialog so long mission
+  objectives and input remain readable; retain scrolling and mobile margins.
 - `CompleteOperationDialog` submits final output through the existing authenticated
   completion API. Review the operation's retained objectives, server progress and
   output schema; require explicit operator confirmation. Preserve raw output JSON
@@ -188,9 +194,15 @@
   pause following too. Keep at most 1,000 entries and resume after the newest
   retained row when history trimming drops newer entries. Render messages as
   plain text and keep controls and filter drafts local to the current source.
-- Open the dedicated Secrets page from Agents via **Manage secrets**, with
-  **All agents** returning to the catalog. Keep Secrets out of the sidebar and
-  highlight Agents while it is open. Preserve its route and operation shortcuts.
+- Operations is the default workspace page after connection/sign-in. The current
+  connection button opens **Status** at `/connections/<id>/status`, retaining
+  history/reload behavior and keyboard/mobile access. Its aggregate indicator is
+  green only when connection, API and database are all healthy, red when any fails,
+  and neutral before a known result. Reuse the existing checks and polling; this
+  indicator does not establish controller/agent/broker/storage health. Active
+  navigation uses its selected styling, never an unrelated red health dot.
+- **Secrets** is a deployment-wide sidebar page with its own active state.
+  Preserve operation and Agent shortcuts without an Agents-only parent/back link.
   The Secrets page uses authenticated `/api/v1/secrets` metadata and
   `/api/v1/secret-requests`. Group refresh requests by shared secret name; their
   progress is not agent readiness or proof of installation. Inventory lists all

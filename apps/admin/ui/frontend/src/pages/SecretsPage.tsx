@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { ArrowLeft, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
+import { LoaderCircle, Plus, RefreshCw } from 'lucide-react';
 import { SecretError, type PendingSecretRequest } from '../api/secrets';
 import { Button } from '../components/Button';
 import { SecretDialog, type SecretDialogTarget } from '../components/SecretDialog';
@@ -9,7 +9,7 @@ import { useTranslation } from '../i18n';
 import '../styles/catalog.css';
 import '../styles/secrets.css';
 
-type Props = { connection: Connection; credentials?: Session; onSignIn: () => void; onBack?: () => void };
+type Props = { connection: Connection; credentials?: Session; onSignIn: () => void };
 type RequestGroup = {
   name: string;
   agents: Set<string>;
@@ -35,7 +35,7 @@ export function SecretsPage(props: Props) {
   return <SecretsContent key={`${props.connection.id}\0${props.connection.url}`} {...props} />;
 }
 
-function SecretsContent({ connection, credentials, onSignIn, onBack }: Props) {
+function SecretsContent({ connection, credentials, onSignIn }: Props) {
   const { t } = useTranslation();
   const identity = useId();
   const [dialog, setDialog] = useState<{ credentials: Session; target: SecretDialogTarget }>();
@@ -60,9 +60,6 @@ function SecretsContent({ connection, credentials, onSignIn, onBack }: Props) {
   }
 
   return <section className="catalog-page secrets-page">
-    {onBack && <button className="catalog-back" type="button" onClick={onBack}>
-      <ArrowLeft size={16} aria-hidden="true" />{t($ => $.agents.back)}
-    </button>}
     <div className="page-heading"><div><h1>{t($ => $.secrets.title)}</h1><p>{t($ => $.secrets.description)}</p></div>
       <div className="secret-actions">
         {credentials && <Button variant="secondary" onClick={query.refresh} disabled={query.refreshing}>

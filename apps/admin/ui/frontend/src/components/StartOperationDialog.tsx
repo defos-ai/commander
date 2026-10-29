@@ -98,7 +98,7 @@ export function StartOperationDialog({ connection, credentials, onClose, onStart
     }
   }
 
-  return <Dialog open title={t($ => $.operationCommands.startTitle)} description={t($ => $.operationCommands.startDescription)} onClose={close}>
+  return <Dialog open className="start-operation-dialog" title={t($ => $.operationCommands.startTitle)} description={t($ => $.operationCommands.startDescription)} onClose={close}>
     <form className="operation-command-form" onSubmit={submit} noValidate autoComplete="off">
       {loading ? <p className="catalog-loading" role="status"><LoaderCircle size={17} className="connection-form-spinner" aria-hidden="true" />{t($ => $.operationCommands.loadingMissions)}</p>
         : loadError ? <div className="notice" role="alert"><p>{t($ => $.operationCommands.missionErrors[loadError.kind])}</p>

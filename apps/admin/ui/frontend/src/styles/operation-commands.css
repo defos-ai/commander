@@ -1,3 +1,4 @@
+.dialog.start-operation-dialog { width: min(900px, calc(100% - 29px)); }
 .operation-controls { display: flex; flex-wrap: wrap; gap: 9px; }
 .operation-command-form { display: grid; gap: 16px; margin-top: 18px; min-width: 0; }
 .operation-command-form code { font: 400 11px/1.7 var(--font-mono); overflow-wrap: anywhere; }

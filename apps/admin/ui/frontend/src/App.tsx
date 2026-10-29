@@ -14,7 +14,7 @@ import { useTranslation } from './i18n';
 import { routeHash, type Route } from './navigation/routes';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 import { ConnectionSettingsPage } from './pages/ConnectionSettingsPage';
-import { OverviewPage } from './pages/OverviewPage';
+import { StatusPage } from './pages/StatusPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { CreateMissionPage } from './pages/CreateMissionPage';
 import { EditMissionPage } from './pages/EditMissionPage';
@@ -34,7 +34,7 @@ export function App() {
   const activeID = route.connectionID;
   const operationLinkID = route.operation;
   const pendingConnectionLink = !route.connectionID && route.connect !== undefined;
-  const section = route.connectionID ? route.section : 'overview';
+  const section = route.connectionID ? route.section : 'operations';
   const selectedID = route.connectionID ? route.itemID : undefined;
   const [modal, setModal] = useState<Modal>();
   const [removing, setRemoving] = useState(false);
@@ -55,7 +55,7 @@ export function App() {
     const prefill = route.connect;
     const connection = prefill && state.connections.find(item => item.url === prefill.url);
     const destination: Route = connection
-      ? { connectionID: connection.id, section: prefill.operation ? 'operations' : 'overview', itemID: prefill.operation }
+      ? { connectionID: connection.id, section: 'operations', itemID: prefill.operation }
       : prefill?.operation ? { operation: prefill.operation } : {};
     // Consume the link once so polling, cancellation and browser history cannot reopen it.
     previousRoute.current = routeHash(destination);
@@ -73,7 +73,7 @@ export function App() {
     focusAfterTransition.current = false;
   }, [route, active, modal]);
 
-  function open(id: string) { navigate({ connectionID: id, section: operationLinkID ? 'operations' : 'overview', itemID: operationLinkID }); }
+  function open(id: string) { navigate({ connectionID: id, section: 'operations', itemID: operationLinkID }); }
   function select(itemID?: string) {
     if (activeID) navigate({ connectionID: activeID, section, itemID,
       ...(route.connectionID && section === 'sessions' ? { sessionFilters: route.sessionFilters } : {}) });
@@ -86,14 +86,13 @@ export function App() {
   const storageNotice = !state.storageAvailable && <p className="notice" role="alert">{t($ => $.connections.storageError)}</p>;
 
   return <>
-    {active ? <WorkspaceLayout connection={active} section={section} sections={['overview', 'operations', 'missions', 'controllers', 'agents', 'sessions', 'actions', 'settings']}
+    {active ? <WorkspaceLayout connection={active} check={state.checks[active.id]} section={section} sections={['operations', 'missions', 'controllers', 'agents', 'sessions', 'actions', 'secrets', 'status', 'settings']}
       onNavigate={destination => navigate({ connectionID: active.id, section: destination })} onBack={() => navigate({})}>
       {storageNotice}
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
       {state.restoring ? <p role="status">{t($ => $.connections.restoring)}</p> : section === 'settings' ? <ConnectionSettingsPage connection={active} signedIn={Boolean(state.credentials[active.id])}
         onEdit={() => edit(active.id)} onForget={() => state.forgetSession(active.id)} onRemove={() => remove(active.id)} />
-        : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
-          onBack={() => navigate({ connectionID: active.id, section: 'agents' })} />
+        : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
         : section === 'sessions' ? <SessionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           selectedID={selectedID} onSelect={select} filters={route.connectionID ? route.sessionFilters : undefined}
           onFiltersChange={sessionFilters => navigate({ connectionID: active.id, section: 'sessions', sessionFilters })}
@@ -122,7 +121,7 @@ export function App() {
             onManageSecrets={() => navigate({ connectionID: active.id, section: 'secrets' })}
             onOpenSessions={owner => navigate({ connectionID: active.id, section: 'sessions', sessionFilters: owner ? { owner_agent_id: owner } : undefined })} />
             : section === 'actions' ? <ActionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} selectedID={selectedID} onSelect={select} />
-              : <OverviewPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}
+              : <StatusPage check={state.checks[active.id]} refreshing={state.refreshing} onRefresh={state.refresh} onSignIn={() => edit(active.id)} />}
     </WorkspaceLayout> : <ConnectionsPage connections={state.connections} statuses={Object.fromEntries(Object.entries(state.checks).map(([id, check]) => [id, check.status]))}
       onOpen={open} onAdd={() => setModal({ kind: 'connect' })} onEdit={edit} onRemove={remove}>
       {storageNotice}
