@@ -492,7 +492,7 @@ func TestSecretsWithMongo(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	request := secretmodel.Request{
-		ID: id.New(), Key: stored.Metadata.Key, AgentID: agentID,
+		ID: id.New(), Key: stored.Metadata.Key, AgentID: agentID, AgentType: "builder-agent",
 		Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(time.Minute),
 	}
 	if err := requests.Create(ctx, request); err != nil {
