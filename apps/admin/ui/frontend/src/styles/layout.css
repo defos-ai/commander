@@ -63,12 +63,12 @@ p.local-discovery { justify-content: flex-start; }
 .sidebar-connection { display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; padding: 12px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; }
 .sidebar-connection:hover { background: #ffffff40; }
 .sidebar-connection[aria-current='page'] { background: var(--smoke); border-color: #d4d3cd; }
-.sidebar-connection-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
 .sidebar-connection .status-dot { background: var(--muted); flex-shrink: 0; }
 .sidebar-connection[data-health='ok'] .status-dot { background: var(--green); }
 .sidebar-connection[data-health='unavailable'] .status-dot { background: var(--red); }
 .sidebar-connection-name { font-size: 14px; font-weight: 600; letter-spacing: -.025em; overflow-wrap: anywhere; }
-.sidebar-connection-url { color: var(--muted); font: 400 10px/1.6 var(--font-mono); overflow-wrap: anywhere; }
+.sidebar-connection-url { display: flex; align-items: center; gap: 7px; color: var(--muted); font: 400 10px/1.6 var(--font-mono); overflow-wrap: anywhere; }
+.sidebar-connection-url > span:last-child { min-width: 0; }
 .workspace-sidebar nav { display: flex; flex: 1; flex-direction: column; gap: 29px; }
 .sidebar-primary, .sidebar-settings { display: flex; flex-direction: column; gap: 5px; }
 .sidebar-footer { display: flex; flex-direction: column; gap: 16px; margin-top: auto; }

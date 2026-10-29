@@ -200,10 +200,11 @@ func (a *Client) settle(ctx context.Context) error {
 					continue
 				}
 				settled = false
-				if !op.Status.Terminal() {
-					if err := call("answer_question", Object{"operation_id": op.ID, "question_id": question.ID, "answer": "Test teardown: no further work."}, nil); err != nil {
-						return err
-					}
+				if op.Status.Terminal() {
+					return fmt.Errorf("operation %s is %s with unanswered question %s; answer questions before finishing test work", op.ID, op.Status, question.ID)
+				}
+				if _, err := AnswerAsOperator(ctx, op.ID, question.ID, "Test teardown: no further work."); err != nil {
+					return fmt.Errorf("settle question %s: %w", question.ID, err)
 				}
 			}
 			if !op.Status.Terminal() {

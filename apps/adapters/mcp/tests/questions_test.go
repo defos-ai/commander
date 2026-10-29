@@ -56,6 +56,16 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	if answered.Status != operations.QuestionAnswered || answered.Answer != answer || answered.AnsweredAt == nil || answered.AnsweredBy != operations.AnswerModel {
 		t.Fatalf("model answer changed: %+v", answered)
 	}
+	operatorAnswer := "The current release."
+	if _, err := fixtures.AnswerAsOperator(a.Context, op.ID, first.ID, operatorAnswer); err != nil {
+		t.Fatal(err)
+	}
+	saved = a.Get(op.ID)
+	operator := saved.Questions[0]
+	if operator.Status != operations.QuestionAnswered || operator.Answer != operatorAnswer || operator.AnsweredBy != operations.AnswerOperator ||
+		operator.AnsweredAt == nil || !operator.AnsweredAt.Before(first.FallbackAt) {
+		t.Fatalf("operator answer did not settle the default waiting window: %+v", operator)
+	}
 	a.Call("cancel_operation", fixtures.Object{"operation_id": op.ID}, nil)
 }
 

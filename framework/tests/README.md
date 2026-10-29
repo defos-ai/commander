@@ -78,6 +78,8 @@ failure details, run `docker compose logs` before teardown.
 Test endpoints and credentials are preconfigured. Override them with
 `COMMANDER_TEST_MCP_URL`, `COMMANDER_TEST_MCP_TOKEN`, `COMMANDER_TEST_API_URL`,
 `COMMANDER_TEST_API_USERNAME` and `COMMANDER_TEST_API_PASSWORD` when needed.
+MCP cleanup also uses that test API connection to answer leftover questions as
+operator input before cancellation; regular MCP answers retain their waiting window.
 
 The API/MCP spawn scenarios also accept `COMMANDER_TEST_SPAWNER_RUNTIME=kubernetes`
 for a separately prepared test deployment using the same fixtures. They verify

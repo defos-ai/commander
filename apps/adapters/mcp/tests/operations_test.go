@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
@@ -33,7 +34,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 		t.Fatalf("new operation must have an empty task list: %+v", empty)
 	}
 	var question operations.Question
-	a.Call("ask_question", fixtures.Object{"operation_id": first.ID, "text": "Analyze the first text?", "options": []string{"Yes", "No"}}, &question)
+	a.Call("ask_question", fixtures.Object{"operation_id": first.ID, "text": "Analyze the first text?", "options": []string{"Yes", "No"}, "timeout_seconds": 1}, &question)
 	a.Fails("assign_task", fixtures.Object{"operation_id": first.ID, "action_name": "analyze-text", "input": fixtures.Object{"text": texts[0]}}, "pending question")
 	b.Task(second.ID, "analyze-text", fixtures.Object{"text": texts[1]})
 	right := b.Wait(second.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })
@@ -41,6 +42,14 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	if len(left.Tasks) != 0 || len(left.Questions) != 1 || len(right.Questions) != 0 || !allTasksSucceeded(right) {
 		t.Fatalf("one operation's question affected the other: first=%+v second=%+v", left, right)
 	}
+	a.Wait(first.ID, func(op fixtures.OperationDetail) bool {
+		for _, saved := range op.Questions {
+			if saved.ID == question.ID {
+				return saved.Pending() && !time.Now().Before(saved.FallbackAt)
+			}
+		}
+		return false
+	})
 	a.Call("answer_question", fixtures.Object{"operation_id": first.ID, "question_id": question.ID, "answer": "Yes"}, nil)
 	a.Task(first.ID, "analyze-text", fixtures.Object{"text": texts[0]})
 	left = a.Wait(first.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })

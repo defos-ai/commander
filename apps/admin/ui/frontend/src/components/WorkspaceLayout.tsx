@@ -71,10 +71,9 @@ export function WorkspaceLayout({ connection, check, section, sections, onNaviga
             aria-current={section === 'status' ? 'page' : undefined}
             aria-label={t($ => $.shell.openStatus, { name: connection.name, health: t($ => $.shell.connectionHealth[health]) })}
             onClick={() => { sidebar.close(); onNavigate('status'); }}>
-            <span className="sidebar-connection-label"><span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
-              <span className="status-dot" aria-hidden="true" /></span>
+            <span className="eyebrow">{t($ => $.shell.currentConnection)}</span>
             <span className="sidebar-connection-name">{connection.name}</span>
-            <span className="sidebar-connection-url">{connection.url}</span>
+            <span className="sidebar-connection-url"><span className="status-dot" aria-hidden="true" /><span>{connection.url}</span></span>
           </button>
           <div className="sidebar-settings">
             {(!sections || sections.includes('settings')) && <button type="button" className="sidebar-command"

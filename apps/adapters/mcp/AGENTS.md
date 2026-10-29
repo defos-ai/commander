@@ -27,3 +27,9 @@ Questions with `command_id` originate from running actions. Answer the saved
 question, then await that task's result; do not ask a duplicate, resolve its
 continuation or queue replacement work while it runs. The action resumes after
 answer delivery and retains its execution deadline.
+
+Stack-test teardown answers leftover questions through the authenticated operator
+HTTP API before cancelling operations. Use the test API connection settings
+(`COMMANDER_TEST_API_*`), never relabel MCP submissions as operator answers or
+bypass `fallback_at`. Terminal unanswered questions cannot be repaired by answer
+commands, so fail with a clear fixture diagnostic instead of polling forever.
