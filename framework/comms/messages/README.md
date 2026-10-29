@@ -49,6 +49,19 @@ Checkpoint values are immutable. An identical save can be retried; a checkpoint
 does not authorize repeating an external side effect. See
 [checkpoint guidance](AGENTS.md) when changing the exchange.
 
+## Execution questions
+
+Inside an action served by `Agent.Serve`, call
+[`action.Question(ctx, key, text, options...)`](../../agent/action/questions.go)
+and handle the returned question's `Answer`. Use a stable key for each decision
+within that execution. Repeating a key reuses its question; changing its text or
+options is rejected.
+
+The controller saves the question for Playground/Admin. Operators can answer
+immediately; a model client may answer after `fallback_at`. The action waits and
+resumes after receiving the saved answer. Cancellation and task deadlines still
+apply. Keep credentials in `action.RequestSecret`, outside question history.
+
 ## Execution logs
 
 Call [`action.Log(ctx, message)`](../../agent/action/log.go) inside an action served

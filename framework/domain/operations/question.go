@@ -3,8 +3,10 @@ package operations
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -37,6 +39,8 @@ type Question struct {
 	Status     QuestionStatus `json:"status"`
 	StepID     string         `json:"step_id,omitempty"`
 	TaskID     string         `json:"task_id,omitempty"`
+	CommandID  string         `json:"command_id,omitempty"`
+	Key        string         `json:"key,omitempty"`
 	Text       string         `json:"text"`
 	Options    []string       `json:"options,omitempty"`
 	Answer     string         `json:"answer,omitempty"`
@@ -68,7 +72,16 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 	if err := o.ValidateStep(question.StepID); err != nil {
 		return err
 	}
+	if question.CommandID != "" && version != 0 {
+		return ErrOperationConflict
+	}
 	for _, existing := range o.Questions {
+		if question.CommandID != "" && existing.CommandID == question.CommandID && existing.Key == question.Key {
+			if existing.TaskID != question.TaskID || existing.StepID != question.StepID || existing.Text != question.Text || !slices.Equal(existing.Options, question.Options) {
+				return ErrOperationConflict
+			}
+			return nil
+		}
 		if existing.ID == question.ID {
 			return ErrOperationConflict
 		}
@@ -78,13 +91,20 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 		if i < 0 {
 			return ErrUnknownTask
 		}
-		c := o.Tasks[i].Continuation
-		if version == 0 || c == nil || c.Version != version || c.Status != ContinuationPending || c.DecisionBy != DecisionModel {
-			return fmt.Errorf("only a pending model decision can request operator intervention: %w", ErrContinuationConflict)
+		task := &o.Tasks[i]
+		if question.CommandID != "" {
+			if task.Status != TaskRunning || task.CommandID != question.CommandID || task.StepID != question.StepID {
+				return ErrOperationConflict
+			}
+		} else {
+			c := task.Continuation
+			if version == 0 || c == nil || c.Version != version || c.Status != ContinuationPending || c.DecisionBy != DecisionModel {
+				return fmt.Errorf("only a pending model decision can request operator intervention: %w", ErrContinuationConflict)
+			}
+			question.StepID = task.StepID
+			c.DecisionBy, c.Status, c.QuestionID = DecisionUser, ContinuationWaiting, question.ID
+			c.Version++
 		}
-		question.StepID = o.Tasks[i].StepID
-		c.DecisionBy, c.Status, c.QuestionID = DecisionUser, ContinuationWaiting, question.ID
-		c.Version++
 	}
 	question.Options = append([]string(nil), question.Options...)
 	o.Questions = append(o.Questions, question)
@@ -97,6 +117,14 @@ func (o *Operation) AskQuestion(question Question, version uint64) error {
 func (q Question) validateNew() error {
 	if !id.Valid(q.ID) || q.TaskID != "" && !id.Valid(q.TaskID) {
 		return errors.New("question and task IDs must be canonical UUIDs")
+	}
+	if q.CommandID != "" || q.Key != "" {
+		if !id.Valid(q.CommandID) || q.TaskID == "" {
+			return errors.New("execution question requires task and command UUIDs")
+		}
+		if err := ValidateExecutionQuestion(q.Key, q.Text, q.Options); err != nil {
+			return err
+		}
 	}
 	if q.Status != QuestionPending || q.Answer != "" || q.AnsweredAt != nil || q.AnsweredBy != "" {
 		return errors.New("new question must be pending without an answer")
@@ -140,6 +168,9 @@ func (o *Operation) AnswerQuestion(questionID, answer string, answeredBy AnswerO
 		default:
 			return errors.New("question is not pending")
 		}
+		if question.CommandID != "" && (len(answer) > MaxExecutionQuestionAnswerBytes || !utf8.ValidString(answer)) {
+			return errors.New("execution question answer must be valid UTF-8 of at most 8192 bytes")
+		}
 		now := time.Now().UTC()
 		if question.FallbackAt.IsZero() {
 			return errors.New("question has no model fallback time")
@@ -152,12 +183,18 @@ func (o *Operation) AnswerQuestion(questionID, answer string, answeredBy AnswerO
 			if i < 0 {
 				return errors.New("question task is missing")
 			}
-			c := o.Tasks[i].Continuation
-			if c == nil || c.QuestionID != question.ID || c.DecisionBy != DecisionUser || c.Status != ContinuationWaiting {
-				return errors.New("question does not match the waiting continuation")
+			if question.CommandID != "" {
+				if o.Tasks[i].CommandID != question.CommandID {
+					return errors.New("question does not match its execution command")
+				}
+			} else {
+				c := o.Tasks[i].Continuation
+				if c == nil || c.QuestionID != question.ID || c.DecisionBy != DecisionUser || c.Status != ContinuationWaiting {
+					return errors.New("question does not match the waiting continuation")
+				}
+				c.DecisionBy, c.Status = DecisionModel, ContinuationPending
+				c.Version++
 			}
-			c.DecisionBy, c.Status = DecisionModel, ContinuationPending
-			c.Version++
 		}
 		question.Status, question.Answer, question.AnsweredAt, question.AnsweredBy = QuestionAnswered, answer, &now, answeredBy
 		o.RefreshStatus()

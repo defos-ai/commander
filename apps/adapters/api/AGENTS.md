@@ -56,6 +56,10 @@
   enrichment out of handlers and mappings. Commands validate API input and send
   typed controller commands. Preserve strict JSON decoding, unknown-field rejection,
   body limits, content-type checks and canonical record-ID validation.
+  Question responses preserve optional `command_id` and `key` for questions
+  originating from running actions. These are response provenance, not accepted
+  ask-question input. Answering resumes that execution after delivery; existing
+  model-decision questions retain their continuation handoff.
 - The [operation log route](endpoints/operations/logs.go) requires `Config.ExecutionStore`,
   constructed from `DATABASE_URL` alongside operation storage; reuse the cached
   Mongo connection. The single `/operations/{operation_id}/logs` route accepts

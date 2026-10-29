@@ -46,6 +46,10 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		if _, err := DecodeCheckpointResponse(message); err != nil {
 			return err
 		}
+	case QuestionResponded:
+		if _, err := DecodeQuestionResponse(message); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported agent event type %q", message.Type)
 	}

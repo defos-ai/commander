@@ -14,12 +14,14 @@ type agentRuntime struct {
 	agent       *Agent
 	events      controllerevents.Client
 	checkpoints *checkpointClient
+	questions   *questionClient
 	logs        *logClient
 	shutdown    func(context.Context, string) error
 }
 
 func (r agentRuntime) Execute(ctx context.Context, call ActionCall, commandID string) (ActionOutput, error) {
 	ctx = context.WithValue(ctx, checkpointClientKey{}, r.checkpoints)
+	ctx = context.WithValue(ctx, questionClientKey{}, r.questions)
 	ctx = context.WithValue(ctx, logClientKey{}, r.logs)
 	return r.agent.work(ctx, call, commandID, true, func(ctx context.Context, snapshot AgentSnapshot) error {
 		publication, cancel := context.WithTimeout(ctx, 5*time.Second)

@@ -128,7 +128,7 @@ func TestSpawnAgentApprovalFlagsAreNotActionInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, reference := range []string{fixtures.ActionPackage, "github.com/acme/worker-agent@v1.2.3"} {
-		for _, field := range []string{"confirmed", "approved"} {
+		for _, field := range []string{"confirmed", "approved", "approval_question_id"} {
 			t.Run(reference+"/"+field, func(t *testing.T) {
 				values := map[string]any{"package": reference, "visibility": "private", field: true}
 				input, err := json.Marshal(values)

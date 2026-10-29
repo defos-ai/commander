@@ -70,16 +70,20 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   it as a static requirement for public installs. Clear temporary token bytes
   after spawning. Public input must remain anonymous even with an inherited
   download token. Visibility selects authentication, not authorization or trust.
-- [`packages.RequireTrustedSource`](packages/trust.go) applies the host's source
-  admission policy using the shared parser and an exact case-insensitive GitHub
-  owner comparison with `defos-ai`. Keep the check in the action before token
-  handling and in `runtimes.PinPackage` before checkpoints, network access or
-  runtime effects. Other owners return `ErrSourceApprovalRequired`; operator-only
-  approval is not implemented in this step. No input confirmation boolean,
-  environment override, source-list entry or claimed agent type can bypass it.
-  Shared parsing/resolution remains unrestricted metadata functionality. The
-  Source admission does not grant encryption-key access. Do not change
-  registration or secret delivery here.
+- [`packages.AuthorizeSource`](packages/trust.go) admits `defos-ai` owners using
+  the shared parser and an exact case-insensitive comparison. For other owners,
+  the running action calls `action.Question` with stable key `install-source`
+  and the canonical selector/visibility, before token access. It waits for the
+  controller's saved answer; operator and post-cutoff model answers both count.
+  Only Yes grants a private context capability bound to selector, command and
+  operation. `RequireTrustedSource` checks that capability in `runtimes.PinPackage`
+  before checkpoints, downloads or runtime effects. Changed question content
+  cannot reuse the execution key, and new executions ask independently.
+  No approval IDs or booleans belong in action input. No global trust is saved.
+  Model clients answer the existing execution question and await its task result;
+  they must not create duplicate questions or replacement installs while it runs.
+  Shared metadata resolution stays unrestricted. Admission grants no extra
+  privileges or encryption-key access; registration and secret delivery stay separate.
 - The shared [package metadata](../../../framework/agent/packages/) package owns
   reference parsing and discovery source definitions. `ParseSelector` accepts GitHub HTTPS
   URLs or `github.com/owner/repository[/module/path]`, with an optional exact

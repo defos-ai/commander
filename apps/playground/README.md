@@ -193,6 +193,10 @@ Playground automatically reviews watched questions when that window ends.
 `/stop` pauses this review; `/watch <operation-id>` resumes it. Other MCP clients
 schedule their own revisit using the same saved `fallback_at`.
 
+Running actions can ask their own questions. Answer the existing question and
+let that action resume; its task deadline continues while it waits. Avoid
+starting replacement work for the same pending decision.
+
 Tool calls update their pending line when they complete or fail. The progress
 area shows up to three recently updated operations; `+N more · /operations`
 points to the full list. Watching and model review continue for hidden operations.

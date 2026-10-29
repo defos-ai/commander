@@ -10,7 +10,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-const DefaultQuestionTimeout = 2 * time.Minute
+const DefaultQuestionTimeout = operations.DefaultQuestionTimeout
 
 func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (operations.Question, error) {
 	if err := command.Validate(); err != nil {

@@ -20,6 +20,8 @@ type QuestionResponse struct {
 	Status     string     `json:"status"`
 	StepID     string     `json:"step_id,omitempty"`
 	TaskID     string     `json:"task_id,omitempty"`
+	CommandID  string     `json:"command_id,omitempty"`
+	Key        string     `json:"key,omitempty"`
 	Text       string     `json:"text"`
 	Options    []string   `json:"options,omitempty"`
 	Answer     string     `json:"answer,omitempty"`

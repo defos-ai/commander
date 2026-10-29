@@ -37,6 +37,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	ctx, endService := context.WithCancelCause(ctx)
 	workersCtx, stopWorkers := context.WithCancel(ctx)
 	checkpoints := &checkpointClient{agentID: a.ID(), service: workersCtx, events: events, pending: make(map[string]checkpointWait)}
+	questions := &questionClient{agentID: a.ID(), service: workersCtx, events: events, pending: make(map[string]questionWait)}
 	logs := &logClient{agentID: a.ID(), service: workersCtx, events: events}
 	var heartbeatDone chan struct{}
 	var resultsDone chan struct{}
@@ -165,6 +166,10 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 				checkpoints.receive(message)
 				return nil
 			}
+			if message.Type == agentevents.QuestionResponded {
+				questions.receive(message)
+				return nil
+			}
 			if message.Type == agentevents.SecretDelivered {
 				if a.secrets != nil {
 					if err := a.secrets.install(message, time.Now().UTC()); err != nil {
@@ -199,7 +204,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}()
 	}
 	a.config.Logger.Info("agent ready", "action_count", len(a.config.Actions))
-	runtime := agentRuntime{agent: a, events: events, checkpoints: checkpoints, logs: logs, shutdown: func(ctx context.Context, commandID string) error {
+	runtime := agentRuntime{agent: a, events: events, checkpoints: checkpoints, questions: questions, logs: logs, shutdown: func(ctx context.Context, commandID string) error {
 		stopCommandID = commandID
 		stopBackground()
 		// Finish shutdown before returning to the consumer for ACK. Announce

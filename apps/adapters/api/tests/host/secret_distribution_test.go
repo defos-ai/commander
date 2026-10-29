@@ -337,7 +337,11 @@ func TestSecretDistributionFromAPIToIndependentAgent(t *testing.T) {
 func assertNoPlaintextInSecretStores(t *testing.T, root string) {
 	t.Helper()
 	for _, directory := range []string{"database", "storage"} {
-		err := filepath.WalkDir(filepath.Join(root, directory), func(path string, entry fs.DirEntry, err error) error {
+		storePath := filepath.Join(root, directory)
+		err := filepath.WalkDir(storePath, func(path string, entry fs.DirEntry, err error) error {
+			if directory == "storage" && path == storePath && errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			if err != nil || entry.IsDir() {
 				return err
 			}

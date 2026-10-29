@@ -37,6 +37,13 @@
   Broker/filesystem access is the trusted publisher boundary; envelope fields do
   not authenticate an untrusted publisher.
   An installation acknowledgement never proves ongoing readiness or revocation.
+- Execution question requests use command correlation plus a stable key; replies
+  correlate to the individual request ID and preserve command/key/work identity.
+  The independent agent event inbox delivers pending or answered saved questions
+  while the action waits. The controller validates its saved execution claim and
+  active task before saving or returning a question. Idempotent polls never reset
+  fallback times or repeat action effects. Keep question content and answers
+  separate from secret payloads; canceled execution waits reject late replies.
 - Preserve `expires_at` as a start deadline. Cached outcomes can replay after
   expiry; new command work cannot. No expiry means no admission limit.
 - When changing a wire field or message type, update its typed clients, producing

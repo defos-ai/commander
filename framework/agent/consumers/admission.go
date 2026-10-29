@@ -21,8 +21,13 @@ func withCommandDeadline(ctx context.Context, command messages.Message) context.
 // CheckCommandDeadline rechecks admission after waiting for internal discovery.
 // The deadline limits starting execution; it does not cancel work already started.
 func CheckCommandDeadline(ctx context.Context) error {
+	return checkAdmissionDeadline(CommandDeadline(ctx))
+}
+
+// CommandDeadline is admission metadata, not cancellation of a running action.
+func CommandDeadline(ctx context.Context) time.Time {
 	deadline, _ := ctx.Value(commandDeadlineKey{}).(time.Time)
-	return checkAdmissionDeadline(deadline)
+	return deadline
 }
 
 func checkAdmissionDeadline(deadline time.Time) error {

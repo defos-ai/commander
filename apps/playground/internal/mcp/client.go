@@ -223,6 +223,9 @@ const (
 
 type Question struct {
 	ID         string         `json:"id"`
+	TaskID     string         `json:"task_id,omitempty"`
+	CommandID  string         `json:"command_id,omitempty"`
+	Key        string         `json:"key,omitempty"`
 	Status     QuestionStatus `json:"status"`
 	Text       string         `json:"text"`
 	Options    []string       `json:"options"`

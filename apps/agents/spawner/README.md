@@ -9,8 +9,11 @@ In Playground, ask:
 > Install the web agent.
 
 You can also supply a GitHub package URL without a source-list entry.
-Spawner currently permits repositories owned by `github.com/defos-ai` only.
-Other owners are blocked until operator-only installation approval is available.
+Repositories owned by `github.com/defos-ai` proceed automatically. For other
+owners, the running action asks Yes/No before accessing tokens or launching the
+agent. Answer in Playground or Admin; after the default two-minute window, the
+model may answer. Yes resumes the same execution; No prevents installation.
+No owner trust is saved.
 
 ## Run
 
@@ -76,6 +79,12 @@ Start an `install-agent` operation and assign `spawn-agent` with the same input:
 A GitHub URL or `@stable` selects the repository's promoted **Latest** release.
 Use `@vMAJOR.MINOR.PATCH` to choose an exact version. Retrying the same execution
 keeps its selected version.
+
+For other owners, answer the question created by the running action. External
+MCP clients must reread the operation at `fallback_at` before using
+`answer_question`; Playground follows the waiting question automatically.
+Do not dispatch another install while the action waits. Its task deadline still
+applies. No approval ID or confirmation boolean belongs in action input.
 
 Review the result and the new agent's action readiness, then complete installation.
 Install agents in a separate operation before starting missions that need them.

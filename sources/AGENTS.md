@@ -37,7 +37,9 @@ Read the [root guide](../AGENTS.md) and
   a tag, search for an older package or claim an unpublished release is available.
 - This source list supports discovery; it does not enforce an installation allowlist.
   Spawner enforces its own trusted-owner policy independently; adding an entry
-  here cannot authorize a different owner.
+  here cannot authorize a different owner. External sources prompt an
+  execution-scoped `action.Question` before download/launch; the existing
+  operator-first window allows model fallback. No owner trust is saved.
   Keep deployment settings, credentials, action schemas and readiness out of it.
   The spawner owns manifest and executable downloads. Shared metadata code must
   remain independent of the spawner and must not require this checkout at runtime.

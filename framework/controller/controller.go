@@ -65,6 +65,7 @@ type Controller struct {
 	logger             *slog.Logger
 	artifactStore      artifacts.ArtifactStore
 	executionStore     executions.ExecutionStore
+	operationStore     operations.OperationStore
 	secrets            *consumers.SecretEventConsumer
 	events             comms.Subscription
 	cancel             context.CancelCauseFunc
@@ -152,7 +153,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	}
 	c := &Controller{
 		id: config.ID, controllerType: config.Type, bus: bus, artifactStore: config.ArtifactStore,
-		executionStore: config.ExecutionStore, logger: config.Logger,
+		executionStore: config.ExecutionStore, operationStore: config.OperationStore, logger: config.Logger,
 		events: events, cancel: cancel, inventory: config.AgentStore,
 		leaseRegistry: registry, leaseSweepInterval: config.LeaseSweepInterval,
 		state:      state.New(lifetime, config.HeartbeatTimeout),

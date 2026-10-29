@@ -10,9 +10,10 @@ Browse [`agents.yaml`](agents.yaml), or ask Playground:
 MCP loads the official source list on demand. Use
 `get_agent_sources` and use the selected source reference and
 visibility to the [installation workflow](../apps/agents/spawner/README.md#during-a-mission).
-You can also provide a GitHub package directly. Spawner currently permits
-repositories owned by `github.com/defos-ai`; other owners remain blocked pending
-operator-only installation approval support.
+You can also provide a GitHub package directly. `github.com/defos-ai` sources
+proceed automatically. For other owners, the running Spawner action asks an
+installation question: operator first, then model fallback after the waiting
+window. Yes resumes that execution; No prevents installation. No owner trust is saved.
 
 ## Source references
 

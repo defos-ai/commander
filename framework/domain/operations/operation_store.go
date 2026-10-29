@@ -57,7 +57,10 @@ type OperationStore interface {
 	ResolveContinuation(ctx context.Context, operationID, taskID string, version uint64, next []actions.NextAction) (Operation, error)
 	// AskQuestion saves the pending question and its deadline with status, event,
 	// and any linked decision handoff. Linked questions require the current version;
-	// duplicate question IDs return ErrOperationConflict without writing.
+	// duplicate question IDs return ErrOperationConflict without writing. Running
+	// execution questions deduplicate by command/key, preserving their first ID,
+	// fallback time and answer; changed contents return ErrOperationConflict.
+	// A successful identical replay confirms the saved question's persistence.
 	AskQuestion(ctx context.Context, operationID string, question Question, version uint64) (Operation, error)
 	// AnswerQuestion saves the answer, origin and linked decision together. Model
 	// answers before FallbackAt return ErrQuestionOperatorWaiting without writing.

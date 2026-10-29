@@ -63,6 +63,8 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 				schema.Properties["missing_requirements"].Description = "Current secret names reported by matching live running work before its saved deadline. Values are never included. These read-only requirements may change without updated_at changing; they neither alter mission preflight nor extend the task deadline."
 			}
 		case "Question":
+			schema.Properties["command_id"].Description = "Present for a question requested by a running action. Answering lets that same execution resume; do not assign replacement work."
+			schema.Properties["key"].Description = "Stable action question name within command_id; retries reuse the saved question and waiting deadline."
 			schema.Properties["fallback_at"].Description = "Earliest time a model may answer. Operators may answer immediately, and unanswered questions remain pending after this time."
 			schema.Properties["status"].Enum = []any{"pending", "answered"}
 			schema.Properties["answered_by"].Enum = []any{"operator", "model"}

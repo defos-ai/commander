@@ -340,6 +340,17 @@
   executors that need to correlate external side effects. `Agent.work` supplies
   this context and overrides caller metadata; identity is not action input or an
   authorization grant. Executors still own durable side-effect reconciliation.
+- `action.Question(ctx, key, text, options...)` waits within a serving execution
+  for a saved operation question answer. Stable keys bind to command/task/work;
+  retries reuse the saved question and cutoff, while changed content conflicts.
+  Active execution questions never hand off or resolve task continuations.
+  The controller validates the durable execution claim before saving or replying.
+  Operator-first timing uses the existing answer transition; the deadline alone
+  supplies no answer. Caller, action and service cancellation bound the wait;
+  task deadlines continue. Late replies cannot revive ended work. Unanswered
+  questions remain in history after an execution ends and can require review.
+  Secrets keep their separate encrypted storage, cache, versions and leases;
+  never pass secret values through question text or answers.
 
 ## Validation
 

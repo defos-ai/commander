@@ -16,7 +16,7 @@ import (
 )
 
 const SpawnAgentName = "spawn-agent"
-const SpawnAgentDescription = "Launch compatible agent releases from trusted github.com/defos-ai repositories; a source-list entry is not required. Other owners are blocked until operator-only approval is available. A repository URL or omitted version selects stable; @stable and exact @vMAJOR.MINOR.PATCH references are also accepted. The spawner saves the resolved version for retries. Pass the package reference and repository visibility from the operator or listed agent sources. Private packages use the host's GITHUB_TOKEN or request it through managed secrets; never put tokens in input. Waits for the assigned agent ID and type to announce registration and returns actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
+const SpawnAgentDescription = "Launch compatible agent releases; a source-list entry is not required. github.com/defos-ai sources proceed automatically. For other owners the running action asks an installation question and waits: operator first, then the model may answer after fallback_at. A saved Yes permits installation for this execution; No prevents it. Answer the saved question rather than assigning another task. The action resumes automatically after its answer, without an approval ID or boolean in input and without saved owner trust. A repository URL or omitted version selects stable; @stable and exact @vMAJOR.MINOR.PATCH references are also accepted. The spawner saves the resolved version for retries. Pass the package reference and repository visibility from the operator or listed agent sources. Private packages use the host's GITHUB_TOKEN or request it through managed secrets; never put tokens in input. Waits for the assigned agent ID and type to announce registration and returns actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
 
 // Spawner uses execution checkpoints for action launches. A retry observes the
 // saved launch for the same command rather than starting another agent.
@@ -48,7 +48,7 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 			InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
-					"package":{"type":"string","description":"GitHub repository URL or github.com/owner/repository[/module/path], optionally followed by @stable or @vMAJOR.MINOR.PATCH; omitted version means stable; only github.com/defos-ai sources are currently permitted"},
+					"package":{"type":"string","description":"GitHub repository URL or github.com/owner/repository[/module/path], optionally followed by @stable or @vMAJOR.MINOR.PATCH; omitted version means stable. Owners outside defos-ai trigger an installation question from the running action."},
 					"visibility":{"type":"string","enum":["public","private"],"default":"public","description":"GitHub repository visibility from the listed agent sources or operator; omitted means public. This does not grant access or change Docker image visibility."}
 				},
 				"required":["package"],
@@ -93,7 +93,8 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 			if err != nil {
 				return runtimes.Result{}, err
 			}
-			if err := downloads.RequireTrustedSource(input.Package); err != nil {
+			ctx, err = downloads.AuthorizeSource(ctx, input.Package, input.Visibility)
+			if err != nil {
 				return runtimes.Result{}, err
 			}
 			var token []byte

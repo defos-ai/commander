@@ -35,6 +35,8 @@ func ToQuestionResponse(question operations.Question) models.QuestionResponse {
 		Status:     string(question.Status),
 		StepID:     question.StepID,
 		TaskID:     question.TaskID,
+		CommandID:  question.CommandID,
+		Key:        question.Key,
 		Text:       question.Text,
 		Options:    slices.Clone(question.Options),
 		Answer:     question.Answer,

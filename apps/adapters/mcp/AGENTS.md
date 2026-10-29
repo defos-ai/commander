@@ -22,3 +22,8 @@ Recheck pending status before answering. Preserve the controller's atomic gate a
 first-answer-wins result. Early-answer errors may add the saved cutoff through a
 bounded read; failed enrichment must retain the original rejection without exposing
 backend errors or retrying the write.
+
+Questions with `command_id` originate from running actions. Answer the saved
+question, then await that task's result; do not ask a duplicate, resolve its
+continuation or queue replacement work while it runs. The action resumes after
+answer delivery and retains its execution deadline.

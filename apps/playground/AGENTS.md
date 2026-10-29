@@ -289,6 +289,10 @@
   before it. Keep operator forms open across this time; it never supplies
   approval or releases a linked continuation. Keep task/continuation revisions
   when deciding whether a review is new or stale.
+  Questions with `command_id` originate from running actions. Preserve their
+  task/command/key in MCP snapshots so model guidance can distinguish them from
+  continuation questions. Answer delivery resumes that action; never dispatch
+  replacement work or resolve its continuation while it is still running.
   The engine validates panel and `/answer` requests, then emits `answer_request`
   for [`internal/ui/answers.go`](internal/ui/answers.go). Submit through the retained
   authenticated API connection, with local login when needed; recheck question

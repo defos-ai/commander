@@ -12,6 +12,7 @@ import (
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/internal/state"
 )
 
@@ -28,6 +29,7 @@ type EventConsumer struct {
 	Inventory  agentmodel.AgentStore
 	Actions    actionmodel.ActionStore
 	Executions executions.ExecutionStore
+	Operations operations.OperationStore
 	Artifacts  artifacts.ArtifactStore
 	State      *state.State
 	Secrets    *SecretEventConsumer
@@ -50,6 +52,8 @@ func (c EventConsumer) Consume(ctx context.Context, message messages.Message) er
 		return (CommandResultConsumer{Inventory: c.Inventory, Executions: c.Executions, Artifacts: c.Artifacts, Bus: c.Bus, State: c.State}).Consume(ctx, message)
 	case controllerevents.CheckpointRequested:
 		return (CheckpointConsumer{Executions: c.Executions, Bus: c.Bus}).Consume(ctx, message)
+	case controllerevents.QuestionRequested:
+		return (QuestionConsumer{Executions: c.Executions, Operations: c.Operations, Bus: c.Bus}).Consume(ctx, message)
 	case controllerevents.ExecutionLogged:
 		return (LogConsumer{Executions: c.Executions}).Consume(ctx, message)
 	case controllerevents.SecretSyncRequested, controllerevents.SecretInstalled:
