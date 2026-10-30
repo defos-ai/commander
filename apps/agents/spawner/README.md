@@ -91,6 +91,22 @@ Review the result and the new agent's action readiness, then complete installati
 Install agents in a separate operation before starting missions that need them.
 Only run packages from authors you trust.
 
+To request multiple instances, use `spawn-agent` with `count` from 1 to 100
+(default 1):
+
+```json
+{"package":"github.com/defos-ai/commander-example-agent@v0.2.0","visibility":"public","count":3}
+```
+
+The controller dispatches one `spawn-agent` task per instance, each with its own
+deadline, source approval and launch checkpoints. `install-agent` collects the
+child results for one review; complete it with `agent_ids` and any limitations.
+The batch output records requested work; inspect the child results for actual
+launches. Use an exact version for the same release across all instances. The
+100-instance limit applies to each batch, not the whole deployment.
+On existing deployments, update the saved `install-agent` mission to the new
+definition; seeding preserves existing missions.
+
 Use MCP `operation_logs`, optionally filtered by `task_id`, to follow package
 selection, preparation, launch reconciliation and registration waits. Long stages
 emit periodic liveness updates. Use the saved task result and agent readiness to

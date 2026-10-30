@@ -262,9 +262,9 @@
   {
     "name": "install-agent",
     "objectives": [
-      "Install one agent from a GitHub package reference or repository URL. The spawner resolves an omitted version or @stable and saves the exact version for retries; explicit @vMAJOR.MINOR.PATCH pins are also accepted.",
-      "Read spawn-agent's schema and readiness, then assign spawn-agent with the mission input, preserving visibility; omitted visibility means public. For owners outside github.com/defos-ai, the running action asks an installation question. Answer that saved question: operator first, model allowed after fallback_at. Yes resumes the same execution; No prevents installation. Do not ask a duplicate question or queue replacement work while it waits. Private repositories use the spawner's GitHub token or the managed-secret form; never request token values in chat or action input.",
-      "Review its saved result and resolve the continuation with no follow-up actions. Recheck the registered agent's action readiness before completing with its agent_id and any limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready."
+      "Install 1 to 100 instances of one GitHub agent package; omitted count means one. The spawner resolves an omitted version or @stable separately for each launch and saves that launch's exact version for retries. Use an explicit @vMAJOR.MINOR.PATCH pin when every instance must use the same release.",
+      "Read spawn-agent's schema and readiness, then assign it with package, visibility and optional count. Omitted count means one direct launch; larger counts propose one single-instance spawn-agent child per instance for controller dispatch. Preserve visibility; omitted means public. For owners outside github.com/defos-ai, each running launch asks an installation question. Answer that saved question: operator first, model allowed after fallback_at. Yes resumes the same execution; No prevents that launch. Do not ask duplicate questions or queue replacement work while it waits. Private repositories use the spawner's GitHub token or managed-secret form; never request token values in chat or action input.",
+      "Review every saved launch result and registered agent's action readiness. The batch output describes requested work, not successful installations; its direct child results are collected for one review. Resolve the model continuation with no follow-up actions. Complete with agent_id for one launch or agent_ids for the successfully installed batch members, describing failed or unverified instances in limitations. If none were installed, use an empty agent_ids array and explain why in limitations. Registration does not guarantee every action is ready. Do not invent packages, install host dependencies, request deployment privileges or retry an uncertain launch with a new task. Run work needing the new actions in a separate operation after its preflight is ready."
     ],
     "required_actions": [
       "spawn-agent"
@@ -273,13 +273,10 @@
       "spawn-agent"
     ],
     "rules": {
-      "decide-next-actions": {
+      "aggregate-results": {
         "for_actions": [
           "spawn-agent"
-        ],
-        "params": {
-          "decision_by": "model"
-        }
+        ]
       }
     },
     "input_schema": {
@@ -294,7 +291,14 @@
           "type": "string",
           "enum": ["public", "private"],
           "default": "public",
-          "description": "Repository visibility supplied by the catalog or operator; omitted means public. Pass it unchanged to spawn-agent."
+          "description": "Repository visibility supplied by the source list or operator; omitted means public. Pass it unchanged to the spawn action."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 1,
+          "description": "Number of agent instances to install with spawn-agent; omitted means one."
         }
       },
       "required": [
@@ -309,6 +313,15 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "agent_ids": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
         "summary": {
           "type": "string",
           "pattern": "\\S"
@@ -321,9 +334,14 @@
           }
         }
       },
-      "required": [
-        "agent_id"
+      "oneOf": [
+        {"required": ["agent_id"]},
+        {"required": ["agent_ids"]}
       ],
+      "allOf": [{
+        "if": {"required": ["agent_ids"], "properties": {"agent_ids": {"maxItems": 0}}},
+        "then": {"required": ["limitations"], "properties": {"limitations": {"minItems": 1}}}
+      }],
       "additionalProperties": false
     }
   }

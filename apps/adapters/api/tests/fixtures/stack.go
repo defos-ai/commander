@@ -283,6 +283,32 @@ func (a *Client) Wait(id string, done func(models.OperationResponse) bool) model
 	}
 }
 
+func (a *Client) WaitForReadyAgents(ids []string) []models.AgentResponse {
+	a.t.Helper()
+	ctx, cancel := context.WithTimeout(a.Context, 30*time.Second)
+	defer cancel()
+	waiting := *a
+	waiting.Context = ctx
+	for {
+		catalog := Read[models.ListResponse[models.AgentResponse]](&waiting, "/api/v1/agents")
+		ready := make([]models.AgentResponse, 0, len(ids))
+		for _, id := range ids {
+			for _, agent := range catalog.Items {
+				if agent.ID == id && agent.Status == "ready" && !agent.Stale && agent.Work == nil {
+					ready = append(ready, agent)
+					break
+				}
+			}
+		}
+		if len(ready) == len(ids) {
+			return ready
+		}
+		if err := Pause(ctx); err != nil {
+			a.t.Fatalf("controller did not accept ready agents %v: %v", ids, err)
+		}
+	}
+}
+
 func TasksSettled(op models.OperationResponse) bool {
 	for _, task := range op.Tasks {
 		if task.Status == "queued" || task.Status == "running" || task.Status == "interrupted" {

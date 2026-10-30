@@ -15,6 +15,19 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [docker.Manager](runtimes/docker/manager.go) and the injected
   [Kubernetes Manager](runtimes/kubernetes/manager.go) implement the interface.
   CLI factories select the runtime; `cli.go` stays independent of concrete clients.
+- [`spawn-agent`](actions/spawn_agent.go) accepts `count` from 1–100 (default 1).
+  A single request launches directly and retains its runtime result. Larger
+  counts return requested batch metadata and propose individual `spawn-agent`
+  tasks with count omitted; planning does not launch a child or access secrets.
+  Preserve each child's controller
+  execution, deadline, source approval and checkpoints; never reuse one command
+  identity for several launches or expand the framework's checkpoint limit for
+  batching. Keep one registered action in runtime and static package metadata.
+  `install-agent` uses `aggregate-results` for the batch action so direct children
+  reach one review. Do not add a matching model-decision rule that blocks this
+  fan-out; single results without proposals still require model review. Each
+  child pins its own selector; callers needing a consistent
+  release across the batch must supply an exact version.
 - Results use `RuntimeKind` and one sealed `RuntimeDetails` value:
   `NativeRuntimeDetails`, `DockerRuntimeDetails` or `KubernetesRuntimeDetails`.
   JSON places the selected payload directly under `runtime_details`, with no

@@ -16,7 +16,7 @@ import (
 )
 
 const SpawnAgentName = "spawn-agent"
-const SpawnAgentDescription = "Launch compatible agent releases; a source-list entry is not required. github.com/defos-ai sources proceed automatically. For other owners the running action asks an installation question and waits: operator first, then the model may answer after fallback_at. A saved Yes permits installation for this execution; No prevents it. Answer the saved question rather than assigning another task. The action resumes automatically after its answer, without an approval ID or boolean in input and without saved owner trust. A repository URL or omitted version selects stable; @stable and exact @vMAJOR.MINOR.PATCH references are also accepted. The spawner saves the resolved version for retries. Pass the package reference and repository visibility from the operator or listed agent sources. Private packages use the host's GITHUB_TOKEN or request it through managed secrets; never put tokens in input. Waits for the assigned agent ID and type to announce registration and returns actions and current readiness; the controller independently persists registration. Launch settings are controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
+const SpawnAgentDescription = "Launch compatible agent releases; count defaults to 1 and must be between 1 and 100. For count 1, wait for the assigned agent's registration and return its identity, actions and readiness. For larger counts, return the requested batch and propose one spawn-agent task per instance for controller dispatch; review child results for actual launches. Each launch has its own deadline, checkpoints and source approval. Use an exact version when all instances must use the same release. A source-list entry is not required. github.com/defos-ai sources proceed automatically. For other owners each running launch asks an installation question: operator first, model allowed after fallback_at. Yes resumes that execution; No prevents its launch. Answer the saved question rather than assigning replacement work. No approval ID or boolean belongs in input and no owner trust is saved. A GitHub URL, omitted version or @stable selects the promoted Latest release; exact @vMAJOR.MINOR.PATCH is also accepted. Each launch saves its resolved version for retries. Preserve the supplied repository visibility; private packages use the host's GITHUB_TOKEN or managed secrets, never tokens in input. The controller independently persists registration. Launch settings remain controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
 
 // Spawner uses execution checkpoints for action launches. A retry observes the
 // saved launch for the same command rather than starting another agent.
@@ -27,9 +27,13 @@ type Spawner interface {
 type SpawnAgentInput struct {
 	Package    string              `json:"package"`
 	Visibility packages.Visibility `json:"visibility,omitempty"`
+	Count      int                 `json:"count,omitempty"`
 }
 
 func (input SpawnAgentInput) Validate() error {
+	if input.Count < 1 || input.Count > 100 {
+		return errors.New("count must be between 1 and 100")
+	}
 	if input.Visibility != packages.Public && input.Visibility != packages.Private {
 		return errors.New("visibility must be public or private")
 	}
@@ -37,11 +41,11 @@ func (input SpawnAgentInput) Validate() error {
 	return err
 }
 
-func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Result], error) {
+func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, map[string]any], error) {
 	if launcher == nil {
 		return nil, errors.New("agent launcher is required")
 	}
-	return action.NewFunc(action.FuncConfig[SpawnAgentInput, runtimes.Result]{
+	return action.NewFunc(action.FuncConfig[SpawnAgentInput, map[string]any]{
 		Action: actionmodel.Action{
 			Name:        SpawnAgentName,
 			Description: SpawnAgentDescription,
@@ -49,7 +53,8 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 				"type":"object",
 				"properties":{
 					"package":{"type":"string","description":"GitHub repository URL or github.com/owner/repository[/module/path], optionally followed by @stable or @vMAJOR.MINOR.PATCH; omitted version means stable. Owners outside defos-ai trigger an installation question from the running action."},
-					"visibility":{"type":"string","enum":["public","private"],"default":"public","description":"GitHub repository visibility from the listed agent sources or operator; omitted means public. This does not grant access or change Docker image visibility."}
+					"visibility":{"type":"string","enum":["public","private"],"default":"public","description":"GitHub repository visibility from the listed agent sources or operator; omitted means public. This does not grant access or change Docker image visibility."},
+					"count":{"type":"integer","minimum":1,"maximum":100,"default":1,"description":"Number of instances requested. More than one proposes individual spawn-agent tasks for the controller; the limit applies to this request, not the deployment."}
 				},
 				"required":["package"],
 				"additionalProperties":false
@@ -57,6 +62,7 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 			// Registered action schemas are raw JSON objects, not byte arrays.
 			OutputSchema: json.RawMessage(`{
 				"type":"object",
+				"oneOf":[{
 				"properties":{
 					"agent_id":{"type":"string"},
 					"agent_type":{"type":"string"},
@@ -85,43 +91,83 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, runtimes.Res
 					}}}
 				],
 				"additionalProperties":false
+				},{
+					"properties":{
+						"package":{"type":"string"},
+						"visibility":{"type":"string","enum":["public","private"]},
+						"count":{"type":"integer","minimum":2,"maximum":100}
+					},
+					"required":["package","visibility","count"],
+					"additionalProperties":false
+				}]
 			}`),
 		},
-		NewInput: func() SpawnAgentInput { return SpawnAgentInput{Visibility: packages.Public} },
-		Run: func(ctx context.Context, input SpawnAgentInput) (runtimes.Result, error) {
+		NewInput: func() SpawnAgentInput { return SpawnAgentInput{Visibility: packages.Public, Count: 1} },
+		Run: func(ctx context.Context, input SpawnAgentInput) (map[string]any, error) {
 			requestID, err := spawnRequestID(ctx)
 			if err != nil {
-				return runtimes.Result{}, err
+				return nil, err
 			}
-			ctx, err = downloads.AuthorizeSource(ctx, input.Package, input.Visibility)
+			if input.Count > 1 {
+				return map[string]any{"package": input.Package, "visibility": input.Visibility, "count": input.Count}, nil
+			}
+			result, err := spawnSingle(ctx, launcher, requestID, input)
 			if err != nil {
-				return runtimes.Result{}, err
+				return nil, err
 			}
-			var token []byte
-			if input.Visibility == packages.Private {
-				token = []byte(os.Getenv("GITHUB_TOKEN"))
-				if len(token) == 0 {
-					err = action.RunWithProgress(ctx, "Private package access", func() error {
-						var secretErr error
-						token, secretErr = action.RequestSecret(ctx, "GITHUB_TOKEN")
-						return secretErr
-					})
-					if err != nil {
-						return runtimes.Result{}, fmt.Errorf("private package requires GITHUB_TOKEN: %w", err)
-					}
-				}
-				defer clear(token)
-				if len(token) == 0 {
-					return runtimes.Result{}, errors.New("GITHUB_TOKEN must not be empty")
-				}
+			return map[string]any{
+				"agent_id": result.AgentID, "agent_type": result.AgentType, "package": result.Package,
+				"runtime": result.Runtime, "runtime_details": result.RuntimeDetails, "actions": result.Actions,
+			}, nil
+		},
+		NextActions: func(_ context.Context, input SpawnAgentInput, _ map[string]any) ([]action.NextAction, error) {
+			if input.Count == 1 {
+				return nil, nil
 			}
-			if err := ctx.Err(); err != nil {
-				return runtimes.Result{}, err
+			count := input.Count
+			input.Count = 0 // Child requests use the default instead of expanding the batch again.
+			data, err := json.Marshal(input)
+			if err != nil {
+				return nil, err
 			}
-			// Public requests explicitly clear any inherited download token.
-			return launcher.Spawn(downloads.WithGitHubToken(ctx, token), requestID, input.Package)
+			proposals := make([]action.NextAction, count)
+			for i := range proposals {
+				proposals[i] = action.NextAction{ActionName: SpawnAgentName, Input: data,
+					Reason: fmt.Sprintf("Launch agent instance %d of %d", i+1, count)}
+			}
+			return proposals, nil
 		},
 	})
+}
+
+func spawnSingle(ctx context.Context, launcher Spawner, requestID string, input SpawnAgentInput) (runtimes.Result, error) {
+	ctx, err := downloads.AuthorizeSource(ctx, input.Package, input.Visibility)
+	if err != nil {
+		return runtimes.Result{}, err
+	}
+	var token []byte
+	if input.Visibility == packages.Private {
+		token = []byte(os.Getenv("GITHUB_TOKEN"))
+		if len(token) == 0 {
+			err = action.RunWithProgress(ctx, "Private package access", func() error {
+				var secretErr error
+				token, secretErr = action.RequestSecret(ctx, "GITHUB_TOKEN")
+				return secretErr
+			})
+			if err != nil {
+				return runtimes.Result{}, fmt.Errorf("private package requires GITHUB_TOKEN: %w", err)
+			}
+		}
+		defer clear(token)
+		if len(token) == 0 {
+			return runtimes.Result{}, errors.New("GITHUB_TOKEN must not be empty")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return runtimes.Result{}, err
+	}
+	// Public requests explicitly clear any inherited download token.
+	return launcher.Spawn(downloads.WithGitHubToken(ctx, token), requestID, input.Package)
 }
 
 func spawnRequestID(ctx context.Context) (string, error) {

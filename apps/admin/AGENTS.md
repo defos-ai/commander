@@ -47,7 +47,9 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   seed [--dry-run]` and launcher calls on this path; the controller does not own
   catalog initialization. Existing definitions always win, including operator edits.
 - Keep bundled mission policy in that JSON. `install-agent` requires only
-  `spawn-agent` and reviews the launch result and readiness; GitHub stable
+  `spawn-agent`, accepts counts up to 100, and aggregates batch
+  children into one review. Complete with `agent_id` for a single launch or
+  `agent_ids` for a batch, after reviewing launch results and readiness. GitHub stable
   resolution belongs to the spawner, and visibility travels unchanged without
   tokens in mission input.
 - `build-agent` requires operator action contracts alongside instructions, checkout

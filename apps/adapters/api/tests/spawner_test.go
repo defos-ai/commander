@@ -139,6 +139,140 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	}
 }
 
+func TestSpawnerBatchCreatesIndependentAgentTasks(t *testing.T) {
+	a := fixtures.Connect(t)
+	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
+	input := fixtures.Object{"package": reference, "visibility": "public", "count": 3}
+	op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": "install-agent", "input": input}, http.StatusCreated)
+	if op.Preflight == nil || !op.Preflight.Ready {
+		t.Fatalf("installation is unavailable: %+v", op.Preflight)
+	}
+
+	assigned := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{"action_name": "spawn-agent", "input": input}, http.StatusCreated)
+	finished := a.Wait(op.ID, fixtures.TasksSettled)
+
+	if len(finished.Tasks) != 4 {
+		t.Fatalf("controller did not create exactly three batch children: %+v", finished.Tasks)
+	}
+	commands := make(map[string]bool)
+	agents := make(map[string]bool)
+	agentIDs := make([]string, 0, 3)
+	childTaskIDs := make([]string, 0, 3)
+	for _, task := range finished.Tasks {
+		if task.Status != "succeeded" || task.Result == nil || !id.Valid(task.CommandID) || commands[task.CommandID] {
+			t.Fatalf("batch task failed or reused another execution identity: %+v", task)
+		}
+		commands[task.CommandID] = true
+		if task.ID == assigned.ID {
+			if task.ActionName != "spawn-agent" || task.ParentTaskID != "" || len(task.Result.NextActions) != 3 {
+				t.Fatalf("batch coordinator did not propose three launches: %+v", task)
+			}
+			var planned struct {
+				Package    string `json:"package"`
+				Visibility string `json:"visibility"`
+				Count      int    `json:"count"`
+			}
+			decodeSpawnOutput(t, task.Result.Output, &planned)
+			if planned.Package != reference || planned.Visibility != "public" || planned.Count != 3 {
+				t.Fatalf("batch planning output lost the requested instances: %+v", planned)
+			}
+			continue
+		}
+		if task.ActionName != "spawn-agent" || task.ParentTaskID != assigned.ID {
+			t.Fatalf("controller lost the batch child's action or parent: %+v", task)
+		}
+		if task.Continuation == nil || task.Continuation.Status != "resolved" || task.Continuation.DecisionBy != "code" {
+			t.Fatalf("batch child exposed a separate review instead of collecting at its parent: %+v", task)
+		}
+		childTaskIDs = append(childTaskIDs, task.ID)
+		var childInput map[string]any
+		if err := json.Unmarshal(task.Input, &childInput); err != nil || len(childInput) != 2 || childInput["package"] != reference || childInput["visibility"] != "public" {
+			t.Fatalf("child request lost package/visibility or recursively expanded its count: %s: %v", task.Input, err)
+		}
+		var launched struct {
+			AgentID   string `json:"agent_id"`
+			AgentType string `json:"agent_type"`
+			Package   string `json:"package"`
+			Runtime   string `json:"runtime"`
+		}
+		if err := json.Unmarshal(task.Result.Output, &launched); err != nil {
+			t.Fatal(err)
+		}
+		if !id.ValidAgent(launched.AgentID) || agents[launched.AgentID] || launched.AgentType != "fixture-agent" || launched.Package != reference || launched.Runtime != fixtures.Environment("COMMANDER_TEST_SPAWNER_RUNTIME", "native") {
+			t.Fatalf("batch launch did not create an independent fixture instance: %+v", launched)
+		}
+		agents[launched.AgentID] = true
+		agentIDs = append(agentIDs, launched.AgentID)
+	}
+	if len(agentIDs) != 3 {
+		t.Fatalf("batch created %d distinct agents, want 3", len(agentIDs))
+	}
+	for _, registered := range a.WaitForReadyAgents(agentIDs) {
+		if registered.Type != "fixture-agent" || !slices.Equal(fixtures.ActionNames(registered.Actions), []string{"fixture-echo"}) {
+			t.Fatalf("controller did not retain a batch child's registered capability: %+v", registered)
+		}
+	}
+	decision := fixtures.ModelDecision(finished)
+	if decision == nil || decision.ID != assigned.ID || finished.Progress.PendingDecisions != 1 || !slices.Equal(decision.Continuation.CreatedTaskIDs, childTaskIDs) || len(decision.Continuation.ProposedActions) != 0 {
+		t.Fatalf("completed batch did not retain one parent review of its three children: %+v", finished)
+	}
+	a.Resolve(op.ID, *decision, []fixtures.Object{})
+	completed := fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(op.ID)+"/complete", fixtures.Object{"output": fixtures.Object{"agent_ids": agentIDs}}, http.StatusOK)
+	var output struct {
+		AgentIDs []string `json:"agent_ids"`
+	}
+	if err := json.Unmarshal(completed.Output, &output); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != "completed" || completed.ReportID == "" || !completed.Progress.Settled || len(completed.Tasks) != 4 || !slices.Equal(output.AgentIDs, agentIDs) {
+		t.Fatalf("reviewing the batch lost its instances or created additional work: %+v", completed)
+	}
+}
+
+func TestSpawnerFailedBatchCanCompleteWithoutInventedAgentIDs(t *testing.T) {
+	a := fixtures.Connect(t)
+	input := fixtures.Object{"package": "github.com/defos-ai/missing-agent@v0.1.0", "count": 2}
+	op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": "install-agent", "input": input}, http.StatusCreated)
+
+	assigned := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{"action_name": "spawn-agent", "input": input}, http.StatusCreated)
+	finished := a.Wait(op.ID, fixtures.TasksSettled)
+
+	if len(finished.Tasks) != 3 {
+		t.Fatalf("failed batch did not retain its coordinator and two launch attempts: %+v", finished.Tasks)
+	}
+	for _, task := range finished.Tasks {
+		if task.ID == assigned.ID {
+			if task.Status != "succeeded" || task.Result == nil || len(task.Result.NextActions) != 2 {
+				t.Fatalf("failed launches lost their accepted batch plan: %+v", task)
+			}
+			continue
+		}
+		if task.ActionName != "spawn-agent" || task.ParentTaskID != assigned.ID || task.Status != "failed" || task.Result != nil || task.Error == "" || task.Continuation == nil || task.Continuation.Status != "resolved" {
+			t.Fatalf("missing package did not retain a failed child under the batch review: %+v", task)
+		}
+	}
+	decision := fixtures.ModelDecision(finished)
+	if decision == nil || decision.ID != assigned.ID || finished.Progress.PendingDecisions != 1 || len(decision.Continuation.CreatedTaskIDs) != 2 || len(decision.Continuation.ProposedActions) != 0 {
+		t.Fatalf("failed batch did not expose one parent review without replacement launches: %+v", finished)
+	}
+	a.Resolve(op.ID, *decision, []fixtures.Object{})
+	completePath := fixtures.OperationPath(op.ID) + "/complete"
+	fixtures.AssertError(t, a.Request(http.MethodPost, completePath, fixtures.Object{"output": fixtures.Object{"agent_ids": []string{}}}), http.StatusUnprocessableEntity, "invalid_output")
+	limitations := []string{"No agents were installed because the requested package release was not found."}
+	completed := fixtures.Post[models.OperationResponse](a, completePath, fixtures.Object{"output": fixtures.Object{"agent_ids": []string{}, "limitations": limitations}}, http.StatusOK)
+	report := fixtures.Read[models.ReportResponse](a, "/api/v1/reports/"+completed.ReportID)
+	var output struct {
+		AgentIDs    []string `json:"agent_ids"`
+		Limitations []string `json:"limitations"`
+	}
+	if err := json.Unmarshal(report.Output, &output); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != "completed" || completed.ReportID == "" || !completed.Progress.Settled || len(completed.Tasks) != 3 || report.OperationID != op.ID || output.AgentIDs == nil || len(output.AgentIDs) != 0 || !slices.Equal(output.Limitations, limitations) {
+		t.Fatalf("failed installation report invented agents or lost its limitations: operation=%+v report=%+v", completed, report)
+	}
+}
+
 func assertSpawnProgressLogs(t *testing.T, a *fixtures.Client, operationID string, spawn models.TaskResponse, childAgentID string) {
 	t.Helper()
 	spawner := fixtures.Read[models.AgentResponse](a, "/api/v1/agents/"+spawn.AgentID)
