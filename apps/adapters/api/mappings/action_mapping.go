@@ -91,11 +91,10 @@ func ToActionOutputResponse(output actions.ActionOutput) models.ActionOutputResp
 		session = &v
 	}
 	return models.ActionOutputResponse{
-		Observations: ToObservationsResponse(output.Observations),
-		Session:      session,
-		ActionName:   output.ActionName,
-		Output:       bytes.Clone(output.Output),
-		Artifacts:    ToArtifactResponses(output.Artifacts),
-		NextActions:  ToNextActionResponses(output.NextActions),
+		Session:     session,
+		ActionName:  output.ActionName,
+		Output:      bytes.Clone(output.Output),
+		Artifacts:   ToArtifactResponses(output.Artifacts),
+		NextActions: ToNextActionResponses(output.NextActions),
 	}
 }

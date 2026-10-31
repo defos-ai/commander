@@ -314,7 +314,6 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			executionContext = action.WithQuestions(executionContext, questions)
 			executionContext = action.WithLogs(executionContext, logs)
 			executionContext = action.WithSession(executionContext, call.Session)
-			executionContext = action.WithAssessment(executionContext, call.Assessment)
 			var waits *workSecretWaits
 			if fromServer {
 				waits = &workSecretWaits{agent: a, context: executionContext, commandID: commandID,
@@ -349,7 +348,7 @@ func (a *Agent) packageOutput(ctx context.Context, name string, result action.Re
 	if err := actionmodel.ValidateNextActions(result.NextActions); err != nil {
 		return ActionOutput{}, err
 	}
-	output := ActionOutput{ActionName: name, Output: bytes.Clone(result.Output), NextActions: actionmodel.CloneNextActions(result.NextActions), Observations: result.Observations.Clone()}
+	output := ActionOutput{ActionName: name, Output: bytes.Clone(result.Output), NextActions: actionmodel.CloneNextActions(result.NextActions)}
 	if result.Session != nil {
 		v := result.Session.Clone()
 		if v.OwnerAgentID != a.ID() {
