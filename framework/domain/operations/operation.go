@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain/assessments"
 	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
@@ -21,22 +22,24 @@ const (
 func (s Status) Terminal() bool { return s == Completed || s == Failed || s == Cancelled }
 
 type Operation struct {
-	ID        string           `json:"id"`
-	Mission   missions.Mission `json:"mission"`
-	Input     json.RawMessage  `json:"input"`
-	Status    Status           `json:"status"`
-	Preflight *Preflight       `json:"preflight,omitempty"`
-	Tasks     []Task           `json:"tasks"`
-	Questions []Question       `json:"questions"`
-	Output    json.RawMessage  `json:"output,omitempty"`
-	ReportID  string           `json:"report_id,omitempty"`
-	Error     string           `json:"error,omitempty"`
-	Events    []Event          `json:"events"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	Assessment *assessments.Snapshot `json:"assessment,omitempty"`
+	ID         string                `json:"id"`
+	Mission    missions.Mission      `json:"mission"`
+	Input      json.RawMessage       `json:"input"`
+	Status     Status                `json:"status"`
+	Preflight  *Preflight            `json:"preflight,omitempty"`
+	Tasks      []Task                `json:"tasks"`
+	Questions  []Question            `json:"questions"`
+	Output     json.RawMessage       `json:"output,omitempty"`
+	ReportID   string                `json:"report_id,omitempty"`
+	Error      string                `json:"error,omitempty"`
+	Events     []Event               `json:"events"`
+	CreatedAt  time.Time             `json:"created_at"`
+	UpdatedAt  time.Time             `json:"updated_at"`
 }
 
 func (o Operation) Clone() Operation {
+	o.Assessment = o.Assessment.Clone()
 	if o.Preflight != nil {
 		preflight := o.Preflight.Clone()
 		o.Preflight = &preflight

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
@@ -166,7 +167,7 @@ func (c *Controller) awaitClaimedAction(ctx context.Context, stored executions.E
 		return state.CommandReply{}, recoveryOutcomeError(err)
 	}
 	if stored.Command.ID != requested.ID || stored.Command.AgentID != requested.AgentID || stored.Command.Work != requested.Work ||
-		original.ActionName != call.ActionName || original.Work != call.Work || !sameActionInput(original.Input, call.Input) {
+		original.ActionName != call.ActionName || original.Work != call.Work || !sameActionInput(original.Input, call.Input) || !reflect.DeepEqual(original.Assessment, call.Assessment) {
 		return state.CommandReply{}, executions.ErrExecutionConflict
 	}
 	if stored.Result == nil {

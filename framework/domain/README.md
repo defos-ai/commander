@@ -41,6 +41,13 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 
 ## Operations
 
+An operation may retain an immutable [assessment scope](assessments/snapshot.go)
+supplied by its client. The runner checks explicitly annotated mission and action
+destinations against it, including automatic child work; arbitrary shell/script
+traffic is not a network containment guarantee. [Observation batches](observations/batch.go)
+carry agent-independent host, service, finding and connection evidence in action
+results, preserving source records for downstream Target aggregation.
+
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Operation`](operations/operation.go) | Owns one mission run: its input, tasks, questions, event history and final output/report reference. | Runner scheduling/recovery, Controller question consumer, Queries, Adapters. |

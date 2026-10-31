@@ -44,6 +44,7 @@ func run() error {
 	owner := os.Getenv("FIXTURE_AGENT_ID")
 	resources := sessionworkerfakes.NewResources(ctx, os.Getenv("FIXTURE_PEER"), os.Getenv("FIXTURE_SESSION_STATE"))
 	var executors []action.Executor
+	executors = append(executors, sessionworkerfakes.NewAssessmentProbe())
 	for _, name := range []string{"propose-connections", "connect-resource", "propose-work"} {
 		mode := ""
 		if name == "connect-resource" {

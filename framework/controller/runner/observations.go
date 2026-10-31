@@ -6,6 +6,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/assessments"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -57,15 +58,15 @@ func (r *Runner) observeInterruptedTasks() {
 			r.observations[task.ID] = taskObservation{inFlight: true}
 			observers++
 			r.workers++
-			go r.observeTask(task.Clone())
+			go r.observeTask(task.Clone(), state.operation.Assessment.Clone())
 		}
 	}
 }
 
-func (r *Runner) observeTask(task operations.Task) {
+func (r *Runner) observeTask(task operations.Task, assessment *assessments.Snapshot) {
 	ctx, cancel := context.WithTimeout(r.ctx, taskObservationTimeout)
 	defer cancel()
-	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input,
+	call := actions.ActionCall{Assessment: assessment, ActionName: task.ActionName, Input: task.Input,
 		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
 	output, err := r.executor.RecoverAction(ctx, task.AgentID, call)
 	r.results <- taskResult{task: task, output: output, err: err, observation: true}

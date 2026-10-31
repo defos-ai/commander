@@ -9,12 +9,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/defos-ai/commander/framework/domain/assessments"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
 
 type operationMetadata struct {
+	Assessment     *assessments.Snapshot `json:"assessment,omitempty"`
 	ID             string                `json:"id"`
 	Mission        missions.Mission      `json:"mission"`
 	Input          json.RawMessage       `json:"input"`
@@ -31,7 +33,7 @@ type operationMetadata struct {
 }
 
 func encodeOperation(op operations.Operation) (map[string]json.RawMessage, error) {
-	metadata := operationMetadata{ID: op.ID, Mission: op.Mission, Input: op.Input,
+	metadata := operationMetadata{Assessment: op.Assessment.Clone(), ID: op.ID, Mission: op.Mission, Input: op.Input,
 		Status: op.Status, Preflight: op.Preflight, Output: op.Output, ReportID: op.ReportID,
 		Error: op.Error, CreatedAt: op.CreatedAt, UpdatedAt: op.UpdatedAt,
 		TaskIDs: make([]string, 0, len(op.Tasks)), QuestionIDs: make([]string, 0, len(op.Questions)),
@@ -147,7 +149,7 @@ func decodeOperation(data map[string]json.RawMessage, operationID string) (opera
 	if err != nil {
 		return operations.Operation{}, err
 	}
-	op := operations.Operation{ID: metadata.ID, Mission: metadata.Mission, Input: metadata.Input,
+	op := operations.Operation{Assessment: metadata.Assessment.Clone(), ID: metadata.ID, Mission: metadata.Mission, Input: metadata.Input,
 		Status: metadata.Status, Preflight: metadata.Preflight, Output: metadata.Output, ReportID: metadata.ReportID,
 		Error: metadata.Error, CreatedAt: metadata.CreatedAt, UpdatedAt: metadata.UpdatedAt,
 		Tasks: make([]operations.Task, 0, len(metadata.TaskIDs)), Questions: make([]operations.Question, 0, len(metadata.QuestionIDs))}

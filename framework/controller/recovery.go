@@ -98,7 +98,7 @@ func (c *Controller) executionResult(ctx context.Context, agentID, commandID str
 	if err := domain.Decode(command.Payload, &storedCall); err != nil {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(err)
 	}
-	if storedCall.ActionName != call.ActionName || storedCall.Work != call.Work || !sameActionInput(storedCall.Input, call.Input) {
+	if storedCall.ActionName != call.ActionName || storedCall.Work != call.Work || !sameActionInput(storedCall.Input, call.Input) || !reflect.DeepEqual(storedCall.Assessment, call.Assessment) {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(errors.New("stored action request does not match the recovering task"))
 	}
 	if record.Result == nil {

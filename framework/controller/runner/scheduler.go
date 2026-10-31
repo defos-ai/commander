@@ -76,6 +76,31 @@ func (r *Runner) dispatchQueued() {
 				continue
 			}
 
+			// Check the selected executor's public contract immediately before every
+			// dispatch, including automatic children and recovered queued work.
+			if s.operation.Assessment != nil {
+				var scopeErr error
+				for _, record := range records {
+					if record.ID != agentID {
+						continue
+					}
+					for _, action := range record.Actions {
+						if action.Name == task.ActionName {
+							input := task.Input
+							if len(input) == 0 {
+								input = []byte(`{}`)
+							}
+							scopeErr = s.operation.Assessment.ValidateInput(action.InputSchema, input)
+						}
+					}
+				}
+				if scopeErr != nil {
+					next, failErr := r.store.Fail(ctx, s.operation.ID, "Assessment scope rejected queued action: "+scopeErr.Error())
+					_ = s.acceptUpdate(next, failErr)
+					break
+				}
+			}
+
 			var next operations.Operation
 			var binding *sessions.Binding
 			if r.sessions != nil {
@@ -95,7 +120,7 @@ func (r *Runner) dispatchQueued() {
 			agentID = task.AgentID
 			used[agentID]++
 			r.lastAgent = agentID
-			call := actionmodel.ActionCall{Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
+			call := actionmodel.ActionCall{Assessment: s.operation.Assessment.Clone(), Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
 			r.workers++
 			go r.runTask(task, call)
 		}

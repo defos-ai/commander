@@ -45,6 +45,9 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	if err := definition.ValidateInput(input); err != nil {
 		return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
 	}
+	if err := command.Assessment.ValidateInput(definition.InputSchema, input); err != nil {
+		return operations.Operation{}, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+	}
 	rules, err := r.ruleSelector.Select(ctx, RuleSelection{Mission: definition.Clone(), Input: append(json.RawMessage(nil), input...)})
 	if err != nil {
 		return operations.Operation{}, fmt.Errorf("select mission rules: %w", err)
@@ -61,7 +64,7 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 	if operationID == "" {
 		operationID = id.OperationID()
 	}
-	operation := operations.Operation{ID: operationID, Mission: definition.Clone(), Input: input,
+	operation := operations.Operation{ID: operationID, Mission: definition.Clone(), Input: input, Assessment: command.Assessment.Clone(),
 		Status: operations.Planning, Tasks: []operations.Task{}, Questions: []operations.Question{},
 		CreatedAt: now, UpdatedAt: now}
 	records, err := r.catalog.Agents(ctx)

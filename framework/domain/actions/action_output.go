@@ -10,17 +10,22 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/observations"
 )
 
 type ActionOutput struct {
-	Session     *sessions.Session    `json:"session,omitempty"`
-	ActionName  string               `json:"action_name"`
-	Output      json.RawMessage      `json:"output"`
-	Artifacts   []artifacts.Artifact `json:"artifacts,omitempty"`
-	NextActions []NextAction         `json:"next_actions,omitempty"`
+	Observations *observations.Batch  `json:"observations,omitempty"`
+	Session      *sessions.Session    `json:"session,omitempty"`
+	ActionName   string               `json:"action_name"`
+	Output       json.RawMessage      `json:"output"`
+	Artifacts    []artifacts.Artifact `json:"artifacts,omitempty"`
+	NextActions  []NextAction         `json:"next_actions,omitempty"`
 }
 
 func (o ActionOutput) Validate() error {
+	if err := o.Observations.Validate(); err != nil {
+		return err
+	}
 	if o.Session != nil {
 		if err := o.Session.Validate(); err != nil {
 			return err
@@ -44,6 +49,7 @@ func (o ActionOutput) Validate() error {
 }
 
 func (o ActionOutput) Clone() ActionOutput {
+	o.Observations = o.Observations.Clone()
 	if o.Session != nil {
 		v := o.Session.Clone()
 		o.Session = &v

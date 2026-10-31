@@ -8,6 +8,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/assessments"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
@@ -53,14 +54,14 @@ func (r *Runner) resumeTasks() {
 			if task.Status == operations.TaskRunning {
 				allowDispatch := !state.operation.Status.Terminal() && task.DeadlineAt.After(time.Now())
 				r.workers++
-				go r.recoverTask(task, allowDispatch)
+				go r.recoverTask(task, allowDispatch, state.operation.Assessment.Clone())
 			}
 		}
 	}
 	r.observeInterruptedTasks()
 }
 
-func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
+func (r *Runner) recoverTask(task operations.Task, allowDispatch bool, assessment *assessments.Snapshot) {
 	deadline := *task.DeadlineAt
 	if !deadline.After(time.Now()) {
 		// An expired running task may already have a durable result. Bound this
@@ -69,7 +70,7 @@ func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
 	}
 	ctx, cancel := context.WithDeadline(r.ctx, deadline)
 	defer cancel()
-	call := actionmodel.ActionCall{ActionName: task.ActionName, Input: task.Input,
+	call := actionmodel.ActionCall{Assessment: assessment, ActionName: task.ActionName, Input: task.Input,
 		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
 	if allowDispatch && r.sessions != nil {
 		prepared, err := r.sessions.Prepare(ctx, runtimeSessions.Assignment{OperationID: task.OperationID, TaskID: task.ID, Candidate: task.AgentID, Timeout: r.taskTimeout})

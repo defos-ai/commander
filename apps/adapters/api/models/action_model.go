@@ -39,9 +39,10 @@ type ActionRequirementResponse struct {
 }
 
 type ActionOutputResponse struct {
-	Session     *RuntimeSessionResponse `json:"session,omitempty"`
-	ActionName  string                  `json:"action_name"`
-	Output      json.RawMessage         `json:"output"`
-	Artifacts   []ArtifactResponse      `json:"artifacts,omitempty"`
-	NextActions []NextActionResponse    `json:"next_actions,omitempty"`
+	Observations *ObservationBatchResponse `json:"observations,omitempty"`
+	Session      *RuntimeSessionResponse   `json:"session,omitempty"`
+	ActionName   string                    `json:"action_name"`
+	Output       json.RawMessage           `json:"output"`
+	Artifacts    []ArtifactResponse        `json:"artifacts,omitempty"`
+	NextActions  []NextActionResponse      `json:"next_actions,omitempty"`
 }

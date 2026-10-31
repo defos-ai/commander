@@ -12,6 +12,7 @@ import (
 
 func ToStartOperationCommand(request models.StartOperationRequest) controllercommands.StartOperationCommand {
 	return controllercommands.StartOperationCommand{
+		Assessment:  ToAssessment(request.Assessment),
 		OperationID: request.OperationID,
 		MissionName: request.MissionName,
 		Input:       bytes.Clone(request.Input),
@@ -46,19 +47,20 @@ func ToOperationViewResponse(operation queries.OperationView) models.OperationRe
 
 func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity, progress operations.Progress) models.OperationResponse {
 	response := models.OperationResponse{
-		ID:        operation.ID,
-		Mission:   ToMissionResponse(operation.Mission),
-		Input:     bytes.Clone(operation.Input),
-		Status:    string(operation.Status),
-		Progress:  toOperationProgressResponse(progress),
-		Tasks:     tasks,
-		Questions: ToQuestionResponses(operation.Questions),
-		Output:    bytes.Clone(operation.Output),
-		ReportID:  operation.ReportID,
-		Error:     operation.Error,
-		Events:    ToEventResponses(operation.Events),
-		CreatedAt: operation.CreatedAt,
-		UpdatedAt: operation.UpdatedAt,
+		Assessment: ToAssessmentResponse(operation.Assessment),
+		ID:         operation.ID,
+		Mission:    ToMissionResponse(operation.Mission),
+		Input:      bytes.Clone(operation.Input),
+		Status:     string(operation.Status),
+		Progress:   toOperationProgressResponse(progress),
+		Tasks:      tasks,
+		Questions:  ToQuestionResponses(operation.Questions),
+		Output:     bytes.Clone(operation.Output),
+		ReportID:   operation.ReportID,
+		Error:      operation.Error,
+		Events:     ToEventResponses(operation.Events),
+		CreatedAt:  operation.CreatedAt,
+		UpdatedAt:  operation.UpdatedAt,
 	}
 	if operation.Preflight != nil {
 		preflight := ToPreflightResponse(*operation.Preflight)

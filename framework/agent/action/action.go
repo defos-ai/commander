@@ -12,6 +12,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/observations"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
@@ -25,10 +26,11 @@ const (
 )
 
 type Result struct {
-	Session     *sessions.Session `json:"session,omitempty"`
-	Output      json.RawMessage   `json:"output"`
-	Artifacts   []Artifact        `json:"-"`
-	NextActions []NextAction      `json:"next_actions,omitempty"`
+	Observations *observations.Batch `json:"observations,omitempty"`
+	Session      *sessions.Session   `json:"session,omitempty"`
+	Output       json.RawMessage     `json:"output"`
+	Artifacts    []Artifact          `json:"-"`
+	NextActions  []NextAction        `json:"next_actions,omitempty"`
 }
 
 // Each instance belongs to one agent. Run never chooses another action or contacts a controller.
