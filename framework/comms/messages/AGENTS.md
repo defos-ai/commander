@@ -46,6 +46,15 @@
   separate from secret payloads; canceled execution waits reject late replies.
 - Preserve `expires_at` as a start deadline. Cached outcomes can replay after
   expiry; new command work cannot. No expiry means no admission limit.
+- [`ContextShared`](../clients/agent/events/context.go) uses the agent event inbox,
+  targeting an exact recipient command and work context. Decode at most 256 KiB
+  and require another source task in the same operation. Preserve existing source
+  identities, artifact ownership and answered-question origin; metadata does not
+  prove acceptance or grant new authority. Share selected output data without
+  follow-up proposals, session mutations, file bytes or secret payloads. The
+  receiving runtime still matches active execution/lifetime independently.
+  This step defines reception only; the controller's policy/persistence checks
+  and forwarding follow separately. Broker ACK is not action consumption.
 - When changing a wire field or message type, update its typed clients, producing
   and consuming code, validation and recovery together. Reflect protocol behavior
   in the [message contract](README.md) without duplicating payload inventories.

@@ -23,4 +23,5 @@ const (
 	QuestionRequested      MessageType = "execution.question.requested"
 	QuestionResponded      MessageType = "execution.question.responded"
 	ExecutionLogged        MessageType = "execution.logged"
+	ContextShared          MessageType = "execution.context.shared"
 )

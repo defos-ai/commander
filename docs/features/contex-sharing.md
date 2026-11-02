@@ -1,13 +1,15 @@
 # Context sharing
 
-**Status: mission policy can be saved; live publication and delivery are planned.**
+**Status: mission policy and agent reception are available; controller forwarding
+is planned.**
 
 Let agents share findings within an operation while work is running:
 
-1. Cybersecurity agents discover vulnerabilities and publish findings and evidence.
-2. The controller saves them and forwards permitted updates to an analyzing agent.
+1. Cybersecurity actions return vulnerability findings and evidence.
+2. The controller saves their results and accepted artifact metadata normally,
+   then forwards permitted data to an analyzing agent.
 3. The analyzer aggregates the updates in memory and analyzes vulnerabilities as
-   they arrive, without waiting for the whole operation to finish.
+   producer actions finish, while other tasks in the operation can continue.
 
 ## Mission policy
 
@@ -34,9 +36,10 @@ declare no routes. Each operation keeps its mission's policy snapshot; editing
 the mission affects future operations. Saving policy does not enable delivery yet.
 
 Results, decisions and artifact metadata are saved normally, whether sharing is
-enabled or not. Enabling sharing adds forwarding to matching receiving tasks in
-the same operation. Relevant non-secret decisions can also be included, retaining
-whether an operator or model answered and the decision's original scope.
+enabled or not. Sharing reuses those records and adds forwarding to matching
+receiving tasks in the same operation. Relevant non-secret answered questions can
+also be included, retaining whether an operator or model answered and the
+decision's original scope.
 
 ## Delivery
 
@@ -50,8 +53,8 @@ sequenceDiagram
 
     Security->>Storage: Upload evidence files
     Storage-->>Security: File references
-    Security->>Controller: Finding and artifact references
-    Controller->>Database: Save finding and artifact metadata
+    Security->>Controller: Completed action result and artifact references
+    Controller->>Database: Save result and accepted artifact metadata
     Database-->>Controller: Saved
     Note over Controller: Check mission sharing policy and receiving task
     Controller->>Analyzer: Push context update via agent event inbox
@@ -62,14 +65,19 @@ sequenceDiagram
 separately in S3-compatible or filesystem storage; messages carry finding data and
 file references rather than the file contents.
 
-After saving evidence, the controller pushes permitted updates to the receiving
-agent's event inbox through the existing messaging bus. The framework delivers
-them to the running action without polling. Start the analyzing task before
-scanners publish findings.
+After accepting and saving evidence, the controller pushes permitted data to the
+receiving agent's event inbox through the existing messaging bus. The framework
+delivers it to the running action without polling. Start the analyzing task before
+producer actions finish.
 
-A finding may be published while its producing action is still running. Such an
-update does not complete that action or replace its final result. Updates retain
-stable IDs and source information so receivers can ignore duplicate deliveries.
+Updates retain existing task, command, artifact or question IDs and source
+information so receivers can ignore duplicate deliveries. Forwarding uses the
+existing saved records without another persistence layer.
+
+A running action uses [`action.ReceiveContext(ctx)`](../../framework/agent/action/context.go)
+to wait for the next pushed update. Reception ends with the execution or its
+deadline. A full buffer reports an error so the analyzer can report incomplete
+context rather than silently continue.
 
 ## Agent-owned memory
 

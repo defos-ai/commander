@@ -255,6 +255,25 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 	if err := call.Validate(); err != nil {
 		return ActionOutput{}, err
 	}
+	executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
+	executionContext, cancelExecution := context.WithCancel(executionContext)
+	var contextProvider action.ContextProvider
+	var inbox *executionContextInbox
+	if fromServer && call.Work.OperationID != "" {
+		if client, ok := ctx.Value(sharedContextClientKey{}).(*sharedContextClient); ok && client != nil {
+			// Bind before announcing work so the controller can deliver immediately.
+			inbox = client.bind(executionContext, commandID, call.Work)
+			contextProvider = inbox
+		}
+	}
+	endContext := func() {
+		cancelExecution()
+		if inbox != nil {
+			inbox.close()
+		}
+	}
+	defer endContext()
+	executionContext = action.WithContextUpdates(executionContext, contextProvider)
 	started := false
 	workErr = a.stateChange(ctx, func(next *agentState) error {
 		if next.status != AgentReady || next.serving && !fromServer {
@@ -293,8 +312,6 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			if len(input) == 0 {
 				input = json.RawMessage(`{}`)
 			}
-			executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
-			executionContext, cancelExecution := context.WithCancel(executionContext)
 			var checkpoints action.CheckpointProvider
 			var questions action.QuestionProvider
 			var logs action.LogProvider
@@ -320,7 +337,7 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 					announce: announce, counts: make(map[string]int)}
 			}
 			endExecution := func() {
-				cancelExecution()
+				endContext()
 				waits.finish()
 			}
 			defer endExecution()

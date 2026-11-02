@@ -253,6 +253,19 @@
   return, panic or caller cancellation. An unavailable log capability skips the
   reporter. Completion describes only that named stage, not acceptance of an
   artifact, a remote side effect or the entire operation.
+- [`action.ReceiveContext`](agent/action/context.go) waits on an execution-scoped
+  memory buffer fed by the independent agent event inbox; it sends no request.
+  Bind it before announcing `AgentWorking`, match the exact recipient agent,
+  command and work identity, and keep source and recipient in the same operation.
+  Preserve saved source IDs and deep-copy result JSON, artifact metadata and
+  answered questions. Receivers own deduplication and aggregation. The 32-update
+  buffer fails with `ErrContextOverflow` rather than silently continuing with
+  incomplete data; it never blocks the event consumer. Caller cancellation,
+  execution/service end and command deadlines bound waits, including detached
+  contexts. Standalone work clears inherited access. Discard buffered data when
+  execution ends; delivery neither changes action outcomes nor extends deadlines.
+  This step enables receiving only; controller policy checks and forwarding are
+  not wired yet. No publication records, replay or durable receiver memory exist.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

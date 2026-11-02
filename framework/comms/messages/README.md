@@ -78,6 +78,20 @@ Query saved operation logs through the
 [HTTP API](../../../apps/adapters/api/README.md#execution-logs)
 or MCP's [`operation_logs`](../../../apps/adapters/README.md#queries-and-artifacts).
 
+## Shared context
+
+Inside an action served by `Agent.Serve`, use
+[`action.ReceiveContext(ctx)`](../../agent/action/context.go) to receive selected
+results, artifact metadata or answered decisions from another task in the same
+operation. Updates preserve source execution and existing record IDs for receiver
+deduplication. Artifact bytes remain in file storage; shared decisions preserve
+their original scope and answer origin without granting new authority.
+
+This receiving contract is available; controller forwarding is not enabled yet.
+Reception uses the existing agent event inbox while the action runs. Broker
+acknowledgement does not prove the action processed an update. Receiver memory is
+local, and live delivery provides no restart replay.
+
 ## Secret synchronization contracts
 
 Use [secret helpers](../../secrets/README.md#agent-requirements) in actions instead

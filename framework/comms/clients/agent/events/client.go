@@ -11,8 +11,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Client sends receipts, secret deliveries and checkpoint responses through a
-// separate inbox while an action command is running.
+// Client uses a separate inbox so controller events can arrive during an action.
 type Client struct {
 	Bus comms.Bus
 }
@@ -48,6 +47,10 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		}
 	case QuestionResponded:
 		if _, err := DecodeQuestionResponse(message); err != nil {
+			return err
+		}
+	case ContextShared:
+		if _, err := DecodeContextUpdate(message); err != nil {
 			return err
 		}
 	default:
