@@ -73,7 +73,7 @@ func openAPIDocument() ([]byte, error) {
 		}
 		if sharing := schema.Properties["sharing"]; sharing != nil {
 			sharing.Type, sharing.Types = "", []string{"array", "null"}
-			sharing.Description = "Optional action-based sharing routes retained in each operation's mission snapshot. Omitted, null or empty sharing declares no routes. Source and recipient actions need not appear in required_actions or optional_actions; routes do not start tasks or change readiness. The controller forwards accepted results and artifact metadata to matching active actions in the same operation. Decision forwarding is planned."
+			sharing.Description = "Optional action-based sharing routes retained in each operation's mission snapshot. Omitted, null or empty sharing declares no routes. Source and recipient actions need not appear in required_actions or optional_actions; routes do not start tasks or change readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded."
 		}
 		switch model.name {
 		case "About":

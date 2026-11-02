@@ -55,7 +55,8 @@
   receiving runtime still matches active execution/lifetime independently.
   Controller forwarding follows durable result/artifact acceptance and the saved
   operation policy; current recipient task, claim and observed work must agree.
-  Decision forwarding is pending. Broker ACK is not action consumption.
+  Task-scoped decisions follow successful answer saves, retaining their original
+  question IDs and operator/model provenance. Broker ACK is not action consumption.
 - When changing a wire field or message type, update its typed clients, producing
   and consuming code, validation and recovery together. Reflect protocol behavior
   in the [message contract](README.md) without duplicating payload inventories.

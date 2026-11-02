@@ -17,10 +17,12 @@ import (
 	"github.com/defos-ai/commander/apps/adapters/api/tests/fakes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
@@ -211,6 +213,36 @@ func (s *SharingStack) AwaitWorking(t *testing.T, operationID, taskID string) mo
 }
 
 func (s *SharingStack) Analyzer(agentID string) *fakes.SharingAnalyzer { return s.analyzers[agentID] }
+
+func (s *SharingStack) AwaitQuestion(t *testing.T, operationID, key string) models.QuestionResponse {
+	t.Helper()
+	var found models.QuestionResponse
+	s.await(t, func() bool {
+		response := s.Request(t, http.MethodGet, "/api/v1/operations/"+operationID+"/questions", nil)
+		if response.Status != http.StatusOK {
+			t.Fatalf("questions read: %d %s", response.Status, response.Body)
+		}
+		var questions models.QuestionListResponse
+		if err := json.Unmarshal([]byte(response.Body), &questions); err != nil {
+			t.Fatal(err)
+		}
+		for _, question := range questions.Items {
+			if question.Key == key && question.Status == "pending" {
+				found = question
+				return true
+			}
+		}
+		return false
+	})
+	return found
+}
+
+func (s *SharingStack) AnswerAsModel(operationID, questionID, answer string) error {
+	_, err := s.runner.Answer(s.Context, controllercommands.AnswerQuestionCommand{
+		OperationID: operationID, QuestionID: questionID, Answer: answer, AnsweredBy: operations.AnswerModel,
+	})
+	return err
+}
 
 func (s *SharingStack) StopAnalyzers() {
 	for _, executor := range s.analyzers {

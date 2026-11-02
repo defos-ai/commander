@@ -19,7 +19,7 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-func (c *Controller) forwardSharedResult(ctx context.Context, source sharedResult) error {
+func (c *Controller) forwardSharedResult(ctx context.Context, source sharedData) error {
 	if c.operationStore == nil || source.Work.OperationID == "" {
 		return nil
 	}
@@ -98,23 +98,7 @@ func (c *Controller) forwardSharedResult(ctx context.Context, source sharedResul
 			}
 			update.Artifacts = artifacts.CloneAll(accepted)
 		}
-		work := messages.WorkContext{OperationID: op.ID, TaskID: task.ID}
-		message, err := agentevents.NewContextUpdate(task.AgentID, task.CommandID, work, update)
-		if err != nil {
-			forwardingErr = errors.Join(forwardingErr, err)
-			continue
-		}
-		active, err := c.sharedRecipient(ctx, task)
-		if err == nil && active && time.Now().Before(*task.DeadlineAt) {
-			deadline := time.Now().Add(250 * time.Millisecond)
-			if task.DeadlineAt.Before(deadline) {
-				deadline = *task.DeadlineAt
-			}
-			publication, cancel := context.WithDeadline(ctx, deadline)
-			err = (agentevents.Client{Bus: c.bus}).Publish(publication, message)
-			cancel()
-		}
-		forwardingErr = errors.Join(forwardingErr, err)
+		forwardingErr = errors.Join(forwardingErr, c.publishSharedUpdate(ctx, task, update))
 	}
 	return forwardingErr
 }
@@ -132,6 +116,25 @@ func sharedResultKinds(policy missions.SharingPolicy, from, to string) (results,
 func sharedTaskMatches(task operations.Task, command messages.Message, call actions.ActionCall) bool {
 	return task.ID == task.CommandID && task.CommandID == command.ID && task.AgentID == command.AgentID &&
 		task.OperationID == command.Work.OperationID && task.ID == command.Work.TaskID && call.Work == command.Work && task.ActionName == call.ActionName
+}
+
+func (c *Controller) publishSharedUpdate(ctx context.Context, task operations.Task, update agentevents.ContextUpdate) error {
+	work := messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}
+	message, err := agentevents.NewContextUpdate(task.AgentID, task.CommandID, work, update)
+	if err != nil {
+		return err
+	}
+	active, err := c.sharedRecipient(ctx, task)
+	if err != nil || !active || !time.Now().Before(*task.DeadlineAt) {
+		return err
+	}
+	deadline := time.Now().Add(250 * time.Millisecond)
+	if task.DeadlineAt.Before(deadline) {
+		deadline = *task.DeadlineAt
+	}
+	publication, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return (agentevents.Client{Bus: c.bus}).Publish(publication, message)
 }
 
 func (c *Controller) sharedRecipient(ctx context.Context, task operations.Task) (bool, error) {

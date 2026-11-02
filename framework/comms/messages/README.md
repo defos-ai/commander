@@ -87,8 +87,8 @@ operation. Updates preserve source execution and existing record IDs for receive
 deduplication. Artifact bytes remain in file storage; shared decisions preserve
 their original scope and answer origin without granting new authority.
 
-The controller forwards accepted results and artifact metadata according to the
-operation's saved `policies.sharing`; decision forwarding is planned. Reception
+The controller forwards accepted results, artifact metadata and saved task-scoped
+answers according to the operation's saved `policies.sharing`. Reception
 uses the existing agent event inbox while the action runs. Broker
 acknowledgement does not prove the action processed an update. Receiver memory is
 local, and live delivery provides no restart replay. Forwarding failures are

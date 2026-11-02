@@ -315,7 +315,7 @@ func missionDefinitionSchema() string {
 			"properties": map[string]any{
 				"sharing": map[string]any{
 					"type": []string{"array", "null"}, "items": json.RawMessage(sharing),
-					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. The controller forwards accepted results and artifact metadata to matching active actions in the same operation. Decision forwarding is planned.",
+					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded.",
 				},
 			},
 			"description": "Optional mission policies. Only sharing is grouped here; completion and rules remain at the mission root. An empty object declares no sharing routes.",

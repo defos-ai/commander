@@ -99,8 +99,8 @@
   Only sharing is grouped here; completion and rules remain at the mission root.
   HTTP uses independent DTOs with cloned lists; MCP accepts the same
   domain policy. Reject unknown fields and invalid entries through shared mission
-  validation. The controller forwards results and accepted artifact metadata to
-  matching active tasks without starting work; decision forwarding is pending.
+  validation. The controller forwards results, accepted artifact metadata and
+  saved task-scoped answers to matching active tasks without starting work.
   Optional `completion` is a mission-wide setting with required `decision_by`
   of `model` or `operator` when present; omitted/null stays absent. Preserve it
   in mission reads and operation snapshots. HTTP completion stamps `operator`,

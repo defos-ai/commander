@@ -5,14 +5,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/apps/adapters/api/tests/fakes"
 	hostfixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/host"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
 func TestSharedDataUsesSavedPoliciesAndAcceptedEvidence(t *testing.T) {
@@ -150,6 +154,96 @@ func TestSharedDataRechecksCancellationAfterReadingArtifacts(t *testing.T) {
 	stack.AwaitTask(t, active.ID, activeAnalysis.ID, "succeeded")
 }
 
+func TestSharedDataForwardsSavedTaskDecisions(t *testing.T) {
+	stack := hostfixtures.NewSharingStack(t)
+	mission := hostfixtures.SharingMission("shared-decisions", []models.MissionSharingPolicyRequest{
+		{FromActions: []string{fakes.FindingAction}, ToActions: []string{fakes.AnalysisAction}, Include: []string{"decisions"}},
+		{FromActions: []string{fakes.FindingAction}, ToActions: []string{fakes.EvidenceAction}, Include: []string{"results"}},
+	})
+	decodeSharing[models.MissionResponse](t, stack.Request(t, http.MethodPost, "/api/v1/missions", mission), http.StatusCreated)
+	operation := startSharingOperation(t, stack, mission.Name)
+	analysis := assignSharingTask(t, stack, operation.ID, fakes.AnalysisAction, json.RawMessage(`{}`))
+	analysis = stack.AwaitWorking(t, operation.ID, analysis.ID)
+	evidence := assignSharingTask(t, stack, operation.ID, fakes.EvidenceAction, json.RawMessage(`{}`))
+	evidence = stack.AwaitWorking(t, operation.ID, evidence.ID)
+	otherOperation := startSharingOperation(t, stack, mission.Name)
+	otherAnalysis := assignSharingTask(t, stack, otherOperation.ID, fakes.AnalysisAction, json.RawMessage(`{}`))
+	otherAnalysis = stack.AwaitWorking(t, otherOperation.ID, otherAnalysis.ID)
+	producer := assignSharingTask(t, stack, operation.ID, fakes.FindingAction, json.RawMessage(`{"marker":"decisions","questions":true}`))
+	producer = stack.AwaitWorking(t, operation.ID, producer.ID)
+
+	for _, key := range []string{"scope", "priority"} {
+		pending := stack.AwaitQuestion(t, operation.ID, key)
+		decodeSharing[models.OperationResponse](t, stack.Request(t, http.MethodPost,
+			"/api/v1/operations/"+operation.ID+"/questions/"+pending.ID+"/answer", models.AnswerQuestionRequest{Answer: "Investigate"}), http.StatusOK)
+		saved := readSharingQuestion(t, stack, operation.ID, pending.ID)
+
+		assertSharedDecision(t, receiveSharedFinding(t, stack, analysis.AgentID), producer, analysis, saved, "operator")
+		if saved.CommandID != producer.CommandID || saved.Key != key {
+			t.Fatal("execution question lost its original command and stable key")
+		}
+		duplicate := stack.Request(t, http.MethodPost, "/api/v1/operations/"+operation.ID+"/questions/"+pending.ID+"/answer",
+			models.AnswerQuestionRequest{Answer: "Ignore"})
+		if duplicate.Status != http.StatusConflict {
+			t.Fatalf("answer replacement was accepted: %d %s", duplicate.Status, duplicate.Body)
+		}
+	}
+	producer = stack.AwaitTask(t, operation.ID, producer.ID, "succeeded")
+	assertSharedFinding(t, receiveSharedFinding(t, stack, evidence.AgentID), producer, evidence, true, false, "decisions")
+
+	operationQuestion := decodeSharing[models.QuestionResponse](t, stack.Request(t, http.MethodPost,
+		"/api/v1/operations/"+operation.ID+"/questions", models.AskQuestionRequest{Text: "Continue monitoring the whole operation?"}), http.StatusCreated)
+	decodeSharing[models.OperationResponse](t, stack.Request(t, http.MethodPost,
+		"/api/v1/operations/"+operation.ID+"/questions/"+operationQuestion.ID+"/answer", models.AnswerQuestionRequest{Answer: "Continue"}), http.StatusOK)
+	if producer.Continuation == nil {
+		t.Fatal("finished producer has no model continuation for a task-linked question")
+	}
+	modelQuestion := decodeSharing[models.QuestionResponse](t, stack.Request(t, http.MethodPost,
+		"/api/v1/operations/"+operation.ID+"/questions", models.AskQuestionRequest{TaskID: producer.ID, Version: producer.Continuation.Version,
+			Text: "Which evidence should the next analysis prioritize?", Options: []string{"Network", "Identity"}, TimeoutSeconds: 2}), http.StatusCreated)
+	if err := stack.AnswerAsModel(operation.ID, modelQuestion.ID, "Network"); !errors.Is(err, operations.ErrQuestionOperatorWaiting) {
+		t.Fatalf("model answer did not respect the operator-first window: %v", err)
+	}
+	deadline := time.NewTimer(time.Until(modelQuestion.FallbackAt))
+	defer deadline.Stop()
+	select {
+	case <-deadline.C:
+	case <-stack.Context.Done():
+		t.Fatal("model fallback deadline exceeded the sharing fixture lifetime")
+	}
+	if err := stack.AnswerAsModel(operation.ID, modelQuestion.ID, "Identity"); err != nil {
+		t.Fatal(err)
+	}
+	savedModel := readSharingQuestion(t, stack, operation.ID, modelQuestion.ID)
+
+	assertSharedDecision(t, receiveSharedFinding(t, stack, analysis.AgentID), producer, analysis, savedModel, "model")
+	shared := stack.Bus.SharedMessages()
+	if pairs := countSharedPairs(t, shared); pairs != 4 {
+		t.Fatalf("decision filtering lost a question, shared an operation-wide question or exposed a result: %d pairs", pairs)
+	}
+	for _, message := range shared {
+		update, err := agentevents.DecodeContextUpdate(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if message.Work.OperationID != operation.ID || message.AgentID == otherAnalysis.AgentID ||
+			update.Decision != nil && (update.Decision.ID == operationQuestion.ID || message.AgentID != analysis.AgentID) ||
+			len(update.Result) != 0 && message.AgentID != evidence.AgentID {
+			t.Fatalf("saved decision or result escaped its selected task scope: %+v", message)
+		}
+	}
+	stack.StopAnalyzers()
+	for _, entry := range []struct {
+		task models.TaskResponse
+		want string
+	}{{analysis, `{"findings":3}`}, {evidence, `{"findings":1}`}, {otherAnalysis, `{"findings":0}`}} {
+		finished := stack.AwaitTask(t, entry.task.OperationID, entry.task.ID, "succeeded")
+		if finished.Result == nil || string(finished.Result.Output) != entry.want {
+			t.Fatalf("analyzer received the wrong distinct decision/result set: %+v; want %s", finished.Result, entry.want)
+		}
+	}
+}
+
 func startSharingOperation(t *testing.T, stack *hostfixtures.SharingStack, mission string) models.OperationResponse {
 	t.Helper()
 	return decodeSharing[models.OperationResponse](t, stack.Request(t, http.MethodPost, "/api/v1/operations", models.StartOperationRequest{
@@ -198,7 +292,7 @@ func decodeSharing[T any](t *testing.T, response hostfixtures.Response, status i
 
 func countSharedPairs(t *testing.T, shared []messages.Message) int {
 	t.Helper()
-	pairs := make(map[[4]string][]byte)
+	pairs := make(map[[5]string][]byte)
 	for _, message := range shared {
 		update, err := agentevents.DecodeContextUpdate(message)
 		if err != nil {
@@ -208,13 +302,42 @@ func countSharedPairs(t *testing.T, shared []messages.Message) int {
 		if err != nil {
 			t.Fatal(err)
 		}
-		key := [4]string{update.Source.AgentID, update.Source.CommandID, message.AgentID, message.CorrelationID}
+		key := [5]string{update.Source.AgentID, update.Source.CommandID, message.AgentID, message.CorrelationID, ""}
+		if update.Decision != nil {
+			key[4] = update.Decision.ID
+		}
 		if previous, exists := pairs[key]; exists && !bytes.Equal(previous, payload) {
 			t.Fatalf("repeated execution pair changed its combined sharing payload: %s != %s", previous, payload)
 		}
 		pairs[key] = payload
 	}
 	return len(pairs)
+}
+
+func readSharingQuestion(t *testing.T, stack *hostfixtures.SharingStack, operationID, questionID string) models.QuestionResponse {
+	t.Helper()
+	return decodeSharing[models.QuestionResponse](t, stack.Request(t, http.MethodGet,
+		"/api/v1/operations/"+operationID+"/questions/"+questionID, nil), http.StatusOK)
+}
+
+func assertSharedDecision(t *testing.T, finding fakes.SharedFinding, source, target models.TaskResponse, saved models.QuestionResponse, origin string) {
+	t.Helper()
+	update := finding.Update
+	if update.Source.AgentID != source.AgentID || update.Source.CommandID != source.CommandID || update.Source.ActionName != source.ActionName ||
+		update.Source.Work.OperationID != source.OperationID || update.Source.Work.TaskID != source.ID ||
+		finding.Execution.CommandID != target.CommandID || finding.Execution.Work.OperationID != target.OperationID || finding.Execution.Work.TaskID != target.ID {
+		t.Fatalf("forwarding lost decision source or recipient provenance: %+v; recipient: %+v", update.Source, finding.Execution)
+	}
+	decision := update.Decision
+	if decision == nil || len(update.Result) != 0 || len(update.Artifacts) != 0 || len(finding.Files) != 0 {
+		t.Fatalf("decisions-only route exposed something besides its saved answer: %+v", update)
+	}
+	if saved.AnsweredBy != origin || decision.ID != saved.ID || string(decision.Status) != saved.Status || decision.TaskID != saved.TaskID ||
+		decision.CommandID != saved.CommandID || decision.Key != saved.Key || decision.Text != saved.Text || !slices.Equal(decision.Options, saved.Options) ||
+		decision.Answer != saved.Answer || string(decision.AnsweredBy) != saved.AnsweredBy || !decision.AskedAt.Equal(saved.AskedAt) ||
+		!decision.FallbackAt.Equal(saved.FallbackAt) || decision.AnsweredAt == nil || saved.AnsweredAt == nil || !decision.AnsweredAt.Equal(*saved.AnsweredAt) {
+		t.Fatalf("forwarded decision differs from the saved %s answer: %+v != %+v", origin, decision, saved)
+	}
 }
 
 func assertSharedFinding(t *testing.T, finding fakes.SharedFinding, source, target models.TaskResponse, results, artifacts bool, marker string) {

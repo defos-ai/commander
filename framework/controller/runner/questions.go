@@ -55,6 +55,9 @@ func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionComm
 		if err := s.acceptUpdate(next, err); err != nil {
 			return operations.Operation{}, err
 		}
+		if sharing, ok := r.executor.(interface{ ShareQuestionAnswer(string, string) }); ok {
+			sharing.ShareQuestionAnswer(command.OperationID, command.QuestionID)
+		}
 		return s.operation.Clone(), nil
 	})
 }

@@ -63,8 +63,8 @@
   need not appear in coverage lists, which are not allowlists. Absent/null `policies`
   and an absent/null/empty sharing list declare no routes. Empty policies are valid.
   Clone the policy container independently and deep-clone each nested slice into
-  operation snapshots. Results and accepted artifact metadata can be forwarded
-  to existing active tasks; decision forwarding is pending. Sharing does not
+  operation snapshots. Results, accepted artifact metadata and task-scoped
+  answered questions can be forwarded to existing active tasks. Sharing does not
   start tasks or grant secret/storage access.
 - Optional mission `completion` stores a mission-wide `CompletionPolicy` with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
@@ -276,6 +276,14 @@
   failures and queue overload are logged without changing accepted outcomes.
   Cancel and join it during shutdown. Recovery reads do not replay sharing, and
   saved source IDs let receivers deduplicate accepted event redeliveries.
+- After a successful answer save, the runner notifies executors supporting
+  `ShareQuestionAnswer`. The controller queues only operation/question IDs and
+  [rereads the saved decision](controller/shared_decisions.go), matching its task
+  to the original execution claim before routing. Preserve question IDs, content,
+  timestamps and answer origin; multiple decisions can belong to one execution.
+  Operation-wide questions are not shared. Pending, rejected or uncertain answers
+  and ordinary reads/recovery never trigger forwarding. Delivery failures do not
+  change an answer or its continuation; sharing grants no completion authority.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and

@@ -1,9 +1,8 @@
 # Data sharing
 
-**Status: live result and artifact forwarding is available. Decision forwarding
-is planned.**
+**Status: live forwarding of results, artifacts and answered decisions is available.**
 
-Share saved results and artifact references between actions
+Share saved results, artifact references and answered decisions between actions
 in the same operation. Receiving agents use that data to build their own working
 context. For example:
 
@@ -41,9 +40,11 @@ future operations. Receiving actions must already be running.
 
 Results, decisions and artifact metadata are saved normally, whether sharing is
 enabled or not. Sharing reuses those records and adds forwarding to matching
-receiving tasks in the same operation. The planned `decisions` option will share
-non-secret, task-scoped answered questions, retaining who answered and the
-decision's original scope.
+receiving tasks in the same operation. The `decisions` option shares non-secret,
+task-scoped answered questions after the answer is saved, retaining the question
+ID, original scope, answer and operator/model origin. It covers questions asked by
+running actions and questions linked to task continuations. Operation-wide
+questions stay outside sharing; receiving a decision grants no approval or authority.
 
 ## Delivery
 
@@ -62,6 +63,11 @@ sequenceDiagram
     Database-->>Controller: Saved
     Note over Controller: Check mission sharing policy and receiving task
     Controller->>Analyzer: Push shared data via agent event inbox
+    opt Task-scoped question answered
+        Controller->>Database: Save answer and operator/model origin
+        Database-->>Controller: Saved
+        Controller->>Analyzer: Push answered decision if permitted
+    end
     Note over Analyzer: Aggregate and analyze in memory
 ```
 
@@ -95,7 +101,7 @@ Managed secrets, execution checkpoints, raw execution logs and private chat
 history stay outside automatic sharing.
 
 Delivery is live and aggregation stays in memory. Forwarding failures and overload
-are logged without changing accepted results. An analyzer restart loses its local
+are logged without changing accepted results or saved answers. An analyzer restart loses its local
 memory; replay and recovery are later work. Saved evidence remains available, but
 persistence alone does not confirm delivery.
 

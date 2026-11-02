@@ -29,18 +29,26 @@ type SharingProducer struct {
 
 func NewSharingProducer() *SharingProducer {
 	return &SharingProducer{Base: action.NewBase(actions.Action{Name: FindingAction,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"marker":{"type":"string"}},"required":["marker"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"marker":{"type":"string"},"questions":{"type":"boolean"}},"required":["marker"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"object"}`)})}
 }
 
-func (p *SharingProducer) Run(_ context.Context, input json.RawMessage) (action.Result, error) {
+func (p *SharingProducer) Run(ctx context.Context, input json.RawMessage) (action.Result, error) {
 	var request struct {
-		Marker string `json:"marker"`
+		Marker    string `json:"marker"`
+		Questions bool   `json:"questions"`
 	}
 	if err := action.DecodeInput(input, &request); err != nil {
 		return action.Result{}, err
 	}
 	p.calls.Add(1)
+	if request.Questions {
+		for _, key := range []string{"scope", "priority"} {
+			if _, err := action.Question(ctx, key, "Choose the "+key+" for this finding.", "Investigate", "Ignore"); err != nil {
+				return action.Result{}, err
+			}
+		}
+	}
 	marker, err := json.Marshal(request.Marker)
 	if err != nil {
 		return action.Result{}, err
@@ -81,7 +89,7 @@ func (a *SharingAnalyzer) Run(ctx context.Context, _ json.RawMessage) (action.Re
 	defer func() { stop(); cancel() }()
 	execution, _ := action.ExecutionFromContext(ctx)
 	count := 0
-	seen := make(map[[2]string]bool)
+	seen := make(map[[3]string]bool)
 	for {
 		update, err := action.ReceiveContext(receiving)
 		if err != nil {
@@ -92,7 +100,10 @@ func (a *SharingAnalyzer) Run(ctx context.Context, _ json.RawMessage) (action.Re
 			}
 			return action.Result{}, err
 		}
-		source := [2]string{update.Source.AgentID, update.Source.CommandID}
+		source := [3]string{update.Source.AgentID, update.Source.CommandID, ""}
+		if update.Decision != nil {
+			source[2] = update.Decision.ID
+		}
 		if seen[source] {
 			continue
 		}
