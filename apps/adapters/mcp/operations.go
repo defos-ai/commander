@@ -310,12 +310,15 @@ func missionDefinitionSchema() string {
 			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
 			"description": "Nonblank exact mission name. Creation requires an unused name; updating requires the existing unchanged name.",
 		},
-		"context": map[string]any{
+		"policies": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": false,
 			"properties": map[string]any{
-				"sharing": map[string]any{"type": []string{"array", "null"}, "items": json.RawMessage(sharing)},
+				"sharing": map[string]any{
+					"type": []string{"array", "null"}, "items": json.RawMessage(sharing),
+					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. Controller forwarding is not enabled yet.",
+				},
 			},
-			"description": "Optional action-based context sharing policy retained in operation snapshots. Empty or omitted sharing disables forwarding. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. This step stores policy only; live forwarding is not enabled yet.",
+			"description": "Optional mission policies. Only sharing is grouped here; completion and rules remain at the mission root. An empty object declares no sharing routes.",
 		},
 		"completion": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": false,

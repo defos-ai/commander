@@ -139,10 +139,10 @@
   Reject malformed or unsupported completion policy when switching JSON to Form,
   retaining the raw source for repair. Mission edits affect future operations;
   the controller still enforces each operation's saved policy.
-- Optional mission `context.sharing` is authored in the full JSON editor. Validate
+- Optional mission `policies.sharing` is authored in the full JSON editor. Validate
   its response shape and preserve its original tokens through unrelated Form edits
-  and JSON/Form switches. Omitted/null context or omitted/null/empty sharing keeps
-  sharing disabled; the shared API owns policy semantics. This contract alone does
+  and JSON/Form switches. Omitted/null policies or omitted/null/empty sharing
+  declare no routes; the shared API owns policy semantics. This contract alone does
   not enable context delivery.
 - Mission details offer **Details / JSON** views. The `/missions/<name>/json`
   route survives reload and browser history. Retain validated response text from

@@ -60,61 +60,75 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	}
 }
 
-func TestMissionContextSharingPolicy(t *testing.T) {
+func TestMissionSharingPolicy(t *testing.T) {
 	a := fixtures.Connect(t)
-	definition := fixtures.ContextMission()
+	definition := fixtures.SharingMission()
 	path := "/api/v1/missions/" + definition.Name
 
 	created := fixtures.Post[models.MissionResponse](a, "/api/v1/missions", definition, http.StatusCreated)
-	assertMissionContext(t, created.Context, definition.Context)
-	assertMissionContext(t, fixtures.Read[models.MissionResponse](a, path).Context, definition.Context)
+	assertMissionSharing(t, created.Policies, definition.Policies)
+	assertMissionSharing(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
 	assertSchema(t, a, "Mission", a.Request(http.MethodGet, path, nil))
 	first := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, http.StatusCreated)
-	if !reflect.DeepEqual(first.Mission.Context, created.Context) || len(first.Tasks) != 0 {
+	if !reflect.DeepEqual(first.Mission.Policies, created.Policies) || len(first.Tasks) != 0 {
 		t.Fatalf("operation lost sharing policy or policy started work: %+v", first)
 	}
 
-	definition.Context.Sharing[0].ToActions[0] = "review-vulnerabilities"
-	definition.Context.Sharing[0].Include = []string{"decisions"}
+	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
+	definition.Policies.Sharing[0].Include = []string{"decisions"}
 	updated := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
-	assertMissionContext(t, updated.Context, definition.Context)
-	assertMissionContext(t, fixtures.Read[models.MissionResponse](a, path).Context, definition.Context)
+	assertMissionSharing(t, updated.Policies, definition.Policies)
+	assertMissionSharing(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
 	retained := fixtures.Read[models.OperationResponse](a, fixtures.OperationPath(first.ID))
-	if !reflect.DeepEqual(retained.Mission.Context, created.Context) {
+	if !reflect.DeepEqual(retained.Mission.Policies, created.Policies) {
 		t.Fatal("mission update changed an existing operation's sharing policy")
 	}
 	second := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, http.StatusCreated)
-	assertMissionContext(t, second.Mission.Context, definition.Context)
+	assertMissionSharing(t, second.Mission.Policies, definition.Policies)
 
-	for _, invalid := range fixtures.InvalidContextPolicies() {
-		candidate := fixtures.ContextMission()
-		candidate.Context = invalid
+	for _, invalid := range fixtures.InvalidSharingPolicies() {
+		candidate := fixtures.SharingMission()
+		candidate.Policies.Sharing = invalid
 		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/missions", candidate), http.StatusBadRequest, "invalid_request")
 	}
-	definition.Context = &models.MissionContextPolicyRequest{}
-	disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
-	if disabled.Context == nil || len(disabled.Context.Sharing) != 0 {
-		t.Fatal("empty context policy should declare no sharing routes")
+	for _, field := range []string{"context", "sharing"} {
+		legacy := fixtures.PoliciesDefinition(definition, nil)
+		delete(legacy, "policies")
+		legacy[field] = definition.Policies.Sharing
+		if field == "context" {
+			legacy[field] = fixtures.Object{"sharing": definition.Policies.Sharing}
+		}
+		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
 	}
-	definition.Context = nil
-	disabled = fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
-	if disabled.Context != nil || fixtures.Read[models.MissionResponse](a, path).Context != nil {
-		t.Fatal("omitted context policy was not removed")
+	for _, policies := range []any{fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{}, nil} {
+		disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, fixtures.PoliciesDefinition(definition, policies)), http.StatusOK)
+		if policies == nil {
+			if disabled.Policies != nil {
+				t.Fatal("null policies were not removed")
+			}
+		} else if disabled.Policies == nil || len(disabled.Policies.Sharing) != 0 {
+			t.Fatal("empty policies should declare no sharing routes")
+		}
+	}
+	definition.Policies = nil
+	disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
+	if disabled.Policies != nil || fixtures.Read[models.MissionResponse](a, path).Policies != nil {
+		t.Fatal("omitted policies were not removed")
 	}
 	for _, operation := range []models.OperationResponse{first, second} {
 		fixtures.Decode[models.OperationResponse](t, a.Request(http.MethodPost, fixtures.OperationPath(operation.ID)+"/cancel", nil), http.StatusOK)
 	}
 }
 
-func assertMissionContext(t *testing.T, got *models.MissionContextPolicyResponse, want *models.MissionContextPolicyRequest) {
+func assertMissionSharing(t *testing.T, got *models.MissionPoliciesResponse, want *models.MissionPoliciesRequest) {
 	t.Helper()
 	if got == nil || want == nil || len(got.Sharing) != len(want.Sharing) {
-		t.Fatalf("mission context differs: got %+v, want %+v", got, want)
+		t.Fatalf("mission sharing differs: got %+v, want %+v", got, want)
 	}
 	for i, route := range got.Sharing {
 		expected := want.Sharing[i]
 		if !slices.Equal(route.FromActions, expected.FromActions) || !slices.Equal(route.ToActions, expected.ToActions) || !slices.Equal(route.Include, expected.Include) {
-			t.Fatalf("mission context route %d differs: got %+v, want %+v", i, route, expected)
+			t.Fatalf("mission sharing route %d differs: got %+v, want %+v", i, route, expected)
 		}
 	}
 }

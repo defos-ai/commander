@@ -3,7 +3,7 @@ package models
 import "encoding/json"
 
 type CreateMissionRequest struct {
-	Context           *MissionContextPolicyRequest    `json:"context,omitempty"`
+	Policies          *MissionPoliciesRequest         `json:"policies,omitempty"`
 	Completion        *MissionCompletionPolicyRequest `json:"completion,omitempty"`
 	Rules             map[string]MissionRuleRequest   `json:"rules,omitempty"`
 	Name              string                          `json:"name"`
@@ -16,11 +16,11 @@ type CreateMissionRequest struct {
 	OutputSchema      json.RawMessage                 `json:"output_schema"`
 }
 
-type MissionContextPolicyRequest struct {
-	Sharing []MissionContextSharingRequest `json:"sharing,omitempty"`
+type MissionPoliciesRequest struct {
+	Sharing []MissionSharingPolicyRequest `json:"sharing,omitempty"`
 }
 
-type MissionContextSharingRequest struct {
+type MissionSharingPolicyRequest struct {
 	FromActions []string `json:"from_actions"`
 	ToActions   []string `json:"to_actions"`
 	Include     []string `json:"include"`
@@ -40,7 +40,7 @@ type MissionRuleParamsRequest struct {
 }
 
 type MissionResponse struct {
-	Context           *MissionContextPolicyResponse    `json:"context,omitempty"`
+	Policies          *MissionPoliciesResponse         `json:"policies,omitempty"`
 	Completion        *MissionCompletionPolicyResponse `json:"completion,omitempty"`
 	Rules             map[string]MissionRuleResponse   `json:"rules,omitempty"`
 	Name              string                           `json:"name"`
@@ -53,11 +53,11 @@ type MissionResponse struct {
 	OutputSchema      json.RawMessage                  `json:"output_schema"`
 }
 
-type MissionContextPolicyResponse struct {
-	Sharing []MissionContextSharingResponse `json:"sharing,omitempty"`
+type MissionPoliciesResponse struct {
+	Sharing []MissionSharingPolicyResponse `json:"sharing,omitempty"`
 }
 
-type MissionContextSharingResponse struct {
+type MissionSharingPolicyResponse struct {
 	FromActions []string `json:"from_actions"`
 	ToActions   []string `json:"to_actions"`
 	Include     []string `json:"include"`

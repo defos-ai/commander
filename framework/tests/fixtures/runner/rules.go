@@ -31,10 +31,10 @@ func ModelRules(action string) missions.RuleSet {
 	}
 }
 
-func ContextSharingPolicy() *missions.ContextPolicy {
-	return &missions.ContextPolicy{Sharing: []missions.ContextSharing{{
+func SharingPolicy() missions.SharingPolicy {
+	return missions.SharingPolicy{{
 		FromActions: []string{"discover"},
 		ToActions:   []string{"inspect"},
-		Include:     []missions.ContextKind{missions.ContextResults, missions.ContextArtifacts},
-	}}}
+		Include:     []missions.SharingKind{missions.ShareResults, missions.ShareArtifacts},
+	}}
 }

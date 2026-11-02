@@ -19,15 +19,15 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 		InputSchema:       bytes.Clone(request.InputSchema),
 		OutputSchema:      bytes.Clone(request.OutputSchema),
 	}
-	if request.Context != nil {
-		mission.Context = &missions.ContextPolicy{}
-		if request.Context.Sharing != nil {
-			mission.Context.Sharing = make([]missions.ContextSharing, len(request.Context.Sharing))
-			for i, sharing := range request.Context.Sharing {
-				mission.Context.Sharing[i] = missions.ContextSharing{
+	if request.Policies != nil {
+		mission.Policies = &missions.MissionPolicies{}
+		if request.Policies.Sharing != nil {
+			mission.Policies.Sharing = make(missions.SharingPolicy, len(request.Policies.Sharing))
+			for i, sharing := range request.Policies.Sharing {
+				mission.Policies.Sharing[i] = missions.SharingRoute{
 					FromActions: slices.Clone(sharing.FromActions),
 					ToActions:   slices.Clone(sharing.ToActions),
-					Include:     contextKinds(sharing.Include),
+					Include:     sharingKinds(sharing.Include),
 				}
 			}
 		}
@@ -59,15 +59,15 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 		InputSchema:       bytes.Clone(mission.InputSchema),
 		OutputSchema:      bytes.Clone(mission.OutputSchema),
 	}
-	if mission.Context != nil {
-		response.Context = &models.MissionContextPolicyResponse{}
-		if mission.Context.Sharing != nil {
-			response.Context.Sharing = make([]models.MissionContextSharingResponse, len(mission.Context.Sharing))
-			for i, sharing := range mission.Context.Sharing {
-				response.Context.Sharing[i] = models.MissionContextSharingResponse{
+	if mission.Policies != nil {
+		response.Policies = &models.MissionPoliciesResponse{}
+		if mission.Policies.Sharing != nil {
+			response.Policies.Sharing = make([]models.MissionSharingPolicyResponse, len(mission.Policies.Sharing))
+			for i, sharing := range mission.Policies.Sharing {
+				response.Policies.Sharing[i] = models.MissionSharingPolicyResponse{
 					FromActions: slices.Clone(sharing.FromActions),
 					ToActions:   slices.Clone(sharing.ToActions),
-					Include:     contextKindNames(sharing.Include),
+					Include:     sharingKindNames(sharing.Include),
 				}
 			}
 		}
@@ -99,18 +99,18 @@ func ToMissionResponses(missions []missions.Mission) []models.MissionResponse {
 	return responses
 }
 
-func contextKinds(names []string) []missions.ContextKind {
+func sharingKinds(names []string) []missions.SharingKind {
 	if names == nil {
 		return nil
 	}
-	kinds := make([]missions.ContextKind, len(names))
+	kinds := make([]missions.SharingKind, len(names))
 	for i, name := range names {
-		kinds[i] = missions.ContextKind(name)
+		kinds[i] = missions.SharingKind(name)
 	}
 	return kinds
 }
 
-func contextKindNames(kinds []missions.ContextKind) []string {
+func sharingKindNames(kinds []missions.SharingKind) []string {
 	if kinds == nil {
 		return nil
 	}

@@ -35,8 +35,8 @@ For a website review:
 
 Learn how to [create missions and choose rules](abstractions.md),
 [build agents](../apps/agents/README.md), or [connect another client](../apps/adapters/README.md).
-See the proposed [context sharing](features/contex-sharing.md) feature for
-live, controller-managed delivery of findings and evidence between actions.
+See [data sharing](features/data-sharing.md) for the planned controller-managed
+delivery of saved results, artifact references and decisions between actions.
 
 ## Dependencies
 

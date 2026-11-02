@@ -7,9 +7,9 @@ import { deferredResponse } from './fixtures/deferred';
 import { connection, credentials, mission, mockAPI, mockEditableMission } from './fixtures/missions';
 
 describe('mission editing', () => {
-  it('edits objectives, action roles and details while preserving the name, context sharing and untouched JSON tokens', async () => {
+  it('edits objectives, action roles and details while preserving the name, sharing policies and untouched JSON tokens', async () => {
     const name = 'Review / #1?';
-    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"context":{"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
+    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"policies":{"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
     const fetch = mockEditableMission(definition);
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={name} onSelect={vi.fn()} />);
 
@@ -38,7 +38,7 @@ describe('mission editing', () => {
     expect(body).toContain(String.raw`"\u0064iscover-pages"`);
     expect(JSON.parse(body)).toMatchObject({ name, objectives: ['Check release health.'], required_actions: ['discover-pages', 'capture-page'],
       completion: { decision_by: 'model' },
-      context: { sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }] },
+      policies: { sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }] },
       optional_actions: [], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
@@ -87,7 +87,7 @@ describe('mission editing', () => {
     expect(body).toContain('1.2300e+42');
     expect(body).not.toContain('"rules"');
     expect(body).not.toContain('"action_definitions"');
-    expect(body).not.toContain('"context"');
+    expect(body).not.toContain('"policies"');
   });
 
   it('rejects a changed name in JSON before writing or showing the renamed value in the form', async () => {

@@ -25,7 +25,7 @@ import (
 type Mission struct {
 	Rules             RuleSet                  `json:"rules,omitempty"`
 	Completion        *CompletionPolicy        `json:"completion,omitempty"`
-	Context           *ContextPolicy           `json:"context,omitempty"`
+	Policies          *MissionPolicies         `json:"policies,omitempty"`
 	Name              string                   `json:"name"`
 	Objectives        []string                 `json:"objectives"`
 	RequiredActions   []string                 `json:"required_actions"`
@@ -76,9 +76,9 @@ func (m Mission) Validate() error {
 			return err
 		}
 	}
-	if m.Context != nil {
-		if err := m.Context.Validate(); err != nil {
-			return err
+	if m.Policies != nil {
+		if err := m.Policies.Validate(); err != nil {
+			return fmt.Errorf("policies: %w", err)
 		}
 	}
 	for _, list := range []struct {
@@ -164,9 +164,9 @@ func (m Mission) Clone() Mission {
 		completion := *m.Completion
 		m.Completion = &completion
 	}
-	if m.Context != nil {
-		context := m.Context.Clone()
-		m.Context = &context
+	if m.Policies != nil {
+		policies := m.Policies.Clone()
+		m.Policies = &policies
 	}
 	m.Objectives = slices.Clone(m.Objectives)
 	m.ActionDefinitions = slices.Clone(m.ActionDefinitions)

@@ -93,9 +93,11 @@
   Sanitize backend errors and direct callers to `describe_mission` before retrying
   uncertain writes. Keep the advertised schema aligned with strict decoding,
   including nullable optional collections and open JSON Schema documents.
-  Optional `context.sharing` retains action-based routes for results, artifacts
+  Optional `policies.sharing` retains action-based routes for results, artifacts
   and decisions in mission/operation reads. Empty or omitted sharing declares no
-  routes. HTTP uses independent DTOs with cloned lists; MCP accepts the same
+  routes. Omitted/null `policies` and an empty object also declare no routes.
+  Only sharing is grouped here; completion and rules remain at the mission root.
+  HTTP uses independent DTOs with cloned lists; MCP accepts the same
   domain policy. Reject unknown fields and invalid entries through shared mission
   validation. This step stores policy only; it does not forward data or start work.
   Optional `completion` is a mission-wide setting with required `decision_by`

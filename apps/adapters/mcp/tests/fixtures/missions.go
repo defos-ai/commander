@@ -12,7 +12,7 @@ func MissionDefinition(mission missions.Mission) Object {
 		"name": mission.Name, "objectives": mission.Objectives,
 		"required_actions": mission.RequiredActions, "optional_actions": mission.OptionalActions,
 		"starting_actions": mission.StartingActions, "action_definitions": mission.ActionDefinitions,
-		"rules": mission.Rules, "completion": mission.Completion, "context": mission.Context,
+		"rules": mission.Rules, "completion": mission.Completion, "policies": mission.Policies,
 		"input_schema": mission.InputSchema, "output_schema": mission.OutputSchema,
 	}
 }
@@ -24,16 +24,16 @@ func (a *Client) CancelActiveOperation(id string) {
 	}
 }
 
-func ContextMission() missions.Mission {
+func SharingMission() missions.Mission {
 	return missions.Mission{
-		Name:         "context-sharing-" + id.New(),
+		Name:         "sharing-" + id.New(),
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Context: &missions.ContextPolicy{Sharing: []missions.ContextSharing{{
+		Policies: &missions.MissionPolicies{Sharing: missions.SharingPolicy{{
 			FromActions: []string{"find-vulnerabilities"},
 			ToActions:   []string{"analyze-vulnerabilities"},
-			Include:     []missions.ContextKind{missions.ContextResults, missions.ContextArtifacts},
+			Include:     []missions.SharingKind{missions.ShareResults, missions.ShareArtifacts},
 		}}},
 	}
 }

@@ -1,7 +1,7 @@
 import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
-import type { ActionDefinition, ContextSharing, Mission, MissionContext, MissionRule } from './types';
+import type { ActionDefinition, Mission, MissionPolicies, MissionRule, SharingRoute } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -39,15 +39,15 @@ function isMissionName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value !== '.' && value !== '..';
 }
 
-function isContextSharing(value: unknown): value is ContextSharing {
+function isSharingRoute(value: unknown): value is SharingRoute {
   return isObject(value) && Object.keys(value).every(key => ['from_actions', 'to_actions', 'include'].includes(key)) &&
     isStringArray(value.from_actions) && isStringArray(value.to_actions) && isStringArray(value.include) &&
     value.include.every(item => item === 'results' || item === 'artifacts' || item === 'decisions');
 }
 
-function isMissionContext(value: unknown): value is MissionContext | null | undefined {
+function isMissionPolicies(value: unknown): value is MissionPolicies | null | undefined {
   return value == null || (isObject(value) && Object.keys(value).every(key => key === 'sharing') &&
-    (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(isContextSharing))));
+    (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(isSharingRoute))));
 }
 
 export function isMission(value: unknown): value is Mission {
@@ -60,7 +60,7 @@ export function isMission(value: unknown): value is Mission {
     (value.completion == null || (isObject(value.completion) &&
       Object.keys(value.completion).every(key => key === 'decision_by') &&
       (value.completion.decision_by === 'model' || value.completion.decision_by === 'operator'))) &&
-    isMissionContext(value.context) &&
+    isMissionPolicies(value.policies) &&
     (value.rules === undefined || (isObject(value.rules) && Object.entries(value.rules).every(([name, rule]) => isRule(name, rule))));
 }
 

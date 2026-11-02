@@ -1,9 +1,11 @@
-# Context sharing
+# Data sharing
 
 **Status: mission policy and agent reception are available; controller forwarding
 is planned.**
 
-Let agents share findings within an operation while work is running:
+Share saved results, artifact references and answered decisions between actions
+in the same operation. Receiving agents use that data to build their own working
+context. For example:
 
 1. Cybersecurity actions return vulnerability findings and evidence.
 2. The controller saves their results and accepted artifact metadata normally,
@@ -13,12 +15,13 @@ Let agents share findings within an operation while work is running:
 
 ## Mission policy
 
-The mission names producing and receiving actions. The controller selects the
-receiving agent and its active task execution. Configuration:
+The mission's `policies.sharing` names producing and receiving actions. The
+controller selects the receiving agent and its active task execution.
+Configuration:
 
 ```json
 {
-  "context": {
+  "policies": {
     "sharing": [
       {
         "from_actions": ["find-vulnerabilities"],
@@ -30,16 +33,17 @@ receiving agent and its active task execution. Configuration:
 }
 ```
 
-Each route requires producing actions, receiving actions and at least one of
-`results`, `artifacts` or `decisions`. Omit `context` or leave `sharing` empty to
-declare no routes. Each operation keeps its mission's policy snapshot; editing
-the mission affects future operations. Saving policy does not enable delivery yet.
+Each sharing policy requires producing actions, receiving actions and at least
+one of `results`, `artifacts` or `decisions`. Omit `policies` or
+`policies.sharing`, or leave the sharing list empty, to disable sharing. Each
+operation keeps its mission's policy snapshot; editing the mission affects
+future operations. Saving policy does not enable delivery yet.
 
 Results, decisions and artifact metadata are saved normally, whether sharing is
 enabled or not. Sharing reuses those records and adds forwarding to matching
-receiving tasks in the same operation. Relevant non-secret answered questions can
-also be included, retaining whether an operator or model answered and the
-decision's original scope.
+receiving tasks in the same operation. Relevant non-secret, task-scoped answered
+questions can also be included, retaining whether an operator or model answered
+and the decision's original scope.
 
 ## Delivery
 
@@ -57,7 +61,7 @@ sequenceDiagram
     Controller->>Database: Save result and accepted artifact metadata
     Database-->>Controller: Saved
     Note over Controller: Check mission sharing policy and receiving task
-    Controller->>Analyzer: Push context update via agent event inbox
+    Controller->>Analyzer: Push shared data via agent event inbox
     Note over Analyzer: Aggregate and analyze in memory
 ```
 
@@ -77,13 +81,13 @@ existing saved records without another persistence layer.
 A running action uses [`action.ReceiveContext(ctx)`](../../framework/agent/action/context.go)
 to wait for the next pushed update. Reception ends with the execution or its
 deadline. A full buffer reports an error so the analyzer can report incomplete
-context rather than silently continue.
+data rather than silently continue.
 
 ## Agent-owned memory
 
-Receiving agents own aggregation and state. Start with process memory, kept
-separate for each operation. The controller routes evidence without managing
-the analyzer's accumulated memory.
+Receiving agents own their context, aggregation and state. Start with process
+memory, kept separate for each operation. The controller forwards saved data
+without managing the analyzer's accumulated memory.
 
 The analyzer runs as a normal controller-assigned task. Sharing does not start
 arbitrary work, extend task deadlines, or deliver updates to completed executions.

@@ -93,36 +93,49 @@ func TestMissions(t *testing.T) {
 	a.Call("cancel_operation", fixtures.Object{"operation_id": opID}, nil)
 }
 
-func TestMissionContextSharingPolicy(t *testing.T) {
+func TestMissionSharingPolicy(t *testing.T) {
 	a := fixtures.Connect(t)
-	definition := fixtures.ContextMission()
+	definition := fixtures.SharingMission()
 	var created, described, updated missions.Mission
 
 	a.Call("create_mission", fixtures.MissionDefinition(definition), &created)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
-	if !reflect.DeepEqual(created.Context, definition.Context) || !reflect.DeepEqual(described.Context, definition.Context) {
+	if !reflect.DeepEqual(created.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {
 		t.Fatal("MCP mission creation or detail lost the sharing policy")
 	}
-	definition.Context.Sharing[0].ToActions[0] = "review-vulnerabilities"
-	definition.Context.Sharing[0].Include = []missions.ContextKind{missions.ContextDecisions}
+	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
+	definition.Policies.Sharing[0].Include = []missions.SharingKind{missions.ShareDecisions}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
-	if !reflect.DeepEqual(updated.Context, definition.Context) || !reflect.DeepEqual(described.Context, definition.Context) {
+	if !reflect.DeepEqual(updated.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {
 		t.Fatal("MCP mission update or detail lost the sharing policy")
 	}
 
 	invalid := fixtures.MissionDefinition(definition)
-	invalid["context"] = fixtures.Object{"sharing": []fixtures.Object{{"from_actions": []string{"find-vulnerabilities"}, "to_actions": []string{"analyze-vulnerabilities"}, "include": []string{"secrets"}}}}
+	invalid["policies"] = fixtures.Object{"sharing": []fixtures.Object{{"from_actions": []string{"find-vulnerabilities"}, "to_actions": []string{"analyze-vulnerabilities"}, "include": []string{"secrets"}}}}
 	invalidClient := fixtures.OpenSession(t)
 	_, err := invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: invalid})
 	if err == nil || !strings.Contains(err.Error(), "include") {
 		t.Fatalf("unsupported sharing kind should be an invalid argument: %v", err)
 	}
-	definition.Context = nil
+	for _, field := range []string{"context", "sharing"} {
+		legacy := fixtures.MissionDefinition(definition)
+		delete(legacy, "policies")
+		legacy[field] = definition.Policies.Sharing
+		if field == "context" {
+			legacy[field] = fixtures.Object{"sharing": definition.Policies.Sharing}
+		}
+		legacyClient := fixtures.OpenSession(t)
+		_, err = legacyClient.Session.CallTool(legacyClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: legacy})
+		if err == nil || !strings.Contains(err.Error(), field) {
+			t.Fatalf("old root %s field should be rejected: %v", field, err)
+		}
+	}
+	definition.Policies = nil
 	updated, described = missions.Mission{}, missions.Mission{}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
-	if updated.Context != nil || described.Context != nil {
-		t.Fatal("null context policy was not removed")
+	if updated.Policies != nil || described.Policies != nil {
+		t.Fatal("null sharing policy was not removed")
 	}
 }
