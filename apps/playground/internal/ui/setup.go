@@ -147,7 +147,7 @@ func (m *Model) setupResult(message tea.Msg) (tea.Cmd, bool) {
 			m.addPrivate("notice", notice)
 		}
 		if !m.config.AllInOne {
-			m.addPrivate("notice", "Try: Build an agent for a task you want to automate.")
+			m.addPrivate("notice", "Try: Create a Hacker News digest.")
 		}
 		m.refresh()
 		return tea.Batch(waitEvent(m.engine), m.shareProviderSecret(), m.saveProviderKey(), m.saveSettings()), true

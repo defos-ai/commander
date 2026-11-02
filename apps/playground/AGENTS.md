@@ -395,7 +395,7 @@
   promise a frozen screen or add a mouse mode command. Show the footer's stop
   shortcut only while a reply is active.
   All-in-one startup shows the provider/model, readiness with the actual connected
-  agent count (one by default), one agent-building prompt and the
+  agent count (one by default), the Hacker News digest demo prompt and the
   state-retention note. Keep URLs, host inventories and
   credential instructions behind `/status`, model queries and `/credentials`.
 

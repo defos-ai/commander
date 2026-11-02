@@ -17,7 +17,7 @@ agents:
     source: github.com/defos-ai/commander-codex-agent@stable
     visibility: public
   example:
-    description: Demonstrates Commander agent actions as a template for developing custom agents.
+    description: Creates Hacker News reading digests with topic selection, public story fetching, filtering, ranking, and Markdown/JSON artifacts; a template for custom Commander agents.
     source: github.com/defos-ai/commander-example-agent@stable
     visibility: public
   cybersec:

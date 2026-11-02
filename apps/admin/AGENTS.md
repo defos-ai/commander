@@ -46,6 +46,15 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   the full batch and delegates to the same create-only API import. Keep `missions
   seed [--dry-run]` and launcher calls on this path; the controller does not own
   catalog initialization. Existing definitions always win, including operator edits.
+- `hacker-news-digest` is the quick-start demo. Keep its required/starting actions
+  and feed/limit inputs aligned with the example agent's
+  [mission](https://github.com/defos-ai/commander-example-agent/blob/main/missions/hacker-news.json).
+  The mission owns missing-agent installation guidance: use a separate
+  `install-agent` operation and recheck readiness, not a spawn task inside the
+  blocked digest operation. Keep this setup instruction out of the root README.
+  The action asks for topics; valid proposals run automatically through digest
+  writing, followed by model review. Require accepted Markdown/JSON artifacts,
+  and never claim article-content summaries or invent a Hacker News credential.
 - Keep bundled mission policy in that JSON. `install-agent` requires only
   `spawn-agent`, accepts counts up to 100, and aggregates batch
   children into one review. Complete with `agent_id` for a single launch or

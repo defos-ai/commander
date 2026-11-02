@@ -1,5 +1,57 @@
 [
   {
+    "name": "hacker-news-digest",
+    "objectives": [
+      "Build a short Hacker News reading list from public story titles, links, scores and comment counts. Hacker News needs no account or API key.",
+      "Check required action readiness before starting. If capabilities are missing, find the public example agent through get_agent_sources and install its listed package in a separate install-agent operation. Review the saved launch result and verify all five required actions are ready before assigning digest work. If they remain unavailable, report the limitation instead of repeatedly installing agents or inventing results.",
+      "Assign choose-hn-topics using the mission input. Let the action ask its saved topic question and answer that question with all or comma-separated keywords: operator first, model allowed after fallback_at. Do not ask a duplicate question or dispatch replacement work while it waits. The controller runs the proposed fetch, filter, rank and write actions automatically.",
+      "Keep up to five matching stories ordered by score, then comment count. Describe only the collected metadata; linked articles and comment trees have not been read. An empty reading list is a valid result.",
+      "Review the saved write-hn-digest result and its accepted digest.md and stories.json artifacts. Resolve the final model continuation with no follow-up actions, then complete the operation with a short summary."
+    ],
+    "required_actions": [
+      "choose-hn-topics",
+      "fetch-hn-stories",
+      "filter-hn-stories",
+      "rank-hn-stories",
+      "write-hn-digest"
+    ],
+    "starting_actions": [
+      "choose-hn-topics"
+    ],
+    "rules": {},
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "feed": {
+          "type": "string",
+          "enum": ["top", "new", "best"],
+          "default": "top"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 10
+        }
+      },
+      "additionalProperties": false
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "build-agent",
     "objectives": [
       "Build the requested Commander agent, optionally publishing and releasing source in this operation. Read checkout-template and build-agent schemas and readiness. Before checkout, define requested action names, descriptions, input/output object schemas and required secret names.",

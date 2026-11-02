@@ -12,9 +12,11 @@ What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=What%
 
 ## Quick start
 
-Each option opens Playground. Choose a model, enter its API key, and describe a mission:
+Each option opens Playground. Choose a model, enter its API key, and ask:
 
-> Create a mission to investigate suspicious activity in our application logs. Find suitable agents and build any missing capabilities.
+> Create a Hacker News digest.
+
+The demo asks for topics and saves a reading list as Markdown and JSON.
 
 ### Docker
 

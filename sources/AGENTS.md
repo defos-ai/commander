@@ -28,6 +28,9 @@ Read the [root guide](../AGENTS.md) and
   `publish-agent` within the build mission after operator agreement. Source
   publication does not create an installable release.
   Source aliases are separate from registered agent types and action names.
+- `example` describes the Hacker News reading-digest workflow and remains a
+  template for custom agents. Its digest uses public story metadata, not article
+  contents. Keep the description aligned with the standalone example agent.
 - `log-observer` observes external application, infrastructure and security logs
   and reports findings. Keep it separate from Commander's execution progress logs;
   vulnerability validation belongs to cybersec and code fixes belong to fixer.
