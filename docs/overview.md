@@ -35,7 +35,7 @@ For a website review:
 
 Learn how to [create missions and choose rules](abstractions.md),
 [build agents](../apps/agents/README.md), or [connect another client](../apps/adapters/README.md).
-See [data sharing](features/data-sharing.md) for the planned controller-managed
+See [data sharing](features/data-sharing.md) for controller-managed
 delivery of saved results, artifact references and decisions between actions.
 
 ## Dependencies

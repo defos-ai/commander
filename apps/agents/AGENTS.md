@@ -102,6 +102,128 @@
 - Keep immutable execution outcomes separate from later operation decisions.
   Cancellation or transport uncertainty must not lead to duplicate execution.
 
+## Receiving shared data
+
+Use `action.ReceiveContext(ctx)` inside an operation execution served by
+`Agent.Serve`. Inject the artifact file store from the host's factory and use the
+same storage as the producers. Register the returned executor in
+`AgentConfig.Actions`; handle constructor errors. Producers return ordinary
+results/artifacts without extra sharing-specific publication code. See
+[mission configuration](../../docs/features/data-sharing.md) for the operator flow
+and the [framework guide](../../framework/AGENTS.md) for runtime contracts.
+
+- Keep aggregation and deduplication memory local to the execution. Process every
+  nonempty section independently: one update can contain both results and artifacts.
+- Deduplicate results by source agent/command, artifacts by artifact ID and
+  decisions by source agent/command/question ID. One command can produce several
+  answers followed by its result. Mark records handled only after processing succeeds.
+- Retain result JSON as `json.RawMessage` or decode into typed fields to preserve
+  numeric precision. Use `ArtifactFileStore.Get(ctx, artifact.ID, file)` to retrieve
+  and verify evidence. Preserve question scope, timestamps and answer origin.
+- Define an explicit stopping condition. This example waits for a requested number
+  of distinct successful producer results; it includes only artifacts and answers
+  received before it stops. Later continuation answers need a longer-lived receiver.
+- Propagate cancellation, receive deadlines, storage errors and buffer overflow.
+  Silence does not prove completion, and restarting does not replay missed data.
+  Bound retained data and evidence sizes for the workload; use managed secrets
+  separately. Sharing neither starts tasks nor extends their deadlines.
+
+Use this implementation as `actions/collect_findings.go` in an external agent.
+Apply incremental analysis inside the loop and replace the counting output with
+its summary. For an unreleased framework, use the
+[local dependency setup](README.md#develop-an-agent-in-a-private-repository).
+
+```go
+package actions
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/defos-ai/commander/framework/agent/action"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/operations"
+)
+
+type CollectFindingsInput struct {
+	ExpectedResults int `json:"expected_results"`
+}
+
+func (input CollectFindingsInput) Validate() error {
+	if input.ExpectedResults < 1 || input.ExpectedResults > 100 {
+		return errors.New("expected_results must be between 1 and 100")
+	}
+	return nil
+}
+
+type CollectFindingsOutput struct {
+	Results   int `json:"results"`
+	Artifacts int `json:"artifacts"`
+	Decisions int `json:"decisions"`
+}
+
+type evidence struct {
+	Metadata artifacts.Artifact
+	Files    map[string][]byte
+}
+
+func NewCollectFindings(files artifacts.ArtifactFileStore) (action.Executor, error) {
+	if files == nil {
+		return nil, errors.New("artifact storage is required")
+	}
+	return action.NewFunc(action.FuncConfig[CollectFindingsInput, CollectFindingsOutput]{
+		Action: actionmodel.Action{
+			Name:        "collect-findings",
+			Description: "Collect shared findings and evidence from other tasks.",
+		},
+		Run: func(ctx context.Context, input CollectFindingsInput) (CollectFindingsOutput, error) {
+			results := make(map[[2]string]json.RawMessage)
+			attachments := make(map[string]evidence)
+			decisions := make(map[[3]string]operations.Question)
+			for len(results) < input.ExpectedResults {
+				update, err := action.ReceiveContext(ctx)
+				if err != nil {
+					if errors.Is(err, action.ErrContextOverflow) {
+						return CollectFindingsOutput{}, fmt.Errorf("findings are incomplete: %w", err)
+					}
+					return CollectFindingsOutput{}, err
+				}
+				for _, artifact := range update.Artifacts {
+					if _, exists := attachments[artifact.ID]; exists {
+						continue
+					}
+					item := evidence{Metadata: artifact, Files: make(map[string][]byte)}
+					for _, file := range artifact.Files {
+						data, err := files.Get(ctx, artifact.ID, file)
+						if err != nil {
+							return CollectFindingsOutput{}, fmt.Errorf("read evidence: %w", err)
+						}
+						item.Files[file.ID] = data
+					}
+					attachments[artifact.ID] = item
+				}
+				if question := update.Decision; question != nil {
+					key := [3]string{update.Source.AgentID, update.Source.CommandID, question.ID}
+					if _, exists := decisions[key]; !exists {
+						decisions[key] = question.Clone()
+					}
+				}
+				if len(update.Result) != 0 {
+					key := [2]string{update.Source.AgentID, update.Source.CommandID}
+					if _, exists := results[key]; !exists {
+						results[key] = update.Result
+					}
+				}
+			}
+			return CollectFindingsOutput{Results: len(results), Artifacts: len(attachments), Decisions: len(decisions)}, nil
+		},
+	})
+}
+```
+
 ## Validation
 
 Keep tests and fixtures in each agent module's `tests/` directory, using external
