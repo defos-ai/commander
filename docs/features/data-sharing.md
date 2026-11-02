@@ -1,9 +1,9 @@
 # Data sharing
 
-**Status: mission policy and agent reception are available; controller forwarding
+**Status: live result and artifact forwarding is available. Decision forwarding
 is planned.**
 
-Share saved results, artifact references and answered decisions between actions
+Share saved results and artifact references between actions
 in the same operation. Receiving agents use that data to build their own working
 context. For example:
 
@@ -37,13 +37,13 @@ Each sharing policy requires producing actions, receiving actions and at least
 one of `results`, `artifacts` or `decisions`. Omit `policies` or
 `policies.sharing`, or leave the sharing list empty, to disable sharing. Each
 operation keeps its mission's policy snapshot; editing the mission affects
-future operations. Saving policy does not enable delivery yet.
+future operations. Receiving actions must already be running.
 
 Results, decisions and artifact metadata are saved normally, whether sharing is
 enabled or not. Sharing reuses those records and adds forwarding to matching
-receiving tasks in the same operation. Relevant non-secret, task-scoped answered
-questions can also be included, retaining whether an operator or model answered
-and the decision's original scope.
+receiving tasks in the same operation. The planned `decisions` option will share
+non-secret, task-scoped answered questions, retaining who answered and the
+decision's original scope.
 
 ## Delivery
 
@@ -94,9 +94,10 @@ arbitrary work, extend task deadlines, or deliver updates to completed execution
 Managed secrets, execution checkpoints, raw execution logs and private chat
 history stay outside automatic sharing.
 
-The first scope is live delivery and in-memory aggregation. An analyzer restart
-loses its local memory; replay and recovery are later work. Saved evidence remains
-available, but persistence alone does not confirm delivery.
+Delivery is live and aggregation stays in memory. Forwarding failures and overload
+are logged without changing accepted results. An analyzer restart loses its local
+memory; replay and recovery are later work. Saved evidence remains available, but
+persistence alone does not confirm delivery.
 
 Controller filtering alone cannot isolate agents that already have broad access
 to shared artifact storage. Strong isolation needs scoped storage access or

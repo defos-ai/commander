@@ -66,6 +66,8 @@ type Controller struct {
 	artifactStore      artifacts.ArtifactStore
 	executionStore     executions.ExecutionStore
 	operationStore     operations.OperationStore
+	sharedResults      chan sharedResult
+	sharingDone        chan struct{}
 	secrets            *consumers.SecretEventConsumer
 	events             comms.Subscription
 	cancel             context.CancelCauseFunc
@@ -159,6 +161,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		state:      state.New(lifetime, config.HeartbeatTimeout),
 		eventsDone: make(chan struct{}), loopDone: make(chan struct{}), cleanupDone: make(chan struct{}),
 		requests: make(chan func()), sessionsDone: make(chan struct{}),
+		sharedResults: make(chan sharedResult, sharingQueueSize), sharingDone: make(chan struct{}),
 	}
 	if config.SessionStore != nil {
 		c.sessions, err = runtimeSessions.New(config.SessionStore, config.OperationStore, config.ExecutionStore, config.AgentStore, config.ActionStore, c.controlSessionRemote)
@@ -179,6 +182,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	}
 	go c.reconcileSessionControls()
 	go c.run()
+	go c.forwardSharedResults()
 	go c.consumeEvents(config.ActionStore)
 
 	return c, nil

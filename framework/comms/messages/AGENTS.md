@@ -53,8 +53,9 @@
   prove acceptance or grant new authority. Share selected output data without
   follow-up proposals, session mutations, file bytes or secret payloads. The
   receiving runtime still matches active execution/lifetime independently.
-  This step defines reception only; the controller's policy/persistence checks
-  and forwarding follow separately. Broker ACK is not action consumption.
+  Controller forwarding follows durable result/artifact acceptance and the saved
+  operation policy; current recipient task, claim and observed work must agree.
+  Decision forwarding is pending. Broker ACK is not action consumption.
 - When changing a wire field or message type, update its typed clients, producing
   and consuming code, validation and recovery together. Reflect protocol behavior
   in the [message contract](README.md) without duplicating payload inventories.

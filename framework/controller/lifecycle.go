@@ -28,6 +28,11 @@ func (c *Controller) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	select {
+	case <-c.sharingDone:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
 	case <-c.sessionsDone:
 	case <-ctx.Done():
 		return ctx.Err()

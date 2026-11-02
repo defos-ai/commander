@@ -63,8 +63,9 @@
   need not appear in coverage lists, which are not allowlists. Absent/null `policies`
   and an absent/null/empty sharing list declare no routes. Empty policies are valid.
   Clone the policy container independently and deep-clone each nested slice into
-  operation snapshots. This currently stores policy only; it does not forward
-  data, select recipients, start tasks or grant secret/storage access.
+  operation snapshots. Results and accepted artifact metadata can be forwarded
+  to existing active tasks; decision forwarding is pending. Sharing does not
+  start tasks or grant secret/storage access.
 - Optional mission `completion` stores a mission-wide `CompletionPolicy` with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
   an empty object is invalid. Clone its pointer independently in mission and
@@ -265,8 +266,16 @@
   execution/service end and command deadlines bound waits, including detached
   contexts. Standalone work clears inherited access. Discard buffered data when
   execution ends; delivery neither changes action outcomes nor extends deadlines.
-  This step enables receiving only; controller policy checks and forwarding are
-  not wired yet. No publication records, replay or durable receiver memory exist.
+  No publication records, replay or durable receiver memory exist.
+- [Result forwarding](controller/shared_results.go) reads the saved operation
+  policy, source execution and task dispatch after result/artifact acceptance.
+  Union matching routes and verify current operation/task state, unfinished
+  recipient claim and fresh observed work before exact-target delivery. Never
+  forward action input, proposals, session mutations or file bytes. A bounded
+  [worker](controller/sharing_loop.go) keeps forwarding I/O outside the owner loop;
+  failures and queue overload are logged without changing accepted outcomes.
+  Cancel and join it during shutdown. Recovery reads do not replay sharing, and
+  saved source IDs let receivers deduplicate accepted event redeliveries.
 - Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
