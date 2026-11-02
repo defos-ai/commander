@@ -7,9 +7,9 @@ import { deferredResponse } from './fixtures/deferred';
 import { connection, credentials, mission, mockAPI, mockEditableMission } from './fixtures/missions';
 
 describe('mission editing', () => {
-  it('edits objectives, action roles and details while preserving the name and untouched schema tokens', async () => {
+  it('edits objectives, action roles and details while preserving the name, context sharing and untouched JSON tokens', async () => {
     const name = 'Review / #1?';
-    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
+    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"context":{"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
     const fetch = mockEditableMission(definition);
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={name} onSelect={vi.fn()} />);
 
@@ -22,6 +22,9 @@ describe('mission editing', () => {
     fireEvent.change(await screen.findByRole('combobox', { name: 'Role for capture-page' }), { target: { value: 'required' } });
     fireEvent.click(screen.getByText('Advanced settings'));
     fireEvent.change(screen.getByRole('textbox', { name: 'Output schema (JSON)' }), { target: { value: '{"type":"object","properties":{"summary":{"type":"string"}}}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    expect((screen.getByRole('textbox', { name: 'Mission definition (JSON)' }) as HTMLTextAreaElement).value).toContain(String.raw`"\u0064iscover-pages"`);
+    fireEvent.click(screen.getByRole('button', { name: 'Form' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(await screen.findByRole('heading', { name, level: 1 })).toBeVisible();
@@ -32,8 +35,10 @@ describe('mission editing', () => {
     const body = writes[0][1]!.body as string;
     expect(body).toContain('9007199254740993');
     expect(body).toContain(String.raw`"\u0061\\path"`);
+    expect(body).toContain(String.raw`"\u0064iscover-pages"`);
     expect(JSON.parse(body)).toMatchObject({ name, objectives: ['Check release health.'], required_actions: ['discover-pages', 'capture-page'],
       completion: { decision_by: 'model' },
+      context: { sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }] },
       optional_actions: [], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
@@ -82,6 +87,7 @@ describe('mission editing', () => {
     expect(body).toContain('1.2300e+42');
     expect(body).not.toContain('"rules"');
     expect(body).not.toContain('"action_definitions"');
+    expect(body).not.toContain('"context"');
   });
 
   it('rejects a changed name in JSON before writing or showing the renamed value in the form', async () => {

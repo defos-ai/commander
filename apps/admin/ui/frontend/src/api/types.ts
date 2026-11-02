@@ -7,8 +7,19 @@ export interface Mission {
   starting_actions: string[] | null;
   rules?: Partial<Record<MissionRuleName, MissionRule>>;
   completion?: { decision_by: 'model' | 'operator' } | null;
+  context?: MissionContext | null;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
+}
+
+export interface MissionContext {
+  sharing?: ContextSharing[] | null;
+}
+
+export interface ContextSharing {
+  from_actions: string[];
+  to_actions: string[];
+  include: ('results' | 'artifacts' | 'decisions')[];
 }
 
 export type MissionRuleName = 'aggregate-results' | 'decide-next-actions' | 'same-agent';

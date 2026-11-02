@@ -14,9 +14,9 @@ What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=What%
 
 Each option opens Playground. Choose a model, enter its API key, and ask:
 
-> Create a Hacker News digest.
+> Create a Hacker News digest
 
-The demo asks for topics and saves a reading list as Markdown and JSON.
+The demo installs [example-agent](https://github.com/defos-ai/commander-example-agent), asks for topics, and saves a reading list as Markdown and JSON.
 
 ### Docker
 

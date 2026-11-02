@@ -57,6 +57,13 @@
 - Mission `objectives` is an ordered, nonempty array of nonblank strings. Clone
   the array at snapshot boundaries and retain each entry through storage and
   transport.
+- Optional mission `context.sharing` declares action-to-action routes for results,
+  artifacts and decisions within an operation. Each entry requires nonempty,
+  unique `from_actions`, `to_actions` and supported `include` values. Action names
+  need not appear in coverage lists, which are not allowlists. Absent/null context
+  and an empty sharing list declare no routes. Deep-clone each nested slice into
+  operation snapshots. This currently stores policy only; it does not forward
+  data, select recipients, start tasks or grant secret/storage access.
 - Optional mission `completion` stores a mission-wide `CompletionPolicy` with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
   an empty object is invalid. Clone its pointer independently in mission and

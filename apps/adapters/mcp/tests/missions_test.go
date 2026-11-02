@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestMissions(t *testing.T) {
@@ -89,4 +91,38 @@ func TestMissions(t *testing.T) {
 	}
 	a.Fails("start_operation", args, "conflict")
 	a.Call("cancel_operation", fixtures.Object{"operation_id": opID}, nil)
+}
+
+func TestMissionContextSharingPolicy(t *testing.T) {
+	a := fixtures.Connect(t)
+	definition := fixtures.ContextMission()
+	var created, described, updated missions.Mission
+
+	a.Call("create_mission", fixtures.MissionDefinition(definition), &created)
+	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
+	if !reflect.DeepEqual(created.Context, definition.Context) || !reflect.DeepEqual(described.Context, definition.Context) {
+		t.Fatal("MCP mission creation or detail lost the sharing policy")
+	}
+	definition.Context.Sharing[0].ToActions[0] = "review-vulnerabilities"
+	definition.Context.Sharing[0].Include = []missions.ContextKind{missions.ContextDecisions}
+	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
+	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
+	if !reflect.DeepEqual(updated.Context, definition.Context) || !reflect.DeepEqual(described.Context, definition.Context) {
+		t.Fatal("MCP mission update or detail lost the sharing policy")
+	}
+
+	invalid := fixtures.MissionDefinition(definition)
+	invalid["context"] = fixtures.Object{"sharing": []fixtures.Object{{"from_actions": []string{"find-vulnerabilities"}, "to_actions": []string{"analyze-vulnerabilities"}, "include": []string{"secrets"}}}}
+	invalidClient := fixtures.OpenSession(t)
+	_, err := invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: invalid})
+	if err == nil || !strings.Contains(err.Error(), "include") {
+		t.Fatalf("unsupported sharing kind should be an invalid argument: %v", err)
+	}
+	definition.Context = nil
+	updated, described = missions.Mission{}, missions.Mission{}
+	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
+	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
+	if updated.Context != nil || described.Context != nil {
+		t.Fatal("null context policy was not removed")
+	}
 }

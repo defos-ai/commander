@@ -160,6 +160,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
 		m.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+		m.Context = fixtures.ContextSharingPolicy()
 		m.Rules = missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"inspect"}},
 			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
@@ -169,10 +170,18 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
-	catalog.Change(func(m *missions.Mission) { m.Completion.DecisionBy = missions.Model })
+	catalog.Change(func(m *missions.Mission) {
+		m.Completion.DecisionBy = missions.Model
+		m.Context.Sharing[0].FromActions[0] = "follow-up"
+		m.Context.Sharing[0].ToActions[0] = "discover"
+		m.Context.Sharing[0].Include[0] = missions.ContextDecisions
+	})
 	later := fixtures.Start(t, r)
 	if later.Mission.Completion == nil || later.Mission.Completion.DecisionBy != missions.Model {
 		t.Fatal("a new operation did not receive the updated completion policy")
+	}
+	if !reflect.DeepEqual(later.Mission.Context, catalog.Snapshot().Context) {
+		t.Fatal("a new operation did not receive the updated context sharing policy")
 	}
 	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].ForActions[0] = "inspect" })
 	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].Params.DecisionBy = "changed" })
@@ -180,6 +189,9 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot changed"
 	op.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	op.Mission.Completion.DecisionBy = missions.Model
+	op.Mission.Context.Sharing[0].FromActions[0] = "returned source changed"
+	op.Mission.Context.Sharing[0].ToActions[0] = "returned recipient changed"
+	op.Mission.Context.Sharing[0].Include[0] = "returned kind changed"
 	fixtures.Assign(t, r, op.ID, "discover")
 	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
 	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
@@ -188,6 +200,9 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	}
 	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != missions.Operator {
 		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
+	}
+	if !reflect.DeepEqual(settled.Mission.Context, fixtures.ContextSharingPolicy()) {
+		t.Fatalf("catalog or returned snapshot edits changed the running operation's context sharing policy: %+v", settled.Mission.Context)
 	}
 }
 

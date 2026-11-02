@@ -297,10 +297,25 @@ func missionDefinitionSchema() string {
 			"properties": map[string]any{"decision_by": map[string]any{"type": []string{"string", "null"}, "enum": []any{nil, "", "model"}}},
 		},
 	}, "for_actions")
+	sharing := objectSchema(map[string]any{
+		"from_actions": map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
+		"to_actions":   map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
+		"include": map[string]any{
+			"type": "array", "minItems": 1, "uniqueItems": true,
+			"items": map[string]any{"type": "string", "enum": []string{"results", "artifacts", "decisions"}},
+		},
+	}, "from_actions", "to_actions", "include")
 	return objectSchema(map[string]any{
 		"name": map[string]any{
 			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
 			"description": "Nonblank exact mission name. Creation requires an unused name; updating requires the existing unchanged name.",
+		},
+		"context": map[string]any{
+			"type": []string{"object", "null"}, "additionalProperties": false,
+			"properties": map[string]any{
+				"sharing": map[string]any{"type": []string{"array", "null"}, "items": json.RawMessage(sharing)},
+			},
+			"description": "Optional action-based context sharing policy retained in operation snapshots. Empty or omitted sharing disables forwarding. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. This step stores policy only; live forwarding is not enabled yet.",
 		},
 		"completion": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": false,

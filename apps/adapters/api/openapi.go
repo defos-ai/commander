@@ -33,11 +33,15 @@ func openAPIDocument() ([]byte, error) {
 		typeOf reflect.Type
 	}{
 		{"About", reflect.TypeFor[models.AboutResponse]()},
+		{"MissionContextSharing", reflect.TypeFor[models.MissionContextSharingResponse]()},
+		{"MissionContextPolicy", reflect.TypeFor[models.MissionContextPolicyResponse]()},
 		{"MissionCompletionPolicy", reflect.TypeFor[models.MissionCompletionPolicyResponse]()},
 		{"MissionRuleParams", reflect.TypeFor[models.MissionRuleParamsResponse]()},
 		{"MissionRule", reflect.TypeFor[models.MissionRuleResponse]()},
 		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
+		{"MissionContextSharingRequest", reflect.TypeFor[models.MissionContextSharingRequest]()},
+		{"MissionContextPolicyRequest", reflect.TypeFor[models.MissionContextPolicyRequest]()},
 		{"MissionCompletionPolicyRequest", reflect.TypeFor[models.MissionCompletionPolicyRequest]()},
 		{"MissionRuleParamsRequest", reflect.TypeFor[models.MissionRuleParamsRequest]()},
 		{"MissionRuleRequest", reflect.TypeFor[models.MissionRuleRequest]()},
@@ -73,6 +77,21 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["application"].Enum = []any{"commander-api", "commander"}
 		case "MissionRuleParams":
 			schema.Properties["decision_by"].Enum = []any{"model"}
+		case "MissionContextSharing", "MissionContextSharingRequest":
+			schema.Required = []string{"from_actions", "to_actions", "include"}
+			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+			for _, name := range []string{"from_actions", "to_actions", "include"} {
+				property := schema.Properties[name]
+				property.Type, property.Types = "array", nil
+				property.MinItems = new(1)
+				property.UniqueItems = true
+				property.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
+			}
+			schema.Properties["include"].Items.Enum = []any{"results", "artifacts", "decisions"}
+		case "MissionContextPolicy", "MissionContextPolicyRequest":
+			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+			schema.Description = "Action-based context sharing policy retained in each operation's mission snapshot. Empty or omitted sharing disables forwarding. This release step stores policy only; live forwarding is not enabled yet."
+			schema.Properties["sharing"].Description = "Routes between source and recipient action names within one operation. These names need not appear in required_actions or optional_actions and do not start tasks or change preflight readiness."
 		case "MissionCompletionPolicy", "MissionCompletionPolicyRequest":
 			schema.Required = []string{"decision_by"}
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
@@ -81,6 +100,7 @@ func openAPIDocument() ([]byte, error) {
 		case "MissionRule":
 			schema.Properties["for_actions"].Description = "Actions whose executions this rule applies to."
 		case "Mission":
+			schema.Properties["context"].Description = "Optional action-based context sharing policy retained in each operation. Policy storage does not yet enable live context delivery."
 			schema.Properties["completion"].Description = "Optional mission-wide completion policy retained in each operation. Omission or model permits model-origin completion; operator requires operator-origin completion with no timed model fallback."
 			schema.Properties["action_definitions"].Description = "Desired action contracts referenced by this mission. Metadata only: defining an action does not register an executor or satisfy readiness."
 			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks."
@@ -230,6 +250,7 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 		forActions.Description = "Nonempty, unique action names without surrounding whitespace."
 	case "CreateMissionRequest":
 		schema.Required = []string{"name", "objectives", "input_schema", "output_schema"}
+		schema.Properties["context"].Description = "Optional action-based context sharing policy, copied into future operation snapshots. Omission or empty sharing disables forwarding. Policy storage does not yet enable live context delivery."
 		schema.Properties["completion"].Description = "Optional mission-wide completion policy, copied into future operation snapshots. operator requires operator-origin completion with no timed model fallback; omission or model also permits model-origin completion."
 		schema.Properties["name"].Pattern = `\S`
 		schema.Properties["name"].Not = &jsonschema.Schema{Enum: []any{".", ".."}}

@@ -30,3 +30,11 @@ func ModelRules(action string) missions.RuleSet {
 		missions.DecideNextActions: {ForActions: []string{action}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
 	}
 }
+
+func ContextSharingPolicy() *missions.ContextPolicy {
+	return &missions.ContextPolicy{Sharing: []missions.ContextSharing{{
+		FromActions: []string{"discover"},
+		ToActions:   []string{"inspect"},
+		Include:     []missions.ContextKind{missions.ContextResults, missions.ContextArtifacts},
+	}}}
+}

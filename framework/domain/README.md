@@ -40,6 +40,7 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and rules; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters, Runner start and rule selection. |
 | [`CompletionPolicy`](missions/completion_policy.go) | Declares who may complete the whole mission; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
+| [`ContextPolicy`, `ContextSharing`](missions/context_policy.go) | Declare permitted action-to-action context routes, retained independently in each operation. Policy storage is available; forwarding is not implemented yet. | Mission authoring/validation, Adapters, mission and operation stores. |
 | [`RuleSet`, `Rule`, `RuleParams`](missions/rule.go) | Express aggregation, model review and same-agent policy declaratively. | Runner rule selection, operation rule application, mission authoring. |
 
 ## Operations

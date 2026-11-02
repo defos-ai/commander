@@ -19,6 +19,19 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 		InputSchema:       bytes.Clone(request.InputSchema),
 		OutputSchema:      bytes.Clone(request.OutputSchema),
 	}
+	if request.Context != nil {
+		mission.Context = &missions.ContextPolicy{}
+		if request.Context.Sharing != nil {
+			mission.Context.Sharing = make([]missions.ContextSharing, len(request.Context.Sharing))
+			for i, sharing := range request.Context.Sharing {
+				mission.Context.Sharing[i] = missions.ContextSharing{
+					FromActions: slices.Clone(sharing.FromActions),
+					ToActions:   slices.Clone(sharing.ToActions),
+					Include:     contextKinds(sharing.Include),
+				}
+			}
+		}
+	}
 	if request.Completion != nil {
 		mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Decision(request.Completion.DecisionBy)}
 	}
@@ -46,6 +59,19 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 		InputSchema:       bytes.Clone(mission.InputSchema),
 		OutputSchema:      bytes.Clone(mission.OutputSchema),
 	}
+	if mission.Context != nil {
+		response.Context = &models.MissionContextPolicyResponse{}
+		if mission.Context.Sharing != nil {
+			response.Context.Sharing = make([]models.MissionContextSharingResponse, len(mission.Context.Sharing))
+			for i, sharing := range mission.Context.Sharing {
+				response.Context.Sharing[i] = models.MissionContextSharingResponse{
+					FromActions: slices.Clone(sharing.FromActions),
+					ToActions:   slices.Clone(sharing.ToActions),
+					Include:     contextKindNames(sharing.Include),
+				}
+			}
+		}
+	}
 	if mission.Completion != nil {
 		response.Completion = &models.MissionCompletionPolicyResponse{DecisionBy: string(mission.Completion.DecisionBy)}
 	}
@@ -71,4 +97,26 @@ func ToMissionResponses(missions []missions.Mission) []models.MissionResponse {
 		responses[i] = ToMissionResponse(mission)
 	}
 	return responses
+}
+
+func contextKinds(names []string) []missions.ContextKind {
+	if names == nil {
+		return nil
+	}
+	kinds := make([]missions.ContextKind, len(names))
+	for i, name := range names {
+		kinds[i] = missions.ContextKind(name)
+	}
+	return kinds
+}
+
+func contextKindNames(kinds []missions.ContextKind) []string {
+	if kinds == nil {
+		return nil
+	}
+	names := make([]string, len(kinds))
+	for i, kind := range kinds {
+		names[i] = string(kind)
+	}
+	return names
 }
