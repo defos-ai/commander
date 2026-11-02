@@ -13,6 +13,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/leases"
+	"github.com/defos-ai/commander/framework/controller/sharing"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
@@ -66,8 +67,7 @@ type Controller struct {
 	artifactStore      artifacts.ArtifactStore
 	executionStore     executions.ExecutionStore
 	operationStore     operations.OperationStore
-	sharingQueue       chan sharedData
-	sharingDone        chan struct{}
+	sharing            *sharing.Worker
 	secrets            *consumers.SecretEventConsumer
 	events             comms.Subscription
 	cancel             context.CancelCauseFunc
@@ -161,7 +161,6 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		state:      state.New(lifetime, config.HeartbeatTimeout),
 		eventsDone: make(chan struct{}), loopDone: make(chan struct{}), cleanupDone: make(chan struct{}),
 		requests: make(chan func()), sessionsDone: make(chan struct{}),
-		sharingQueue: make(chan sharedData, sharingQueueSize), sharingDone: make(chan struct{}),
 	}
 	if config.SessionStore != nil {
 		c.sessions, err = runtimeSessions.New(config.SessionStore, config.OperationStore, config.ExecutionStore, config.AgentStore, config.ActionStore, c.controlSessionRemote)
@@ -180,9 +179,13 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		cancel(err)
 		return nil, errors.Join(err, events.Close())
 	}
+	c.sharing = sharing.NewWorker(lifetime, sharing.Config{
+		Bus: bus, Operations: config.OperationStore, Executions: config.ExecutionStore,
+		Artifacts: config.ArtifactStore, Agent: c.Agent, Logger: config.Logger,
+	})
 	go c.reconcileSessionControls()
 	go c.run()
-	go c.forwardSharedData()
+	go c.sharing.Run()
 	go c.consumeEvents(config.ActionStore)
 
 	return c, nil
@@ -191,3 +194,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 func (c *Controller) ID() string { return c.id }
 
 func (c *Controller) Type() string { return c.controllerType }
+
+func (c *Controller) ShareQuestionAnswer(operationID, questionID string) {
+	c.sharing.ShareQuestionAnswer(operationID, questionID)
+}

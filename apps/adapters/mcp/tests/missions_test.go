@@ -9,6 +9,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -73,7 +74,7 @@ func TestMissions(t *testing.T) {
 	}
 	aggregate := mission.Rules[missions.AggregateResults]
 	decision := mission.Rules[missions.DecideNextActions]
-	if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{"analyze-text"}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, []string{"write-summary"}) || decision.Params == nil || decision.Params.DecisionBy != missions.Model {
+	if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{"analyze-text"}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, []string{"write-summary"}) || decision.Params == nil || decision.Params.DecisionBy != policies.Model {
 		t.Fatalf("mission detail lost grouping or model rules: %+v", mission.Rules)
 	}
 	if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {
@@ -104,7 +105,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 		t.Fatal("MCP mission creation or detail lost the sharing policy")
 	}
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
-	definition.Policies.Sharing[0].Include = []missions.SharingKind{missions.ShareDecisions}
+	definition.Policies.Sharing[0].Include = []policies.SharingKind{policies.ShareDecisions}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
 	if !reflect.DeepEqual(updated.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {

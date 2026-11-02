@@ -59,7 +59,7 @@ func (c *Controller) consumeEvents(actions actions.ActionStore) {
 		_, err := submit(ctx, c, func(ctx context.Context) (struct{}, error) {
 			err := events.Consume(ctx, message)
 			if err == nil {
-				c.queueSharedResult(message)
+				c.sharing.QueueResult(message)
 			}
 			if err == nil && c.sessions != nil && (message.Type == messages.AgentStarted || message.Type == messages.AgentUpdated || message.Type == messages.AgentHeartbeat || message.Type == messages.AgentStopped) {
 				err = c.sessions.Observe(ctx, runtimeSessions.Evidence{AgentID: message.AgentID})

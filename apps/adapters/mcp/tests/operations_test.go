@@ -14,6 +14,7 @@ import (
 	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/id"
@@ -416,7 +417,7 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	a.Call("describe_mission", fixtures.Object{"mission_name": "analyze-text"}, &definition)
 	operatorDefinition := definition.Clone()
 	operatorDefinition.Name += "-operator-" + id.New()
-	operatorDefinition.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+	operatorDefinition.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
 	operatorDefinition.OutputSchema = json.RawMessage(`{"anyOf":[{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false},{"type":"null"}]}`)
 	a.Call("create_mission", fixtures.MissionDefinition(operatorDefinition), nil)
 	var operation operations.Operation
@@ -453,7 +454,7 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 
 	modelDefinition := definition.Clone()
 	modelDefinition.Name += "-model-" + id.New()
-	modelDefinition.Completion = &missions.CompletionPolicy{DecisionBy: missions.Model}
+	modelDefinition.Completion = &policies.CompletionPolicy{DecisionBy: policies.Model}
 	a.Call("create_mission", fixtures.MissionDefinition(modelDefinition), nil)
 	var modelOperation operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": modelDefinition.Name, "input": fixtures.Object{"text": "Model completes final output"}}, &modelOperation)

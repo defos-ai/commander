@@ -11,6 +11,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -23,17 +24,17 @@ import (
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
-	Rules             RuleSet                  `json:"rules,omitempty"`
-	Completion        *CompletionPolicy        `json:"completion,omitempty"`
-	Policies          *MissionPolicies         `json:"policies,omitempty"`
-	Name              string                   `json:"name"`
-	Objectives        []string                 `json:"objectives"`
-	RequiredActions   []string                 `json:"required_actions"`
-	OptionalActions   []string                 `json:"optional_actions,omitempty"`
-	ActionDefinitions []actionmodel.Definition `json:"action_definitions,omitempty"`
-	StartingActions   []string                 `json:"starting_actions"`
-	InputSchema       json.RawMessage          `json:"input_schema"`
-	OutputSchema      json.RawMessage          `json:"output_schema"`
+	Rules             RuleSet                    `json:"rules,omitempty"`
+	Completion        *policies.CompletionPolicy `json:"completion,omitempty"`
+	Policies          *policies.MissionPolicies  `json:"policies,omitempty"`
+	Name              string                     `json:"name"`
+	Objectives        []string                   `json:"objectives"`
+	RequiredActions   []string                   `json:"required_actions"`
+	OptionalActions   []string                   `json:"optional_actions,omitempty"`
+	ActionDefinitions []actionmodel.Definition   `json:"action_definitions,omitempty"`
+	StartingActions   []string                   `json:"starting_actions"`
+	InputSchema       json.RawMessage            `json:"input_schema"`
+	OutputSchema      json.RawMessage            `json:"output_schema"`
 }
 
 func LoadMission(data []byte) (Mission, error) {

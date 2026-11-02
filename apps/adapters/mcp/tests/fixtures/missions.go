@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -30,10 +31,10 @@ func SharingMission() missions.Mission {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &missions.MissionPolicies{Sharing: missions.SharingPolicy{{
+		Policies: &policies.MissionPolicies{Sharing: policies.SharingPolicy{{
 			FromActions: []string{"find-vulnerabilities"},
 			ToActions:   []string{"analyze-vulnerabilities"},
-			Include:     []missions.SharingKind{missions.ShareResults, missions.ShareArtifacts},
+			Include:     []policies.SharingKind{policies.ShareResults, policies.ShareArtifacts},
 		}}},
 	}
 }

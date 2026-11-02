@@ -34,6 +34,9 @@ applies to all domain packages below this directory.
 - [Missions](missions/mission.go) are reusable definitions saved into each
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.
+- Mission policy types live in [missions/policies](missions/policies/), which
+  stays independent of its parent package. Rules remain in `missions`; their
+  decision parameter reuses [policies.Decision](missions/policies/decision.go).
 - Operation transitions own tasks, questions, continuations and events together.
   Use [OperationStore](operations/operation_store.go) mutation contracts rather
   than rebuilding a saved operation from a stale caller snapshot.

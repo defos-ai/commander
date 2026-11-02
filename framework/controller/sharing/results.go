@@ -1,4 +1,4 @@
-package controller
+package sharing
 
 import (
 	"bytes"
@@ -14,16 +14,16 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
-	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
 
-func (c *Controller) forwardSharedResult(ctx context.Context, source sharedData) error {
-	if c.operationStore == nil || source.Work.OperationID == "" {
+func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) error {
+	if w.operationStore == nil || source.Work.OperationID == "" {
 		return nil
 	}
-	stored, err := c.executionStore.Get(ctx, source.AgentID, source.CommandID)
+	stored, err := w.executionStore.Get(ctx, source.AgentID, source.CommandID)
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func (c *Controller) forwardSharedResult(ctx context.Context, source sharedData)
 	if err != nil {
 		return err
 	}
-	op, err := c.operationStore.Get(ctx, source.Work.OperationID)
+	op, err := w.operationStore.Get(ctx, source.Work.OperationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		return nil
 	}
@@ -89,7 +89,7 @@ func (c *Controller) forwardSharedResult(ctx context.Context, source sharedData)
 		}
 		if shareArtifacts && len(output.Artifacts) != 0 {
 			if !artifactsRead {
-				accepted, artifactErr = c.sharedArtifacts(ctx, output.Artifacts)
+				accepted, artifactErr = w.sharedArtifacts(ctx, output.Artifacts)
 				artifactsRead = true
 			}
 			if artifactErr != nil {
@@ -98,16 +98,16 @@ func (c *Controller) forwardSharedResult(ctx context.Context, source sharedData)
 			}
 			update.Artifacts = artifacts.CloneAll(accepted)
 		}
-		forwardingErr = errors.Join(forwardingErr, c.publishSharedUpdate(ctx, task, update))
+		forwardingErr = errors.Join(forwardingErr, w.publishSharedUpdate(ctx, task, update))
 	}
 	return forwardingErr
 }
 
-func sharedResultKinds(policy missions.SharingPolicy, from, to string) (results, artifacts bool) {
+func sharedResultKinds(policy policies.SharingPolicy, from, to string) (results, artifacts bool) {
 	for _, route := range policy {
 		if slices.Contains(route.FromActions, from) && slices.Contains(route.ToActions, to) {
-			results = results || slices.Contains(route.Include, missions.ShareResults)
-			artifacts = artifacts || slices.Contains(route.Include, missions.ShareArtifacts)
+			results = results || slices.Contains(route.Include, policies.ShareResults)
+			artifacts = artifacts || slices.Contains(route.Include, policies.ShareArtifacts)
 		}
 	}
 	return results, artifacts
@@ -118,13 +118,13 @@ func sharedTaskMatches(task operations.Task, command messages.Message, call acti
 		task.OperationID == command.Work.OperationID && task.ID == command.Work.TaskID && call.Work == command.Work && task.ActionName == call.ActionName
 }
 
-func (c *Controller) publishSharedUpdate(ctx context.Context, task operations.Task, update agentevents.ContextUpdate) error {
+func (w *Worker) publishSharedUpdate(ctx context.Context, task operations.Task, update agentevents.ContextUpdate) error {
 	work := messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}
 	message, err := agentevents.NewContextUpdate(task.AgentID, task.CommandID, work, update)
 	if err != nil {
 		return err
 	}
-	active, err := c.sharedRecipient(ctx, task)
+	active, err := w.sharedRecipient(ctx, task)
 	if err != nil || !active || !time.Now().Before(*task.DeadlineAt) {
 		return err
 	}
@@ -134,15 +134,15 @@ func (c *Controller) publishSharedUpdate(ctx context.Context, task operations.Ta
 	}
 	publication, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	return (agentevents.Client{Bus: c.bus}).Publish(publication, message)
+	return (agentevents.Client{Bus: w.bus}).Publish(publication, message)
 }
 
-func (c *Controller) sharedRecipient(ctx context.Context, task operations.Task) (bool, error) {
+func (w *Worker) sharedRecipient(ctx context.Context, task operations.Task) (bool, error) {
 	if task.Status != operations.TaskRunning || task.DeadlineAt == nil || !time.Now().Before(*task.DeadlineAt) ||
 		!id.ValidAgent(task.AgentID) || !id.Valid(task.CommandID) {
 		return false, nil
 	}
-	op, err := c.operationStore.Get(ctx, task.OperationID)
+	op, err := w.operationStore.Get(ctx, task.OperationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		return false, nil
 	}
@@ -164,7 +164,7 @@ func (c *Controller) sharedRecipient(ctx context.Context, task operations.Task) 
 		current.ActionName != task.ActionName || current.CommandID != task.CommandID || current.DeadlineAt == nil || !current.DeadlineAt.Equal(*task.DeadlineAt) {
 		return false, nil
 	}
-	claim, err := c.executionStore.Get(ctx, task.AgentID, task.CommandID)
+	claim, err := w.executionStore.Get(ctx, task.AgentID, task.CommandID)
 	if errors.Is(err, executions.ErrUnknownExecution) {
 		return false, nil
 	}
@@ -182,7 +182,7 @@ func (c *Controller) sharedRecipient(ctx context.Context, task operations.Task) 
 		!claim.Command.ExpiresAt.IsZero() && !time.Now().Before(claim.Command.ExpiresAt) {
 		return false, nil
 	}
-	record, err := c.Agent(ctx, task.AgentID)
+	record, err := w.agent(ctx, task.AgentID)
 	if errors.Is(err, agents.ErrUnknownAgent) {
 		return false, nil
 	}
@@ -194,14 +194,14 @@ func (c *Controller) sharedRecipient(ctx context.Context, task operations.Task) 
 		work.OperationID == task.OperationID && work.TaskID == task.ID && work.CommandID == task.CommandID && work.ActionName == task.ActionName, nil
 }
 
-func (c *Controller) sharedArtifacts(ctx context.Context, refs []artifacts.Artifact) ([]artifacts.Artifact, error) {
+func (w *Worker) sharedArtifacts(ctx context.Context, refs []artifacts.Artifact) ([]artifacts.Artifact, error) {
 	accepted := make([]artifacts.Artifact, 0, len(refs))
 	seen := make(map[string]bool, len(refs))
 	for _, ref := range refs {
 		if seen[ref.ID] {
 			continue
 		}
-		saved, err := c.artifactStore.Get(ctx, ref.ID)
+		saved, err := w.artifactStore.Get(ctx, ref.ID)
 		if err != nil {
 			return nil, err
 		}

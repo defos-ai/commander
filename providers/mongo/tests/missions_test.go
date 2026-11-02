@@ -11,6 +11,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	mongomissions "github.com/defos-ai/commander/providers/mongo/missions"
 	"github.com/defos-ai/commander/providers/mongo/tests/fixtures"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -22,12 +23,12 @@ func TestMissionMongoStore(t *testing.T) {
 	ctx := t.Context()
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
-		Completion:      &missions.CompletionPolicy{DecisionBy: missions.Operator},
+		Completion:      &policies.CompletionPolicy{DecisionBy: policies.Operator},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		ActionDefinitions: []actions.Definition{fixtures.ActionDefinition()},
 		Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 		},
 		InputSchema:  json.RawMessage(`{"type":"object","x-example":9007199254740993,"properties":{"url":{"type":"string"}}}`),
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}}}`),
@@ -63,7 +64,7 @@ func TestMissionMongoStore(t *testing.T) {
 	if !bytes.Equal(schema, original.InputSchema) || document.Lookup("name").StringValue() != original.Name {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
-	if decision, ok := document.Lookup("completion", "decision_by").StringValueOK(); !ok || decision != string(missions.Operator) {
+	if decision, ok := document.Lookup("completion", "decision_by").StringValueOK(); !ok || decision != string(policies.Operator) {
 		t.Fatal("provider changed the completion setting or its stored field names")
 	}
 	definitions, err := document.Lookup("action_definitions").Array().Values()
@@ -81,7 +82,7 @@ func TestMissionMongoStore(t *testing.T) {
 		}
 	}
 	stored.Objectives[0] = "modified by reader"
-	stored.Completion.DecisionBy = missions.Model
+	stored.Completion.DecisionBy = policies.Model
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
 	stored.ActionDefinitions[0].Name = "modified by reader"
@@ -128,7 +129,7 @@ func TestMissionMongoStore(t *testing.T) {
 	invalidSchema := updated.Clone()
 	invalidSchema.InputSchema = json.RawMessage(`{"type":"invalid-type"}`)
 	invalidCompletion := updated.Clone()
-	invalidCompletion.Completion = &missions.CompletionPolicy{DecisionBy: "unknown"}
+	invalidCompletion.Completion = &policies.CompletionPolicy{DecisionBy: "unknown"}
 	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion} {
 		if err := catalog.Upsert(ctx, invalid); err == nil {
 			t.Fatal("invalid mission replaced a valid one")

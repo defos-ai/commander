@@ -9,6 +9,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
@@ -69,7 +70,7 @@ func TestRulesModelDecisionStopsProposedTasks(t *testing.T) {
 	config := fixtures.Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
 		m.Rules = missions.RuleSet{
-			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 		}
 	})
 	exec, calls := fakes.ControlledExecutor()
@@ -96,7 +97,7 @@ func TestRulesModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
 		m.Rules = missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"discover", "inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.DecideNextActions: {ForActions: []string{"discover", "inspect"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 		}
 	})
 	exec, calls := fakes.ControlledExecutor()
@@ -159,11 +160,11 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	config := fixtures.Config()
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
-		m.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
-		m.Policies = &missions.MissionPolicies{Sharing: fixtures.SharingPolicy()}
+		m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+		m.Policies = &policies.MissionPolicies{Sharing: fixtures.SharingPolicy()}
 		m.Rules = missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"inspect"}},
-			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 		}
 	})
 	expected := catalog.Snapshot().Rules.Clone()
@@ -171,13 +172,13 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
 	catalog.Change(func(m *missions.Mission) {
-		m.Completion.DecisionBy = missions.Model
+		m.Completion.DecisionBy = policies.Model
 		m.Policies.Sharing[0].FromActions[0] = "follow-up"
 		m.Policies.Sharing[0].ToActions[0] = "discover"
-		m.Policies.Sharing[0].Include[0] = missions.ShareDecisions
+		m.Policies.Sharing[0].Include[0] = policies.ShareDecisions
 	})
 	later := fixtures.Start(t, r)
-	if later.Mission.Completion == nil || later.Mission.Completion.DecisionBy != missions.Model {
+	if later.Mission.Completion == nil || later.Mission.Completion.DecisionBy != policies.Model {
 		t.Fatal("a new operation did not receive the updated completion policy")
 	}
 	if !reflect.DeepEqual(later.Mission.Policies, catalog.Snapshot().Policies) {
@@ -188,7 +189,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	catalog.Change(func(m *missions.Mission) { delete(m.Rules, missions.AggregateResults) })
 	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot changed"
 	op.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
-	op.Mission.Completion.DecisionBy = missions.Model
+	op.Mission.Completion.DecisionBy = policies.Model
 	op.Mission.Policies.Sharing[0].FromActions[0] = "returned source changed"
 	op.Mission.Policies.Sharing[0].ToActions[0] = "returned recipient changed"
 	op.Mission.Policies.Sharing[0].Include[0] = "returned kind changed"
@@ -198,10 +199,10 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	if !reflect.DeepEqual(settled.Mission.Rules, expected) || len(settled.Tasks) != 1 || settled.Tasks[0].Continuation.DecisionBy != operations.DecisionModel {
 		t.Fatalf("catalog or returned snapshot edits changed the running operation's rules: %+v", settled)
 	}
-	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != missions.Operator {
+	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != policies.Operator {
 		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
 	}
-	if !reflect.DeepEqual(settled.Mission.Policies, &missions.MissionPolicies{Sharing: fixtures.SharingPolicy()}) {
+	if !reflect.DeepEqual(settled.Mission.Policies, &policies.MissionPolicies{Sharing: fixtures.SharingPolicy()}) {
 		t.Fatalf("catalog or returned snapshot edits changed the running operation's sharing policy: %+v", settled.Mission.Policies)
 	}
 }

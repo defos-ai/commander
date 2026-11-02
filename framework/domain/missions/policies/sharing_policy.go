@@ -1,9 +1,10 @@
-package missions
+package policies
 
 import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type SharingKind string
@@ -69,4 +70,18 @@ func (p SharingPolicy) Clone() SharingPolicy {
 		p[i].Include = slices.Clone(p[i].Include)
 	}
 	return p
+}
+
+func validateActionNames(field string, names []string) error {
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
+			return fmt.Errorf("%s must contain nonblank names without surrounding whitespace", field)
+		}
+		if seen[name] {
+			return fmt.Errorf("%s contains duplicate action %q", field, name)
+		}
+		seen[name] = true
+	}
+	return nil
 }

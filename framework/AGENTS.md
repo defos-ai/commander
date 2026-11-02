@@ -57,7 +57,8 @@
 - Mission `objectives` is an ordered, nonempty array of nonblank strings. Clone
   the array at snapshot boundaries and retain each entry through storage and
   transport.
-- Optional mission `policies.sharing` declares action-to-action routes for results,
+- Optional mission [`policies.sharing`](domain/missions/policies/sharing_policy.go)
+  declares action-to-action routes for results,
   artifacts and decisions within an operation. Each entry requires nonempty,
   unique `from_actions`, `to_actions` and supported `include` values. Action names
   need not appear in coverage lists, which are not allowlists. Absent/null `policies`
@@ -66,7 +67,8 @@
   operation snapshots. Results, accepted artifact metadata and task-scoped
   answered questions can be forwarded to existing active tasks. Sharing does not
   start tasks or grant secret/storage access.
-- Optional mission `completion` stores a mission-wide `CompletionPolicy` with
+- Optional mission `completion` stores a mission-wide
+  [`CompletionPolicy`](domain/missions/policies/completion_policy.go) with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
   an empty object is invalid. Clone its pointer independently in mission and
   operation snapshots. Trusted adapters stamp required completion origin:
@@ -267,20 +269,24 @@
   contexts. Standalone work clears inherited access. Discard buffered data when
   execution ends; delivery neither changes action outcomes nor extends deadlines.
   No publication records, replay or durable receiver memory exist.
-- [Result forwarding](controller/shared_results.go) reads the saved operation
+- The [sharing worker](controller/sharing/loop.go) receives stores, messaging and
+  live-agent observation through injected dependencies. The controller owns its
+  lifecycle; sharing must not import the parent package or mutate controller state.
+  [Result forwarding](controller/sharing/results.go) reads the saved operation
   policy, source execution and task dispatch after result/artifact acceptance.
   Union matching routes and verify current operation/task state, unfinished
   recipient claim and fresh observed work before exact-target delivery. Never
   forward action input, proposals, session mutations or file bytes. A bounded
-  [worker](controller/sharing_loop.go) keeps forwarding I/O outside the owner loop;
-  failures and queue overload are logged without changing accepted outcomes.
+  worker keeps forwarding I/O outside the owner loop; failures and queue overload
+  are logged without changing accepted outcomes.
   Cancel and join it during shutdown. Recovery reads do not replay sharing, and
   saved source IDs let receivers deduplicate accepted event redeliveries.
 - After a successful answer save, the runner notifies executors supporting
-  `ShareQuestionAnswer`. The controller queues only operation/question IDs and
-  [rereads the saved decision](controller/shared_decisions.go), matching its task
-  to the original execution claim before routing. Preserve question IDs, content,
-  timestamps and answer origin; multiple decisions can belong to one execution.
+  `ShareQuestionAnswer`. The controller delegates only operation/question IDs to
+  the worker, which [rereads the saved decision](controller/sharing/decisions.go)
+  and matches its task to the original execution claim before routing. Preserve
+  question IDs, content, timestamps and answer origin; multiple decisions can
+  belong to one execution.
   Operation-wide questions are not shared. Pending, rejected or uncertain answers
   and ordinary reads/recovery never trigger forwarding. Delivery failures do not
   change an answer or its continuation; sharing grants no completion authority.

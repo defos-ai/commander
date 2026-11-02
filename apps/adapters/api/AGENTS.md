@@ -58,7 +58,8 @@
   future operations only, never their retained mission snapshots. Read the saved
   definition after uncertain writes; never retry an update automatically.
 - Optional mission `completion` maps through independent API request/response DTOs
-  to `missions.CompletionPolicy`. Clone its pointer at mapping boundaries; omission
+  to [`policies.CompletionPolicy`](../../../framework/domain/missions/policies/completion_policy.go).
+  Clone its pointer at mapping boundaries; omission
   and explicit null stay omitted, while a present object requires exact
   `decision_by: model|operator` and rejects unknown fields. OpenAPI must describe
   this separately from action-scoped rule parameters. Preserve the configured

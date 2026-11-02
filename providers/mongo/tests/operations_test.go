@@ -15,6 +15,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	mongooperations "github.com/defos-ai/commander/providers/mongo/operations"
@@ -35,7 +36,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Mission.RequiredActions = append(original.Mission.RequiredActions, "discover")
 	original.Mission.Rules = missions.RuleSet{
 		missions.AggregateResults:  {ForActions: []string{"discover"}},
-		missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 	}
 	task := operations.NewTask(original.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
 	original.Tasks = []operations.Task{task}
@@ -444,7 +445,7 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 			first, _ := fixtures.OpenOperations(t)
 			second, database := fixtures.OpenOperations(t)
 			definition := fixtures.Operation()
-			definition.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+			definition.Mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
 			op := fixtures.CreateOperation(t, first, definition)
 			completionDraft := fixtures.CompletionDraft()
 			if _, err := first.SaveCompletionDraft(t.Context(), op.ID, completionDraft); err != nil {
@@ -540,7 +541,7 @@ func TestOperationMongoCompletionDraftIsAnAtomicReviewCopy(t *testing.T) {
 	first, database := fixtures.OpenOperations(t)
 	second, _ := fixtures.OpenOperations(t)
 	definition := fixtures.Operation()
-	definition.Mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Operator}
+	definition.Mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
 	op := fixtures.CreateOperation(t, first, definition)
 	completionDraft := fixtures.CompletionDraft()
 	expected := compactOperationJSON(t, completionDraft)

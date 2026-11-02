@@ -39,9 +39,9 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and rules; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters, Runner start and rule selection. |
-| [`CompletionPolicy`](missions/completion_policy.go) | Declares who may complete the whole mission; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
-| [`MissionPolicies`](missions/policies.go) | Groups optional behavioral settings, currently sharing, into each saved mission snapshot. Completion and orchestration rules retain their existing fields. | Mission validation/cloning, Adapters, mission and operation stores. |
-| [`SharingPolicy`, `SharingRoute`](missions/sharing_policy.go) | Declare permitted action-to-action data routes for saved results, accepted artifact metadata and task-scoped answered questions, retained independently in each operation. | Mission authoring/validation, Adapters, Controller forwarding, mission and operation stores. |
+| [`CompletionPolicy`](missions/policies/completion_policy.go) | Declares who may complete the whole mission; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
+| [`MissionPolicies`](missions/policies/policies.go) | Groups optional behavioral settings, currently sharing, into each saved mission snapshot. Completion and orchestration rules retain their existing fields. | Mission validation/cloning, Adapters, mission and operation stores. |
+| [`SharingPolicy`, `SharingRoute`](missions/policies/sharing_policy.go) | Declare permitted action-to-action data routes for saved results, accepted artifact metadata and task-scoped answered questions, retained independently in each operation. | Mission authoring/validation, Adapters, Controller forwarding, mission and operation stores. |
 | [`RuleSet`, `Rule`, `RuleParams`](missions/rule.go) | Express aggregation, model review and same-agent policy declaratively. | Runner rule selection, operation rule application, mission authoring. |
 
 ## Operations

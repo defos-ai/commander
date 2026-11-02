@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 )
 
 type RuleName string
@@ -16,13 +18,6 @@ const (
 	SameAgent         RuleName = "same-agent"
 )
 
-type Decision string
-
-const (
-	Model    Decision = "model"
-	Operator Decision = "operator"
-)
-
 type RuleSet map[RuleName]Rule
 
 type Rule struct {
@@ -31,7 +26,7 @@ type Rule struct {
 }
 
 type RuleParams struct {
-	DecisionBy Decision `json:"decision_by,omitempty"`
+	DecisionBy policies.Decision `json:"decision_by,omitempty"`
 }
 
 func (rules RuleSet) Validate() error {
@@ -63,8 +58,8 @@ func (rule Rule) validate(name RuleName) error {
 	if name != DecideNextActions && rule.Params != nil && rule.Params.DecisionBy != "" {
 		return fmt.Errorf("%s does not accept decision_by", name)
 	}
-	if name == DecideNextActions && (rule.Params == nil || rule.Params.DecisionBy != Model) {
-		return fmt.Errorf("decision_by must be %q", Model)
+	if name == DecideNextActions && (rule.Params == nil || rule.Params.DecisionBy != policies.Model) {
+		return fmt.Errorf("decision_by must be %q", policies.Model)
 	}
 	return nil
 }

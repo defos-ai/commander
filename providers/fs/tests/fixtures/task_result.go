@@ -7,6 +7,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
@@ -20,7 +21,7 @@ func CreateResultOperation(t *testing.T, store *operationfs.OperationFsStore) (o
 		ID: operationID, Status: operations.Running, CreatedAt: created, UpdatedAt: created,
 		Mission: missions.Mission{Rules: missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+			missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 		}},
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,

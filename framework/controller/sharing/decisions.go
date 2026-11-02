@@ -1,4 +1,4 @@
-package controller
+package sharing
 
 import (
 	"context"
@@ -11,15 +11,15 @@ import (
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
-	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
-func (c *Controller) forwardSharedDecision(ctx context.Context, source sharedData) error {
-	if c.operationStore == nil || source.Work.OperationID == "" || source.QuestionID == "" {
+func (w *Worker) forwardSharedDecision(ctx context.Context, source sharedData) error {
+	if w.operationStore == nil || source.Work.OperationID == "" || source.QuestionID == "" {
 		return nil
 	}
-	op, err := c.operationStore.Get(ctx, source.Work.OperationID)
+	op, err := w.operationStore.Get(ctx, source.Work.OperationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		return nil
 	}
@@ -51,7 +51,7 @@ func (c *Controller) forwardSharedDecision(ctx context.Context, source sharedDat
 	if task.OperationID != op.ID || question.CommandID != "" && question.CommandID != task.CommandID {
 		return errors.New("shared decision does not match its saved task dispatch")
 	}
-	claim, err := c.executionStore.Get(ctx, task.AgentID, task.CommandID)
+	claim, err := w.executionStore.Get(ctx, task.AgentID, task.CommandID)
 	if errors.Is(err, executions.ErrUnknownExecution) {
 		return nil
 	}
@@ -85,13 +85,13 @@ func (c *Controller) forwardSharedDecision(ctx context.Context, source sharedDat
 			!sharesDecision(op.Mission.Policies.Sharing, task.ActionName, recipient.ActionName) {
 			continue
 		}
-		forwardingErr = errors.Join(forwardingErr, c.publishSharedUpdate(ctx, recipient, update.Clone()))
+		forwardingErr = errors.Join(forwardingErr, w.publishSharedUpdate(ctx, recipient, update.Clone()))
 	}
 	return forwardingErr
 }
 
-func sharesDecision(policy missions.SharingPolicy, from, to string) bool {
-	return slices.ContainsFunc(policy, func(route missions.SharingRoute) bool {
-		return slices.Contains(route.FromActions, from) && slices.Contains(route.ToActions, to) && slices.Contains(route.Include, missions.ShareDecisions)
+func sharesDecision(policy policies.SharingPolicy, from, to string) bool {
+	return slices.ContainsFunc(policy, func(route policies.SharingRoute) bool {
+		return slices.Contains(route.FromActions, from) && slices.Contains(route.ToActions, to) && slices.Contains(route.Include, policies.ShareDecisions)
 	})
 }

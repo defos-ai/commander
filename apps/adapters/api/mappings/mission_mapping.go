@@ -6,6 +6,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 )
 
 func ToMission(request models.CreateMissionRequest) missions.Mission {
@@ -20,11 +21,11 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 		OutputSchema:      bytes.Clone(request.OutputSchema),
 	}
 	if request.Policies != nil {
-		mission.Policies = &missions.MissionPolicies{}
+		mission.Policies = &policies.MissionPolicies{}
 		if request.Policies.Sharing != nil {
-			mission.Policies.Sharing = make(missions.SharingPolicy, len(request.Policies.Sharing))
+			mission.Policies.Sharing = make(policies.SharingPolicy, len(request.Policies.Sharing))
 			for i, sharing := range request.Policies.Sharing {
-				mission.Policies.Sharing[i] = missions.SharingRoute{
+				mission.Policies.Sharing[i] = policies.SharingRoute{
 					FromActions: slices.Clone(sharing.FromActions),
 					ToActions:   slices.Clone(sharing.ToActions),
 					Include:     sharingKinds(sharing.Include),
@@ -33,14 +34,14 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 		}
 	}
 	if request.Completion != nil {
-		mission.Completion = &missions.CompletionPolicy{DecisionBy: missions.Decision(request.Completion.DecisionBy)}
+		mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Decision(request.Completion.DecisionBy)}
 	}
 	if request.Rules != nil {
 		mission.Rules = make(missions.RuleSet, len(request.Rules))
 		for name, rule := range request.Rules {
 			mapped := missions.Rule{ForActions: slices.Clone(rule.ForActions)}
 			if rule.Params != nil {
-				mapped.Params = &missions.RuleParams{DecisionBy: missions.Decision(rule.Params.DecisionBy)}
+				mapped.Params = &missions.RuleParams{DecisionBy: policies.Decision(rule.Params.DecisionBy)}
 			}
 			mission.Rules[missions.RuleName(name)] = mapped
 		}
@@ -99,18 +100,18 @@ func ToMissionResponses(missions []missions.Mission) []models.MissionResponse {
 	return responses
 }
 
-func sharingKinds(names []string) []missions.SharingKind {
+func sharingKinds(names []string) []policies.SharingKind {
 	if names == nil {
 		return nil
 	}
-	kinds := make([]missions.SharingKind, len(names))
+	kinds := make([]policies.SharingKind, len(names))
 	for i, name := range names {
-		kinds[i] = missions.SharingKind(name)
+		kinds[i] = policies.SharingKind(name)
 	}
 	return kinds
 }
 
-func sharingKindNames(kinds []missions.SharingKind) []string {
+func sharingKindNames(kinds []policies.SharingKind) []string {
 	if kinds == nil {
 		return nil
 	}

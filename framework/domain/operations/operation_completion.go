@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -27,7 +27,7 @@ func (origin CompletionOrigin) Validate() error {
 }
 
 func (o Operation) RequiresCompletionApproval() bool {
-	return o.Mission.Completion != nil && o.Mission.Completion.DecisionBy == missions.Operator
+	return o.Mission.Completion != nil && o.Mission.Completion.DecisionBy == policies.Operator
 }
 
 func (o *Operation) SaveCompletionDraft(output json.RawMessage) error {

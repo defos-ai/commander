@@ -1,4 +1,4 @@
-package missions
+package policies
 
 type MissionPolicies struct {
 	Sharing SharingPolicy `json:"sharing,omitempty"`

@@ -5,6 +5,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
@@ -27,14 +28,14 @@ func RuleGroup(children ...operations.Task) operations.RuleContext {
 
 func ModelRules(action string) missions.RuleSet {
 	return missions.RuleSet{
-		missions.DecideNextActions: {ForActions: []string{action}, Params: &missions.RuleParams{DecisionBy: missions.Model}},
+		missions.DecideNextActions: {ForActions: []string{action}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
 	}
 }
 
-func SharingPolicy() missions.SharingPolicy {
-	return missions.SharingPolicy{{
+func SharingPolicy() policies.SharingPolicy {
+	return policies.SharingPolicy{{
 		FromActions: []string{"discover"},
 		ToActions:   []string{"inspect"},
-		Include:     []missions.SharingKind{missions.ShareResults, missions.ShareArtifacts},
+		Include:     []policies.SharingKind{policies.ShareResults, policies.ShareArtifacts},
 	}}
 }

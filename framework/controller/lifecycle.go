@@ -28,7 +28,7 @@ func (c *Controller) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 	select {
-	case <-c.sharingDone:
+	case <-c.sharing.Done():
 	case <-ctx.Done():
 		return ctx.Err()
 	}
