@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -32,7 +33,7 @@ func must[T any](value T, err error) T {
 	return value
 }
 
-func run() error {
+func run() (result error) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	root := os.Getenv("DATABASE_URL")
@@ -54,10 +55,26 @@ func run() error {
 		MissionStore: must(missions.NewMissionFsStore(root)), OperationStore: operationStore,
 		ReportStore: must(reports.NewReportFsStore(os.Getenv("STORAGE_URL"))), AgentCatalog: coordination, Sessions: coordination.RuntimeSessions(),
 	}))
+	runnerDone := make(chan struct{})
+	var runnerErr error
+	go func() {
+		defer close(runnerDone)
+		runnerErr = execution.Run(context.Background())
+	}()
 	defer func() {
 		shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)
 		defer done()
-		_ = execution.Close(shutdown)
+		result = errors.Join(result, execution.Close(shutdown))
+		select {
+		case <-runnerDone:
+			if runnerErr != nil && runnerErr != runner.ErrClosed && !errors.Is(result, runnerErr) {
+				result = errors.Join(result, runnerErr)
+			}
+		case <-shutdown.Done():
+			if !errors.Is(result, shutdown.Err()) {
+				result = errors.Join(result, shutdown.Err())
+			}
+		}
 	}()
 	commands := must(adapter.NewConsumer(ctx, bus, "default", coordination.ID(), coordination, execution, nil))
 	commandsDone := make(chan error, 1)
@@ -79,6 +96,8 @@ func run() error {
 		return nil
 	case <-coordination.Done():
 		return coordination.Err()
+	case <-runnerDone:
+		return errors.New("operation runner stopped")
 	}
 }
 

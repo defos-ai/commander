@@ -8,10 +8,18 @@
 - Keep framework scheduling and recovery in [framework/controller](../../framework/controller/).
   A host supplies dependencies and policies; it must not duplicate the runner's
   owner loop or introduce its own operation mutation path.
+- `runner.NewRunner` completes recovery synchronously and starts no execution
+  loop. Start its blocking, single-use `Run` explicitly and monitor its return.
+  Keep constructor and Run lifetimes detached from the host's shutdown signal so
+  command intake stops before runner shutdown; do not detach individual operations.
 - Mark registration ready only after the runner and consumers start. On shutdown,
   mark draining, stop command intake, close the runner, then coordination, then
   registration and providers. Keep coordination available while the runner suspends
   accepted tasks, and use bounded shutdown contexts that survive parent cancellation.
+  Join the Run call within that bound; an expired `Close` deadline must not become
+  an unbounded wait on its goroutine.
+  During cleanup, ignore only the exact `runner.ErrClosed` return when Close won
+  before Run started; retain wrapped persistence errors and unexpected-exit checks.
 - Keep the current one-active-controller-per-database assumption explicit.
   Registration and provider support do not implement distributed ownership or
   capacity across controllers.

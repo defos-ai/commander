@@ -170,6 +170,15 @@
   outside the owner loop. `Done` signals cancellation; `Close` waits for workers
   and subscription cleanup under its caller's context before hosts release
   providers. Cleanup runs separately so it cannot block `Close` past that deadline.
+- [`runner.NewRunner`](controller/runner/runner.go) restores saved state
+  synchronously without launching task execution or background observation. The host must start
+  [`Runner.Run`](controller/runner/lifecycle.go) before submitting mutations.
+  `Run` is blocking and single-use: concurrent calls return `ErrAlreadyRunning`;
+  calls after shutdown return `ErrClosed`. Constructor-context cancellation,
+  Run-context cancellation and `Close` stop admission. The running loop joins
+  accepted calls and retains successful late results before returning saved write
+  errors. `Close` also works before `Run`, bounds its wait by the caller's context
+  and may be retried after a timeout; it does not cancel saved operations.
 - Only one active controller per database is supported. Registration and selector
   capacity do not establish distributed ownership or global capacity.
 - Apply operation mutations atomically to the latest saved record through

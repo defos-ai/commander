@@ -21,7 +21,6 @@ type taskResult struct {
 // After startup recovery, this loop owns all mutable runner state. Workers only
 // execute remote calls and return results; they never retain operationState.
 func (r *Runner) run() {
-	defer close(r.done)
 	if r.ctx.Err() == nil {
 		r.resumeTasks()
 	}

@@ -43,6 +43,7 @@ type SharingStack struct {
 	analyzers  map[string]*fakes.SharingAnalyzer
 	agents     []sharingAgent
 	runner     *runner.Runner
+	runnerDone chan error
 	server     *httptest.Server
 	client     *http.Client
 	cancel     context.CancelFunc
@@ -106,6 +107,8 @@ func NewSharingStack(t *testing.T) *SharingStack {
 	s.runner, err = runner.NewRunner(ctx, s.Controller, runner.Config{MissionStore: config.MissionStore,
 		OperationStore: config.OperationStore, ReportStore: config.ReportStore, AgentCatalog: s.Controller, TaskTimeout: 20 * time.Second})
 	require(err)
+	s.runnerDone = make(chan error, 1)
+	go func() { s.runnerDone <- s.runner.Run(ctx) }()
 	config.Operations = s.runner
 	handler, err := api.NewHandler(config)
 	require(err)
@@ -292,8 +295,19 @@ func (s *SharingStack) close(t *testing.T) {
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if s.runner != nil {
-		if err := s.runner.Close(shutdown); err != nil {
-			t.Error(err)
+		closeErr := s.runner.Close(shutdown)
+		if closeErr != nil {
+			t.Error(closeErr)
+		}
+		select {
+		case err := <-s.runnerDone:
+			if err != nil && err != runner.ErrClosed && !errors.Is(closeErr, err) {
+				t.Error(err)
+			}
+		case <-shutdown.Done():
+			if !errors.Is(closeErr, shutdown.Err()) {
+				t.Error(shutdown.Err())
+			}
 		}
 	}
 	if s.Controller != nil {

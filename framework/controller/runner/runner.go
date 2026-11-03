@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -34,6 +35,7 @@ var (
 	ErrFinished        = operations.ErrFinished
 	ErrQuestionPending = operations.ErrQuestionPending
 	ErrNotRunning      = operations.ErrNotRunning
+	ErrAlreadyRunning  = errors.New("runner is already running")
 )
 
 type AgentCatalog interface {
@@ -87,6 +89,7 @@ type Runner struct {
 	workers        int
 	closeErr       error // written before done closes
 	done           chan struct{}
+	runState       atomic.Uint32
 }
 
 func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Runner, error) {
@@ -133,6 +136,5 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 		cancel()
 		return nil, err
 	}
-	go r.run()
 	return r, nil
 }

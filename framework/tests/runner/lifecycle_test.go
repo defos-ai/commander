@@ -17,6 +17,131 @@ import (
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
+func TestRunnerDefersRecoveredExecutionUntilRun(t *testing.T) {
+	config := fixtures.Config()
+	queued := fixtures.SeedMaintenanceTask(t, config, false)
+	running := fixtures.SeedMaintenanceTask(t, config, true)
+	exec, calls := fakes.ControlledExecutor()
+	exec.Recover = exec.Run
+	r, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fixtures.CloseRunner(t, r) })
+
+	before, err := r.Get(t.Context(), running.ID)
+	if err != nil || before.Tasks[0].Status != operations.TaskRunning || !reflect.DeepEqual(before.Tasks, running.Tasks) {
+		t.Fatalf("construction lost saved work before Run: %+v, %v", before, err)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("construction executed work before Run: %+v", call)
+	case <-time.After(150 * time.Millisecond):
+	}
+	fixtures.StartRunner(t, r)
+	recovered := fixtures.Receive(t, calls)
+	if recovered.Call.Work.OperationID != running.ID || recovered.Call.Work.TaskID != running.Tasks[0].ID {
+		t.Fatalf("Run did not resume the saved execution first: %+v", recovered)
+	}
+	recovered.Reply <- fixtures.Output("inspect")
+	dispatched := fixtures.Receive(t, calls)
+	if dispatched.Call.Work.OperationID != queued.ID || dispatched.Call.Work.TaskID != queued.Tasks[0].ID {
+		t.Fatalf("Run did not preserve the saved queued task: %+v", dispatched)
+	}
+	dispatched.Reply <- fixtures.Output("inspect")
+	for _, op := range []operations.Operation{running, queued} {
+		settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+		if len(settled.Tasks) != 1 || settled.Tasks[0].ID != op.Tasks[0].ID || settled.Tasks[0].Result == nil {
+			t.Fatalf("Run duplicated or lost recovered work: %+v", settled)
+		}
+	}
+}
+
+func TestRunnerCloseBeforeRunPreservesWorkAndRejectsStart(t *testing.T) {
+	config := fixtures.Config()
+	op := fixtures.SeedMaintenanceTask(t, config, false)
+	exec, calls := fakes.ControlledExecutor()
+	r, err := runner.NewRunner(t.Context(), exec, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fixtures.CloseRunner(t, r) })
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	closed := make(chan error, 2)
+
+	for range 2 {
+		go func() { closed <- r.Close(ctx) }()
+	}
+	for range 2 {
+		if err := awaitRunnerReturn(t, closed); err != nil {
+			t.Fatalf("Close before Run waited for a nonexistent loop: %v", err)
+		}
+	}
+	if err := r.Run(ctx); !errors.Is(err, runner.ErrClosed) {
+		t.Fatalf("Run restarted a closed runner: %v", err)
+	}
+	_, assignErr := r.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`)})
+	retained, readErr := r.Get(ctx, op.ID)
+
+	if !errors.Is(assignErr, runner.ErrClosed) || readErr != nil || !reflect.DeepEqual(retained.Tasks, op.Tasks) {
+		t.Fatalf("pre-start shutdown changed saved work or admitted a task: %+v, assign=%v, read=%v", retained, assignErr, readErr)
+	}
+	select {
+	case call := <-calls:
+		t.Fatalf("pre-start shutdown executed work: %+v", call)
+	default:
+	}
+}
+
+func TestRunnerRejectsDuplicateRunAndJoinsContextCancellation(t *testing.T) {
+	exec, calls := fakes.ControlledExecutor()
+	r, err := runner.NewRunner(t.Context(), exec, fixtures.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelRun, finished := fixtures.StartRunner(t, r)
+	t.Cleanup(func() { fixtures.CloseRunner(t, r) })
+	op := fixtures.Start(t, r)
+	task := fixtures.Assign(t, r, op.ID, "inspect")
+	fixtures.Receive(t, calls)
+	duplicate := make(chan error, 1)
+
+	go func() { duplicate <- r.Run(t.Context()) }()
+
+	if err := awaitRunnerReturn(t, duplicate); !errors.Is(err, runner.ErrAlreadyRunning) {
+		t.Fatalf("duplicate Run did not retain one owner loop: %v", err)
+	}
+	waiter := make(chan error, 1)
+	go func() { _, err := r.WaitTask(t.Context(), op.ID, task.ID); waiter <- err }()
+
+	cancelRun()
+	runErr, waitErr := awaitRunnerReturn(t, finished), awaitRunnerReturn(t, waiter)
+	closeErr := r.Close(t.Context())
+	retained, readErr := r.Get(t.Context(), op.ID)
+
+	if runErr != nil || closeErr != nil || !errors.Is(waitErr, runner.ErrNotRunning) || readErr != nil {
+		t.Fatalf("Run-context cancellation did not join work and release waiters: run=%v, close=%v, wait=%v, read=%v", runErr, closeErr, waitErr, readErr)
+	}
+	if retained.Tasks[0].Status != operations.TaskRunning || retained.Tasks[0].Result != nil {
+		t.Fatalf("host cancellation replaced the recoverable remote outcome: %+v", retained.Tasks[0])
+	}
+	if err := r.Run(t.Context()); !errors.Is(err, runner.ErrClosed) {
+		t.Fatalf("a cancelled Run restarted the runner: %v", err)
+	}
+}
+
+func awaitRunnerReturn(t *testing.T, result <-chan error) error {
+	t.Helper()
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(5 * time.Second):
+		t.Fatal("runner lifecycle call did not return")
+		return nil
+	}
+}
+
 func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, fixtures.Config(), exec)
@@ -78,7 +203,12 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 		<-release
 		return fixtures.Output(call.ActionName), nil
 	}}
-	r := fixtures.NewRunner(t, fixtures.Config(), exec)
+	r, err := runner.NewRunner(t.Context(), exec, fixtures.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, finished := fixtures.StartRunner(t, r)
+	t.Cleanup(func() { fixtures.CloseRunner(t, r) })
 	t.Cleanup(func() {
 		select {
 		case <-release:
@@ -111,6 +241,9 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := awaitRunnerReturn(t, finished); err != nil {
+		t.Fatalf("Run returned before draining its successful result: %v", err)
+	}
 	got, err := r.WaitTask(ctx, op.ID, task.ID)
 	if err != nil || got.Status != operations.TaskSucceeded || got.Result == nil {
 		t.Fatalf("shutdown dropped successful work: %+v, %v", got, err)
@@ -133,6 +266,7 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, r)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

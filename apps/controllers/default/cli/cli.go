@@ -108,10 +108,27 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	if err != nil {
 		return err
 	}
+	runnerDone := make(chan struct{})
+	var runnerErr error
+	go func() {
+		defer close(runnerDone)
+		runnerErr = execution.Run(context.WithoutCancel(ctx))
+	}()
 	defer func() {
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		result = errors.Join(result, execution.Close(shutdown))
+		select {
+		case <-runnerDone:
+			// Close can win before the Run goroutine starts.
+			if runnerErr != nil && runnerErr != runner.ErrClosed && !errors.Is(result, runnerErr) {
+				result = errors.Join(result, runnerErr)
+			}
+		case <-shutdown.Done():
+			if !errors.Is(result, shutdown.Err()) {
+				result = errors.Join(result, shutdown.Err())
+			}
+		}
 	}()
 	commandCtx, cancelCommands := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelCommands()
@@ -151,6 +168,8 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		return nil
 	case <-coordination.Done():
 		return fmt.Errorf("controller coordination stopped: %w", coordination.Err())
+	case <-runnerDone:
+		return errors.New("operation runner stopped")
 	case <-commandsDone:
 		return errors.New("adapter consumer stopped")
 	}

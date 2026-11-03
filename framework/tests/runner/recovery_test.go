@@ -84,6 +84,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -156,6 +157,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -190,6 +192,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, restarted)
 	t.Cleanup(func() { fixtures.CloseRunner(t, restarted) })
 	recovered := fixtures.Receive(t, calls)
 	if recovered.Agent != fixtures.AgentID || recovered.Call.Work.TaskID != task.ID || recovered.Call.Work.OperationID != op.ID {
@@ -237,6 +240,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -320,6 +324,7 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -424,6 +429,7 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -524,6 +530,7 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

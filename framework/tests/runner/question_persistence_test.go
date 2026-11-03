@@ -95,6 +95,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			fixtures.StartRunner(t, first)
 			t.Cleanup(func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()

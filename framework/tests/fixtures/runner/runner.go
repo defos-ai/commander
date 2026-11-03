@@ -33,9 +33,33 @@ func NewRunner(t *testing.T, config runner.Config, e fakes.Executor) *runner.Run
 	if err != nil {
 		t.Fatal(err)
 	}
+	StartRunner(t, r)
 	t.Cleanup(func() { CloseRunner(t, r) })
 	return r
 }
+
+func StartRunner(t *testing.T, r *runner.Runner) (context.CancelFunc, <-chan error) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	result, stopped := make(chan error, 1), make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		closing, done := context.WithTimeout(context.Background(), 5*time.Second)
+		defer done()
+		_ = r.Close(closing)
+		select {
+		case <-stopped:
+		case <-closing.Done():
+			t.Errorf("runner Run did not stop: %v", closing.Err())
+		}
+	})
+	go func() {
+		result <- r.Run(ctx)
+		close(stopped)
+	}()
+	return cancel, result
+}
+
 func CloseRunner(t *testing.T, r *runner.Runner) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

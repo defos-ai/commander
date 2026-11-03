@@ -110,6 +110,7 @@ func TestUncertainCompletionRetainsReportThroughRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -166,6 +167,7 @@ func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, first)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -205,6 +207,7 @@ func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fixtures.StartRunner(t, restarted)
 	t.Cleanup(func() { fixtures.CloseRunner(t, restarted) })
 	recovered := fixtures.Receive(t, observed)
 	if recovered.Agent != original.Agent || !reflect.DeepEqual(recovered.Call, original.Call) {
