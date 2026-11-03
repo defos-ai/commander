@@ -67,6 +67,12 @@ func TestMissionSharingPolicy(t *testing.T) {
 	created := fixtures.Post[models.MissionResponse](a, "/api/v1/missions", definition, http.StatusCreated)
 	assertMissionPolicies(t, created.Policies, definition.Policies)
 	assertMissionPolicies(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
+	catalog := fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
+	index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == definition.Name })
+	if index < 0 {
+		t.Fatal("created mission was missing from the catalog")
+	}
+	assertMissionPolicies(t, catalog.Items[index].Policies, definition.Policies)
 	assertSchema(t, a, "Mission", a.Request(http.MethodGet, path, nil))
 	first := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, http.StatusCreated)
 	if !reflect.DeepEqual(first.Mission.Policies, created.Policies) || len(first.Tasks) != 0 {
@@ -76,6 +82,10 @@ func TestMissionSharingPolicy(t *testing.T) {
 	definition.Policies.Completion.DecisionBy = "model"
 	definition.Policies.Continuation.AggregateResults = []string{"review-vulnerabilities"}
 	definition.Policies.Continuation.ModelReview = []string{"review-vulnerabilities"}
+	definition.Policies.Session = []models.MissionSessionPolicyRequest{
+		{CreateAction: "connect-resource", UseActions: []string{"inspect-resource", "close-resource"}},
+		{CreateAction: "connect-secondary", UseActions: []string{"use-secondary"}},
+	}
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []string{"decisions"}
 	updated := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
@@ -105,6 +115,12 @@ func TestMissionSharingPolicy(t *testing.T) {
 		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"completion": completion})
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, candidate), http.StatusBadRequest, "invalid_request")
 	}
+	for _, session := range fixtures.InvalidSessionPolicies() {
+		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"session": session})
+		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/missions", candidate), http.StatusBadRequest, "invalid_request")
+		fixtures.AssertError(t, a.Request(http.MethodPut, path, candidate), http.StatusBadRequest, "invalid_request")
+	}
+	assertMissionPolicies(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
 	for _, completion := range []any{nil, fixtures.Object{}, fixtures.Object{"decision_by": "operator"}} {
 		legacy := fixtures.PoliciesDefinition(definition, nil)
 		legacy["completion"] = completion
@@ -124,13 +140,13 @@ func TestMissionSharingPolicy(t *testing.T) {
 		}
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
 	}
-	for _, policies := range []any{fixtures.Object{"completion": nil}, fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"continuation": nil}, fixtures.Object{"continuation": fixtures.Object{}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": nil, "model_review": nil}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}}, fixtures.Object{}, nil} {
+	for _, policies := range []any{fixtures.Object{"completion": nil}, fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"session": []fixtures.Object{}}, fixtures.Object{"session": nil}, fixtures.Object{"continuation": nil}, fixtures.Object{"continuation": fixtures.Object{}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": nil, "model_review": nil}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}}, fixtures.Object{}, nil} {
 		disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, fixtures.PoliciesDefinition(definition, policies)), http.StatusOK)
 		if policies == nil {
 			if disabled.Policies != nil {
 				t.Fatal("null policies were not removed")
 			}
-		} else if disabled.Policies == nil || disabled.Policies.Completion != nil || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Continuation != nil && (len(disabled.Policies.Continuation.AggregateResults) != 0 || len(disabled.Policies.Continuation.ModelReview) != 0) {
+		} else if disabled.Policies == nil || disabled.Policies.Completion != nil || len(disabled.Policies.Session) != 0 || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Continuation != nil && (len(disabled.Policies.Continuation.AggregateResults) != 0 || len(disabled.Policies.Continuation.ModelReview) != 0) {
 			t.Fatal("empty policies should declare no overrides")
 		}
 	}
@@ -148,6 +164,15 @@ func assertMissionPolicies(t *testing.T, got *models.MissionPoliciesResponse, wa
 	t.Helper()
 	if got == nil || want == nil || len(got.Sharing) != len(want.Sharing) {
 		t.Fatalf("mission sharing differs: got %+v, want %+v", got, want)
+	}
+	if len(got.Session) != len(want.Session) {
+		t.Fatalf("mission session policies differ: got %+v, want %+v", got.Session, want.Session)
+	}
+	for i, policy := range got.Session {
+		expected := want.Session[i]
+		if policy.CreateAction != expected.CreateAction || !slices.Equal(policy.UseActions, expected.UseActions) {
+			t.Fatalf("mission session policy %d differs: got %+v, want %+v", i, policy, expected)
+		}
 	}
 	if (got.Completion == nil) != (want.Completion == nil) || got.Completion != nil && got.Completion.DecisionBy != want.Completion.DecisionBy {
 		t.Fatalf("mission completion differs: got %+v, want %+v", got.Completion, want.Completion)

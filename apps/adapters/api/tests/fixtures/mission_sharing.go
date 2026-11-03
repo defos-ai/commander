@@ -15,6 +15,9 @@ func SharingMission() models.CreateMissionRequest {
 		OutputSchema: json.RawMessage(`{}`),
 		Policies: &models.MissionPoliciesRequest{
 			Completion: &models.MissionCompletionPolicyRequest{DecisionBy: "operator"},
+			Session: []models.MissionSessionPolicyRequest{{
+				CreateAction: "connect-resource", UseActions: []string{"use-resource"},
+			}},
 			Continuation: &models.MissionContinuationPolicyRequest{
 				AggregateResults: []string{"find-vulnerabilities"},
 				ModelReview:      []string{"find-vulnerabilities", "analyze-vulnerabilities"},
@@ -87,5 +90,34 @@ func InvalidCompletionPolicies() []any {
 		Object{"decision_by": 1},
 		Object{"decision_by": "operator", "fallback_at": "later"},
 		"operator",
+	}
+}
+
+func InvalidSessionPolicies() []any {
+	return []any{
+		Object{},
+		[]any{nil},
+		[]Object{{}},
+		[]Object{{"create_action": "", "use_actions": []string{"use-resource"}}},
+		[]Object{{"create_action": " connect-resource", "use_actions": []string{"use-resource"}}},
+		[]Object{{"create_action": "connect-resource", "use_actions": nil}},
+		[]Object{{"create_action": "connect-resource", "use_actions": []string{}}},
+		[]Object{{"create_action": "connect-resource", "use_actions": []string{"use-resource", "use-resource"}}},
+		[]Object{{"create_action": "connect-resource", "use_actions": []string{"use-resource "}}},
+		[]Object{{"create_action": "connect-resource", "use_actions": []string{"connect-resource"}}},
+		[]Object{{"create_action": "connect-resource", "use_actions": "use-resource"}},
+		[]Object{{"create_action": "connect-resource", "use_actions": []string{"use-resource"}, "scope": "operation"}},
+		[]Object{
+			{"create_action": "connect-resource", "use_actions": []string{"use-resource"}},
+			{"create_action": "connect-resource", "use_actions": []string{"use-secondary"}},
+		},
+		[]Object{
+			{"create_action": "connect-resource", "use_actions": []string{"use-resource"}},
+			{"create_action": "connect-secondary", "use_actions": []string{"use-resource"}},
+		},
+		[]Object{
+			{"create_action": "connect-resource", "use_actions": []string{"use-resource"}},
+			{"create_action": "use-resource", "use_actions": []string{"use-secondary"}},
+		},
 	}
 }

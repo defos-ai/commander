@@ -147,6 +147,19 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 		if property := policies.Properties["completion"]; property == nil || !slices.Contains(property.Types, "object") || !slices.Contains(property.Types, "null") || slices.Contains(policies.Required, "completion") {
 			t.Fatal("OpenAPI must make nested completion optional and nullable")
 		}
+		if property := policies.Properties["session"]; property == nil || !slices.Contains(property.Types, "array") || !slices.Contains(property.Types, "null") || property.MinItems != nil || property.Items == nil || slices.Contains(policies.Required, "session") {
+			t.Fatal("OpenAPI must make session policies optional, nullable and allow an empty list")
+		}
+		session := document.Components.Schemas["MissionSessionPolicy"+suffix]
+		if session.AdditionalProperties == nil || session.AdditionalProperties.Not == nil || !slices.Equal(session.Required, []string{"create_action", "use_actions"}) || len(session.Properties) != 2 {
+			t.Fatal("OpenAPI must require a session creator and consumers while rejecting unknown fields")
+		}
+		if creator := session.Properties["create_action"]; creator == nil || creator.Type != "string" || creator.Pattern != `^\S(?:[\s\S]*\S)?$` {
+			t.Fatal("OpenAPI must require a trimmed nonblank session creator")
+		}
+		if consumers := session.Properties["use_actions"]; consumers == nil || consumers.Type != "array" || consumers.MinItems == nil || *consumers.MinItems != 1 || !consumers.UniqueItems || consumers.Items == nil || consumers.Items.Pattern != `^\S(?:[\s\S]*\S)?$` {
+			t.Fatal("OpenAPI must require nonempty unique trimmed session consumer names")
+		}
 		completion := document.Components.Schemas["MissionCompletionPolicy"+suffix]
 		if completion.AdditionalProperties == nil || completion.AdditionalProperties.Not == nil || !slices.Equal(completion.Required, []string{"decision_by"}) || completion.Properties["decision_by"] == nil || !slices.Equal(completion.Properties["decision_by"].Enum, []any{"model", "operator"}) {
 			t.Fatal("OpenAPI must require a completion decision maker and reject unknown fields")

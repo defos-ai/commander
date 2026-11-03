@@ -36,12 +36,14 @@ func openAPIDocument() ([]byte, error) {
 		{"MissionSharingPolicy", reflect.TypeFor[models.MissionSharingPolicyResponse]()},
 		{"MissionContinuationPolicy", reflect.TypeFor[models.MissionContinuationPolicyResponse]()},
 		{"MissionCompletionPolicy", reflect.TypeFor[models.MissionCompletionPolicyResponse]()},
+		{"MissionSessionPolicy", reflect.TypeFor[models.MissionSessionPolicyResponse]()},
 		{"MissionPolicies", reflect.TypeFor[models.MissionPoliciesResponse]()},
 		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"MissionSharingPolicyRequest", reflect.TypeFor[models.MissionSharingPolicyRequest]()},
 		{"MissionContinuationPolicyRequest", reflect.TypeFor[models.MissionContinuationPolicyRequest]()},
 		{"MissionCompletionPolicyRequest", reflect.TypeFor[models.MissionCompletionPolicyRequest]()},
+		{"MissionSessionPolicyRequest", reflect.TypeFor[models.MissionSessionPolicyRequest]()},
 		{"MissionPoliciesRequest", reflect.TypeFor[models.MissionPoliciesRequest]()},
 		{"ActionDefinitionRequest", reflect.TypeFor[models.ActionDefinitionRequest]()},
 		{"CreateMissionRequest", reflect.TypeFor[models.CreateMissionRequest]()},
@@ -78,6 +80,10 @@ func openAPIDocument() ([]byte, error) {
 			sharing.Type, sharing.Types = "", []string{"array", "null"}
 			sharing.Description = "Optional action-based sharing routes retained in each operation's mission snapshot. Omitted, null or empty sharing declares no routes. Source and recipient actions need not appear in required_actions or optional_actions; routes do not start tasks or change readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded."
 		}
+		if session := schema.Properties["session"]; session != nil {
+			session.Type, session.Types = "", []string{"array", "null"}
+			session.Description = "Optional operation-local session groups retained in each mission snapshot. Omitted, null or empty declares no managed bindings. Each action belongs to at most one group and role. The controller supplies session_scope for creation and both session_scope and session_id for use; omit these routing fields when assigning mapped actions. Create and use must be accepted separately. Action contracts and resource readiness are checked at runtime."
+		}
 		switch model.name {
 		case "About":
 			schema.Properties["runtime"].Enum = []any{"native", "docker", "docker-compose"}
@@ -103,9 +109,20 @@ func openAPIDocument() ([]byte, error) {
 			}
 			schema.Properties["aggregate_results"].Description = "Action names whose direct child results are grouped for continuation. Omitted, null or empty disables this override."
 			schema.Properties["model_review"].Description = "Action names whose valid proposals require model review instead of automatic continuation. May overlap aggregate_results; omitted, null or empty disables this override. Failures and empty proposals still require review."
+		case "MissionSessionPolicy", "MissionSessionPolicyRequest":
+			schema.Required = []string{"create_action", "use_actions"}
+			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+			schema.Properties["create_action"].Pattern = `^\S(?:[\s\S]*\S)?$`
+			schema.Properties["create_action"].Description = "Action whose session_mode=create contract creates this group's resource. Creator selection requires its consumer contracts on the same agent."
+			consumers := schema.Properties["use_actions"]
+			consumers.Type, consumers.Types = "array", nil
+			consumers.MinItems = new(1)
+			consumers.UniqueItems = true
+			consumers.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
+			consumers.Description = "Unique actions with session_mode=use that receive the accepted creator's binding. The creator cannot also be a consumer. Missing or unusable sessions block use; accepted tasks never switch to a replacement."
 		case "MissionPolicies", "MissionPoliciesRequest":
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-			schema.Description = "Optional continuation, completion and sharing policies retained in each operation. An empty object declares no policy overrides; completion defaults to model."
+			schema.Description = "Optional continuation, completion, session and sharing policies retained in each operation. An empty object declares no policy overrides; completion defaults to model."
 		case "MissionCompletionPolicy", "MissionCompletionPolicyRequest":
 			schema.Description = "Optional mission-wide completion policy retained in each operation. Omitted or null defaults to model; a present object requires decision_by. Operator requires operator-origin completion with no timed model fallback."
 			schema.Required = []string{"decision_by"}

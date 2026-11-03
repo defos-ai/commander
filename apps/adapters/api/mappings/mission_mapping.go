@@ -31,6 +31,15 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 				ModelReview:      slices.Clone(request.Policies.Continuation.ModelReview),
 			}
 		}
+		if request.Policies.Session != nil {
+			mission.Policies.Session = make([]policies.SessionPolicy, len(request.Policies.Session))
+			for i, session := range request.Policies.Session {
+				mission.Policies.Session[i] = policies.SessionPolicy{
+					CreateAction: session.CreateAction,
+					UseActions:   slices.Clone(session.UseActions),
+				}
+			}
+		}
 		if request.Policies.Sharing != nil {
 			mission.Policies.Sharing = make(policies.SharingPolicy, len(request.Policies.Sharing))
 			for i, sharing := range request.Policies.Sharing {
@@ -65,6 +74,15 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 			response.Policies.Continuation = &models.MissionContinuationPolicyResponse{
 				AggregateResults: slices.Clone(mission.Policies.Continuation.AggregateResults),
 				ModelReview:      slices.Clone(mission.Policies.Continuation.ModelReview),
+			}
+		}
+		if mission.Policies.Session != nil {
+			response.Policies.Session = make([]models.MissionSessionPolicyResponse, len(mission.Policies.Session))
+			for i, session := range mission.Policies.Session {
+				response.Policies.Session[i] = models.MissionSessionPolicyResponse{
+					CreateAction: session.CreateAction,
+					UseActions:   slices.Clone(session.UseActions),
+				}
 			}
 		}
 		if mission.Policies.Sharing != nil {

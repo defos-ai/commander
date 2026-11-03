@@ -72,7 +72,6 @@ limits, see [Sessions](../../docs/features/sessions.md).
   automatic children without losing their parent's accepted outcome.
 - Unmatched actions keep explicit session handling. Stateless work gains no binding;
   policies do not sequence tasks, close resources or grant ownership through input.
-  API/MCP mission authoring for this policy is a separate step.
 
 ## Provider contract
 

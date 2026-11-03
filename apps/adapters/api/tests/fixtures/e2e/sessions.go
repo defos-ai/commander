@@ -88,7 +88,6 @@ type SessionStack struct {
 	binaries            map[string]string
 	stopController      func()
 	peer                string
-	database            string
 }
 
 func (s *SessionStack) WithTest(t *testing.T) func() {
@@ -139,7 +138,7 @@ func NewSessionStack(t *testing.T, peer string, controllerSource ...string) *Ses
 	env := append(os.Environ(), "BUS_URL="+bus, "DATABASE_URL="+database, "STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=info", "FIXTURE_PEER="+peer)
 	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	t.Cleanup(client.CloseIdleConnections)
-	s := &SessionStack{t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, database: database, controllerArgs: []string{"--heartbeat-timeout=6s"}}
+	s := &SessionStack{t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, controllerArgs: []string{"--heartbeat-timeout=6s"}}
 	StartE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
 	s.stopController = StartE2E(t, binaries["controller"], s.controllerArgs, env)
 	WaitUntil(t, 10*time.Second, func() bool {

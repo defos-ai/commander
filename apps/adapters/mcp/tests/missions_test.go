@@ -97,6 +97,20 @@ func TestMissionSharingPolicy(t *testing.T) {
 	a := fixtures.Connect(t)
 	definition := fixtures.SharingMission()
 	var created, described, updated missions.Mission
+	tools, err := a.Session.ListTools(a.Context, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published := 0
+	for _, tool := range tools.Tools {
+		if tool.Name == "create_mission" || tool.Name == "update_mission" {
+			assertPublishedSessionPolicy(t, tool)
+			published++
+		}
+	}
+	if published != 2 {
+		t.Fatal("mission creation and update tools must both publish session policies")
+	}
 
 	a.Call("create_mission", fixtures.MissionDefinition(definition), &created)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
@@ -109,6 +123,8 @@ func TestMissionSharingPolicy(t *testing.T) {
 		t.Fatal("operation lost mission policies or policies started work")
 	}
 	definition.Policies.Completion.DecisionBy = policies.Model
+	definition.Policies.Session[0].CreateAction = "open-review"
+	definition.Policies.Session[0].UseActions[0] = "review-vulnerabilities"
 	definition.Policies.Continuation.AggregateResults = []string{"review-vulnerabilities"}
 	definition.Policies.Continuation.ModelReview = []string{"review-vulnerabilities"}
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
@@ -130,7 +146,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 	invalid := fixtures.MissionDefinition(definition)
 	invalid["policies"] = fixtures.Object{"sharing": []fixtures.Object{{"from_actions": []string{"find-vulnerabilities"}, "to_actions": []string{"analyze-vulnerabilities"}, "include": []string{"secrets"}}}}
 	invalidClient := fixtures.OpenSession(t)
-	_, err := invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: invalid})
+	_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: invalid})
 	if err == nil || !strings.Contains(err.Error(), "include") {
 		t.Fatalf("unsupported sharing kind should be an invalid argument: %v", err)
 	}
@@ -157,6 +173,20 @@ func TestMissionSharingPolicy(t *testing.T) {
 		if err == nil {
 			t.Fatalf("invalid completion should be an invalid argument: %+v", completion)
 		}
+	}
+	for _, session := range fixtures.InvalidSessionPolicies() {
+		candidate := fixtures.MissionDefinition(definition)
+		candidate["policies"] = fixtures.Object{"session": session}
+		for _, tool := range []string{"create_mission", "update_mission"} {
+			_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: tool, Arguments: candidate})
+			if err == nil {
+				t.Fatalf("%s accepted invalid session policy: %+v", tool, session)
+			}
+		}
+	}
+	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
+	if !reflect.DeepEqual(described.Policies, definition.Policies) {
+		t.Fatal("invalid session policies changed the saved mission")
 	}
 	for _, completion := range []any{nil, fixtures.Object{}, fixtures.Object{"decision_by": "operator"}} {
 		legacy := fixtures.MissionDefinition(definition)
@@ -196,6 +226,15 @@ func TestMissionSharingPolicy(t *testing.T) {
 			t.Fatal("empty continuation should declare no overrides")
 		}
 	}
+	for _, session := range []any{nil, []fixtures.Object{}} {
+		candidate := fixtures.MissionDefinition(definition)
+		candidate["policies"] = fixtures.Object{"session": session}
+		updated = missions.Mission{}
+		a.Call("update_mission", candidate, &updated)
+		if updated.Policies == nil || len(updated.Policies.Session) != 0 {
+			t.Fatal("empty session policy should declare no managed bindings")
+		}
+	}
 	candidate := fixtures.MissionDefinition(definition)
 	candidate["policies"] = fixtures.Object{"completion": nil}
 	updated = missions.Mission{}
@@ -212,5 +251,38 @@ func TestMissionSharingPolicy(t *testing.T) {
 	}
 	for _, operation := range []operations.Operation{first, second} {
 		a.CancelActiveOperation(operation.ID)
+	}
+}
+
+func assertPublishedSessionPolicy(t *testing.T, tool *mcp.Tool) {
+	t.Helper()
+	raw, err := json.Marshal(tool.InputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties struct {
+			Policies struct {
+				Properties struct {
+					Session struct {
+						Type  []string `json:"type"`
+						Items struct {
+							AdditionalProperties json.RawMessage            `json:"additionalProperties"`
+							Required             []string                   `json:"required"`
+							Properties           map[string]json.RawMessage `json:"properties"`
+						} `json:"items"`
+					} `json:"session"`
+				} `json:"properties"`
+			} `json:"policies"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	session := schema.Properties.Policies.Properties.Session
+	if !slices.Contains(session.Type, "array") || !slices.Contains(session.Type, "null") ||
+		string(session.Items.AdditionalProperties) != "false" || !slices.Equal(session.Items.Required, []string{"create_action", "use_actions"}) ||
+		len(session.Items.Properties["create_action"]) == 0 || len(session.Items.Properties["use_actions"]) == 0 {
+		t.Fatalf("%s omits the strict nullable session policy contract: %s", tool.Name, raw)
 	}
 }

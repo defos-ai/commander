@@ -77,6 +77,16 @@
   operation policy: `operator` retains model output for review and permits final
   completion only with operator origin, without a timed fallback; omitted/model
   policies permit either origin to complete immediately.
+- Optional mission `policies.session` uses independent session-policy DTOs with
+  `create_action` and `use_actions`. Clone the group slice and each consumer list
+  in both mapping directions. Register strict entry schemas before policies so
+  `session` remains an optional nullable array with required nonblank creator and
+  nonempty unique consumer names. Shared validation rejects overlapping groups;
+  mission writes do not inspect installed agents or assign resources.
+  Preserve groups through list/detail, create/update and operation snapshots.
+  Controller admission injects the routing fields for mapped actions; clients
+  submit business input. Keep these rules in mission OpenAPI descriptions without
+  adding assignment endpoints or accepting a client-supplied authoritative binding.
 - Completion requests remain output-only. Stamp `CompletedBy=CompletionOperator`
   in the trusted HTTP mapping; reject client-supplied `completed_by`. Expose the
   saved origin as optional, read-only `Operation.completed_by` and preserve it on
