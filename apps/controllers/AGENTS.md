@@ -40,8 +40,8 @@
 - Report the selector's `Name()` in registration. The previous selected agent ID
   advances only after durable dispatch reservation; load/capacity describe this
   runner's work, not a distributed global limit.
-- The runner validates the stored mission and retains its rules directly in the
-  operation's independent mission snapshot. Hosts do not inject rule selection
+- The runner validates the stored mission and retains its policies directly in the
+  operation's independent mission snapshot. Hosts do not inject policy selection
   or override policy. Edit mission definitions for future operations; recovery
   uses each operation's original snapshot.
 - Dispatched tasks remain bound to their recorded agent and command. Never silently
@@ -61,7 +61,7 @@
   [default-missions.json](../admin/missions/default-missions.json) and seeds them
   through the API. The controller reads mission definitions from its store; it
   must not seed or import them during startup.
-- Mission behavior belongs in its policies and continuation rules. Agents propose
+- Mission behavior belongs in its policies. Agents propose
   actions; the controller applies the saved definition without host or agent
   special cases.
 - Existing operations retain their mission snapshot when the catalog changes.

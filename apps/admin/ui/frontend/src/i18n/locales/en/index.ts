@@ -7,7 +7,7 @@ import operations from './operations';
 import operationCommands from './operationCommands';
 import operationGraph from './operationGraph';
 import operationLogs from './operationLogs';
-import missionRules from './missionRules';
+import missionPolicies from './missionPolicies';
 import artifacts from './artifacts';
 import secrets from './secrets';
 import runtimeSessions from './runtimeSessions';
@@ -23,7 +23,7 @@ export default {
   operationCommands,
   operationGraph,
   operationLogs,
-  missionRules,
+  missionPolicies,
   artifacts,
   secrets,
   runtimeSessions,

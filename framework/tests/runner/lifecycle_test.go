@@ -11,6 +11,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
@@ -123,9 +124,9 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testing.T) {
 	config := fixtures.Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.AggregateResults: {ForActions: []string{"discover"}},
-		}
+		m.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"},
+		}}
 	})
 	exec, calls := fakes.ControlledExecutor()
 	r, err := runner.NewRunner(t.Context(), exec, config)

@@ -97,7 +97,7 @@
   through `ArtifactFileStore`; the controller accepts metadata through `ArtifactStore`.
   Uploaded bytes alone are not published evidence. Preserve ownership and checksums.
 - Agents may return schema-valid next-action proposals with input and a reason.
-  Mission rules own automation, and the controller dispatches accepted work; an
+  Mission policies own automation, and the controller dispatches accepted work; an
   action must never directly execute or send its proposed follow-up commands.
 - Keep immutable execution outcomes separate from later operation decisions.
   Cancellation or transport uncertainty must not lead to duplicate execution.

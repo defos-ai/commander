@@ -1,7 +1,8 @@
 import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
-import type { ActionDefinition, Mission, MissionPolicies, MissionRule, PlacementPolicy, SharingRoute } from './types';
+import type { ActionDefinition, Mission } from './types';
+import { isMissionPolicies } from '../missions/policies';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -19,16 +20,6 @@ function isObjectives(value: unknown): value is string[] {
   return isStringArray(value) && value.length > 0 && value.every(item => item.trim() !== '');
 }
 
-function isRule(name: string, value: unknown): value is MissionRule {
-  if (!isObject(value) || Object.keys(value).some(key => key !== 'for_actions' && key !== 'params') ||
-    !isStringArray(value.for_actions) || !value.for_actions.length ||
-    value.for_actions.some(action => !action || action.trim() !== action) || new Set(value.for_actions).size !== value.for_actions.length) return false;
-  const params = value.params;
-  if (params !== undefined && (!isObject(params) || Object.keys(params).some(key => key !== 'decision_by'))) return false;
-  if (name === 'aggregate-results') return params === undefined || params.decision_by === undefined;
-  return name === 'decide-next-actions' && isObject(params) && params.decision_by === 'model';
-}
-
 function isActionDefinition(value: unknown): value is ActionDefinition {
   return isObject(value) && typeof value.name === 'string' && value.name.trim() !== '' &&
     typeof value.description === 'string' && isObject(value.input_schema) && isObject(value.output_schema) &&
@@ -39,27 +30,8 @@ function isMissionName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value !== '.' && value !== '..';
 }
 
-function isSharingRoute(value: unknown): value is SharingRoute {
-  return isObject(value) && Object.keys(value).every(key => ['from_actions', 'to_actions', 'include'].includes(key)) &&
-    isStringArray(value.from_actions) && isStringArray(value.to_actions) && isStringArray(value.include) &&
-    value.include.every(item => item === 'results' || item === 'artifacts' || item === 'decisions');
-}
-
-function isPlacementPolicy(value: unknown): value is PlacementPolicy | null | undefined {
-  return value == null || (isObject(value) && Object.keys(value).every(key => key === 'same_agent') &&
-    (value.same_agent == null || (isStringArray(value.same_agent) &&
-      value.same_agent.every(action => action !== '' && action.trim() === action) &&
-      new Set(value.same_agent).size === value.same_agent.length)));
-}
-
-function isMissionPolicies(value: unknown): value is MissionPolicies | null | undefined {
-  return value == null || (isObject(value) && Object.keys(value).every(key => key === 'sharing' || key === 'placement') &&
-    isPlacementPolicy(value.placement) &&
-    (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(isSharingRoute))));
-}
-
 export function isMission(value: unknown): value is Mission {
-  return isObject(value) && !('steps' in value) && isMissionName(value.name) && isObjectives(value.objectives) &&
+  return isObject(value) && !('steps' in value) && !('rules' in value) && isMissionName(value.name) && isObjectives(value.objectives) &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.optional_actions === undefined || isStringArray(value.optional_actions)) &&
     (value.action_definitions === undefined || (Array.isArray(value.action_definitions) && value.action_definitions.every(isActionDefinition))) &&
@@ -68,8 +40,7 @@ export function isMission(value: unknown): value is Mission {
     (value.completion == null || (isObject(value.completion) &&
       Object.keys(value.completion).every(key => key === 'decision_by') &&
       (value.completion.decision_by === 'model' || value.completion.decision_by === 'operator'))) &&
-    isMissionPolicies(value.policies) &&
-    (value.rules === undefined || (isObject(value.rules) && Object.entries(value.rules).every(([name, rule]) => isRule(name, rule))));
+    isMissionPolicies(value.policies);
 }
 
 export async function listMissions(url: string, credentials: Session, signal?: AbortSignal): Promise<Mission[]> {
@@ -119,8 +90,8 @@ async function writeMission(url: string, credentials: Session, definition: strin
   let input: unknown;
   try { input = JSON.parse(definition); }
   catch { throw failure('invalid_json'); }
-  if (!isObject(input) || !isMissionName(input.name) || !isObjectives(input.objectives) ||
-    !isObject(input.input_schema) || !isObject(input.output_schema)) {
+  if (!isObject(input) || 'steps' in input || 'rules' in input || !isMissionName(input.name) || !isObjectives(input.objectives) ||
+    !isObject(input.input_schema) || !isObject(input.output_schema) || !isMissionPolicies(input.policies)) {
     throw failure('invalid_input');
   }
   const name = input.name;

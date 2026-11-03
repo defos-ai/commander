@@ -15,7 +15,7 @@ import (
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
-func TestRulesDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
+func TestContinuationDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 	config := fixtures.Config()
 	config.AgentCatalog.(*fakes.AgentCatalog).Set(fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002"))
 	exec, calls := fakes.ControlledExecutor()
@@ -47,14 +47,14 @@ func TestRulesDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 		return false
 	})
 	if len(partial.Tasks) != 3 || partial.Tasks[0].Continuation.DecisionBy != operations.DecisionCode || partial.Tasks[0].Continuation.Status != operations.ContinuationResolved {
-		t.Fatalf("default rule did not schedule proposals automatically: %+v", partial)
+		t.Fatalf("default continuation did not schedule proposals automatically: %+v", partial)
 	}
 	for _, child := range partial.Tasks[1:] {
 		if child.ParentTaskID != parent.ID || child.ActionName != "inspect" {
 			t.Fatalf("generated task lost its action or parent: %+v", child)
 		}
 		if child.ID == first.Call.Work.TaskID && (child.Continuation == nil || child.Continuation.DecisionBy != operations.DecisionModel || child.Continuation.Status != operations.ContinuationPending) {
-			t.Fatalf("first child waited for its sibling without an aggregation rule: %+v", child)
+			t.Fatalf("first child waited for its sibling without an aggregation policy: %+v", child)
 		}
 	}
 	second.Reply <- fixtures.Output("inspect")
@@ -66,12 +66,12 @@ func TestRulesDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 	}
 }
 
-func TestRulesModelDecisionStopsProposedTasks(t *testing.T) {
+func TestContinuationModelDecisionStopsProposedTasks(t *testing.T) {
 	config := fixtures.Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
-		}
+		m.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			ModelReview: []string{"discover"},
+		}}
 	})
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
@@ -82,7 +82,7 @@ func TestRulesModelDecisionStopsProposedTasks(t *testing.T) {
 	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 	c := settled.Tasks[0].Continuation
 	if len(settled.Tasks) != 1 || c.DecisionBy != operations.DecisionModel || c.Status != operations.ContinuationPending || !reflect.DeepEqual(c.ProposedActions, []actions.NextAction{proposed}) {
-		t.Fatalf("model rule did not retain proposals for review: %+v", settled)
+		t.Fatalf("model-review policy did not retain proposals for review: %+v", settled)
 	}
 	select {
 	case call := <-calls:
@@ -91,14 +91,14 @@ func TestRulesModelDecisionStopsProposedTasks(t *testing.T) {
 	}
 }
 
-func TestRulesModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
+func TestContinuationModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	config := fixtures.Config()
 	config.AgentCatalog.(*fakes.AgentCatalog).Set(fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002"))
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"discover", "inspect"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
-		}
+		m.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"},
+			ModelReview:      []string{"discover", "inspect"},
+		}}
 	})
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
@@ -124,13 +124,13 @@ func TestRulesModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	partial := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		return len(op.Tasks) == 3 && (op.Tasks[1].Status == operations.TaskSucceeded || op.Tasks[2].Status == operations.TaskSucceeded)
 	})
-	if c := partial.Tasks[0].Continuation; c.DecisionBy != operations.DecisionCode || c.Status != operations.ContinuationWaiting || ruleDecisionCount(partial) != 0 {
+	if c := partial.Tasks[0].Continuation; c.DecisionBy != operations.DecisionCode || c.Status != operations.ContinuationWaiting || continuationDecisionCount(partial) != 0 {
 		t.Fatalf("model-selected children escaped the aggregation group: %+v", partial)
 	}
 	second.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "follow-up", Input: second.Call.Input})
 	grouped := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
 	decision := grouped.Tasks[0].Continuation
-	if len(grouped.Tasks) != 3 || ruleDecisionCount(grouped) != 1 || decision.DecisionBy != operations.DecisionModel || decision.Status != operations.ContinuationPending || len(decision.ProposedActions) != 2 {
+	if len(grouped.Tasks) != 3 || continuationDecisionCount(grouped) != 1 || decision.DecisionBy != operations.DecisionModel || decision.Status != operations.ContinuationPending || len(decision.ProposedActions) != 2 {
 		t.Fatalf("expected one model decision with both child proposals: %+v", grouped)
 	}
 	_, err = r.Resolve(t.Context(), commands.ResolveContinuationCommand{
@@ -151,29 +151,31 @@ func TestRulesModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	}
 	third.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "follow-up", Input: third.Call.Input})
 	final := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
-	if ruleDecisionCount(final) != 2 || len(final.Tasks) != 4 || !reflect.DeepEqual(final.Tasks[0].Continuation.ProposedActions, []actions.NextAction{{ActionName: "follow-up", Input: json.RawMessage(`{"page":3}`)}}) {
+	if continuationDecisionCount(final) != 2 || len(final.Tasks) != 4 || !reflect.DeepEqual(final.Tasks[0].Continuation.ProposedActions, []actions.NextAction{{ActionName: "follow-up", Input: json.RawMessage(`{"page":3}`)}}) {
 		t.Fatalf("later group repeated old proposals or lost its own result: %+v", final)
 	}
 }
 
-func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
+func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	config := fixtures.Config()
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
 		m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
-		m.Policies = &policies.MissionPolicies{Placement: fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy()}
-		m.Rules = missions.RuleSet{
-			missions.AggregateResults:  {ForActions: []string{"inspect"}},
-			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
+		scope := []string{"discover", "inspect"}
+		m.Policies = &policies.MissionPolicies{
+			Placement: fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy(),
+			Continuation: &policies.ContinuationPolicy{AggregateResults: scope, ModelReview: scope[:1]},
 		}
 	})
-	expected := catalog.Snapshot().Rules.Clone()
+	expected := catalog.Snapshot().Policies.Clone()
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
 	catalog.Change(func(m *missions.Mission) {
 		m.Completion.DecisionBy = policies.Model
 		m.Policies.Placement.SameAgent[0] = "follow-up"
+		m.Policies.Continuation.AggregateResults[0] = "follow-up"
+		m.Policies.Continuation.ModelReview[0] = "inspect"
 		m.Policies.Sharing[0].FromActions[0] = "follow-up"
 		m.Policies.Sharing[0].ToActions[0] = "discover"
 		m.Policies.Sharing[0].Include[0] = policies.ShareDecisions
@@ -183,13 +185,13 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 		t.Fatal("a new operation did not receive the updated completion policy")
 	}
 	if !reflect.DeepEqual(later.Mission.Policies, catalog.Snapshot().Policies) {
-		t.Fatal("a new operation did not receive the updated placement and sharing policies")
+		t.Fatal("a new operation did not receive the updated mission policies")
 	}
-	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].ForActions[0] = "inspect" })
-	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].Params.DecisionBy = "changed" })
-	catalog.Change(func(m *missions.Mission) { delete(m.Rules, missions.AggregateResults) })
-	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot changed"
-	op.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
+	op.Mission.Policies.Continuation.AggregateResults[0] = "returned aggregation changed"
+	if op.Mission.Policies.Continuation.ModelReview[0] != "discover" {
+		t.Fatal("snapshot continuation scopes share mutable backing storage")
+	}
+	op.Mission.Policies.Continuation.ModelReview[0] = "returned review changed"
 	op.Mission.Completion.DecisionBy = policies.Model
 	op.Mission.Policies.Placement.SameAgent[0] = "returned placement changed"
 	op.Mission.Policies.Sharing[0].FromActions[0] = "returned source changed"
@@ -198,18 +200,18 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	fixtures.Assign(t, r, op.ID, "discover")
 	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover", actions.NextAction{ActionName: "inspect"})
 	settled := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
-	if !reflect.DeepEqual(settled.Mission.Rules, expected) || len(settled.Tasks) != 1 || settled.Tasks[0].Continuation.DecisionBy != operations.DecisionModel {
-		t.Fatalf("catalog or returned snapshot edits changed the running operation's rules: %+v", settled)
+	if len(settled.Tasks) != 1 || settled.Tasks[0].Continuation.DecisionBy != operations.DecisionModel {
+		t.Fatalf("catalog or returned snapshot edits changed continuation behavior: %+v", settled)
 	}
 	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != policies.Operator {
 		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
 	}
-	if !reflect.DeepEqual(settled.Mission.Policies, &policies.MissionPolicies{Placement: fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy()}) {
-		t.Fatalf("catalog or returned snapshot edits changed the running operation's placement or sharing policy: %+v", settled.Mission.Policies)
+	if !reflect.DeepEqual(settled.Mission.Policies, &expected) {
+		t.Fatalf("catalog or returned snapshot edits changed the running operation's policies: %+v", settled.Mission.Policies)
 	}
 }
 
-func ruleDecisionCount(op operations.Operation) int {
+func continuationDecisionCount(op operations.Operation) int {
 	count := 0
 	for _, event := range op.Events {
 		if event.Type == operations.ContinuationReady {
@@ -219,13 +221,13 @@ func ruleDecisionCount(op operations.Operation) int {
 	return count
 }
 
-func TestRulesWaitForAllChildrenBeforeModelReview(t *testing.T) {
+func TestContinuationWaitForAllChildrenBeforeModelReview(t *testing.T) {
 	config := fixtures.Config()
 	config.AgentCatalog.(*fakes.AgentCatalog).Set(fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002"))
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.AggregateResults: {ForActions: []string{"discover"}},
-		}
+		m.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"},
+		}}
 	})
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)

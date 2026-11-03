@@ -34,9 +34,6 @@ func (o Operation) AssessAffinity() *Affinity {
 // or an empty ID before the first matching dispatch. Failed, interrupted and
 // cancelled assignments retain the binding; queued tasks never establish it.
 func (o Operation) AffinityAgentID() (string, error) {
-	if err := o.Mission.Rules.Validate(); err != nil {
-		return "", err
-	}
 	if o.Mission.Policies != nil {
 		if err := o.Mission.Policies.Validate(); err != nil {
 			return "", err

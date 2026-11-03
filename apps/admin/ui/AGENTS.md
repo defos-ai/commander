@@ -87,7 +87,7 @@
   reads fail, and allow saving without installed actions. Inspect uses independent
   `/agents` snapshots for per-agent readiness, labels stale reports, and never infers
   operation preflight or reserved capacity. Report failures must not block authoring.
-  **Advanced settings** exposes schemas, rules and action definitions as raw
+  **Advanced settings** exposes schemas, policies and action definitions as raw
   JSON; **JSON** edits the full document. Patch only changed top-level values when
   moving from Form to JSON or submitting. Preserve untouched fields, numeric tokens
   and string escapes; reject unrepresentable JSON-to-Form transitions without
@@ -96,9 +96,9 @@
   a portal and stop submit propagation so adding a definition cannot submit the
   mission form. Add/edit/remove never calls the API or installs actions. New
   definitions become required unless already referenced; edits preserve roles.
-  Keep names read-only when editing so rules retain their references. Definitions
+  Keep names read-only when editing so policies retain their references. Definitions
   stay referenced by required/optional actions in the picker; editing preserves
-  their role. Removing a definition keeps action selections and rules intact;
+  their role. Removing a definition keeps action selections and policies intact;
   remove its selection separately if no longer needed.
   Preserve raw schema tokens, untouched definitions and unknown properties when
   editing the array. Reject duplicates and invalid structure without overwriting
@@ -124,7 +124,7 @@
   `CreateMissionPage.tsx`; the flows may diverge, so do not merge them into a
   generic editor page. Reuse form fields and draft helpers. Names identify catalog records: keep the Form
   name read-only and reject JSON renames before `PUT /api/v1/missions/<name>`.
-  Objectives, action roles/definitions, schemas and rules may change; saved
+  Objectives, action roles/definitions, schemas and policies may change; saved
   operation snapshots remain unchanged. Cancel returns to details, while a
   confirmed save or explicit uncertain-write readback reloads the saved detail.
   Keep edits scoped to the connection/session/name and discard them on leaving
@@ -139,17 +139,24 @@
   Reject malformed or unsupported completion policy when switching JSON to Form,
   retaining the raw source for repair. Mission edits affect future operations;
   the controller still enforces each operation's saved policy.
-- Optional mission `policies.sharing` is authored in the full JSON editor. Validate
-  its response shape and preserve its original tokens through unrelated Form edits
-  and JSON/Form switches. Omitted/null policies or omitted/null/empty sharing
-  declare no routes; the shared API owns policy semantics. The controller forwards
-  results, artifact metadata and saved task-scoped answers to matching active actions.
-- Optional `policies.placement.same_agent` is authored in the full JSON editor and
-  shown separately in mission details as **Same agent actions**. Validate the
-  placement response shape and preserve its original tokens through unrelated
-  Form edits and JSON/Form switches. Omitted/null/empty placement or `same_agent`
-  lists declare no group. Placement is no longer accepted in the `rules` map;
-  its remaining entries cover aggregation and model review.
+- **Policies (JSON)** edits the complete `policies` object: `placement`,
+  `continuation` and `sharing`. Share field-shape validation between responses,
+  Form transitions and writes; reject the old root `rules` field. Preserve raw
+  number/string tokens and untouched omitted/null/empty representations through
+  unrelated edits and JSON/Form switches. Formatting alone must not create policies.
+  Keep invalid drafts editable in their original mode; reject submission and
+  unrepresentable mode switches without discarding the source. The shared API owns
+  references and policy semantics.
+- `policies.placement.same_agent` is shown separately as **Same agent actions**.
+  Omitted/null/empty placement or `same_agent` lists declare no group.
+- `policies.continuation.aggregate_results` and `model_review` are independent
+  action lists and may overlap. Show their actions and effects in a **Continuation**
+  table. Omitted/null/empty lists declare no overrides. Valid proposals run
+  automatically unless model review is required; failed work and invalid/empty
+  proposals still require review. Aggregation waits for saved direct children only.
+- Optional `policies.sharing` routes forward results, artifact metadata and saved
+  task-scoped answers to matching active actions. Omitted/null/empty sharing declares
+  no routes. Never imply that authoring a route guarantees live recipient delivery.
 - Mission details offer **Details / JSON** views. The `/missions/<name>/json`
   route survives reload and browser history. Retain validated response text from
   the same detail request; never reconstruct exported JSON from parsed JavaScript
@@ -245,8 +252,8 @@
   the operator waiting deadline never disables operator answers.
 - Execution graphs show saved work. Reuse `GraphCanvas`, graph layout and panning
   hooks; keep node details in dialogs and preserve mouse, keyboard, zoom and focus
-  behavior. Mission rules use a compact table of rules, `for_actions` and settings;
-  they describe policies, not execution dependencies.
+  behavior. Mission continuation policies describe how execution proceeds; their
+  action lists do not declare execution dependencies.
   List required and optional mission actions separately; optional declarations
   alone do not indicate blocked readiness before those actions are queued.
 - Accept and display the mission's `policies.placement.same_agent` group.

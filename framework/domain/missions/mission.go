@@ -24,7 +24,6 @@ import (
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
-	Rules             RuleSet                    `json:"rules,omitempty"`
 	Completion        *policies.CompletionPolicy `json:"completion,omitempty"`
 	Policies          *policies.MissionPolicies  `json:"policies,omitempty"`
 	Name              string                     `json:"name"`
@@ -42,6 +41,13 @@ func (m Mission) SameAgentActions() []string {
 		return nil
 	}
 	return m.Policies.Placement.SameAgent
+}
+
+func (m Mission) ContinuationPolicy() policies.ContinuationPolicy {
+	if m.Policies == nil || m.Policies.Continuation == nil {
+		return policies.ContinuationPolicy{}
+	}
+	return *m.Policies.Continuation
 }
 
 func LoadMission(data []byte) (Mission, error) {
@@ -108,9 +114,6 @@ func (m Mission) Validate() error {
 		}
 	}
 	if err := m.validateActionDefinitions(); err != nil {
-		return err
-	}
-	if err := m.Rules.Validate(); err != nil {
 		return err
 	}
 	if _, err := resolveSchema(m.InputSchema); err != nil {
@@ -181,7 +184,6 @@ func (m Mission) Clone() Mission {
 	for i := range m.ActionDefinitions {
 		m.ActionDefinitions[i] = m.ActionDefinitions[i].Clone()
 	}
-	m.Rules = m.Rules.Clone()
 	if m.RequiredActions != nil {
 		m.RequiredActions = append([]string{}, m.RequiredActions...)
 	}

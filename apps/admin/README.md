@@ -38,7 +38,7 @@ Imports preserve existing names and stop on the first failure, reporting complet
 uncertain and unattempted items. After an uncertain write, export that mission to
 inspect saved state before submitting again. Use `missions --help` for options.
 
-To edit a mission, export it, change its objectives, actions, rules or schemas,
+To edit a mission, export it, change its objectives, actions, policies or schemas,
 then run `missions update mission.json`. Update requires exactly one definition
 under its existing name and affects future operations; existing operations keep
 their saved definition. Names cannot be changed by an update.

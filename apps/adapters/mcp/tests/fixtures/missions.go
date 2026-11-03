@@ -13,7 +13,7 @@ func MissionDefinition(mission missions.Mission) Object {
 		"name": mission.Name, "objectives": mission.Objectives,
 		"required_actions": mission.RequiredActions, "optional_actions": mission.OptionalActions,
 		"starting_actions": mission.StartingActions, "action_definitions": mission.ActionDefinitions,
-		"rules": mission.Rules, "completion": mission.Completion, "policies": mission.Policies,
+		"completion": mission.Completion, "policies": mission.Policies,
 		"input_schema": mission.InputSchema, "output_schema": mission.OutputSchema,
 	}
 }
@@ -31,7 +31,7 @@ func SharingMission() missions.Mission {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &policies.MissionPolicies{Placement: &policies.PlacementPolicy{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: policies.SharingPolicy{{
+		Policies: &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{AggregateResults: []string{"find-vulnerabilities"}, ModelReview: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Placement: &policies.PlacementPolicy{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: policies.SharingPolicy{{
 			FromActions: []string{"find-vulnerabilities"},
 			ToActions:   []string{"analyze-vulnerabilities"},
 			Include:     []policies.SharingKind{policies.ShareResults, policies.ShareArtifacts},
@@ -47,5 +47,20 @@ func InvalidPlacementPolicies() []any {
 		Object{"same_agent": "find-vulnerabilities"},
 		Object{"for_actions": []string{"find-vulnerabilities"}},
 		Object{"same_agent": []string{"find-vulnerabilities"}, "fallback": true},
+	}
+}
+
+func InvalidContinuationPolicies() []any {
+	return []any{
+		Object{"aggregate_results": []string{"find-vulnerabilities", "find-vulnerabilities"}},
+		Object{"aggregate_results": []string{" find-vulnerabilities"}},
+		Object{"aggregate_results": []string{""}},
+		Object{"aggregate_results": "find-vulnerabilities"},
+		Object{"model_review": []string{"analyze-vulnerabilities", "analyze-vulnerabilities"}},
+		Object{"model_review": []string{"analyze-vulnerabilities "}},
+		Object{"model_review": []string{""}},
+		Object{"model_review": "analyze-vulnerabilities"},
+		Object{"aggregate_results": []string{"find-vulnerabilities"}, "decision_by": "model"},
+		Object{"for_actions": []string{"find-vulnerabilities"}},
 	}
 }

@@ -2,7 +2,7 @@
 
 Connect AI clients and continuously running agent hosts to Commander's control
 plane through the Model Context Protocol. Coordinate complex missions under saved
-rules, hand decisions to operators when needed, and inspect progress, results and
+policies, hand decisions to operators when needed, and inspect progress, results and
 artifacts across distributed agent work.
 
 Follow the [MCP setup and workflow guide](https://github.com/defos-ai/commander/blob/main/apps/adapters/README.md#quick-start)
@@ -14,7 +14,7 @@ it binds to `0.0.0.0:$PORT`. Override this with `MCP_LISTEN_ADDRESS` or
 Include your public hostname in `--allowed-hosts` when deploying behind a proxy.
 
 To edit a mission, read `describe_mission`, then call `update_mission` with its
-complete definition and unchanged name. Edit objectives, actions, rules and
+complete definition and unchanged name. Edit objectives, actions, policies and
 schemas; existing operations keep their original mission snapshot. After an
 uncertain update, read the saved definition before retrying.
 

@@ -24,8 +24,9 @@ var _ missions.MissionStore = (*MissionMongoStore)(nil)
 // JSON schemas stay as raw bytes in BSON so their numbers and extension fields
 // round-trip exactly, without adding Mongo-specific codecs to the framework.
 type missionDocument struct {
-	ID      string           `bson:"_id"`
-	Mission missions.Mission `bson:",inline"`
+	ID               string           `bson:"_id"`
+	UnsupportedRules bson.RawValue    `bson:"rules,omitempty"`
+	Mission          missions.Mission `bson:",inline"`
 }
 
 func NewMissionMongoStore(database *store.MongoStore) *MissionMongoStore {
@@ -104,6 +105,10 @@ func (s *MissionMongoStore) List(ctx context.Context) ([]missions.Mission, error
 }
 
 func (d missionDocument) decode() (missions.Mission, error) {
+	// BSON ignores unknown fields; an old rules map must not silently lose review constraints.
+	if !d.UnsupportedRules.IsZero() {
+		return missions.Mission{}, errors.New("stored mission uses unsupported rules; convert it to continuation policies")
+	}
 	if d.ID != d.Mission.Name {
 		return missions.Mission{}, errors.New("stored mission ID does not match its name")
 	}

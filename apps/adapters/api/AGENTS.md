@@ -62,8 +62,15 @@
   policy pointer and its action-name slice independently. Omitted/null/empty
   placement or action lists declare no affinity. Names are trimmed, nonblank and
   unique; they need not belong to mission coverage. Strict OpenAPI/MCP schemas
-  reject unknown fields and the removed `rules.same-agent` form. Preserve placement
+  reject unknown fields and the removed root `rules` field (including empty/null). Preserve placement
   in mission responses and operation snapshots; edits affect future operations.
+- Optional mission `policies.continuation` maps through independent continuation
+  request/response DTOs. Clone its pointer, `aggregate_results` and `model_review`
+  lists separately. Each optional list permits null or empty values, requires
+  unique trimmed nonblank action names and can overlap the other list. Omitted,
+  null or empty continuation declares no overrides. Keep OpenAPI nested policies
+  and continuation strict; register continuation schemas before policies so the
+  nested schema preserves nullable arrays and action-name constraints.
 - Optional mission `completion` maps through independent API request/response DTOs
   to [`policies.CompletionPolicy`](../../../framework/domain/missions/policies/completion_policy.go).
   Clone its pointer at mapping boundaries; omission

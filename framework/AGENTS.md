@@ -45,7 +45,7 @@
   calls; saving a value does not deliver it or fulfill a request.
 - Preserve Commander → Controller → Agent control flow: adapters query saved
   state and send operation commands; only the controller selects agent instances.
-- Mission definitions own rules. Actions may propose schema-valid next
+- Mission definitions own policies. Actions may propose schema-valid next
   actions, but must never dispatch them or contact a controller themselves.
 - [`missions.MissionStore.Create`](domain/missions/mission_store.go) validates and
   atomically reserves an exact mission name; duplicates return `ErrMissionExists`
@@ -85,7 +85,7 @@
   Saved completion draft does not freeze later work, so review current eligibility
   before accepting it. Retain it as history on failure/cancellation. This records
   the submission channel, not proof of a human's identity. There is no question
-  timeout or model fallback for operator completion. Action-scoped rules and
+  timeout or model fallback for operator completion. Continuation policies and
   question behavior remain unchanged. Reconcile uncertain writes before another
   mutation; completion draft has no separate IDs, origin metadata or command.
 - Optional mission `action_definitions` reuses `actions.Definition` for desired
@@ -99,13 +99,18 @@
   its tasks are queued. Remove that extra coverage after dispatch/completion;
   normal execution checks still apply. Neither list restricts which actions may
   execute. Validate unique nonblank names and reject required/optional overlap;
-  clone both lists at snapshot boundaries. Normal rules and readiness apply to optional work.
+  clone both lists at snapshot boundaries. Normal policies and readiness apply to optional work.
   `policies.placement.same_agent` groups still participate in preflight even
   if an action is optional; optionality does not override a placement constraint.
-- [`missions.RuleSet`](domain/missions/rule.go) is saved in each operation's
-  mission snapshot. [`operations.RuleApplier`](domain/operations/rule_applier.go)
-  evaluates it without I/O; effects commit with the triggering transition.
-  Valid proposals run automatically unless a matching rule requires model review;
+- Optional [`policies.continuation`](domain/missions/policies/continuation_policy.go)
+  is saved in each operation's mission snapshot. Its independent `aggregate_results`
+  and `model_review` action lists may overlap; names are trimmed, unique and
+  nonblank within each list without a coverage-list membership requirement.
+  Omitted/null continuation, empty objects and nil/empty lists add no overrides.
+  Deep-clone its pointer and both slices independently, even with shared input
+  backing arrays. [`operations.EvaluateContinuation`](domain/operations/continuation_evaluation.go)
+  evaluates snapshots without I/O or mutation; effects commit with the triggering
+  transition. Valid proposals run automatically unless the policy requires model review;
   failures and empty proposals also require review. Aggregation uses the current
   decision's saved child IDs. Preserve parent grouping before evaluating children,
   each child's parentage, and fresh group membership on subsequent decisions.
@@ -114,12 +119,12 @@
   `same_agent` list, declare no affinity. An empty placement object is valid.
   Validate trimmed, unique nonblank names without requiring coverage-list
   membership. Deep-clone the placement pointer and its list in mission snapshots.
-  The old `same-agent` rule is unsupported; remaining rules govern continuation.
+  The root `rules` field is unsupported; no aliases or read-time conversion apply.
   [`Operation.AffinityAgentID`](domain/operations/affinity.go) derives the binding
   from retained task assignments; no separate binding record is stored. Failed,
   interrupted and cancelled dispatched tasks retain ownership. Enforce agreement
   atomically in `DispatchTask` and reject conflicting history during recovery.
-  This is a placement constraint, not a continuation rule or execution ordering.
+  This is a placement constraint, not a continuation decision or execution ordering.
   Before binding, preflight limits grouped actions to agents advertising the
   entire group. After binding, assess only the saved owner's readiness. Include
   grouped actions even when omitted from `required_actions`; preserve the existing
@@ -132,8 +137,8 @@
   persisted operation fields; inconsistent history returns an explicit error,
   never an apparently unbound group.
 - Operation startup validates the stored mission/input and clones the mission
-  directly into its saved snapshot. Rule behavior belongs to that definition;
-  hosts do not select or override rules. Recovery and task execution use the
+  directly into its saved snapshot. Policy behavior belongs to that definition;
+  hosts do not select or override policies. Recovery and task execution use the
   saved snapshot, independent of later mission edits.
 
 ## Runtime and persistence invariants

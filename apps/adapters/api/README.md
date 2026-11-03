@@ -42,7 +42,7 @@ curl --user "$API_USERNAME" \
 ```
 
 Include `name`, an `objectives` array, `input_schema` and `output_schema`.
-Add required/optional actions, starting actions and rules as needed.
+Add required/optional actions, starting actions and policies as needed.
 Use `action_definitions` for capabilities an agent should implement later;
 see [mission definitions](../../../docs/abstractions.md#mission-operation-and-task).
 
@@ -52,7 +52,7 @@ the mission by name before retrying. Keep secret values out of definitions.
 
 To edit an existing mission, send its complete definition with
 `PUT /api/v1/missions/{mission_name}`. Encode the name as one path segment and keep
-the JSON `name` unchanged. Objectives, action lists/contracts, rules and schemas
+the JSON `name` unchanged. Objectives, action lists/contracts, policies and schemas
 can change; existing operations keep their original mission snapshot. Read the
 saved definition after an uncertain update before retrying.
 

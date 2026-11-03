@@ -193,12 +193,12 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   const missionURL = page.url();
   await expect(page).toHaveURL(/\/missions\/analyze-text$/);
 
-  const rules = page.getByRole('table', { name: 'Mission rules' });
-  await expect(rules.getByRole('row')).toHaveCount(3);
-  await expect(rules.getByRole('row', { name: 'Aggregate results analyze-text All direct children', exact: true })).toBeVisible();
-  const decisions = rules.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Decide next actions', exact: true }) });
+  const continuation = page.getByRole('table', { name: 'Continuation', exact: true });
+  await expect(continuation.getByRole('row')).toHaveCount(3);
+  await expect(continuation.getByRole('row', { name: 'Aggregate results analyze-text Wait for all direct children to finish', exact: true })).toBeVisible();
+  const decisions = continuation.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Model review', exact: true }) });
   await expect(decisions.getByRole('listitem')).toHaveText(['write-summary']);
-  await expect(decisions.getByRole('cell', { name: 'Model', exact: true })).toBeVisible();
+  await expect(decisions.getByRole('cell', { name: 'Review valid proposals before continuing', exact: true })).toBeVisible();
 
   await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(agents.items.length);

@@ -35,16 +35,16 @@ applies to all domain packages below this directory.
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.
 - Mission policy types live in [missions/policies](missions/policies/), which
-  stays independent of its parent package. Rules remain in `missions`; their
-  decision parameter reuses [policies.Decision](missions/policies/decision.go).
+  stays independent of its parent package. Placement, continuation and sharing
+  are grouped under `MissionPolicies`; completion retains its separate mission field.
 - [`PlacementPolicy`](missions/policies/placement_policy.go) is optional under
   `MissionPolicies.Placement`. Its one `same_agent` group is read by preflight,
   dispatch, affinity and session placement. Omitted/null placement and nil/empty
   action lists add no constraint. Validate trimmed, unique nonblank names without
   requiring membership in mission coverage. Clone the pointer and list independently.
-  Reject the old `same-agent` rule rather than accepting both configurations.
-- [`ContinuationPolicy`](missions/policies/continuation_policy.go) remains a
-  standalone contract for the next step; continuation behavior still uses rules.
+  Reject the old root `rules` field rather than accepting both configurations.
+- [`ContinuationPolicy`](missions/policies/continuation_policy.go) is optional under
+  `MissionPolicies.Continuation` and controls task/group follow-up decisions.
   Its aggregation/model-review scopes are independent and may overlap. Clone each
   slice independently, even when inputs share a backing array. Aggregation covers
   saved direct children; failures and empty proposals still require model review.
@@ -52,7 +52,10 @@ applies to all domain packages below this directory.
 - Operation transitions own tasks, questions, continuations and events together.
   Use [OperationStore](operations/operation_store.go) mutation contracts rather
   than rebuilding a saved operation from a stale caller snapshot.
-  Rule evaluation stays pure in [rule_applier.go](operations/rule_applier.go).
+  Continuation evaluation stays pure in
+  [continuation_evaluation.go](operations/continuation_evaluation.go), without a
+  replaceable rule-applier interface. Commit effects through the existing atomic
+  operation transitions.
   Completion uses the saved mission policy: model submissions either complete
   immediately or retain completion draft for operator review. Completion draft is
   operation state, not a question or a separate approval model; only explicit

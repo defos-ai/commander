@@ -40,9 +40,8 @@
       }
     ],
     "starting_actions": ["analyze-text"],
-    "rules": {
-      "aggregate-results": {"for_actions": ["analyze-text"]},
-      "decide-next-actions": {"for_actions": ["write-summary"], "params": {"decision_by": "model"}}
+    "policies": {
+      "continuation": {"aggregate_results": ["analyze-text"], "model_review": ["write-summary"]}
     },
     "input_schema": {
       "type": "object",

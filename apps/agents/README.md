@@ -70,7 +70,7 @@ for an example returning screenshots.
 ### Propose follow-up work
 
 Use `FuncConfig.NextActions` or `Result.NextActions` to return action names,
-JSON inputs and optional reasons. Set [mission rules](../../docs/abstractions.md#mission-rules)
+JSON inputs and optional reasons. Set [mission policies](../../docs/abstractions.md#continuation-policy)
 when follow-up work needs model review or aggregated results.
 
 ### Develop an agent in a private repository

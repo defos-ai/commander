@@ -96,11 +96,18 @@
   Optional `policies.sharing` retains action-based routes for results, artifacts
   and decisions in mission/operation reads. Empty or omitted sharing declares no
   routes. Omitted/null `policies` and an empty object also declare no routes.
-  Placement and sharing are grouped here; completion and continuation rules remain
+  Placement, continuation and sharing are grouped here; completion remains
   at the mission root. `policies.placement.same_agent` is an optional unique list
   of trimmed action names; omitted/null/empty placement or lists mean no affinity.
   Preserve its pointer and slice independently in HTTP DTO mappings and snapshots.
-  Reject the removed `rules.same-agent` form; placement neither starts nor orders tasks.
+  Placement neither starts nor orders tasks. `policies.continuation` contains
+  independent `aggregate_results` and `model_review` action-name lists. They may
+  overlap; omitted/null/empty fields or objects disable each override. Names are
+  unique, trimmed and nonblank. Aggregation collects saved direct children, never
+  descendants; valid proposals continue automatically unless model review applies.
+  Failures and empty proposals still require model review. Clone each list
+  independently across HTTP mappings and operation snapshots. Reject the removed
+  root `rules` field, including empty objects and null.
   HTTP uses independent DTOs with cloned lists; MCP accepts the same
   domain policy. Reject unknown fields and invalid entries through shared mission
   validation. The controller forwards results, accepted artifact metadata and

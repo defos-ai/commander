@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	operationfs "github.com/defos-ai/commander/providers/fs/operations"
 	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
@@ -31,7 +30,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 			if automatic {
 				var err error
 				op, err = first.Update(t.Context(), op.ID, func(next *operations.Operation) error {
-					delete(next.Mission.Rules, missions.DecideNextActions)
+					next.Mission.Policies.Continuation.ModelReview = nil
 					return nil
 				})
 				if err != nil {
@@ -94,7 +93,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertResultJSONEqual(t, saved.Mission.Rules, op.Mission.Rules)
+			assertResultJSONEqual(t, saved.Mission.Policies, op.Mission.Policies)
 			for i, request := range requests {
 				child := saved.Tasks[i+1]
 				if child.Status != operations.TaskSucceeded || child.Result == nil || child.Continuation == nil || child.Continuation.Status != operations.ContinuationResolved {

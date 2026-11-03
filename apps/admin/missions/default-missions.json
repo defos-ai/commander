@@ -18,7 +18,6 @@
     "starting_actions": [
       "choose-hn-topics"
     ],
-    "rules": {},
     "input_schema": {
       "type": "object",
       "properties": {
@@ -80,18 +79,13 @@
           "checkout-template",
           "build-agent"
         ]
-      }
-    },
-    "rules": {
-      "decide-next-actions": {
-        "for_actions": [
+      },
+      "continuation": {
+        "model_review": [
           "checkout-template",
           "build-agent",
           "publish-agent"
-        ],
-        "params": {
-          "decision_by": "model"
-        }
+        ]
       }
     },
     "input_schema": {
@@ -326,9 +320,9 @@
     "starting_actions": [
       "spawn-agent"
     ],
-    "rules": {
-      "aggregate-results": {
-        "for_actions": [
+    "policies": {
+      "continuation": {
+        "aggregate_results": [
           "spawn-agent"
         ]
       }

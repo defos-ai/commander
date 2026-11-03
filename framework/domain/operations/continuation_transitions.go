@@ -6,7 +6,6 @@ import (
 	"time"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/missions"
 )
 
 // continueTask is part of the same operation update as the result. No publication
@@ -40,11 +39,11 @@ func continueTask(op *Operation, taskID string, success bool) error {
 	if op.Status.Terminal() {
 		return nil
 	}
-	effects, err := (DefaultRuleApplier{}).Apply(RuleContext{Rules: op.Mission.Rules, Task: *task})
+	effects, err := EvaluateContinuation(ContinuationEvaluation{Policy: op.Mission.ContinuationPolicy(), Task: *task})
 	if err != nil {
 		return err
 	}
-	if effects.Decision != RuleAutomatic || len(op.Tasks)+len(c.ProposedActions) > 10000 {
+	if effects.Decision != ContinuationAutomatic || len(op.Tasks)+len(c.ProposedActions) > 10000 {
 		return nil
 	}
 	c.DecisionBy = DecisionCode
@@ -93,7 +92,7 @@ func taskIndex(op *Operation, taskID string) int {
 }
 
 // Collected siblings reach a decision together. If all can continue in code,
-// apply each child's rule in this same durable update. Otherwise expose one
+// evaluate each child's continuation policy in this same durable update. Otherwise expose one
 // model decision on the parent, retaining all child results and proposals.
 func refreshGroups(op *Operation) error {
 	for i := 0; i < len(op.Tasks); i++ {
@@ -101,11 +100,11 @@ func refreshGroups(op *Operation) error {
 		if c == nil || c.Status != ContinuationWaiting || c.DecisionBy != DecisionCode {
 			continue
 		}
-		effects, err := (DefaultRuleApplier{}).Apply(RuleContext{Rules: op.Mission.Rules, Task: op.Tasks[i], Tasks: op.Tasks})
+		effects, err := EvaluateContinuation(ContinuationEvaluation{Policy: op.Mission.ContinuationPolicy(), Task: op.Tasks[i], Tasks: op.Tasks})
 		if err != nil {
 			return err
 		}
-		if effects.Decision == RuleWait {
+		if effects.Decision == ContinuationWait {
 			continue
 		}
 		proposals := effects.ProposedActions
@@ -113,10 +112,10 @@ func refreshGroups(op *Operation) error {
 			proposals = append(proposals, actionmodel.CloneNextActions(next.Actions)...)
 		}
 		c.Version++
-		if effects.Decision == RuleAutomatic && !op.Status.Terminal() && len(op.Tasks)+len(proposals) <= 10000 {
+		if effects.Decision == ContinuationAutomatic && !op.Status.Terminal() && len(op.Tasks)+len(proposals) <= 10000 {
 			c.Status = ContinuationResolved
 			applyFollowUps(op, effects.FollowUps)
-			op.AppendEvent(ContinuationResolvedEvent, op.Tasks[i].ID, "", "Task group settled; automatic rules applied")
+			op.AppendEvent(ContinuationResolvedEvent, op.Tasks[i].ID, "", "Task group settled; automatic continuations applied")
 		} else {
 			c.DecisionBy, c.Status = DecisionModel, ContinuationPending
 			c.ProposedActions = append([]actionmodel.NextAction{}, proposals...)
@@ -126,7 +125,7 @@ func refreshGroups(op *Operation) error {
 	return nil
 }
 
-func applyFollowUps(op *Operation, followUps []RuleFollowUp) {
+func applyFollowUps(op *Operation, followUps []ContinuationFollowUp) {
 	for _, next := range followUps {
 		i := taskIndex(op, next.TaskID)
 		c := op.Tasks[i].Continuation
@@ -166,7 +165,7 @@ func (op *Operation) ResolveContinuation(taskID string, version uint64, actions 
 	}
 	c.ProposedActions = actionmodel.CloneNextActions(actions)
 	c.Version++
-	createChildren(op, i, actions, ruleMatches(op.Mission.Rules, missions.AggregateResults, op.Tasks[i].ActionName))
+	createChildren(op, i, actions, slices.Contains(op.Mission.ContinuationPolicy().AggregateResults, op.Tasks[i].ActionName))
 	op.RefreshStatus()
 	op.AppendEvent(ContinuationResolvedEvent, taskID, "", "Model decision recorded")
 	op.UpdatedAt = time.Now().UTC()

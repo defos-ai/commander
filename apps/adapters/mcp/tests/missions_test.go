@@ -72,11 +72,10 @@ func TestMissions(t *testing.T) {
 	if !slices.Equal(mission.StartingActions, []string{"analyze-text"}) || !slices.Equal(mission.RequiredActions, []string{"analyze-text", "write-summary"}) {
 		t.Fatalf("incorrect fixture workflow: %+v", mission)
 	}
-	aggregate := mission.Rules[missions.AggregateResults]
-	decision := mission.Rules[missions.DecideNextActions]
-	if len(mission.Rules) != 2 || !reflect.DeepEqual(aggregate.ForActions, []string{"analyze-text"}) || aggregate.Params != nil || !reflect.DeepEqual(decision.ForActions, []string{"write-summary"}) || decision.Params == nil || decision.Params.DecisionBy != policies.Model {
-		t.Fatalf("mission detail lost grouping or model rules: %+v", mission.Rules)
+	if mission.Policies == nil || mission.Policies.Continuation == nil || !slices.Equal(mission.Policies.Continuation.AggregateResults, []string{"analyze-text"}) || !slices.Equal(mission.Policies.Continuation.ModelReview, []string{"write-summary"}) {
+		t.Fatalf("mission detail lost continuation policies: %+v", mission.Policies)
 	}
+
 	if len(mission.InputSchema) == 0 || len(mission.OutputSchema) == 0 {
 		t.Fatal("mission schemas missing")
 	}
@@ -102,20 +101,22 @@ func TestMissionSharingPolicy(t *testing.T) {
 	a.Call("create_mission", fixtures.MissionDefinition(definition), &created)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
 	if !reflect.DeepEqual(created.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {
-		t.Fatal("MCP mission creation or detail lost the sharing policy")
+		t.Fatal("MCP mission creation or detail lost mission policies")
 	}
 	var first operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, &first)
 	if !reflect.DeepEqual(first.Mission.Policies, created.Policies) || len(first.Tasks) != 0 {
 		t.Fatal("operation lost mission policies or policies started work")
 	}
+	definition.Policies.Continuation.AggregateResults = []string{"review-vulnerabilities"}
+	definition.Policies.Continuation.ModelReview = []string{"review-vulnerabilities"}
 	definition.Policies.Placement.SameAgent[1] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []policies.SharingKind{policies.ShareDecisions}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
 	if !reflect.DeepEqual(updated.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {
-		t.Fatal("MCP mission update or detail lost the sharing policy")
+		t.Fatal("MCP mission update or detail lost mission policies")
 	}
 	if !reflect.DeepEqual(a.Get(first.ID).Mission.Policies, created.Policies) {
 		t.Fatal("mission update changed an existing operation's policies")
@@ -123,7 +124,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 	var second operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, &second)
 	if !reflect.DeepEqual(second.Mission.Policies, definition.Policies) {
-		t.Fatal("new operation did not retain updated placement and sharing policies")
+		t.Fatal("new operation did not retain updated policies")
 	}
 
 	invalid := fixtures.MissionDefinition(definition)
@@ -141,11 +142,21 @@ func TestMissionSharingPolicy(t *testing.T) {
 			t.Fatalf("invalid placement should be an invalid argument: %+v", placement)
 		}
 	}
-	legacyRule := fixtures.MissionDefinition(definition)
-	legacyRule["rules"] = fixtures.Object{"same-agent": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}
-	_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: legacyRule})
-	if err == nil {
-		t.Fatal("same-agent must be rejected as a rule")
+	for _, continuation := range fixtures.InvalidContinuationPolicies() {
+		candidate := fixtures.MissionDefinition(definition)
+		candidate["policies"] = fixtures.Object{"continuation": continuation}
+		_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: candidate})
+		if err == nil {
+			t.Fatalf("invalid continuation should be an invalid argument: %+v", continuation)
+		}
+	}
+	for _, rules := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate-results": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}, fixtures.Object{"decide-next-actions": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}, "params": fixtures.Object{"decision_by": "model"}}}, fixtures.Object{"same-agent": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}} {
+		legacy := fixtures.MissionDefinition(definition)
+		legacy["rules"] = rules
+		_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: legacy})
+		if err == nil {
+			t.Fatalf("legacy root rules must be rejected: %+v", rules)
+		}
 	}
 	for _, field := range []string{"context", "sharing"} {
 		legacy := fixtures.MissionDefinition(definition)
@@ -167,6 +178,15 @@ func TestMissionSharingPolicy(t *testing.T) {
 		a.Call("update_mission", candidate, &updated)
 		if updated.Policies == nil || placement == nil && updated.Policies.Placement != nil || placement != nil && (updated.Policies.Placement == nil || len(updated.Policies.Placement.SameAgent) != 0) {
 			t.Fatal("empty placement should declare no affinity group")
+		}
+	}
+	for _, continuation := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate_results": nil, "model_review": nil}, fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}} {
+		candidate := fixtures.MissionDefinition(definition)
+		candidate["policies"] = fixtures.Object{"continuation": continuation}
+		updated = missions.Mission{}
+		a.Call("update_mission", candidate, &updated)
+		if updated.Policies == nil || continuation == nil && updated.Policies.Continuation != nil || continuation != nil && (updated.Policies.Continuation == nil || len(updated.Policies.Continuation.AggregateResults) != 0 || len(updated.Policies.Continuation.ModelReview) != 0) {
+			t.Fatal("empty continuation should declare no overrides")
 		}
 	}
 	definition.Policies = nil

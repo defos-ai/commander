@@ -1,4 +1,4 @@
-# Missions and rules
+# Missions and policies
 
 Use a mission to describe a repeatable goal, the actions it needs and how to
 handle follow-up work. Start in **Admin → Missions → Create mission**, or use
@@ -8,7 +8,7 @@ the [HTTP API](../apps/adapters/api/README.md#create-and-update-missions) or MCP
 
 | Concept | Example |
 | --- | --- |
-| **Mission**: reusable objectives, action requirements and rules | Review a website |
+| **Mission**: reusable objectives, action requirements and policies | Review a website |
 | **Operation**: one run of a mission | Review `https://defos.ai` |
 | **Task**: one action assignment | Check links on one page |
 | **Report**: the final saved output | Findings and recommended fixes |
@@ -19,7 +19,7 @@ the [HTTP API](../apps/adapters/api/README.md#create-and-update-missions) or MCP
 2. Select required actions. Add useful extras as `optional_actions` so they do not
    block the initial readiness check.
 3. Choose `starting_actions` from the required actions and define input/output schemas.
-4. Add rules for aggregation/model review, and placement policy for shared agent state.
+4. Set continuation policy for aggregation/model review and placement policy for shared agent state.
 5. Save the mission. In Admin, open its **JSON** view to inspect the definition.
 
 For example, a build mission can require checkout and build while leaving sharing optional:
@@ -88,14 +88,14 @@ the same form; its task deadline still applies. See [secret setup](../framework/
 ## Next actions and continuations
 
 Agents can propose multiple `next_actions`. By default, the controller queues
-valid proposals automatically. Use mission rules to request a model decision instead.
+valid proposals automatically. Use continuation policy to request a model decision instead.
 Proposal order does not create dependencies.
 
 A **continuation** is the decision about what follows a task:
 
 | Decision maker | What happens |
 | --- | --- |
-| Code | Follow mission rules and valid proposals |
+| Code | Follow continuation policy and valid proposals |
 | Model | Commander reviews results and chooses follow-ups |
 | User | Commander asks for your guidance |
 
@@ -103,31 +103,32 @@ When reviewing through MCP, `resolve_continuation` accepts follow-up actions;
 `actions: []` closes the branch. Refresh the task before retrying a stale decision.
 Once work and questions are resolved, explicitly complete the operation with its report.
 
-## Mission rules
+## Continuation policy
 
-Choose the action names with `for_actions`:
+Set the action names for each behavior in `policies.continuation`:
 
 ```json
 {
-  "rules": {
-    "aggregate-results": {
-      "for_actions": ["discover-pages"]
-    },
-    "decide-next-actions": {
-      "for_actions": ["check-links", "capture-page"],
-      "params": {"decision_by": "model"}
+  "policies": {
+    "continuation": {
+      "aggregate_results": ["discover-pages"],
+      "model_review": ["check-links", "capture-page"]
     }
   }
 }
 ```
 
-| Rule | Use it when… |
+| Setting | Use it when… |
 | --- | --- |
-| `aggregate-results` | One action generates several checks and you want their direct results collected before deciding what follows |
-| `decide-next-actions` | Commander should review results instead of automatically running proposed follow-ups |
+| `aggregate_results` | One action generates several checks and you want their direct results collected before deciding what follows |
+| `model_review` | Commander should review results instead of automatically running proposed follow-ups |
+
+The lists are independent and can overlap. Omitted/null continuation or empty
+lists add no overrides. Failures, empty proposals and invalid proposals still
+require model review. The old root `rules` field is no longer accepted.
 
 Aggregation waits for all **direct children** from one execution, not their recursive
-follow-ups. Without it, each child continues independently. Rules do not merge
+follow-ups. Without it, each child continues independently. Policies do not merge
 outputs or invent action inputs.
 
 ## Task affinity
@@ -144,7 +145,7 @@ Affinity does not create execution order or prevent concurrency: propose depende
 actions only after their prerequisites finish. Leave artifact-based work outside
 the group when any compatible agent can do it.
 
-Edit the mission to change rules for future operations. Existing operations keep
+Edit the mission to change policies for future operations. Existing operations keep
 their original mission snapshot.
 
 ## Questions

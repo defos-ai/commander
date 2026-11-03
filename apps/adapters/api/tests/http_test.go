@@ -128,17 +128,32 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 	if _, ok := document.Security[0]["basicAuth"]; !ok {
 		t.Fatal("OpenAPI does not declare Basic authentication")
 	}
-	mission := document.Components.Schemas["Mission"]
-	if mission.Properties["rules"] == nil || mission.Properties["automations"] != nil {
-		t.Fatal("OpenAPI must publish mission rules without the old automation format")
+	for _, name := range []string{"Mission", "CreateMissionRequest"} {
+		mission := document.Components.Schemas[name]
+		if mission.Properties["policies"] == nil || mission.Properties["rules"] != nil || mission.Properties["automations"] != nil {
+			t.Fatalf("OpenAPI %s must publish typed mission policies without legacy rules", name)
+		}
 	}
-	rule := document.Components.Schemas["MissionRule"]
-	if rule.Properties["for_actions"] == nil || rule.Properties["actions"] != nil {
-		t.Fatal("OpenAPI must identify rule selectors as for_actions")
+	for _, name := range []string{"MissionRule", "MissionRuleRequest", "MissionRuleParams", "MissionRuleParamsRequest"} {
+		if _, exists := document.Components.Schemas[name]; exists {
+			t.Fatalf("OpenAPI still publishes removed %s", name)
+		}
 	}
-	params := document.Components.Schemas["MissionRuleParams"]
-	if decision := params.Properties["decision_by"]; decision == nil || len(decision.Enum) != 1 || decision.Enum[0] != "model" {
-		t.Fatal("OpenAPI must document model as the supported rule decision maker")
+	for _, suffix := range []string{"", "Request"} {
+		policies := document.Components.Schemas["MissionPolicies"+suffix]
+		if property := policies.Properties["continuation"]; property == nil || !slices.Contains(property.Types, "object") || !slices.Contains(property.Types, "null") || slices.Contains(policies.Required, "continuation") {
+			t.Fatal("OpenAPI must make continuation optional and nullable")
+		}
+		continuation := document.Components.Schemas["MissionContinuationPolicy"+suffix]
+		if continuation.AdditionalProperties == nil || continuation.AdditionalProperties.Not == nil || len(continuation.Properties) != 2 {
+			t.Fatal("OpenAPI continuation must reject unknown fields")
+		}
+		for _, field := range []string{"aggregate_results", "model_review"} {
+			property := continuation.Properties[field]
+			if property == nil || !slices.Contains(property.Types, "array") || !slices.Contains(property.Types, "null") || !property.UniqueItems || property.MinItems != nil || property.Items == nil || property.Items.Pattern != `^\S(?:[\s\S]*\S)?$` || slices.Contains(continuation.Required, field) {
+				t.Fatalf("OpenAPI must allow optional, nullable, empty %s and require unique trimmed action names", field)
+			}
+		}
 	}
 	controller := document.Components.Schemas["Controller"]
 	for _, name := range []string{"agent_selector"} {

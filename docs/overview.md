@@ -29,11 +29,11 @@ For a website review:
 
 1. Ask Commander to review a site.
 2. Commander installs any missing agents and starts the review mission.
-3. The controller sends checks to ready agents. Mission rules determine when
+3. The controller sends checks to ready agents. Mission policies determine when
    Commander reviews their results.
 4. Open the completed operation in Admin to inspect findings and screenshots.
 
-Learn how to [create missions and choose rules](abstractions.md),
+Learn how to [create missions and choose policies](abstractions.md),
 [build agents](../apps/agents/README.md), or [connect another client](../apps/adapters/README.md).
 See [data sharing](features/data-sharing.md) for controller-managed
 delivery of saved results, artifact references and decisions between actions.

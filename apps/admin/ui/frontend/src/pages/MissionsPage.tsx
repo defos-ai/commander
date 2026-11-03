@@ -98,8 +98,7 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
           aria-label={t($ => $.missions.open, { name: item.name })} onClick={() => select(item.name)}>
           <span className="mission-row-main"><span className="mission-row-name">{item.name}</span><span className="mission-row-objective">{item.objectives.join(' ')}</span>
             <span className="mission-row-meta"><span>{t($ => $.missions.actions, { count: item.required_actions?.length ?? 0 })}</span>
-              {Boolean(item.optional_actions?.length) && <span>{t($ => $.missions.optionalActionCount, { count: item.optional_actions?.length ?? 0 })}</span>}
-              <span>{t($ => $.missions.ruleCount, { count: Object.keys(item.rules ?? {}).length })}</span></span>
+              {Boolean(item.optional_actions?.length) && <span>{t($ => $.missions.optionalActionCount, { count: item.optional_actions?.length ?? 0 })}</span>}</span>
           </span><ArrowUpRight size={18} aria-hidden="true" />
         </button></li>)}
       </ul> : <div className="missions-empty">

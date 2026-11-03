@@ -19,7 +19,7 @@ const (
 )
 
 // A task owns one versioned continuation. Waiting code continuations collect
-// their children before applying mission rules or requesting a model decision.
+// their children before evaluating continuation policy or requesting a model decision.
 type Continuation struct {
 	Version         uint64                   `json:"version"`
 	DecisionBy      DecisionBy               `json:"decision_by"`

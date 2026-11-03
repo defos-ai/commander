@@ -5,7 +5,6 @@ export interface Mission {
   optional_actions?: string[];
   action_definitions?: ActionDefinition[];
   starting_actions: string[] | null;
-  rules?: Partial<Record<MissionRuleName, MissionRule>>;
   completion?: { decision_by: 'model' | 'operator' } | null;
   policies?: MissionPolicies | null;
   input_schema: Record<string, unknown> | null;
@@ -14,6 +13,7 @@ export interface Mission {
 
 export interface MissionPolicies {
   placement?: PlacementPolicy | null;
+  continuation?: ContinuationPolicy | null;
   sharing?: SharingRoute[] | null;
 }
 
@@ -21,17 +21,15 @@ export interface PlacementPolicy {
   same_agent?: string[] | null;
 }
 
+export interface ContinuationPolicy {
+  aggregate_results?: string[] | null;
+  model_review?: string[] | null;
+}
+
 export interface SharingRoute {
   from_actions: string[];
   to_actions: string[];
   include: ('results' | 'artifacts' | 'decisions')[];
-}
-
-export type MissionRuleName = 'aggregate-results' | 'decide-next-actions';
-
-export interface MissionRule {
-  for_actions: string[];
-  params?: { decision_by?: 'model' };
 }
 
 export interface ActionDefinition {

@@ -23,8 +23,8 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   execution, deadline, source approval and checkpoints; never reuse one command
   identity for several launches or expand the framework's checkpoint limit for
   batching. Keep one registered action in runtime and static package metadata.
-  `install-agent` uses `aggregate-results` for the batch action so direct children
-  reach one review. Do not add a matching model-decision rule that blocks this
+  `install-agent` includes the batch action in `policies.continuation.aggregate_results`
+  so direct children reach one review. Do not add it to `model_review`, which blocks this
   fan-out; single results without proposals still require model review. Each
   child pins its own selector; callers needing a consistent
   release across the batch must supply an exact version.
@@ -41,7 +41,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   metadata instead of maintaining a package list or installation instructions.
   Permit compatible GitHub packages owned by `defos-ai`, including packages
   outside the source list. Preserve caller-supplied responsibilities. Keep mission
-  rules in `install-agent`; agent guidance must not bypass controller dispatch.
+  policies in `install-agent`; agent guidance must not bypass controller dispatch.
 - `cli/factory.go` selects and constructs the runtime and providers, owns created
   resources and closes them in reverse order. `cli.Run` uses deployment
   configuration. `cli.RunWithOptions` accepts production runtime/state-directory

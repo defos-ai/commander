@@ -29,8 +29,10 @@ func (o *Operation) Recover(now time.Time) (bool, error) {
 }
 
 func (o Operation) validateRecovery() error {
-	if err := o.Mission.Rules.Validate(); err != nil {
-		return err
+	if o.Mission.Policies != nil {
+		if err := o.Mission.Policies.Validate(); err != nil {
+			return err
+		}
 	}
 	if len(o.CompletionDraft) != 0 {
 		if !o.RequiresCompletionApproval() || !utf8.Valid(o.CompletionDraft) || !json.Valid(o.CompletionDraft) {

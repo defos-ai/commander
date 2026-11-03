@@ -88,8 +88,8 @@
 .mission-action-sections { display: grid; grid-template-columns: 1fr 2fr; gap: 22px; }
 .mission-action-names { display: flex; flex-wrap: wrap; gap: 7px; list-style: none; margin: 0; padding: 0; }
 .mission-action-names li { padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; font: 400 10px/1.6 var(--font-mono); overflow-wrap: anywhere; min-width: 0; }
-.mission-empty-rules { padding-top: 14px; }
-.mission-rules { margin-top: 14px; }
+.mission-continuation-empty { padding-top: 14px; }
+.mission-continuation { margin-top: 14px; }
 .mission-fields-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
 .mission-fields { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
 .mission-fields th, .mission-fields td { padding: 13px 14px; vertical-align: top; overflow-wrap: anywhere; }

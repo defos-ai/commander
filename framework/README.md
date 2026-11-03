@@ -2,7 +2,7 @@
 
 Build and extend Commander's agent control plane for complex business workflows.
 Connect existing tools and agents through typed actions, or implement new agents
-with the same contracts. Mission rules and model or operator decisions guide
+with the same contracts. Mission policies and model or operator decisions guide
 long-running work; saved outcomes and artifacts support operational review.
 Apps provide host configuration; [providers](../providers/README.md) supply
 messaging and storage.
@@ -12,7 +12,7 @@ messaging and storage.
 Start with the component you want to extend:
 
 - [Agents](../apps/agents/README.md): implement and register actions.
-- [Controllers](../apps/controllers/README.md): customize agent selection and mission rules.
+- [Controllers](../apps/controllers/README.md): customize agent selection and mission policies.
 - [Adapters](../apps/adapters/README.md): expose commands and queries to clients.
 
 The Go module is `github.com/defos-ai/commander/framework`. Inside this repository,
@@ -37,7 +37,7 @@ image digest; see the [package guide](../docs/agent-packages.md#source-template)
 | You want to… | Read |
 | --- | --- |
 | Find a domain model's purpose and consumers | [Domain models](domain/README.md) |
-| Understand missions and rules | [Core concepts](../docs/abstractions.md) |
+| Understand missions and policies | [Core concepts](../docs/abstractions.md) |
 | Connect a message consumer | [Messaging](comms/README.md) |
 | Extend a message contract | [Wire messages](comms/messages/README.md) |
 | Ask a decision from a running action | [Execution questions](comms/messages/README.md#execution-questions) |

@@ -1,7 +1,7 @@
 # Adapters
 
 Connect AI clients and internal applications to Commander's agent control plane.
-Coordinate complex workflows across existing systems, with mission rules, AI or
+Coordinate complex workflows across existing systems, with mission policies, AI or
 operator decisions, and saved execution evidence. Choose an interface:
 
 - **MCP:** let a model choose missions, assign work and review results.
@@ -52,11 +52,11 @@ The list is discovery metadata; it has no saved trust or approval state.
 
 Call `create_mission` with a flat mission definition containing `name`,
 `objectives`, `input_schema` and `output_schema`.
-Add actions and rules as needed; see
+Add actions and policies as needed; see
 [mission definitions](../../docs/abstractions.md#mission-operation-and-task).
 Actions may be installed later. Saving a mission does not start work.
 
-Names are unique and remain fixed. To change objectives, actions, rules or schemas,
+Names are unique and remain fixed. To change objectives, actions, policies or schemas,
 read `describe_mission`, then call `update_mission` with the complete replacement
 definition under the same name. Updates affect future operations; existing
 operations retain their saved mission definition.

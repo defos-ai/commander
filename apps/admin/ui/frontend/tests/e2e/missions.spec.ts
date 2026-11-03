@@ -6,6 +6,7 @@ import { connect, test } from '../fixtures/e2e';
 test('create and edit a reusable mission through Admin without installing actions or starting work', async ({ page, api }) => {
   const actionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const missionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
+  const missionPolicies = String.raw`{"placement":{"same_agent":["future-mission-action","analyze-text"]},"continuation":{"aggregate_results":["future-mission-\u0061ction"],"model_review":["future-mission-\u0061ction","analyze-text"]},"sharing":[{"from_actions":["future-mission-action"],"to_actions":["analyze-text"],"include":["results","artifacts"]}]}`;
   const mission = {
     name: `ui-mission-${randomUUID()}`,
     objectives: ['Review using an action that has not been installed yet.', 'Save findings for a later review.'],
@@ -18,6 +19,7 @@ test('create and edit a reusable mission through Admin without installing action
     output_schema: {},
   };
   const expectedMission = { ...mission, objectives: [mission.objectives[0], 'Keep evidence for a later review.'], optional_actions: ['analyze-text'],
+    policies: JSON.parse(missionPolicies),
     completion: { decision_by: 'operator' } };
   const operationIDs = async () => (await api.get<{ items: { id: string }[] }>('/operations')).items.map(item => item.id).sort();
   const actionNames = async () => (await api.get<{ items: { name: string }[] }>('/actions')).items.map(item => item.name).sort();
@@ -73,6 +75,7 @@ test('create and edit a reusable mission through Admin without installing action
   await expect(create.getByText('Defined in this mission', { exact: true })).toBeVisible();
   await create.locator('summary').filter({ hasText: /^Advanced settings$/ }).click();
   await create.getByRole('textbox', { name: 'Input schema (JSON)', exact: true }).fill(missionInputSchema);
+  await create.getByRole('textbox', { name: 'Policies (JSON)', exact: true }).fill(missionPolicies);
   await create.getByRole('searchbox', { name: 'Search actions', exact: true }).fill('');
   await create.getByRole('combobox', { name: 'Role for analyze-text', exact: true }).selectOption('optional');
   const inspector = create.locator('summary').filter({ hasText: /^Inspect analyze-text$/ }).locator('..');
@@ -90,6 +93,7 @@ test('create and edit a reusable mission through Admin without installing action
   const authoredJSON = await create.getByLabel('Mission definition (JSON)', { exact: true }).inputValue();
   expect(authoredJSON.match(/9007199254740993/g)).toHaveLength(2);
   expect(authoredJSON).toContain(String.raw`"\u0061\\path"`);
+  expect(authoredJSON.match(/"future-mission-\\u0061ction"/g)).toHaveLength(2);
   await create.getByRole('button', { name: 'Form', exact: true }).click();
   await create.getByRole('button', { name: 'Create mission', exact: true }).click();
   await expect(create.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true })).toHaveCount(0);
@@ -99,6 +103,10 @@ test('create and edit a reusable mission through Admin without installing action
   await expect(objectives.getByRole('listitem')).toHaveText(expectedMission.objectives);
   const completion = page.getByRole('heading', { name: 'Completion decision', exact: true }).locator('..');
   await expect(completion.getByText('Operator', { exact: true })).toBeVisible();
+  const continuation = page.getByRole('table', { name: 'Continuation', exact: true });
+  await expect(continuation.getByRole('rowheader')).toHaveText(['Aggregate results', 'Model review']);
+  await expect(continuation.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Model review', exact: true }) }).getByRole('listitem'))
+    .toHaveText(['future-mission-action', 'analyze-text']);
   const missionURL = page.url();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
@@ -113,6 +121,7 @@ test('create and edit a reusable mission through Admin without installing action
   expect(JSON.parse(savedJSON).action_definitions).toEqual(mission.action_definitions);
   expect(savedJSON.match(/9007199254740993/g)).toHaveLength(2);
   expect(savedJSON).toContain(String.raw`"\u0061\\path"`);
+  expect(JSON.parse(savedJSON).policies).toEqual(expectedMission.policies);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.getByRole('button', { name: 'Copy JSON', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
@@ -151,12 +160,14 @@ test('create and edit a reusable mission through Admin without installing action
   const updated = await api.get<Mission>(`/missions/${mission.name}`);
   expect(updated).toMatchObject({ ...mission, objectives: [expectedMission.objectives[0], 'Report release findings.'],
     completion: { decision_by: 'model' },
+    policies: expectedMission.policies,
     required_actions: ['future-mission-action', 'analyze-text'], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
   expect(updated.optional_actions ?? []).toEqual([]);
   await page.getByRole('group', { name: 'Mission view', exact: true }).getByRole('button', { name: 'JSON', exact: true }).click();
   const updatedJSON = await page.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true }).inputValue();
   expect(updatedJSON.match(/9007199254740993/g)).toHaveLength(2);
   expect(updatedJSON).toContain(String.raw`"\u0061\\path"`);
+  expect(JSON.parse(updatedJSON).policies).toEqual(expectedMission.policies);
   expect(await operationIDs()).toEqual(before);
   expect(await actionNames()).toEqual(actionsBefore);
 });

@@ -22,6 +22,12 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 	}
 	if request.Policies != nil {
 		mission.Policies = &policies.MissionPolicies{}
+		if request.Policies.Continuation != nil {
+			mission.Policies.Continuation = &policies.ContinuationPolicy{
+				AggregateResults: slices.Clone(request.Policies.Continuation.AggregateResults),
+				ModelReview:      slices.Clone(request.Policies.Continuation.ModelReview),
+			}
+		}
 		if request.Policies.Placement != nil {
 			mission.Policies.Placement = &policies.PlacementPolicy{SameAgent: slices.Clone(request.Policies.Placement.SameAgent)}
 		}
@@ -39,16 +45,6 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 	if request.Completion != nil {
 		mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Decision(request.Completion.DecisionBy)}
 	}
-	if request.Rules != nil {
-		mission.Rules = make(missions.RuleSet, len(request.Rules))
-		for name, rule := range request.Rules {
-			mapped := missions.Rule{ForActions: slices.Clone(rule.ForActions)}
-			if rule.Params != nil {
-				mapped.Params = &missions.RuleParams{DecisionBy: policies.Decision(rule.Params.DecisionBy)}
-			}
-			mission.Rules[missions.RuleName(name)] = mapped
-		}
-	}
 	return mission
 }
 
@@ -65,6 +61,12 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	}
 	if mission.Policies != nil {
 		response.Policies = &models.MissionPoliciesResponse{}
+		if mission.Policies.Continuation != nil {
+			response.Policies.Continuation = &models.MissionContinuationPolicyResponse{
+				AggregateResults: slices.Clone(mission.Policies.Continuation.AggregateResults),
+				ModelReview:      slices.Clone(mission.Policies.Continuation.ModelReview),
+			}
+		}
 		if mission.Policies.Placement != nil {
 			response.Policies.Placement = &models.MissionPlacementPolicyResponse{SameAgent: slices.Clone(mission.Policies.Placement.SameAgent)}
 		}
@@ -81,16 +83,6 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	}
 	if mission.Completion != nil {
 		response.Completion = &models.MissionCompletionPolicyResponse{DecisionBy: string(mission.Completion.DecisionBy)}
-	}
-	if mission.Rules != nil {
-		response.Rules = make(map[string]models.MissionRuleResponse, len(mission.Rules))
-		for name, rule := range mission.Rules {
-			mapped := models.MissionRuleResponse{ForActions: slices.Clone(rule.ForActions)}
-			if rule.Params != nil {
-				mapped.Params = &models.MissionRuleParamsResponse{DecisionBy: string(rule.Params.DecisionBy)}
-			}
-			response.Rules[string(name)] = mapped
-		}
 	}
 	return response
 }

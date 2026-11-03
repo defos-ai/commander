@@ -5,7 +5,6 @@ import "encoding/json"
 type CreateMissionRequest struct {
 	Policies          *MissionPoliciesRequest         `json:"policies,omitempty"`
 	Completion        *MissionCompletionPolicyRequest `json:"completion,omitempty"`
-	Rules             map[string]MissionRuleRequest   `json:"rules,omitempty"`
 	Name              string                          `json:"name"`
 	Objectives        []string                        `json:"objectives"`
 	ActionDefinitions []ActionDefinitionRequest       `json:"action_definitions,omitempty"`
@@ -17,8 +16,14 @@ type CreateMissionRequest struct {
 }
 
 type MissionPoliciesRequest struct {
-	Placement *MissionPlacementPolicyRequest `json:"placement,omitempty"`
-	Sharing   []MissionSharingPolicyRequest  `json:"sharing,omitempty"`
+	Continuation *MissionContinuationPolicyRequest `json:"continuation,omitempty"`
+	Placement    *MissionPlacementPolicyRequest    `json:"placement,omitempty"`
+	Sharing      []MissionSharingPolicyRequest     `json:"sharing,omitempty"`
+}
+
+type MissionContinuationPolicyRequest struct {
+	AggregateResults []string `json:"aggregate_results,omitempty"`
+	ModelReview      []string `json:"model_review,omitempty"`
 }
 
 type MissionPlacementPolicyRequest struct {
@@ -35,19 +40,9 @@ type MissionCompletionPolicyRequest struct {
 	DecisionBy string `json:"decision_by"`
 }
 
-type MissionRuleRequest struct {
-	ForActions []string                  `json:"for_actions"`
-	Params     *MissionRuleParamsRequest `json:"params,omitempty"`
-}
-
-type MissionRuleParamsRequest struct {
-	DecisionBy string `json:"decision_by,omitempty"`
-}
-
 type MissionResponse struct {
 	Policies          *MissionPoliciesResponse         `json:"policies,omitempty"`
 	Completion        *MissionCompletionPolicyResponse `json:"completion,omitempty"`
-	Rules             map[string]MissionRuleResponse   `json:"rules,omitempty"`
 	Name              string                           `json:"name"`
 	Objectives        []string                         `json:"objectives"`
 	ActionDefinitions []ActionDefinitionResponse       `json:"action_definitions,omitempty"`
@@ -59,8 +54,14 @@ type MissionResponse struct {
 }
 
 type MissionPoliciesResponse struct {
-	Placement *MissionPlacementPolicyResponse `json:"placement,omitempty"`
-	Sharing   []MissionSharingPolicyResponse  `json:"sharing,omitempty"`
+	Continuation *MissionContinuationPolicyResponse `json:"continuation,omitempty"`
+	Placement    *MissionPlacementPolicyResponse    `json:"placement,omitempty"`
+	Sharing      []MissionSharingPolicyResponse     `json:"sharing,omitempty"`
+}
+
+type MissionContinuationPolicyResponse struct {
+	AggregateResults []string `json:"aggregate_results,omitempty"`
+	ModelReview      []string `json:"model_review,omitempty"`
 }
 
 type MissionPlacementPolicyResponse struct {
@@ -75,13 +76,4 @@ type MissionSharingPolicyResponse struct {
 
 type MissionCompletionPolicyResponse struct {
 	DecisionBy string `json:"decision_by"`
-}
-
-type MissionRuleResponse struct {
-	ForActions []string                   `json:"for_actions"`
-	Params     *MissionRuleParamsResponse `json:"params,omitempty"`
-}
-
-type MissionRuleParamsResponse struct {
-	DecisionBy string `json:"decision_by,omitempty"`
 }

@@ -190,7 +190,7 @@ function Question({ question, onAnswer, active }: { question: OperationQuestion;
 
 function Affinity({ affinity }: { affinity: OperationAffinity }) {
   const { t } = useTranslation();
-  return <section className="catalog-section"><h2>{t($ => $.missionRules.sameAgent)}</h2>
+  return <section className="catalog-section"><h2>{t($ => $.missionPolicies.sameAgent)}</h2>
     {affinity.error ? <p className="notice" role="alert">{affinity.error}</p> : <>
       <p className="catalog-muted">{t($ => $.operations.affinityDescription)}</p>
       {affinity.agent_id ? <dl className="detail-list">

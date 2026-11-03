@@ -14,7 +14,6 @@ import (
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
@@ -34,10 +33,9 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Mission.OptionalActions = []string{"publish"}
 	original.Mission.ActionDefinitions = []actions.Definition{fixtures.ActionDefinition()}
 	original.Mission.RequiredActions = append(original.Mission.RequiredActions, "discover")
-	original.Mission.Rules = missions.RuleSet{
-		missions.AggregateResults:  {ForActions: []string{"discover"}},
-		missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
-	}
+	original.Mission.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+		AggregateResults: []string{"discover"}, ModelReview: []string{"inspect"},
+	}}
 	task := operations.NewTask(original.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
 	original.Tasks = []operations.Task{task}
 	question := fixtures.Question("")
@@ -56,8 +54,8 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Mission.ActionDefinitions[0].OutputSchema[0] = '!'
 	original.Tasks[0].Input[0] = '!'
 	original.Questions[0].Options[0] = "changed"
-	original.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
-	original.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
+	original.Mission.Policies.Continuation.AggregateResults[0] = "changed"
+	original.Mission.Policies.Continuation.ModelReview[0] = "changed"
 	got := fixtures.ReadOperation(t, catalog, expected.ID)
 	assertOperationEqual(t, got, expected)
 	if !got.CreatedAt.Equal(expected.CreatedAt) || !got.Questions[0].FallbackAt.Equal(question.FallbackAt) {
@@ -70,8 +68,8 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	got.Mission.ActionDefinitions[0].RequiredSecrets[0] = "CHANGED"
 	got.Mission.ActionDefinitions[0].InputSchema[0] = '!'
 	got.Mission.ActionDefinitions[0].OutputSchema[0] = '!'
-	got.Mission.Rules[missions.AggregateResults].ForActions[0] = "changed"
-	got.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
+	got.Mission.Policies.Continuation.AggregateResults[0] = "changed"
+	got.Mission.Policies.Continuation.ModelReview[0] = "changed"
 	got.Questions[0].Options[0] = "changed"
 	assertOperationEqual(t, fixtures.ReadOperation(t, catalog, expected.ID), expected)
 	other := fixtures.Operation()
@@ -247,7 +245,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 	first, _ := fixtures.OpenOperations(t)
 	second, _ := fixtures.OpenOperations(t)
 	op := fixtures.Operation()
-	op.Mission.Rules = missions.RuleSet{missions.AggregateResults: {ForActions: []string{"discover"}}}
+	op.Mission.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{AggregateResults: []string{"discover"}}}
 	op = fixtures.CreateOperation(t, first, op)
 	parent := fixtures.QueueAndDispatch(t, first, op.ID, "discover")
 	result := fixtures.SuccessfulTask(parent)
@@ -291,7 +289,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 		}
 	}
 	settled := fixtures.ReadOperation(t, first, op.ID)
-	assertOperationEqual(t, settled.Mission.Rules, op.Mission.Rules)
+	assertOperationEqual(t, settled.Mission.Policies, op.Mission.Policies)
 	decision := settled.Tasks[0].Continuation
 	if decision.DecisionBy != operations.DecisionModel || decision.Status != operations.ContinuationPending || countOperationEvents(settled, operations.ContinuationReady) != 1 || countOperationEvents(settled, operations.TaskFinished) != 3 {
 		t.Fatalf("last child did not settle group exactly once: %+v", settled)

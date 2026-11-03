@@ -19,10 +19,9 @@ func CreateResultOperation(t *testing.T, store *operationfs.OperationFsStore) (o
 	operationID, taskID := id.OperationID(), id.TaskID()
 	op := operations.Operation{
 		ID: operationID, Status: operations.Running, CreatedAt: created, UpdatedAt: created,
-		Mission: missions.Mission{Rules: missions.RuleSet{
-			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"inspect"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
-		}},
+		Mission: missions.Mission{Policies: &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"}, ModelReview: []string{"inspect"},
+		}}},
 		Preflight: &operations.Preflight{Ready: true, Version: 2},
 		Tasks: []operations.Task{{ID: taskID, OperationID: operationID, CommandID: taskID,
 			AgentID: "review-agent-00000001", ActionName: "discover",

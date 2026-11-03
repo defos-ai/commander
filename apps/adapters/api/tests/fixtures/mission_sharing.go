@@ -13,7 +13,7 @@ func SharingMission() models.CreateMissionRequest {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &models.MissionPoliciesRequest{Placement: &models.MissionPlacementPolicyRequest{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: []models.MissionSharingPolicyRequest{{
+		Policies: &models.MissionPoliciesRequest{Continuation: &models.MissionContinuationPolicyRequest{AggregateResults: []string{"find-vulnerabilities"}, ModelReview: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Placement: &models.MissionPlacementPolicyRequest{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: []models.MissionSharingPolicyRequest{{
 			FromActions: []string{"find-vulnerabilities"},
 			ToActions:   []string{"analyze-vulnerabilities"},
 			Include:     []string{"results", "artifacts", "decisions"},
@@ -64,5 +64,20 @@ func InvalidPlacementPolicies() []any {
 		Object{"same_agent": "find-vulnerabilities"},
 		Object{"for_actions": []string{"find-vulnerabilities"}},
 		Object{"same_agent": []string{"find-vulnerabilities"}, "fallback": true},
+	}
+}
+
+func InvalidContinuationPolicies() []any {
+	return []any{
+		Object{"aggregate_results": []string{"find-vulnerabilities", "find-vulnerabilities"}},
+		Object{"aggregate_results": []string{" find-vulnerabilities"}},
+		Object{"aggregate_results": []string{""}},
+		Object{"aggregate_results": "find-vulnerabilities"},
+		Object{"model_review": []string{"analyze-vulnerabilities", "analyze-vulnerabilities"}},
+		Object{"model_review": []string{"analyze-vulnerabilities "}},
+		Object{"model_review": []string{""}},
+		Object{"model_review": "analyze-vulnerabilities"},
+		Object{"aggregate_results": []string{"find-vulnerabilities"}, "decision_by": "model"},
+		Object{"for_actions": []string{"find-vulnerabilities"}},
 	}
 }

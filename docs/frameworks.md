@@ -11,7 +11,7 @@ through shared missions, operator decisions, execution records and artifacts.
    The wrapper invokes your existing agent through its process or service API.
 2. Map progress, questions and results to Commander's logs, execution questions
    and artifacts. Supply managed credentials only to the runtime that needs them.
-3. Register the wrapper with the controller. Mission rules and model or operator
+3. Register the wrapper with the controller. Mission policies and model or operator
    decisions coordinate its actions alongside other agents.
 
 The existing framework retains its internal workflow state and recovery behavior.

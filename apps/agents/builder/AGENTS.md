@@ -59,9 +59,9 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   another POST for that execution. Reconcile by request ID or inspect GitHub.
   Never automatically retry failed CI or create replacement release tasks.
   Status checks carry `workflow_run_id`, read the same run, and propose another
-  check after a bounded wait. They stay outside the mission's model-decision
-  rule so pending checks continue automatically. Empty terminal proposals return
-  to model review. Verify run identity/version, published stable release, exact
+  check after a bounded wait. Keep these checks outside
+  `policies.continuation.model_review` so they continue automatically. Empty
+  terminal proposals return to model review. Verify run identity/version, published stable release, exact
   tag commit, bounded manifest, all six uploaded native asset SHA-256 digests
   and expected digest-pinned image metadata before returning a package reference.
   Do not pull images, download every binary, change visibility or install here.

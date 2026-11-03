@@ -27,7 +27,7 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
   const advanced = [
     { field: 'input_schema', label: t($ => $.missions.builder.inputSchema) },
     { field: 'output_schema', label: t($ => $.missions.builder.outputSchema) },
-    { field: 'rules', label: t($ => $.missions.builder.rules) },
+    { field: 'policies', label: t($ => $.missions.builder.policies) },
     { field: 'action_definitions', label: t($ => $.missions.builder.actionDefinitions) },
   ] as const;
 

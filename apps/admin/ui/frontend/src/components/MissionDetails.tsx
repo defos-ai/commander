@@ -1,7 +1,7 @@
 import type { Mission } from '../api/types';
 import { useTranslation } from '../i18n';
 import { SchemaDetails } from './SchemaDetails';
-import { MissionRules } from './MissionRules';
+import { MissionContinuation } from './MissionContinuation';
 import '../styles/catalog.css';
 
 function ActionNames({ names }: { names: string[] | null | undefined }) {
@@ -27,11 +27,11 @@ export function MissionDetails({ mission }: { mission: Mission }) {
     </div>
     {Boolean(mission.optional_actions?.length) && <section className="mission-section"><h2>{t($ => $.missions.optionalActions)}</h2><ActionNames names={mission.optional_actions} /></section>}
     {Boolean(mission.policies?.placement?.same_agent?.length) && <section className="mission-section"><h2>{t($ => $.missions.sameAgentActions)}</h2>
-      <p className="mission-muted">{t($ => $.missionRules.sameAgentSetting)}</p>
+      <p className="mission-muted">{t($ => $.missionPolicies.sameAgentSetting)}</p>
       <ActionNames names={mission.policies?.placement?.same_agent} />
     </section>}
-    <section className="mission-section"><h2>{t($ => $.missions.rules)}</h2>
-      <MissionRules rules={mission.rules} />
+    <section className="mission-section"><h2>{t($ => $.missionPolicies.continuation)}</h2>
+      <MissionContinuation policy={mission.policies?.continuation} />
     </section>
     <SchemaDetails schema={mission.input_schema} direction="input" />
     <SchemaDetails schema={mission.output_schema} direction="output" />

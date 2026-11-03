@@ -16,11 +16,10 @@ export const mission: Mission = {
     properties: { url: { type: 'string', description: 'Website to review' }, max_pages: { type: 'integer', default: 3 } },
   },
   output_schema: { type: 'object', properties: { summary: { type: 'string' } } },
-  rules: {
-    'aggregate-results': { for_actions: ['discover-pages'] },
-    'decide-next-actions': { for_actions: ['check-links', 'capture-page'], params: { decision_by: 'model' } },
+  policies: {
+    placement: { same_agent: ['discover-pages', 'check-links'] },
+    continuation: { aggregate_results: ['discover-pages'], model_review: ['check-links', 'capture-page'] },
   },
-  policies: { placement: { same_agent: ['discover-pages', 'check-links'] } },
 };
 
 export const otherMission: Mission = { ...mission, name: 'review-service', objectives: ['Check service availability.'] };

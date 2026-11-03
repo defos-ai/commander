@@ -1,7 +1,7 @@
 # Controllers
 
 The controller coordinates long-running missions across distributed agents,
-applies saved rules to follow-up work, and retains progress and results for
+applies saved policies to follow-up work, and retains progress and results for
 operational review. Use Admin's **Controllers** page to check its health.
 
 ## Quick start
@@ -51,7 +51,7 @@ an empty ID to defer work. [Task affinity](../../docs/abstractions.md#task-affin
 still applies.
 
 Report its `Name()` in `controller.RegistrationConfig.AgentSelector` so Admin
-displays it. Mission rules come directly from the saved definition and remain
+displays it. Mission policies come directly from the saved definition and remain
 fixed for each operation. See [AGENTS.md](AGENTS.md)
 for lifecycle and scheduling constraints.
 

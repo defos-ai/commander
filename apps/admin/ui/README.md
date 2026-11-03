@@ -79,7 +79,7 @@ explicitly, then review and approve it.
    actions to guide the first assignments.
 4. Choose **Define action** for a capability to build later. Add its input/output
    object schemas and required secret names.
-5. Use **Advanced settings** for rules and schemas, or **JSON** for
+5. Use **Advanced settings** for policies and schemas, or **JSON** for
    the full definition. Save to open the new mission.
 
 Actions can be installed later; saving does not start work. Keep secret values

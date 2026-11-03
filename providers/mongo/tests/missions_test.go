@@ -24,17 +24,16 @@ func TestMissionMongoStore(t *testing.T) {
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
-		Policies: &policies.MissionPolicies{Placement: &policies.PlacementPolicy{
-			SameAgent: []string{"discover", "check"},
-		}},
+		Policies: &policies.MissionPolicies{
+			Placement: &policies.PlacementPolicy{SameAgent: []string{"discover", "check"}},
+			Continuation: &policies.ContinuationPolicy{
+				AggregateResults: []string{"discover"}, ModelReview: []string{"check"},
+			},
+		},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		ActionDefinitions: []actions.Definition{fixtures.ActionDefinition()},
-		Rules: missions.RuleSet{
-			missions.AggregateResults:  {ForActions: []string{"discover"}},
-			missions.DecideNextActions: {ForActions: []string{"check"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
-		},
-		InputSchema:  json.RawMessage(`{"type":"object","x-example":9007199254740993,"properties":{"url":{"type":"string"}}}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}}}`),
+		InputSchema:       json.RawMessage(`{"type":"object","x-example":9007199254740993,"properties":{"url":{"type":"string"}}}`),
+		OutputSchema:      json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}}}`),
 	}
 	other := original.Clone()
 	other.Name = "beta"
@@ -74,6 +73,14 @@ func TestMissionMongoStore(t *testing.T) {
 	if err != nil || len(placement) != 2 || placement[0].StringValue() != "discover" || placement[1].StringValue() != "check" {
 		t.Fatalf("provider changed the placement policy or its stored field names: %v, %v", placement, err)
 	}
+	aggregation, err := document.Lookup("policies", "continuation", "aggregate_results").Array().Values()
+	if err != nil || len(aggregation) != 1 || aggregation[0].StringValue() != "discover" {
+		t.Fatalf("provider changed the aggregation policy or its stored field names: %v, %v", aggregation, err)
+	}
+	review, err := document.Lookup("policies", "continuation", "model_review").Array().Values()
+	if err != nil || len(review) != 1 || review[0].StringValue() != "check" {
+		t.Fatalf("provider changed the model-review policy or its stored field names: %v, %v", review, err)
+	}
 	definitions, err := document.Lookup("action_definitions").Array().Values()
 	if err != nil || len(definitions) != 1 {
 		t.Fatalf("stored action definitions: %v, %v", definitions, err)
@@ -98,8 +105,8 @@ func TestMissionMongoStore(t *testing.T) {
 	stored.ActionDefinitions[0].InputSchema[0] = '!'
 	stored.ActionDefinitions[0].OutputSchema[0] = '!'
 	stored.InputSchema[0] = '!'
-	stored.Rules[missions.AggregateResults].ForActions[0] = "modified by reader"
-	stored.Rules[missions.DecideNextActions].Params.DecisionBy = "modified by reader"
+	stored.Policies.Continuation.AggregateResults[0] = "modified by reader"
+	stored.Policies.Continuation.ModelReview[0] = "modified by reader"
 	unchanged, err := catalog.Get(ctx, original.Name)
 	if err != nil || !reflect.DeepEqual(unchanged, original) {
 		t.Fatalf("caller changed persisted mission: %#v, error = %v", unchanged, err)
@@ -118,7 +125,7 @@ func TestMissionMongoStore(t *testing.T) {
 
 	updated := original.Clone()
 	updated.Objectives = []string{"Review before release"}
-	updated.OptionalActions, updated.Rules = nil, nil
+	updated.OptionalActions = nil
 	updated.ActionDefinitions = nil
 	updated.Completion = nil
 	updated.Policies = nil
@@ -144,7 +151,9 @@ func TestMissionMongoStore(t *testing.T) {
 	invalidCompletion.Completion = &policies.CompletionPolicy{DecisionBy: "unknown"}
 	invalidPlacement := updated.Clone()
 	invalidPlacement.Policies = &policies.MissionPolicies{Placement: &policies.PlacementPolicy{SameAgent: []string{"discover", "discover"}}}
-	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidPlacement} {
+	invalidContinuation := updated.Clone()
+	invalidContinuation.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{ModelReview: []string{"check", "check"}}}
+	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidPlacement, invalidContinuation} {
 		if err := catalog.Upsert(ctx, invalid); err == nil {
 			t.Fatal("invalid mission replaced a valid one")
 		}
@@ -170,6 +179,24 @@ func TestMissionMongoStore(t *testing.T) {
 	items, err = catalog.List(ctx)
 	if err != nil || len(items) != 2 || !reflect.DeepEqual(items[1], other) {
 		t.Fatalf("upsert overwrote unrelated missions: %#v, error = %v", items, err)
+	}
+	for _, unsupported := range []any{bson.M{"decide-next-actions": bson.M{"for_actions": []string{"check"}}}, bson.M{}, nil} {
+		if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$set": bson.M{"rules": unsupported}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := catalog.Get(ctx, updated.Name); err == nil {
+			t.Fatal("stored rules were silently ignored when reading a mission")
+		}
+		if _, err := catalog.List(ctx); err == nil {
+			t.Fatal("stored rules were silently ignored when listing missions")
+		}
+	}
+	if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$unset": bson.M{"rules": ""}}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = catalog.Get(ctx, updated.Name)
+	if err != nil || !reflect.DeepEqual(stored, updated) {
+		t.Fatalf("rejecting old rules changed the saved mission: %#v, error = %v", stored, err)
 	}
 }
 

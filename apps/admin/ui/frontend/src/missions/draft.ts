@@ -1,4 +1,5 @@
 import { formatJSON } from './format';
+import { isMissionPolicies } from './policies';
 
 export const initialMissionDefinition = JSON.stringify({
   name: '',
@@ -18,7 +19,7 @@ export type MissionDraft = {
   starting_actions: string[];
   input_schema: string;
   output_schema: string;
-  rules: string;
+  policies: string;
   action_definitions: string;
 };
 
@@ -93,13 +94,14 @@ function strings(value: unknown, nullable = false): value is string[] | undefine
 
 export function readMissionDraft(source: string): MissionDraft {
   const { value, fields } = document(source);
-  if ('steps' in value || typeof value.name !== 'string' || !strings(value.objectives) || !value.objectives?.length
+  if ('steps' in value || 'rules' in value || typeof value.name !== 'string' || !strings(value.objectives) || !value.objectives?.length
     || !strings(value.required_actions, true) || !strings(value.optional_actions, true) || !strings(value.starting_actions, true)) {
     throw new TypeError('Mission form fields have invalid types');
   }
-  for (const field of ['input_schema', 'output_schema', 'rules']) {
+  for (const field of ['input_schema', 'output_schema']) {
     if (value[field] != null && !object(value[field])) throw new TypeError('Mission object field has an invalid type');
   }
+  if (!isMissionPolicies(value.policies)) throw new TypeError('Mission policies have invalid fields');
   if (value.action_definitions != null && !Array.isArray(value.action_definitions)) {
     throw new TypeError('Mission action definitions must be a list');
   }
@@ -121,7 +123,7 @@ export function readMissionDraft(source: string): MissionDraft {
     starting_actions: value.starting_actions ?? [],
     input_schema: raw('input_schema', '{}'),
     output_schema: raw('output_schema', '{}'),
-    rules: raw('rules', '{}'),
+    policies: raw('policies', '{}'),
     action_definitions: raw('action_definitions', '[]'),
   };
 }
@@ -143,7 +145,7 @@ export function writeMissionDraft(source: string, draft: MissionDraft): string {
     const jsonValue = JSON.stringify(draft[field]);
     if (JSON.stringify(previous[field]) !== jsonValue) result = updateMissionDefinition(result, field, jsonValue);
   }
-  for (const field of ['input_schema', 'output_schema', 'rules', 'action_definitions'] as const) {
+  for (const field of ['input_schema', 'output_schema', 'policies', 'action_definitions'] as const) {
     JSON.parse(draft[field]);
     if (formatJSON(previous[field]) !== formatJSON(draft[field])) result = updateMissionDefinition(result, field, draft[field]);
   }

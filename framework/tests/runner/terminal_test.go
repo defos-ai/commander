@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
@@ -152,9 +153,9 @@ func TestUncertainCompletionRetainsReportThroughRecovery(t *testing.T) {
 func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 	config := fixtures.Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.AggregateResults: {ForActions: []string{"discover"}},
-		}
+		m.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"},
+		}}
 	})
 	failure := errors.New("directory sync failed")
 	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterFail: func(operations.Operation) error {

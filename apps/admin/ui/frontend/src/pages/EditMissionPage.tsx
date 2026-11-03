@@ -171,7 +171,7 @@ function formattedDraft(source: string): MissionDraft {
     ...draft,
     input_schema: formatJSON(draft.input_schema),
     output_schema: formatJSON(draft.output_schema),
-    rules: formatJSON(draft.rules),
+    policies: formatJSON(draft.policies),
     action_definitions: formatJSON(draft.action_definitions),
   };
 }

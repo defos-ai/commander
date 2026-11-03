@@ -88,7 +88,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
 	query := queries.Operations{Store: config.OperationStore, Agents: config.AgentStore, Reports: config.ReportStore, Executions: config.ExecutionStore}
 	addLogTools(server, query)
-	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, rules and schemas before starting it.", emptySchema,
+	addTool(server, "list_missions", "List mission names and objectives. Use describe_mission for the selected mission's actions, policies and schemas before starting it.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Missions []missionListItem `json:"missions"`
 		}, error) {
@@ -101,11 +101,11 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, policies, rules and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; rules group results or request model review. policies.placement.same_agent keeps its action names on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, policies and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; policies.continuation.aggregate_results groups direct child results; policies.continuation.model_review requests model review. policies.placement.same_agent keeps its action names on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
-	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions, policies and rules. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
+	addTool(server, "create_mission", "Create a reusable mission from its full definition: name, objectives, input_schema, output_schema and optional action lists, action_definitions, policies. Objectives are an ordered, nonempty array of nonblank strings. Desired action definitions are metadata, not installed capabilities or readiness evidence. Uses shared mission validation; actions need not be installed. Returns the created definition. Existing names, including identical definitions, return a tool error and are never replaced. Requires no running controller and does not start work or install agents. Creation has a 10-second deadline and is not retried; after an uncertain failure, read describe_mission by name before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -123,7 +123,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				return missions.Mission{}, errors.New("mission creation failed; read describe_mission before retrying")
 			}
 		})
-	addTool(server, "update_mission", "Update an existing reusable mission using its complete definition. First read describe_mission; preserve its exact name and all fields that should remain. The name identifies the existing mission and cannot be renamed; unknown names return a tool error without creating anything. Objectives, required/optional/starting actions, action_definitions, policies, rules and schemas can change. Uses the same shared validation as creation. Returns the updated definition. Existing operations retain their original mission snapshot; future operations use the update. Concurrent edits are last-write-wins. Requires no running controller, does not start work or install agents, has a 10-second deadline and is never retried automatically. After an uncertain failure, read describe_mission before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
+	addTool(server, "update_mission", "Update an existing reusable mission using its complete definition. First read describe_mission; preserve its exact name and all fields that should remain. The name identifies the existing mission and cannot be renamed; unknown names return a tool error without creating anything. Objectives, required/optional/starting actions, action_definitions, policies and schemas can change. Uses the same shared validation as creation. Returns the updated definition. Existing operations retain their original mission snapshot; future operations use the update. Concurrent edits are last-write-wins. Requires no running controller, does not start work or install agents, has a 10-second deadline and is never retried automatically. After an uncertain failure, read describe_mission before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
@@ -290,13 +290,6 @@ func missionDefinitionSchema() string {
 		"input_schema":  actionSchema,
 		"output_schema": actionSchema,
 	}, "name", "input_schema", "output_schema")
-	rule := objectSchema(map[string]any{
-		"for_actions": map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
-		"params": map[string]any{
-			"type": []string{"object", "null"}, "additionalProperties": false,
-			"properties": map[string]any{"decision_by": map[string]any{"type": []string{"string", "null"}, "enum": []any{nil, "", "model"}}},
-		},
-	}, "for_actions")
 	sharing := objectSchema(map[string]any{
 		"from_actions": map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
 		"to_actions":   map[string]any{"type": "array", "minItems": 1, "items": actionName, "uniqueItems": true},
@@ -313,6 +306,11 @@ func missionDefinitionSchema() string {
 		"policies": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": false,
 			"properties": map[string]any{
+				"continuation": map[string]any{
+					"type": []string{"object", "null"}, "additionalProperties": false,
+					"properties":  map[string]any{"aggregate_results": actionNames, "model_review": actionNames},
+					"description": "Optional independent action-name lists. aggregate_results groups direct child results; model_review requires review of valid proposals instead of automatic continuation. Lists may overlap. Omitted, null or empty fields disable each override; failures and empty proposals still require review.",
+				},
 				"placement": map[string]any{
 					"type": []string{"object", "null"}, "additionalProperties": false,
 					"properties":  map[string]any{"same_agent": actionNames},
@@ -323,7 +321,7 @@ func missionDefinitionSchema() string {
 					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded.",
 				},
 			},
-			"description": "Optional placement and sharing policies. Completion and continuation rules remain at the mission root. An empty object declares no policy overrides.",
+			"description": "Optional placement, continuation and sharing policies. Completion remains at the mission root. An empty object declares no policy overrides.",
 		},
 		"completion": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": false,
@@ -346,11 +344,7 @@ func missionDefinitionSchema() string {
 			"type": []string{"array", "null"}, "items": actionName, "uniqueItems": true,
 			"description": "Initial action guidance. Each name must appear in required_actions; saving a definition does not queue tasks.",
 		},
-		"rules": map[string]any{
-			"type": []string{"object", "null"}, "additionalProperties": json.RawMessage(rule),
-			"propertyNames": map[string]any{"enum": []string{"aggregate-results", "decide-next-actions"}},
-			"description":   "Mission rules. decide-next-actions requires params.decision_by=model. Other rules reject a nonempty decision_by. Shared validation checks rule and action-list constraints.",
-		},
+
 		"input_schema":  map[string]any{"type": "object", "description": "Locally resolvable JSON Schema for mission input; {} allows any value. External references are rejected."},
 		"output_schema": map[string]any{"type": "object", "description": "Locally resolvable JSON Schema for mission output; {} allows any value. External references are rejected."},
 	}, "name", "objectives", "input_schema", "output_schema")

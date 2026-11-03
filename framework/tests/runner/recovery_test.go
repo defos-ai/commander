@@ -14,6 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
@@ -297,9 +298,9 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.T) {
 	config := fixtures.Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.AggregateResults: {ForActions: []string{"discover"}},
-		}
+		m.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"},
+		}}
 	})
 	failure := errors.New("directory sync failed")
 	var failed atomic.Bool
@@ -361,6 +362,10 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 		}
 		savedChildren[child.ID] = child
 	}
+	expectedPolicies := stored.Mission.Policies.Clone()
+	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
+		m.Policies.Continuation = nil
+	})
 
 	restarted := fixtures.NewRunner(t, config, exec)
 	for range 2 {
@@ -383,6 +388,9 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 	}
 	if gotParent.Continuation == nil || !reflect.DeepEqual(gotParent.Continuation.CreatedTaskIDs, savedParent.Continuation.CreatedTaskIDs) {
 		t.Fatalf("recovery replaced the saved automatic children: %+v", gotParent.Continuation)
+	}
+	if !reflect.DeepEqual(settled.Mission.Policies, &expectedPolicies) || gotParent.Continuation.DecisionBy != operations.DecisionModel || gotParent.Continuation.Status != operations.ContinuationPending || continuationDecisionCount(settled) != 1 {
+		t.Fatalf("catalog edits changed the recovered aggregation policy or group decision: %+v", settled)
 	}
 	finished := 0
 	for _, event := range settled.Events {
