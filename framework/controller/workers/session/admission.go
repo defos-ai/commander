@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"slices"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
@@ -12,7 +13,8 @@ import (
 
 // Normalize uses mission contracts and the durable catalog only at acceptance.
 // Once saved, task intent is never reinterpreted from a later registration.
-func (w *Worker) Normalize(ctx context.Context, next []actions.NextAction, records []agents.Agent, definitions []actions.Definition) ([]actions.NextAction, error) {
+func (w *Worker) Normalize(ctx context.Context, op operations.Operation, next []actions.NextAction, records []agents.Agent) ([]actions.NextAction, error) {
+	definitions := op.Mission.ActionDefinitions
 	known := make(map[string]bool)
 	for _, definition := range definitions {
 		known[definition.Name] = true
@@ -26,22 +28,45 @@ func (w *Worker) Normalize(ctx context.Context, next []actions.NextAction, recor
 	for _, proposal := range next {
 		needsCatalog = needsCatalog || !known[proposal.ActionName]
 	}
-	if !needsCatalog {
-		return runtimeSessions.Normalize(next, records, definitions...), nil
-	}
-	catalog, err := w.actions.List(ctx)
-	if err != nil {
-		return nil, err
-	}
 	fallback := append([]actions.Definition(nil), definitions...)
-	for _, definition := range catalog {
-		// Live announcements and explicit mission contracts supersede an older
-		// last-writer catalog entry. Conflicting live contracts still block.
-		if !known[definition.Name] {
-			fallback = append(fallback, definition.Definition())
+	if needsCatalog {
+		catalog, err := w.actions.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, definition := range catalog {
+			// Live announcements and mission contracts supersede learned entries.
+			if !known[definition.Name] {
+				fallback = append(fallback, definition.Definition())
+			}
 		}
 	}
-	return runtimeSessions.Normalize(next, records, fallback...), nil
+	var scopes []model.Scope
+	if hasSessionPolicy(op, next) {
+		// Repair only already accepted claims before resolving another task.
+		if err := w.Observe(ctx, runtimeSessions.Evidence{OperationID: op.ID}); err != nil {
+			return nil, err
+		}
+		var err error
+		scopes, err = w.store.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return runtimeSessions.Normalize(op, next, records, scopes, fallback...)
+}
+
+func hasSessionPolicy(op operations.Operation, next []actions.NextAction) bool {
+	if op.Mission.Policies != nil {
+		for _, policy := range op.Mission.Policies.Session {
+			for _, action := range next {
+				if action.ActionName == policy.CreateAction || slices.Contains(policy.UseActions, action.ActionName) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func creation(task operations.Task) model.ExecutionRef {

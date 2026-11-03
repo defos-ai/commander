@@ -35,6 +35,7 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 			return operations.Task{}, err
 		}
 		normalized := resolved[0]
+		task.Input = normalized.Input
 		task.SessionIntent = normalized.SessionIntent.Clone()
 		if task.SessionIntent != nil && task.SessionIntent.Mode == "create" {
 			task.SessionIntent.ID = task.ID
@@ -94,7 +95,7 @@ func (r *Worker) finishTask(s *operationState, task operations.Task, result acti
 				r.pendingResults = make(map[string]taskResult)
 			}
 			if _, pending := r.pendingResults[task.ID]; !pending {
-				r.logger.Warn("Task result awaiting action contracts", "operation_id", task.OperationID, "task_id", task.ID, "error_type", fmt.Sprintf("%T", err))
+				r.logger.Warn("Task result awaiting admission state", "operation_id", task.OperationID, "task_id", task.ID, "error_type", fmt.Sprintf("%T", err))
 			}
 			r.pendingResults[task.ID] = taskResult{task: task.Clone(), output: result.Clone()}
 			return

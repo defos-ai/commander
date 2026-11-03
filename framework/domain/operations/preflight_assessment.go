@@ -61,7 +61,10 @@ func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]se
 			if index < 0 {
 				continue
 			}
-			candidate := AssessAgentAction(record, record.Actions[index])
+			candidate := AgentReadiness{AgentID: record.ID, AgentType: string(record.Type), Reason: "Agent does not provide the session policy's consumer contracts"}
+			if o.SessionPolicyCompatible(Task{ActionName: name}, record) {
+				candidate = AssessAgentAction(record, record.Actions[index])
+			}
 			if candidate.Reason == "" {
 				readiness.ReadyAgentIDs = append(readiness.ReadyAgentIDs, record.ID)
 			} else {

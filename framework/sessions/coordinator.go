@@ -10,7 +10,7 @@ import (
 )
 
 type Coordinator interface {
-	Normalize(context.Context, []actions.NextAction, []agents.Agent, []actions.Definition) ([]actions.NextAction, error)
+	Normalize(context.Context, operations.Operation, []actions.NextAction, []agents.Agent) ([]actions.NextAction, error)
 	CheckAdmission(context.Context, operations.Task) error
 	ScopeRecords(context.Context) ([]model.Scope, error)
 	Prepare(context.Context, Assignment) (PreparedDispatch, error)

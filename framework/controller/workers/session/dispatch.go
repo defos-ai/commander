@@ -54,7 +54,7 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 	}
 	available := false
 	for _, record := range records {
-		if record.ID == a.Candidate && !record.Stale {
+		if record.ID == a.Candidate && !record.Stale && op.SessionPolicyCompatible(task, record) {
 			for _, definition := range record.Actions {
 				if definition.Name == task.ActionName && operations.AssessAgentAction(record, definition).Reason == "" {
 					available = task.MatchesSessionMode(definition.SessionMode)

@@ -96,6 +96,28 @@ func (t Task) MatchesSessionMode(mode string) bool {
 	}
 	return mode == "create"
 }
+
+func (o Operation) SessionPolicyCompatible(task Task, record agents.Agent) bool {
+	if o.Mission.Policies == nil {
+		return true
+	}
+	for _, policy := range o.Mission.Policies.Session {
+		if policy.CreateAction != task.ActionName {
+			continue
+		}
+		// Consumer readiness is checked separately; creation only needs the contracts.
+		for _, name := range policy.UseActions {
+			if !slices.ContainsFunc(record.Actions, func(a actions.Action) bool {
+				return a.Name == name && a.SessionMode == string(sessions.Use)
+			}) {
+				return false
+			}
+		}
+		return true
+	}
+	return true
+}
+
 func sessionConstraint(task Task, scopes []sessions.Scope, check bool) (string, error) {
 	intent := task.SessionIntent
 	if intent == nil {

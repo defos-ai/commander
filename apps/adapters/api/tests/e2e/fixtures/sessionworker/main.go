@@ -47,9 +47,13 @@ func run() error {
 	owner := os.Getenv("FIXTURE_AGENT_ID")
 	resources := sessionworkerfakes.NewResources(ctx, os.Getenv("FIXTURE_PEER"), os.Getenv("FIXTURE_SESSION_STATE"))
 	var executors []action.Executor
-	for _, name := range []string{"propose-connections", "connect-resource", "propose-work"} {
+	creationActions := []string{"propose-connections", "connect-resource", "propose-work"}
+	if os.Getenv("FIXTURE_POLICY_ACTIONS") == "true" {
+		creationActions = append(creationActions, "connect-secondary")
+	}
+	for _, name := range creationActions {
 		mode := ""
-		if name == "connect-resource" {
+		if name == "connect-resource" || name == "connect-secondary" {
 			mode = "create"
 		}
 		inputSchema := json.RawMessage(`{"type":"object","required":["session_scope"],"properties":{"session_scope":{"type":"string"}}}`)
@@ -76,21 +80,30 @@ func run() error {
 	if os.Getenv("FIXTURE_USE_REQUIRES_SECRET") == "true" {
 		secrets = []string{"SESSION_ACCESS"}
 	}
-	use, err := action.NewFunc(action.FuncConfig[useInput, useOutput]{Action: actions.Action{Name: "use-resource", SessionMode: "use", RequiredSecrets: secrets}, Run: func(ctx context.Context, input useInput) (useOutput, error) {
-		binding, ok := action.SessionFromContext(ctx)
-		if !ok {
-			return useOutput{}, errors.New("missing binding")
-		}
-		_, found, err := action.LoadCheckpoint(ctx, "session_setup_intent")
-		if err != nil {
-			return useOutput{}, err
-		}
-		return useOutput{Owner: owner, ID: binding.ID, CreationTask: binding.Creation.TaskID, Isolated: !found}, nil
-	}})
-	if err != nil {
-		return err
+	useActions := []string{"use-resource"}
+	if os.Getenv("FIXTURE_POLICY_ACTIONS") == "true" {
+		useActions = append(useActions, "use-secondary")
 	}
-	executors = append(executors, use)
+	if os.Getenv("FIXTURE_OMIT_USE") == "true" {
+		useActions = nil
+	}
+	for _, name := range useActions {
+		use, err := action.NewFunc(action.FuncConfig[useInput, useOutput]{Action: actions.Action{Name: name, SessionMode: "use", RequiredSecrets: secrets}, Run: func(ctx context.Context, input useInput) (useOutput, error) {
+			binding, ok := action.SessionFromContext(ctx)
+			if !ok {
+				return useOutput{}, errors.New("missing binding")
+			}
+			_, found, err := action.LoadCheckpoint(ctx, "session_setup_intent")
+			if err != nil {
+				return useOutput{}, err
+			}
+			return useOutput{Owner: owner, ID: binding.ID, CreationTask: binding.Creation.TaskID, Isolated: !found}, nil
+		}})
+		if err != nil {
+			return err
+		}
+		executors = append(executors, use)
+	}
 	marker, err := action.NewFunc(action.FuncConfig[map[string]any, map[string]string]{Action: actions.Action{Name: "mark-owner"}, Run: func(ctx context.Context, _ map[string]any) (map[string]string, error) {
 		return map[string]string{"owner": owner}, nil
 	}})
