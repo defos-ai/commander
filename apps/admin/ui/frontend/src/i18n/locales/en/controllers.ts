@@ -1,6 +1,6 @@
 export default {
   title: 'Controllers',
-  description: 'Controller availability, host details and selection policies.',
+  description: 'Controller availability, host details and agent selection.',
   search: 'Search controllers',
   searchPlaceholder: 'Search by ID, type or hostname…',
   count_one: '{{count}} controller',
@@ -47,7 +47,6 @@ export default {
   architecture: 'Architecture',
   version: 'Version',
   agentSelector: 'Agent selector',
-  ruleSelector: 'Rule selector',
   startedAt: 'Started at',
   lastHeartbeat: 'Last heartbeat',
   leaseExpiresAt: 'Lease expires at',

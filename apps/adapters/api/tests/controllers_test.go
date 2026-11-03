@@ -40,7 +40,7 @@ func TestControllersExposeRegisteredStateAndLeaseFreshness(t *testing.T) {
 		if detail.ID != controller.ID || detail.Type == "" {
 			t.Fatalf("controller identity is missing: %+v", detail)
 		}
-		if detail.Version == "" || detail.AgentSelector != "round-robin" || detail.RuleSelector != "mission-rules" {
+		if detail.Version == "" || detail.AgentSelector != "round-robin" {
 			t.Fatalf("controller runtime metadata is missing: %+v", detail)
 		}
 		if detail.Server.Hostname == "" || detail.Server.OS == "" || detail.Server.Arch == "" {
@@ -49,14 +49,14 @@ func TestControllersExposeRegisteredStateAndLeaseFreshness(t *testing.T) {
 		if detail.StartedAt.IsZero() || detail.LastHeartbeat.Before(detail.StartedAt) || detail.LeaseExpiresAt.Before(detail.LastHeartbeat) || detail.Status != "stopped" && detail.LeaseExpiresAt.Equal(detail.LastHeartbeat) {
 			t.Fatalf("controller lifetime or lease is invalid: %+v", detail)
 		}
-		if detail.Type != controller.Type || detail.Server != controller.Server || detail.Version != controller.Version || detail.AgentSelector != controller.AgentSelector || detail.RuleSelector != controller.RuleSelector || !detail.StartedAt.Equal(controller.StartedAt) {
+		if detail.Type != controller.Type || detail.Server != controller.Server || detail.Version != controller.Version || detail.AgentSelector != controller.AgentSelector || !detail.StartedAt.Equal(controller.StartedAt) {
 			t.Fatalf("controller identity changed between list and detail: list=%+v detail=%+v", controller, detail)
 		}
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(result.Body), &fields); err != nil {
 			t.Fatal(err)
 		}
-		for _, name := range []string{"version", "agent_selector", "rule_selector"} {
+		for _, name := range []string{"version", "agent_selector"} {
 			var value string
 			if len(fields[name]) == 0 || string(fields[name]) == "null" || json.Unmarshal(fields[name], &value) != nil {
 				t.Fatalf("controller %s must be a JSON string: %s", name, result.Body)

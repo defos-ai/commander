@@ -64,7 +64,7 @@ func run() error {
 	go func() { commandsDone <- commands.Consume(ctx) }()
 	defer func() { cancel(); _ = commands.Close(); <-commandsDone }()
 	registration := must(controller.Register(ctx, must(fscontrollers.NewControllerFsStore(root)), controller.RegistrationConfig{
-		ID: coordination.ID(), Type: "default", AgentSelector: "round-robin", RuleSelector: "mission",
+		ID: coordination.ID(), Type: "default", AgentSelector: "round-robin",
 	}))
 	defer func() {
 		shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)

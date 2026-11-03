@@ -126,12 +126,10 @@
   retaining binding after completion or loss of registration. Keep it out of
   persisted operation fields; inconsistent history returns an explicit error,
   never an apparently unbound group.
-- [`RuleSelector`](controller/runner/rule_selector.go) selects a complete rule set
-  at operation start, after mission/input validation and before persistence. The
-  default retains mission rules. Validate and clone selection output into the
-  operation's mission snapshot; never reselect on recovery or per-task execution.
-  Selection runs outside the owner loop, may overlap across starts, and must honor
-  cancellation. Errors fail the start without falling back or saving an operation.
+- Operation startup validates the stored mission/input and clones the mission
+  directly into its saved snapshot. Rule behavior belongs to that definition;
+  hosts do not select or override rules. Recovery and task execution use the
+  saved snapshot, independent of later mission edits.
 
 ## Runtime and persistence invariants
 
@@ -303,7 +301,7 @@
   value was saved or a delivery acknowledged.
 - Keep registration ready only after recovery and consumers start. During
   shutdown, await runner and consumer termination before closing registration.
-  Hosts register both selectors' `Name()` values with the same implementations
+  Hosts register the agent selector's `Name()` using the same implementation
   injected into the runner.
 
 ## Agent extension contracts

@@ -47,8 +47,8 @@ applies to all domain packages below this directory.
   requiring membership in mission coverage. Clone every slice independently,
   including when caller-provided lists share a backing array. Aggregation covers
   each execution's saved direct children; model review remains the runtime default
-  for failures and empty proposals. These contracts grant no completion/sharing
-  authority to the selector.
+  for failures and empty proposals. Placement and continuation do not override
+  completion or sharing settings.
 - Operation transitions own tasks, questions, continuations and events together.
   Use [OperationStore](operations/operation_store.go) mutation contracts rather
   than rebuilding a saved operation from a stale caller snapshot.

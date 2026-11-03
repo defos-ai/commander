@@ -3,9 +3,7 @@ package runner_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"reflect"
-	"sync/atomic"
 	"testing"
 
 	"github.com/defos-ai/commander/framework/controller/runner"
@@ -16,12 +14,8 @@ import (
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/runner"
 )
 
-func TestSelectedAffinitySelectsAnAgentSupportingTheWholeGroup(t *testing.T) {
-	config := fixtures.Config()
-	selected := missions.RuleSet{missions.SameAgent: {ForActions: []string{"inspect", "discover"}}}
-	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
-		return selected, nil
-	})
+func TestAffinitySelectsAnAgentSupportingTheWholeGroup(t *testing.T) {
+	config := fixtures.AffinityConfig()
 	partial, complete := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
 	partial.Actions = []actions.Action{
 		{Name: "inspect", Status: actions.Ready},
@@ -31,8 +25,8 @@ func TestSelectedAffinitySelectsAnAgentSupportingTheWholeGroup(t *testing.T) {
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
-	if !reflect.DeepEqual(op.Mission.Rules, selected) || len(config.MissionStore.(*fakes.MissionStore).Snapshot().Rules) != 0 {
-		t.Fatal("selected affinity must belong to the saved operation without changing the mission catalog")
+	if !reflect.DeepEqual(op.Mission.Rules, config.MissionStore.(*fakes.MissionStore).Snapshot().Rules) {
+		t.Fatal("operation did not retain its mission's affinity rule")
 	}
 
 	first := fixtures.Assign(t, r, op.ID, "inspect")
@@ -113,13 +107,9 @@ func TestAffinityQueuesBusySiblingsWithoutPinningOtherOperations(t *testing.T) {
 }
 
 func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
-	config := fixtures.Config()
-	var selections atomic.Int32
-	selected := missions.RuleSet{missions.SameAgent: {ForActions: []string{"inspect", "discover"}}}
-	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
-		selections.Add(1)
-		return selected, nil
-	})
+	config := fixtures.AffinityConfig()
+	missionStore := config.MissionStore.(*fakes.MissionStore)
+	expectedRules := missionStore.Snapshot().Rules.Clone()
 	owner, spare := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
 	catalog := config.AgentCatalog.(*fakes.AgentCatalog)
 	catalog.Set(owner, spare)
@@ -134,9 +124,8 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	queued := fixtures.Assign(t, first, op.ID, "discover")
 	assertAffinityTaskQueued(t, first, op.ID, 1, calls)
 	fixtures.CloseRunner(t, first)
-	config.RuleSelector = fakes.RuleSelectorFunc(func(context.Context, runner.RuleSelection) (missions.RuleSet, error) {
-		selections.Add(1)
-		return nil, errors.New("must not reselect affinity for a saved operation")
+	missionStore.Change(func(m *missions.Mission) {
+		m.Rules = nil
 	})
 
 	owner.Stale = true
@@ -191,9 +180,8 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	if dispatches != 1 || len(settled.Tasks) != 2 || settled.Tasks[0].ID != originalTask.ID {
 		t.Fatalf("recovery replayed the original task: %+v", settled)
 	}
-	if selections.Load() != 1 || !reflect.DeepEqual(settled.Mission.Rules, selected) ||
-		len(config.MissionStore.(*fakes.MissionStore).Snapshot().Rules) != 0 {
-		t.Fatal("recovery must retain selected affinity without reselecting or changing the mission catalog")
+	if !reflect.DeepEqual(settled.Mission.Rules, expectedRules) || len(missionStore.Snapshot().Rules) != 0 {
+		t.Fatal("recovery must retain saved affinity independently of later mission edits")
 	}
 	select {
 	case call := <-calls:

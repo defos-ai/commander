@@ -50,15 +50,9 @@ and pass it in `runner.Config.AgentSelector`. Return an eligible agent ID or
 an empty ID to defer work. [Task affinity](../../docs/abstractions.md#task-affinity)
 still applies.
 
-### Rule selection
-
-Pass a [`runner.RuleSelector`](../../framework/controller/runner/rule_selector.go)
-in `runner.Config.RuleSelector` to choose rules when an operation starts.
-The default uses the mission's rules. Return the full rule set; the saved
-selection applies throughout that operation.
-
-For either selector, report its `Name()` in the corresponding
-`controller.RegistrationConfig` field so Admin displays it. See [AGENTS.md](AGENTS.md)
+Report its `Name()` in `controller.RegistrationConfig.AgentSelector` so Admin
+displays it. Mission rules come directly from the saved definition and remain
+fixed for each operation. See [AGENTS.md](AGENTS.md)
 for lifecycle and scheduling constraints.
 
 ### Run tests

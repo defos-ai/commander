@@ -141,7 +141,7 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 		t.Fatal("OpenAPI must document model as the supported rule decision maker")
 	}
 	controller := document.Components.Schemas["Controller"]
-	for _, name := range []string{"agent_selector", "rule_selector"} {
+	for _, name := range []string{"agent_selector"} {
 		if property := controller.Properties[name]; property == nil || property.Type != "string" || !slices.Contains(controller.Required, name) {
 			t.Fatalf("OpenAPI must publish controller %s as a required string", name)
 		}

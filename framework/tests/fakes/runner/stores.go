@@ -278,10 +278,3 @@ func (AgentSelectorFunc) Name() string { return "test-selector" }
 func (f AgentSelectorFunc) Select(ctx context.Context, selection runner.AgentSelection) (string, error) {
 	return f(ctx, selection)
 }
-
-type RuleSelectorFunc func(context.Context, runner.RuleSelection) (missions.RuleSet, error)
-
-func (RuleSelectorFunc) Name() string { return "test-rules" }
-func (f RuleSelectorFunc) Select(ctx context.Context, selection runner.RuleSelection) (missions.RuleSet, error) {
-	return f(ctx, selection)
-}

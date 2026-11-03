@@ -75,7 +75,7 @@ export class CommanderAPI {
         spawnedCatalog: actions.items.filter(action => action.name === 'fixture-echo').length === Math.min(spawned.length, 1),
         // Cleanup retains catalogs, including missions created by earlier UI tests.
         missions: fixtureMissions.filter(name => missions.items.some(mission => mission.name === name)),
-        controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin' && controller.rule_selector === 'mission-rules'),
+        controller: controllers.items.some(controller => controller.type === 'default' && controller.status === 'ready' && !controller.stale && controller.agent_selector === 'round-robin'),
       };
     }, { timeout: 60_000, message: 'Wait for controller, test missions and ready example, builder, spawner and any previously spawned agents' }).toEqual({
       agents: [

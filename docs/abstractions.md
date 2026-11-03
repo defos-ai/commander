@@ -145,7 +145,8 @@ Affinity does not create execution order or prevent concurrency: propose depende
 actions only after their prerequisites finish. Leave artifact-based work outside
 the group when any compatible agent can do it.
 
-For custom selection, see [controller rules](../apps/controllers/README.md#rule-selection).
+Edit the mission to change rules for future operations. Existing operations keep
+their original mission snapshot.
 
 ## Questions
 

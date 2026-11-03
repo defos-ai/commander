@@ -16,7 +16,6 @@ type controllerDocument struct {
 	Server         controllermodel.ServerInfo `bson:"server"`
 	Version        string                     `bson:"version"`
 	AgentSelector  string                     `bson:"agent_selector"`
-	RuleSelector   string                     `bson:"rule_selector"`
 	StartedAt      bsonvalue.Timestamp        `bson:"started_at"`
 	LastHeartbeat  bsonvalue.Timestamp        `bson:"last_heartbeat"`
 	LeaseExpiresAt bsonvalue.Timestamp        `bson:"lease_expires_at"`
@@ -27,8 +26,7 @@ func encode(record controllermodel.Controller) controllerDocument {
 	return controllerDocument{
 		ID: record.ID, Type: record.Type, Status: record.Status, StatusReason: record.StatusReason,
 		Server: record.Server, Version: record.Version, AgentSelector: record.AgentSelector,
-		RuleSelector: record.RuleSelector,
-		StartedAt:    bsonvalue.NewTimestamp(record.StartedAt), LastHeartbeat: bsonvalue.NewTimestamp(record.LastHeartbeat),
+		StartedAt: bsonvalue.NewTimestamp(record.StartedAt), LastHeartbeat: bsonvalue.NewTimestamp(record.LastHeartbeat),
 		LeaseExpiresAt: bsonvalue.NewTimestamp(record.LeaseExpiresAt),
 	}
 }
@@ -37,7 +35,6 @@ func (document controllerDocument) decode() (controllermodel.Controller, error) 
 	record := controllermodel.Controller{
 		ID: document.ID, Type: document.Type, Status: document.Status, StatusReason: document.StatusReason,
 		Server: document.Server, Version: document.Version, AgentSelector: document.AgentSelector, Stale: document.Stale,
-		RuleSelector: document.RuleSelector,
 	}
 	for _, field := range []struct {
 		name  string

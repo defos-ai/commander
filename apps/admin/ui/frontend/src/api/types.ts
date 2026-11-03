@@ -85,7 +85,6 @@ export interface Controller {
   server: { hostname: string; os: string; arch: string };
   version: string;
   agent_selector: string;
-  rule_selector: string;
   started_at: string;
   last_heartbeat: string;
   lease_expires_at: string;

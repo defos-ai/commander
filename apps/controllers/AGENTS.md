@@ -40,17 +40,10 @@
 - Report the selector's `Name()` in registration. The previous selected agent ID
   advances only after durable dispatch reservation; load/capacity describe this
   runner's work, not a distributed global limit.
-- [runner.RuleSelector](../../framework/controller/runner/rule_selector.go) selects
-  the full rule set at operation start. Inject it through `runner.Config.RuleSelector`;
-  the default `MissionRuleSelector` clones the mission's rules. To extend a definition,
-  clone `selection.Mission.Rules` before editing; nil or empty means no explicit rules.
-  Register the rule selector's `Name()` in `RegistrationConfig.RuleSelector`, just
-  as the agent selector's name is registered in `RegistrationConfig.AgentSelector`.
-- Rule selection runs outside the owner loop and may overlap concurrent starts.
-  Implementations must honor the context and be concurrency-safe. The runner
-  validates and clones selected rules before saving them only in the operation's
-  mission snapshot. Errors and invalid rules reject the start without fallback.
-  Recovery uses that saved selection; do not reselect rules or mutate the catalog.
+- The runner validates the stored mission and retains its rules directly in the
+  operation's independent mission snapshot. Hosts do not inject rule selection
+  or override policy. Edit mission definitions for future operations; recovery
+  uses each operation's original snapshot.
 - Dispatched tasks remain bound to their recorded agent and command. Never silently
   reassign an execution whose outcome is unknown or retry it from host code.
 - `--task-timeout` overrides `TASK_TIMEOUT`; both require a positive Go duration

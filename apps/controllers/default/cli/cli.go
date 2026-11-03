@@ -69,10 +69,9 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 	}
 	defer func() { result = errors.Join(result, deps.Close()) }()
 	agentSelector := runner.RoundRobinSelector{}
-	ruleSelector := runner.MissionRuleSelector{}
 	registration, err := controller.Register(ctx, deps.ControllerStore, controller.RegistrationConfig{
 		ID: configuration.controllerID, Type: controllerType,
-		AgentSelector: agentSelector.Name(), RuleSelector: ruleSelector.Name(), Logger: logger,
+		AgentSelector: agentSelector.Name(), Logger: logger,
 	})
 	if err != nil {
 		return fmt.Errorf("controller registration: %w", err)
@@ -103,7 +102,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		Sessions:    coordination.RuntimeSessions(),
 		ReportStore: deps.ReportStore, AgentCatalog: coordination,
-		AgentSelector: agentSelector, RuleSelector: ruleSelector, Logger: logger,
+		AgentSelector: agentSelector, Logger: logger,
 		TaskTimeout: configuration.taskTimeout,
 	})
 	if err != nil {
