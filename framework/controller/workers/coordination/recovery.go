@@ -1,4 +1,4 @@
-package controller
+package coordination
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ import (
 
 // RecoverAction waits for an already-dispatched task's durable outcome. It never
 // publishes a command: an uncertain execution must not silently run twice.
-func (c *Controller) RecoverAction(ctx context.Context, agentID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
+func (c *Worker) RecoverAction(ctx context.Context, agentID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
 	if ctx == nil {
 		return actionmodel.ActionOutput{}, errors.New("action recovery requires a context")
 	}
@@ -33,7 +33,7 @@ func (c *Controller) RecoverAction(ctx context.Context, agentID string, call act
 	return c.recoverAction(ctx, agentID, call.Work.TaskID, call)
 }
 
-func (c *Controller) recoverAction(ctx context.Context, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
+func (c *Worker) recoverAction(ctx context.Context, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
 	if err := c.state.CheckOpen(); err != nil {
 		return actionmodel.ActionOutput{}, errors.Join(err, c.state.Context.Err())
 	}
@@ -50,7 +50,7 @@ func (c *Controller) recoverAction(ctx context.Context, agentID, commandID strin
 		// A completed result remains usable even after its agent disappears.
 		// Only inspect the lease after checking the durable execution record.
 		agent, err := c.Agent(ctx, agentID)
-		if err != nil && !errors.Is(err, ErrUnknownAgent) {
+		if err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
 			return actionmodel.ActionOutput{}, recoveryOutcomeError(err)
 		}
 		available := err == nil && !agent.Stale && (agent.Status == agentmodel.AgentReady || agent.Status == agentmodel.AgentWorking)
@@ -69,7 +69,7 @@ func (c *Controller) recoverAction(ctx context.Context, agentID, commandID strin
 			if finished || err != nil {
 				return output, err
 			}
-			return actionmodel.ActionOutput{}, errors.Join(executions.ErrIndeterminate, ErrAgentNotRunning)
+			return actionmodel.ActionOutput{}, errors.Join(executions.ErrIndeterminate, agentmodel.ErrAgentNotRunning)
 		}
 		select {
 		case <-ticker.C:
@@ -79,7 +79,7 @@ func (c *Controller) recoverAction(ctx context.Context, agentID, commandID strin
 	}
 }
 
-func (c *Controller) executionResult(ctx context.Context, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, bool, error) {
+func (c *Worker) executionResult(ctx context.Context, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, bool, error) {
 	record, err := c.executionStore.Get(ctx, agentID, commandID)
 	if errors.Is(err, executions.ErrUnknownExecution) {
 		return actionmodel.ActionOutput{}, false, nil
@@ -112,7 +112,7 @@ func (c *Controller) executionResult(ctx context.Context, agentID, commandID str
 	return output, true, recoveryOutcomeError(err)
 }
 
-func (c *Controller) actionResult(ctx context.Context, message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
+func (c *Worker) actionResult(ctx context.Context, message messages.Message, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
 	output, err := executions.DecodeActionResult(message, agentID, commandID, call)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err

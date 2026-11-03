@@ -1,4 +1,4 @@
-package sessions
+package session
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-func (c *Coordinator) Control(ctx context.Context, request model.Control) (model.Session, error) {
+func (w *Worker) Control(ctx context.Context, request model.Control) (model.Session, error) {
 	if err := request.Validate(); err != nil {
 		return model.Session{}, err
 	}
 	if request.RequestID == "" {
 		request.RequestID = id.New()
 	}
-	if err := c.lock(ctx); err != nil {
+	if err := w.lock(ctx); err != nil {
 		return model.Session{}, err
 	}
-	record, err := c.controlIntent(ctx, request)
-	c.unlock()
+	record, err := w.controlIntent(ctx, request)
+	w.unlock()
 	if err != nil {
 		return model.Session{}, err
 	}
@@ -33,33 +33,33 @@ func (c *Coordinator) Control(ctx context.Context, request model.Control) (model
 		return record.View(), nil
 	}
 	if request.Method == "inspect" {
-		return c.view(ctx, record)
+		return w.view(ctx, record)
 	}
 	if record.PendingControl != nil && request.Method == "close" {
 		request = *record.PendingControl
 	}
 	creation := record.Creation
 	request.Creation = &creation
-	observation, err := c.remote(ctx, request)
+	observation, err := w.remote.ControlSessionRemote(ctx, request)
 	if err != nil {
 		return model.Session{}, err
 	}
-	if err := c.lock(ctx); err != nil {
+	if err := w.lock(ctx); err != nil {
 		return model.Session{}, err
 	}
-	defer c.unlock()
+	defer w.unlock()
 	kind := model.Observe
 	if request.Method == "close" {
 		kind = model.ConfirmClose
 	}
-	record, err = c.apply(ctx, model.Change{Kind: kind, ScopeID: request.ScopeID, ID: request.ID, Control: &request, Observation: &observation})
+	record, err = w.apply(ctx, model.Change{Kind: kind, ScopeID: request.ScopeID, ID: request.ID, Control: &request, Observation: &observation})
 	if err != nil {
 		return model.Session{}, err
 	}
 	return record.View(), nil
 }
-func (c *Coordinator) controlIntent(ctx context.Context, request model.Control) (model.Record, error) {
-	scope, err := c.store.Get(ctx, request.ScopeID)
+func (w *Worker) controlIntent(ctx context.Context, request model.Control) (model.Record, error) {
+	scope, err := w.store.Get(ctx, request.ScopeID)
 	if err != nil {
 		return model.Record{}, err
 	}
@@ -73,9 +73,9 @@ func (c *Coordinator) controlIntent(ctx context.Context, request model.Control) 
 	if record.Disposition == model.Released {
 		switch request.Method {
 		case "close":
-			return c.apply(ctx, model.Change{Kind: model.RequestClose, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
+			return w.apply(ctx, model.Change{Kind: model.RequestClose, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
 		case "abandon":
-			return c.apply(ctx, model.Change{Kind: model.Abandon, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
+			return w.apply(ctx, model.Change{Kind: model.Abandon, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
 		}
 		return record, nil
 	}
@@ -83,23 +83,23 @@ func (c *Coordinator) controlIntent(ctx context.Context, request model.Control) 
 	case "close":
 		creation := record.Creation
 		request.Creation = &creation
-		return c.apply(ctx, model.Change{Kind: model.RequestClose, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
+		return w.apply(ctx, model.Change{Kind: model.RequestClose, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
 	case "inspect":
 		return record, nil
 	case "abandon":
-		view, err := c.view(ctx, record)
+		view, err := w.view(ctx, record)
 		if err != nil {
 			return record, err
 		}
 		if view.State != "lost" && view.State != "failed" {
 			return record, errors.New("only a lost session can be abandoned")
 		}
-		return c.apply(ctx, model.Change{Kind: model.Abandon, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
+		return w.apply(ctx, model.Change{Kind: model.Abandon, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
 	default:
 		return record, record.Available()
 	}
 }
-func (c *Coordinator) view(ctx context.Context, record model.Record) (model.Session, error) {
+func (w *Worker) view(ctx context.Context, record model.Record) (model.Session, error) {
 	view := record.View()
 	if record.Disposition == model.Released {
 		return view, nil
@@ -107,7 +107,7 @@ func (c *Coordinator) view(ctx context.Context, record model.Record) (model.Sess
 	if record.OwnerAgentID == "" {
 		return view, nil
 	}
-	agent, err := c.agents.Get(ctx, record.OwnerAgentID)
+	agent, err := w.agents.Get(ctx, record.OwnerAgentID)
 	if err != nil && !errors.Is(err, agents.ErrUnknownAgent) {
 		return view, err
 	}
@@ -121,8 +121,8 @@ func (c *Coordinator) view(ctx context.Context, record model.Record) (model.Sess
 
 // ResumeControls retries saved close identities and best-effort revocation after
 // abandonment. An unaware unreachable owner may still run previously delivered work.
-func (c *Coordinator) ResumeControls(ctx context.Context) error {
-	scopes, err := c.store.List(ctx)
+func (w *Worker) ResumeControls(ctx context.Context) error {
+	scopes, err := w.store.List(ctx)
 	if err != nil {
 		return err
 	}
@@ -144,14 +144,14 @@ func (c *Coordinator) ResumeControls(ctx context.Context) error {
 			for record := range jobs {
 				bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
 				if record.Disposition == model.Closing {
-					_, _ = c.Control(bounded, *record.PendingControl)
+					_, _ = w.Control(bounded, *record.PendingControl)
 				} else {
 					request := model.Control{Reference: record.Reference, Method: "close", RequestID: record.Release.RequestID, Creation: &record.Creation}
-					observation, err := c.remote(bounded, request)
+					observation, err := w.remote.ControlSessionRemote(bounded, request)
 					if err == nil {
-						if err = c.lock(bounded); err == nil {
-							_ = c.observeResource(bounded, observation)
-							c.unlock()
+						if err = w.lock(bounded); err == nil {
+							_ = w.observeResource(bounded, observation)
+							w.unlock()
 						}
 					}
 				}

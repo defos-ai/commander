@@ -3,29 +3,35 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/defos-ai/commander/framework/comms"
-	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/controller/workers"
 )
 
-func (c *Controller) start(actions actions.ActionStore) {
-	var workers sync.WaitGroup
-	workers.Go(c.reconcileSessionControls)
-	workers.Go(c.run)
-	workers.Go(c.sharing.Run)
-	workers.Go(func() { c.consumeEvents(actions) })
+func (c *Controller) start(list ...workers.Worker) {
+	var group sync.WaitGroup
+	for _, worker := range list {
+		group.Go(func() {
+			err := worker.Run(c.lifetime)
+			if err == nil && c.lifetime.Err() == nil {
+				err = fmt.Errorf("%T stopped while the controller was running", worker)
+			}
+			c.beginClose(err)
+		})
+	}
 	go func() {
-		workers.Wait()
+		group.Wait()
 		close(c.workersDone)
 	}()
 }
 
 // Done closes when coordination stops, including event or lease processing failures.
 // Hosts must still call Close to join workers and wait for subscription cleanup.
-func (c *Controller) Done() <-chan struct{} { return c.state.Context.Done() }
+func (c *Controller) Done() <-chan struct{} { return c.lifetime.Done() }
 
-func (c *Controller) Err() error { return context.Cause(c.state.Context) }
+func (c *Controller) Err() error { return context.Cause(c.lifetime) }
 
 // Close wakes controller callers and releases its subscription. It leaves
 // independently hosted agents and the caller-owned bus running.

@@ -147,16 +147,26 @@
 
 - Runtime-session changes must follow the [session guide](sessions/AGENTS.md),
   including when changing callers outside the session directory. The
-  shared `sessions.Coordinator` owns admission, binding, exact execution claiming
-  and publication ordering. Persist normalized intent with automatic children.
+  controller's `session.Worker` owns admission, binding, exact execution
+  claiming and publication ordering. The runner consumes the shared
+  `sessions.Coordinator` interface backed by that same instance. Persist normalized
+  intent with automatic children.
   Preserve scope history across inventory expiry; abandonment releases only the
   scope, retaining existing same-agent affinity. Checkpoints remain execution facts.
   Use [session E2Es](../apps/adapters/api/tests/e2e/session_lifecycle_test.go) for
   public recovery, owner placement and lifecycle behavior.
-- Use existing controller and runner owner loops for runtime mutation. Update
-  persistence, consumers and recovery together when changing lifecycle behavior.
-- Controller lifecycle startup joins its owner loop, event consumer, session
-  controls and sharing worker through one completion signal. Keep remote waits
+- Controller owns worker lifetime, startup, shutdown and delegating facades.
+  [NewController](controller/controller.go) owns `ControllerConfig`, defaults and
+  validation, and constructs the host and shared lifetime.
+  [Assembly](controller/assembly.go) receives that host and config, then builds and
+  returns the worker list without calling `Run` or starting workers.
+  `NewController` starts the returned list; [worker subpackages](controller/workers/AGENTS.md)
+  retain their logic and private state. The parent workers package contains only
+  their shared contract. Use coordination and runner owner loops for runtime
+  mutation. Update persistence, consumers and recovery together when changing
+  lifecycle behavior.
+- Controller lifecycle startup joins coordination, events, sessions, secret
+  reconciliation and sharing through one completion signal. Keep remote waits
   outside the owner loop. `Done` signals cancellation; `Close` waits for workers
   and subscription cleanup under its caller's context before hosts release
   providers. Cleanup runs separately so it cannot block `Close` past that deadline.
@@ -283,10 +293,10 @@
   contexts. Standalone work clears inherited access. Discard buffered data when
   execution ends; delivery neither changes action outcomes nor extends deadlines.
   No publication records, replay or durable receiver memory exist.
-- The [sharing worker](controller/sharing/loop.go) receives stores, messaging and
+- The [sharing worker](controller/workers/sharing/worker.go) receives stores, messaging and
   live-agent observation through injected dependencies. The controller owns its
   lifecycle; sharing must not import the parent package or mutate controller state.
-  [Result forwarding](controller/sharing/results.go) reads the saved operation
+  [Result forwarding](controller/workers/sharing/results.go) reads the saved operation
   policy, source execution and task dispatch after result/artifact acceptance.
   Union matching routes and verify current operation/task state, unfinished
   recipient claim and fresh observed work before exact-target delivery. Never
@@ -297,7 +307,7 @@
   saved source IDs let receivers deduplicate accepted event redeliveries.
 - After a successful answer save, the runner notifies executors supporting
   `ShareQuestionAnswer`. The controller delegates only operation/question IDs to
-  the worker, which [rereads the saved decision](controller/sharing/decisions.go)
+  the worker, which [rereads the saved decision](controller/workers/sharing/decisions.go)
   and matches its task to the original execution claim before routing. Preserve
   question IDs, content, timestamps and answer origin; multiple decisions can
   belong to one execution.
@@ -405,10 +415,12 @@
   reads use `operations.AssessTaskRequirements` to match live work to its saved
   assignment and deadline; this projection does not change task state, suspend
   timeouts, or authorize retries. Static action readiness remains unchanged.
-- Controller secret synchronization runs in the existing owner loop with paired
+- Controller secret synchronization has its own worker with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any
   valid shared name; static declarations govern readiness, not access.
+  Serialize event handling and periodic reconciliation through the coordination
+  mailbox so inventory observations and deliveries retain one owner.
   Only the controller decrypts for delivery. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
 - Preserve schema validation of action input, output and proposed next actions.

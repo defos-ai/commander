@@ -4,9 +4,11 @@ Read this guide when changing session admission, placement, providers, controls
 or recovery, including callers outside this directory. For usage and lifecycle
 limits, see [Sessions](../../docs/features/sessions.md).
 
-- [admission.go](admission.go) normalizes intent; [observations.go](observations.go)
-  reconciles operation/execution evidence; [controls.go](controls.go) handles
-  lifecycle controls. The domain owns transitions; stores own atomicity.
+- [admission.go](admission.go) normalizes intent without I/O; shared dispatch and
+  evidence types and the runner's [Coordinator](coordinator.go) contract remain
+  here. The controller's [session.Worker](../controller/workers/session/worker.go)
+  owns admission, dispatch, observation and control reconciliation. The domain
+  owns transitions; stores own atomicity.
 - Live and mission contracts take precedence over learned catalog metadata.
   Resolve from known contracts first; a transient catalog lookup failure must
   remain retryable, never become a permanent admission error. Freeze accepted
@@ -95,7 +97,7 @@ Dispatch saves task intent, reserves the scope, assesses placement, persists the
 exact owner dispatch, binds the session and claims the execution before publishing.
 These stores have no shared transaction: reconcile incomplete phases to the saved
 identities before publication. Serialize preparation/publication and close/abandon
-through the coordinator; do not hold its gate while waiting for remote execution
+through the session worker; do not hold its gate while waiting for remote execution
 or control replies. An uncertain write never authorizes a new owner or command.
 
 One active controller per database is supported. FS stores scope aggregates in

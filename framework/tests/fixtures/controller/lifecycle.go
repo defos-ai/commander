@@ -10,7 +10,7 @@ import (
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
 )
 
-func StartLifecycleController(t *testing.T, cleanupError error) (context.Context, *controller.Controller, *fakes.Bus, *fakes.Inventory, *fakes.Gate) {
+func StartLifecycleController(t *testing.T, cleanupError error, sweepInterval time.Duration) (context.Context, *controller.Controller, *fakes.Bus, *fakes.Inventory, *fakes.Gate) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -18,7 +18,7 @@ func StartLifecycleController(t *testing.T, cleanupError error) (context.Context
 	bus.BlockClose(gate, cleanupError)
 	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
 		AgentStore: inventory, ActionStore: fakes.UnusedActions{}, ArtifactStore: fakes.UnusedArtifacts{},
-		ExecutionStore: fakes.UnusedExecutions{}, HeartbeatTimeout: time.Hour, LeaseSweepInterval: time.Hour,
+		ExecutionStore: fakes.UnusedExecutions{}, HeartbeatTimeout: time.Hour, LeaseSweepInterval: sweepInterval,
 	})
 	if err != nil {
 		gate.Open()

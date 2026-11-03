@@ -101,13 +101,20 @@ func (g *Gate) wait() {
 }
 
 type Inventory struct {
-	record     atomic.Pointer[agents.Agent]
-	upsertGate atomic.Pointer[Gate]
-	expiryGate atomic.Pointer[Gate]
+	record        atomic.Pointer[agents.Agent]
+	upsertGate    atomic.Pointer[Gate]
+	upsertFailure atomic.Pointer[inventoryFailure]
+	expiryGate    atomic.Pointer[Gate]
+	expiryFailure atomic.Pointer[inventoryFailure]
 }
+
+type inventoryFailure struct{ err error }
 
 func (s *Inventory) Upsert(_ context.Context, record agents.Agent) error {
 	s.upsertGate.Swap(nil).wait()
+	if failure := s.upsertFailure.Swap(nil); failure != nil {
+		return failure.err
+	}
 	cloned := record.Clone()
 	s.record.Store(&cloned)
 	return nil
@@ -125,12 +132,15 @@ func (s *Inventory) List(context.Context) ([]agents.Agent, error) {
 	return nil, nil
 }
 func (s *Inventory) DeleteExpired(_ context.Context, cutoff time.Time) ([]agents.Agent, error) {
+	s.expiryGate.Swap(nil).wait()
+	if failure := s.expiryFailure.Swap(nil); failure != nil {
+		return nil, failure.err
+	}
 	for {
 		record := s.record.Load()
 		if record == nil || record.LastHeartbeat.After(cutoff) {
 			return nil, nil
 		}
-		s.expiryGate.Swap(nil).wait()
 		if s.record.CompareAndSwap(record, nil) {
 			return []agents.Agent{record.Clone()}, nil
 		}
@@ -178,3 +188,5 @@ func (s *Inventory) Set(record *agents.Agent) {
 }
 func (s *Inventory) BlockNextUpsert(gate *Gate) { s.upsertGate.Store(gate) }
 func (s *Inventory) BlockNextExpiry(gate *Gate) { s.expiryGate.Store(gate) }
+func (s *Inventory) FailNextUpsert(err error)   { s.upsertFailure.Store(&inventoryFailure{err: err}) }
+func (s *Inventory) FailNextExpiry(err error)   { s.expiryFailure.Store(&inventoryFailure{err: err}) }

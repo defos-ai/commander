@@ -41,7 +41,7 @@ type AgentCatalog interface {
 }
 
 type Config struct {
-	Sessions      *runtimeSessions.Coordinator
+	Sessions      runtimeSessions.Coordinator
 	AgentCatalog  AgentCatalog
 	AgentSelector AgentSelector
 	Logger        *slog.Logger
@@ -65,7 +65,7 @@ type operationState struct {
 }
 
 type Runner struct {
-	sessions       *runtimeSessions.Coordinator
+	sessions       runtimeSessions.Coordinator
 	ctx            context.Context
 	cancel         context.CancelFunc
 	executor       ActionExecutor

@@ -1,4 +1,4 @@
-package controller
+package coordination
 
 import (
 	"context"
@@ -18,12 +18,12 @@ import (
 // DispatchAction is for durable queued tasks. Redelivery uses the exact stored
 // envelope to the same process ID: agents keep a command ledger for their entire
 // lifetime, and replacements receive new IDs. Never retarget unknown work.
-func (c *Controller) DispatchAction(ctx context.Context, agentID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
+func (c *Worker) DispatchAction(ctx context.Context, agentID string, call actionmodel.ActionCall, publisher SessionPublisher) (actionmodel.ActionOutput, error) {
 	message, err := agentcommands.NewRunAction(agentID, call)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	reply, err := c.command(ctx, message, controllerevents.ActionSucceeded, true)
+	reply, err := c.command(ctx, message, controllerevents.ActionSucceeded, true, publisher)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
@@ -31,15 +31,15 @@ func (c *Controller) DispatchAction(ctx context.Context, agentID string, call ac
 	return output, commandOutcomeError(agentcommands.RunAction, err)
 }
 
-func (c *Controller) resumeClaimedAction(ctx context.Context, stored executions.Execution, requested messages.Message, replay bool) (state.CommandReply, error) {
+func (c *Worker) resumeClaimedAction(ctx context.Context, stored executions.Execution, requested messages.Message, replay bool, publisher SessionPublisher) (state.CommandReply, error) {
 	if !replay {
 		return c.awaitClaimedAction(ctx, stored, requested)
 	}
 	current, err := submit(ctx, c, func(ctx context.Context) (executions.Execution, error) {
-		return c.redeliverAction(ctx, stored, requested)
+		return c.redeliverAction(ctx, stored, requested, publisher)
 	})
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrControllerClosed) {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, state.ErrControllerClosed) {
 			err = commandOutcomeError(agentcommands.RunAction, c.inventoryError(err))
 		}
 		return state.CommandReply{}, err
@@ -48,7 +48,7 @@ func (c *Controller) resumeClaimedAction(ctx context.Context, stored executions.
 	return c.awaitClaimedAction(ctx, current, requested)
 }
 
-func (c *Controller) redeliverAction(ctx context.Context, stored executions.Execution, requested messages.Message) (executions.Execution, error) {
+func (c *Worker) redeliverAction(ctx context.Context, stored executions.Execution, requested messages.Message, publisher SessionPublisher) (executions.Execution, error) {
 	if err := stored.Validate(); err != nil {
 		return executions.Execution{}, err
 	}
@@ -60,12 +60,12 @@ func (c *Controller) redeliverAction(ctx context.Context, stored executions.Exec
 	if current.Result == nil {
 		record, err := c.Agent(ctx, current.Command.AgentID)
 		if err != nil || record.Stale || (record.Status != agentmodel.AgentReady && record.Status != agentmodel.AgentWorking) {
-			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, ErrAgentNotRunning)
+			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, agentmodel.ErrAgentNotRunning)
 		}
 		publish := (agentcommands.Client{Bus: c.bus}).Publish
 		var publishErr error
-		if c.sessions != nil {
-			publishErr = c.sessions.Publish(ctx, current.Command, publish)
+		if publisher != nil {
+			publishErr = publisher.Publish(ctx, current.Command, publish)
 		} else {
 			publishErr = publish(ctx, current.Command)
 		}

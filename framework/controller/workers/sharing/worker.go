@@ -20,12 +20,16 @@ const (
 	sharingTimeout   = 2 * time.Second
 )
 
-type Config struct {
+type AgentReader interface {
+	Agent(context.Context, string) (agents.Agent, error)
+}
+
+type Dependencies struct {
 	Bus        comms.Bus
 	Operations operations.OperationStore
 	Executions executions.ExecutionStore
 	Artifacts  artifacts.ArtifactStore
-	Agent      func(context.Context, string) (agents.Agent, error)
+	Agents     AgentReader
 	Logger     *slog.Logger
 }
 
@@ -35,16 +39,16 @@ type Worker struct {
 	operationStore operations.OperationStore
 	executionStore executions.ExecutionStore
 	artifactStore  artifacts.ArtifactStore
-	agent          func(context.Context, string) (agents.Agent, error)
+	agents         AgentReader
 	logger         *slog.Logger
 	queue          chan sharedData
 }
 
-func NewWorker(ctx context.Context, config Config) *Worker {
+func New(ctx context.Context, config Dependencies) *Worker {
 	return &Worker{
 		ctx: ctx, bus: config.Bus, operationStore: config.Operations,
 		executionStore: config.Executions, artifactStore: config.Artifacts,
-		agent: config.Agent, logger: config.Logger,
+		agents: config.Agents, logger: config.Logger,
 		queue: make(chan sharedData, sharingQueueSize),
 	}
 }
@@ -82,21 +86,21 @@ func (w *Worker) queueSharedData(source sharedData) {
 	}
 }
 
-func (w *Worker) Run() {
+func (w *Worker) Run(ctx context.Context) error {
 	for {
 		select {
-		case <-w.ctx.Done():
-			return
+		case <-ctx.Done():
+			return nil
 		case source := <-w.queue:
-			ctx, cancel := context.WithTimeout(w.ctx, sharingTimeout)
+			forwarding, cancel := context.WithTimeout(ctx, sharingTimeout)
 			var err error
 			if source.QuestionID != "" {
-				err = w.forwardSharedDecision(ctx, source)
+				err = w.forwardSharedDecision(forwarding, source)
 			} else {
-				err = w.forwardSharedResult(ctx, source)
+				err = w.forwardSharedResult(forwarding, source)
 			}
 			cancel()
-			if err != nil && w.ctx.Err() == nil {
+			if err != nil && ctx.Err() == nil {
 				w.logger.Warn("shared data forwarding failed", "operation_id", source.Work.OperationID,
 					"task_id", source.Work.TaskID, "command_id", source.CommandID, "question_id", source.QuestionID, "error_type", fmt.Sprintf("%T", err))
 			}

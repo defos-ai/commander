@@ -24,6 +24,10 @@ func InvalidMessage(err error) error {
 	return comms.InvalidMessage(err)
 }
 
+type SecretEvents interface {
+	Consume(context.Context, messages.Message) error
+}
+
 type EventConsumer struct {
 	Bus        comms.Bus
 	Inventory  agentmodel.AgentStore
@@ -32,7 +36,7 @@ type EventConsumer struct {
 	Operations operations.OperationStore
 	Artifacts  artifacts.ArtifactStore
 	State      *state.State
-	Secrets    *SecretEventConsumer
+	Secrets    SecretEvents
 }
 
 func (c EventConsumer) Consume(ctx context.Context, message messages.Message) error {

@@ -182,7 +182,7 @@ func (w *Worker) sharedRecipient(ctx context.Context, task operations.Task) (boo
 		!claim.Command.ExpiresAt.IsZero() && !time.Now().Before(claim.Command.ExpiresAt) {
 		return false, nil
 	}
-	record, err := w.agent(ctx, task.AgentID)
+	record, err := w.agents.Agent(ctx, task.AgentID)
 	if errors.Is(err, agents.ErrUnknownAgent) {
 		return false, nil
 	}

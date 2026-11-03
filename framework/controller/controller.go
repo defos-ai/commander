@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -13,7 +12,10 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/leases"
-	"github.com/defos-ai/commander/framework/controller/sharing"
+	"github.com/defos-ai/commander/framework/controller/workers/coordination"
+	"github.com/defos-ai/commander/framework/controller/workers/event"
+	"github.com/defos-ai/commander/framework/controller/workers/session"
+	"github.com/defos-ai/commander/framework/controller/workers/sharing"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
@@ -23,7 +25,6 @@ import (
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/framework/internal/state"
-	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
 const DefaultHeartbeatTimeout = leases.DefaultTimeout
@@ -53,35 +54,23 @@ type ControllerConfig struct {
 	Logger             *slog.Logger
 }
 
-// Controller discovers agents from its own event topic and routes decisions over
-// the bus. It neither owns agent runtimes nor calls a model or selects actions.
-// The host supplies controller-owned database stores.
+// Controller assembles components and owns their shared lifetime. Each worker
+// owns its dependencies and behavior; public commands delegate to coordination.
 type Controller struct {
-	sessions           *runtimeSessions.Coordinator
-	state              *state.State
-	id                 string
-	controllerType     string
-	bus                comms.Bus
-	logger             *slog.Logger
-	artifactStore      artifacts.ArtifactStore
-	executionStore     executions.ExecutionStore
-	operationStore     operations.OperationStore
-	sharing            *sharing.Worker
-	secrets            *consumers.SecretEventConsumer
-	events             comms.Subscription
-	cancel             context.CancelCauseFunc
-	inventory          agentmodel.AgentStore
-	leaseRegistry      *leases.Registry
-	leaseSweepInterval time.Duration
-	closeOnce          sync.Once
-	closeErr           error // written before cleanupDone closes
-	workersDone        chan struct{}
-	requests           chan func()
-	cleanupDone        chan struct{}
+	id             string
+	controllerType string
+	coordination   *coordination.Worker
+	sessions       *session.Worker
+	sharing        *sharing.Worker
+	events         *event.Worker
+	lifetime       context.Context
+	cancel         context.CancelCauseFunc
+	closeOnce      sync.Once
+	closeErr       error // written before cleanupDone closes
+	workersDone    chan struct{}
+	cleanupDone    chan struct{}
 }
 
-// NewController subscribes immediately. Announcements and heartbeats register
-// agents; the host is responsible for starting and stopping their runtimes.
 func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) (*Controller, error) {
 	if ctx == nil || bus == nil {
 		return nil, errors.New("controller requires a context and event bus")
@@ -138,51 +127,16 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	if config.Logger == nil {
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	registry, err := leases.NewRegistry(config.AgentStore, config.HeartbeatTimeout)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := registry.Sweep(ctx, time.Now().UTC()); err != nil {
-		return nil, fmt.Errorf("expire agent leases: %w", err)
-	}
 	lifetime, cancel := context.WithCancelCause(ctx)
-	events, err := bus.Subscribe(lifetime, comms.Inbox{Topic: messages.ControllerEvents(config.Type), Name: config.ID, Mode: comms.TransientExclusive})
+	c := &Controller{
+		id: config.ID, controllerType: config.Type, lifetime: lifetime, cancel: cancel,
+		workersDone: make(chan struct{}), cleanupDone: make(chan struct{}),
+	}
+	workers, err := assemble(c, bus, config)
 	if err != nil {
-		cancel(err)
 		return nil, err
 	}
-	c := &Controller{
-		id: config.ID, controllerType: config.Type, bus: bus, artifactStore: config.ArtifactStore,
-		executionStore: config.ExecutionStore, operationStore: config.OperationStore, logger: config.Logger,
-		events: events, cancel: cancel, inventory: config.AgentStore,
-		leaseRegistry: registry, leaseSweepInterval: config.LeaseSweepInterval,
-		state:       state.New(lifetime, config.HeartbeatTimeout),
-		workersDone: make(chan struct{}), cleanupDone: make(chan struct{}),
-		requests: make(chan func()),
-	}
-	if config.SessionStore != nil {
-		c.sessions, err = runtimeSessions.New(config.SessionStore, config.OperationStore, config.ExecutionStore, config.AgentStore, config.ActionStore, c.controlSessionRemote)
-		if err != nil {
-			cancel(err)
-			return nil, errors.Join(err, events.Close())
-		}
-	}
-	if config.SecretStore != nil {
-		c.secrets = &consumers.SecretEventConsumer{
-			Bus: bus, Inventory: config.AgentStore, Secrets: config.SecretStore, Requests: config.SecretRequestStore,
-			Decryptor: config.SecretDecryptor,
-		}
-	}
-	if err := c.reconcileSecrets(); err != nil {
-		cancel(err)
-		return nil, errors.Join(err, events.Close())
-	}
-	c.sharing = sharing.NewWorker(lifetime, sharing.Config{
-		Bus: bus, Operations: config.OperationStore, Executions: config.ExecutionStore,
-		Artifacts: config.ArtifactStore, Agent: c.Agent, Logger: config.Logger,
-	})
-	c.start(config.ActionStore)
-
+	c.start(workers...)
 	return c, nil
 }
 
