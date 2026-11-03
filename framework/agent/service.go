@@ -246,11 +246,15 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 					return
 				case <-ticker.C:
 					if err := a.publishState(workersCtx, events, controllerevents.AgentHeartbeat, ""); err != nil {
-						if workersCtx.Err() == nil {
-							a.config.Logger.Error("heartbeat failed", "error_type", fmt.Sprintf("%T", err))
-							endService(err)
+						if workersCtx.Err() != nil {
+							return
 						}
-						return
+						if errors.Is(err, comms.ErrClosed) {
+							endService(err)
+							return
+						}
+						a.config.Logger.Warn("heartbeat failed", "error_type", fmt.Sprintf("%T", err))
+						continue
 					}
 					a.config.Logger.Debug("heartbeat sent", "status", a.Status())
 				}

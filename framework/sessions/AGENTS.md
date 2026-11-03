@@ -33,6 +33,10 @@ limits, see [Sessions](../../docs/features/sessions.md).
   Preserve correlated receipts, retained history, owner-specific requirements and
   meaningful per-task placement across HTTP/MCP mappings. Ordinary unconstrained
   queue changes must not create preflight events or version bumps.
+- Uncorrelated session announcements and heartbeats tolerate a missing controller
+  event inbox during restart. Keep the agent and its resources alive; subsequent
+  full-state heartbeats restore observation. A closed bus or cancelled service
+  still ends serving, and correlated control replies retain their normal semantics.
 
 ## Terminology
 
@@ -143,9 +147,13 @@ RabbitMQ broker outside the test process. Each scenario substitutes a fresh DB
 name for the literal `{database}` placeholder. Never point the bus at a live
 application deployment. Stop disposable services after the run.
 
+With the [provider test services](../../.github/composes/compose.providers.test.yaml),
+Mongo uses replica set `rs0`. Set `COMMANDER_TEST_RABBITMQ_URL` to the disposable
+broker's authenticated URL on its published port `5673` before running:
+
 ```sh
-COMMANDER_SESSION_E2E_DATABASE_URL='mongodb://127.0.0.1:27017/{database}?replicaSet=sessions&directConnection=true' \
-COMMANDER_SESSION_E2E_BUS_URL='amqp://guest:guest@127.0.0.1:5672/' \
+COMMANDER_SESSION_E2E_DATABASE_URL='mongodb://127.0.0.1:27017/{database}?replicaSet=rs0&directConnection=true' \
+COMMANDER_SESSION_E2E_BUS_URL="${COMMANDER_TEST_RABBITMQ_URL:?Set the disposable test broker URL}" \
   go test -count=1 -timeout=6m ./apps/adapters/api/tests/e2e -run '^TestE2ESession'
 ```
 

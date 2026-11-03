@@ -140,6 +140,11 @@
   execution facts.
   Use [session E2Es](../apps/adapters/api/tests/e2e/session_lifecycle_test.go) for
   public recovery, owner placement and lifecycle behavior.
+- Once serving, failed heartbeat and uncorrelated session-state publications do
+  not end the agent unless the bus is closed or its service is cancelled. Log
+  failures without payloads; later full-state heartbeats restore observations
+  after controller restart. Keep startup, correlated control replies and durable
+  result-acceptance handling separate from these periodic observations.
 - Controller owns worker lifetime, startup, shutdown and delegating facades.
   [NewController](controller/controller.go) owns `ControllerConfig`, defaults and
   validation, and constructs the host with admission and core lifetimes.

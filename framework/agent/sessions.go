@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -84,10 +85,14 @@ func (a *Agent) serveSessions(ctx context.Context, bus comms.Bus, publisher even
 					return
 				}
 				if err := a.publishState(ctx, publisher, events.AgentUpdated, ""); err != nil {
-					if ctx.Err() == nil {
-						stop(err)
+					if ctx.Err() != nil {
+						return
 					}
-					return
+					if errors.Is(err, comms.ErrClosed) {
+						stop(err)
+						return
+					}
+					a.config.Logger.Warn("session state announcement failed", "error_type", fmt.Sprintf("%T", err))
 				}
 			}
 		}

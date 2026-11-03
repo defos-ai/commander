@@ -37,7 +37,7 @@ func StartE2E(t *testing.T, binary string, args, env []string) func() {
 	return stop
 }
 
-func startE2EProcess(t *testing.T, binary string, args, env []string) (*os.Process, func()) {
+func startE2EProcess(t *testing.T, binary string, args, env []string) (string, func()) {
 	t.Helper()
 	log, err := os.CreateTemp(t.TempDir(), "process-*.log")
 	if err != nil {
@@ -70,7 +70,7 @@ func startE2EProcess(t *testing.T, binary string, args, env []string) (*os.Proce
 			t.Logf("%s: %s", filepath.Base(binary), data)
 		}
 	})
-	return command.Process, stop
+	return log.Name(), stop
 }
 
 func RequireFilesystemFixture(t *testing.T) {
@@ -88,6 +88,7 @@ type SessionStack struct {
 	binaries            map[string]string
 	stopController      func()
 	peer                string
+	workerLogs          map[int]string
 }
 
 func (s *SessionStack) WithTest(t *testing.T) func() {
@@ -138,7 +139,7 @@ func NewSessionStack(t *testing.T, peer string, controllerSource ...string) *Ses
 	env := append(os.Environ(), "BUS_URL="+bus, "DATABASE_URL="+database, "STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=info", "FIXTURE_PEER="+peer)
 	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	t.Cleanup(client.CloseIdleConnections)
-	s := &SessionStack{t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, controllerArgs: []string{"--heartbeat-timeout=6s"}}
+	s := &SessionStack{t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, controllerArgs: []string{"--heartbeat-timeout=6s"}, workerLogs: make(map[int]string)}
 	StartE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
 	s.stopController = StartE2E(t, binaries["controller"], s.controllerArgs, env)
 	WaitUntil(t, 10*time.Second, func() bool {
@@ -206,7 +207,8 @@ func (s *SessionStack) Worker(suffix int, extra ...string) func() {
 	owner := fmt.Sprintf("fixture-agent-%08x", suffix)
 	env := append(append([]string{}, s.env...), "FIXTURE_AGENT_ID="+owner, "FIXTURE_PEER="+s.peer)
 	env = append(env, extra...)
-	_, stop := startE2EProcess(s.t, s.binaries["worker"], nil, env)
+	log, stop := startE2EProcess(s.t, s.binaries["worker"], nil, env)
+	s.workerLogs[suffix] = log
 	WaitUntil(s.t, 10*time.Second, func() bool {
 		var catalog struct{ Items []struct{ ID, Status string } }
 		s.Request("GET", "/api/v1/agents", nil, 200, &catalog)
@@ -218,6 +220,15 @@ func (s *SessionStack) Worker(suffix int, extra ...string) func() {
 		return false
 	})
 	return stop
+}
+
+func (s *SessionStack) WorkerLog(suffix int) string {
+	s.t.Helper()
+	data, err := os.ReadFile(s.workerLogs[suffix])
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return string(data)
 }
 
 func (s *SessionStack) Mission(name string, required ...string) {

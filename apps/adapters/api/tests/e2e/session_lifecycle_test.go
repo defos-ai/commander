@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +16,67 @@ import (
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 )
+
+func TestE2ESessionOwnerSurvivesControllerDowntime(t *testing.T) {
+	inventoryEntered := make(chan struct{}, 1)
+	releaseInventory := make(chan struct{})
+	var released sync.Once
+	var creations atomic.Int32
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/create/") {
+			creations.Add(1)
+		}
+		if r.URL.Path == "/inventory" {
+			select {
+			case inventoryEntered <- struct{}{}:
+			default:
+			}
+			select {
+			case <-releaseInventory:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(peer.Close)
+	t.Cleanup(func() { released.Do(func() { close(releaseInventory) }) })
+	s := e2efixtures.NewSessionStack(t, peer.URL)
+	s.Worker(1)
+	s.Mission("controller-downtime", "connect-resource")
+	scope := id.New()
+	resource := createSession(t, s, s.Start("controller-downtime"), scope)
+	select {
+	case <-inventoryEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("session inventory was never held")
+	}
+
+	s.StopController()
+	logOffset := len(s.WorkerLog(1))
+	released.Do(func() { close(releaseInventory) })
+	amqpBus := strings.HasPrefix(os.Getenv("COMMANDER_SESSION_E2E_BUS_URL"), "amqp")
+	heartbeat := "heartbeat sent"
+	if amqpBus {
+		heartbeat = "heartbeat failed"
+	}
+	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
+		return strings.Contains(s.WorkerLog(1)[logOffset:], heartbeat)
+	})
+	if amqpBus {
+		e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
+			return strings.Contains(s.WorkerLog(1)[logOffset:], "session state announcement failed")
+		})
+	}
+	s.Restart()
+	op := s.Start("controller-downtime")
+	use := s.Assign(op, "use-resource", map[string]string{"session_scope": scope, "session_id": resource.ID})
+	finished := s.Finished(op, use.ID)
+
+	if finished.AgentID != resource.OwnerAgentID || finished.SessionIntent == nil || finished.SessionIntent.ID != resource.ID || creations.Load() != 1 {
+		t.Fatalf("controller downtime replaced the session or owner: task=%+v creations=%d", finished, creations.Load())
+	}
+}
 
 func TestE2ESessionLifecycleOwnership(t *testing.T) {
 	peer, network := e2efixtures.PartitionableSessionPeer(t)

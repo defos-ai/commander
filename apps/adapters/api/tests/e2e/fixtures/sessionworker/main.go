@@ -115,7 +115,7 @@ func run() error {
 	}
 	executors = append(executors, marker)
 	interval := 500 * time.Millisecond
-	worker, err := agent.NewAgent(agent.AgentConfig{Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})), ID: owner, Type: "fixture", Actions: executors,
+	worker, err := agent.NewAgent(agent.AgentConfig{Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})), ID: owner, Type: "fixture", Actions: executors,
 		Sessions: resources, ArtifactFileStore: files, HeartbeatInterval: &interval,
 		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "session-e2e"}})
 	if err != nil {
