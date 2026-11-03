@@ -16,10 +16,17 @@ import (
 )
 
 type GitConfig struct {
-	Source  string
-	Mode    string
-	Started string
-	Publish *PublicationGit
+	Source       string
+	Mode         string
+	Started      string
+	Publish      *PublicationGit
+	BuildMode    string
+	BuildStarted string
+	BuildSource  string
+	RealGo       string
+	Framework    string
+	ModuleCache  string
+	GoCache      string
 }
 
 type GitState struct {

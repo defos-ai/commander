@@ -6,7 +6,7 @@ import { connect, test } from '../fixtures/e2e';
 test('create and edit a reusable mission through Admin without installing actions or starting work', async ({ page, api }) => {
   const actionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const missionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
-  const missionPolicies = String.raw`{"completion":{"decision_by":"model"},"placement":{"same_agent":["future-mission-action","analyze-text"]},"continuation":{"aggregate_results":["future-mission-\u0061ction"],"model_review":["future-mission-\u0061ction","analyze-text"]},"sharing":[{"from_actions":["future-mission-action"],"to_actions":["analyze-text"],"include":["results","artifacts"]}]}`;
+  const missionPolicies = String.raw`{"completion":{"decision_by":"model"},"continuation":{"aggregate_results":["future-mission-\u0061ction"],"model_review":["future-mission-\u0061ction","analyze-text"]},"sharing":[{"from_actions":["future-mission-action"],"to_actions":["analyze-text"],"include":["results","artifacts"]}]}`;
   const mission = {
     name: `ui-mission-${randomUUID()}`,
     objectives: ['Review using an action that has not been installed yet.', 'Save findings for a later review.'],

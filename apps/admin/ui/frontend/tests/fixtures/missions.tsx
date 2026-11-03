@@ -17,7 +17,6 @@ export const mission: Mission = {
   },
   output_schema: { type: 'object', properties: { summary: { type: 'string' } } },
   policies: {
-    placement: { same_agent: ['discover-pages', 'check-links'] },
     continuation: { aggregate_results: ['discover-pages'], model_review: ['check-links', 'capture-page'] },
   },
 };

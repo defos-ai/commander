@@ -25,7 +25,6 @@ func TestMissionMongoStore(t *testing.T) {
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		Policies: &policies.MissionPolicies{
 			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
-			Placement:  &policies.PlacementPolicy{SameAgent: []string{"discover", "check"}},
 			Continuation: &policies.ContinuationPolicy{
 				AggregateResults: []string{"discover"}, ModelReview: []string{"check"},
 			},
@@ -72,10 +71,6 @@ func TestMissionMongoStore(t *testing.T) {
 	if _, err := document.LookupErr("completion"); err == nil {
 		t.Fatal("provider wrote an unsupported root completion setting")
 	}
-	placement, err := document.Lookup("policies", "placement", "same_agent").Array().Values()
-	if err != nil || len(placement) != 2 || placement[0].StringValue() != "discover" || placement[1].StringValue() != "check" {
-		t.Fatalf("provider changed the placement policy or its stored field names: %v, %v", placement, err)
-	}
 	aggregation, err := document.Lookup("policies", "continuation", "aggregate_results").Array().Values()
 	if err != nil || len(aggregation) != 1 || aggregation[0].StringValue() != "discover" {
 		t.Fatalf("provider changed the aggregation policy or its stored field names: %v, %v", aggregation, err)
@@ -100,7 +95,6 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 	stored.Objectives[0] = "modified by reader"
 	stored.Policies.Completion.DecisionBy = policies.Model
-	stored.Policies.Placement.SameAgent[0] = "modified by reader"
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
 	stored.ActionDefinitions[0].Name = "modified by reader"
@@ -145,17 +139,15 @@ func TestMissionMongoStore(t *testing.T) {
 		t.Fatal("upsert retained a removed completion setting")
 	}
 	if _, err := document.LookupErr("policies"); err == nil {
-		t.Fatal("upsert retained a removed placement policy")
+		t.Fatal("upsert retained removed mission policies")
 	}
 	invalidSchema := updated.Clone()
 	invalidSchema.InputSchema = json.RawMessage(`{"type":"invalid-type"}`)
 	invalidCompletion := updated.Clone()
 	invalidCompletion.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: "unknown"}}
-	invalidPlacement := updated.Clone()
-	invalidPlacement.Policies = &policies.MissionPolicies{Placement: &policies.PlacementPolicy{SameAgent: []string{"discover", "discover"}}}
 	invalidContinuation := updated.Clone()
 	invalidContinuation.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{ModelReview: []string{"check", "check"}}}
-	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidPlacement, invalidContinuation} {
+	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidContinuation} {
 		if err := catalog.Upsert(ctx, invalid); err == nil {
 			t.Fatal("invalid mission replaced a valid one")
 		}
@@ -217,6 +209,31 @@ func TestMissionMongoStore(t *testing.T) {
 	stored, err = catalog.Get(ctx, updated.Name)
 	if err != nil || !reflect.DeepEqual(stored, updated) {
 		t.Fatalf("rejecting root completion changed the saved mission: %#v, error = %v", stored, err)
+	}
+	for _, unsupported := range []bson.M{
+		{"placement": bson.M{"same_agent": []string{"discover", "check"}}},
+		{"placement": bson.M{}},
+		{"placement": nil},
+		{"continuation": bson.M{"aggregate_results": []string{"discover"}, "unexpected": true}},
+		{"completion": bson.M{"decision_by": "operator", "unexpected": true}},
+		{"sharing": []bson.M{{"from_actions": []string{"discover"}, "to_actions": []string{"check"}, "include": []string{"results"}, "unexpected": true}}},
+	} {
+		if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$set": bson.M{"policies": unsupported}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := catalog.Get(ctx, updated.Name); err == nil {
+			t.Fatal("unsupported stored policies were silently ignored when reading a mission")
+		}
+		if _, err := catalog.List(ctx); err == nil {
+			t.Fatal("unsupported stored policies were silently ignored when listing missions")
+		}
+	}
+	if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$unset": bson.M{"policies": ""}}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = catalog.Get(ctx, updated.Name)
+	if err != nil || !reflect.DeepEqual(stored, updated) {
+		t.Fatalf("rejecting unsupported policies changed the saved mission: %#v, error = %v", stored, err)
 	}
 }
 

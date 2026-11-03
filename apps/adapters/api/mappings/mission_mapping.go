@@ -31,9 +31,6 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 				ModelReview:      slices.Clone(request.Policies.Continuation.ModelReview),
 			}
 		}
-		if request.Policies.Placement != nil {
-			mission.Policies.Placement = &policies.PlacementPolicy{SameAgent: slices.Clone(request.Policies.Placement.SameAgent)}
-		}
 		if request.Policies.Sharing != nil {
 			mission.Policies.Sharing = make(policies.SharingPolicy, len(request.Policies.Sharing))
 			for i, sharing := range request.Policies.Sharing {
@@ -69,9 +66,6 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 				AggregateResults: slices.Clone(mission.Policies.Continuation.AggregateResults),
 				ModelReview:      slices.Clone(mission.Policies.Continuation.ModelReview),
 			}
-		}
-		if mission.Policies.Placement != nil {
-			response.Policies.Placement = &models.MissionPlacementPolicyResponse{SameAgent: slices.Clone(mission.Policies.Placement.SameAgent)}
 		}
 		if mission.Policies.Sharing != nil {
 			response.Policies.Sharing = make([]models.MissionSharingPolicyResponse, len(mission.Policies.Sharing))

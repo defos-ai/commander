@@ -23,7 +23,6 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		{"AgentReadiness", reflect.TypeFor[models.AgentReadinessResponse]()},
 		{"ActionReadiness", reflect.TypeFor[models.ActionReadinessResponse]()},
 		{"Preflight", reflect.TypeFor[models.PreflightResponse]()},
-		{"Affinity", reflect.TypeFor[models.AffinityResponse]()},
 		{"Continuation", reflect.TypeFor[models.ContinuationResponse]()},
 		{"Task", reflect.TypeFor[models.TaskResponse]()},
 		{"Event", reflect.TypeFor[models.EventResponse]()},
@@ -47,12 +46,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
 			schema.Properties["missing_requirements"].Description = "Missing prerequisites assessed on a live ready/working candidate. Entries with kind=secret identify declared shared secret names; agent_type identifies the requesting candidate, not a secret scope. Sensitive host configuration is separate. Stale or offline candidates report only their unavailability reason. Values and secret lease refresh requests are never included."
 		case "Preflight":
-			schema.Description = "Saved readiness for mission and same-agent actions. Before affinity binds, grouped candidates must advertise every grouped action; afterward only the bound agent satisfies grouped coverage. Capacity is assessed separately by the scheduler. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
-		case "Affinity":
-			schema.Description = "Read-only same-agent binding derived from the saved mission and task assignments, including terminal tasks. Absent without policies.placement.same_agent. This is a placement constraint, not execution ordering or proof of agent availability."
-			schema.Properties["for_actions"].Description = "Actions bound to one agent instance within this operation."
-			schema.Properties["agent_id"].Description = "Agent selected by the first matching dispatch. Later matching tasks wait for this agent; no automatic fallback or rebinding. Absent before dispatch or when error is present."
-			schema.Properties["error"].Description = "Saved rule or dispatch history is inconsistent. Absence of agent_id in this case does not mean the group is unbound; inspect the saved tasks."
+			schema.Description = "Saved readiness for mission actions. Session requirements may restrict a task to its recorded owner. Capacity is assessed separately by the scheduler. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
 		case "Continuation":
 			schema.Properties["status"].Enum = []any{"pending", "waiting", "resolved"}
 			schema.Properties["decision_by"].Enum = []any{"code", "model", "user"}
@@ -83,7 +77,6 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			if model.name == "Operation" {
 				schema.Properties["completion_draft"].ReadOnly = true
 				schema.Properties["completion_draft"].Description = "Final output submitted by a model under operator completion policy, awaiting explicit operator approval. No final report exists yet. An operator may review or edit it before completing through the existing completion API."
-				schema.Properties["affinity"].Description = "Derived same-agent placement. Queued tasks remain unassigned until dispatch; affinity does not change their agent_id."
 				schema.Properties["completed_by"].Enum = []any{"operator", "model"}
 				schema.Properties["completed_by"].ReadOnly = true
 				schema.Properties["completed_by"].Description = "Origin of the accepted completion, assigned by the submitting adapter: operator for the HTTP API, model for MCP. Absent until completion is saved."

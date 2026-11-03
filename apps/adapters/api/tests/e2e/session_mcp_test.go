@@ -2,7 +2,6 @@ package e2e_test
 
 import (
 	"encoding/json"
-	"syscall"
 	"testing"
 	"time"
 
@@ -12,7 +11,9 @@ import (
 )
 
 func TestE2ESessionMCPDiscovery(t *testing.T) {
-	s := e2efixtures.NewSessionStack(t, e2efixtures.ImmediateSessionPeer(t).URL)
+	peer, network := e2efixtures.PartitionableSessionPeer(t)
+	defer network.Resume()
+	s := e2efixtures.NewSessionStack(t, peer.URL)
 	mcp := s.MCP()
 	var catalog struct {
 		Tools []struct {
@@ -49,8 +50,8 @@ func TestE2ESessionMCPDiscovery(t *testing.T) {
 		mcp.RPC("tools/call", map[string]any{"name": "list_runtime_sessions", "arguments": arguments}, -32602)
 	}
 
-	s.Worker(1)
-	s.Mission("mcp-discovery", false, "connect-resource")
+	s.Worker(1, "FIXTURE_PARTITION_CHECK=true")
+	s.Mission("mcp-discovery", "connect-resource")
 	firstScope, secondScope := id.New(), id.New()
 	first := createSession(t, s, s.Start("mcp-discovery"), firstScope)
 	second := createSession(t, s, s.Start("mcp-discovery"), secondScope)
@@ -80,9 +81,7 @@ func TestE2ESessionMCPDiscovery(t *testing.T) {
 	assertSessions(map[string]any{"scope_id": firstScope}, first)
 	assertSessions(map[string]any{"owner_agent_id": first.OwnerAgentID}, first, second)
 
-	if err := s.SignalWorker(1, syscall.SIGSTOP); err != nil {
-		t.Fatal(err)
-	}
+	network.Pause()
 	e2efixtures.WaitUntil(t, 12*time.Second, func() bool {
 		items := mcp.List(map[string]any{"owner_agent_id": first.OwnerAgentID})
 		return len(items) == 2 && items[0].State == "lost" && items[1].State == "lost"

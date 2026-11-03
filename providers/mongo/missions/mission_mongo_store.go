@@ -1,11 +1,14 @@
 package missions
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/providers/mongo/store"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -79,30 +82,56 @@ func (s *MissionMongoStore) Upsert(ctx context.Context, mission missions.Mission
 }
 
 func (s *MissionMongoStore) Get(ctx context.Context, name string) (missions.Mission, error) {
-	var document missionDocument
+	var document bson.Raw
 	if err := s.database.GetByID(ctx, collection, name, &document); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return missions.Mission{}, missions.ErrUnknownMission
 		}
 		return missions.Mission{}, err
 	}
-	return document.decode()
+	return decodeMission(document)
 }
 
 func (s *MissionMongoStore) List(ctx context.Context) ([]missions.Mission, error) {
-	var documents []missionDocument
+	var documents []bson.Raw
 	if err := s.database.Find(ctx, collection, bson.D{}, &documents, options.Find().SetSort(bson.D{{Key: "_id", Value: 1}})); err != nil {
 		return nil, err
 	}
 	result := make([]missions.Mission, 0, len(documents))
 	for _, document := range documents {
-		mission, err := document.decode()
+		mission, err := decodeMission(document)
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, mission)
 	}
 	return result, nil
+}
+
+func decodeMission(data bson.Raw) (missions.Mission, error) {
+	// BSON silently ignores unknown fields, including removed nested policies.
+	if value := data.Lookup("policies"); !value.IsZero() && value.Type != bson.TypeNull {
+		body, ok := value.DocumentOK()
+		if !ok {
+			return missions.Mission{}, errors.New("stored mission policies must be a document")
+		}
+		encoded, err := bson.MarshalExtJSON(body, false, false)
+		if err != nil {
+			return missions.Mission{}, err
+		}
+		decoder := json.NewDecoder(bytes.NewReader(encoded))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(new(policies.MissionPolicies)); err != nil {
+			return missions.Mission{}, fmt.Errorf("invalid stored mission policies: %w", err)
+		}
+	}
+	var document missionDocument
+	decoder := bson.NewDecoder(bson.NewDocumentReader(bytes.NewReader(data)))
+	decoder.UseJSONStructTags()
+	if err := decoder.Decode(&document); err != nil {
+		return missions.Mission{}, err
+	}
+	return document.decode()
 }
 
 func (d missionDocument) decode() (missions.Mission, error) {

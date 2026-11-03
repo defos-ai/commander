@@ -4,77 +4,80 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/build"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/workspaces"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/sessions"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 const BuildAgentName = "build-agent"
-const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in a workspace returned by checkout-template on this builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Keep checkout and build in one operation with policies.placement.same_agent. Requires the managed OPENAI_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
+const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in the workspace session returned by checkout-template. Supply its exact session_scope and session_id; the controller routes work to the owning builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Requires the managed OPENAI_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
 
 type BuildAgentInput struct {
-	WorkspaceID  string                   `json:"workspace_id"`
+	SessionScope string                   `json:"session_scope"`
+	SessionID    string                   `json:"session_id"`
 	Instructions string                   `json:"instructions"`
 	Actions      []actionmodel.Definition `json:"actions"`
 }
 
 func (i BuildAgentInput) Validate() error {
-	if !workspaceIDPattern.MatchString(i.WorkspaceID) || !utf8.ValidString(i.Instructions) || strings.TrimSpace(i.Instructions) == "" || len(i.Instructions) > 32000 || strings.ContainsRune(i.Instructions, 0) {
-		return errors.New("input requires a checkout workspace_id and nonblank instructions of at most 32000 bytes")
+	if !id.Valid(i.SessionScope) || !id.Valid(i.SessionID) {
+		return errors.New("input requires canonical session_scope and session_id")
+	}
+	if !utf8.ValidString(i.Instructions) || strings.TrimSpace(i.Instructions) == "" || len(i.Instructions) > 32000 || strings.ContainsRune(i.Instructions, 0) {
+		return errors.New("input requires nonblank instructions of at most 32000 bytes")
 	}
 	return build.ValidateActions(i.Actions)
 }
 
 type BuildAgentOutput struct {
-	WorkspaceID string `json:"workspace_id"`
-	SourceFiles int    `json:"source_files"`
-	AgentType   string `json:"agent_type"`
-	ModulePath  string `json:"module_path"`
-	Binary      string `json:"binary"`
+	SessionScope string `json:"session_scope"`
+	SessionID    string `json:"session_id"`
+	WorkspaceID  string `json:"workspace_id"`
+	SourceFiles  int    `json:"source_files"`
+	AgentType    string `json:"agent_type"`
+	ModulePath   string `json:"module_path"`
+	Binary       string `json:"binary"`
 }
 
 type buildTools struct{ codex, goTool string }
 
 type BuildAgent struct {
 	*action.Base
-	workspaceDir string
-	tools        atomic.Pointer[buildTools]
-	building     sync.Mutex
+	workspaces *workspaces.Provider
+	tools      atomic.Pointer[buildTools]
 }
 
-func NewBuildAgent(workspaceDir string) (*BuildAgent, error) {
-	if strings.TrimSpace(workspaceDir) == "" {
-		return nil, errors.New("workspace directory must not be blank")
-	}
-	root, err := filepath.Abs(workspaceDir)
-	if err != nil {
-		return nil, fmt.Errorf("workspace directory: %w", err)
+func NewBuildAgent(provider *workspaces.Provider) (*BuildAgent, error) {
+	if provider == nil {
+		return nil, errors.New("workspace sessions are required")
 	}
 	output, err := action.SchemaFor[BuildAgentOutput]()
 	if err != nil {
 		return nil, err
 	}
-	return &BuildAgent{workspaceDir: root, Base: action.NewBase(actionmodel.Action{
+	return &BuildAgent{workspaces: provider, Base: action.NewBase(actionmodel.Action{
+		SessionMode:     string(sessions.Use),
 		Name:            BuildAgentName,
 		Description:     BuildAgentDescription,
 		RequiredSecrets: []string{"OPENAI_API_KEY"},
 		InputSchema: json.RawMessage(`{
   "type":"object",
   "properties":{
-    "workspace_id":{"type":"string","pattern":"^checkout-[0-9]+$"},
+    "session_scope":{"type":"string","format":"uuid"},
+    "session_id":{"type":"string","format":"uuid","description":"Workspace session returned by checkout-template."},
     "instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"},
     "actions":{
       "type":"array","minItems":1,"maxItems":100,
@@ -92,7 +95,7 @@ func NewBuildAgent(workspaceDir string) (*BuildAgent, error) {
       }
     }
   },
-  "required":["workspace_id","instructions","actions"],
+  "required":["session_scope","session_id","instructions","actions"],
   "additionalProperties":false
 }`),
 		OutputSchema: output,
@@ -132,8 +135,6 @@ func (a *BuildAgent) Discover(ctx context.Context, env environment.Environment, 
 	return action.Ready, nil
 }
 
-var workspaceIDPattern = regexp.MustCompile(`^checkout-[0-9]+$`)
-
 func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return action.Result{}, err
@@ -148,17 +149,22 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	if err := input.Validate(); err != nil {
 		return action.Result{}, err
 	}
-	if !a.building.TryLock() {
-		return action.Result{}, errors.New("another build is running on this builder; wait for its outcome")
-	}
-	defer a.building.Unlock()
 	tools := a.tools.Load()
 	if tools == nil || !process.Available(tools.codex) || !process.Available(tools.goTool) {
 		a.tools.Store(nil)
 		a.SetStatus(action.Unknown)
 		return action.Result{}, errors.New("build tools changed; run discovery again")
 	}
-	source, err := a.sourceDirectory(input.WorkspaceID)
+	binding, ok := action.SessionFromContext(ctx)
+	if !ok || binding.ScopeID != input.SessionScope || binding.ID != input.SessionID {
+		return action.Result{}, errors.New("build requires its framework workspace session binding")
+	}
+	ctx, workspace, release, err := a.workspaces.Use(ctx, binding)
+	if err != nil {
+		return action.Result{}, err
+	}
+	defer release()
+	source, err := workspace.Source()
 	if err != nil {
 		return action.Result{}, err
 	}
@@ -186,7 +192,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}
 	// Check the original directory again: generated files cannot redirect later
 	// verification or artifact reads to another workspace through a symlink.
-	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
+	if _, err := workspace.Source(); err != nil {
 		return action.Result{}, err
 	}
 	if err := action.RunWithProgress(ctx, "Go tests", func() error {
@@ -203,7 +209,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}); err != nil {
 		return action.Result{}, err
 	}
-	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
+	if _, err := workspace.Source(); err != nil {
 		return action.Result{}, err
 	}
 	var metadata build.PackageMetadata
@@ -214,7 +220,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}); err != nil {
 		return action.Result{}, err
 	}
-	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
+	if _, err := workspace.Source(); err != nil {
 		return action.Result{}, err
 	}
 	if err := action.RunWithProgress(ctx, "Registered action validation", func() error {
@@ -222,7 +228,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}); err != nil {
 		return action.Result{}, err
 	}
-	if _, err := a.sourceDirectory(input.WorkspaceID); err != nil {
+	if _, err := workspace.Source(); err != nil {
 		return action.Result{}, err
 	}
 	var archive []byte
@@ -238,7 +244,7 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 		return action.Result{}, err
 	}
 	result, err := action.JSONResult(BuildAgentOutput{
-		WorkspaceID: input.WorkspaceID, SourceFiles: count,
+		SessionScope: binding.ScopeID, SessionID: binding.ID, WorkspaceID: workspace.ID, SourceFiles: count,
 		AgentType: metadata.AgentType, ModulePath: metadata.ModulePath, Binary: metadata.Binary,
 	})
 	if err != nil {
@@ -246,23 +252,4 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 	}
 	result.Artifacts = []action.Artifact{{Name: "Agent source", Files: []artifacts.FileSource{{Name: "source.tar.gz", MediaType: "application/gzip", Data: archive}}}}
 	return result, nil
-}
-
-func (a *BuildAgent) sourceDirectory(workspaceID string) (string, error) {
-	info, err := os.Lstat(a.workspaceDir)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return "", errors.New("builder workspace directory is unavailable or unsafe")
-	}
-	root, err := os.OpenRoot(a.workspaceDir)
-	if err != nil {
-		return "", errors.New("builder workspace directory is unavailable")
-	}
-	defer root.Close()
-	for _, name := range []string{workspaceID, filepath.Join(workspaceID, "source")} {
-		info, err := root.Lstat(name)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return "", errors.New("workspace is missing or unsafe; use the workspace_id returned by checkout-template on this builder")
-		}
-	}
-	return filepath.Join(a.workspaceDir, workspaceID, "source"), nil
 }

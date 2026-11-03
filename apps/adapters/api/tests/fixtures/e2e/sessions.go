@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -82,7 +81,6 @@ func RequireFilesystemFixture(t *testing.T) {
 }
 
 type SessionStack struct {
-	processes           map[int]*os.Process
 	t                   *testing.T
 	url, password       string
 	client              *http.Client
@@ -96,10 +94,6 @@ func (s *SessionStack) WithTest(t *testing.T) func() {
 	previous := s.t
 	s.t = t
 	return func() { s.t = previous }
-}
-
-func (s *SessionStack) SignalWorker(suffix int, signal os.Signal) error {
-	return s.processes[suffix].Signal(signal)
 }
 
 func (s *SessionStack) StopController() { s.stopController() }
@@ -144,7 +138,7 @@ func NewSessionStack(t *testing.T, peer string, controllerSource ...string) *Ses
 	env := append(os.Environ(), "BUS_URL="+bus, "DATABASE_URL="+database, "STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=info", "FIXTURE_PEER="+peer)
 	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	t.Cleanup(client.CloseIdleConnections)
-	s := &SessionStack{processes: map[int]*os.Process{}, t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, controllerArgs: []string{"--heartbeat-timeout=6s"}}
+	s := &SessionStack{t: t, url: "http://" + address, password: password, client: client, env: env, binaries: binaries, peer: peer, controllerArgs: []string{"--heartbeat-timeout=6s"}}
 	StartE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
 	s.stopController = StartE2E(t, binaries["controller"], s.controllerArgs, env)
 	WaitUntil(t, 10*time.Second, func() bool {
@@ -212,9 +206,7 @@ func (s *SessionStack) Worker(suffix int, extra ...string) func() {
 	owner := fmt.Sprintf("fixture-agent-%08x", suffix)
 	env := append(append([]string{}, s.env...), "FIXTURE_AGENT_ID="+owner, "FIXTURE_PEER="+s.peer)
 	env = append(env, extra...)
-	process, stop := startE2EProcess(s.t, s.binaries["worker"], nil, env)
-	s.processes[suffix] = process
-	s.t.Cleanup(func() { _ = process.Signal(syscall.SIGCONT) })
+	_, stop := startE2EProcess(s.t, s.binaries["worker"], nil, env)
 	WaitUntil(s.t, 10*time.Second, func() bool {
 		var catalog struct{ Items []struct{ ID, Status string } }
 		s.Request("GET", "/api/v1/agents", nil, 200, &catalog)
@@ -228,12 +220,8 @@ func (s *SessionStack) Worker(suffix int, extra ...string) func() {
 	return stop
 }
 
-func (s *SessionStack) Mission(name string, group bool, required ...string) {
-	policies := map[string]any{}
-	if group {
-		policies["placement"] = map[string]any{"same_agent": []string{"connect-resource", "use-resource", "mark-owner"}}
-	}
-	s.Request("POST", "/api/v1/missions", map[string]any{"name": name, "objectives": []string{"Exercise durable runtime sessions"}, "required_actions": required, "starting_actions": []string{"connect-resource"}, "policies": policies, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
+func (s *SessionStack) Mission(name string, required ...string) {
+	s.Request("POST", "/api/v1/missions", map[string]any{"name": name, "objectives": []string{"Exercise durable runtime sessions"}, "required_actions": required, "starting_actions": []string{"connect-resource"}, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
 }
 
 func (s *SessionStack) Start(mission string) string {

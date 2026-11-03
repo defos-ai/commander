@@ -3,7 +3,6 @@ package operation
 import (
 	"context"
 	"errors"
-	"slices"
 	"sort"
 	"time"
 
@@ -115,33 +114,10 @@ func (r *Worker) selectAgent(ctx context.Context, operation operations.Operation
 		return "", nil
 	}
 	owner := placement.OwnerAgentID
-	var affinityCandidates []string
-	grouped := slices.Contains(operation.Mission.SameAgentActions(), task.ActionName)
-	if grouped {
-		boundAgentID, err := operation.AffinityAgentID()
-		if err != nil {
-			return "", err
-		}
-		if boundAgentID != "" {
-			// A preceding dispatch in this scheduler pass may have just bound
-			// the group; the saved preflight can still list unbound candidates.
-			affinityCandidates = []string{boundAgentID}
-		} else if operation.Preflight != nil {
-			for _, readiness := range operation.Preflight.Actions {
-				if readiness.ActionName == task.ActionName {
-					affinityCandidates = readiness.ReadyAgentIDs
-					break
-				}
-			}
-		}
-	}
 	selection := AgentSelection{PreviousAgentID: r.lastAgent}
 	eligible := make(map[string]bool)
 	for _, record := range records {
 		if owner != "" && record.ID != owner {
-			continue
-		}
-		if grouped && !slices.Contains(affinityCandidates, record.ID) {
 			continue
 		}
 		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity {

@@ -30,7 +30,7 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[name] = summary
 	}
-	for _, name := range []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"} {
+	for _, name := range []string{"analyze-text", "build-agent", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
 			t.Fatalf("missing agent mission: %s", name)
 		}
@@ -111,7 +111,6 @@ func TestMissionSharingPolicy(t *testing.T) {
 	definition.Policies.Completion.DecisionBy = policies.Model
 	definition.Policies.Continuation.AggregateResults = []string{"review-vulnerabilities"}
 	definition.Policies.Continuation.ModelReview = []string{"review-vulnerabilities"}
-	definition.Policies.Placement.SameAgent[1] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []policies.SharingKind{policies.ShareDecisions}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
@@ -135,12 +134,12 @@ func TestMissionSharingPolicy(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "include") {
 		t.Fatalf("unsupported sharing kind should be an invalid argument: %v", err)
 	}
-	for _, placement := range fixtures.InvalidPlacementPolicies() {
+	for _, removed := range []any{nil, fixtures.Object{}} {
 		candidate := fixtures.MissionDefinition(definition)
-		candidate["policies"] = fixtures.Object{"placement": placement}
+		candidate["policies"] = fixtures.Object{"placement": removed}
 		_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: candidate})
 		if err == nil {
-			t.Fatalf("invalid placement should be an invalid argument: %+v", placement)
+			t.Fatal("removed placement policy must be rejected")
 		}
 	}
 	for _, continuation := range fixtures.InvalidContinuationPolicies() {
@@ -167,7 +166,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 			t.Fatalf("legacy root completion must be rejected: %+v", completion)
 		}
 	}
-	for _, rules := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate-results": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}, fixtures.Object{"decide-next-actions": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}, "params": fixtures.Object{"decision_by": "model"}}}, fixtures.Object{"same-agent": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}} {
+	for _, rules := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate-results": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}, fixtures.Object{"decide-next-actions": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}, "params": fixtures.Object{"decision_by": "model"}}}} {
 		legacy := fixtures.MissionDefinition(definition)
 		legacy["rules"] = rules
 		_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: legacy})
@@ -186,15 +185,6 @@ func TestMissionSharingPolicy(t *testing.T) {
 		_, err = legacyClient.Session.CallTool(legacyClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: legacy})
 		if err == nil || !strings.Contains(err.Error(), field) {
 			t.Fatalf("old root %s field should be rejected: %v", field, err)
-		}
-	}
-	for _, placement := range []any{nil, fixtures.Object{}, fixtures.Object{"same_agent": nil}, fixtures.Object{"same_agent": []string{}}} {
-		candidate := fixtures.MissionDefinition(definition)
-		candidate["policies"] = fixtures.Object{"placement": placement}
-		updated = missions.Mission{}
-		a.Call("update_mission", candidate, &updated)
-		if updated.Policies == nil || placement == nil && updated.Policies.Placement != nil || placement != nil && (updated.Policies.Placement == nil || len(updated.Policies.Placement.SameAgent) != 0) {
-			t.Fatal("empty placement should declare no affinity group")
 		}
 	}
 	for _, continuation := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate_results": nil, "model_review": nil}, fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}} {

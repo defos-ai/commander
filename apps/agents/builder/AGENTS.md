@@ -5,9 +5,12 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 ## Entry points
 
 - [agent.go](agent.go) defines `AgentType` and `NewAgent`, returning the framework
-  agent with a fresh catalog when `AgentConfig.Actions` is nil. An explicitly
-  empty catalog stays empty. Keep catalog construction here; individual action
-  constructors belong in `actions/`.
+  agent with a fresh catalog and shared workspace-session provider when
+  `AgentConfig.Actions` is nil. An explicitly empty catalog stays empty.
+  `NewActions` returns the catalog and its `sessions.Provider`; inject both into
+  `AgentConfig` together. Custom actions/providers remain caller-owned; default
+  actions cannot use an unrelated provider. Keep catalog construction here;
+  individual action constructors belong in `actions/`.
 - [cli](cli/) owns host configuration, provider factories and lifecycle.
   `--workspace-dir` overrides `BUILDER_WORKSPACE_DIR`; the default is
   `state/builder-workspaces`. Providers follow the example-agent template's conventions.
@@ -17,10 +20,15 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   type and never accept full IDs or a caller-supplied type prefix.
 - `cli.Run` enables managed-secret delivery without an encryption key. The host
   must not read, validate, generate or distribute `SECRETS_ENCRYPTION_KEY`.
-- [checkout-template](actions/checkout_template.go) accepts `{}` and uses a fixed
-  source URL; do not expose paths or arbitrary Git URLs through task input.
-- [build-agent](actions/build_agent.go) accepts the checkout's opaque workspace
-  ID, instructions and 1–100 `actions.Definition` contracts. Require unique safe
+- [checkout-template](actions/checkout_template.go) declares `session_mode=create`
+  and accepts `session_scope`, plus an optional `session_id` for explicit reuse.
+  Use the operation ID as its default scope. Its source URL is fixed; do not expose
+  paths or arbitrary Git URLs through task input. Return the exact session binding,
+  opaque workspace ID and revision; reuse never replaces existing source.
+- [build-agent](actions/build_agent.go) declares `session_mode=use` and accepts the
+  checkout's exact `session_scope` and `session_id`, instructions and 1–100
+  `actions.Definition` contracts. Workspace IDs are output metadata, never routing
+  inputs. Require unique safe
   action names, trimmed nonblank descriptions, compilable input/output schemas
   explicitly declaring `type: object`, and valid unique required secret names.
   Preserve schema extensions and allow local references only. Validate contracts
@@ -98,6 +106,19 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - Create a private, unique checkout per execution. Return an opaque workspace ID
   and exact revision, never a host path. Successful checkouts remain in configured
   storage; remove only the current incomplete checkout on errors or cancellation.
+  Explicit reuse returns the original checkout without cloning again.
+- [internal/workspaces](internal/workspaces/) implements the process-local
+  `sessions.Provider` shared by checkout, build and the agent runtime. Read the
+  [session contract](../../../framework/sessions/AGENTS.md) before changing it.
+  `Prepare` retains the exact framework creation claim without touching disk;
+  actions require its binding through `action.SessionFromContext`. The provider
+  serializes work per claim, keeps cancellation private and publishes independent
+  snapshots through coalesced changes. Do not hold its mutex over subprocess work.
+  Close fences starts first, cancels active checkout/build and waits before
+  acknowledging closure. A timed-out close leaves the claim fenced; retries join
+  its retained work. Preserve close-before-prepare tombstones for the process
+  lifetime and reject conflicting owners/creation claims. Explicit close retains
+  successful source bytes; owner shutdown reports loss, not verified closure.
 - [Git commands](internal/git/command.go) run argv directly with bounded output and an isolated
   environment. Never inherit managed secrets, Git config, credential helpers or
   proxy settings. Disable hooks/templates and recursive submodules. The temporary
@@ -147,9 +168,11 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   Keep child output bounded to 1 MiB, inspection bounded to two minutes, diagnostics
   redacted and the probe out of artifacts. Failures preserve source and return no
   artifacts. Constructor inspection checks declarations, not implementation behavior.
-- Workspace storage is local to the owning builder. The bundled `build-agent`
-  mission binds checkout and build through `policies.placement.same_agent`.
-  Do not route a workspace to another builder or duplicate affinity in the action.
+- Workspace storage is local to the exact builder process. The bundled
+  `build-agent` mission passes checkout's session binding into build; controller
+  session placement selects the owner. Do not duplicate placement in the action
+  or attach old workspace directories to a replacement process by ID. Publication
+  continues to use artifact storage independently of workspace/session ownership.
 
 ## Deployment
 

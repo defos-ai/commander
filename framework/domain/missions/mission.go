@@ -35,13 +35,6 @@ type Mission struct {
 	OutputSchema      json.RawMessage           `json:"output_schema"`
 }
 
-func (m Mission) SameAgentActions() []string {
-	if m.Policies == nil || m.Policies.Placement == nil {
-		return nil
-	}
-	return m.Policies.Placement.SameAgent
-}
-
 func (m Mission) ContinuationPolicy() policies.ContinuationPolicy {
 	if m.Policies == nil || m.Policies.Continuation == nil {
 		return policies.ContinuationPolicy{}

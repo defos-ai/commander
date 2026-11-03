@@ -31,7 +31,6 @@ type OperationView struct {
 	operations.Operation
 	Tasks    []TaskView
 	Progress operations.Progress
-	Affinity *operations.Affinity
 }
 
 type TaskView struct {
@@ -191,7 +190,6 @@ func operationView(item operations.Operation, records map[string]agents.Agent, n
 		Operation: item,
 		Tasks:     taskViews(item.Tasks, item.ID, records, now),
 		Progress:  item.AssessProgress(now),
-		Affinity:  item.AssessAffinity(),
 	}
 }
 

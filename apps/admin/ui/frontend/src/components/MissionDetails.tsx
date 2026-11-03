@@ -26,10 +26,6 @@ export function MissionDetails({ mission }: { mission: Mission }) {
       <section className="mission-section"><h2>{t($ => $.missions.requiredActions)}</h2><ActionNames names={mission.required_actions} /></section>
     </div>
     {Boolean(mission.optional_actions?.length) && <section className="mission-section"><h2>{t($ => $.missions.optionalActions)}</h2><ActionNames names={mission.optional_actions} /></section>}
-    {Boolean(mission.policies?.placement?.same_agent?.length) && <section className="mission-section"><h2>{t($ => $.missions.sameAgentActions)}</h2>
-      <p className="mission-muted">{t($ => $.missionPolicies.sameAgentSetting)}</p>
-      <ActionNames names={mission.policies?.placement?.same_agent} />
-    </section>}
     <section className="mission-section"><h2>{t($ => $.missionPolicies.continuation)}</h2>
       <MissionContinuation policy={mission.policies?.continuation} />
     </section>

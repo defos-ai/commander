@@ -28,7 +28,6 @@ type OperationResponse struct {
 	Status          string                    `json:"status"`
 	Progress        OperationProgressResponse `json:"progress"`
 	Preflight       *PreflightResponse        `json:"preflight,omitempty"`
-	Affinity        *AffinityResponse         `json:"affinity,omitempty"`
 	Tasks           []TaskResponse            `json:"tasks"`
 	Questions       []QuestionResponse        `json:"questions"`
 	Output          json.RawMessage           `json:"output,omitempty"`
@@ -48,10 +47,4 @@ type OperationProgressResponse struct {
 	PendingDecisions int            `json:"pending_decisions"`
 	PendingQuestions int            `json:"pending_questions"`
 	Settled          bool           `json:"settled"`
-}
-
-type AffinityResponse struct {
-	ForActions []string `json:"for_actions"`
-	AgentID    string   `json:"agent_id,omitempty"`
-	Error      string   `json:"error,omitempty"`
 }

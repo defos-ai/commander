@@ -49,8 +49,8 @@ controller hosts its components.
 The default is `operation.RoundRobinSelector{}`. To change selection, implement
 [`operation.AgentSelector`](../../framework/controller/workers/operation/agent_selector.go)
 and pass it in `controller.ControllerConfig.AgentSelector`. Return an eligible
-agent ID or an empty ID to defer work. [Task affinity](../../docs/features/missions.md#task-affinity)
-still applies.
+agent ID or an empty ID to defer work. Tasks using a
+[session](../../docs/features/sessions.md) remain bound to its owner.
 
 Report its `Name()` in `controller.RegistrationConfig.AgentSelector` so Admin
 displays it. Mission policies come directly from the saved definition and remain

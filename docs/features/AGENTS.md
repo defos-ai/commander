@@ -8,8 +8,8 @@ operators use Commander; [README.md](README.md) is the feature index.
 - Put mission authoring and policy configuration in `missions.md`; put running,
   inspecting and settling work in `operations.md`. Questions, secrets, sessions
   and data sharing have their own guides. Avoid repeating their full workflows.
-- Use current `policies.placement`, `policies.continuation`, `policies.completion`
-  and `policies.sharing` shapes. Mission edits affect future operations only.
+- Use current `policies.continuation`, `policies.completion` and
+  `policies.sharing` shapes. Resource ownership belongs to sessions. Mission edits affect future operations only.
 - Keep component setup, flags and command references in component READMEs.
   Link implementation contracts, provider interfaces and checks in the relevant
   AGENTS files instead of copying them into feature guides.

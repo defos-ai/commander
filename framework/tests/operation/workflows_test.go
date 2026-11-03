@@ -162,8 +162,8 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	catalog.Change(func(m *missions.Mission) {
 		scope := []string{"discover", "inspect"}
 		m.Policies = &policies.MissionPolicies{
-			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
-			Placement:  fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy(),
+			Completion:   &policies.CompletionPolicy{DecisionBy: policies.Operator},
+			Sharing:      fixtures.SharingPolicy(),
 			Continuation: &policies.ContinuationPolicy{AggregateResults: scope, ModelReview: scope[:1]},
 		}
 	})
@@ -173,7 +173,6 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	op := fixtures.Start(t, r)
 	catalog.Change(func(m *missions.Mission) {
 		m.Policies.Completion.DecisionBy = policies.Model
-		m.Policies.Placement.SameAgent[0] = "follow-up"
 		m.Policies.Continuation.AggregateResults[0] = "follow-up"
 		m.Policies.Continuation.ModelReview[0] = "inspect"
 		m.Policies.Sharing[0].FromActions[0] = "follow-up"
@@ -193,7 +192,6 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	}
 	op.Mission.Policies.Continuation.ModelReview[0] = "returned review changed"
 	op.Mission.Policies.Completion.DecisionBy = policies.Model
-	op.Mission.Policies.Placement.SameAgent[0] = "returned placement changed"
 	op.Mission.Policies.Sharing[0].FromActions[0] = "returned source changed"
 	op.Mission.Policies.Sharing[0].ToActions[0] = "returned recipient changed"
 	op.Mission.Policies.Sharing[0].Include[0] = "returned kind changed"

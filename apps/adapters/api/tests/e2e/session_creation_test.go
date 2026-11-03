@@ -21,15 +21,6 @@ import (
 )
 
 func TestE2EAutomaticSessionCreationReservesScope(t *testing.T) {
-	for _, sameAgent := range []bool{false, true} {
-		t.Run(fmt.Sprintf("same-agent=%t", sameAgent), func(t *testing.T) {
-			testSessionCreationReservesScope(t, sameAgent)
-		})
-	}
-}
-
-func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
-	t.Helper()
 	root, err := filepath.Abs("../../../../..")
 	if err != nil {
 		t.Fatal(err)
@@ -80,10 +71,6 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	}
 	address := listener.Addr().String()
 	listener.Close()
-	policies := map[string]any{}
-	if sameAgent {
-		policies["placement"] = map[string]any{"same_agent": []string{"propose-connections", "connect-resource"}}
-	}
 	password := id.New()
 	env := append(os.Environ(), "BUS_URL="+filepath.Join(state, "bus"), "DATABASE_URL="+filepath.Join(state, "database"),
 		"STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=error")
@@ -140,7 +127,7 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 		request("GET", "/api/v1/agents", nil, 200, &catalog)
 		return len(catalog.Items) == 2 && catalog.Items[0].Status == "ready" && catalog.Items[1].Status == "ready"
 	})
-	request("POST", "/api/v1/missions", map[string]any{"name": "session-e2e", "objectives": []string{"Connect one owned resource"}, "required_actions": []string{"propose-connections", "connect-resource"}, "starting_actions": []string{"propose-connections"}, "policies": policies, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
+	request("POST", "/api/v1/missions", map[string]any{"name": "session-e2e", "objectives": []string{"Connect one owned resource"}, "required_actions": []string{"propose-connections", "connect-resource"}, "starting_actions": []string{"propose-connections"}, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
 	input := map[string]any{"session_scope": id.New()}
 	start := func() string {
 		var operation operations.Operation
@@ -205,14 +192,7 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 		var operation operations.Operation
 		request("GET", path, nil, 200, &operation)
 		queued, succeeded := 0, 0
-		owner := ""
 		for _, task := range operation.Tasks {
-			if sameAgent && task.AgentID != "" {
-				if owner != "" && task.AgentID != owner {
-					t.Fatalf("session creation violated same-agent placement: %+v", operation.Tasks)
-				}
-				owner = task.AgentID
-			}
 			if task.ActionName != "connect-resource" {
 				continue
 			}

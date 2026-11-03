@@ -119,7 +119,7 @@ func ExpectedAgentActions(agentType string) []string {
 }
 
 func ExpectedMissions() []string {
-	return []string{"analyze-text", "build-agent", "fixture-affinity", "fixture-use-agent", "install-agent"}
+	return []string{"analyze-text", "build-agent", "fixture-use-agent", "install-agent"}
 }
 
 func HasExpectedMissions(missions []models.MissionResponse) bool {

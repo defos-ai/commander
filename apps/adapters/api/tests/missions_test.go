@@ -76,7 +76,6 @@ func TestMissionSharingPolicy(t *testing.T) {
 	definition.Policies.Completion.DecisionBy = "model"
 	definition.Policies.Continuation.AggregateResults = []string{"review-vulnerabilities"}
 	definition.Policies.Continuation.ModelReview = []string{"review-vulnerabilities"}
-	definition.Policies.Placement.SameAgent[1] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []string{"decisions"}
 	updated := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
@@ -94,8 +93,8 @@ func TestMissionSharingPolicy(t *testing.T) {
 		candidate.Policies.Sharing = invalid
 		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/missions", candidate), http.StatusBadRequest, "invalid_request")
 	}
-	for _, placement := range fixtures.InvalidPlacementPolicies() {
-		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"placement": placement})
+	for _, removed := range []any{nil, fixtures.Object{}} {
+		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"placement": removed})
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, candidate), http.StatusBadRequest, "invalid_request")
 	}
 	for _, continuation := range fixtures.InvalidContinuationPolicies() {
@@ -111,7 +110,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 		legacy["completion"] = completion
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
 	}
-	for _, rules := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate-results": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}, fixtures.Object{"decide-next-actions": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}, "params": fixtures.Object{"decision_by": "model"}}}, fixtures.Object{"same-agent": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}} {
+	for _, rules := range []any{nil, fixtures.Object{}, fixtures.Object{"aggregate-results": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}, fixtures.Object{"decide-next-actions": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}, "params": fixtures.Object{"decision_by": "model"}}}} {
 		legacy := fixtures.PoliciesDefinition(definition, nil)
 		legacy["rules"] = rules
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
@@ -125,13 +124,13 @@ func TestMissionSharingPolicy(t *testing.T) {
 		}
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
 	}
-	for _, policies := range []any{fixtures.Object{"completion": nil}, fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"continuation": nil}, fixtures.Object{"continuation": fixtures.Object{}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": nil, "model_review": nil}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}}, fixtures.Object{"placement": nil}, fixtures.Object{"placement": fixtures.Object{}}, fixtures.Object{"placement": fixtures.Object{"same_agent": nil}}, fixtures.Object{"placement": fixtures.Object{"same_agent": []string{}}}, fixtures.Object{}, nil} {
+	for _, policies := range []any{fixtures.Object{"completion": nil}, fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"continuation": nil}, fixtures.Object{"continuation": fixtures.Object{}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": nil, "model_review": nil}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}}, fixtures.Object{}, nil} {
 		disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, fixtures.PoliciesDefinition(definition, policies)), http.StatusOK)
 		if policies == nil {
 			if disabled.Policies != nil {
 				t.Fatal("null policies were not removed")
 			}
-		} else if disabled.Policies == nil || disabled.Policies.Completion != nil || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Placement != nil && len(disabled.Policies.Placement.SameAgent) != 0 || disabled.Policies.Continuation != nil && (len(disabled.Policies.Continuation.AggregateResults) != 0 || len(disabled.Policies.Continuation.ModelReview) != 0) {
+		} else if disabled.Policies == nil || disabled.Policies.Completion != nil || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Continuation != nil && (len(disabled.Policies.Continuation.AggregateResults) != 0 || len(disabled.Policies.Continuation.ModelReview) != 0) {
 			t.Fatal("empty policies should declare no overrides")
 		}
 	}
@@ -155,9 +154,6 @@ func assertMissionPolicies(t *testing.T, got *models.MissionPoliciesResponse, wa
 	}
 	if (got.Continuation == nil) != (want.Continuation == nil) || got.Continuation != nil && (!slices.Equal(got.Continuation.AggregateResults, want.Continuation.AggregateResults) || !slices.Equal(got.Continuation.ModelReview, want.Continuation.ModelReview)) {
 		t.Fatalf("mission continuation differs: got %+v, want %+v", got.Continuation, want.Continuation)
-	}
-	if (got.Placement == nil) != (want.Placement == nil) || got.Placement != nil && !slices.Equal(got.Placement.SameAgent, want.Placement.SameAgent) {
-		t.Fatalf("mission placement differs: got %+v, want %+v", got.Placement, want.Placement)
 	}
 	for i, route := range got.Sharing {
 		expected := want.Sharing[i]

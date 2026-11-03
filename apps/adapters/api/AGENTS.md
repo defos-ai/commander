@@ -57,20 +57,14 @@
   `404 mission_not_found`. Concurrent edits are last-write-wins. Updates affect
   future operations only, never their retained mission snapshots. Read the saved
   definition after uncertain writes; never retry an update automatically.
-- Optional mission `policies.placement.same_agent` uses independent placement
-  request/response DTOs mapped to the shared `PlacementPolicy`. Clone the optional
-  policy pointer and its action-name slice independently. Omitted/null/empty
-  placement or action lists declare no affinity. Names are trimmed, nonblank and
-  unique; they need not belong to mission coverage. Strict OpenAPI/MCP schemas
-  reject unknown fields and the removed root `rules` field (including empty/null). Preserve placement
-  in mission responses and operation snapshots; edits affect future operations.
 - Optional mission `policies.continuation` maps through independent continuation
   request/response DTOs. Clone its pointer, `aggregate_results` and `model_review`
   lists separately. Each optional list permits null or empty values, requires
   unique trimmed nonblank action names and can overlap the other list. Omitted,
   null or empty continuation declares no overrides. Keep OpenAPI nested policies
   and continuation strict; register continuation schemas before policies so the
-  nested schema preserves nullable arrays and action-name constraints.
+  nested schema preserves nullable arrays and action-name constraints. Reject the
+  removed `policies.placement` field, including null, through strict decoding.
 - Optional mission `policies.completion` maps through independent API
   request/response DTOs to [`policies.CompletionPolicy`](../../../framework/domain/missions/policies/completion_policy.go).
   Clone its pointer at mapping boundaries; omission and explicit null stay
@@ -130,9 +124,6 @@
   managed declarations for assessed live candidates, not sensitive host
   configuration (`kind: configuration`, `sensitive: true`) or pending lease requests.
   Keep mappings independent; API reads never infer readiness from secret storage.
-- Operation DTOs explicitly map the read-only `affinity` assessment from saved
-  task history. Keep ownership separate from queued task assignments and live
-  readiness; preserve history errors rather than presenting them as unbound.
 - Operation DTOs expose the shared `progress` assessment on queries and commands.
   Keep its six required fields in the OpenAPI contract and map counts explicitly;
   clients use `settled` to keep observing terminal work with unknown outcomes.

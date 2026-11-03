@@ -11,14 +11,9 @@ export interface Mission {
 }
 
 export interface MissionPolicies {
-  placement?: PlacementPolicy | null;
   continuation?: ContinuationPolicy | null;
   completion?: CompletionPolicy | null;
   sharing?: SharingRoute[] | null;
-}
-
-export interface PlacementPolicy {
-  same_agent?: string[] | null;
 }
 
 export interface ContinuationPolicy {

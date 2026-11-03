@@ -16,8 +16,8 @@ use the [HTTP API](../../apps/adapters/api/README.md#operation-commands).
 5. Follow the operation, answer [questions](questions.md) and review decisions.
 
 Starting does not automatically assign `starting_actions`. Optional actions do
-not block initial preflight, but must be ready when queued. A same-agent group
-also requires a suitable owner; optionality does not remove that constraint.
+not block initial preflight, but must be ready when queued. Work using a
+[session](sessions.md) must also have a usable resource on its exact owner.
 
 Successful actions can propose follow-ups. Valid nonempty proposals run
 automatically unless continuation policy requires model review. Failures,

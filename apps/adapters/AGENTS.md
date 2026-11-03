@@ -46,7 +46,7 @@
 - Runtime-session tools query retained records through `queries.Sessions` using
   optional intersecting scope/exact-owner filters and send
   controls through the controller. Preserve `request_id`, abandonment's retained
-  lost state and affinity, and `session_mode` in action summaries/contracts.
+  lost state and exact owner, and `session_mode` in action summaries/contracts.
   See [session queries and controls](../../docs/features/sessions.md#queries-and-controls).
 - Standalone MCP requires `MCP_TOKEN`; embedded hosts inject `host.BearerCredentials`
   through CLI options. Validate before opening listeners or providers. Protect
@@ -96,10 +96,8 @@
   Optional `policies.sharing` retains action-based routes for results, artifacts
   and decisions in mission/operation reads. Empty or omitted sharing declares no
   routes. Omitted/null `policies` and an empty object also declare no routes.
-  Placement, continuation, completion and sharing are grouped under policies.
-  `policies.placement.same_agent` is an optional unique list of trimmed action names; omitted/null/empty placement or lists mean no affinity.
-  Preserve its pointer and slice independently in HTTP DTO mappings and snapshots.
-  Placement neither starts nor orders tasks. `policies.continuation` contains
+  Continuation, completion and sharing are grouped under policies.
+  `policies.continuation` contains
   independent `aggregate_results` and `model_review` action-name lists. They may
   overlap; omitted/null/empty fields or objects disable each override. Names are
   unique, trimmed and nonblank. Aggregation collects saved direct children, never
@@ -180,11 +178,6 @@
   fallback_at is the earliest model answer time. Operators may answer throughout;
   unanswered questions remain pending and blocking after this deadline. Passing
   the deadline does not supply an answer or approval.
-- MCP `get_operation` and `list_operations` expose read-only `affinity` through
-  `Operation.AssessAffinity`. Preserve `for_actions`, the saved owner and any
-  history error even without live inventory. Queued tasks remain unassigned.
-  Explain `policies.placement.same_agent` as placement with no fallback; saved preflight is not
-  evidence of current capacity. Command responses retain their saved-state shape.
 - Keep pagination cursors bound to the resource and operation. Bound event waits
   and honor cancellation without changing saved operation state.
 

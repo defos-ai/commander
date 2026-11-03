@@ -40,7 +40,7 @@
 ## Selection and durable work
 
 - [operation.AgentSelector](../../framework/controller/workers/operation/agent_selector.go)
-  chooses only among supplied eligible candidates. Affinity, readiness, capacity
+  chooses only among supplied eligible candidates. Session ownership, readiness, capacity
   checks and durable dispatch reservation remain the operation worker's
   responsibility.
   Inject it through `ControllerConfig.AgentSelector`.

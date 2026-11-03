@@ -56,7 +56,7 @@ func registerSessions(server *mcp.Server, config Config) {
 			return result, nil
 		})
 	if controller, ok := config.Operations.(commands.SessionController); ok {
-		addTool(server, "control_runtime_session", "Inspect, verify or close an existing runtime session, or explicitly abandon a lost session. Owner controls remain available while a task is running. Abandonment releases the scope without confirming closure or changing operation affinity.",
+		addTool(server, "control_runtime_session", "Inspect, verify or close an existing runtime session, or explicitly abandon a lost session. Owner controls remain available while a task is running. Abandonment releases the scope without confirming closure or changing the retained session owner.",
 			`{"type":"object","additionalProperties":false,"required":["id","owner_agent_id","scope_id","method"],"properties":{"id":{"type":"string","format":"uuid"},"owner_agent_id":{"type":"string"},"scope_id":{"type":"string","format":"uuid"},"request_id":{"type":"string","format":"uuid"},"method":{"type":"string","enum":["inspect","verify","close","abandon"]}}}`,
 			func(ctx context.Context, request sessions.Control) (sessions.Session, error) {
 				return controller.ControlSession(ctx, request)

@@ -35,7 +35,7 @@ applies to all domain packages below this directory.
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.
 - Mission policy types live in [missions/policies](missions/policies/), which
-  stays independent of its parent package. Completion, placement, continuation
+  stays independent of its parent package. Completion, continuation
   and sharing are grouped under `MissionPolicies`.
 - [`CompletionPolicy`](missions/policies/completion_policy.go) is optional under
   `MissionPolicies.Completion`. Omission/null preserves the model default; an
@@ -43,18 +43,14 @@ applies to all domain packages below this directory.
   policy container. `Mission.CompletionPolicy` reads the effective value without
   filling omitted fields. Reject root `completion` instead of dropping operator
   authority while reading an old definition.
-- [`PlacementPolicy`](missions/policies/placement_policy.go) is optional under
-  `MissionPolicies.Placement`. Its one `same_agent` group is read by preflight,
-  dispatch, affinity and session placement. Omitted/null placement and nil/empty
-  action lists add no constraint. Validate trimmed, unique nonblank names without
-  requiring membership in mission coverage. Clone the pointer and list independently.
-  Reject the old root `rules` field rather than accepting both configurations.
 - [`ContinuationPolicy`](missions/policies/continuation_policy.go) is optional under
   `MissionPolicies.Continuation` and controls task/group follow-up decisions.
   Its aggregation/model-review scopes are independent and may overlap. Clone each
   slice independently, even when inputs share a backing array. Aggregation covers
   saved direct children; failures and empty proposals still require model review.
-  Placement and continuation do not override completion or sharing settings.
+  Continuation does not override completion or sharing settings. Reject removed
+  root `rules` and nested `policies.placement` fields, including null or empty values,
+  rather than silently accepting definitions with discarded constraints.
 - Operation transitions own tasks, questions, continuations and events together.
   Use [OperationStore](operations/operation_store.go) mutation contracts rather
   than rebuilding a saved operation from a stale caller snapshot.

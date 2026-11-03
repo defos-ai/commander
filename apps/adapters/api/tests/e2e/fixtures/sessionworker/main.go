@@ -37,6 +37,9 @@ func run() error {
 		return err
 	}
 	defer bus.Close()
+	if os.Getenv("FIXTURE_PARTITION_CHECK") == "true" {
+		bus = sessionworkerfakes.WithPartition(bus, os.Getenv("FIXTURE_PEER"))
+	}
 	files, err := artifacts.NewArtifactFileFsStore(os.Getenv("STORAGE_URL"))
 	if err != nil {
 		return err
@@ -95,18 +98,6 @@ func run() error {
 		return err
 	}
 	executors = append(executors, marker)
-	proposer, err := action.NewFunc(action.FuncConfig[useInput, map[string]string]{Action: actions.Action{Name: "propose-affinity"}, Run: func(ctx context.Context, _ useInput) (map[string]string, error) {
-		return map[string]string{"owner": owner}, nil
-	}, NextActions: func(ctx context.Context, input useInput, _ map[string]string) ([]action.NextAction, error) {
-		raw, _ := json.Marshal(input)
-		return []action.NextAction{{ActionName: "mark-owner", Input: json.RawMessage(`{}`)}, {ActionName: "use-resource", Input: raw}}, nil
-	}})
-	if err != nil {
-		return err
-	}
-	if os.Getenv("FIXTURE_NO_PROPOSER") != "true" {
-		executors = append(executors, proposer)
-	}
 	interval := 500 * time.Millisecond
 	worker, err := agent.NewAgent(agent.AgentConfig{Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})), ID: owner, Type: "fixture", Actions: executors,
 		Sessions: resources, ArtifactFileStore: files, HeartbeatInterval: &interval,

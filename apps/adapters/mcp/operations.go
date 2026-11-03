@@ -101,7 +101,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, policies and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; policies.continuation.aggregate_results groups direct child results; policies.continuation.model_review requests model review. policies.placement.same_agent keeps its action names on one agent instance per operation; it does not serialize tasks. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, policies and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; policies.continuation.aggregate_results groups direct child results; policies.continuation.model_review requests model review. Does not execute work.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
@@ -148,7 +148,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request StartOperationRequest) (operationResult, error) {
 			return commandOperation(execution.Start(ctx, commands.StartOperationCommand(request)))
 		})
-	addTool(server, "list_operations", "List operation IDs, mission names, inputs, status, affinity and progress (task counts, finished/total tasks, pending model decisions/questions and settlement). Use get_operation for results and decisions, or get_report for a final report.", emptySchema,
+	addTool(server, "list_operations", "List operation IDs, mission names, inputs, status and progress (task counts, finished/total tasks, pending model decisions/questions and settlement). Use get_operation for results and decisions, or get_report for a final report.", emptySchema,
 		func(ctx context.Context, _ struct{}) (struct {
 			Operations []operationSummary `json:"operations"`
 		}, error) {
@@ -161,7 +161,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Operations []operationSummary `json:"operations"`
 			}{summaries}, err
 		})
-	addTool(server, "get_operation", "Read status, progress, preflight, affinity, tasks, results, continuations and question history. progress.finished_tasks counts succeeded, failed and cancelled tasks; interrupted tasks remain unfinished. progress.settled requires terminal status and all tasks finished; keep polling until settled even after cancellation or failure. affinity derives its for_actions from policies.placement.same_agent and its bound agent_id from saved dispatches; agent_id is absent before the first dispatch. Command responses contain saved state; use this query for the derived affinity view. Queued tasks remain unassigned. A busy or unavailable bound agent causes waiting, never fallback or automatic replay; an affinity error requires inspection, not retry or rebinding. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Unanswered questions remain pending after fallback_at, when model answers become available. Schedule a fresh get_operation at or after fallback_at before answering; no operation event is emitted just because that time passes. Time passing alone does not release a linked continuation. Questions with command_id come from running actions: answer the existing question and let that execution resume; do not ask a duplicate or assign replacement work. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
+	addTool(server, "get_operation", "Read status, progress, preflight, tasks, results, continuations and question history. progress.finished_tasks counts succeeded, failed and cancelled tasks; interrupted tasks remain unfinished. progress.settled requires terminal status and all tasks finished; keep polling until settled even after cancellation or failure. Queued tasks remain unassigned. Session work routes to its recorded owner; inspect task preflight for owner availability and session requirements. In preflight, an action without ready_agent_ids is blocked; unavailable_agents explains candidate requirements, or is absent when no agent advertises the action. last_question is the latest pending question; remaining_questions counts other pending questions. Unanswered questions remain pending after fallback_at, when model answers become available. Schedule a fresh get_operation at or after fallback_at before answering; no operation event is emitted just because that time passes. Time passing alone does not release a linked continuation. Questions with command_id come from running actions: answer the existing question and let that execution resume; do not ask a duplicate or assign replacement work. Running tasks may include agent_type and missing_requirements from matching live execution. Supply secret values only through Admin Secrets or the Playground masked form; task deadlines continue. An interrupted task has an unknown execution outcome; inspect before assigning replacement work.", operationSchema,
 		func(ctx context.Context, request OperationRequest) (operationDetail, error) {
 			operation, err := query.Get(ctx, request.OperationID)
 			return describeOperation(operation), err
@@ -186,7 +186,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return query.GetReport(ctx, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and enforces same-agent placement. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema.", objectSchema(map[string]any{
 		"operation_id": stringProperty,
 		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages."},
 		"input":        map[string]any{"type": "object"},
@@ -317,17 +317,12 @@ func missionDefinitionSchema() string {
 					"properties":  map[string]any{"aggregate_results": actionNames, "model_review": actionNames},
 					"description": "Optional independent action-name lists. aggregate_results groups direct child results; model_review requires review of valid proposals instead of automatic continuation. Lists may overlap. Omitted, null or empty fields disable each override; failures and empty proposals still require review.",
 				},
-				"placement": map[string]any{
-					"type": []string{"object", "null"}, "additionalProperties": false,
-					"properties":  map[string]any{"same_agent": actionNames},
-					"description": "Optional same_agent action names bound to the first dispatched agent in each operation, without fallback or execution ordering. Omitted, null or empty names declare no affinity; names need not appear in mission action coverage.",
-				},
 				"sharing": map[string]any{
 					"type": []string{"array", "null"}, "items": json.RawMessage(sharing),
 					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded.",
 				},
 			},
-			"description": "Optional placement, continuation, completion and sharing policies. An empty object declares no policy overrides; completion defaults to model.",
+			"description": "Optional continuation, completion and sharing policies. An empty object declares no policy overrides; completion defaults to model.",
 		},
 		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
 			"description": "Ordered mission objectives; include at least one nonblank objective."},

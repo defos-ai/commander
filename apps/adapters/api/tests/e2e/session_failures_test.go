@@ -26,7 +26,7 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 	t.Cleanup(peer.Close)
 	s := e2efixtures.NewSessionStack(t, peer.URL, "./apps/adapters/api/tests/e2e/fixtures/faultcontroller")
 	s.Worker(1)
-	s.Mission("accepted-session", false, "connect-resource", "mark-owner")
+	s.Mission("accepted-session", "connect-resource", "mark-owner")
 	for _, name := range []string{"assign", "resolve-continuation", "cancel", "fail"} {
 		t.Run(name, func(t *testing.T) {
 			continuation := name == "resolve-continuation"
@@ -119,7 +119,7 @@ func TestE2EProposalsSurviveCatalogOutage(t *testing.T) {
 			t.Cleanup(unblock)
 			s := e2efixtures.NewSessionStack(t, peer.URL, "./apps/adapters/api/tests/e2e/fixtures/faultcontroller")
 			s.Worker(1)
-			s.Mission("catalog-outage", false, "connect-resource", "propose-work")
+			s.Mission("catalog-outage", "connect-resource", "propose-work")
 			op := s.Start("catalog-outage")
 			parent := s.Assign(op, "propose-work", map[string]string{"action_name": target})
 			select {

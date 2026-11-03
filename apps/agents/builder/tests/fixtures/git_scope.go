@@ -56,6 +56,16 @@ func GitScope(t *testing.T, config fakes.GitConfig) *environment.DiscoveryScope 
 	if err := os.WriteFile(filepath.Join(bin, "fixture.json"), encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
+	if config.BuildMode != "" {
+		for _, tool := range []string{"codex", "go"} {
+			if runtime.GOOS == "windows" {
+				tool += ".exe"
+			}
+			if err := copyExecutable(self, filepath.Join(bin, tool)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	return &environment.DiscoveryScope{Paths: []string{bin}}
 }
 

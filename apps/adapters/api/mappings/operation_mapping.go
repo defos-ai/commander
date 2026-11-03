@@ -38,14 +38,14 @@ func ToFailOperationCommand(operationID string, request models.FailOperationRequ
 }
 
 func ToOperationResponse(operation operations.Operation) models.OperationResponse {
-	return toOperationResponse(operation, ToTaskResponses(operation.Tasks), operation.AssessAffinity(), operation.AssessProgress(time.Now().UTC()))
+	return toOperationResponse(operation, ToTaskResponses(operation.Tasks), operation.AssessProgress(time.Now().UTC()))
 }
 
 func ToOperationViewResponse(operation queries.OperationView) models.OperationResponse {
-	return toOperationResponse(operation.Operation, ToTaskViewResponses(operation.Tasks), operation.Affinity, operation.Progress)
+	return toOperationResponse(operation.Operation, ToTaskViewResponses(operation.Tasks), operation.Progress)
 }
 
-func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, affinity *operations.Affinity, progress operations.Progress) models.OperationResponse {
+func toOperationResponse(operation operations.Operation, tasks []models.TaskResponse, progress operations.Progress) models.OperationResponse {
 	response := models.OperationResponse{
 		ID:              operation.ID,
 		Mission:         ToMissionResponse(operation.Mission),
@@ -66,13 +66,6 @@ func toOperationResponse(operation operations.Operation, tasks []models.TaskResp
 	if operation.Preflight != nil {
 		preflight := ToPreflightResponse(*operation.Preflight)
 		response.Preflight = &preflight
-	}
-	if affinity != nil {
-		response.Affinity = &models.AffinityResponse{
-			ForActions: affinity.ForActions,
-			AgentID:    affinity.AgentID,
-			Error:      affinity.Error,
-		}
 	}
 	return response
 }

@@ -24,9 +24,11 @@ artifact bytes and reports belong to the separate storage provider.
   name, including an identical definition. Keep seeding's `Upsert` replacement
   behavior separate; only a duplicate `_id` maps to `missions.ErrMissionExists`.
 - BSON ignores unknown fields. Mission reads explicitly reject stored root
-  `rules` and `completion` fields, including null/empty values, so review and
-  completion constraints cannot silently disappear. New documents omit them;
-  no conversion happens during reads. Completion belongs in `policies.completion`.
+  `rules` and `completion` fields, including null/empty values. Strictly decode
+  the raw `policies` document before accepting the domain value, rejecting removed
+  `placement` and unknown nested fields so constraints cannot silently disappear.
+  New documents omit removed fields; no conversion happens during reads.
+  Completion belongs in `policies.completion`.
 - Operations span metadata, task, question and event collections. Initialize
   collections/indexes before the first transaction; preserve unique positions and
   event keys within each operation.

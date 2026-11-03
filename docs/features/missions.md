@@ -46,7 +46,6 @@ with input matching its advertised action schema:
   "input_schema": {"type": "object"},
   "output_schema": {"type": "object"},
   "policies": {
-    "placement": {"same_agent": ["checkout-template", "build-agent"]},
     "continuation": {"model_review": ["build-agent"]},
     "completion": {"decision_by": "operator"}
   }
@@ -54,7 +53,9 @@ with input matching its advertised action schema:
 ```
 
 The controller selects the agent. Check its action schemas and readiness before
-assigning work; mission input and an individual action's input are separate.
+assigning work; mission input and an individual action's input are separate. For
+checkout, use the operation ID as `session_scope`; build with the returned
+`session_scope` and `session_id`.
 See the [bundled missions](../../apps/admin/missions/default-missions.json)
 for complete workflows.
 
@@ -62,21 +63,21 @@ for complete workflows.
 
 | Policy | Effect |
 | --- | --- |
-| `placement.same_agent` | Keep listed actions on one agent instance within an operation |
 | `continuation.aggregate_results` | Collect a matching action's saved direct children before deciding what follows |
 | `continuation.model_review` | Review matching results before running proposed follow-ups |
 | `completion.decision_by` | Allow model completion or require explicit operator completion |
 | [`sharing`](data-sharing.md) | Forward results, artifacts or decisions to active receiving actions |
 
-All policies live under `policies`. Omitted placement, continuation and sharing
-add no constraints or routes. Omitted/null completion defaults to `model`;
+All policies live under `policies`. Omitted continuation and sharing add no
+constraints or routes. Omitted/null completion defaults to `model`;
 an empty completion object is invalid.
 
-### Task affinity
+### Resource ownership
 
-Placement binds the group on its first matching dispatch. If its owner becomes
-unavailable, work waits for that instance. It does not create execution order or
-prevent concurrency. Use [sessions](sessions.md) for resources that outlive a task.
+Use [sessions](sessions.md) for resources retained between actions, such as
+Builder workspaces or browser sessions. Pass the saved session identity to each
+action that uses it; the controller routes the task to its owner. Different
+sessions in one operation can belong to different agents.
 
 ### Continuation policy
 

@@ -142,17 +142,15 @@
   Reject `completion: {}` and unsupported completion policy when switching JSON
   to Form. Mission edits affect future operations;
   the controller still enforces each operation's saved policy.
-- **Policies (JSON)** edits the complete `policies` object: `placement`,
-  `continuation`, `completion` and `sharing`. Share field-shape validation between
+- **Policies (JSON)** edits the complete `policies` object: `continuation`,
+  `completion` and `sharing`. Share field-shape validation between
   responses, Form transitions and writes; reject the old root `rules` and
-  `completion` fields, including null values. Preserve raw
+  `completion` fields and removed nested `placement`, including null values. Preserve raw
   number/string tokens and untouched omitted/null/empty representations through
   unrelated edits and JSON/Form switches. Formatting alone must not create policies.
   Keep invalid drafts editable in their original mode; reject submission and
   unrepresentable mode switches without discarding the source. The shared API owns
   references and policy semantics.
-- `policies.placement.same_agent` is shown separately as **Same agent actions**.
-  Omitted/null/empty placement or `same_agent` lists declare no group.
 - `policies.continuation.aggregate_results` and `model_review` are independent
   action lists and may overlap. Show their actions and effects in a **Continuation**
   table. Omitted/null/empty lists declare no overrides. Valid proposals run
@@ -260,13 +258,6 @@
   action lists do not declare execution dependencies.
   List required and optional mission actions separately; optional declarations
   alone do not indicate blocked readiness before those actions are queued.
-- Accept and display the mission's `policies.placement.same_agent` group.
-  Operation `affinity` is a
-  read-only placement view: show its owner or first-dispatch binding note, and
-  give history errors precedence over unbound wording. Show queued-for-owner
-  hints only on matching queued tasks in active operations. Retain terminal
-  ownership as history, and use saved preflight reasons without inferring
-  current capacity or promising fallback.
 - Use existing theme tokens/fonts. The COMMANDER wordmark uses Grunt Grotesk
   SemiBold without a star. Keep dialog labels and focus behavior accessible.
 

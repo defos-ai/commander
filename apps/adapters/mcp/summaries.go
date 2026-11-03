@@ -104,7 +104,6 @@ type operationSummary struct {
 	Input              json.RawMessage       `json:"input"`
 	Status             operations.Status     `json:"status"`
 	Preflight          *operations.Preflight `json:"preflight,omitempty"`
-	Affinity           *operations.Affinity  `json:"affinity,omitempty"`
 	Progress           operationProgress     `json:"progress"`
 	LastQuestion       *operations.Question  `json:"last_question"`
 	RemainingQuestions int                   `json:"remaining_questions"`
@@ -119,7 +118,7 @@ func summarizeOperation(operation queries.OperationView) operationSummary {
 	return operationSummary{
 		ID: operation.ID, Mission: missionSummary{Name: operation.Mission.Name}, Input: operation.Input,
 		Status: operation.Status, Progress: describeProgress(progress),
-		Preflight: operation.Preflight, Affinity: operation.Affinity,
+		Preflight:    operation.Preflight,
 		LastQuestion: progress.LastQuestion, RemainingQuestions: progress.RemainingQuestions,
 		ReportID: operation.ReportID, Error: operation.Error,
 		CreatedAt: operation.CreatedAt, UpdatedAt: operation.UpdatedAt,

@@ -2,7 +2,6 @@ package operations
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
@@ -39,12 +38,10 @@ func (o *Operation) DispatchTask(dispatch TaskDispatch) error {
 	if task.OperationID != o.ID || task.CommandID != task.ID {
 		return errors.New("task dispatch requires matching operation and command identities")
 	}
-	agentID, err := o.AffinityAgentID()
-	if err != nil {
-		return err
-	}
-	if agentID != "" && slices.Contains(o.Mission.SameAgentActions(), task.ActionName) && dispatch.AgentID != agentID {
-		return fmt.Errorf("%w: same-agent requires agent %s", ErrOperationConflict, agentID)
+	if o.Mission.Policies != nil {
+		if err := o.Mission.Policies.Validate(); err != nil {
+			return err
+		}
 	}
 
 	deadline := dispatch.DeadlineAt.UTC()

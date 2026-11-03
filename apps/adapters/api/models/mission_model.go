@@ -17,17 +17,12 @@ type CreateMissionRequest struct {
 type MissionPoliciesRequest struct {
 	Completion   *MissionCompletionPolicyRequest   `json:"completion,omitempty"`
 	Continuation *MissionContinuationPolicyRequest `json:"continuation,omitempty"`
-	Placement    *MissionPlacementPolicyRequest    `json:"placement,omitempty"`
 	Sharing      []MissionSharingPolicyRequest     `json:"sharing,omitempty"`
 }
 
 type MissionContinuationPolicyRequest struct {
 	AggregateResults []string `json:"aggregate_results,omitempty"`
 	ModelReview      []string `json:"model_review,omitempty"`
-}
-
-type MissionPlacementPolicyRequest struct {
-	SameAgent []string `json:"same_agent,omitempty"`
 }
 
 type MissionSharingPolicyRequest struct {
@@ -55,17 +50,12 @@ type MissionResponse struct {
 type MissionPoliciesResponse struct {
 	Completion   *MissionCompletionPolicyResponse   `json:"completion,omitempty"`
 	Continuation *MissionContinuationPolicyResponse `json:"continuation,omitempty"`
-	Placement    *MissionPlacementPolicyResponse    `json:"placement,omitempty"`
 	Sharing      []MissionSharingPolicyResponse     `json:"sharing,omitempty"`
 }
 
 type MissionContinuationPolicyResponse struct {
 	AggregateResults []string `json:"aggregate_results,omitempty"`
 	ModelReview      []string `json:"model_review,omitempty"`
-}
-
-type MissionPlacementPolicyResponse struct {
-	SameAgent []string `json:"same_agent,omitempty"`
 }
 
 type MissionSharingPolicyResponse struct {

@@ -1,6 +1,6 @@
 # Sessions
 
-Keep an agent-owned resource, such as a browser or shell connection, across
+Keep an agent-owned resource, such as a Builder workspace, browser or shell connection, across
 actions and operations. Open **Admin → Sessions** to inspect resources and their
 owners, or use [Admin commands](../../apps/admin/README.md#sessions), also
 available in Playground through `/admin sessions`.
@@ -45,8 +45,12 @@ sequenceDiagram
 | Mechanism | Lifetime and purpose |
 | --- | --- |
 | Session | Retains a resource and its owner across operations until release. |
-| `policies.placement.same_agent` | Keeps grouped actions on one agent within an operation; closing a session does not remove that binding. |
 | Execution checkpoint | Records an immutable execution fact; it does not control session lifetime or authorize repeating an effect. |
+
+Builder checkout creates a workspace session; build uses its returned
+`session_scope` and `session_id`. Closing the session stops access and active work
+while retaining the workspace files. Different sessions can have different owners
+within the same operation.
 
 ## Queries and controls
 
@@ -80,7 +84,7 @@ before submitting again; a timeout does not prove closure.
   Confirmed close prevents delayed setup from reopening the same reference.
 - Abandonment retains history and sends revocation to the old owner when possible.
   An unreachable owner may still execute already-delivered work. Replacement
-  never redirects old tasks or changes an operation's saved same-agent binding.
+  never redirects tasks that reference the old session.
 - Recovery reconciles saved intent, ownership and execution before dispatch.
   Unknown outcomes retain the original command and owner; checkpoints do not
   authorize an automatic retry elsewhere.

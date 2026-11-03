@@ -103,8 +103,6 @@
   normal execution checks still apply. Neither list restricts which actions may
   execute. Validate unique nonblank names and reject required/optional overlap;
   clone both lists at snapshot boundaries. Normal policies and readiness apply to optional work.
-  `policies.placement.same_agent` groups still participate in preflight even
-  if an action is optional; optionality does not override a placement constraint.
 - Optional [`policies.continuation`](domain/missions/policies/continuation_policy.go)
   is saved in each operation's mission snapshot. Its independent `aggregate_results`
   and `model_review` action lists may overlap; names are trimmed, unique and
@@ -117,28 +115,11 @@
   failures and empty proposals also require review. Aggregation uses the current
   decision's saved child IDs. Preserve parent grouping before evaluating children,
   each child's parentage, and fresh group membership on subsequent decisions.
-- The `policies.placement.same_agent` policy binds its listed actions within one
-  operation. Omitted/null policies or placement, and an omitted/null/empty
-  `same_agent` list, declare no affinity. An empty placement object is valid.
-  Validate trimmed, unique nonblank names without requiring coverage-list
-  membership. Deep-clone the placement pointer and its list in mission snapshots.
-  The root `rules` field is unsupported; no aliases or read-time conversion apply.
-  [`Operation.AffinityAgentID`](domain/operations/affinity.go) derives the binding
-  from retained task assignments; no separate binding record is stored. Failed,
-  interrupted and cancelled dispatched tasks retain ownership. Enforce agreement
-  atomically in `DispatchTask` and reject conflicting history during recovery.
-  This is a placement constraint, not a continuation decision or execution ordering.
-  Before binding, preflight limits grouped actions to agents advertising the
-  entire group. After binding, assess only the saved owner's readiness. Include
-  grouped actions even when omitted from `required_actions`; preserve the existing
-  operation-wide preflight gate. Busy owners wait for normal scheduler capacity.
-  Recheck the binding for each dispatch, including subsequent tasks in the same
-  scheduler pass. Never fall back to another agent or rebind after an outage.
-  Do not present secret requirements from agents excluded by affinity.
-  `Operation.AssessAffinity` derives a read-only query view from the same history,
-  retaining binding after completion or loss of registration. Keep it out of
-  persisted operation fields; inconsistent history returns an explicit error,
-  never an apparently unbound group.
+- Session-aware tasks remain bound to the exact resource owner recorded by their
+  accepted session intent. Stateless tasks and creation intents without an owner
+  select any ready eligible agent; there is no mission-wide action-group binding
+  or lookahead through other queued tasks. Reject removed `policies.placement`
+  and root `rules` fields instead of silently dropping constraints on reads.
 - Operation startup validates the stored mission/input and clones the mission
   directly into its saved snapshot. Policy behavior belongs to that definition;
   hosts do not select or override policies. Recovery and task execution use the
@@ -153,7 +134,8 @@
   `sessions.Coordinator` interface backed by that same instance. Persist normalized
   intent with automatic children.
   Preserve scope history across inventory expiry; abandonment releases only the
-  scope, retaining existing same-agent affinity. Checkpoints remain execution facts.
+  scope, retaining saved session identities and ownership. Checkpoints remain
+  execution facts.
   Use [session E2Es](../apps/adapters/api/tests/e2e/session_lifecycle_test.go) for
   public recovery, owner placement and lifecycle behavior.
 - Controller owns worker lifetime, startup, shutdown and delegating facades.
@@ -337,8 +319,8 @@
   and ordinary reads/recovery never trigger forwarding. Delivery failures do not
   change an answer or its continuation; sharing grants no completion authority.
 - Keep [`AgentSelector`](controller/workers/operation/agent_selector.go) limited to choosing
-  eligible candidates. The operation worker owns affinity, readiness and capacity checks
-  and dispatch persistence. Selection is serial, must honor cancellation and
+  eligible candidates. The operation worker owns session ownership, readiness,
+  capacity checks and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
 - Operation preflight exposes missing requirements only for live, ready/working
   candidates, retaining their registered agent type. Inventory retains the last

@@ -77,6 +77,5 @@ func (o Operation) validateRecovery() error {
 			}
 		}
 	}
-	_, err := o.AffinityAgentID()
-	return err
+	return nil
 }

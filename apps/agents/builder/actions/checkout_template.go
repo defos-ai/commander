@@ -14,33 +14,38 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/builder/internal/git"
 	"github.com/defos-ai/commander/apps/agents/builder/internal/process"
+	"github.com/defos-ai/commander/apps/agents/builder/internal/workspaces"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/environment"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 const CheckoutTemplateName = "checkout-template"
-const CheckoutTemplateDescription = "Check out the public Commander example-agent template into a new local workspace. Returns its workspace ID and exact Git revision. Does not build, run or publish code; the workspace belongs to this builder instance."
+const CheckoutTemplateDescription = "Check out the public Commander example-agent template into a new workspace session. Supply session_scope to create, or session_scope and session_id to reuse an existing checkout on its owning builder. Returns the session binding, opaque workspace ID and exact Git revision. Does not build, run or publish code."
 const TemplateURL = "https://github.com/defos-ai/commander-example-agent.git"
 
+type CheckoutTemplateInput struct {
+	SessionScope string `json:"session_scope"`
+	SessionID    string `json:"session_id,omitempty"`
+}
+
 type CheckoutTemplateOutput struct {
+	SessionScope     string `json:"session_scope"`
+	SessionID        string `json:"session_id"`
 	WorkspaceID      string `json:"workspace_id"`
 	TemplateRevision string `json:"template_revision"`
 }
 
 type CheckoutTemplate struct {
 	*action.Base
-	workspaceDir string
-	executable   atomic.Pointer[string]
+	workspaces *workspaces.Provider
+	executable atomic.Pointer[string]
 }
 
-func NewCheckoutTemplate(workspaceDir string) (*CheckoutTemplate, error) {
-	if strings.TrimSpace(workspaceDir) == "" {
-		return nil, errors.New("workspace directory must not be blank")
-	}
-	root, err := filepath.Abs(workspaceDir)
-	if err != nil {
-		return nil, fmt.Errorf("workspace directory: %w", err)
+func NewCheckoutTemplate(provider *workspaces.Provider) (*CheckoutTemplate, error) {
+	if provider == nil {
+		return nil, errors.New("workspace sessions are required")
 	}
 	outputSchema, err := action.SchemaFor[CheckoutTemplateOutput]()
 	if err != nil {
@@ -48,12 +53,16 @@ func NewCheckoutTemplate(workspaceDir string) (*CheckoutTemplate, error) {
 	}
 	return &CheckoutTemplate{
 		Base: action.NewBase(actionmodel.Action{
-			Name:         CheckoutTemplateName,
-			Description:  CheckoutTemplateDescription,
-			InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+			SessionMode: string(sessions.Create),
+			Name:        CheckoutTemplateName,
+			Description: CheckoutTemplateDescription,
+			InputSchema: json.RawMessage(`{"type":"object","properties":{
+"session_scope":{"type":"string","format":"uuid","description":"Session scope; use the operation ID for an operation-local workspace."},
+"session_id":{"type":"string","format":"uuid","description":"Existing session to reuse on its owning builder; omit to create."}
+},"required":["session_scope"],"additionalProperties":false}`),
 			OutputSchema: outputSchema,
 		}),
-		workspaceDir: root,
+		workspaces: provider,
 	}, nil
 }
 
@@ -91,8 +100,17 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	if err := a.Check(); err != nil {
 		return action.Result{}, err
 	}
-	if err := action.DecodeInput(raw, &struct{}{}); err != nil {
+	var input CheckoutTemplateInput
+	if err := action.DecodeInput(raw, &input); err != nil {
 		return action.Result{}, err
+	}
+	intent, err := sessions.ResolveIntent(string(sessions.Create), raw)
+	if err != nil {
+		return action.Result{}, err
+	}
+	binding, ok := action.SessionFromContext(ctx)
+	if !ok || binding.ScopeID != intent.ScopeID || intent.ID != "" && binding.ID != intent.ID || binding.Mode != intent.Mode {
+		return action.Result{}, errors.New("checkout requires its framework workspace session binding")
 	}
 	executable := a.executable.Load()
 	if executable == nil {
@@ -105,9 +123,16 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	var result action.Result
-	err := action.RunWithProgress(ctx, "Template checkout", func() error {
-		var checkoutErr error
-		result, checkoutErr = a.checkout(ctx, *executable)
+	err = action.RunWithProgress(ctx, "Template checkout", func() error {
+		workspace, session, checkoutErr := a.workspaces.Checkout(ctx, binding, func(ctx context.Context, directory string) (string, error) {
+			return a.checkout(ctx, *executable, directory)
+		})
+		if checkoutErr != nil {
+			return checkoutErr
+		}
+		result, checkoutErr = action.JSONResult(CheckoutTemplateOutput{SessionScope: binding.ScopeID, SessionID: binding.ID,
+			WorkspaceID: workspace.ID, TemplateRevision: workspace.Revision})
+		result.Session = &session
 		return checkoutErr
 	})
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
@@ -119,42 +144,28 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	return result, err
 }
 
-func (a *CheckoutTemplate) checkout(ctx context.Context, executable string) (result action.Result, err error) {
-	if err = os.MkdirAll(a.workspaceDir, 0700); err != nil {
-		return result, fmt.Errorf("create workspace directory: %w", err)
-	}
-	workspace, err := os.MkdirTemp(a.workspaceDir, "checkout-")
-	if err != nil {
-		return result, fmt.Errorf("create checkout workspace: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, os.RemoveAll(workspace))
-		}
-	}()
+func (a *CheckoutTemplate) checkout(ctx context.Context, executable, workspace string) (revision string, err error) {
 	// Git receives an empty home so it cannot read the host's credentials or config.
 	home := filepath.Join(workspace, ".home")
 	if err = os.Mkdir(home, 0700); err != nil {
-		return result, err
+		return "", err
 	}
 	defer func() { err = errors.Join(err, os.RemoveAll(home)) }()
 	command := git.Command{Executable: executable, Home: home}
 	source := filepath.Join(workspace, "source")
 	if _, err = command.Run(ctx, workspace, "clone", "--quiet", "--depth=1", "--single-branch", "--no-tags", "--no-recurse-submodules", "--template=", "--", TemplateURL, source); err != nil {
-		return result, fmt.Errorf("checkout template: %w", err)
+		return "", fmt.Errorf("checkout template: %w", err)
 	}
-	revision, err := command.Run(ctx, source, "rev-parse", "--verify", "HEAD^{commit}")
+	revision, err = command.Run(ctx, source, "rev-parse", "--verify", "HEAD^{commit}")
 	if err != nil {
-		return result, fmt.Errorf("read template revision: %w", err)
+		return "", fmt.Errorf("read template revision: %w", err)
 	}
 	if err = ctx.Err(); err != nil {
-		return result, err
+		return "", err
 	}
 	revision = strings.TrimSpace(revision)
 	if hash, decodeErr := hex.DecodeString(revision); decodeErr != nil || (len(hash) != 20 && len(hash) != 32) {
-		return result, errors.New("Git returned an invalid template revision")
+		return "", errors.New("Git returned an invalid template revision")
 	}
-	return action.JSONResult(CheckoutTemplateOutput{
-		WorkspaceID: filepath.Base(workspace), TemplateRevision: revision,
-	})
+	return revision, nil
 }

@@ -34,14 +34,12 @@ func openAPIDocument() ([]byte, error) {
 	}{
 		{"About", reflect.TypeFor[models.AboutResponse]()},
 		{"MissionSharingPolicy", reflect.TypeFor[models.MissionSharingPolicyResponse]()},
-		{"MissionPlacementPolicy", reflect.TypeFor[models.MissionPlacementPolicyResponse]()},
 		{"MissionContinuationPolicy", reflect.TypeFor[models.MissionContinuationPolicyResponse]()},
 		{"MissionCompletionPolicy", reflect.TypeFor[models.MissionCompletionPolicyResponse]()},
 		{"MissionPolicies", reflect.TypeFor[models.MissionPoliciesResponse]()},
 		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"MissionSharingPolicyRequest", reflect.TypeFor[models.MissionSharingPolicyRequest]()},
-		{"MissionPlacementPolicyRequest", reflect.TypeFor[models.MissionPlacementPolicyRequest]()},
 		{"MissionContinuationPolicyRequest", reflect.TypeFor[models.MissionContinuationPolicyRequest]()},
 		{"MissionCompletionPolicyRequest", reflect.TypeFor[models.MissionCompletionPolicyRequest]()},
 		{"MissionPoliciesRequest", reflect.TypeFor[models.MissionPoliciesRequest]()},
@@ -71,7 +69,7 @@ func openAPIDocument() ([]byte, error) {
 			objectives.Items.Pattern = `\S`
 			objectives.Description = "Ordered mission objectives. Include at least one nonblank objective."
 		}
-		for _, name := range []string{"placement", "continuation", "completion"} {
+		for _, name := range []string{"continuation", "completion"} {
 			if property := schema.Properties[name]; property != nil {
 				property.Type, property.Types = "", []string{"object", "null"}
 			}
@@ -95,13 +93,6 @@ func openAPIDocument() ([]byte, error) {
 				property.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
 			}
 			schema.Properties["include"].Items.Enum = []any{"results", "artifacts", "decisions"}
-		case "MissionPlacementPolicy", "MissionPlacementPolicyRequest":
-			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-			property := schema.Properties["same_agent"]
-			property.Type, property.Types = "", []string{"array", "null"}
-			property.UniqueItems = true
-			property.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
-			property.Description = "Optional action names bound to the first dispatched agent in each operation. Omitted, null or empty declares no affinity. Names need not appear in mission action coverage; this constraint neither starts nor orders work."
 		case "MissionContinuationPolicy", "MissionContinuationPolicyRequest":
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
 			for _, name := range []string{"aggregate_results", "model_review"} {
@@ -114,7 +105,7 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["model_review"].Description = "Action names whose valid proposals require model review instead of automatic continuation. May overlap aggregate_results; omitted, null or empty disables this override. Failures and empty proposals still require review."
 		case "MissionPolicies", "MissionPoliciesRequest":
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-			schema.Description = "Optional placement, continuation, completion and sharing policies retained in each operation. An empty object declares no policy overrides; completion defaults to model."
+			schema.Description = "Optional continuation, completion and sharing policies retained in each operation. An empty object declares no policy overrides; completion defaults to model."
 		case "MissionCompletionPolicy", "MissionCompletionPolicyRequest":
 			schema.Description = "Optional mission-wide completion policy retained in each operation. Omitted or null defaults to model; a present object requires decision_by. Operator requires operator-origin completion with no timed model fallback."
 			schema.Required = []string{"decision_by"}

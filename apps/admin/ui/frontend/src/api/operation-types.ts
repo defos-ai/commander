@@ -6,7 +6,6 @@ export interface Operation {
   input: unknown;
   status: string;
   progress: OperationProgress;
-  affinity?: OperationAffinity;
   preflight?: OperationPreflight | null;
   tasks: OperationTask[] | null;
   questions: OperationQuestion[] | null;
@@ -28,12 +27,6 @@ export interface OperationProgress {
   pending_decisions: number;
   pending_questions: number;
   settled: boolean;
-}
-
-export interface OperationAffinity {
-  for_actions: string[];
-  agent_id?: string;
-  error?: string;
 }
 
 export interface OperationTask {

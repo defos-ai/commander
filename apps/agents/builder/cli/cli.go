@@ -13,6 +13,7 @@ import (
 	builder "github.com/defos-ai/commander/apps/agents/builder"
 	agents "github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/host"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -59,8 +60,9 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	}
 	defer func() { result = errors.Join(result, dependencies.Close()) }()
 	actions := []action.Executor{}
+	var workspaces sessions.Provider
 	if configuration.actionNames == nil || len(configuration.actionNames) > 0 {
-		actions, err = builder.NewActions(configuration.workspaceDir, dependencies.ArtifactFileStore, configuration.defaultVisibility)
+		actions, workspaces, err = builder.NewActions(configuration.workspaceDir, dependencies.ArtifactFileStore, configuration.defaultVisibility)
 		if err != nil {
 			return err
 		}
@@ -80,6 +82,7 @@ func Run(ctx context.Context, args []string, stderr io.Writer) (result error) {
 	agent, err := builder.NewAgent(agents.AgentConfig{
 		ID:                agentID,
 		Actions:           actions,
+		Sessions:          workspaces,
 		ArtifactFileStore: dependencies.ArtifactFileStore,
 		Logger:            logger,
 		HeartbeatInterval: &configuration.heartbeatInterval,

@@ -29,8 +29,7 @@ function completionPolicy(value: unknown): boolean {
 }
 
 export function isMissionPolicies(value: unknown): value is MissionPolicies | null | undefined {
-  return value == null || (object(value) && Object.keys(value).every(key => ['placement', 'continuation', 'completion', 'sharing'].includes(key)) &&
-    actionPolicy(value.placement, ['same_agent']) &&
+  return value == null || (object(value) && Object.keys(value).every(key => ['continuation', 'completion', 'sharing'].includes(key)) &&
     actionPolicy(value.continuation, ['aggregate_results', 'model_review']) &&
     completionPolicy(value.completion) &&
     (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(sharingRoute))));

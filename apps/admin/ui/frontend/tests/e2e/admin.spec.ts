@@ -185,8 +185,6 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   await buildMission.click();
   const optionalActions = page.locator('.mission-section').filter({ has: page.getByRole('heading', { name: 'Optional actions', exact: true }) });
   await expect(optionalActions.getByRole('listitem')).toHaveText(['publish-agent', 'release-agent']);
-  const placement = page.locator('.mission-section').filter({ has: page.getByRole('heading', { name: 'Same agent actions', exact: true }) });
-  await expect(placement.getByRole('listitem')).toHaveText(['checkout-template', 'build-agent']);
   await page.getByRole('button', { name: 'All missions', exact: true }).click();
   await page.getByRole('button', { name: 'View mission analyze-text', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'analyze-text', exact: true })).toBeVisible();

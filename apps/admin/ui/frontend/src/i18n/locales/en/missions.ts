@@ -164,7 +164,6 @@ export default {
   startingActions: 'Starting actions',
   requiredActions: 'Required actions',
   optionalActions: 'Optional actions',
-  sameAgentActions: 'Same agent actions',
   none: 'None specified',
   input: 'Inputs',
   output: 'Output',

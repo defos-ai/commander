@@ -46,7 +46,9 @@ the outcome.
 
 For direct MCP use, read `describe_mission` for `build-agent` and
 `describe_action` for each action's input schema. Checkout and build must run on
-the same builder; the bundled mission handles this routing.
+the workspace's owning builder. The bundled mission creates a workspace session
+using the operation ID as `session_scope`, then passes the returned scope and
+session ID to build. Reuse that binding to revise an existing checkout.
 
 ## Publish source
 
@@ -90,6 +92,11 @@ for managed secrets. See [shared secrets](../../../docs/features/secrets.md).
 | --- | --- |
 | Compose (`builder` profile) | `builder-state` volume; retained across container recreation |
 | Separate builder | `state/builder-workspaces`; override with `BUILDER_WORKSPACE_DIR` |
+
+Use Admin **Sessions** to close a workspace session. Closing stops active checkout
+or build work and prevents further use; it retains completed source on disk.
+Sessions belong to one running builder process. After losing that owner, use a
+new checkout rather than passing its workspace ID to another builder.
 
 Use a builder deployment you trust to execute generated code. Codex uses its
 workspace sandbox, but Go tests and builds run as the builder's operating-system

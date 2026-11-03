@@ -19,9 +19,9 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - Completing/cancelling work or expiring inventory does not release a session.
   Close confirms the exact creation claim. Failed close stays pending with its
   saved request ID; abandonment retains identity/history and best-effort revocation.
-- Replacement never rebinds queued use or existing operation affinity. Before the
-  first dispatch, session constraints restrict earlier actions in the same group;
-  tasks outside it may use other owners.
+- Replacement never rebinds queued use. Placement follows each task's accepted
+  session intent and exact owner; other tasks remain independently eligible.
+  Creation without an owner can select any ready compatible agent.
 - Keep lifecycle disposition (`reserved`, `active`, `closing`, `released`) separate
   from resource state. Lease loss projects `lost` while retaining the reservation.
 - Session discovery uses `sessions.QueryStore.Find` with intersecting session,
@@ -45,8 +45,6 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - **Binding**: dispatched work's immutable session identity and exact owner.
 - **Abandonment**: explicitly releasing a lost/failed session for replacement
   while preserving uncertain history; it is not proof of closure.
-- **Same-agent affinity**: an operation's grouped actions share the first
-  dispatched owner; it grants neither ordering nor session lifetime.
 - **Execution checkpoint**: an immutable execution fact, not session state or
   permission to repeat an effect or transfer ownership.
 
@@ -127,7 +125,7 @@ COMMANDER_SESSION_E2E_BUS_URL='amqp://guest:guest@127.0.0.1:5672/' \
 ```
 
 Coverage includes automatic competing creations and restart, cross-operation use,
-owner loss/abandonment without affinity rebinding, group lookahead and independent
+owner loss/abandonment without rebinding queued use, independent session
 owners, owner-specific secrets, queued cancellation, close during creation,
 failed-close reconciliation, reuse before verification, checkpoint immutability
 and isolation, and intent accepted before executor registration. Real shell

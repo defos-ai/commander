@@ -32,7 +32,6 @@ type operationDetail struct {
 	operations.Operation
 	Progress           operationProgress    `json:"progress"`
 	Tasks              []taskDetail         `json:"tasks"`
-	Affinity           *operations.Affinity `json:"affinity,omitempty"`
 	LastQuestion       *operations.Question `json:"last_question"`
 	RemainingQuestions int                  `json:"remaining_questions"`
 }
@@ -42,6 +41,6 @@ func describeOperation(operation queries.OperationView) operationDetail {
 	for i, task := range operation.Tasks {
 		tasks[i] = describeTask(task)
 	}
-	return operationDetail{Operation: operation.Operation, Tasks: tasks, Affinity: operation.Affinity, Progress: describeProgress(operation.Progress),
+	return operationDetail{Operation: operation.Operation, Tasks: tasks, Progress: describeProgress(operation.Progress),
 		LastQuestion: operation.Progress.LastQuestion, RemainingQuestions: operation.Progress.RemainingQuestions}
 }

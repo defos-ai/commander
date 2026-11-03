@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -18,10 +17,11 @@ import (
 )
 
 func TestE2ESessionLifecycleOwnership(t *testing.T) {
-	peer := e2efixtures.ImmediateSessionPeer(t)
+	peer, network := e2efixtures.PartitionableSessionPeer(t)
+	defer network.Resume()
 	s := e2efixtures.NewSessionStack(t, peer.URL)
-	s.Worker(1)
-	s.Mission("lifecycle", true, "connect-resource")
+	s.Worker(1, "FIXTURE_PARTITION_CHECK=true")
+	s.Mission("lifecycle", "connect-resource")
 	op1 := s.Start("lifecycle")
 	scope := id.New()
 	first := createSession(t, s, op1, scope)
@@ -42,10 +42,8 @@ func TestE2ESessionLifecycleOwnership(t *testing.T) {
 	if used.AgentID != first.OwnerAgentID || !output.Isolated || output.CreationTask == use.ID {
 		t.Fatalf("session binding/checkpoints escaped execution scope: %+v %+v", used, output)
 	}
-	// Explicit abandonment releases a lost scope; it leaves the old operation bound.
-	if err := s.SignalWorker(1, syscall.SIGSTOP); err != nil {
-		t.Fatal(err)
-	}
+	// Abandonment releases the scope without redirecting tasks using the old session.
+	network.Pause()
 	e2efixtures.WaitUntil(t, 12*time.Second, func() bool {
 		for _, v := range s.List(scope) {
 			if v.ID == first.ID {
@@ -54,6 +52,8 @@ func TestE2ESessionLifecycleOwnership(t *testing.T) {
 		}
 		return false
 	})
+	lostOperation := s.Start("lifecycle")
+	blocked := s.Assign(lostOperation, "use-resource", map[string]string{"session_scope": scope, "session_id": first.ID})
 	abandoned := s.Control(first.Reference, "abandon")
 	if abandoned.ReleaseReason != "abandoned" || abandoned.State != "lost" {
 		t.Fatalf("abandonment claimed closure: %+v", abandoned)
@@ -63,30 +63,24 @@ func TestE2ESessionLifecycleOwnership(t *testing.T) {
 	if replacement.ID == first.ID || replacement.OwnerAgentID == first.OwnerAgentID {
 		t.Fatalf("replacement reused the old identity: %+v", replacement)
 	}
+	reuse := s.Assign(op2, "use-resource", map[string]string{"session_scope": scope, "session_id": replacement.ID})
+	if finished := s.Finished(op2, reuse.ID); finished.AgentID != replacement.OwnerAgentID {
+		t.Fatalf("replacement session was routed to another owner: %+v", finished)
+	}
 	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
-		op := s.Operation(op2)
-		for _, r := range op.Preflight.Actions {
-			if len(r.ReadyAgentIDs) > 0 {
-				return false
-			}
-		}
-		return true
-	})
-	blocked := s.Assign(op2, "use-resource", map[string]string{"session_scope": scope, "session_id": replacement.ID})
-	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
-		op := s.Operation(op2)
+		op := s.Operation(lostOperation)
 		if op.Preflight == nil {
 			return false
 		}
-		for _, p := range op.Preflight.Tasks {
-			if p.TaskID == blocked.ID {
-				return strings.Contains(p.Reason, "placement_conflict")
+		for _, placement := range op.Preflight.Tasks {
+			if placement.TaskID == blocked.ID {
+				return strings.Contains(placement.Reason, "session_abandoned")
 			}
 		}
 		return false
 	})
-	if task := s.Task(op2, blocked.ID); task.AgentID != "" || task.Status != operations.TaskQueued {
-		t.Fatalf("abandonment rebound old affinity: %+v", task)
+	if task := s.Task(lostOperation, blocked.ID); task.AgentID != "" || task.Status != operations.TaskQueued || task.SessionIntent == nil || task.SessionIntent.ID != first.ID {
+		t.Fatalf("abandonment redirected work from the old session: %+v", task)
 	}
 	s.Restart()
 	items := s.List(scope)
@@ -98,9 +92,7 @@ func TestE2ESessionLifecycleOwnership(t *testing.T) {
 			t.Fatalf("old identity reclaimed scope: %+v", item)
 		}
 	}
-	if err := s.SignalWorker(1, syscall.SIGCONT); err != nil {
-		t.Fatal(err)
-	}
+	network.Resume()
 	e2efixtures.WaitUntil(t, 8*time.Second, func() bool {
 		var catalog struct {
 			Items []struct {
@@ -181,44 +173,32 @@ func TestE2ESessionLifecycleOwnership(t *testing.T) {
 	}
 }
 
-func TestE2ESessionAffinityLookaheadAndOwnerReadiness(t *testing.T) {
+func TestE2ESessionOwnerReadiness(t *testing.T) {
 	peer := e2efixtures.ImmediateSessionPeer(t)
 	s := e2efixtures.NewSessionStack(t, peer.URL)
 	s.Worker(1, "FIXTURE_USE_REQUIRES_SECRET=true")
-	s.Mission("create-only", false, "connect-resource")
+	s.Mission("create-only", "connect-resource")
 	scope := id.New()
 	resource := createSession(t, s, s.Start("create-only"), scope)
 	s.Worker(2)
-	s.Mission("lookahead", true, "connect-resource")
-	op := s.Start("lookahead")
-	parent := s.Assign(op, "propose-affinity", map[string]string{"session_scope": scope, "session_id": resource.ID})
-	s.Finished(op, parent.ID)
+	s.Mission("owner-readiness", "connect-resource")
+	op := s.Start("owner-readiness")
+	task := s.Assign(op, "use-resource", map[string]string{"session_scope": scope, "session_id": resource.ID})
 	// B advertises a ready use action, but only A owns the selected session.
 	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
 		op := s.Operation(op)
 		if op.Preflight == nil || op.Preflight.Ready {
 			return false
 		}
-		for _, a := range op.Preflight.Actions {
-			if a.ActionName != "use-resource" {
-				continue
-			}
-			if len(a.ReadyAgentIDs) > 0 {
-				t.Fatal("non-owner readiness masked owner requirements")
-			}
-			for _, blocked := range a.UnavailableAgents {
-				if blocked.AgentID == resource.OwnerAgentID && len(blocked.MissingRequirements) > 0 {
-					return true
-				}
+		for _, placement := range op.Preflight.Tasks {
+			if placement.TaskID == task.ID && placement.OwnerAgentID == resource.OwnerAgentID && len(placement.MissingRequirements) > 0 {
+				return true
 			}
 		}
 		return false
 	})
-	current := s.Operation(op)
-	for _, task := range current.Tasks {
-		if task.ActionName == "mark-owner" && task.AgentID != "" {
-			t.Fatalf("stateless task bound group before owner became ready: %+v", task)
-		}
+	if current := s.Task(op, task.ID); current.AgentID != "" || current.Status != operations.TaskQueued {
+		t.Fatalf("ready non-owner received a task requiring another session: %+v", current)
 	}
 	var agents struct {
 		Items []struct {
@@ -264,7 +244,7 @@ func TestE2ESessionCloseDuringCreation(t *testing.T) {
 	t.Cleanup(func() { once.Do(func() { close(release) }) })
 	s := e2efixtures.NewSessionStack(t, peer.URL)
 	s.Worker(1)
-	s.Mission("close-prepared", false, "connect-resource")
+	s.Mission("close-prepared", "connect-resource")
 	op := s.Start("close-prepared")
 	scope := id.New()
 	task := s.Assign(op, "connect-resource", map[string]string{"session_scope": scope})
@@ -303,8 +283,8 @@ func TestE2ESessionCancellationReleasesUnstartedScope(t *testing.T) {
 	peer := e2efixtures.ImmediateSessionPeer(t)
 	s := e2efixtures.NewSessionStack(t, peer.URL)
 	s.Worker(1)
-	s.Mission("blocked-create", false, "connect-resource", "missing-capability")
-	s.Mission("available-create", false, "connect-resource")
+	s.Mission("blocked-create", "connect-resource", "missing-capability")
+	s.Mission("available-create", "connect-resource")
 	for _, method := range []string{"cancel", "fail"} {
 		t.Run(method, func(t *testing.T) {
 			scope := id.New()
@@ -331,44 +311,24 @@ func TestE2ESessionCancellationReleasesUnstartedScope(t *testing.T) {
 	}
 }
 
-func TestE2ESessionGroupLookaheadAndIndependentOwners(t *testing.T) {
+func TestE2ESessionIndependentOwners(t *testing.T) {
 	peer := e2efixtures.ImmediateSessionPeer(t)
 	s := e2efixtures.NewSessionStack(t, peer.URL)
 	s.Worker(1)
-	s.Mission("ungrouped", false, "connect-resource")
+	s.Mission("sessions", "connect-resource")
 	firstScope := id.New()
-	first := createSession(t, s, s.Start("ungrouped"), firstScope)
-	s.Worker(2, "FIXTURE_NO_PROPOSER=true")
+	first := createSession(t, s, s.Start("sessions"), firstScope)
+	s.Worker(2)
 	secondScope := id.New()
-	second := createSession(t, s, s.Start("ungrouped"), secondScope)
+	second := createSession(t, s, s.Start("sessions"), secondScope)
 	if first.OwnerAgentID == second.OwnerAgentID {
 		t.Fatal("fixture needs two different resource owners")
 	}
-	s.Mission("grouped", true, "connect-resource")
-	op := s.Start("grouped")
-	parent := s.Assign(op, "propose-affinity", map[string]string{"session_scope": firstScope, "session_id": first.ID})
-	s.Finished(op, parent.ID)
-	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
-		current := s.Operation(op)
-		done := 0
-		for _, task := range current.Tasks {
-			if task.ParentTaskID == parent.ID {
-				if task.AgentID != "" && task.AgentID != first.OwnerAgentID {
-					t.Fatalf("group bound away from later accepted session owner: %+v", task)
-				}
-				if task.Status == operations.TaskSucceeded {
-					done++
-				}
-			}
-		}
-		return done == 2
-	})
-	// No same-agent placement policy means different tasks can use different exact owners.
-	separate := s.Start("ungrouped")
-	a := s.Assign(separate, "use-resource", map[string]string{"session_scope": firstScope, "session_id": first.ID})
-	b := s.Assign(separate, "use-resource", map[string]string{"session_scope": secondScope, "session_id": second.ID})
-	if s.Finished(separate, a.ID).AgentID != first.OwnerAgentID || s.Finished(separate, b.ID).AgentID != second.OwnerAgentID {
-		t.Fatal("independent sessions gained an implicit affinity group")
+	op := s.Start("sessions")
+	a := s.Assign(op, "use-resource", map[string]string{"session_scope": firstScope, "session_id": first.ID})
+	b := s.Assign(op, "use-resource", map[string]string{"session_scope": secondScope, "session_id": second.ID})
+	if s.Finished(op, a.ID).AgentID != first.OwnerAgentID || s.Finished(op, b.ID).AgentID != second.OwnerAgentID {
+		t.Fatal("tasks did not use their exact session owners")
 	}
 }
 
@@ -383,7 +343,7 @@ func TestE2ESessionReuseBeforeVerification(t *testing.T) {
 	t.Cleanup(peer.Close)
 	s := e2efixtures.NewSessionStack(t, peer.URL)
 	s.Worker(1, "FIXTURE_SESSION_STATE=listening")
-	s.Mission("reuse", false, "connect-resource")
+	s.Mission("reuse", "connect-resource")
 	op, scope := s.Start("reuse"), id.New()
 	created := s.Assign(op, "connect-resource", map[string]string{"session_scope": scope})
 	result := s.Finished(op, created.ID)
@@ -427,7 +387,7 @@ func TestE2ESessionCloseReceiptRecovery(t *testing.T) {
 	t.Cleanup(peer.Close)
 	s := e2efixtures.NewSessionStack(t, peer.URL)
 	s.Worker(1)
-	s.Mission("close-recovery", false, "connect-resource")
+	s.Mission("close-recovery", "connect-resource")
 	scope := id.New()
 	first := createSession(t, s, s.Start("close-recovery"), scope)
 	request := map[string]any{"id": first.ID, "scope_id": scope, "owner_agent_id": first.OwnerAgentID, "method": "close", "request_id": id.New()}

@@ -40,9 +40,8 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and policies; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters and Operation worker startup. |
 | [`CompletionPolicy`](missions/policies/completion_policy.go) | Declares completion authority under `policies.completion`; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Operation worker and atomic completion in operation stores. |
-| [`PlacementPolicy`](missions/policies/placement_policy.go) | Binds one action group to the first dispatched agent within an operation. | Mission validation/cloning, preflight, operation worker placement, atomic dispatch, session placement and adapters. |
 | [`ContinuationPolicy`](missions/policies/continuation_policy.go) | Defines independent action scopes for direct-child aggregation and required model review. | Mission validation/cloning, continuation evaluation, atomic transitions and adapters. |
-| [`MissionPolicies`](missions/policies/policies.go) | Groups optional completion, placement, continuation and sharing settings into each saved mission snapshot. | Mission validation/cloning, Adapters, mission and operation stores. |
+| [`MissionPolicies`](missions/policies/policies.go) | Groups optional completion, continuation and sharing settings into each saved mission snapshot. | Mission validation/cloning, Adapters, mission and operation stores. |
 | [`SharingPolicy`, `SharingRoute`](missions/policies/sharing_policy.go) | Declare permitted action-to-action data routes for saved results, accepted artifact metadata and task-scoped answered questions, retained independently in each operation. | Mission authoring/validation, Adapters, Controller forwarding, mission and operation stores. |
 
 ## Operations
@@ -59,7 +58,6 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | [`Preflight`, `ActionReadiness`, `AgentReadiness`](operations/preflight.go) | Explain whether current agents cover required actions and what prevents dispatch. | Operation worker assessment, OperationStore, Queries and Adapters. |
 | [`TaskPlacement`](operations/session_placement.go) | Explains an exact-owner/session placement constraint or missing requirement for a task. | Session placement assessment, Operation worker selection, preflight views. |
 | [`Progress`](operations/progress.go) | Derives task counts, pending decisions/questions and settlement from saved state. | Queries, Adapters, Admin UI and Playground through adapter responses. |
-| [`Affinity`](operations/affinity.go) | Projects placement policy and retained assignments into a bound process or a diagnostic. | Operation worker placement checks, Queries and Adapters. |
 | [`ContinuationEvaluation`, `ContinuationEffects`, `ContinuationFollowUp`](operations/continuation_evaluation.go) | Separate the inputs and effects of pure continuation-policy evaluation from dispatch and persistence. | `EvaluateContinuation`, operation result/continuation transitions. |
 
 Questions stay here because a model can ask before any execution exists or while
