@@ -35,8 +35,15 @@ applies to all domain packages below this directory.
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.
 - Mission policy types live in [missions/policies](missions/policies/), which
-  stays independent of its parent package. Completion, continuation
+  stays independent of its parent package. Completion, continuation, session
   and sharing are grouped under `MissionPolicies`.
+- [`SessionPolicy`](missions/policies/session_policy.go) declares `create_action`
+  and nonempty unique `use_actions` under `policies.session`. Names must be trimmed
+  and nonblank; an action may belong to only one entry and role. No installed-agent
+  or coverage-list membership is required. Omitted/null/empty lists add no policy.
+  Deep-clone the entry slice and each consumer slice. This contract is persisted
+  only; controller binding and adapter support are pending, so declarations do
+  not yet supply or enforce session IDs.
 - [`CompletionPolicy`](missions/policies/completion_policy.go) is optional under
   `MissionPolicies.Completion`. Omission/null preserves the model default; an
   explicit empty policy is invalid. Clone its pointer independently with the

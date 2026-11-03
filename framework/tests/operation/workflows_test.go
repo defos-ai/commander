@@ -163,6 +163,7 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 		scope := []string{"discover", "inspect"}
 		m.Policies = &policies.MissionPolicies{
 			Completion:   &policies.CompletionPolicy{DecisionBy: policies.Operator},
+			Session:      []policies.SessionPolicy{{CreateAction: "checkout-template", UseActions: []string{"build-agent"}}},
 			Sharing:      fixtures.SharingPolicy(),
 			Continuation: &policies.ContinuationPolicy{AggregateResults: scope, ModelReview: scope[:1]},
 		}
@@ -173,6 +174,8 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	op := fixtures.Start(t, r)
 	catalog.Change(func(m *missions.Mission) {
 		m.Policies.Completion.DecisionBy = policies.Model
+		m.Policies.Session[0].CreateAction = "prepare-source"
+		m.Policies.Session[0].UseActions[0] = "compile-source"
 		m.Policies.Continuation.AggregateResults[0] = "follow-up"
 		m.Policies.Continuation.ModelReview[0] = "inspect"
 		m.Policies.Sharing[0].FromActions[0] = "follow-up"
@@ -192,6 +195,8 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	}
 	op.Mission.Policies.Continuation.ModelReview[0] = "returned review changed"
 	op.Mission.Policies.Completion.DecisionBy = policies.Model
+	op.Mission.Policies.Session[0].CreateAction = "returned creator changed"
+	op.Mission.Policies.Session[0].UseActions[0] = "returned consumer changed"
 	op.Mission.Policies.Sharing[0].FromActions[0] = "returned source changed"
 	op.Mission.Policies.Sharing[0].ToActions[0] = "returned recipient changed"
 	op.Mission.Policies.Sharing[0].Include[0] = "returned kind changed"
@@ -203,6 +208,9 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	}
 	if settled.Mission.Policies.Completion == nil || settled.Mission.Policies.Completion.DecisionBy != policies.Operator {
 		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
+	}
+	if session := settled.Mission.Policies.Session; len(session) != 1 || session[0].CreateAction != "checkout-template" || !reflect.DeepEqual(session[0].UseActions, []string{"build-agent"}) {
+		t.Fatalf("catalog or returned snapshot edits changed the running operation's session policy: %+v", session)
 	}
 	if !reflect.DeepEqual(settled.Mission.Policies, &expected) {
 		t.Fatalf("catalog or returned snapshot edits changed the running operation's policies: %+v", settled.Mission.Policies)
